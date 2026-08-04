@@ -124,7 +124,10 @@ func generateCanonicalSearchClientModels(metadataDir, appDir string) error {
 		"search",
 	)
 	for _, model := range models {
-		imports := canonicalSearchModelImports(model, fileByClass)
+		imports, importErr := canonicalSearchModelImports(model, fileByClass)
+		if importErr != nil {
+			return fmt.Errorf("derive %s client imports: %w", model.className, importErr)
+		}
 		content := renderStandaloneDtoDart(clientProjection{
 			DartClass:   model.className,
 			Strict:      true,
@@ -258,6 +261,16 @@ func canonicalSearchClientField(
 			return field, fmt.Errorf("enum_ref is required")
 		}
 		field.DartType = field.EnumRef
+		switch field.EnumRef {
+		case "ContentType", "ContentIdentity":
+			field.DartEnumDecoderWithPath = true
+			field.DartEnumWireGetter = "wireName"
+		default:
+			return field, fmt.Errorf(
+				"enum_ref %s has no canonical Search enum owner",
+				field.EnumRef,
+			)
+		}
 		return field, nil
 	}
 	switch field.WireType {
@@ -295,7 +308,7 @@ func canonicalSearchClientField(
 func canonicalSearchModelImports(
 	model canonicalSearchClientModel,
 	fileByClass map[string]string,
-) []string {
+) ([]string, error) {
 	seen := map[string]struct{}{}
 	imports := make([]string, 0)
 	add := func(value string) {
@@ -310,7 +323,15 @@ func canonicalSearchModelImports(
 	}
 	for _, field := range model.fields {
 		if field.EnumRef != "" {
-			add("../content_contract_enums.g.dart")
+			switch field.EnumRef {
+			case "ContentType", "ContentIdentity":
+				add("../../content/content_operation_contracts.g.dart")
+			default:
+				return nil, fmt.Errorf(
+					"enum_ref %s has no canonical Search import owner",
+					field.EnumRef,
+				)
+			}
 		}
 		for _, className := range []string{
 			field.MapFromStringKeyClass,
@@ -322,7 +343,7 @@ func canonicalSearchModelImports(
 			add(fileByClass[className])
 		}
 	}
-	return imports
+	return imports, nil
 }
 
 func hasConstraint(constraints []string, expected string) bool {

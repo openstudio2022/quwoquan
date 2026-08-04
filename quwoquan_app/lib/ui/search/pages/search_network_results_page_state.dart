@@ -36,9 +36,6 @@ class _SearchNetworkResultsPageState
   List<SearchDegradeSignal> _degradeSignals = const <SearchDegradeSignal>[];
   bool _showAllConnections = false;
   static const int _connectionCollapsedCap = 4;
-  late final DateTime _pageEnteredAt;
-  bool _didTrackPageImpression = false;
-  ContentBehaviorTracker? _behaviorTracker;
   String? _feedRequestIdAtEnter;
   // 搜索反馈归因锚点：云响应 envelope 的 requestId + 条目位次映射。
   // 响应无 requestId 时不上报（fail-closed，不合成伪 id）。
@@ -69,9 +66,11 @@ class _SearchNetworkResultsPageState
   @override
   void initState() {
     super.initState();
-    _pageEnteredAt = DateTime.now();
     _appTelemetry = ref.read(appTelemetryReporterProvider);
     _searchFeedbackWriter = ref.read(searchFeedbackCommandWriterProvider);
+    _feedRequestIdAtEnter = ref
+        .read(feedSessionProvider.notifier)
+        .currentFeedRequestId;
     _query = widget.launchContext.prefilledQuery.trim();
     _controller = TextEditingController(text: _query);
     _focusNode = FocusNode();
@@ -88,38 +87,18 @@ class _SearchNetworkResultsPageState
       }
       _scheduleRefresh(immediate: true);
       _focusNode.requestFocus();
-      _trackPageImpressionIfNeeded();
     });
   }
 
   @override
   void dispose() {
     _recordSearchResultDwellIfNeeded(reportFeedback: true);
-    _trackPageDwell();
     _debounceTimer?.cancel();
     _requestToken += 1;
     _waitController.dispose();
     _controller.dispose();
     _focusNode.dispose();
     super.dispose();
-  }
-
-  void _trackPageImpressionIfNeeded() {
-    if (_didTrackPageImpression) {
-      return;
-    }
-    _didTrackPageImpression = true;
-    _behaviorTracker = ref.read(contentBehaviorTrackerProvider);
-    _feedRequestIdAtEnter = ref
-        .read(feedSessionProvider.notifier)
-        .currentFeedRequestId;
-    _behaviorTracker!.trackImpression(
-      'search_network_results',
-      contentType: 'search_page',
-      referralSource: ReferralSource.search,
-      feedRequestId: _feedRequestIdAtEnter,
-      channelId: _activeTabId,
-    );
   }
 
   /// 查询级 impression：一次云搜索响应渲染完成上报一次（同 requestId 去重）。
@@ -345,23 +324,6 @@ class _SearchNetworkResultsPageState
     );
   }
 
-  void _trackPageDwell() {
-    final tracker = _behaviorTracker;
-    if (tracker == null) {
-      return;
-    }
-    final elapsedSeconds =
-        DateTime.now().difference(_pageEnteredAt).inMilliseconds / 1000.0;
-    tracker.trackDwell(
-      'search_network_results',
-      durationSeconds: elapsedSeconds,
-      contentType: 'search_page',
-      referralSource: ReferralSource.search,
-      feedRequestId: _feedRequestIdAtEnter,
-      channelId: _activeTabId,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
@@ -400,11 +362,15 @@ class _SearchNetworkResultsPageState
             child: _errorSemantic != null && !_isLoading
                 ? AppPageErrorState(
                     semantic: _errorSemantic!,
-                    onAction: (action) async {
+                    onRecovery: (action) async {
                       if (action.type == UiErrorActionType.retry ||
                           action.type == UiErrorActionType.resubmit) {
                         await _loadResults();
+                        return _errorSemantic == null
+                            ? UiRecoveryOutcome.recovered
+                            : UiRecoveryOutcome.stillBlocked;
                       }
+                      return UiRecoveryOutcome.cancelled;
                     },
                   )
                 : Padding(

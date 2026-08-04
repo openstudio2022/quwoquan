@@ -12,6 +12,17 @@ import (
 	skillconsenttest "quwoquan_service/services/assistant-service/tests/support/skillconsent"
 )
 
+type consentReaderStub struct {
+	consents []model.Consent
+}
+
+func (stub consentReaderStub) ListActiveConsents(
+	context.Context,
+	string,
+) ([]model.Consent, error) {
+	return append([]model.Consent(nil), stub.consents...), nil
+}
+
 func TestSkillConsentFacadesFailClosedWithoutStore(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -24,8 +35,8 @@ func TestSkillConsentFacadesFailClosedWithoutStore(t *testing.T) {
 		ctx,
 		"grant-command",
 		"account-a",
-		"personal_content_access",
-		[]string{"personal_content_access"},
+		"travel_companion",
+		[]string{"travel.trip.read"},
 	); err == nil {
 		t.Fatal("Grant() error=nil, want unavailable")
 	}
@@ -33,7 +44,7 @@ func TestSkillConsentFacadesFailClosedWithoutStore(t *testing.T) {
 		ctx,
 		"revoke-command",
 		"account-a",
-		"personal_content_access",
+		"travel_companion",
 	); err == nil {
 		t.Fatal("Revoke() error=nil, want unavailable")
 	}
@@ -51,16 +62,16 @@ func TestSkillConsentLifecycleUsesAuthoritativeStore(t *testing.T) {
 		ctx,
 		"grant-command",
 		"account-a",
-		"personal_content_access",
-		[]string{"personal_content_access", "travel.trip.read"},
+		"travel_companion",
+		[]string{"assistant.memory.preferences.read", "travel.trip.read"},
 	)
 	if err != nil || granted.Consent == nil {
 		t.Fatalf("Grant() result=%+v error=%v", granted, err)
 	}
 	if granted.Consent.AccountID != "account-a" ||
-		granted.Consent.SkillID != "personal_content_access" ||
+		granted.Consent.SkillID != "travel_companion" ||
 		len(granted.Consent.GrantedScopes) != 2 ||
-		granted.Consent.GrantedScopes[0] != "personal_content_access" ||
+		granted.Consent.GrantedScopes[0] != "assistant.memory.preferences.read" ||
 		granted.Consent.GrantedScopes[1] != "travel.trip.read" ||
 		!granted.Consent.IsGranted() {
 		t.Fatalf("Grant()=%+v", granted)
@@ -69,8 +80,8 @@ func TestSkillConsentLifecycleUsesAuthoritativeStore(t *testing.T) {
 		ctx,
 		"grant-command",
 		"account-a",
-		"personal_content_access",
-		[]string{"travel.trip.read", "personal_content_access"},
+		"travel_companion",
+		[]string{"travel.trip.read", "assistant.memory.preferences.read"},
 	)
 	if err != nil || !replayed.Replayed || replayed.Consent == nil ||
 		replayed.Consent.ID != granted.Consent.ID {
@@ -80,8 +91,8 @@ func TestSkillConsentLifecycleUsesAuthoritativeStore(t *testing.T) {
 		ctx,
 		"grant-command-distinct",
 		"account-a",
-		"personal_content_access",
-		[]string{"personal_content_access", "travel.trip.read"},
+		"travel_companion",
+		[]string{"assistant.memory.preferences.read", "travel.trip.read"},
 	)
 	if err != nil || noOp.Changed || noOp.Replayed || noOp.Consent == nil ||
 		noOp.Consent.ID != granted.Consent.ID {
@@ -104,7 +115,7 @@ func TestSkillConsentLifecycleUsesAuthoritativeStore(t *testing.T) {
 		ctx,
 		"blank-scope-command",
 		"account-a",
-		"personal_content_access",
+		"travel_companion",
 		[]string{},
 	); !errors.Is(err, model.ErrInvalidArgument) {
 		t.Fatalf("Grant() blank scope error=%v, want invalid argument", err)
@@ -113,7 +124,7 @@ func TestSkillConsentLifecycleUsesAuthoritativeStore(t *testing.T) {
 		ctx,
 		"duplicate-scope-command",
 		"account-a",
-		"personal_content_access",
+		"travel_companion",
 		[]string{"travel.trip.read", "travel.trip.read"},
 	); !errors.Is(err, model.ErrInvalidArgument) {
 		t.Fatalf("Grant() duplicate scope error=%v, want invalid argument", err)
@@ -122,8 +133,8 @@ func TestSkillConsentLifecycleUsesAuthoritativeStore(t *testing.T) {
 		ctx,
 		"scope-conflict-command",
 		"account-a",
-		"personal_content_access",
-		[]string{"personal_content_access", "travel.trip.read", "travel.stay.read"},
+		"travel_companion",
+		[]string{"assistant.memory.preferences.read", "travel.trip.read", "travel.stay.read"},
 	); !errors.Is(err, model.ErrScopeConflict) {
 		t.Fatalf("Grant() changed scope set error=%v, want scope conflict", err)
 	}
@@ -131,12 +142,108 @@ func TestSkillConsentLifecycleUsesAuthoritativeStore(t *testing.T) {
 		ctx,
 		"revoke-command",
 		"account-a",
-		"personal_content_access",
+		"travel_companion",
 	); err != nil {
 		t.Fatalf("Revoke() error=%v", err)
 	}
 	items, err = queries.List(ctx, "account-a")
 	if err != nil || len(items) != 0 {
 		t.Fatalf("List() after revoke items=%+v error=%v", items, err)
+	}
+}
+
+func TestSkillConsentRequireUsesCurrentSkillAndRequiredScopes(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store := skillconsenttest.NewMemoryStore()
+	queries := application.NewQueryFacade(store)
+	commands := application.NewCommandFacade(store, func() time.Time {
+		return time.Date(2026, 8, 4, 9, 0, 0, 0, time.UTC)
+	})
+
+	// Optional-only ContextProfiles do not touch storage and never block Skill
+	// start, even when no consent reader is configured.
+	if err := application.NewQueryFacade(nil).Require(
+		ctx,
+		"account-a",
+		"travel_companion",
+		nil,
+	); err != nil {
+		t.Fatalf("optional-only Require() error=%v", err)
+	}
+	if err := application.NewQueryFacade(nil).Require(
+		ctx,
+		"account-a",
+		"travel_companion",
+		[]string{"travel.trip.read"},
+	); !errors.Is(err, model.ErrStorageUnavailable) {
+		t.Fatalf("required scope without reader error=%v, want unavailable", err)
+	}
+
+	if _, err := commands.Grant(
+		ctx,
+		"travel-consent",
+		"account-a",
+		"travel_companion",
+		[]string{"assistant.memory.preferences.read", "travel.trip.read"},
+	); err != nil {
+		t.Fatalf("Grant() error=%v", err)
+	}
+	if err := queries.Require(
+		ctx,
+		"account-a",
+		"travel_companion",
+		[]string{"travel.trip.read"},
+	); err != nil {
+		t.Fatalf("same active consent did not cover required scope: %v", err)
+	}
+	if err := queries.Require(
+		ctx,
+		"account-a",
+		"another_skill",
+		[]string{"travel.trip.read"},
+	); !errors.Is(err, model.ErrConsentRequired) {
+		t.Fatalf("foreign Skill consent error=%v, want consent required", err)
+	}
+	if err := queries.Require(
+		ctx,
+		"account-a",
+		"travel_companion",
+		[]string{"travel.trip.read", "travel.stay.read"},
+	); !errors.Is(err, model.ErrConsentRequired) {
+		t.Fatalf("partial scope coverage error=%v, want consent required", err)
+	}
+	if err := queries.Require(
+		ctx,
+		"account-a",
+		"travel_companion",
+		[]string{""},
+	); !errors.Is(err, model.ErrConsentRequired) {
+		t.Fatalf("invalid required scope error=%v, want consent required", err)
+	}
+
+	// Required scopes must be covered by one current aggregate. Multiple stale
+	// or corrupt active facts may never be unioned into a broader permission.
+	split := application.NewQueryFacade(consentReaderStub{consents: []model.Consent{
+		{
+			ID:            "consent-a",
+			AccountID:     "account-a",
+			SkillID:       "travel_companion",
+			GrantedScopes: []string{"travel.trip.read"},
+		},
+		{
+			ID:            "consent-b",
+			AccountID:     "account-a",
+			SkillID:       "travel_companion",
+			GrantedScopes: []string{"assistant.memory.preferences.read"},
+		},
+	}})
+	if err := split.Require(
+		ctx,
+		"account-a",
+		"travel_companion",
+		[]string{"assistant.memory.preferences.read", "travel.trip.read"},
+	); !errors.Is(err, model.ErrConsentRequired) {
+		t.Fatalf("split active facts error=%v, want consent required", err)
 	}
 }

@@ -80,7 +80,7 @@
 
 - GIVEN 合法 persona 发起或接听 CallSession。
 - WHEN rtc-service 通过 MediaRoomProvider 创建 Room、签发 mediaAccess 并发布 CallRinging/CallConnected/CallEnded。
-- THEN App 从响应消费 mediaAccess，在线事件只经可信 realtime connection 投递并按 client_ws_type 解析。
+- THEN App 从响应消费 mediaAccess，在线事件只经可信 realtime connection 投递，并仅从 `RtcRealtimeEventEnvelope` 构造 `RtcSignalEvent`。
 
 <a id="gwt-002"></a>
 ### GWT-002 离线来电 provider 与平台唤醒

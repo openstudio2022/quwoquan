@@ -8,5 +8,3 @@ overrides:
 secretRefs:
   sys.travel-service.mongo.uri: TRAVEL_MONGO_URI
 externalBindings:
-  runtime.message.transport:
-    state: enabled

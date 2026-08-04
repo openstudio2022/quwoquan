@@ -50,7 +50,7 @@ void main() {
     HttpOverrides.global = _NoNetworkHttpOverrides();
   });
 
-  testWidgets('发现页双轨标签固定为点滴/作品且不再暴露微趣', (tester) async {
+  testWidgets('发现页内容身份标签固定为点滴/作品且不再暴露微趣', (tester) async {
     await tester.pumpWidget(_buildApp(const _DiscoveryIdentityRailPreview()));
     await tester.pump();
 
@@ -59,8 +59,8 @@ void main() {
     expect(find.text('微趣'), findsNothing);
   });
 
-  testWidgets('作品频道格式筛选使用全部作品/图片/视频/文章（V1.0 经更多面板暴露）', (tester) async {
-    // V1.0：媒体筛选不再以顶部 tab 常驻，由「更多」面板内的筛选 chips 暴露；
+  testWidgets('作品频道格式筛选使用全部作品/图片/视频/文章并由更多面板暴露', (tester) async {
+    // 媒体筛选不再以顶部 tab 常驻，由「更多」面板内的筛选 chips 暴露；
     // 此处校验筛选配置真相源的标签集合保持全部/图片/视频/文章。
     await tester.pumpWidget(
       _buildApp(

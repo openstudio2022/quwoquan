@@ -16,6 +16,45 @@ target: prod-hosted
 management:
   sshHost: "118.31.239.122"
   purpose: ssh-only-management
+  defaultHostId: prod-host-01
+  hosts:
+    - id: prod-host-01
+      sshHost: "118.31.239.122"
+      planes: [service, edge]
+
+# prevalidate / gray / prod 是同一 prod-hosted 目标内的 deployment instance，
+# 不是环境枚举。每个 replica 绑定一台 SSH 主机；同一 plane 在单主机最多一个
+# replica，避免 rootless Podman 的固定发布端口冲突。扩容只追加 host 与 replica
+# placement，不复制 runtime 配置、Secret Bundle 或公开 URL。
+deploymentInstances:
+  prevalidate:
+    rolloutStages: []
+    promotable: false
+    replicas:
+      service:
+        - id: r0
+          hostId: prod-host-01
+      edge:
+        - id: r0
+          hostId: prod-host-01
+  gray:
+    rolloutStages: [gray-initial, carry-on]
+    replicas:
+      service:
+        - id: r0
+          hostId: prod-host-01
+      edge:
+        - id: r0
+          hostId: prod-host-01
+  prod:
+    rolloutStages: [full]
+    replicas:
+      service:
+        - id: r0
+          hostId: prod-host-01
+      edge:
+        - id: r0
+          hostId: prod-host-01
 
 # 非 root 中转/bootstrap 账号：仅用于 SSH 登录、按平面分发凭据、触发受限发布命令；无日常 root。
 relayAccount:
@@ -49,7 +88,7 @@ prevalidation:
     requireHealthyExceptProviderBound: true
     providerBoundServices: [product-ops-service]
     providerReadinessStatus: GATE_BLOCK
-  capacityStrategy: constrained-single-host
+  capacityStrategy: constrained-per-replica-host
   minimumHostResources:
     cpuCores: 2
     memoryBytes: 1879048192

@@ -3,9 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/contact_home_row_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/message_home_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository_api.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
@@ -17,7 +14,7 @@ import 'package:quwoquan_app/core/services/visit_recorder_service.dart';
 import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_page.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
-import '../../../../support/cloud_services/repository_mock_reexports.dart';
+import '../../../../support/cloud_services/object_doubles/chat/alpha_chat_state_engine.dart';
 
 import '../../../../support/cloud_services/user_typed_facet_test_support.dart';
 
@@ -283,7 +280,7 @@ final class _AlphaChatConversationJourneyFacet extends Fake
   final Object? listMessageHomeFailure;
 
   @override
-  Future<List<MessageHomeRowDto>> listMessageHome({
+  Future<List<MessageHomeRow>> listMessageHome({
     String filter = 'all',
     String? cursor,
     int limit = 20,
@@ -303,7 +300,7 @@ final class _AlphaChatContactJourneyFacet extends Fake
   final AlphaChatStateEngine _engine;
 
   @override
-  Future<List<ContactHomeRowDto>> listContactHome({
+  Future<List<ContactHomeRow>> listContactHome({
     String filter = 'all',
     String? cursor,
     int limit = 20,
@@ -319,7 +316,7 @@ final class _AlphaChatMemberJourneyFacet extends Fake
   final AlphaChatStateEngine _engine;
 
   @override
-  Future<List<ChatConversationMemberDto>> listMembers({
+  Future<List<ConversationMemberListRow>> listMembers({
     required String conversationId,
     String? cursor,
     int limit = 20,
@@ -334,15 +331,16 @@ final class _AlphaChatMemberJourneyFacet extends Fake
           sort: sort,
         )
         .map(
-          (row) => ChatConversationMemberDto.fromMap(
-            Map<String, dynamic>.from(row),
-          ).copyWith(avatarUrl: ''),
+          (row) => ConversationMemberListRow.fromWire(<String, Object?>{
+            ...row,
+            'avatarUrl': '',
+          }),
         )
         .toList(growable: false);
   }
 }
 
-List<MessageHomeRowDto> _messageHomeRows(
+List<MessageHomeRow> _messageHomeRows(
   AlphaChatStateEngine engine, {
   String filter = 'all',
   int limit = 100,
@@ -350,24 +348,27 @@ List<MessageHomeRowDto> _messageHomeRows(
   return engine
       .listMessageHome(filter: filter, limit: limit)
       .map(
-        (row) => MessageHomeRowDto.fromMap(
-          Map<String, dynamic>.from(row),
-        ).copyWith(avatarUrl: ''),
+        (row) =>
+            MessageHomeRow.fromWire(<String, Object?>{...row, 'avatarUrl': ''}),
       )
       .toList(growable: false);
 }
 
-List<ContactHomeRowDto> _contactHomeRows(
+List<ContactHomeRow> _contactHomeRows(
   AlphaChatStateEngine engine, {
   String filter = 'all',
   int limit = 500,
 }) {
   return engine
       .listContactHome(filter: filter, limit: limit)
-      .map(
-        (row) => ContactHomeRowDto.fromMap(
-          Map<String, dynamic>.from(row),
-        ).copyWith(avatarUrl: ''),
-      )
+      .map((row) {
+        final lastActiveAt = row['lastActiveAt'];
+        return ContactHomeRow.fromWire(<String, Object?>{
+          ...row,
+          'avatarUrl': '',
+          if (lastActiveAt is String && lastActiveAt.trim().isEmpty)
+            'lastActiveAt': null,
+        });
+      })
       .toList(growable: false);
 }

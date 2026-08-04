@@ -4,9 +4,11 @@ package local_contract
 import (
 	"context"
 	assistantgenerated "quwoquan_service/services/assistant-service/generated/assistant/assistant_session"
+	runorchestration "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/orchestration"
 	skillcontext "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/skillcontext"
 	skillcontextinfra "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/infrastructure/skillcontext"
 	. "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
+	readerresource "quwoquan_service/services/assistant-service/internal/assistant/domain_reader_descriptor/infrastructure/resource"
 	"strings"
 	"testing"
 
@@ -64,15 +66,26 @@ func (f *assistantSessionChatMentionServiceFakeChatGroundingClient) SendMessage(
 func TestHandleAssistantMentionedReadsChatConversationContextAndReplies(t *testing.T) {
 	chat := &assistantSessionChatMentionServiceFakeChatGroundingClient{}
 	model := &contextAssemblyRecordingModel{}
-	loop := NewAgentLoop(
+	loop := runorchestration.NewAgentLoop(
 		nil,
-		ReactRuntime{Model: model},
+		runorchestration.ReactRuntime{
+			Model: model,
+			Tools: canonicalTestToolCoordinator(nil),
+		},
 		nil,
 	)
 	loop.Catalog = skillfixture.Loader{}
 	loop.PromptAssets = promptassets.MustResolver(t)
 	runOption, runtime := canonicalRunTestRuntime(t, loop)
-	registry, err := skillcontextinfra.NewRuntimeRegistry(runtime, nil, nil)
+	descriptors, err := skillcontextinfra.RuntimeDescriptors()
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := readerresource.NewCatalog(descriptors)
+	if err != nil {
+		t.Fatal(err)
+	}
+	registry, err := skillcontextinfra.NewRuntimeRegistry(catalog, runtime, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +94,6 @@ func TestHandleAssistantMentionedReadsChatConversationContextAndReplies(t *testi
 		skillconsenttest.NewMemoryStore(),
 		nil,
 		WithSessionStore(persistence.NewMemorySessionStore()),
-		WithAgentLoop(loop),
 		runOption,
 		WithChatGroundingClient(chat),
 	)
@@ -142,9 +154,9 @@ func TestHandleAssistantMentionedReadsChatConversationContextAndReplies(t *testi
 	if len(model.assemblies) == 0 || model.assemblies[0] == nil {
 		t.Fatal("model did not receive the canonical Run context assembly")
 	}
-	snapshot, ok := model.assemblies[0].ContextEnvelope["skillContextSnapshot"].(skillcontext.Snapshot)
-	if !ok {
-		t.Fatalf("skill context snapshot=%#v", model.assemblies[0].ContextEnvelope["skillContextSnapshot"])
+	snapshot := model.assemblies[0].SkillContextSnapshot
+	if snapshot == nil {
+		t.Fatal("skill context snapshot is missing")
 	}
 	var conversation *skillcontext.Segment
 	for index := range snapshot.Segments {
@@ -172,11 +184,6 @@ func TestHandleAssistantMentionedDropsEventWhenAssistantWasRemoved(t *testing.T)
 		skillconsenttest.NewMemoryStore(),
 		nil,
 		WithSessionStore(persistence.NewMemorySessionStore()),
-		WithAgentLoop(NewAgentLoop(
-			proactiveSkillRuntime{},
-			ReactRuntime{Model: proactiveFinalModel{}},
-			nil,
-		)),
 		WithChatGroundingClient(chat),
 	)
 

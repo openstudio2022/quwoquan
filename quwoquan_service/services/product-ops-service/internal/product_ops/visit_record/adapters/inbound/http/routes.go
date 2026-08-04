@@ -25,6 +25,14 @@ type Handler struct {
 	service *visitapplication.Service
 }
 
+// recordVisitRequest mirrors the canonical public RecordVisitRequest body.
+// Idempotency-Key is bound from the header and actor identity is derived from
+// the verified principal; neither belongs to this JSON body.
+type recordVisitRequest struct {
+	TargetType string `json:"targetType"`
+	TargetKey  string `json:"targetKey"`
+}
+
 func NewHandler(service *visitapplication.Service) *Handler {
 	if service == nil {
 		panic("visit HTTP adapter requires service")
@@ -45,10 +53,7 @@ func (h *Handler) record(w http.ResponseWriter, r *http.Request) {
 		writeRouteNotFound(w, r)
 		return
 	}
-	var request struct {
-		TargetType string `json:"targetType"`
-		TargetKey  string `json:"targetKey"`
-	}
+	var request recordVisitRequest
 	if err := decodeStrictJSON(r, &request); err != nil {
 		writeError(w, r, visitgenerated.AppErrorFromVisitInvalidArgument(err.Error()))
 		return
@@ -58,7 +63,7 @@ func (h *Handler) record(w http.ResponseWriter, r *http.Request) {
 		writeUnauthorized(w, r)
 		return
 	}
-	result, err := h.service.RecordVisit(r.Context(), visitapplication.VisitInput{
+	result, err := h.service.RecordVisit(r.Context(), visitapplication.RecordVisitCommand{
 		UserID:     actorHash,
 		TargetType: request.TargetType,
 		TargetKey:  request.TargetKey,

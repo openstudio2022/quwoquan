@@ -1,15 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_kind_metadata.g.dart';
+import '../../../../support/fixtures/intersection_fixtures.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_action_hint.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_kind_metadata.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/components/object_page/intersection_target_navigator.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/core/models/start_group_chat_route_extra.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {
   group(
@@ -18,19 +16,22 @@ void main() {
       test('routeId 闭集映射到对应 codegen 路由', () {
         expect(
           IntersectionTargetNavigator.resolvePath(
-            IntersectionTarget(objectId: 'u1', routeId: 'userProfile'),
+            intersectionTargetFixture(objectId: 'u1', routeId: 'userProfile'),
           ),
           contains('u1'),
         );
         expect(
           IntersectionTargetNavigator.resolvePath(
-            IntersectionTarget(objectId: 'c1', routeId: 'circleDetail'),
+            intersectionTargetFixture(objectId: 'c1', routeId: 'circleDetail'),
           ),
           contains('c1'),
         );
         expect(
           IntersectionTargetNavigator.resolvePath(
-            IntersectionTarget(objectId: 'h1', routeId: 'homepageDetail'),
+            intersectionTargetFixture(
+              objectId: 'h1',
+              routeId: 'homepageDetail',
+            ),
           ),
           contains('h1'),
         );
@@ -38,7 +39,7 @@ void main() {
 
       test('myIntersections 维度下钻附加 sourceRef 过滤', () {
         final path = IntersectionTargetNavigator.resolvePath(
-          IntersectionTarget(
+          intersectionTargetFixture(
             objectId: 'relationship',
             routeId: 'myIntersections',
           ),
@@ -51,7 +52,7 @@ void main() {
       test('routeId 缺省 → 回退 objectKind 兜底映射', () {
         expect(
           IntersectionTargetNavigator.resolvePath(
-            IntersectionTarget(objectId: 'u1', objectKind: 'person'),
+            intersectionTargetFixture(objectId: 'u1', objectKind: 'person'),
           ),
           contains('u1'),
         );
@@ -61,13 +62,13 @@ void main() {
         expect(IntersectionTargetNavigator.resolvePath(null), isNull);
         expect(
           IntersectionTargetNavigator.resolvePath(
-            IntersectionTarget(objectId: '  ', routeId: 'userProfile'),
+            intersectionTargetFixture(objectId: '  ', routeId: 'userProfile'),
           ),
           isNull,
         );
         expect(
           IntersectionTargetNavigator.resolvePath(
-            IntersectionTarget(objectId: 'x', objectKind: 'alien'),
+            intersectionTargetFixture(objectId: 'x', objectKind: 'alien'),
           ),
           isNull,
         );
@@ -85,7 +86,7 @@ void main() {
         // gathering 详情页尚未实现：resolvePath 落入 default → null，端侧静默降级。
         expect(
           IntersectionTargetNavigator.resolvePath(
-            IntersectionTarget(objectId: 'g1', objectKind: 'gathering'),
+            intersectionTargetFixture(objectId: 'g1', objectKind: 'gathering'),
           ),
           isNull,
         );
@@ -141,7 +142,7 @@ void main() {
 
         final ok = navigator.open(
           homeContext,
-          IntersectionTarget(
+          intersectionTargetFixture(
             objectId: 'u_lin',
             objectKind: 'person',
             routeId: 'userProfile',
@@ -173,7 +174,7 @@ void main() {
 
       final ok = navigator.open(
         homeContext,
-        IntersectionTarget(objectId: '', routeId: 'userProfile'),
+        intersectionTargetFixture(objectId: '', routeId: 'userProfile'),
         attribution: const IntersectionNavAttribution(),
       );
       await tester.pumpAndSettle();
@@ -204,7 +205,7 @@ void main() {
 
       final ok = navigator.open(
         plainContext,
-        IntersectionTarget(
+        intersectionTargetFixture(
           objectId: 'u_lin',
           objectKind: 'person',
           routeId: 'userProfile',
@@ -276,16 +277,16 @@ void main() {
 
       final result = const IntersectionTargetNavigator().openActionHint(
         homeContext,
-        IntersectionActionHint(
+        intersectionActionHintFixture(
           actionKey: 'ask_assistant',
           dispatch: 'assistant',
         ),
-        evidenceReason: IntersectionReason(
+        evidenceReason: intersectionReasonFixture(
           kind: 'shared_followees',
           intersectionId: 'intersection-1',
           pointSummarySnapshotId: 'evidence-1',
         ),
-        contextObjectTarget: IntersectionTarget(
+        contextObjectTarget: intersectionTargetFixture(
           objectType: 'user',
           objectId: 'u_lin',
           objectKind: 'person',
@@ -316,10 +317,13 @@ void main() {
 
       final result = navigator.openActionHint(
         homeContext,
-        IntersectionActionHint(
+        intersectionActionHintFixture(
           actionKey: 'open_object',
           dispatch: 'navigate',
-          target: IntersectionTarget(objectId: 'u_lin', objectKind: 'person'),
+          target: intersectionTargetFixture(
+            objectId: 'u_lin',
+            objectKind: 'person',
+          ),
         ),
         attribution: const IntersectionNavAttribution(
           intersectionId: 'ix1',
@@ -346,11 +350,11 @@ void main() {
         // 关注（§15 无死循环）。若在本层因 login 隐藏/拦截，已登录用户也会失去入口。
         final result = const IntersectionTargetNavigator().openActionHint(
           homeContext,
-          IntersectionActionHint(
+          intersectionActionHintFixture(
             actionKey: 'follow_person',
             dispatch: 'navigate',
             requiredGates: <String>['login'],
-            target: IntersectionTarget(
+            target: intersectionTargetFixture(
               objectId: 'u_lin',
               objectKind: 'person',
               routeId: 'userProfile',
@@ -385,7 +389,7 @@ void main() {
 
       final result = navigator.openActionHint(
         homeContext,
-        IntersectionActionHint(
+        intersectionActionHintFixture(
           actionKey: 'start_gathering',
           dispatch: 'gathering',
           // start_gathering 是「公开约伴邀约」，发起环节安全门不含 mutualConsent
@@ -397,7 +401,7 @@ void main() {
             'blocked',
             'rateLimit',
           ],
-          target: IntersectionTarget(
+          target: intersectionTargetFixture(
             objectId: 'fixture_homepage_travel_photo_west_lake',
             objectKind: 'place',
           ),
@@ -410,15 +414,15 @@ void main() {
           evidenceId: 'ev_wishlist_1',
         ),
         // 对象名只能取自云侧主句 span：承接页要用它命名约伴群。
-        evidenceReason: IntersectionReason(
+        evidenceReason: intersectionReasonFixture(
           intersectionId: 'ix_wishlist',
           kind: 'coWishlistedEntity',
           primarySpans: <IntersectionTextSpan>[
-            IntersectionTextSpan(text: '你和「陆衡」都想去'),
-            IntersectionTextSpan(
+            intersectionTextSpanFixture(text: '你和「陆衡」都想去'),
+            intersectionTextSpanFixture(
               text: '「西湖」',
               role: 'object',
-              target: IntersectionTarget(
+              target: intersectionTargetFixture(
                 objectId: 'fixture_homepage_travel_photo_west_lake',
                 objectKind: 'place',
               ),
@@ -455,7 +459,7 @@ void main() {
 
       final result = const IntersectionTargetNavigator().openActionHint(
         homeContext,
-        IntersectionActionHint(
+        intersectionActionHintFixture(
           actionKey: 'start_gathering',
           dispatch: 'gathering',
         ),
@@ -474,11 +478,14 @@ void main() {
 
       final result = const IntersectionTargetNavigator().openActionHint(
         homeContext,
-        IntersectionActionHint(
+        intersectionActionHintFixture(
           actionKey: 'greet_person',
           dispatch: 'message',
           requiredGates: const <String>['login', 'greetPreference', 'blocked'],
-          target: IntersectionTarget(objectId: 'u_lin', objectKind: 'person'),
+          target: intersectionTargetFixture(
+            objectId: 'u_lin',
+            objectKind: 'person',
+          ),
         ),
       );
       expect(result.status, IntersectionActionDispatchStatus.opened);
@@ -493,11 +500,11 @@ void main() {
 
       final result = const IntersectionTargetNavigator().openActionHint(
         homeContext,
-        IntersectionActionHint(
+        intersectionActionHintFixture(
           actionKey: 'message_person',
           dispatch: 'message',
           requiredGates: const <String>['login'],
-          target: IntersectionTarget(
+          target: intersectionTargetFixture(
             objectId: 'fixture_circle_photo',
             objectKind: 'circle',
           ),
@@ -515,10 +522,13 @@ void main() {
 
       final result = const IntersectionTargetNavigator().openActionHint(
         homeContext,
-        IntersectionActionHint(
+        intersectionActionHintFixture(
           actionKey: 'unknown_action',
           dispatch: 'unknown',
-          target: IntersectionTarget(objectId: 'u_lin', objectKind: 'person'),
+          target: intersectionTargetFixture(
+            objectId: 'u_lin',
+            objectKind: 'person',
+          ),
         ),
       );
       expect(result.status, IntersectionActionDispatchStatus.unsupported);

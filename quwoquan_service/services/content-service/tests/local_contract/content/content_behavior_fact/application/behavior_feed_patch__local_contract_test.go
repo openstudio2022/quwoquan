@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"quwoquan_service/runtime/clientrealtime"
 	rtrec "quwoquan_service/runtime/recommendation"
 	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence"
@@ -41,8 +42,12 @@ type capturePatchPublisher struct {
 }
 
 func (p *capturePatchPublisher) Publish(_ context.Context, channel, message string) error {
+	var envelope clientrealtime.ClientRealtimeEventEnvelope
+	if err := json.Unmarshal([]byte(message), &envelope); err != nil {
+		return err
+	}
 	var patch rtrec.FeedRealtimePatch
-	if err := json.Unmarshal([]byte(message), &patch); err != nil {
+	if err := json.Unmarshal(envelope.Payload, &patch); err != nil {
 		return err
 	}
 	p.mu.Lock()
@@ -66,7 +71,7 @@ func TestProcessBatchEmitsNegativeRemovalPatch(t *testing.T) {
 	pub := &capturePatchPublisher{}
 	svc, processor := newPatchBehaviorService(pub)
 
-	err := svc.ProcessBatch(context.Background(), []BehaviorEventInput{
+	_, err := svc.ProcessBatch(context.Background(), []BehaviorEventInput{
 		{
 			ClientEventID: "evt-negative-001",
 			OccurredAt:    validBehaviorOccurredAt(),
@@ -108,7 +113,7 @@ func TestProcessBatchNoPatchForNeutralActions(t *testing.T) {
 	pub := &capturePatchPublisher{}
 	svc, _ := newPatchBehaviorService(pub)
 
-	err := svc.ProcessBatch(context.Background(), []BehaviorEventInput{
+	_, err := svc.ProcessBatch(context.Background(), []BehaviorEventInput{
 		{
 			ClientEventID: "evt-neutral-click-001",
 			OccurredAt:    validBehaviorOccurredAt(),
@@ -142,16 +147,16 @@ func TestPlaybackProgressIsObservationalAndEffectivePlayFailsClosed(t *testing.T
 	}
 
 	svc, processor := newPatchBehaviorService(&capturePatchPublisher{})
-	err := svc.ProcessBatch(context.Background(), []BehaviorEventInput{{
-		ClientEventID:   "evt-scrubbing-001",
-		OccurredAt:      validBehaviorOccurredAt(),
-		UserID:          "user-video",
-		Action:          "effective_play",
-		ContentID:       "post-video",
-		SessionID:       "playback-session-1",
-		State:           "scrubbing",
-		EffectivePlayMS: 30_000,
-		TotalUnits:      125,
+	_, err := svc.ProcessBatch(context.Background(), []BehaviorEventInput{{
+		ClientEventID:     "evt-scrubbing-001",
+		OccurredAt:        validBehaviorOccurredAt(),
+		UserID:            "user-video",
+		Action:            "effective_play",
+		ContentID:         "post-video",
+		PlaybackSessionID: "playback-session-1",
+		State:             "scrubbing",
+		EffectivePlayMS:   30_000,
+		TotalUnits:        125,
 	}})
 	if err == nil {
 		t.Fatal("scrubbing must not qualify as effective playback")
@@ -160,17 +165,17 @@ func TestPlaybackProgressIsObservationalAndEffectivePlayFailsClosed(t *testing.T
 		t.Fatal("rejected effective playback must not enter recommendation")
 	}
 
-	err = svc.ProcessBatch(context.Background(), []BehaviorEventInput{{
-		ClientEventID:   "evt-effective-001",
-		OccurredAt:      validBehaviorOccurredAt(),
-		UserID:          "user-video",
-		Action:          "effective_play",
-		ContentID:       "post-video",
-		SessionID:       "playback-session-1",
-		State:           "foreground_visible_playing",
-		EffectivePlayMS: 8_000,
-		ConsumedRatio:   0.064,
-		TotalUnits:      125,
+	_, err = svc.ProcessBatch(context.Background(), []BehaviorEventInput{{
+		ClientEventID:     "evt-effective-001",
+		OccurredAt:        validBehaviorOccurredAt(),
+		UserID:            "user-video",
+		Action:            "effective_play",
+		ContentID:         "post-video",
+		PlaybackSessionID: "playback-session-1",
+		State:             "foreground_visible_playing",
+		EffectivePlayMS:   8_000,
+		ConsumedRatio:     0.064,
+		TotalUnits:        125,
 	}})
 	if err != nil {
 		t.Fatalf("valid effective playback rejected: %v", err)
@@ -191,7 +196,7 @@ func TestBehaviorEventRequiresIdempotencyAndUsesOccurredAt(t *testing.T) {
 	svc, processor := newPatchBehaviorService(&capturePatchPublisher{})
 	occurredAt := time.Now().UTC().Add(-time.Hour).Truncate(time.Millisecond)
 
-	err := svc.ProcessBatch(context.Background(), []BehaviorEventInput{{
+	_, err := svc.ProcessBatch(context.Background(), []BehaviorEventInput{{
 		ClientEventID: "evt-occurred-at-001",
 		OccurredAt:    occurredAt.Format(time.RFC3339Nano),
 		UserID:        "user-occurred-at",
@@ -205,7 +210,7 @@ func TestBehaviorEventRequiresIdempotencyAndUsesOccurredAt(t *testing.T) {
 		t.Fatalf("signal timestamp = %s, want %s", got, occurredAt)
 	}
 
-	if err := svc.ProcessBatch(context.Background(), []BehaviorEventInput{{
+	if _, err := svc.ProcessBatch(context.Background(), []BehaviorEventInput{{
 		OccurredAt: occurredAt.Format(time.RFC3339Nano),
 		UserID:     "user-missing-id",
 		Action:     "click",
@@ -213,7 +218,7 @@ func TestBehaviorEventRequiresIdempotencyAndUsesOccurredAt(t *testing.T) {
 	}}); err == nil {
 		t.Fatal("missing clientEventId must be rejected")
 	}
-	if err := svc.ProcessBatch(context.Background(), []BehaviorEventInput{{
+	if _, err := svc.ProcessBatch(context.Background(), []BehaviorEventInput{{
 		ClientEventID: "evt-missing-occurred-at",
 		UserID:        "user-missing-time",
 		Action:        "click",
@@ -230,7 +235,7 @@ func TestProcessBatchRequiresCanonicalImpressionState(t *testing.T) {
 		state := state
 		t.Run("reject_"+state, func(t *testing.T) {
 			svc, processor := newPatchBehaviorService(&capturePatchPublisher{})
-			err := svc.ProcessBatch(context.Background(), []BehaviorEventInput{{
+			_, err := svc.ProcessBatch(context.Background(), []BehaviorEventInput{{
 				ClientEventID: "evt-impression-invalid-" + state,
 				OccurredAt:    validBehaviorOccurredAt(),
 				UserID:        "user-impression-state",
@@ -251,7 +256,7 @@ func TestProcessBatchRequiresCanonicalImpressionState(t *testing.T) {
 		state := state
 		t.Run("accept_"+state, func(t *testing.T) {
 			svc, processor := newPatchBehaviorService(&capturePatchPublisher{})
-			err := svc.ProcessBatch(context.Background(), []BehaviorEventInput{{
+			_, err := svc.ProcessBatch(context.Background(), []BehaviorEventInput{{
 				ClientEventID: "evt-impression-valid-" + state,
 				OccurredAt:    validBehaviorOccurredAt(),
 				UserID:        "user-impression-state",

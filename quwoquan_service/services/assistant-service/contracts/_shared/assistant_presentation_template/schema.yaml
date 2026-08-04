@@ -14,6 +14,7 @@ fields:
   - { name: responsiveVariants, type: list<object>, ref: responsive_variant, default: [] }
   - { name: allowedActionIntents, type: list<string>, default: [] }
   - { name: fallbackMarkdown, type: string, required: true }
+  - { name: fallbackMarkdownBinding, type: string, default: '' }
   - { name: accessibility, type: map, default: {} }
   - { name: assetDigest, type: string, required: true }
 subcontracts:

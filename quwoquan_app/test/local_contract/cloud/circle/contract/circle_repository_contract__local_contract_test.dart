@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
-import '../../../../support/cloud_services/repository_mock_reexports.dart';
+import '../../../../support/cloud_services/object_doubles/circle/alpha_circle_query_reader.dart';
 
 const _fixtureCircleId = 'fixture_circle_photo';
 
@@ -17,7 +17,7 @@ void main() {
     test('list 返回非空圈子列表', () async {
       final circles = await reader.list(const CircleListQuery());
       expect(circles.items, isNotEmpty);
-      expect(circles.items.first.circleId, isNotEmpty);
+      expect(circles.items.first.id, isNotEmpty);
       expect(circles.items.first.name, isNotEmpty);
     });
 
@@ -25,7 +25,7 @@ void main() {
       final detail = await reader.get(
         const CircleDetailQuery(circleId: _fixtureCircleId),
       );
-      expect(detail.circleId, _fixtureCircleId);
+      expect(detail.id, _fixtureCircleId);
       expect(detail.name, isNotEmpty);
       expect(detail.domainId, isNotEmpty);
       expect(detail.autoSyncChat, isTrue);
@@ -36,7 +36,7 @@ void main() {
         const CircleFeedQuery(circleId: _fixtureCircleId),
       );
       expect(feed.items, isNotEmpty);
-      expect(feed.items.first.post.postId, isNotEmpty);
+      expect(feed.items.first.postId, isNotEmpty);
     });
 
     test('discovery feed 使用同一 fixture bundle', () async {
@@ -145,7 +145,7 @@ void main() {
         'status': 'archived',
         'idempotentReplay': true,
       });
-      expect(decoded.status, CircleLifecycleStatus.archived);
+      expect(decoded.status, CircleStatus.archived);
       expect(decoded.idempotentReplay, isTrue);
     });
   });

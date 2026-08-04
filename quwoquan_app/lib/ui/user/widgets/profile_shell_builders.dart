@@ -5,12 +5,18 @@ extension _ProfileShellTabBuilders on _ProfileShellState {
   Widget _buildFirstScreenError(BuildContext context, ProfileState state) {
     return AppPageErrorState(
       semantic: _profileBlockingErrorSemantic(context, state.identityFailure!),
-      onAction: (action) async {
+      onRecovery: (action) async {
         if (action.type == UiErrorActionType.retry ||
             action.type == UiErrorActionType.resubmit) {
           await ref
               .read(profileNotifierProvider(widget.userId).notifier)
               .reloadIdentity();
+          return ref
+                      .read(profileNotifierProvider(widget.userId))
+                      .identityFailure ==
+                  null
+              ? UiRecoveryOutcome.recovered
+              : UiRecoveryOutcome.stillBlocked;
         } else if (action.type == UiErrorActionType.login) {
           await requireLogin(
             ref,
@@ -19,9 +25,12 @@ extension _ProfileShellTabBuilders on _ProfileShellState {
             redirect: GoRouterState.of(context).uri.toString(),
             dismissFallback: AppRoutePaths.home,
           );
+          return UiRecoveryOutcome.handedOff;
         } else if (action.type == UiErrorActionType.dismiss) {
           _leaveProfile(context);
+          return UiRecoveryOutcome.handedOff;
         }
+        return UiRecoveryOutcome.cancelled;
       },
     );
   }

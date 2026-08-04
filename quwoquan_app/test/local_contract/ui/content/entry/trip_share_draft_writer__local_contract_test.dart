@@ -80,7 +80,8 @@ TripTravelogueDraftSource _source({
     tripId: 'trip-1',
     sourceRevisionId: 'revision-1',
     sourceRevisionNumber: 1,
-    sourceDigest: 'sha256:source',
+    sourceDigest:
+        'sha256:41cf6794ba4200b839c53531555f0f3998df4cbb01a4d5cb0b94e3ca5e23947d',
     privacyPolicyDigest:
         'sha256:760672367557300130bdf88db43b01f07917475ae4f60ff0b9be95aa78d7e2f1',
     scope: TripShareSnapshotScope.full,

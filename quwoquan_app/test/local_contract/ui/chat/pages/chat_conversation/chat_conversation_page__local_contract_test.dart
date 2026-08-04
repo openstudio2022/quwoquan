@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import '../../../../../support/cloud_services/chat_repository_mock.dart';
+import '../../../../../support/cloud_services/content/mock_content_repository.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_delegate.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_notifier.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
@@ -41,6 +42,9 @@ void main() {
             MockChatRepository(),
           ),
           chatMessageCommandWriterProvider.overrideWithValue(writer),
+          contentConfigRepositoryProvider.overrideWithValue(
+            MockContentRepository(),
+          ),
           relationshipCapabilityRepositoryProvider.overrideWithValue(
             _MutualRelationshipCapability(),
           ),
@@ -121,6 +125,9 @@ void main() {
             MockChatRepository(),
           ),
           chatMessageCommandWriterProvider.overrideWithValue(writer),
+          contentConfigRepositoryProvider.overrideWithValue(
+            MockContentRepository(),
+          ),
           relationshipCapabilityRepositoryProvider.overrideWithValue(
             _BlockedRelationshipCapability(),
           ),
@@ -220,7 +227,9 @@ class _MutualRelationshipCapability extends RelationshipCapabilityRepository {
   bool get reconcilesCapabilityWithSharedRelationshipState => false;
 
   @override
-  Future<RelationshipCapabilityDto> getCapability(String targetUserId) async {
+  Future<RelationshipCapabilityViewData> getCapability(
+    String targetUserId,
+  ) async {
     return _relationshipCapability(targetUserId: targetUserId, allowed: true);
   }
 }
@@ -230,33 +239,35 @@ class _BlockedRelationshipCapability extends RelationshipCapabilityRepository {
   bool get reconcilesCapabilityWithSharedRelationshipState => false;
 
   @override
-  Future<RelationshipCapabilityDto> getCapability(String targetUserId) async {
+  Future<RelationshipCapabilityViewData> getCapability(
+    String targetUserId,
+  ) async {
     return _relationshipCapability(targetUserId: targetUserId, allowed: false);
   }
 }
 
-RelationshipCapabilityDto _relationshipCapability({
+RelationshipCapabilityViewData _relationshipCapability({
   required String targetUserId,
   required bool allowed,
 }) {
-  return RelationshipCapabilityDto.fromMap(<String, dynamic>{
-    'viewerPersonaId': 'persona_chat_uat',
-    'targetPersonaId': targetUserId,
-    'relationState': allowed ? 'mutual' : 'blocked',
-    'canFollow': false,
-    'canUnfollow': allowed,
-    'canFollowBack': false,
-    'canGreet': false,
-    'canCreateDirectConversation': allowed,
-    'canSendMessage': allowed,
-    'canOpenConversation': allowed,
-    'hasPendingGreeting': false,
-    'hasFormalConversation': allowed,
-    'canStartVoiceCall': allowed,
-    'canStartVideoCall': allowed,
-    'isBlocked': !allowed,
-    'isBlockedBy': false,
-  });
+  return RelationshipCapabilityViewData(
+    viewerPersonaId: 'persona_chat_uat',
+    targetPersonaId: targetUserId,
+    relationState: allowed ? 'mutual' : 'blocked',
+    canFollow: false,
+    canUnfollow: allowed,
+    canFollowBack: false,
+    canGreet: false,
+    canCreateDirectConversation: allowed,
+    canSendMessage: allowed,
+    canOpenConversation: allowed,
+    hasPendingGreeting: false,
+    hasFormalConversation: allowed,
+    canStartVoiceCall: allowed,
+    canStartVideoCall: allowed,
+    isBlocked: !allowed,
+    isBlockedBy: false,
+  );
 }
 
 void _noop() {}

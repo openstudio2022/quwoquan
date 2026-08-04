@@ -141,10 +141,10 @@ func extractSession(t *testing.T, resp map[string]any) map[string]any {
 
 func extractMediaAccess(t *testing.T, resp map[string]any) map[string]any {
 	t.Helper()
-	if _, legacy := resp["token"]; legacy {
-		t.Fatal("response must not expose legacy token field")
+	if _, retired := resp["token"]; retired {
+		t.Fatal("response must not expose retired token field")
 	}
-	if _, legacy := resp["livekitUrl"]; legacy {
+	if _, retired := resp["livekitUrl"]; retired {
 		t.Fatal("response must not expose vendor-specific livekitUrl field")
 	}
 	mediaAccess, ok := resp["mediaAccess"].(map[string]any)

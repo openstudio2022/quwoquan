@@ -68,7 +68,7 @@ type PreferenceSnapshotReader interface {
 		context.Context,
 		string,
 		string,
-	) ([]preferencemodel.Snapshot, []preferencemodel.Snapshot, error)
+	) ([]preferencemodel.AssistantPreferenceSnapshot, []preferencemodel.AssistantPreferenceSnapshot, error)
 }
 
 type UseCaseOption func(*UseCases)
@@ -116,7 +116,7 @@ func (s *UseCases) Start(
 			return runruntime.Run{}, invalidArgument(err.Error())
 		}
 	}
-	var sessionPreferences, longTermPreferences = []preferencemodel.Snapshot(nil), []preferencemodel.Snapshot(nil)
+	var sessionPreferences, longTermPreferences = []preferencemodel.AssistantPreferenceSnapshot(nil), []preferencemodel.AssistantPreferenceSnapshot(nil)
 	if s.preferenceSnapshots != nil {
 		sessionPreferences, longTermPreferences, err =
 			s.preferenceSnapshots.ResolveActiveSnapshots(
@@ -141,19 +141,19 @@ func (s *UseCases) Start(
 		}
 	}
 	run, err := s.runs.Start(ctx, runruntime.StartCommand{
-		UserID:                  userID,
-		PersonaID:               input.TrustedPersonaID,
-		SessionID:               sessionID,
-		ClientRequestID:         input.ClientRequestID,
-		TraceID:                 traceID,
-		RequestContext:          input.TrustedRequestContext,
-		IntentKind:              strings.TrimSpace(input.Intent.Kind),
-		InputText:               text,
-		ContextSnapshot:         contextSnapshot,
-		SurfaceCapabilities:     input.SurfaceCapabilities,
-		SessionPreferenceFacts:  sessionPreferences,
-		LongTermPreferenceFacts: longTermPreferences,
-		ReasoningProfile:        profile,
+		UserID:              userID,
+		PersonaID:           input.TrustedPersonaID,
+		SessionID:           sessionID,
+		ClientRequestID:     input.ClientRequestID,
+		TraceID:             traceID,
+		RequestContext:      input.TrustedRequestContext,
+		IntentKind:          strings.TrimSpace(input.Intent.Kind),
+		InputText:           text,
+		ContextSnapshot:     contextSnapshot,
+		SurfaceCapabilities: input.SurfaceCapabilities,
+		SessionPreferences:  sessionPreferences,
+		LongTermPreferences: longTermPreferences,
+		ReasoningProfile:    profile,
 		DefinitionOfDone: runruntime.DefinitionOfDone{
 			Outcome:                  input.DefinitionOfDone.Outcome,
 			Constraints:              input.DefinitionOfDone.Constraints,

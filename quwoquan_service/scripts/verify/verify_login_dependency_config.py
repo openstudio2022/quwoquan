@@ -89,9 +89,16 @@ def verify_config(
         "sys.user-service.integration.external_interaction_base_url",
         defaults.get("sys.user-service.integration.external_interaction_base_url"),
     )
-    if not isinstance(base_url, str) or not base_url.startswith("https://"):
+    if env == "prod":
+        if not isinstance(base_url, str) or not base_url.startswith("https://"):
+            failures.append(
+                f"{env}: sys.user-service.integration.external_interaction_base_url must use https"
+            )
+    elif base_url != "http://integration-service:18086":
         failures.append(
-            f"{env}: sys.user-service.integration.external_interaction_base_url must use https"
+            f"{env}: sys.user-service.integration.external_interaction_base_url "
+            "must be the canonical nonprod internal http mesh URL "
+            "http://integration-service:18086"
         )
     if RETIRED_OTP_MODE_KEY in overrides or RETIRED_OTP_MODE_KEY in defaults:
         failures.append(

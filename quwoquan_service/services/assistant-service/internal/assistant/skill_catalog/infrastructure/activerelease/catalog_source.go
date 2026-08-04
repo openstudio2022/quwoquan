@@ -9,9 +9,10 @@ import (
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
 
-	skillpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/skill"
+	"quwoquan_service/services/assistant-service/internal/assistant/skill_catalog/application/catalogprojection"
 	"quwoquan_service/services/assistant-service/internal/assistant/skill_catalog/domain/model"
 	packageapplication "quwoquan_service/services/assistant-service/internal/assistant/skill_package_release/application"
+	skillpkg "quwoquan_service/services/assistant-service/internal/assistant/skill_package_release/application/packageasset"
 	packagemodel "quwoquan_service/services/assistant-service/internal/assistant/skill_package_release/domain/model"
 )
 
@@ -120,23 +121,8 @@ func (source *CatalogSource) ListCatalogItems(
 	}
 	items := make([]model.Item, 0, len(snapshot.Manifests))
 	for _, manifest := range snapshot.Manifests {
-		consentScopes := map[string]struct{}{}
-		for _, requirement := range manifest.ContextProfile.Requirements {
-			for _, rawScope := range requirement.ConsentScopes {
-				scope := strings.TrimSpace(rawScope)
-				if scope != "" {
-					consentScopes[scope] = struct{}{}
-				}
-			}
-		}
-		requiredConsentScopes := make([]string, 0, len(consentScopes))
-		for scope := range consentScopes {
-			requiredConsentScopes = append(requiredConsentScopes, scope)
-		}
-		sort.Strings(requiredConsentScopes)
-		description := strings.TrimSpace(manifest.CatalogProfile.ValueDescription)
-		if description == "" {
-			description = strings.TrimSpace(manifest.Description)
+		if manifest.CatalogProfile.Visibility == skillpkg.CatalogVisibilityHidden {
+			continue
 		}
 		schemaRef := strings.TrimSpace(manifest.InputProfile.ConfigurationSchemaRef)
 		schema, found := snapshot.InputSchemas[schemaRef]
@@ -156,27 +142,29 @@ func (source *CatalogSource) ListCatalogItems(
 				err,
 			)
 		}
-		items = append(items, model.Item{
-			PackageID:                   snapshot.PackageID,
-			ReleaseDigest:               snapshot.ReleaseDigest,
-			SkillID:                     manifest.SkillID,
-			DisplayName:                 manifest.DisplayName,
-			Description:                 description,
-			Category:                    manifest.DomainID,
-			RequiresConsent:             len(requiredConsentScopes) > 0,
-			RequiredConsentScopes:       requiredConsentScopes,
-			IconHint:                    manifest.CatalogProfile.IconToken,
-			CoverMediaRef:               manifest.CatalogProfile.CoverMediaRef,
-			TargetUsers:                 append([]string{}, manifest.CatalogProfile.TargetUsers...),
-			DataUseSummary:              manifest.CatalogProfile.DataUseSummary,
-			ExampleRefs:                 append([]string{}, manifest.CatalogProfile.ExampleRefs...),
-			ActivationMode:              manifest.ActivationProfile.Mode,
-			AllowedSurfaceKinds:         append([]string{}, manifest.ActivationProfile.AllowedSurfaceKinds...),
-			ConfigurationSchemaDigest:   schema.AssetDigest,
-			ConfigurationSchema:         configurationSchema,
-			SetupTemplateRef:            manifest.InputProfile.SetupTemplateRef,
-			ConfigurationRequiredFields: append([]string{}, manifest.InputProfile.RequiredFields...),
+		item, listed, err := catalogprojection.Project(catalogprojection.Input{
+			PackageID:                 snapshot.PackageID,
+			ReleaseDigest:             snapshot.ReleaseDigest,
+			Manifest:                  manifest,
+			ConfigurationSchemaDigest: schema.AssetDigest,
+			ConfigurationSchema:       configurationSchema,
+			LoadTemplate: func(skillID string, templateID string) ([]byte, bool, error) {
+				for _, owner := range []string{skillID, "quwoquan.official"} {
+					key := owner + "\x00" + templateID
+					asset, found := snapshot.PresentationTemplates[key]
+					if found {
+						return append([]byte(nil), asset.Document...), true, nil
+					}
+				}
+				return nil, false, nil
+			},
 		})
+		if err != nil {
+			return nil, err
+		}
+		if listed {
+			items = append(items, item)
+		}
 	}
 	return items, nil
 }

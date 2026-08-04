@@ -1,4 +1,4 @@
-// spec_ref: specs/feature-tree/assistant-run-learning/run-stream-policy/policy-template-routing/spec.md
+// spec_ref: specs/feature-tree/assistant-run-learning/run-stream-policy/policy-template-routing/spec.md#gwt-001
 package assistant_policy_release_test
 
 import (
@@ -124,5 +124,57 @@ func TestPolicyReleaseRejectsUnsafeLearningContext(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("unsafe learning context policy must be rejected")
+	}
+}
+
+func TestPolicyReleaseRejectsRoutingIdentityThatDiffersFromItsTemplate(t *testing.T) {
+	t.Parallel()
+	base := model.Release{
+		PolicyID:          "assistant-default",
+		DefaultTemplateID: "travel-companion",
+		Templates: []model.Template{{
+			TemplateID:      "travel-companion",
+			SkillID:         "travel_companion",
+			DomainID:        "travel",
+			PromptPolicy:    "ground shared travel decisions",
+			AllowedTools:    []string{"app_search", "web_search"},
+			SearchIntensity: "high",
+		}},
+		LearningContextPolicy: model.LearningContextPolicy{
+			Enabled:                true,
+			AllowedSignals:         []string{"feedback_counts"},
+			AllowedMetricIDs:       []string{"turn_completion"},
+			AllowedReasonCodes:     []string{"clear"},
+			MinimumFeedbackSamples: 3,
+			WindowDays:             30,
+		},
+	}
+	for _, testCase := range []struct {
+		name string
+		rule model.RoutingRule
+	}{
+		{
+			name: "retired skill id cannot alias the canonical travel template",
+			rule: model.RoutingRule{
+				RuleID: "travel-planning", Priority: 10,
+				SkillID: "travel_planning", TemplateID: "travel-companion",
+			},
+		},
+		{
+			name: "foreign domain cannot alias the canonical travel template",
+			rule: model.RoutingRule{
+				RuleID: "foreign-domain", Priority: 10,
+				DomainID: "life", SkillID: "travel_companion",
+				TemplateID: "travel-companion",
+			},
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			candidate := base
+			candidate.RoutingRules = []model.RoutingRule{testCase.rule}
+			if _, err := model.Digest(candidate); !errors.Is(err, model.ErrInvalidArgument) {
+				t.Fatalf("routing identity mismatch error=%v want invalid argument", err)
+			}
+		})
 	}
 }

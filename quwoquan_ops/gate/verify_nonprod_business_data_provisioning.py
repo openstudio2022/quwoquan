@@ -64,10 +64,12 @@ FORBIDDEN_RUNTIME_TOKENS = (
 )
 
 FORBIDDEN_NONPROD_PROVIDER_TOKENS = (
+    # Stable Adapter IDs remain forbidden in first-party deploy manifests.
+    # Environment keys such as *_FIXTURE_BASE_URL are allowed because they
+    # reference an independently deployed protocol workload, not in-process data.
     "protocol_fixture",
     "local_capture",
     "local_recorder",
-    "_FIXTURE_",
 )
 
 PROD_SCAN_ROOTS = (

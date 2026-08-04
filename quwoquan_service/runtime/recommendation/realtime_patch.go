@@ -4,11 +4,12 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"strings"
 	"time"
+
+	"quwoquan_service/runtime/clientrealtime"
 )
 
 // 低风险首页推荐实时 patch（商用化阶段 7 · §G）服务端发射真相源。
@@ -23,8 +24,7 @@ import (
 // feedPatchChannelTemplate 是 per-user 瞬时通道模板，必须等于 metadata 的 realtime_channel_template。
 const feedPatchChannelTemplate = "rt:rec:feed:user:{userId}"
 
-// FeedRealtimePatchSchema 是 wire envelope 的单一 schema 身份。
-const FeedRealtimePatchSchema = "feed_realtime_patch"
+const feedRealtimePatchWireType = "feed.patch"
 
 // FeedPatchType 是 patch 类型闭集（metadata patch_types）。
 type FeedPatchType string
@@ -63,7 +63,6 @@ const (
 
 // FeedRealtimePatch 是强类型 wire envelope，json tag 必须与 metadata envelope_fields 同名。
 type FeedRealtimePatch struct {
-	Schema                  string                    `json:"schema"`
 	PatchID                 string                    `json:"patchId"`
 	PatchType               FeedPatchType             `json:"patchType"`
 	UserID                  string                    `json:"userId"`
@@ -352,9 +351,6 @@ func relationshipHintReason(signal BehaviorSignal) (FeedPatchReasonCode, bool) {
 
 // emit 填充契约不变字段、校验、序列化并发布到 per-user 通道，并登记可观测指标。
 func (e *FeedPatchEmitter) emit(ctx context.Context, patch FeedRealtimePatch) error {
-	if patch.Schema == "" {
-		patch.Schema = FeedRealtimePatchSchema
-	}
 	if patch.PatchID == "" {
 		patch.PatchID = e.newID()
 	}
@@ -370,7 +366,18 @@ func (e *FeedPatchEmitter) emit(ctx context.Context, patch FeedRealtimePatch) er
 		e.logEmitError("rec.feed_patch.invalid", patch, err)
 		return err
 	}
-	encoded, err := json.Marshal(patch)
+	emittedAt, err := time.Parse(time.RFC3339, patch.EmittedAt)
+	if err != nil {
+		RecordFeedPatchEmitFailed(patchType, "marshal")
+		e.logEmitError("rec.feed_patch.marshal_failed", patch, err)
+		return err
+	}
+	encoded, err := clientrealtime.MarshalClientRealtimeEventEnvelope(
+		feedRealtimePatchWireType,
+		patch.PatchID,
+		emittedAt,
+		patch,
+	)
 	if err != nil {
 		RecordFeedPatchEmitFailed(patchType, "marshal")
 		e.logEmitError("rec.feed_patch.marshal_failed", patch, err)

@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	getObjectIntersectionsOperation = "content.post.GetObjectIntersections"
+	getObjectIntersectionsOperation = "content.intersection_visit_state.GetObjectIntersections"
 	maxResponseBytes                = 256 << 10
 )
 

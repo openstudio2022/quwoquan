@@ -1,5 +1,33 @@
 
 types:
+  RealtimeEventEnvelope:
+    description: >-
+      WebSocket 与 LongPoll 共用的第一方实时业务 envelope。type 是闭集判别器，
+      具体 event_ref、payload_entity 与 owner 只由 _shared/realtime_event_catalog.yaml
+      登记；payload 字段继续由对象本地 contracts 拥有，未知 type 或字段必须拒绝。
+    discriminator: type
+    variant_catalog: _shared/realtime_event_catalog.yaml
+    unknown_field_policy: reject
+    fields:
+      - { name: type, type: string }
+      - { name: eventId, type: string, nullable: true }
+      - { name: occurredAt, type: timestamp }
+      - { name: payload, type: object }
+
+  GreetingIntersectionSnapshot:
+    description: >-
+      user-service 以当前双方关系重新解析并冻结、chat-service 只读消费的破冰交集展示快照。
+      该跨服务值对象只有此处一个 wire owner，不允许领域服务复制定义或在 App barrel 隐藏冲突类型。
+    fields:
+      - { name: intersectionId, type: string, constraints: [NOT_BLANK] }
+      - { name: evidenceId, type: string, constraints: [NOT_BLANK] }
+      - { name: sourceRef, type: string, constraints: [NOT_BLANK] }
+      - { name: objectTypeRef, type: string, constraints: [NOT_BLANK] }
+      - { name: objectId, type: string, constraints: [NOT_BLANK] }
+      - { name: primaryText, type: string, constraints: [NOT_BLANK] }
+      - { name: dimension, type: string, constraints: [NULLABLE] }
+      - { name: resolvedAt, type: timestamp, constraints: [NOT_NULL] }
+
   GeoPoint:
     fields:
       - { name: latitude, type: float64 }
@@ -109,7 +137,7 @@ enums:
   ExternalInteractionStatus: [accepted, pending_dispatch, processing, sent_unconfirmed, delivered, failed, dead_letter]
   ExternalInteractionAttemptStatus: [sent_unconfirmed, delivered, failed]
   ExternalInteractionSensitivity: [public, private, secret]
-  ExternalInteractionProvider: [aliyun_sms, local_sms_recorder, push_dispatch, apns_voip, fcm, local_push_recorder]
+  ExternalInteractionProvider: [aliyun_sms, local_sms_recorder, push_dispatch, apns_voip, fcm, push_protocol_substitute]
   ConnectorAuthorizationMode: [device_native, oauth2, public_link]
   ConnectorAuthorizationStatus: [pending, verified, consumed, expired, revoked, failed]
   ConnectorConfirmationPolicy: [none, user_confirmation]

@@ -8,9 +8,11 @@ final class AlphaFollowingSubjectFacet
   AlphaFollowingSubjectFacet({ObjectScenarioSeedReader? fixtures})
     : _items = _load(fixtures ?? objectScenarioSeedReader);
 
-  final List<FollowingSubjectResult> _items;
+  final List<FollowingSubjectItemView> _items;
 
-  static List<FollowingSubjectResult> _load(ObjectScenarioSeedReader fixtures) {
+  static List<FollowingSubjectItemView> _load(
+    ObjectScenarioSeedReader fixtures,
+  ) {
     final seed = fixtures.requireSeedSet('user', 'following_subject_core');
     final rawItems = seed['items'];
     if (rawItems is! List<Object?>) {
@@ -58,7 +60,7 @@ final class AlphaFollowingSubjectFacet
     }
     final current = _items[index];
     final visitedAt = command.visitedAt.toUtc();
-    _items[index] = FollowingSubjectResult(
+    _items[index] = FollowingSubjectItemView(
       subjectId: current.subjectId,
       subjectType: current.subjectType,
       displayName: current.displayName,

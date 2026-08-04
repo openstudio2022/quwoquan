@@ -25,7 +25,9 @@ def configure_test_auth_environment() -> None:
     os.environ["AUTH_JWT_ISSUER"] = TEST_ISSUER
     os.environ["AUTH_JWT_AUDIENCE"] = TEST_AUDIENCE
     os.environ["AUTH_JWT_TOKEN_VERSION"] = str(TEST_VERSION)
-    config_version = "sha256:recommendation-local-contract"
+    config_version = "sha256:" + hashlib.sha256(
+        b"recommendation-service:local-contract-config"
+    ).hexdigest()
     repo_root = Path(__file__).resolve().parents[5]
     config_root = (
         repo_root

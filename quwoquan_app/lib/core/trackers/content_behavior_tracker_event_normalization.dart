@@ -8,7 +8,7 @@ extension _ContentBehaviorTrackerEventNormalization on ContentBehaviorTracker {
     final feed = event.feedRequestId?.trim();
     final suffix = feed == null || feed.isEmpty ? now.toString() : feed;
     return BehaviorEvent(
-      clientEventId: 'beh:${event.action.wireValue}:$safeContent:$suffix:$now',
+      clientEventId: 'beh:${event.action.wireName}:$safeContent:$suffix:$now',
       state: event.state ?? _stateForAction(event.action),
       contentId: event.contentId,
       action: event.action,
@@ -61,41 +61,42 @@ extension _ContentBehaviorTrackerEventNormalization on ContentBehaviorTracker {
         '${event.motionDirection ?? ''}|${event.motionProfile ?? ''}|'
         '${event.settleMs ?? ''}|${event.reducedMotion ?? ''}|'
         '${event.committed ?? ''}';
-    return '$feed|${event.contentId}|${event.action.wireValue}|${event.state ?? ''}|$subject|$kind|$motion';
+    return '$feed|${event.contentId}|${event.action.wireName}|${event.state ?? ''}|$subject|$kind|$motion';
   }
 
-  String _stateForAction(BehaviorAction action) {
+  String _stateForAction(BehaviorEventType action) {
     switch (action) {
-      case BehaviorAction.impression:
+      case BehaviorEventType.impression:
         return 'impressed';
-      case BehaviorAction.dwell:
+      case BehaviorEventType.dwell:
         return 'dwell';
-      case BehaviorAction.dislike:
-      case BehaviorAction.hideAuthor:
-      case BehaviorAction.hideContentType:
-      case BehaviorAction.report:
-      case BehaviorAction.skip:
-      case BehaviorAction.intersectionFeedback:
-      case BehaviorAction.wishlistRemove:
+      case BehaviorEventType.dislike:
+      case BehaviorEventType.hideAuthor:
+      case BehaviorEventType.hideContentType:
+      case BehaviorEventType.report:
+      case BehaviorEventType.skip:
+      case BehaviorEventType.intersectionFeedback:
+      case BehaviorEventType.wishlistRemove:
         return 'negative';
-      case BehaviorAction.click:
-      case BehaviorAction.intersectionExpand:
-      case BehaviorAction.like:
-      case BehaviorAction.undoDislike:
-      case BehaviorAction.share:
-      case BehaviorAction.comment:
-      case BehaviorAction.follow:
-      case BehaviorAction.authorView:
-      case BehaviorAction.entityPageView:
-      case BehaviorAction.tagClick:
-      case BehaviorAction.playProgress:
-      case BehaviorAction.effectivePlay:
-      case BehaviorAction.contentDepth:
-      case BehaviorAction.joinCircle:
-      case BehaviorAction.addContact:
-      case BehaviorAction.assistantInterest:
-      case BehaviorAction.onboardingInterest:
-      case BehaviorAction.wishlistAdd:
+      case BehaviorEventType.click:
+      case BehaviorEventType.intersectionExpand:
+      case BehaviorEventType.like:
+      case BehaviorEventType.undoDislike:
+      case BehaviorEventType.share:
+      case BehaviorEventType.comment:
+      case BehaviorEventType.follow:
+      case BehaviorEventType.authorView:
+      case BehaviorEventType.entityPageView:
+      case BehaviorEventType.tagClick:
+      case BehaviorEventType.playProgress:
+      case BehaviorEventType.effectivePlay:
+      case BehaviorEventType.contentDepth:
+      case BehaviorEventType.joinCircle:
+      case BehaviorEventType.leaveCircle:
+      case BehaviorEventType.addContact:
+      case BehaviorEventType.assistantInterest:
+      case BehaviorEventType.onboardingInterest:
+      case BehaviorEventType.wishlistAdd:
         return 'interaction';
     }
   }

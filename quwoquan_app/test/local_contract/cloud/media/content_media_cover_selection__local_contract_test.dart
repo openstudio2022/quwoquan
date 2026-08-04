@@ -108,11 +108,11 @@ CloudException _mediaFailure({
   );
 }
 
-ContentMediaCoverSelectionResult _selection() {
+MediaCoverSelectionResult _selection() {
   final cover = Uri.parse('https://cdn.example.test/video-asset-1/cover.jpg');
-  return ContentMediaCoverSelectionResult(
+  return MediaCoverSelectionResult(
     mediaId: 'video-asset-1',
-    coverStrategy: 'first_frame',
+    coverStrategy: MediaCoverStrategy.firstFrame,
     manualCoverAssetId: null,
     coverFrameTimeMs: 0,
     thumbnailUrl: cover,

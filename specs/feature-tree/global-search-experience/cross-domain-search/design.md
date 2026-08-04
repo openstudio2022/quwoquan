@@ -17,7 +17,7 @@
 - [`multi-domain-result-composition`](./multi-domain-result-composition/spec.md)：输入“钱”可预览并打开发布态“东钱湖”实体主页。
 - [`recent-search-sync-and-voice-asr`](./recent-search-sync-and-voice-asr/spec.md)：local_contract 与真实 Mongo api_integration 覆盖相同去重、receipt、owner isolation 行为。
 - [`search-intersection-consumption`](./search-intersection-consumption/spec.md)：connected / discovery / intersection_lead 三组互斥，connected 区不展示交集句。
-- [`xiaoqu-entry-handoff`](./xiaoqu-entry-handoff/spec.md)：SearchXiaoquResults 不再返回固定 spec/knowledge 占位 citation。
+- [`xiaoqu-entry-handoff`](./xiaoqu-entry-handoff/spec.md)：`StartAssistantRun` 的 `search` 意图返回真实 citation，不新增搜索模型执行副轨。
 
 ## 3. 端云与数据流
 

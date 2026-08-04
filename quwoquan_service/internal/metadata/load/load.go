@@ -281,18 +281,19 @@ type routeDocument struct {
 		TerminalField       string   `yaml:"terminal_field"`
 		TerminalValues      []string `yaml:"terminal_values"`
 	} `yaml:"streaming"`
-	RequestBindings  *requestBindingsDocument  `yaml:"request_bindings"`
-	RequestConstants *requestConstantsDocument `yaml:"request_constants"`
-	PathParams       any                       `yaml:"path_params"`
-	QueryParams      any                       `yaml:"query_params"`
-	RequestFields    any                       `yaml:"request_fields"`
-	Headers          any                       `yaml:"headers"`
-	ResponseEntity   string                    `yaml:"response_entity"`
-	ResponseBody     string                    `yaml:"response_body"`
-	ResponseBodyKind string                    `yaml:"response_body_kind"`
-	Actor            string                    `yaml:"actor"`
-	Security         map[string]string         `yaml:"security"`
-	Authorization    struct {
+	RequestBindings   *requestBindingsDocument  `yaml:"request_bindings"`
+	RequestConstants  *requestConstantsDocument `yaml:"request_constants"`
+	PathParams        any                       `yaml:"path_params"`
+	QueryParams       any                       `yaml:"query_params"`
+	RequestFields     any                       `yaml:"request_fields"`
+	Headers           any                       `yaml:"headers"`
+	ResponseEntity    string                    `yaml:"response_entity"`
+	ResponseEntityRef string                    `yaml:"response_entity_ref"`
+	ResponseBody      string                    `yaml:"response_body"`
+	ResponseBodyKind  string                    `yaml:"response_body_kind"`
+	Actor             string                    `yaml:"actor"`
+	Security          map[string]string         `yaml:"security"`
+	Authorization     struct {
 		Principal       string   `yaml:"principal"`
 		Scopes          []string `yaml:"scopes"`
 		Permissions     []string `yaml:"permissions"`
@@ -532,6 +533,7 @@ func loadService(
 			LegacyRequestKeys:      legacyRequestKeys,
 			ClientBindingOverrides: clientBindingOverrides,
 			ResponseEntity:         strings.TrimSpace(route.ResponseEntity),
+			ResponseEntityRef:      strings.TrimSpace(route.ResponseEntityRef),
 			ResponseBody:           strings.TrimSpace(route.ResponseBody),
 			ResponseBodyKind:       strings.TrimSpace(route.ResponseBodyKind),
 			SourcePath:             relativePath(metadataDir, path),
@@ -589,7 +591,8 @@ func loadService(
 				LatencyP95Milliseconds: route.SLO.LatencyP95Milliseconds,
 				AvailabilityPercent:    route.SLO.AvailabilityPercent,
 			},
-			ClientContract: clientContract,
+			ClientContract:         clientContract,
+			ClientContractExplicit: route.ClientContract != nil,
 		})
 	}
 	runtimeEntrypoints := make(

@@ -1,11 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_kind_metadata.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_point.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_representative_actor.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_fact_items.dart';
+
+import '../../../../support/fixtures/intersection_fixtures.dart';
 
 /// T1：交集展示的端侧单源合约。
 ///
@@ -27,7 +25,8 @@ void main() {
     String repPrivacy = 'visible',
     List<IntersectionTextSpan> primarySpans = const <IntersectionTextSpan>[],
   }) {
-    return IntersectionReason(
+    return intersectionReasonFixture(
+      kind: kind,
       dimension: dimension,
       intersectionId: 'ix_test',
       intersectionClass: 'fact',
@@ -39,27 +38,38 @@ void main() {
       primaryText: primaryText,
       primarySpans: primarySpans,
       intersectionPoints: <IntersectionPoint>[
-        IntersectionPoint(
+        intersectionPointFixture(
           pointId: 'p',
+          pointClass: 'fact',
           sourceRef: kind,
           count: count,
           dimension: dimension,
+          label: '',
+          displayText: '',
+          visibility: 'public',
+          sampleText: '',
+          sampleAvatarUrls: const <String>[],
+          sampleVisuals: const <IntersectionVisual>[],
         ),
       ],
       representativeActor: repName == null
           ? null
-          : IntersectionRepresentativeActor(
+          : intersectionRepresentativeActorFixture(
               actorId: repId ?? '',
               displayName: repName,
+              avatarUrl: '',
+              relationLabel: '',
               privacyState: repPrivacy,
               target: repId == null
                   ? null
-                  : IntersectionTarget(
+                  : intersectionTargetFixture(
                       objectType: 'user',
                       objectId: repId,
                       objectKind: 'person',
                       routeId: 'userProfile',
                     ),
+              evidenceRank: 1,
+              snapshotVersion: 'intersection_fixture',
             ),
     );
   }
@@ -123,7 +133,7 @@ void main() {
   group('逐 kind 端侧元数据只剩视觉兜底', () {
     test('kind → iconKey 由 codegen 单一真相源驱动', () {
       expect(IntersectionKindMetadata.of('sharedFollowees')!.iconKey, 'people');
-      expect(IntersectionKindMetadata.of('commonContact')!.iconKey, 'contact');
+      expect(IntersectionKindMetadata.of('commonFollower')!.iconKey, 'people');
       expect(IntersectionKindMetadata.of('coVisitedEntity')!.iconKey, 'place');
       expect(
         IntersectionKindMetadata.of('followeeVisited')!.iconKey,

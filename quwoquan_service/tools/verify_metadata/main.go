@@ -396,7 +396,11 @@ func (v *validator) validateControlPlaneFile(path, domain string, routePaths map
 				v.errorf("%s: %s has incomplete operation declaration", pathRelative(v.metadataDir, path), obj.ObjectType)
 				continue
 			}
-			if len(op.Scopes) == 0 {
+			// Control-plane operation_refs may select a canonical authenticated
+			// user-plane operation whose principal is public and whose authority is
+			// expressed by actor + ownership policy rather than an operator scope.
+			// All non-public principals remain scope-bound and fail closed.
+			if controlPlaneOperationRequiresScopes(op.Principal) && len(op.Scopes) == 0 {
 				v.errorf("%s: %s/%s scopes cannot be empty", pathRelative(v.metadataDir, path), obj.ObjectType, op.Operation)
 			}
 			if op.DangerLevel != "" && !isAllowed(op.DangerLevel, "low", "medium", "high", "critical") {
@@ -420,6 +424,10 @@ func (v *validator) validateControlPlaneFile(path, domain string, routePaths map
 	}
 
 	_ = domain
+}
+
+func controlPlaneOperationRequiresScopes(principal string) bool {
+	return strings.TrimSpace(principal) != "public"
 }
 
 func (v *validator) validateConfigSchemaFile(path, domain string) {

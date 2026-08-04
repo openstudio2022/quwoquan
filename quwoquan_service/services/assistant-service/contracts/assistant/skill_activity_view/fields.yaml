@@ -1,0 +1,35 @@
+description: Skill Center 使用的脱敏活动联邦 Slice。
+fields:
+- {name: activityId, source: activityId, type: string, constraints: [PK, NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read, role: projection}
+- {name: accountId, source: accountId, type: string, constraints: [NOT_NULL], classification: PRIVATE, log_policy: hash, api_exposure: none, ops_exposure: read, role: projection, reference: true}
+- {name: skillId, source: skillId, type: string, constraints: [NOT_NULL, NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: projection}
+- {name: activityKind, source: activityKind, type: enum, enum_ref: SkillActivityKind, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: projection}
+- {name: status, source: status, type: string, constraints: [NOT_NULL, NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: projection, description: Source owner 状态原文，只用于辅助展示与诊断；App 分支必须消费 displayKey/recoveryAction canonical enum。}
+- {name: displayKey, source: displayKey, type: enum, enum_ref: SkillActivityDisplayKey, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: projection, description: App 本地化使用的 canonical 闭集语义 key，不包含用户或 Provider 正文。}
+- {name: sourceObjectRef, source: sourceObjectRef, type: string, constraints: [NOT_NULL, NOT_BLANK], classification: SENSITIVE, log_policy: hash, api_exposure: read, ops_exposure: read, role: projection}
+- {name: sourceRevision, source: sourceRevision, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read, role: projection}
+- {name: runId, source: runId, type: string, constraints: [NULLABLE], classification: SENSITIVE, log_policy: hash, api_exposure: none, ops_exposure: read, role: projection, reference: true}
+- {name: consentId, source: consentId, type: string, constraints: [NULLABLE], classification: SENSITIVE, log_policy: hash, api_exposure: none, ops_exposure: read, role: projection, reference: true}
+- {name: subscriptionId, source: subscriptionId, type: string, constraints: [NULLABLE], classification: SENSITIVE, log_policy: hash, api_exposure: none, ops_exposure: read, role: projection, reference: true}
+- {name: dataControlRequestId, source: dataControlRequestId, type: string, constraints: [NULLABLE], classification: SENSITIVE, log_policy: hash, api_exposure: read, ops_exposure: read, role: projection, reference: true}
+- {name: failureCode, source: failureCode, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read, role: projection}
+- {name: recoveryAction, source: recoveryAction, type: enum, enum_ref: SkillActivityRecoveryAction, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: projection}
+- {name: occurredAt, source: occurredAt, type: timestamp, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: projection}
+types:
+  ListSkillActivitiesQuery:
+    description: 当前账号按 Skill 分区读取活动的有界 cursor 查询。
+    fields:
+    - {name: skillId, source: path.skillId, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+    - {name: cursor, source: cursor, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: write, ops_exposure: none}
+    - {name: limit, source: limit, type: int, constraints: [NULLABLE, POSITIVE, MAX_100], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+  SkillActivityExternalSource:
+    description: 由事实 owner 提供的 generated query 入口；Assistant 不复制其数据。
+    fields:
+    - {name: sourceKind, source: sourceKind, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: operationRef, source: operationRef, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+  SkillActivitySlice:
+    description: 脱敏活动列表和需要由其他 owner 联邦读取的 typed source。
+    fields:
+    - {name: items, source: items, type: '[]SkillActivityView', constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+    - {name: nextCursor, source: nextCursor, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+    - {name: externalSources, source: externalSources, type: '[]SkillActivityExternalSource', constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}

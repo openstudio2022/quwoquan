@@ -10,6 +10,7 @@ import 'package:quwoquan_app/core/services/cache/local_search_namespace.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../support/sqflite_ffi_test_support.dart';
+import '../../../support/cloud_services/object_doubles/circle/circle_contract_test_builders.dart';
 
 void main() {
   setUpAll(ensureSqfliteFfiInitialized);
@@ -292,8 +293,8 @@ final class _CountingCircleQueryReader implements CircleQueryReader {
   Future<CirclePageSlice> list(CircleListQuery query) async {
     listCalls += 1;
     return CirclePageSlice(
-      items: <CircleProjection>[
-        CircleProjection(
+      items: <Circle>[
+        buildCircleContract(
           circleId: 'fixture_circle_photo',
           name: '契约摄影社',
           ownerId: 'fixture_owner',
@@ -303,30 +304,30 @@ final class _CountingCircleQueryReader implements CircleQueryReader {
   }
 
   @override
-  Future<CircleSearchResultSlice> search(CircleSearchQuery query) async =>
-      CircleSearchResultSlice(
-        items: const <CircleSearchItemProjection>[],
-        facetBuckets: const <CircleFacetBucketProjection>[],
+  Future<CircleSearchResultView> search(CircleSearchQuery query) async =>
+      CircleSearchResultView(
+        items: const <CircleSearchItemView>[],
+        facetBuckets: const <CircleFacetBucketView>[],
       );
 
   @override
-  Future<CircleProjection> get(CircleDetailQuery query) async =>
+  Future<Circle> get(CircleDetailQuery query) async =>
       throw UnimplementedError();
 
   @override
   Future<CircleFeedPageSlice> feed(CircleFeedQuery query) async =>
-      CircleFeedPageSlice(items: const <CircleFeedPostProjection>[]);
+      CircleFeedPageSlice(items: const <CircleFeedItemView>[]);
 
   @override
-  Future<CircleStatsSlice> stats(CircleStatsQuery query) async =>
-      const CircleStatsSlice();
+  Future<CircleStatsWire> stats(CircleStatsQuery query) async =>
+      buildCircleStatsContract(circleId: query.circleId);
 
   @override
-  Future<CircleImpactSlice> impact(CircleImpactQuery query) async =>
-      CircleImpactSlice(
+  Future<CircleImpactSummary> impact(CircleImpactQuery query) async =>
+      CircleImpactSummary(
         circleId: query.circleId,
         total: 0,
-        items: const <CircleImpactItemProjection>[],
+        items: const <CircleImpactItem>[],
       );
 }
 

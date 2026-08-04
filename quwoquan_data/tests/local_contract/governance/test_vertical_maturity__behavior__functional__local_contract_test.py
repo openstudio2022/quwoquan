@@ -23,6 +23,7 @@ from pathlib import Path
 sys.path.insert(0, str(SCRIPTS_ROOT))
 
 from core.io import read_json, write_json  # noqa: E402
+from core.article_package import sha256_text  # noqa: E402
 from content.release.environment.consistency import scan_release_contract  # noqa: E402
 from governance.coverage.benchmark import evaluate_benchmark  # noqa: E402
 from governance.coverage.vertical_inventory import (  # noqa: E402
@@ -168,7 +169,7 @@ def test_travel_image_rights_requires_generated_asset_provenance():
         {
             **base,
             "generationModel": "gpt-image",
-            "generationPromptHash": "sha256:abc",
+            "generationPromptHash": sha256_text("travel generated asset fixture prompt"),
             "generatedAt": "2026-06-13T00:00:00Z",
             "syntheticDisclosure": True,
         },

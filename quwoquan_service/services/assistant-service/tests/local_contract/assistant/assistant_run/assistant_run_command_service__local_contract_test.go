@@ -8,7 +8,87 @@ import (
 	"time"
 
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
+	assistantmodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/model"
 )
+
+type feedbackContextResolverRecorder struct {
+	calls         int
+	accountID     string
+	personaID     string
+	skillID       string
+	surfaceKind   string
+	packageID     string
+	releaseDigest string
+	policy        assistantmodel.AssistantFrozenLearningContextPolicy
+	frozenAt      time.Time
+}
+
+type feedbackContextResolverFunc func(
+	context.Context,
+	string,
+	string,
+	string,
+	string,
+	string,
+	string,
+	assistantmodel.AssistantFrozenLearningContextPolicy,
+	time.Time,
+) assistantmodel.AssistantFeedbackContextSnapshot
+
+func (resolve feedbackContextResolverFunc) ResolveFeedbackContext(
+	ctx context.Context,
+	accountID string,
+	personaID string,
+	skillID string,
+	surfaceKind string,
+	packageID string,
+	releaseDigest string,
+	policy assistantmodel.AssistantFrozenLearningContextPolicy,
+	frozenAt time.Time,
+) assistantmodel.AssistantFeedbackContextSnapshot {
+	return resolve(
+		ctx,
+		accountID,
+		personaID,
+		skillID,
+		surfaceKind,
+		packageID,
+		releaseDigest,
+		policy,
+		frozenAt,
+	)
+}
+
+func (resolver *feedbackContextResolverRecorder) ResolveFeedbackContext(
+	_ context.Context,
+	accountID string,
+	personaID string,
+	skillID string,
+	surfaceKind string,
+	packageID string,
+	releaseDigest string,
+	policy assistantmodel.AssistantFrozenLearningContextPolicy,
+	frozenAt time.Time,
+) assistantmodel.AssistantFeedbackContextSnapshot {
+	resolver.calls++
+	resolver.accountID = accountID
+	resolver.personaID = personaID
+	resolver.skillID = skillID
+	resolver.surfaceKind = surfaceKind
+	resolver.packageID = packageID
+	resolver.releaseDigest = releaseDigest
+	resolver.policy = policy
+	resolver.frozenAt = frozenAt
+	return assistantmodel.AssistantFeedbackContextSnapshot{
+		Decision:                "injected",
+		ConsentID:               "consent-travel",
+		DefinitionDigest:        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		ConsentGrantedAt:        frozenAt.Add(-time.Hour),
+		SourceWatermarkSequence: 12,
+		WindowDays:              policy.WindowDays,
+		FeedbackSampleCount:     3,
+	}
+}
 
 func TestAssistantRunCommandServiceOwnsIdempotencyAndJournal(t *testing.T) {
 	t.Parallel()
@@ -21,21 +101,21 @@ func TestAssistantRunCommandServiceOwnsIdempotencyAndJournal(t *testing.T) {
 	}
 	service := runruntime.NewCommandService(
 		repository,
-		runruntime.SessionAuthorizerFunc(func(
+		runruntime.SessionResolverFunc(func(
 			_ context.Context,
 			userID string,
 			sessionID string,
-		) error {
+		) (runruntime.SessionContinuity, error) {
 			if userID != "user-1" || sessionID != "session-1" {
-				return errors.New("session not found")
+				return runruntime.SessionContinuity{}, errors.New("session not found")
 			}
-			return nil
+			return runruntime.SessionContinuity{}, nil
 		}),
 		skillPackages,
 		runruntime.AllowAllStartAccessPolicy{},
 		func() time.Time { return now },
 		nil,
-		testPolicyResolver(),
+		runruntime.WithPolicyResolver(testPolicyResolver()),
 	)
 	command := runruntime.StartCommand{
 		UserID:          "user-1",
@@ -99,6 +179,266 @@ func TestAssistantRunCommandServiceOwnsIdempotencyAndJournal(t *testing.T) {
 	}
 }
 
+func TestAssistantRunFreezesPersonalSessionContinuityAndExcludesSharedSurface(t *testing.T) {
+	t.Parallel()
+
+	repository := newMemoryRunRepository()
+	resolverCalls := 0
+	continuity := runruntime.SessionContinuity{
+		SummaryID:      "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		Text:           "当前目标：完成杭州行程",
+		FromTurnID:     "run-history-1",
+		ToTurnID:       "run-history-3",
+		TurnCount:      3,
+		CurrentGoal:    "完成杭州行程",
+		ConfirmedFacts: []string{"同行人数为 2 人"},
+		PendingItems:   []string{"确认酒店"},
+		ConfirmedSlots: map[string]string{"destination": "杭州"},
+	}
+	service := runruntime.NewCommandService(
+		repository,
+		runruntime.SessionResolverFunc(func(
+			context.Context,
+			string,
+			string,
+		) (runruntime.SessionContinuity, error) {
+			resolverCalls++
+			return continuity, nil
+		}),
+		testSkillPackageIdentityResolver(),
+		runruntime.AllowAllStartAccessPolicy{},
+		func() time.Time { return time.Date(2026, 8, 4, 10, 0, 0, 0, time.UTC) },
+		nil,
+		runruntime.WithPolicyResolver(testPolicyResolver()),
+	)
+	command := runruntime.StartCommand{
+		UserID:          "user-continuity",
+		SessionID:       "session-continuity",
+		ClientRequestID: "request-continuity",
+		InputText:       "继续上面的计划",
+		RequestContext:  runruntime.RequestContext{SurfaceKind: "assistant"},
+	}
+	personal, err := service.Start(t.Context(), command)
+	if err != nil {
+		t.Fatalf("start personal Run: %v", err)
+	}
+	continuity.ConfirmedFacts[0] = "mutated"
+	continuity.ConfirmedSlots["destination"] = "mutated"
+	if personal.SessionContinuity == nil ||
+		personal.SessionContinuity.ConfirmedFacts[0] != "同行人数为 2 人" ||
+		personal.SessionContinuity.ConfirmedSlots["destination"] != "杭州" {
+		t.Fatalf("AssistantRun did not freeze an immutable continuity snapshot: %+v", personal.SessionContinuity)
+	}
+	if _, err := service.Start(t.Context(), command); err != nil || resolverCalls != 1 {
+		t.Fatalf("idempotent replay re-resolved mutable session state: calls=%d err=%v", resolverCalls, err)
+	}
+
+	sharedCommand := command
+	sharedCommand.ClientRequestID = "request-continuity-shared"
+	sharedCommand.RequestContext = runruntime.RequestContext{SurfaceKind: "conversation"}
+	shared, err := service.Start(t.Context(), sharedCommand)
+	if err != nil {
+		t.Fatalf("start shared Run: %v", err)
+	}
+	if shared.SessionContinuity != nil {
+		t.Fatalf("shared Run leaked personal AssistantSession continuity: %+v", shared.SessionContinuity)
+	}
+}
+
+func TestAssistantRunFreezesFeedbackContextBeforeExecutionAndExcludesSharedSurface(
+	t *testing.T,
+) {
+	t.Parallel()
+	now := time.Date(2026, 8, 4, 12, 0, 0, 0, time.UTC)
+	feedback := &feedbackContextResolverRecorder{}
+	policy := runruntime.PolicyResolverFunc(func(
+		_ context.Context,
+		policyID string,
+		_ string,
+		_ string,
+		_ string,
+	) (runruntime.FrozenPolicySelection, error) {
+		return runruntime.FrozenPolicySelection{
+			PolicyID:        policyID,
+			ReleaseDigest:   "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			Cohort:          "stable",
+			RolloutRevision: 1,
+			RuleID:          "travel-companion",
+			Template: runruntime.FrozenPolicyTemplate{
+				TemplateID: "travel-companion",
+				SkillID:    "travel_companion",
+				DomainID:   "travel",
+			},
+			LearningContextPolicy: runruntime.FrozenLearningContextPolicy{
+				Enabled:                true,
+				AllowedSignals:         []string{"feedback_counts"},
+				MinimumFeedbackSamples: 3,
+				WindowDays:             30,
+			},
+		}, nil
+	})
+	service := runruntime.NewCommandService(
+		newMemoryRunRepository(),
+		runruntime.SessionResolverFunc(func(
+			context.Context,
+			string,
+			string,
+		) (runruntime.SessionContinuity, error) {
+			return runruntime.SessionContinuity{}, nil
+		}),
+		testSkillPackageIdentityResolver(),
+		runruntime.AllowAllStartAccessPolicy{},
+		func() time.Time { return now },
+		nil,
+		runruntime.WithPolicyResolver(policy),
+		runruntime.WithFeedbackContextResolver(feedback),
+	)
+	command := runruntime.StartCommand{
+		UserID:           "account-1",
+		PersonaID:        "persona-1",
+		SessionID:        "session-feedback",
+		ClientRequestID:  "request-feedback",
+		InputText:        "继续优化杭州旅行计划",
+		RequestedSkillID: "travel_companion",
+		RequestContext:   runruntime.RequestContext{SurfaceKind: "personal"},
+	}
+	run, err := service.Start(t.Context(), command)
+	if err != nil {
+		t.Fatalf("start feedback Run: %v", err)
+	}
+	if feedback.calls != 1 || feedback.accountID != command.UserID ||
+		feedback.personaID != command.PersonaID || feedback.skillID != command.RequestedSkillID ||
+		feedback.surfaceKind != "personal" || feedback.frozenAt != now ||
+		feedback.packageID != "assistant.session.skills" ||
+		feedback.releaseDigest != "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" ||
+		run.FeedbackContextSnapshot.Decision != "injected" ||
+		run.FeedbackContextSnapshot.ConsentID != "consent-travel" {
+		t.Fatalf("feedback context was not frozen from current Skill: calls=%d resolver=%+v run=%+v", feedback.calls, feedback, run.FeedbackContextSnapshot)
+	}
+	if _, err := service.Start(t.Context(), command); err != nil || feedback.calls != 1 {
+		t.Fatalf("idempotent replay re-read mutable feedback: calls=%d err=%v", feedback.calls, err)
+	}
+
+	shared := command
+	shared.ClientRequestID = "request-feedback-shared"
+	shared.RequestContext.SurfaceKind = "conversation"
+	sharedRun, err := service.Start(t.Context(), shared)
+	if err != nil {
+		t.Fatalf("start shared feedback Run: %v", err)
+	}
+	if feedback.calls != 1 ||
+		sharedRun.FeedbackContextSnapshot.Decision != "shared_surface_excluded" ||
+		sharedRun.FeedbackContextSnapshot.FeedbackSampleCount != 0 {
+		t.Fatalf("shared Run exposed private feedback: calls=%d snapshot=%+v", feedback.calls, sharedRun.FeedbackContextSnapshot)
+	}
+}
+
+func TestAssistantRunRejectsFeedbackSnapshotOutsideFrozenPolicy(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 8, 4, 13, 0, 0, 0, time.UTC)
+	policy := runruntime.PolicyResolverFunc(func(
+		_ context.Context,
+		policyID string,
+		_ string,
+		_ string,
+		_ string,
+	) (runruntime.FrozenPolicySelection, error) {
+		return runruntime.FrozenPolicySelection{
+			PolicyID:        policyID,
+			ReleaseDigest:   "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			Cohort:          "stable",
+			RolloutRevision: 1,
+			Template: runruntime.FrozenPolicyTemplate{
+				TemplateID: "travel-companion",
+				SkillID:    "travel_companion",
+				DomainID:   "travel",
+			},
+			LearningContextPolicy: runruntime.FrozenLearningContextPolicy{
+				Enabled:                true,
+				AllowedSignals:         []string{"feedback_counts"},
+				MinimumFeedbackSamples: 3,
+				WindowDays:             30,
+			},
+		}, nil
+	})
+	cases := map[string]assistantmodel.AssistantFeedbackContextSnapshot{
+		"unknown decision": {
+			Decision:   "caller_invented",
+			WindowDays: 30,
+		},
+		"future consent": {
+			Decision:                "injected",
+			ConsentID:               "consent-future",
+			ConsentGrantedAt:        now.Add(time.Minute),
+			DefinitionDigest:        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			SourceWatermarkSequence: 1,
+			WindowDays:              30,
+			FeedbackSampleCount:     3,
+		},
+		"metric outside policy": {
+			Decision:                "injected",
+			ConsentID:               "consent-metric",
+			ConsentGrantedAt:        now.Add(-time.Hour),
+			DefinitionDigest:        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			SourceWatermarkSequence: 1,
+			WindowDays:              30,
+			FeedbackSampleCount:     3,
+			Metrics: []assistantmodel.AssistantFeedbackMetricSummary{{
+				MetricID:    "raw_private_text_score",
+				SampleCount: 3,
+				Average:     1,
+				Latest:      1,
+			}},
+		},
+	}
+	for name, snapshot := range cases {
+		name, snapshot := name, snapshot
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			service := runruntime.NewCommandService(
+				newMemoryRunRepository(),
+				runruntime.SessionResolverFunc(func(
+					context.Context,
+					string,
+					string,
+				) (runruntime.SessionContinuity, error) {
+					return runruntime.SessionContinuity{}, nil
+				}),
+				testSkillPackageIdentityResolver(),
+				runruntime.AllowAllStartAccessPolicy{},
+				func() time.Time { return now },
+				nil,
+				runruntime.WithPolicyResolver(policy),
+				runruntime.WithFeedbackContextResolver(feedbackContextResolverFunc(func(
+					context.Context,
+					string,
+					string,
+					string,
+					string,
+					string,
+					string,
+					assistantmodel.AssistantFrozenLearningContextPolicy,
+					time.Time,
+				) assistantmodel.AssistantFeedbackContextSnapshot {
+					return snapshot
+				})),
+			)
+			_, err := service.Start(t.Context(), runruntime.StartCommand{
+				UserID:           "account-1",
+				PersonaID:        "persona-1",
+				SessionID:        "session-" + name,
+				ClientRequestID:  "request-" + name,
+				InputText:        "继续优化旅行计划",
+				RequestedSkillID: "travel_companion",
+				RequestContext:   runruntime.RequestContext{SurfaceKind: "personal"},
+			})
+			if !errors.Is(err, runruntime.ErrInvalidRun) {
+				t.Fatalf("untrusted feedback snapshot must fail closed, got %v", err)
+			}
+		})
+	}
+}
+
 func TestAssistantRunCommandServiceClosesCommandsWithCAS(t *testing.T) {
 	t.Parallel()
 
@@ -106,12 +446,12 @@ func TestAssistantRunCommandServiceClosesCommandsWithCAS(t *testing.T) {
 	now := time.Date(2026, 7, 31, 12, 0, 0, 0, time.UTC)
 	service := runruntime.NewCommandService(
 		repository,
-		runruntime.SessionAuthorizerFunc(func(
+		runruntime.SessionResolverFunc(func(
 			context.Context,
 			string,
 			string,
-		) error {
-			return nil
+		) (runruntime.SessionContinuity, error) {
+			return runruntime.SessionContinuity{}, nil
 		}),
 		testSkillPackageIdentityResolver(),
 		runruntime.AllowAllStartAccessPolicy{},
@@ -120,7 +460,7 @@ func TestAssistantRunCommandServiceClosesCommandsWithCAS(t *testing.T) {
 			return now
 		},
 		nil,
-		testPolicyResolver(),
+		runruntime.WithPolicyResolver(testPolicyResolver()),
 	)
 	run, err := service.Start(context.Background(), runruntime.StartCommand{
 		UserID:          "user-1",

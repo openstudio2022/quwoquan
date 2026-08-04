@@ -193,7 +193,7 @@ class _ChatAnnouncementPageState extends ConsumerState<ChatAnnouncementPage> {
             category: UiErrorCategory.pageLoad,
             scope: UiErrorScope.page,
           ),
-          onAction: (action) async {
+          onRecovery: (action) async {
             if (action.type == UiErrorActionType.retry ||
                 action.type == UiErrorActionType.resubmit) {
               ref.invalidate(groupHomeProvider(widget.conversationId));
@@ -202,7 +202,9 @@ class _ChatAnnouncementPageState extends ConsumerState<ChatAnnouncementPage> {
                     conversationMembersProvider(widget.conversationId).notifier,
                   )
                   .load();
+              return UiRecoveryOutcome.superseded;
             }
+            return UiRecoveryOutcome.cancelled;
           },
         ),
       );

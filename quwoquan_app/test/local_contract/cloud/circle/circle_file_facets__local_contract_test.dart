@@ -76,7 +76,7 @@ void main() {
     );
 
     expect(page.items.single.assetId, 'asset-1');
-    expect(page.nextCursor, 'file-1');
+    expect(page.cursor, 'file-1');
     expect(executor.queryParameters, <String, String>{
       'parentFolderId': 'folder-1',
       'limit': '25',

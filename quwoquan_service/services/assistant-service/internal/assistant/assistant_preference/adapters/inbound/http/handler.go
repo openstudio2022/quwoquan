@@ -57,7 +57,7 @@ func (h *Handler) set(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, preferenceapplication.InvalidArgumentError(err.Error()))
 		return
 	}
-	fact, err := h.commands.SetPreference(r.Context(), preferenceapplication.SetPreferenceCommand{
+	preference, err := h.commands.SetPreference(r.Context(), preferenceapplication.SetPreferenceCommand{
 		UserID: accountID, Scope: input.Scope, SessionID: input.SessionID,
 		Kind: input.Kind, Value: input.Value, SourceType: input.SourceType,
 		SourceSessionID: input.SourceSessionID, Confirmed: input.Confirmed,
@@ -66,7 +66,7 @@ func (h *Handler) set(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, fact)
+	writeJSON(w, http.StatusOK, preference)
 }
 
 func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
@@ -98,19 +98,19 @@ func (h *Handler) restore(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) updateStatus(
 	w http.ResponseWriter,
 	r *http.Request,
-	update func(context.Context, string, string) (preferencemodel.Fact, error),
+	update func(context.Context, string, string) (preferencemodel.AssistantPreference, error),
 ) {
 	accountID, err := preferenceAccountID(r)
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
-	fact, err := update(r.Context(), accountID, r.PathValue("preferenceId"))
+	preference, err := update(r.Context(), accountID, r.PathValue("preferenceId"))
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, fact)
+	writeJSON(w, http.StatusOK, preference)
 }
 
 func preferenceAccountID(r *http.Request) (string, error) {

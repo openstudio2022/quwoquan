@@ -1,0 +1,130 @@
+{
+  "schema": "assistant.policy_release",
+  "commandId": "policy-release:assistant-default:6579402860644c0273747b33c23962cff013caec0839407afbe7dffdcc50f8e7",
+  "release": {
+    "policyId": "assistant-default",
+    "releaseDigest": "6579402860644c0273747b33c23962cff013caec0839407afbe7dffdcc50f8e7",
+    "defaultTemplateId": "default-general",
+    "templates": [
+      {
+        "templateId": "default-general",
+        "skillId": "fallback_general_search",
+        "domainId": "assistant",
+        "promptPolicy": "先判断问题需要的事实边界，再给出结论与依据。引用可核验来源，明确说明不确定的部分。",
+        "allowedTools": [
+          "app_search",
+          "web_find",
+          "web_open",
+          "web_search"
+        ],
+        "searchIntensity": "medium"
+      },
+      {
+        "templateId": "knowledge-general",
+        "skillId": "knowledge_general",
+        "domainId": "knowledge",
+        "promptPolicy": "先给结论再给依据。涉及争议或时效的结论必须标注来源与时间，不确定时说明边界。",
+        "allowedTools": [
+          "web_find",
+          "web_open",
+          "web_search"
+        ],
+        "searchIntensity": "medium"
+      },
+      {
+        "templateId": "local-life",
+        "skillId": "local_life",
+        "domainId": "life",
+        "promptPolicy": "本地生活先明确所在城市与商圈，再给出候选与取舍理由。站内地点主页与内容优先于站外泛结果。",
+        "allowedTools": [
+          "app_search",
+          "web_find",
+          "web_open",
+          "web_search"
+        ],
+        "searchIntensity": "medium"
+      },
+      {
+        "templateId": "travel-companion",
+        "skillId": "travel_companion",
+        "domainId": "travel",
+        "promptPolicy": "围绕吃、玩、住、行、同行协作、现场变化和随拍时间线组织旅行服务。缺少决定性约束时先澄清；动态天气、交通、营业与价格必须附查询时间和来源；计划与变更只生成可确认提案，不把提案伪装为已执行。",
+        "allowedTools": [
+          "app_search",
+          "calendar_create_reminder",
+          "weather_lookup",
+          "web_find",
+          "web_open",
+          "web_search"
+        ],
+        "searchIntensity": "high"
+      },
+      {
+        "templateId": "weather-realtime",
+        "skillId": "weather",
+        "domainId": "life",
+        "promptPolicy": "天气必须给出地点、时间范围与数据来源。先回答用户真正要做的决策，再补细节。",
+        "allowedTools": [
+          "weather_lookup",
+          "web_find",
+          "web_open",
+          "web_search"
+        ],
+        "searchIntensity": "high"
+      }
+    ],
+    "routingRules": [
+      {
+        "ruleId": "travel-companion",
+        "priority": 10,
+        "domainId": "travel",
+        "skillId": "travel_companion",
+        "templateId": "travel-companion"
+      },
+      {
+        "ruleId": "weather-realtime",
+        "priority": 20,
+        "skillId": "weather",
+        "templateId": "weather-realtime"
+      },
+      {
+        "ruleId": "local-life",
+        "priority": 30,
+        "skillId": "local_life",
+        "templateId": "local-life"
+      },
+      {
+        "ruleId": "knowledge-general",
+        "priority": 40,
+        "skillId": "knowledge_general",
+        "templateId": "knowledge-general"
+      },
+      {
+        "ruleId": "fallback-general-search",
+        "priority": 100,
+        "domainId": "assistant",
+        "skillId": "fallback_general_search",
+        "templateId": "default-general"
+      }
+    ],
+    "learningContextPolicy": {
+      "enabled": true,
+      "allowedSignals": [
+        "feedback_counts",
+        "metric_summaries",
+        "top_reason_codes"
+      ],
+      "allowedMetricIds": [
+        "turn_completion"
+      ],
+      "allowedReasonCodes": [
+        "clear",
+        "privacy",
+        "unsafe"
+      ],
+      "minimumFeedbackSamples": 3,
+      "windowDays": 30,
+      "snapshotTrainingEligible": false
+    }
+  }
+}

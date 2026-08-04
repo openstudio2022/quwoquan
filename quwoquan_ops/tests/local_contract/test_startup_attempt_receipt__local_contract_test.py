@@ -51,6 +51,12 @@ def test_startup_attempt_has_atomic_transactional_lifecycle(tmp_path: Path) -> N
     assert stopped["imageComposition"] == _composition()
     assert json.loads(receipt_path.read_text(encoding="utf-8")) == stopped
     assert json.loads(
+        (
+            receipt_path.parent
+            / "workloads/content-release/startup_attempt.json"
+        ).read_text(encoding="utf-8")
+    ) == stopped
+    assert json.loads(
         (run_root / "startup_attempt.json").read_text(encoding="utf-8")
     ) == stopped
     assert not list(receipt_path.parent.glob("*.tmp"))
@@ -127,3 +133,57 @@ def test_startup_attempt_rejects_cross_attempt_and_invalid_transition(
                 attempt_id="attempt-1",
                 status="running",
             )
+
+
+def test_workload_receipts_remain_isolated(tmp_path: Path) -> None:
+    receipt_path = tmp_path / "process/startup_attempt.json"
+    common = {
+        "env": "alpha",
+        "target": "alpha-local",
+        "compose_project": "quwoquan_alpha",
+        "configuration_digest": "sha256:" + "c" * 64,
+        "image_transport_tag": "sha256:" + "a" * 64,
+        "image_composition": _composition(),
+    }
+    with mock.patch.object(
+        subject,
+        "startup_attempt_path",
+        return_value=receipt_path,
+    ):
+        for workload, attempt_id in (
+            ("content-release", "content-1"),
+            ("full", "full-1"),
+        ):
+            subject.transition_startup_attempt(
+                attempt_id=attempt_id,
+                status="prepared",
+                workload=workload,
+                **common,
+            )
+            subject.transition_startup_attempt(
+                attempt_id=attempt_id,
+                status="partial",
+                workload=workload,
+                **common,
+            )
+            subject.transition_startup_attempt(
+                attempt_id=attempt_id,
+                status="running",
+                workload=workload,
+                **common,
+            )
+            subject.transition_startup_attempt(
+                attempt_id=attempt_id,
+                status="stopped",
+                workload=workload,
+                **common,
+            )
+
+        content = subject.load_workload_startup_attempt(
+            "alpha-local",
+            "content-release",
+        )
+        full = subject.load_workload_startup_attempt("alpha-local", "full")
+
+    assert content is not None and content["attemptId"] == "content-1"
+    assert full is not None and full["attemptId"] == "full-1"

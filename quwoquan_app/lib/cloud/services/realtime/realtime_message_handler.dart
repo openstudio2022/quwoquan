@@ -4,7 +4,6 @@ import 'dart:developer' as developer;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
 import 'package:quwoquan_app/cloud/rtc/rtc_signal_events.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/feed_realtime_patch.g.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_record.dart';
 import 'package:riverpod/misc.dart' show ProviderListenable, ProviderOrFamily;
@@ -13,8 +12,7 @@ import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dar
 import 'package:quwoquan_app/ui/chat/providers/group_home_provider.dart';
 import 'package:quwoquan_app/ui/discovery/providers/feed_realtime_patch_provider.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
-import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart'
-    show ChatMessageView, MessageCard, MessageStatus, MessageType;
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// 与 [Ref.read] / [WidgetRef.read] 兼容，避免 `Ref` 与 `WidgetRef` 类型分裂。
 typedef ChatProviderRead = T Function<T>(ProviderListenable<T> listenable);
@@ -41,7 +39,6 @@ class RealtimeMessageHandler {
   Timer? _conversationRefreshTimer;
   Timer? _avatarPatchTimer;
   Timer? _reconnectRecoveryTimer;
-  int? _latestHintedSyncSeq;
 
   void handle(Map<String, dynamic> event) {
     final eventType = event['type'] as String? ?? '';
@@ -56,7 +53,9 @@ class RealtimeMessageHandler {
     // rtc 通话信令（rt:rtc:user 通道，wire type call.* / participant.* /
     // screen_share.*）分发给通话事件总线，由来电协调器与通话页订阅。
     if (isRtcSignalWireType(eventType)) {
-      _read(rtcSignalEventBusProvider).emit(event);
+      _read(
+        rtcSignalEventBusProvider,
+      ).emit(RealtimeEventEnvelope.fromWire(event));
       return;
     }
 
@@ -125,10 +124,7 @@ class RealtimeMessageHandler {
         return;
 
       case 'UserAvatarUpdated':
-        final userLatestSeq =
-            (event['latestSyncSeq'] as num?)?.toInt() ??
-            (payload['latestSyncSeq'] as num?)?.toInt();
-        _scheduleAvatarPatchSync(userLatestSeq);
+        _scheduleAvatarPatchSync();
         if (conversationId.isNotEmpty) {
           unawaited(
             _read(conversationMembersProvider(conversationId).notifier).load(),
@@ -139,10 +135,7 @@ class RealtimeMessageHandler {
         return;
 
       case 'ConversationAvatarUpdated':
-        final conversationLatestSeq =
-            (event['latestSyncSeq'] as num?)?.toInt() ??
-            (payload['latestSyncSeq'] as num?)?.toInt();
-        _scheduleAvatarPatchSync(conversationLatestSeq);
+        _scheduleAvatarPatchSync();
         if (conversationId.isNotEmpty) {
           invalidate?.call(groupHomeProvider(conversationId));
           _refreshConversationCache(conversationId);
@@ -161,10 +154,7 @@ class RealtimeMessageHandler {
         return;
 
       case 'sync_hint':
-        final latestSeq =
-            (event['latestSyncSeq'] as num?)?.toInt() ??
-            (payload['latestSyncSeq'] as num?)?.toInt();
-        _scheduleAvatarPatchSync(latestSeq);
+        _scheduleAvatarPatchSync();
         return;
 
       case 'Reconnected':
@@ -313,7 +303,7 @@ class RealtimeMessageHandler {
       try {
         final syncService = _read(conversationSyncProvider);
         unawaited(syncService.sync(force: true));
-        _scheduleAvatarPatchSync(_latestHintedSyncSeq);
+        _scheduleAvatarPatchSync();
         unawaited(_read(localChatSearchSyncProvider).sync(force: true));
       } catch (error, stackTrace) {
         // 重连补全失败若静默即丢消息不可观测：必须上报，由下一次心跳/重连兜底。
@@ -328,22 +318,12 @@ class RealtimeMessageHandler {
     });
   }
 
-  void _scheduleAvatarPatchSync(int? latestSeq) {
-    if (latestSeq != null &&
-        latestSeq > 0 &&
-        (_latestHintedSyncSeq == null || latestSeq > _latestHintedSyncSeq!)) {
-      _latestHintedSyncSeq = latestSeq;
-    }
+  void _scheduleAvatarPatchSync() {
     _avatarPatchTimer?.cancel();
     _avatarPatchTimer = Timer(const Duration(milliseconds: 120), () {
       try {
-        final hintedLatestSyncSeq = _latestHintedSyncSeq;
-        _latestHintedSyncSeq = null;
         unawaited(
-          _read(conversationSyncProvider).syncAvatarPatches(
-            hintedLatestSyncSeq: hintedLatestSyncSeq,
-            force: true,
-          ),
+          _read(conversationSyncProvider).syncAvatarPatches(force: true),
         );
       } catch (error, stackTrace) {
         // best-effort：仅影响头像即时刷新，后续同步补齐；上报保留观测面。

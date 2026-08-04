@@ -1,0 +1,66 @@
+services:
+  provider-protocol-substitute:
+    profiles: ["debug-provider-substitute"]
+    image: "quwoquan/provider-protocol-substitute-debug:${QWQ_COMPOSE_IMAGE_TAG:-local}"
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        GO_BASE_IMAGE: "${QWQ_COMPOSE_GO_BASE_IMAGE:?QWQ_COMPOSE_GO_BASE_IMAGE is required}"
+        ALPINE_BASE_IMAGE: "${QWQ_COMPOSE_ALPINE_BASE_IMAGE:?QWQ_COMPOSE_ALPINE_BASE_IMAGE is required}"
+    environment:
+      APP_ENV: "${QWQ_COMPOSE_ENV:?QWQ_COMPOSE_ENV is required}"
+      PROVIDER_SUBSTITUTE_CONFIGURATION_DIGEST: "${QWQ_COMPOSE_CONFIG_VERSION:?runtime configuration digest is required}"
+      PROVIDER_SUBSTITUTE_ADDR: ":18089"
+      PROVIDER_SUBSTITUTE_OPERATOR_TOKEN: "${PROVIDER_SUBSTITUTE_OPERATOR_TOKEN:?target Provider substitute operator token is required}"
+      PROVIDER_SUBSTITUTE_TLS_CERT_FILE: "/run/secrets/provider-protocol-substitute/server.crt"
+      PROVIDER_SUBSTITUTE_TLS_KEY_FILE: "/run/secrets/provider-protocol-substitute/server.key"
+      PROVIDER_SUBSTITUTE_SCENARIO: "${PROVIDER_SUBSTITUTE_SCENARIO:-success}"
+    ports:
+      - "${QWQ_COMPOSE_PROVIDER_SUBSTITUTE_PORT:?target Provider substitute port is required}:18089"
+    volumes:
+      - ${QWQ_COMPOSE_PROVIDER_SUBSTITUTE_TLS_CERT_FILE:?target Provider substitute certificate is required}:/run/secrets/provider-protocol-substitute/server.crt:ro
+      - ${QWQ_COMPOSE_PROVIDER_SUBSTITUTE_TLS_KEY_FILE:?target Provider substitute key is required}:/run/secrets/provider-protocol-substitute/server.key:ro
+    healthcheck:
+      test: ["CMD", "wget", "--no-check-certificate", "-qO-", "https://127.0.0.1:18089/healthz"]
+      interval: 5s
+      timeout: 2s
+      start_period: 5s
+      retries: 12
+    restart: unless-stopped
+
+  assistant-service:
+    environment:
+      SSL_CERT_FILE: "/run/secrets/provider-protocol-substitute/ca.crt"
+    volumes:
+      - ${QWQ_COMPOSE_PROVIDER_SUBSTITUTE_CA_FILE:?target Provider substitute CA is required}:/run/secrets/provider-protocol-substitute/ca.crt:ro
+    depends_on:
+      provider-protocol-substitute:
+        condition: service_healthy
+
+  content-service:
+    environment:
+      SSL_CERT_FILE: "/run/secrets/provider-protocol-substitute/ca.crt"
+    volumes:
+      - ${QWQ_COMPOSE_PROVIDER_SUBSTITUTE_CA_FILE:?target Provider substitute CA is required}:/run/secrets/provider-protocol-substitute/ca.crt:ro
+    depends_on:
+      provider-protocol-substitute:
+        condition: service_healthy
+
+  integration-service:
+    environment:
+      SSL_CERT_FILE: "/run/secrets/provider-protocol-substitute/ca.crt"
+    volumes:
+      - ${QWQ_COMPOSE_PROVIDER_SUBSTITUTE_CA_FILE:?target Provider substitute CA is required}:/run/secrets/provider-protocol-substitute/ca.crt:ro
+    depends_on:
+      provider-protocol-substitute:
+        condition: service_healthy
+
+  user-service:
+    environment:
+      SSL_CERT_FILE: "/run/secrets/provider-protocol-substitute/ca.crt"
+    volumes:
+      - ${QWQ_COMPOSE_PROVIDER_SUBSTITUTE_CA_FILE:?target Provider substitute CA is required}:/run/secrets/provider-protocol-substitute/ca.crt:ro
+    depends_on:
+      provider-protocol-substitute:
+        condition: service_healthy

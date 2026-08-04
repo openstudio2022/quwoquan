@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
+	eventrecordhttp "quwoquan_service/services/product-ops-service/internal/product_ops/event_record/adapters/inbound/http"
 )
 
 var (
@@ -42,7 +43,7 @@ func registerStartupTelemetryMetrics() {
 	})
 }
 
-func recordStartupTelemetryMetrics(event startupTelemetryEventInput) {
+func recordStartupTelemetryMetrics(event eventrecordhttp.StartupTelemetryEventInput) {
 	registerStartupTelemetryMetrics()
 	labels := prometheus.Labels{
 		"phase":            event.Phase,

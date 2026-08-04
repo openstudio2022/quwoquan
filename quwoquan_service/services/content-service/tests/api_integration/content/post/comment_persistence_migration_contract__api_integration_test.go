@@ -94,7 +94,7 @@ func TestCommentStore_AuthoritativeCountsNoCache(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read Post Comment projection: %v", err)
 	}
-	if page.Total != authoritative || numberAsInt64(counters["comment"]) != authoritative {
+	if page.Total != authoritative || counters.CommentCount != authoritative {
 		t.Fatalf("authoritative Comment count mismatch: mongo=%d page=%d counters=%+v", authoritative, page.Total, counters)
 	}
 }
@@ -169,7 +169,7 @@ func TestCommentCountReconciliation_HighConcurrency(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read concurrent Post projection: %v", err)
 	}
-	if page.Total != authoritative || numberAsInt64(counters["comment"]) != authoritative {
+	if page.Total != authoritative || counters.CommentCount != authoritative {
 		t.Fatalf("concurrent Comment convergence mismatch: mongo=%d page=%d counters=%+v", authoritative, page.Total, counters)
 	}
 }

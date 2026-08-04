@@ -1,11 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
+import 'package:quwoquan_app/cloud/services/chat/chat_view_data.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {
-  group('ChatInboxDto — 常规契约', () {
-    test('fromMap parses canonical inbox row', () {
-      final dto = ChatInboxDto.fromMap(const <String, dynamic>{
+  group('ChatInboxViewData — 常规契约', () {
+    test('generated fromWire 映射 canonical inbox row', () {
+      final wire = ChatInboxItemView.fromWire(const <String, dynamic>{
         'id': 'conv_006',
         'type': 'group',
         'title': '产品共创群',
@@ -21,6 +21,7 @@ void main() {
         'pinned': true,
         'circleId': '',
       });
+      final dto = ChatInboxViewData.fromWire(wire);
 
       expect(dto.id, equals('conv_006'));
       expect(dto.type, equals('group'));
@@ -36,10 +37,10 @@ void main() {
     });
   });
 
-  group('ChatInboxDto — 单轨契约', () {
+  group('ChatInboxViewData — 单轨契约', () {
     test('拒绝已退休字段，不创建第二套 wire 方言', () {
       expect(
-        () => ChatInboxDto.fromMap(const <String, dynamic>{
+        () => ChatInboxItemView.fromWire(const <String, dynamic>{
           '_id': 'current_conv',
           'type': 'group',
           'title': '老字段群聊',
@@ -56,7 +57,7 @@ void main() {
     });
 
     test('toMap round-trip preserves core fields', () {
-      final original = ChatInboxDto.fromMap(const <String, dynamic>{
+      final original = ChatInboxItemView.fromWire(const <String, dynamic>{
         'id': 'conv_001',
         'type': 'direct',
         'title': '李明',
@@ -73,7 +74,7 @@ void main() {
         'circleId': '',
       });
 
-      final roundTrip = ChatInboxDto.fromMap(original.toMap());
+      final roundTrip = ChatInboxItemView.fromWire(original.toWire());
 
       expect(roundTrip.id, equals(original.id));
       expect(roundTrip.title, equals(original.title));
@@ -83,14 +84,14 @@ void main() {
     });
   });
 
-  group('ChatInboxDto — 异常/边界契约', () {
+  group('ChatInboxItemView — 异常/边界契约', () {
     test('缺失必填字段立即失败', () {
-      expect(() => ChatInboxDto.fromMap(const {}), throwsFormatException);
+      expect(() => ChatInboxItemView.fromWire(const {}), throwsFormatException);
     });
 
     test('拒绝 canonical MessageType 以外的历史别名', () {
       final wire = <String, dynamic>{
-        'id': 'conv_legacy_type',
+        'id': 'conv_retired_type',
         'type': 'direct',
         'title': '历史类型',
         'avatarUrl': '',
@@ -105,7 +106,7 @@ void main() {
         'pinned': false,
         'circleId': '',
       };
-      expect(() => ChatInboxDto.fromMap(wire), throwsFormatException);
+      expect(() => ChatInboxItemView.fromWire(wire), throwsFormatException);
     });
   });
 }

@@ -22,24 +22,98 @@ import (
 	"quwoquan_service/runtime/streaming"
 	preferencehttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_preference/adapters/inbound/http"
 	preferenceapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_preference/application"
+	runorchestration "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/orchestration"
 	runruntime "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
+	runmodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/model"
 	assistanthttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/adapters/inbound/http"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
-	skillpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/skill"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
+	sessioncompaction "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/compaction"
+	sessionorchestration "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
+	assistant "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/model"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/ports"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/notificationclient"
 	turnviewhttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_turn_view/adapters/inbound/http"
 	turnviewapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_turn_view/application"
 	turnviewmodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_turn_view/domain/model"
 	consentapplication "quwoquan_service/services/assistant-service/internal/assistant/skill_consent/application"
+	skillpkg "quwoquan_service/services/assistant-service/internal/assistant/skill_package_release/application/packageasset"
 	subscriptionhttp "quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/adapters/inbound/http"
 	subscriptionapplication "quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/application"
 	skillmodel "quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/domain/model"
+	"quwoquan_service/services/assistant-service/tests/support/skillfixture"
 )
 
+// spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/long-term-memory-compaction/spec.md#gwt-002
+func TestMongoSessionCompactionCommitsSummaryAndReplayReceiptAtomically(t *testing.T) {
+	resetIntegrationState(t)
+	now := time.Date(2026, 8, 4, 10, 0, 0, 0, time.UTC)
+	_, _, err := integrationSessionStore.InsertSession(t.Context(), assistant.AssistantSession{
+		SessionID: "session-mongo-compaction",
+		UserID:    "user-mongo-compaction",
+		State:     "active",
+		CreatedAt: now.Add(-time.Hour),
+		UpdatedAt: now.Add(-time.Hour),
+	})
+	if err != nil {
+		t.Fatalf("insert AssistantSession: %v", err)
+	}
+	providerCalls := 0
+	service := sessioncompaction.NewService(
+		integrationSessionStore,
+		sessioncompaction.NarrativeGeneratorFunc(func(
+			context.Context,
+			sessioncompaction.NarrativeInput,
+		) (string, error) {
+			providerCalls++
+			return "你已完成第一轮计划，仍需确认酒店。", nil
+		}),
+	)
+	source := sessioncompaction.CompletedRunSource{
+		CompletionEventID: "run-mongo-compaction:terminal",
+		RunID:             "run-mongo-compaction",
+		SessionID:         "session-mongo-compaction",
+		UserID:            "user-mongo-compaction",
+		CurrentGoal:       "完成杭州行程",
+		UserInput:         "继续规划杭州行程",
+		AnswerText:        "已完成第一轮计划",
+		PendingItems:      []string{"确认酒店"},
+		ConfirmedSlots:    map[string]string{"destination": "杭州"},
+		CompletedAt:       now,
+	}
+	first, err := service.CompactCompletedRun(t.Context(), source)
+	if err != nil {
+		t.Fatalf("compact completed Run: %v", err)
+	}
+	replayed, err := service.CompactCompletedRun(t.Context(), source)
+	if err != nil {
+		t.Fatalf("replay completed Run: %v", err)
+	}
+	if replayed.SummaryID != first.SummaryID || providerCalls != 1 {
+		t.Fatalf("replay changed summary or called provider: first=%+v replay=%+v calls=%d", first, replayed, providerCalls)
+	}
+	persisted, found, err := integrationSessionStore.GetSession(
+		t.Context(),
+		source.SessionID,
+	)
+	if err != nil || !found || persisted.ContextSummary == nil ||
+		persisted.ContextSummary.SummaryID != first.SummaryID ||
+		persisted.SummaryVersion != 1 || persisted.SummarySourceSequence != 1 ||
+		persisted.CompletionSequence != 1 {
+		t.Fatalf("persisted summary=%+v found=%t err=%v", persisted, found, err)
+	}
+	receiptCount, err := integrationMongoDB.Collection(
+		"assistant_session_summary_receipts",
+	).CountDocuments(t.Context(), bson.M{
+		"_id":       source.CompletionEventID,
+		"sessionId": source.SessionID,
+		"summaryId": first.SummaryID,
+	})
+	if err != nil || receiptCount != 1 {
+		t.Fatalf("summary receipt count=%d err=%v", receiptCount, err)
+	}
+}
+
 func assistantHTTPHandlerWithTurnView(
-	service *orchestration.AssistantService,
+	service *sessionorchestration.AssistantService,
 ) http.Handler {
 	mux := http.NewServeMux()
 	turnviewhttp.NewHandler(turnviewapplication.NewQueryFacade(
@@ -136,14 +210,14 @@ func assistantAPIInjectedRunCommand(
 }
 
 type assistantRunEnvelope struct {
-	RunID            string         `json:"runId"`
-	SessionID        string         `json:"sessionId"`
-	Status           string         `json:"status"`
-	ReasoningProfile string         `json:"reasoningProfile"`
-	Goal             string         `json:"goal"`
-	TerminalSnapshot map[string]any `json:"terminalSnapshot"`
-	TraceID          string         `json:"traceId"`
-	Revision         int64          `json:"revision"`
+	RunID            string                                 `json:"runId"`
+	SessionID        string                                 `json:"sessionId"`
+	Status           string                                 `json:"status"`
+	ReasoningProfile string                                 `json:"reasoningProfile"`
+	Goal             string                                 `json:"goal"`
+	TerminalSnapshot *runmodel.AssistantRunTerminalSnapshot `json:"terminalSnapshot"`
+	TraceID          string                                 `json:"traceId"`
+	Revision         int64                                  `json:"revision"`
 	StreamState      struct {
 		LastSeq     int64  `json:"lastSeq"`
 		Completed   bool   `json:"completed"`
@@ -858,16 +932,14 @@ func TestAssistantRunStreamResumeSemantics(t *testing.T) {
 	// SSE journal 只保留有限窗口；terminalSnapshot 是 GetRun、SSE 终态重放与
 	// history 的共同无 TTL 真相源。
 	var storedAnswerText string
-	var storedFailure map[string]any
-	if len(stored.TerminalSnapshot) == 0 {
+	if stored.TerminalSnapshot == nil {
 		t.Fatalf("terminal run is missing durable terminalSnapshot: %#v", stored)
 	}
-	storedAnswerText, _ = stored.TerminalSnapshot["answerText"].(string)
-	storedFailure, _ = stored.TerminalSnapshot["failure"].(map[string]any)
+	storedAnswerText = stored.TerminalSnapshot.AnswerText
 	if stored.State.WireName() == "completed" && strings.TrimSpace(storedAnswerText) == "" {
 		t.Fatalf("completed run is missing durable answer text: %#v", stored)
 	}
-	if stored.State.WireName() == "failed" && storedFailure == nil {
+	if stored.State.WireName() == "failed" && stored.TerminalSnapshot.Failure == nil {
 		t.Fatalf("failed run is missing durable canonical failure: %#v", stored)
 	}
 	if _, err := integrationMongoDB.Collection("assistant_run_events").DeleteMany(
@@ -914,7 +986,7 @@ func TestAssistantRunStreamResumeSemantics(t *testing.T) {
 			stored.State.WireName(),
 		)
 	}
-	if storedFailure != nil && terminalSnapshot["failure"] == nil {
+	if stored.TerminalSnapshot.Failure != nil && terminalSnapshot["failure"] == nil {
 		t.Fatalf(
 			"terminal failure after journal expiry is absent: %#v",
 			terminalResponse,
@@ -1061,7 +1133,7 @@ func TestAssistantRunWritesScorecardOnCompletion(t *testing.T) {
 	if err != nil || preRelayFacts != 0 {
 		t.Fatalf("learning fact must only be appended by relay: count=%d err=%v", preRelayFacts, err)
 	}
-	relay := integrationRunTerminalLearningRelay("scorecard-terminal-relay")
+	relay := integrationRunTerminalRelay("scorecard-terminal-relay")
 	processed, err := relay.FlushOnce(ctx)
 	if err != nil || processed != 1 {
 		t.Fatalf("relay terminal scorecard: processed=%d err=%v", processed, err)
@@ -1209,7 +1281,7 @@ func TestSkillConsentRevokeImmediateEnforcement(t *testing.T) {
 	commands := consentapplication.NewCommandFacade(integrationConsentStore, nil)
 
 	if _, err := commands.Grant(
-		ctx, "enforce-grant", "enforce-user", "personal_content_access", []string{"personal_content_access"},
+		ctx, "enforce-grant", "enforce-user", "travel_companion", []string{"travel.trip.read"},
 	); err != nil {
 		t.Fatalf("grant consent: %v", err)
 	}
@@ -1219,16 +1291,16 @@ func TestSkillConsentRevokeImmediateEnforcement(t *testing.T) {
 		SessionID:         "consent-gate-session",
 		ClientRequestID:   "consent-gate-run",
 		IntentKind:        "answer",
-		InputText:         "看看我的个人内容",
-		RequestedSkillID:  consentapplication.SkillPersonalContentAccess,
-		RequestedDomainID: "assistant",
+		InputText:         "看看我当前的行程",
+		RequestedSkillID:  "travel_companion",
+		RequestedDomainID: "travel",
 	})
 	if err != nil || granted.RunID == "" {
 		t.Fatalf("granted sensitive run start: run=%#v err=%v", granted, err)
 	}
 
 	if _, err := commands.Revoke(
-		ctx, "enforce-revoke", "enforce-user", "personal_content_access",
+		ctx, "enforce-revoke", "enforce-user", "travel_companion",
 	); err != nil {
 		t.Fatalf("revoke consent: %v", err)
 	}
@@ -1239,8 +1311,8 @@ func TestSkillConsentRevokeImmediateEnforcement(t *testing.T) {
 		ClientRequestID:   "consent-gate-run-revoked",
 		IntentKind:        "answer",
 		InputText:         "再看一次",
-		RequestedSkillID:  consentapplication.SkillPersonalContentAccess,
-		RequestedDomainID: "assistant",
+		RequestedSkillID:  "travel_companion",
+		RequestedDomainID: "travel",
 	})
 	if err == nil || !strings.Contains(err.Error(), "ASSISTANT.USER.skill_consent_required") {
 		t.Fatalf("revoked consent must deny canonical run start: %v", err)
@@ -1331,7 +1403,7 @@ func integrationDeliveryPolicyReader(
 		})
 	}))
 	t.Cleanup(server.Close)
-	client, err := orchestration.NewUserDeliveryPolicyClient(
+	client, err := sessionorchestration.NewUserDeliveryPolicyClient(
 		server.URL,
 		integrationServiceCredentials("integration-user-policy-token"),
 		server.Client(),
@@ -1346,9 +1418,9 @@ type integrationProactiveFinalModel struct{}
 
 func (integrationProactiveFinalModel) Complete(
 	context.Context,
-	orchestration.ModelRequest,
-) (orchestration.ModelResponse, error) {
-	return orchestration.ModelResponse{Text: "旅行主动 Skill 已生成本期安排"}, nil
+	runorchestration.ModelRequest,
+) (runorchestration.ModelResponse, error) {
+	return runorchestration.ModelResponse{Text: "旅行主动 Skill 已生成本期安排"}, nil
 }
 
 // TestSkillSubscriptionCronLeaseNoDuplicate 验证同一 tick 窗口的 Redis 租约：
@@ -1357,14 +1429,14 @@ func (integrationProactiveFinalModel) Complete(
 func TestSkillSubscriptionCronLeaseNoDuplicate(t *testing.T) {
 	resetIntegrationState(t)
 	ctx := context.Background()
-	loop := orchestration.NewAgentLoop(
+	loop := runorchestration.NewAgentLoop(
 		integrationChatMentionSkillRuntime{},
-		orchestration.ReactRuntime{
+		runorchestration.ReactRuntime{
 			Model: integrationProactiveFinalModel{},
 		},
 		nil,
 	)
-	loop.Catalog = skillpkg.StaticLoader{Manifests: []skillpkg.Manifest{{
+	loop.Catalog = skillfixture.StaticLoader{Manifests: []skillpkg.Manifest{{
 		SkillID:     "news_briefing",
 		DomainID:    "assistant",
 		DisplayName: "资讯简报",
@@ -1372,38 +1444,37 @@ func TestSkillSubscriptionCronLeaseNoDuplicate(t *testing.T) {
 	}}}
 	runCommands := runruntime.NewCommandService(
 		integrationRunRepository,
-		runruntime.SessionAuthorizerFunc(func(
+		runruntime.SessionResolverFunc(func(
 			context.Context,
 			string,
 			string,
-		) error {
-			return nil
+		) (runruntime.SessionContinuity, error) {
+			return runruntime.SessionContinuity{}, nil
 		}),
 		testSkillPackageIdentityResolver(),
 		runruntime.AllowAllStartAccessPolicy{},
 		time.Now,
 		nil,
-		integrationRunPolicyResolver(),
+		runruntime.WithPolicyResolver(integrationRunPolicyResolver()),
 	)
 	runWorker := runruntime.NewDurableWorker(
 		integrationRunRepository,
 		integrationRunRepository,
-		orchestration.NewDurableRunExecutor(loop),
+		runorchestration.NewDurableRunExecutor(loop),
 		"api-integration-proactive-worker",
 	)
 	workerContext, cancelWorker := context.WithTimeout(ctx, 15*time.Second)
 	defer cancelWorker()
 	go runWorker.Run(workerContext)
 	service := newIntegrationAssistantService(
-		orchestration.WithNotificationAppMessageCommandWriter(
+		sessionorchestration.WithNotificationAppMessageCommandWriter(
 			integrationNotificationCommandWriter(t),
 		),
-		orchestration.WithAssistantDeliveryPolicyReader(
+		sessionorchestration.WithAssistantDeliveryPolicyReader(
 			integrationDeliveryPolicyReader(t),
 		),
-		orchestration.WithAgentLoop(loop),
-		orchestration.WithSkillCatalog(loop.Catalog),
-		orchestration.WithRunCommandService(runCommands),
+		sessionorchestration.WithSkillCatalog(loop.Catalog),
+		sessionorchestration.WithRunCommandService(runCommands),
 	)
 	handler := assistantHTTPHandlerWithTurnView(service)
 
@@ -1607,7 +1678,7 @@ func TestAssistantSessionLifecycleQueryAndCancel(t *testing.T) {
 	}
 	if storedStatus.State.WireName() != "cancelled" ||
 		storedStatus.CompletedAt == nil ||
-		len(storedStatus.TerminalSnapshot) == 0 {
+		storedStatus.TerminalSnapshot == nil {
 		t.Fatalf("mongo run must retain cancelled terminal snapshot: %#v", storedStatus)
 	}
 

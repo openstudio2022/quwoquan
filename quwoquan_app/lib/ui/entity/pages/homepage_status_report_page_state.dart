@@ -66,7 +66,7 @@ class _HomepageStatusReportPageState
         backgroundColor: SettingsSemanticConstants.pageBackground(isDark),
         body: AppPageErrorState(
           semantic: ensureRetryUiErrorSemantic(_pageErrorSemantic!),
-          onAction: _handlePageErrorAction,
+          onRecovery: _handlePageErrorAction,
         ),
       );
     }
@@ -437,10 +437,14 @@ class _HomepageStatusReportPageState
     }
   }
 
-  Future<void> _handlePageErrorAction(UiErrorAction action) async {
+  Future<UiRecoveryOutcome> _handlePageErrorAction(UiErrorAction action) async {
     if (action.type == UiErrorActionType.retry ||
         action.type == UiErrorActionType.resubmit) {
       await _load();
+      return _pageErrorSemantic == null
+          ? UiRecoveryOutcome.recovered
+          : UiRecoveryOutcome.stillBlocked;
     }
+    return UiRecoveryOutcome.cancelled;
   }
 }

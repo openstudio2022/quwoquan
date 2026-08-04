@@ -17,7 +17,7 @@ import (
 	rolloutmodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_policy_rollout/domain/model"
 	rolloutpersistence "quwoquan_service/services/assistant-service/internal/assistant/assistant_policy_rollout/infrastructure/persistence"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
+	assistant "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/model"
 )
 
 func TestAssistantPolicyReleaseRolloutPersistsActivationAndRollback(
@@ -249,19 +249,19 @@ func TestAssistantRunFreezesRealPolicySelectionAcrossActivationAndRollback(
 	}
 	commands := runruntime.NewCommandService(
 		integrationRunRepository,
-		runruntime.SessionAuthorizerFunc(func(
+		runruntime.SessionResolverFunc(func(
 			ctx context.Context,
 			userID string,
 			sessionID string,
-		) error {
+		) (runruntime.SessionContinuity, error) {
 			_, authorizeErr := service.GetSession(ctx, userID, sessionID)
-			return authorizeErr
+			return runruntime.SessionContinuity{}, authorizeErr
 		}),
 		testSkillPackageIdentityResolver(),
 		runruntime.AllowAllStartAccessPolicy{},
 		time.Now,
 		nil,
-		realRunPolicyResolver(rollouts),
+		runruntime.WithPolicyResolver(realRunPolicyResolver(rollouts)),
 	)
 	firstTurn := createPolicyRun(
 		t,

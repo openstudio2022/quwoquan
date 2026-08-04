@@ -55,6 +55,7 @@ business_rules:
 - SuspendAccount 与 RestoreAccount 必须在同一事务内更新 accountState/authEpoch、撤销 refresh session、写幂等回执/audit ref
   并写 durable outbox
 - actor、accountId 与审计元数据只来自 trusted principal 和 invocation context
+- PullUserSync 只返回由 kind 判别的 user_avatar_updated 或 conversation_avatar_updated 强类型补丁；未知 runtime patch、kind 与载荷不匹配或字段畸形必须 fail closed，游标缺口只以 requiresResync 要求调用方重建 owner projection
 lifecycle:
   state_field: accountState
   states:

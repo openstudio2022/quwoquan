@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import 'package:quwoquan_app/cloud/services/chat/chat_view_data.dart';
 import '../../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_page.dart';
@@ -106,7 +106,10 @@ void main() {
 
 class _CustomMockChatRepository extends MockChatRepository {
   @override
-  Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
+  Future<List<ChatInboxViewData>> listInbox({
+    String? cursor,
+    int limit = 20,
+  }) async {
     return [
       chatInboxFixture(
         id: 'conv_custom',
@@ -127,7 +130,7 @@ class _CustomMockChatRepository extends MockChatRepository {
   }
 
   @override
-  Future<List<ChatInboxDto>> listConversations({
+  Future<List<ChatInboxViewData>> listConversations({
     String? cursor,
     int limit = 20,
   }) async {
@@ -137,27 +140,33 @@ class _CustomMockChatRepository extends MockChatRepository {
 
 class _EmptyChatRepository extends MockChatRepository {
   @override
-  Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
-    return const <ChatInboxDto>[];
-  }
-
-  @override
-  Future<List<ChatInboxDto>> listConversations({
+  Future<List<ChatInboxViewData>> listInbox({
     String? cursor,
     int limit = 20,
   }) async {
-    return const <ChatInboxDto>[];
+    return const <ChatInboxViewData>[];
+  }
+
+  @override
+  Future<List<ChatInboxViewData>> listConversations({
+    String? cursor,
+    int limit = 20,
+  }) async {
+    return const <ChatInboxViewData>[];
   }
 }
 
 class _ErrorChatRepository extends MockChatRepository {
   @override
-  Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
+  Future<List<ChatInboxViewData>> listInbox({
+    String? cursor,
+    int limit = 20,
+  }) async {
     throw Exception('Repository error');
   }
 
   @override
-  Future<List<ChatInboxDto>> listConversations({
+  Future<List<ChatInboxViewData>> listConversations({
     String? cursor,
     int limit = 20,
   }) async {

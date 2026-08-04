@@ -499,8 +499,8 @@ func TestListFollowing_Pagination(t *testing.T) {
 	if len(result) != 2 {
 		t.Fatalf("following list must return exact FollowingRelationshipPageSlice: %#v", result)
 	}
-	if _, legacy := result["cursor"]; legacy {
-		t.Fatalf("following list retains legacy cursor response key: %#v", result)
+	if _, retired := result["cursor"]; retired {
+		t.Fatalf("following list retains retired cursor response key: %#v", result)
 	}
 	if _, exists := result["nextCursor"]; !exists {
 		t.Fatalf("following list missing canonical nextCursor: %#v", result)

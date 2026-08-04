@@ -49,10 +49,17 @@ func MaterializeReleaseExternalInteractionBindings(
 	if err != nil {
 		return Config{}, fmt.Errorf("Push provider binding invalid: %w", err)
 	}
-	if pushBinding.AdapterID == providerbinding.PushAdapterLocalRecorder {
+	if pushBinding.AdapterID == providerbinding.PushAdapterProtocolSubstitute {
+		endpoint, ok := pushBinding.Endpoint("endpoint")
+		if !ok {
+			return Config{}, fmt.Errorf(
+				"Push protocol substitute binding has no endpoint material",
+			)
+		}
 		cfg.Integration.ExternalInteraction.Push = PushDeliveryProviderConfig{
 			Enabled:   true,
-			Mode:      "local_recorder",
+			Mode:      "protocol_substitute",
+			Endpoint:  endpoint,
 			TimeoutMs: int(pushBinding.Timeout.Milliseconds()),
 		}
 		return cfg, nil

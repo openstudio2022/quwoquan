@@ -5,6 +5,7 @@ import 'package:quwoquan_app/cloud/services/user/relationship_capability_reposit
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/models/search_models.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/ui/user/pages/contact_search_result_page.dart';
 import '../../../../support/fakes/contact_profile_queries.dart';
 
@@ -13,13 +14,13 @@ void main() {
     await _pumpSearchPage(
       tester,
       ContactProfileQueryFake(
-        searchItems: <SocialRelationSearchItemView>[
-          SocialRelationSearchItemView(
+        searchItems: <SocialRelationSearchItemViewData>[
+          SocialRelationSearchItemViewData(
             personaId: 'persona-alice',
             userHandle: 'alice',
             displayName: 'Alice',
             chatAvailable: false,
-            relationshipCapability: RelationshipCapabilityDto(
+            relationshipCapability: RelationshipCapabilityViewData(
               viewerPersonaId: 'persona-viewer',
               targetPersonaId: 'persona-alice',
               relationState: 'not_following',
@@ -52,7 +53,7 @@ void main() {
       ContactProfileQueryFake(searchError: StateError('search unavailable')),
     );
 
-    expect(find.text(SearchText.recoveryReloadLaterTitle), findsOneWidget);
+    expect(find.byType(AppPageErrorState), findsOneWidget);
     expect(find.text(ContactText.addContactSearchNoResult), findsNothing);
   });
 }

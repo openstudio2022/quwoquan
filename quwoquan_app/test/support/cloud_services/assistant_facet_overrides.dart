@@ -20,7 +20,7 @@ List<Override> alphaAssistantFacetOverrides(AlphaAssistantFacets facets) {
     assistantLearningFactAppendFacetProvider.overrideWithValue(facets),
     assistantPersonalizationFacetProvider.overrideWithValue(facets),
     assistantPersonalDataFacetProvider.overrideWithValue(facets),
-    assistantPreferenceFactFacetProvider.overrideWithValue(facets),
+    assistantPreferenceFacetProvider.overrideWithValue(facets),
     assistantSearchRunFacetProvider.overrideWithValue(facets),
     assistantCreationRunFacetProvider.overrideWithValue(facets),
   ];

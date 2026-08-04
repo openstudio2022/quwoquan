@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/ports"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/modelprovider"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/orchestration"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/ports"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/infrastructure/modelprovider"
 )
 
 type capturedToolCallingRequest struct {

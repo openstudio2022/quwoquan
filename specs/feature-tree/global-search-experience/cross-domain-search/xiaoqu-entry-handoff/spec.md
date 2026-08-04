@@ -16,7 +16,7 @@
 
 - 小趣自然语言 query 到 canonical search request 的转换。
 - web.document 与站内对象统一聚合、引用和降级。
-- SearchXiaoquResults 输出真实 citation provenance。
+- `StartAssistantRun` 的 `search` 意图在同一 Run 生命周期中输出真实 citation provenance。
 - page/object rich context 参与 retrieval 与 citation rank。
 
 ### Out of Scope
@@ -29,14 +29,14 @@
 <a id="req-001"></a>
 ### REQ-001 小趣通过统一 LLM search tool 获得网页与站内对象检索结果
 
-- SearchXiaoquResults 不再返回固定 spec/knowledge 占位 citation。
+- `StartAssistantRun` 的 `search` 意图不得返回固定 spec/knowledge 占位 citation。
 - tool_coordinator 测试能证明 web_search/app_search/search 走 canonical_search provider。
 - 小趣结果页可以打开真实站内对象或公开 web citation。
 
 <a id="req-002"></a>
 ### REQ-002 小趣搜使用 typed contract 返回真实结果
 
-- `小趣搜` 必须通过 assistant 的 typed contract / metadata 路径返回真实结果，不能在 runtime 做字符串语义分流。
+- `小趣搜` 必须通过 `AssistantRunIntent.search` 与 `StartAssistantRun` 的 typed contract 返回真实结果，不得新增独立搜索模型执行 operation，也不能在 runtime 做字符串语义分流。
 - 借鉴微信搜索中的独立 AI / 网络结果入口心智，但统一收口为网络结果页中的 `小趣搜` tab。
 
 ## 4. 契约引用
@@ -50,7 +50,7 @@
 <a id="gwt-001"></a>
 ### GWT-001 小趣通过统一 LLM search tool 获得网页与站内对象检索结果
 
-- GIVEN 用户在小趣或全局搜索“小趣搜”输入自然语言 query。
+- GIVEN 用户在小趣或全局搜索“小趣搜”输入自然语言 query，请求以 `AssistantRunIntent.search` 进入唯一 Run 入口。
 - GIVEN canonical search registry 已注册 web.document、content.post、entity.homepage、circle.group、chat.message 等对象类型。
 - WHEN 小趣生成 searchPlans/queryVariants 并调用 search 工具。
 - THEN web_search 能力作为 web.document provider 接入 canonical search，而不是独立 fake adapter。
@@ -72,9 +72,7 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；当前 App Widget 测试只覆盖确定性 typed double 与错误态，Assistant Service 尚未拥有
-  `SearchXiaoquResults` 的 canonical operation、真实 `canonical_search` 聚合 handler 以及直接引用
-  本节点 GWT 的 `api_integration / user_acceptance` 证据。
-- 在正式 operation、provider degrade envelope、真实 citation readback 和直接 `spec_ref` 测试闭合前，
+- 影响或价值：仍缺真实 `canonical_search` provider 聚合、部分 provider 不可用时的结构化 degrade、citation readback 以及直接引用本节点 GWT 的 `api_integration / user_acceptance` 证据；`AssistantRunIntent.search`、`StartAssistantRun` 与引用视图已有 canonical source contract。
+- 在该唯一 Run operation 的 provider degrade envelope、真实 citation readback 和直接 `spec_ref` 测试闭合前，
   不得把现有 UI 替身测试提升为本 GWT 已通过，也不得以非生产 provider substitute 冒充真实网页来源。
 - 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。

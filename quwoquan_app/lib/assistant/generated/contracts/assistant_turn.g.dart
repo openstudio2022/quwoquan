@@ -4,8 +4,8 @@
 
 import 'package:quwoquan_app/assistant/contracts/aggregation_state.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_preference_snapshot.dart';
 import 'package:quwoquan_app/assistant/contracts/orchestrator_state_contract.dart';
-import 'package:quwoquan_app/assistant/contracts/preference_fact.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/skill_run.dart';
 import 'package:quwoquan_app/assistant/contracts/subagent_plan.dart';
@@ -1045,8 +1045,8 @@ class AssistantTurnOutput {
     this.retrievalProcessing = const RetrievalProcessingSnapshot(),
     this.answerProcessing = const AssistantTurnAnswerProcessing(),
     this.historicalThinkingSnapshot = const AssistantTurnHistoricalThinkingSnapshot(),
-    this.sessionPreferenceFacts = const <PreferenceFact>[],
-    this.longTermPreferenceFacts = const <PreferenceFact>[],
+    this.sessionPreferences = const <AssistantPreferenceSnapshot>[],
+    this.longTermPreferences = const <AssistantPreferenceSnapshot>[],
   });
 
   final String contractId;
@@ -1084,8 +1084,8 @@ class AssistantTurnOutput {
   final RetrievalProcessingSnapshot retrievalProcessing;
   final AssistantTurnAnswerProcessing answerProcessing;
   final AssistantTurnHistoricalThinkingSnapshot historicalThinkingSnapshot;
-  final List<PreferenceFact> sessionPreferenceFacts;
-  final List<PreferenceFact> longTermPreferenceFacts;
+  final List<AssistantPreferenceSnapshot> sessionPreferences;
+  final List<AssistantPreferenceSnapshot> longTermPreferences;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
         'contractId': contractId,
@@ -1123,8 +1123,8 @@ class AssistantTurnOutput {
         'retrievalProcessing': retrievalProcessing.toJson(),
         'answerProcessing': answerProcessing.toJson(),
         'historicalThinkingSnapshot': historicalThinkingSnapshot.toJson(),
-        'sessionPreferenceFacts': sessionPreferenceFacts.map((item) => item.toJson()).toList(growable: false),
-        'longTermPreferenceFacts': longTermPreferenceFacts.map((item) => item.toJson()).toList(growable: false),
+        'sessionPreferences': sessionPreferences.map((item) => item.toJson()).toList(growable: false),
+        'longTermPreferences': longTermPreferences.map((item) => item.toJson()).toList(growable: false),
       };
 
   factory AssistantTurnOutput.fromJson(Map<String, dynamic> json) {
@@ -1164,8 +1164,8 @@ class AssistantTurnOutput {
       'retrievalProcessing',
       'answerProcessing',
       'historicalThinkingSnapshot',
-      'sessionPreferenceFacts',
-      'longTermPreferenceFacts',
+      'sessionPreferences',
+      'longTermPreferences',
     };
     final unknownFields = json.keys
         .where((key) => !allowedFields.contains(key))
@@ -1278,11 +1278,11 @@ class AssistantTurnOutput {
     if (json.containsKey('historicalThinkingSnapshot') && json['historicalThinkingSnapshot'] != null && (json['historicalThinkingSnapshot'] is! Map)) {
       throw const FormatException('AssistantTurnOutput field historicalThinkingSnapshot has an invalid wire value');
     }
-    if (json.containsKey('sessionPreferenceFacts') && json['sessionPreferenceFacts'] != null && (json['sessionPreferenceFacts'] is! List || (json['sessionPreferenceFacts'] as List).any((item) => item is! Map))) {
-      throw const FormatException('AssistantTurnOutput field sessionPreferenceFacts has an invalid wire value');
+    if (json.containsKey('sessionPreferences') && json['sessionPreferences'] != null && (json['sessionPreferences'] is! List || (json['sessionPreferences'] as List).any((item) => item is! Map))) {
+      throw const FormatException('AssistantTurnOutput field sessionPreferences has an invalid wire value');
     }
-    if (json.containsKey('longTermPreferenceFacts') && json['longTermPreferenceFacts'] != null && (json['longTermPreferenceFacts'] is! List || (json['longTermPreferenceFacts'] as List).any((item) => item is! Map))) {
-      throw const FormatException('AssistantTurnOutput field longTermPreferenceFacts has an invalid wire value');
+    if (json.containsKey('longTermPreferences') && json['longTermPreferences'] != null && (json['longTermPreferences'] is! List || (json['longTermPreferences'] as List).any((item) => item is! Map))) {
+      throw const FormatException('AssistantTurnOutput field longTermPreferences has an invalid wire value');
     }
     return AssistantTurnOutput(
       contractId: (json['contractId'] as String?)?.trim() ?? "",
@@ -1320,8 +1320,8 @@ class AssistantTurnOutput {
       retrievalProcessing: json['retrievalProcessing'] is Map ? RetrievalProcessingSnapshot.fromJson((json['retrievalProcessing'] as Map).cast<String, dynamic>()) : const RetrievalProcessingSnapshot(),
       answerProcessing: json['answerProcessing'] is Map ? AssistantTurnAnswerProcessing.fromJson((json['answerProcessing'] as Map).cast<String, dynamic>()) : const AssistantTurnAnswerProcessing(),
       historicalThinkingSnapshot: json['historicalThinkingSnapshot'] is Map ? AssistantTurnHistoricalThinkingSnapshot.fromJson((json['historicalThinkingSnapshot'] as Map).cast<String, dynamic>()) : const AssistantTurnHistoricalThinkingSnapshot(),
-      sessionPreferenceFacts: (json['sessionPreferenceFacts'] as List?)?.whereType<Map>().map((item) => PreferenceFact.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <PreferenceFact>[],
-      longTermPreferenceFacts: (json['longTermPreferenceFacts'] as List?)?.whereType<Map>().map((item) => PreferenceFact.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <PreferenceFact>[],
+      sessionPreferences: (json['sessionPreferences'] as List?)?.whereType<Map>().map((item) => AssistantPreferenceSnapshot.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <AssistantPreferenceSnapshot>[],
+      longTermPreferences: (json['longTermPreferences'] as List?)?.whereType<Map>().map((item) => AssistantPreferenceSnapshot.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <AssistantPreferenceSnapshot>[],
     );
   }
 
@@ -1369,6 +1369,6 @@ class AssistantTurnOutputFields {
   static const String retrievalProcessing = 'retrievalProcessing';
   static const String answerProcessing = 'answerProcessing';
   static const String historicalThinkingSnapshot = 'historicalThinkingSnapshot';
-  static const String sessionPreferenceFacts = 'sessionPreferenceFacts';
-  static const String longTermPreferenceFacts = 'longTermPreferenceFacts';
+  static const String sessionPreferences = 'sessionPreferences';
+  static const String longTermPreferences = 'longTermPreferences';
 }

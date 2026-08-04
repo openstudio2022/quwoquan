@@ -6,12 +6,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	prompting "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/prompting"
+	prompting "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/prompting"
 	"strings"
 
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
-	skillpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/skill"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/orchestration"
+	assistant "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/model"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/ports"
+	skillpkg "quwoquan_service/services/assistant-service/internal/assistant/skill_package_release/application/packageasset"
 )
 
 // DeterministicModelProvider 以固定文本回应每个 ReAct stage，使测试无需真实模型即可
@@ -48,7 +49,7 @@ func (DeterministicModelProvider) Complete(
 	case "reasoning":
 		delta := map[string]any{
 			"nextAction": "tool_call",
-			"toolName":   reasoningToolName(req.SkillID),
+			"toolName":   reasoningToolName(req.ToolCatalog),
 			"toolInput": map[string]any{
 				"query": question,
 			},
@@ -117,17 +118,11 @@ func (DeterministicModelProvider) Complete(
 	}
 }
 
-func reasoningToolName(skillID string) string {
-	switch skillID {
-	case "daily_assistant",
-		"calendar_task",
-		"travel_companion",
-		"work_productivity",
-		"local_life":
-		return "app_search"
-	default:
-		return "web_search"
+func reasoningToolName(catalog []ports.ModelToolDefinition) string {
+	if len(catalog) == 0 {
+		return ""
 	}
+	return catalog[0].Name
 }
 
 func finalAnswer(skillID, question, summary string) string {
@@ -153,10 +148,10 @@ func clientTrace(req orchestration.ModelRequest, responseText string) map[string
 		orchestration.FormatPageContextForPrompt(req.PageContext),
 		prompting.FormatAuthorizedIntersectionEvidenceForPrompt(req.IntersectionEvidence),
 		prompting.FormatModelPreferencesForPrompt(
-			req.SessionPreferenceFacts,
-			req.LongTermPreferenceFacts,
+			req.SessionPreferences,
+			req.LongTermPreferences,
 		),
-		prompting.FormatFactualMemoriesForPrompt(req.LongTermPreferenceFacts),
+		prompting.FormatConfirmedPreferencesForPrompt(req.LongTermPreferences),
 		prompting.FormatFeedbackContextForPrompt(req.FeedbackContext),
 		req.UserQuestion,
 	)

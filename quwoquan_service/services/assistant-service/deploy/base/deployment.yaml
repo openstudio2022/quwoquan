@@ -48,8 +48,7 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.annotations['quwoquan.io/image-version']
-            - name: ASSISTANT_RESOURCE_ROOT
-              value: /app/resources/skills/assistant/assistant_session
+            # Runtime reads only signed immutable SkillPackageRelease assets.
             - name: ASSISTANT_SKILL_PACKAGE_ROOT
               value: /app/resources/skills/packages/official
             - name: ASSISTANT_POLICY_RESOURCE_ROOT

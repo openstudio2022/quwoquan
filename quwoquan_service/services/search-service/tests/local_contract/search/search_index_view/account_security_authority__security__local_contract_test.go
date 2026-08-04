@@ -325,7 +325,7 @@ func TestSearchAPIWiresAccountSecurityAuthorityAndNoPIISLO(t *testing.T) {
 		"rtauth.NewHTTPAccountSecurityAuthority(",
 		"BaseURL:     cfg.AccountSecurityAuthority.BaseURL",
 		"Timeout:     accountSecurityAuthorityTimeout",
-		`healthChecker.Register("account-security-authority"`,
+		`readiness.Register("account-security-authority"`,
 		"return accountSecurityAuthority.CheckAccountSecurityAuthority(hctx)",
 		"AccountSecurityAuthority: accountSecurityAuthority",
 	} {

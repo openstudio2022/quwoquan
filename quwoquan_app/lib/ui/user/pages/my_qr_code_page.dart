@@ -77,10 +77,12 @@ class _MyQrCodePageState extends ConsumerState<MyQrCodePage> {
                 category: UiErrorCategory.pageLoad,
                 scope: UiErrorScope.page,
               ),
-              onAction: (action) async {
+              onRecovery: (action) async {
                 if (action.type == UiErrorActionType.retry) {
                   _reload();
+                  return UiRecoveryOutcome.superseded;
                 }
+                return UiRecoveryOutcome.cancelled;
               },
             );
           }

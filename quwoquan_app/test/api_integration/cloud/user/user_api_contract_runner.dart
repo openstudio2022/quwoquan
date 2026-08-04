@@ -255,7 +255,7 @@ void main() {
     );
 
     expect(result.accountState, 'closed');
-    expect(DateTime.tryParse(result.closedAt), isNotNull);
+    expect(result.closedAt.isUtc, isTrue);
     expect(result.idempotentReplay, isFalse);
     await expectLater(
       _accountSessions.refreshToken(

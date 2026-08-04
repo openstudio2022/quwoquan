@@ -8,6 +8,8 @@ import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
+import '../canonical_digest_fixture.dart';
+
 final class AssistantPrototypeTaskRow {
   const AssistantPrototypeTaskRow({
     required this.taskKey,
@@ -284,13 +286,13 @@ class AlphaAssistantFacets
   }) async {
     final now = DateTime.now().toUtc().toIso8601String();
     final index = _preferences.indexWhere(
-      (fact) =>
-          fact.scope == scope &&
-          (fact.sessionId ?? '') == sessionId.trim() &&
-          fact.kind == kind,
+      (preference) =>
+          preference.scope == scope &&
+          (preference.sessionId ?? '') == sessionId.trim() &&
+          preference.kind == kind,
     );
     final existing = index < 0 ? null : _preferences[index];
-    final fact = AssistantPreference(
+    final preference = AssistantPreference(
       preferenceId:
           existing?.preferenceId ?? 'apf_alpha_${_preferences.length + 1}',
       userId: 'alpha_persona',
@@ -309,11 +311,11 @@ class AlphaAssistantFacets
       version: (existing?.version ?? 0) + 1,
     );
     if (index < 0) {
-      _preferences.add(fact);
+      _preferences.add(preference);
     } else {
-      _preferences[index] = fact;
+      _preferences[index] = preference;
     }
-    return fact;
+    return preference;
   }
 
   @override
@@ -324,11 +326,11 @@ class AlphaAssistantFacets
   }) async {
     return _preferences
         .where(
-          (fact) =>
-              fact.status == status &&
-              (scope == null || fact.scope == scope) &&
+          (preference) =>
+              preference.status == status &&
+              (scope == null || preference.scope == scope) &&
               (sessionId.trim().isEmpty ||
-                  (fact.sessionId ?? '') == sessionId.trim()),
+                  (preference.sessionId ?? '') == sessionId.trim()),
         )
         .toList(growable: false);
   }
@@ -338,7 +340,7 @@ class AlphaAssistantFacets
     required String preferenceId,
   }) async {
     final index = _preferences.indexWhere(
-      (fact) => fact.preferenceId == preferenceId.trim(),
+      (preference) => preference.preferenceId == preferenceId.trim(),
     );
     if (index < 0) {
       throw StateError('assistant preference not found');
@@ -374,7 +376,7 @@ class AlphaAssistantFacets
     required String preferenceId,
   }) async {
     final index = _preferences.indexWhere(
-      (fact) => fact.preferenceId == preferenceId.trim(),
+      (preference) => preference.preferenceId == preferenceId.trim(),
     );
     if (index < 0) {
       throw StateError('assistant preference not found');
@@ -420,7 +422,10 @@ class AlphaAssistantFacets
     }) {
       return AssistantSkillCatalogItemView(
         packageId: 'quwoquan.official.$skillId',
-        releaseDigest: 'sha256:${skillId.padRight(64, '0').substring(0, 64)}',
+        releaseDigest: canonicalFixtureSha256(<String, Object?>{
+          'packageId': 'quwoquan.official.$skillId',
+          'skillId': skillId,
+        }),
         skillId: skillId,
         displayName: displayName,
         description: description,
@@ -435,8 +440,10 @@ class AlphaAssistantFacets
         exampleRefs: const <String>[],
         activationMode: activationMode,
         allowedSurfaceKinds: const <String>['personal'],
-        configurationSchemaDigest:
-            'sha256:${'schema-$skillId'.padRight(64, '0').substring(0, 64)}',
+        configurationSchemaDigest: canonicalFixtureSha256(<String, Object?>{
+          'skillId': skillId,
+          'configurationRequiredFields': const <String>[],
+        }),
         setupTemplateRef: 'assistant.setup.$skillId',
         configurationRequiredFields: const <String>[],
       );

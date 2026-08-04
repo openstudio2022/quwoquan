@@ -10,10 +10,10 @@ import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/application/user/profile/profile_edit_query.dart';
 import 'package:quwoquan_app/application/user/profile/profile_query.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/profile_qr_resolve_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_edit_models.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
+import 'package:quwoquan_app/cloud/services/user/profile_media_upload_gateway.dart';
 import 'package:quwoquan_app/components/object_page/profile_ios_components.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/di/cloud_http_client_provider.dart';
@@ -24,6 +24,7 @@ import 'package:quwoquan_app/ui/user/pages/edit_profile_page.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show
         ProfileCommandWriter,
+        ProfileQrResolveWire,
         ProfileUpdateProposalListQuery,
         ProfileUpdateProposalQuery,
         ProfileUpdateProposalQueryReader,
@@ -31,7 +32,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
         ProfileUpdateProposalView,
         ProfileUpdateSnapshot,
         UpdateUserProfileCommand;
-import '../../../../support/cloud_services/repository_mock_reexports.dart'
+import '../../../../support/cloud_services/object_doubles/tag/alpha_tag_facets.dart'
     show AlphaTagFacet;
 
 import '../../../../support/cloud_services/user_typed_facet_test_support.dart';
@@ -41,9 +42,11 @@ class _EditProfileMockRepository implements ProfileQuery, ProfileEditQuery {
   String? _updatedNickname;
   String? _updatedBio;
   UpdateUserProfileCommand? lastCommand;
+  final List<UpdateUserProfileCommand> commands = <UpdateUserProfileCommand>[];
 
   void apply(UpdateUserProfileCommand command) {
     lastCommand = command;
+    commands.add(command);
     _updatedNickname = command.nickname ?? _updatedNickname;
     _updatedBio = command.bio ?? _updatedBio;
   }
@@ -130,10 +133,10 @@ class _EditProfileMockRepository implements ProfileQuery, ProfileEditQuery {
   }
 
   @override
-  Future<List<SocialRelationSearchItemView>> searchSocialRelations({
+  Future<List<SocialRelationSearchItemViewData>> searchSocialRelations({
     required String query,
     int limit = 20,
-  }) async => const <SocialRelationSearchItemView>[];
+  }) async => const <SocialRelationSearchItemViewData>[];
 
   @override
   Future<ProfileEditSnapshotData> getProfileEditSnapshot() async {
@@ -172,11 +175,11 @@ class _EditProfileMockRepository implements ProfileQuery, ProfileEditQuery {
   }
 
   @override
-  Future<ProfileQrResolveWireDto> resolveProfileQrToken({
+  Future<ProfileQrResolveWire> resolveProfileQrToken({
     required String token,
     String handle = '',
   }) async {
-    return ProfileQrResolveWireDto(
+    return ProfileQrResolveWire(
       personaId: 'user_001',
       userHandle: handle.isEmpty ? 'test_user' : handle,
       publicProfileUrl: 'https://app.quwoquan.test/u/test_user',
@@ -200,8 +203,10 @@ class _EditProfileCommandWriter implements ProfileCommandWriter {
       nickname: command.nickname ?? '',
       nicknameCustomized: command.nickname != null,
       profileVersion: 2,
+      avatarVersion: 0,
       bio: command.bio,
-      updatedAt: DateTime.now().toUtc().toIso8601String(),
+      identityTags: const <String>[],
+      updatedAt: DateTime.now().toUtc(),
     );
   }
 }
@@ -374,6 +379,9 @@ void main() {
           profileCommandWriterProvider.overrideWithValue(
             _EditProfileCommandWriter(mockRepo),
           ),
+          profileMediaUploadGatewayProvider.overrideWithValue(
+            const _UnusedProfileMediaUploadGateway(),
+          ),
           relationshipCapabilityRepositoryProvider.overrideWithValue(
             relationshipCapabilityRepositoryFrom(
               const TestRelationshipCapabilityQuery.mutual(),
@@ -535,6 +543,7 @@ void main() {
       expect(find.text('云浮'), findsOneWidget);
       await tester.tap(find.text('云浮'));
       await _pumpFrames(tester, count: 8);
+      expect(find.text('广东 云浮'), findsOneWidget);
 
       await tester.tap(
         find.byKey(const ValueKey<String>('edit-profile-nickname-row')),
@@ -551,11 +560,22 @@ void main() {
       );
       await _pumpFrames(tester, count: 8);
 
-      await tester.tap(find.byKey(const ValueKey<String>('edit-profile-save')));
+      final saveButton = find.byKey(
+        const ValueKey<String>('edit-profile-save'),
+      );
+      expect(
+        tester.widget<CupertinoButton>(saveButton).onPressed,
+        isNotNull,
+        reason: '地区与昵称变更后主表单必须可提交',
+      );
+      await tester.tap(saveButton);
       await _pumpFrames(tester, count: 20);
 
       expect(find.text(newNickname), findsAtLeastNWidgets(1));
-      expect(mockRepo.lastCommand?.regionTagRef, 'Topic/地理/行政区/中国/广东省/云浮市');
+      expect(
+        mockRepo.commands.map((command) => command.regionTagRef),
+        contains('Topic/地理/行政区/中国/广东省/云浮市'),
+      );
       expect(mockRepo.lastCommand, isA<UpdateUserProfileCommand>());
       expect(
         noNetworkClient.requestedUris,
@@ -568,3 +588,15 @@ void main() {
 }
 
 class _NoNetworkHttpOverrides extends HttpOverrides {}
+
+class _UnusedProfileMediaUploadGateway implements ProfileMediaUploadGateway {
+  const _UnusedProfileMediaUploadGateway();
+
+  @override
+  Future<ProfileMediaUploadResult> uploadImage({
+    required String localPath,
+    required ProfileMediaTarget target,
+  }) {
+    throw StateError('profile journey does not select media');
+  }
+}

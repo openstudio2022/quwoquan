@@ -313,17 +313,15 @@ func redactPersonaCommandHistory(
 	personaIDs []string,
 	closedAt time.Time,
 ) error {
+	_ = closedAt
+	// Receipts and outbox share deterministic packet IDs derived from the
+	// Idempotency-Key. Deleting receipts while retaining outbox rows leaves
+	// orphan event_id primary keys that break later CreatePersona retries with
+	// the same nonprod key (duplicate personas_outbox_pkey → HTTP 500).
 	if _, err := tx.Exec(ctx, `
-UPDATE personas_outbox
-SET payload_json=jsonb_build_object(
-      'personaId', aggregate_id,
-      'redacted', true
-    ),
-    published_at=COALESCE(published_at,$2),
-    next_attempt_at=$2,
-    last_error=''
-WHERE aggregate_id=ANY($1::text[])`, personaIDs, closedAt); err != nil {
-		return fmt.Errorf("redact persona outbox on account close: %w", err)
+DELETE FROM personas_outbox
+WHERE aggregate_id=ANY($1::text[])`, personaIDs); err != nil {
+		return fmt.Errorf("delete persona outbox on account close: %w", err)
 	}
 	if _, err := tx.Exec(ctx, `
 DELETE FROM personas_command_receipts

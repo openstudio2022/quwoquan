@@ -361,8 +361,7 @@ Object? _responseFor(String operationId) {
     },
     AppCloudOperationIds.chatConversationListGroupCandidates =>
       <String, Object?>{
-        'items': <Object?>[_contact],
-        'nextCursor': null,
+        'items': <Object?>[_groupCandidate],
       },
     AppCloudOperationIds.chatChatInboxViewListInbox => <String, Object?>{
       'items': <Object?>[_inbox],
@@ -422,6 +421,7 @@ const Map<String, Object?> _conversation = <String, Object?>{
   'receiptEnabled': true,
   'announcement': '',
   'announcementUpdatedBy': '',
+  'announcementUpdatedAt': '2026-07-21T08:00:00Z',
   'nameEditableByAdminOnly': false,
   'lastMessageId': 'message-1',
   'lastMessagePreview': '你好',
@@ -447,6 +447,24 @@ const Map<String, Object?> _contactHome = <String, Object?>{
 };
 
 const Map<String, Object?> _contact = <String, Object?>{
+  'userId': 'persona-2',
+  'userHandle': 'xiaoq_public',
+  'displayName': '小趣',
+  'avatarUrl': '',
+  'bio': '摄影作者',
+  'metFrom': '摄影圈',
+  'lastInteraction': '刚刚',
+  'relationState': 'mutual',
+  'conversationId': 'conversation-1',
+  'conversationType': 'direct',
+  'subtitle': '摄影作者',
+  'highlightText': '',
+  'matchedField': '',
+  'source': 'mutual',
+  'isStarred': false,
+};
+
+const Map<String, Object?> _groupCandidate = <String, Object?>{
   'userId': 'persona-2',
   'userHandle': 'xiaoq_public',
   'displayName': '小趣',

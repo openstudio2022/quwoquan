@@ -99,11 +99,11 @@ void main() {
       final createCommand = CreateProfileUpdateProposalCommand(
         personaId: _personaId,
         proposalId: proposalId,
-        source: ProfileUpdateProposalSource.assistant,
+        source: ProposalSource.assistant,
         reason: 'Gamma Assistant profile proposal verification',
         evidenceRefs: <String>['assistant-run:$identity'],
         impactScope: const <String>['bio'],
-        changes: ProfileChangeSet(bio: 'Gamma proposal $identity'),
+        bio: 'Gamma proposal $identity',
       );
 
       final created = await remote.create(createCommand);
@@ -127,15 +127,15 @@ void main() {
         ProfileUpdateProposalQuery(proposalId: proposalId),
       );
 
-      expect(created.status, ProfileUpdateProposalStatus.pending);
+      expect(created.status, ProposalStatus.pending);
       expect(createReplay.replayed, isTrue);
-      expect(confirmed.status, ProfileUpdateProposalStatus.confirmed);
-      expect(applied.status, ProfileUpdateProposalStatus.applied);
+      expect(confirmed.status, ProposalStatus.confirmed);
+      expect(applied.status, ProposalStatus.applied);
       expect(appliedView.applyAuditId, isNotEmpty);
       expect(appliedView.rollbackDeadline, isNotNull);
-      expect(rolledBack.status, ProfileUpdateProposalStatus.rolledBack);
+      expect(rolledBack.status, ProposalStatus.rolledBack);
       expect(rollbackReplay.replayed, isTrue);
-      expect(rolledBackView.status, ProfileUpdateProposalStatus.rolledBack);
+      expect(rolledBackView.status, ProposalStatus.rolledBack);
       expect(rolledBackView.rollbackAuditId, isNotEmpty);
       expect(telemetry.events.every((event) => event.succeeded), isTrue);
 
@@ -170,9 +170,8 @@ Future<void> _writeRemoteEvidence(Map<String, Object?> evidence) async {
   await output.writeAsString('${jsonEncode(evidence)}\n');
 }
 
-CloudHttpClient _buildGammaHttpClient() => CloudHttpClient(
-  authTokenProvider: _StaticTokenProvider(_accessToken),
-);
+CloudHttpClient _buildGammaHttpClient() =>
+    CloudHttpClient(authTokenProvider: _StaticTokenProvider(_accessToken));
 
 final class _StaticTokenProvider implements CloudAuthTokenProvider {
   const _StaticTokenProvider(this.token);

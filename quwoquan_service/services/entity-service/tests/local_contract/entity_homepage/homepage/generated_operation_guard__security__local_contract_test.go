@@ -8,7 +8,7 @@ import (
 	entityguard "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/operationguard"
 )
 
-func TestGeneratedEntityOperationGuardUsesCurrentCommercialContract(t *testing.T) {
+func TestGeneratedEntityOperationGuardUsesCanonicalCommercialContract(t *testing.T) {
 	handlerCalls := 0
 	guarded := entityguard.Handler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		handlerCalls++
@@ -22,7 +22,7 @@ func TestGeneratedEntityOperationGuardUsesCurrentCommercialContract(t *testing.T
 	}{
 		{method: http.MethodGet, path: "/homepages/search", wantStatus: http.StatusOK},
 		{method: http.MethodPost, path: "/homepages/candidates", wantStatus: http.StatusUnauthorized},
-		{method: http.MethodGet, path: "/entity/legacy-unregistered-route", wantStatus: http.StatusNotFound},
+		{method: http.MethodGet, path: "/entity/retired-unregistered-route", wantStatus: http.StatusNotFound},
 	} {
 		recorder := httptest.NewRecorder()
 		guarded.ServeHTTP(recorder, httptest.NewRequest(testCase.method, testCase.path, nil))

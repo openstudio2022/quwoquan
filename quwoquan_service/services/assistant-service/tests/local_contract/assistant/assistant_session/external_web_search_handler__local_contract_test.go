@@ -1,17 +1,18 @@
 // spec_ref: specs/feature-tree/runtime/runtime-assistant/context-grounded-answering/spec.md#gwt-002
+// spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/autonomous-web-exploration/spec.md#gwt-004
 package local_contract
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
-	. "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
+	. "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/orchestration"
 	"strings"
 	"testing"
 
-	toolpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/tool"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/ports"
+	toolpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/tool"
+	assistant "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/model"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/ports"
 )
 
 type assistantSessionExternalWebSearchHandlerRecordingExternalSearchProvider struct {
@@ -44,9 +45,9 @@ func TestExternalWebSearchHandlerUsesTypedWeatherPort(t *testing.T) {
 			Title: "不安全来源", URL: "http://example.com/weather", Source: "unsafe",
 		}},
 	}}
-	handler := NewExternalWebSearchHandler(nil, weather, nil)
+	handler := NewWeatherLookupHandler(weather)
 	result, err := handler(t.Context(), toolpkg.Request{
-		ToolName: "web_search",
+		ToolName: "weather_lookup",
 		Input: map[string]any{
 			"query":              "杭州明天天气",
 			"location":           "杭州",
@@ -87,14 +88,30 @@ func TestExternalWebSearchHandlerUsesTypedWeatherPort(t *testing.T) {
 	}
 }
 
+func TestFinanceQuoteUsesTypedFinancePortWithoutSkillRouting(t *testing.T) {
+	finance := &assistantSessionExternalWebSearchHandlerRecordingExternalSearchProvider{
+		result: ports.ExternalSearchResult{Summary: "BABA public quote"},
+	}
+	handler := NewFinanceQuoteHandler(finance)
+	_, err := handler(t.Context(), toolpkg.Request{
+		ToolName: "finance_quote",
+		Input: map[string]any{
+			"query":   "核验阿里巴巴行情",
+			"symbols": []any{"BABA", "9988.HK"},
+		},
+	})
+	if err != nil || len(finance.request.Symbols) != 2 ||
+		finance.request.Symbols[0] != "BABA" {
+		t.Fatalf("finance request=%+v error=%v", finance.request, err)
+	}
+}
+
 func TestExternalWebSearchHandlerMapsProviderFailureToStructuredCode(t *testing.T) {
 	registry := toolpkg.BaseRegistry()
 	registry.Register(
 		toolpkg.WebSearchMetadata(),
-		NewExternalWebSearchHandler(
+		NewPublicWebSearchHandler(
 			assistantSessionExternalWebSearchHandlerProviderFailureSearchProvider{},
-			nil,
-			nil,
 		),
 	)
 	coordinator := DefaultToolCoordinator{Registry: registry}
@@ -115,13 +132,11 @@ func TestExternalWebSearchHandlerMapsProviderFailureToStructuredCode(t *testing.
 	}
 }
 
-func TestExternalWebSearchHandlerDoesNotFallbackAcrossCapabilities(t *testing.T) {
-	public := &assistantSessionExternalWebSearchHandlerRecordingExternalSearchProvider{}
-	handler := NewExternalWebSearchHandler(
-		public,
-		assistantSessionExternalWebSearchHandlerProviderFailureWeatherProvider{},
-		nil,
-	)
+func TestPublicWebSearchNeverInfersWeatherCapabilityFromTextOrSkill(t *testing.T) {
+	public := &assistantSessionExternalWebSearchHandlerRecordingExternalSearchProvider{
+		result: ports.ExternalSearchResult{Summary: "public weather pages"},
+	}
+	handler := NewPublicWebSearchHandler(public)
 	_, err := handler(t.Context(), toolpkg.Request{
 		ToolName: "web_search",
 		Input: map[string]any{
@@ -129,15 +144,22 @@ func TestExternalWebSearchHandlerDoesNotFallbackAcrossCapabilities(t *testing.T)
 			"skillId": "weather",
 		},
 	})
+	if err != nil || public.request.Query != "杭州天气" {
+		t.Fatalf("public request=%+v error=%v", public.request, err)
+	}
+}
+
+func TestWeatherLookupFailureCannotFallbackToAnotherCapability(t *testing.T) {
+	handler := NewWeatherLookupHandler(
+		assistantSessionExternalWebSearchHandlerProviderFailureWeatherProvider{},
+	)
+	_, err := handler(t.Context(), toolpkg.Request{
+		ToolName: "weather_lookup",
+		Input:    map[string]any{"query": "杭州天气"},
+	})
 	var failure ports.ProviderFailure
-	if !errors.As(err, &failure) {
-		t.Fatalf("error = %v, want ProviderFailure", err)
-	}
-	if failure.Capability != "weather" {
-		t.Fatalf("failure = %+v", failure)
-	}
-	if public.request.Query != "" {
-		t.Fatalf("weather failure must not fall back to public search: %+v", public.request)
+	if !errors.As(err, &failure) || failure.Capability != "weather" {
+		t.Fatalf("error=%v failure=%+v", err, failure)
 	}
 }
 

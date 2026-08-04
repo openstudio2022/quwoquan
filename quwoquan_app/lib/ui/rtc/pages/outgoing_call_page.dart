@@ -74,13 +74,18 @@ class _OutgoingCallPageState extends ConsumerState<OutgoingCallPage> {
               category: UiErrorCategory.pageLoad,
               scope: UiErrorScope.page,
             ),
-            onAction: (action) async {
+            onRecovery: (action) async {
               if (action.type == UiErrorActionType.retry ||
                   action.type == UiErrorActionType.resubmit) {
                 await ref
                     .read(callSessionProvider.notifier)
                     .joinCall(widget.callId);
+                final refreshed = ref.read(callSessionProvider);
+                return refreshed.failure == null && refreshed.session != null
+                    ? UiRecoveryOutcome.recovered
+                    : UiRecoveryOutcome.stillBlocked;
               }
+              return UiRecoveryOutcome.cancelled;
             },
           ),
         ),

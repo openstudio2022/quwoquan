@@ -1,4 +1,4 @@
-package preferencefact
+package preferenceapplication
 
 import (
 	"context"
@@ -19,8 +19,8 @@ type ListPreferencesQuery struct {
 	Limit     int
 }
 
-type PreferenceFactListView struct {
-	Items []preferencemodel.Fact `json:"items"`
+type AssistantPreferenceListView struct {
+	Items []preferencemodel.AssistantPreference `json:"items"`
 }
 
 type QueryFacade struct {
@@ -34,7 +34,7 @@ func NewQueryFacade(reader preferenceports.Reader) *QueryFacade {
 func (f *QueryFacade) ListPreferences(
 	ctx context.Context,
 	query ListPreferencesQuery,
-) (_ PreferenceFactListView, err error) {
+) (_ AssistantPreferenceListView, err error) {
 	ctx, span := rtobs.StartBusinessSpan(
 		ctx,
 		"assistant.ListAssistantPreferences",
@@ -45,17 +45,17 @@ func (f *QueryFacade) ListPreferences(
 
 	userID := strings.TrimSpace(query.UserID)
 	if userID == "" {
-		return PreferenceFactListView{}, preferenceInvalidArgument("missing trusted persona")
+		return AssistantPreferenceListView{}, preferenceInvalidArgument("missing trusted persona")
 	}
 	scope := preferencemodel.Scope(strings.TrimSpace(query.Scope))
 	switch scope {
 	case "", preferencemodel.ScopeSession, preferencemodel.ScopeLongTerm:
 	default:
-		return PreferenceFactListView{}, preferenceInvalidArgument("invalid preference scope")
+		return AssistantPreferenceListView{}, preferenceInvalidArgument("invalid preference scope")
 	}
 	sessionID := strings.TrimSpace(query.SessionID)
 	if scope == preferencemodel.ScopeLongTerm && sessionID != "" {
-		return PreferenceFactListView{}, preferenceInvalidArgument(
+		return AssistantPreferenceListView{}, preferenceInvalidArgument(
 			"long_term preference query cannot bind session",
 		)
 	}
@@ -66,7 +66,7 @@ func (f *QueryFacade) ListPreferences(
 	switch status {
 	case preferencemodel.StatusActive, preferencemodel.StatusRevoked:
 	default:
-		return PreferenceFactListView{}, preferenceInvalidArgument("invalid preference status")
+		return AssistantPreferenceListView{}, preferenceInvalidArgument("invalid preference status")
 	}
 	limit := query.Limit
 	if limit <= 0 {
@@ -76,7 +76,7 @@ func (f *QueryFacade) ListPreferences(
 		limit = 100
 	}
 	if f == nil || f.reader == nil {
-		return PreferenceFactListView{}, preferenceStorageUnavailable(
+		return AssistantPreferenceListView{}, preferenceStorageUnavailable(
 			"assistant preference reader is not configured",
 		)
 	}
@@ -87,25 +87,25 @@ func (f *QueryFacade) ListPreferences(
 		Limit:     limit,
 	})
 	if readErr != nil {
-		return PreferenceFactListView{}, preferenceStorageUnavailable(readErr.Error())
+		return AssistantPreferenceListView{}, preferenceStorageUnavailable(readErr.Error())
 	}
 	if items == nil {
-		items = []preferencemodel.Fact{}
+		items = []preferencemodel.AssistantPreference{}
 	}
-	return PreferenceFactListView{Items: items}, nil
+	return AssistantPreferenceListView{Items: items}, nil
 }
 
 func (f *QueryFacade) ResolveActiveSnapshots(
 	ctx context.Context,
 	userID string,
 	sessionID string,
-) ([]preferencemodel.Snapshot, []preferencemodel.Snapshot, error) {
+) ([]preferencemodel.AssistantPreferenceSnapshot, []preferencemodel.AssistantPreferenceSnapshot, error) {
 	if f == nil || f.reader == nil {
 		return nil, nil, preferenceStorageUnavailable(
 			"assistant preference reader is not configured",
 		)
 	}
-	facts, err := f.reader.ListActiveForRun(
+	preferences, err := f.reader.ListActiveForRun(
 		ctx,
 		strings.TrimSpace(userID),
 		strings.TrimSpace(sessionID),
@@ -114,27 +114,27 @@ func (f *QueryFacade) ResolveActiveSnapshots(
 	if err != nil {
 		return nil, nil, preferenceStorageUnavailable(err.Error())
 	}
-	sessionFacts := make([]preferencemodel.Fact, 0, 4)
-	longTermFacts := make([]preferencemodel.Fact, 0, 4)
-	for _, fact := range facts {
-		switch fact.Scope {
+	sessionPreferences := make([]preferencemodel.AssistantPreference, 0, 4)
+	longTermPreferences := make([]preferencemodel.AssistantPreference, 0, 4)
+	for _, preference := range preferences {
+		switch preference.Scope {
 		case preferencemodel.ScopeSession:
-			if len(sessionFacts) < 16 {
-				sessionFacts = append(sessionFacts, fact)
+			if len(sessionPreferences) < 16 {
+				sessionPreferences = append(sessionPreferences, preference)
 			}
 		case preferencemodel.ScopeLongTerm:
-			if len(longTermFacts) < 16 {
-				longTermFacts = append(longTermFacts, fact)
+			if len(longTermPreferences) < 16 {
+				longTermPreferences = append(longTermPreferences, preference)
 			}
 		}
 	}
-	return preferenceSnapshots(sessionFacts), preferenceSnapshots(longTermFacts), nil
+	return preferenceSnapshots(sessionPreferences), preferenceSnapshots(longTermPreferences), nil
 }
 
-func preferenceSnapshots(facts []preferencemodel.Fact) []preferencemodel.Snapshot {
-	out := make([]preferencemodel.Snapshot, 0, len(facts))
-	for _, fact := range facts {
-		out = append(out, fact.Snapshot())
+func preferenceSnapshots(preferences []preferencemodel.AssistantPreference) []preferencemodel.AssistantPreferenceSnapshot {
+	out := make([]preferencemodel.AssistantPreferenceSnapshot, 0, len(preferences))
+	for _, preference := range preferences {
+		out = append(out, preference.Snapshot())
 	}
 	return out
 }

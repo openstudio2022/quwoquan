@@ -17,58 +17,6 @@ var allowedRouteModeTokens = map[string]bool{
 	"rail": true, "flight": true, "ferry": true,
 }
 
-// RouteMapFromTravelProjection converts the canonical Travel read model into
-// the strictly smaller route_map semantic payload. It intentionally omits
-// provider routing, coordinates and transport modes that Travel does not own.
-func RouteMapFromTravelProjection(tripMap map[string]any) (map[string]any, bool) {
-	tripID := stringValue(tripMap["tripId"])
-	revisionID := stringValue(tripMap["currentRevisionId"])
-	sourceDigest := stringValue(tripMap["sourceDigest"])
-	rawStops, ok := tripMap["stops"].([]any)
-	if !ok || tripID == "" || revisionID == "" || sourceDigest == "" || len(rawStops) == 0 {
-		return nil, false
-	}
-	stops := make([]any, 0, len(rawStops))
-	for _, rawStop := range rawStops {
-		stop, stopOK := rawStop.(map[string]any)
-		placeRef, placeOK := stop["placeRef"].(map[string]any)
-		dayIndex, dayOK := boundedInteger(stop["dayIndex"], 0, 366)
-		sequence, sequenceOK := boundedInteger(stop["sequence"], 0, maxRouteMapStops-1)
-		if !stopOK || !placeOK || !dayOK || !sequenceOK {
-			return nil, false
-		}
-		stops = append(stops, map[string]any{
-			"placeRef": cloneMap(placeRef), "dayIndex": dayIndex, "order": sequence,
-			"itemId": stringValue(stop["itemId"]), "title": stringValue(stop["title"]),
-		})
-	}
-	markers := make([]any, 0)
-	if rawMarkers, ok := tripMap["momentMarkers"].([]any); ok {
-		markers = make([]any, 0, len(rawMarkers))
-		for _, rawMarker := range rawMarkers {
-			marker, markerOK := rawMarker.(map[string]any)
-			placeRef, placeOK := marker["placeRef"].(map[string]any)
-			dayIndex, dayOK := boundedInteger(marker["dayIndex"], 0, 366)
-			if !markerOK || !placeOK || !dayOK {
-				return nil, false
-			}
-			markers = append(markers, map[string]any{
-				"momentId": stringValue(marker["momentId"]),
-				"placeRef": cloneMap(placeRef), "dayIndex": dayIndex,
-				"itemId": stringValue(marker["itemId"]),
-			})
-		}
-	}
-	result := map[string]any{
-		"tripId": tripID, "revisionId": revisionID, "sourceDigest": sourceDigest,
-		"stops": stops, "segments": []any{}, "markers": markers,
-	}
-	if err := validateRouteMapData(result); err != nil {
-		return nil, false
-	}
-	return result, true
-}
-
 func validateRouteMapData(data map[string]any) error {
 	if !exactMapKeys(
 		data,

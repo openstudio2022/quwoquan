@@ -1,7 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/components/media/picker/image_pick_gateway.dart';
@@ -15,27 +14,33 @@ Widget _app({
   CircleLifecycleCommandWriter? lifecycleWriter,
   ImagePickGateway? mediaPicker,
 }) {
-  final circle = CircleDto(
-    id: 'fixture_circle_photo',
-    name: '光影摄影社',
-    description: '一群热爱光影的人',
-    coverUrl: 'https://example.com/cover.jpg',
-    ownerId: 'u1',
-    tags: const ['摄影', '城市'],
-    visibility: CircleVisibility.public,
-    joinPolicy: CircleJoinPolicy.approval,
-    autoSyncChat: true,
-    sectionConfig: const [
-      CircleSectionConfigDto(sectionType: 'works', visible: true, order: 0),
-      CircleSectionConfigDto(
-        sectionType: 'interaction',
-        visible: true,
-        order: 1,
-      ),
+  final circle = Circle.fromWire(<String, Object?>{
+    'id': 'fixture_circle_photo',
+    'name': '光影摄影社',
+    'description': '一群热爱光影的人',
+    'coverUrl': 'https://example.com/cover.jpg',
+    'ownerId': 'u1',
+    'tags': <String>['摄影', '城市'],
+    'memberCount': 0,
+    'postCount': 0,
+    'weeklyActiveCount': 0,
+    'version': 1,
+    'status': 'active',
+    'visibility': 'public',
+    'joinPolicy': 'approval',
+    'kind': 'interest',
+    'displaySubjectType': 'circle',
+    'followEnabled': true,
+    'autoSyncChat': true,
+    'sectionConfig': <Object?>[
+      <String, Object?>{'sectionType': 'works', 'visible': true, 'order': 0},
+      <String, Object?>{'sectionType': 'custom', 'visible': true, 'order': 1},
     ],
-    createdAt: DateTime(2024, 1, 1),
-    updatedAt: DateTime(2024, 1, 2),
-  );
+    'storageUsedBytes': 0,
+    'storageQuotaBytes': 1073741824,
+    'createdAt': '2024-01-01T00:00:00.000Z',
+    'updatedAt': '2024-01-02T00:00:00.000Z',
+  });
   final overrides = [
     if (lifecycleWriter != null)
       circlesListCircleLifecycleCommandWriterProvider.overrideWithValue(
@@ -78,7 +83,7 @@ class _RecordingCircleLifecycleWriter implements CircleLifecycleCommandWriter {
     return const CircleCommandResult(
       circleId: 'created_circle_1',
       version: 1,
-      status: CircleLifecycleStatus.active,
+      status: CircleStatus.active,
       idempotentReplay: false,
     );
   }

@@ -1,13 +1,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/selectable_group_conversation_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import 'package:quwoquan_app/cloud/services/chat/chat_view_data.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/providers/start_group_from_group_provider.dart';
 import '../../../../support/cloud_services/chat_repository_mock.dart';
 import '../../../../support/fixtures/chat/chat_mock_seed_refs.dart';
+import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
 
 void main() {
   group('从群聊中选择联系人 · Provider local_contract', () {
@@ -229,7 +229,7 @@ final class _SourceAwareGroupSelectionRepository
       <ChatSelectableGroupSource>[];
 
   @override
-  Future<CursorPage<SelectableGroupConversationRowDto>>
+  Future<CursorPage<SelectableGroupConversationRow>>
   listSelectableGroupConversations({
     String? query,
     ChatSelectableGroupSource source = ChatSelectableGroupSource.all,
@@ -238,38 +238,40 @@ final class _SourceAwareGroupSelectionRepository
   }) async {
     requestedSources.add(source);
     final items = switch (source) {
-      ChatSelectableGroupSource.group => <SelectableGroupConversationRowDto>[
-        SelectableGroupConversationRowDto(
+      ChatSelectableGroupSource.group => <SelectableGroupConversationRow>[
+        SelectableGroupConversationRow(
           conversationId: 'conversation_private',
           title: '周末同行群',
+          avatarUrl: '',
           circleId: '',
           friendMemberCount: 1,
           memberCount: 3,
         ),
       ],
-      ChatSelectableGroupSource.circle => <SelectableGroupConversationRowDto>[
-        SelectableGroupConversationRowDto(
+      ChatSelectableGroupSource.circle => <SelectableGroupConversationRow>[
+        SelectableGroupConversationRow(
           conversationId: 'conversation_circle',
           title: '摄影圈交流群',
+          avatarUrl: '',
           circleId: 'circle_photo',
           friendMemberCount: 1,
           memberCount: 8,
         ),
       ],
-      ChatSelectableGroupSource.all => <SelectableGroupConversationRowDto>[],
+      ChatSelectableGroupSource.all => <SelectableGroupConversationRow>[],
     };
-    return CursorPage<SelectableGroupConversationRowDto>(items: items);
+    return CursorPage<SelectableGroupConversationRow>(items: items);
   }
 
   @override
-  Future<CursorPage<ChatContactRowDto>> listSelectableGroupContactMembers({
+  Future<CursorPage<ChatContactRowViewData>> listSelectableGroupContactMembers({
     required String conversationId,
     String? query,
     String? cursor,
     int limit = 20,
-  }) async => CursorPage<ChatContactRowDto>(
-    items: <ChatContactRowDto>[
-      ChatContactRowDto(
+  }) async => CursorPage<ChatContactRowViewData>(
+    items: <ChatContactRowViewData>[
+      ChatContactRowViewData(
         userId: conversationId == 'conversation_circle'
             ? 'friend_circle'
             : 'friend_private',
@@ -289,7 +291,7 @@ final class _PagedGroupSelectionRepository
       <({String? cursor, String? query})>[];
 
   @override
-  Future<CursorPage<SelectableGroupConversationRowDto>>
+  Future<CursorPage<SelectableGroupConversationRow>>
   listSelectableGroupConversations({
     String? query,
     ChatSelectableGroupSource source = ChatSelectableGroupSource.all,
@@ -298,25 +300,25 @@ final class _PagedGroupSelectionRepository
   }) async {
     groupRequests.add((cursor: cursor, query: query));
     return switch (cursor) {
-      null => CursorPage<SelectableGroupConversationRowDto>(
-        items: <SelectableGroupConversationRowDto>[
+      null => CursorPage<SelectableGroupConversationRow>(
+        items: <SelectableGroupConversationRow>[
           _groupRow('conversation_1'),
           _groupRow('conversation_2'),
         ],
         nextCursor: 'groups-2',
       ),
-      'groups-2' => CursorPage<SelectableGroupConversationRowDto>(
-        items: <SelectableGroupConversationRowDto>[
+      'groups-2' => CursorPage<SelectableGroupConversationRow>(
+        items: <SelectableGroupConversationRow>[
           _groupRow('conversation_2'),
           _groupRow('conversation_3'),
         ],
       ),
-      _ => const CursorPage<SelectableGroupConversationRowDto>(items: []),
+      _ => const CursorPage<SelectableGroupConversationRow>(items: []),
     };
   }
 
   @override
-  Future<CursorPage<ChatContactRowDto>> listSelectableGroupContactMembers({
+  Future<CursorPage<ChatContactRowViewData>> listSelectableGroupContactMembers({
     required String conversationId,
     String? query,
     String? cursor,
@@ -324,28 +326,36 @@ final class _PagedGroupSelectionRepository
   }) async {
     memberRequests.add((cursor: cursor, query: query));
     return switch (cursor) {
-      null => CursorPage<ChatContactRowDto>(
-        items: <ChatContactRowDto>[_memberRow('user_1'), _memberRow('user_2')],
+      null => CursorPage<ChatContactRowViewData>(
+        items: <ChatContactRowViewData>[
+          _memberRow('user_1'),
+          _memberRow('user_2'),
+        ],
         nextCursor: 'members-2',
       ),
-      'members-2' => CursorPage<ChatContactRowDto>(
-        items: <ChatContactRowDto>[_memberRow('user_2'), _memberRow('user_3')],
+      'members-2' => CursorPage<ChatContactRowViewData>(
+        items: <ChatContactRowViewData>[
+          _memberRow('user_2'),
+          _memberRow('user_3'),
+        ],
       ),
-      _ => const CursorPage<ChatContactRowDto>(items: []),
+      _ => const CursorPage<ChatContactRowViewData>(items: []),
     };
   }
 
-  SelectableGroupConversationRowDto _groupRow(String conversationId) {
-    return SelectableGroupConversationRowDto(
+  SelectableGroupConversationRow _groupRow(String conversationId) {
+    return SelectableGroupConversationRow(
       conversationId: conversationId,
       title: conversationId,
+      avatarUrl: '',
+      circleId: '',
       friendMemberCount: 2,
       memberCount: 3,
     );
   }
 
-  ChatContactRowDto _memberRow(String userId) {
-    return ChatContactRowDto(
+  ChatContactRowViewData _memberRow(String userId) {
+    return ChatContactRowViewData(
       userId: userId,
       displayName: userId,
       relationState: 'mutual',

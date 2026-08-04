@@ -75,7 +75,7 @@ func ResolveLocationLookup(
 		}
 		endpoints[role] = value
 	}
-	if len(endpoints) == 0 && binding.AdapterID != "ext.map.protocol_fixture" {
+	if len(endpoints) == 0 {
 		return ResolvedLocationBinding{}, fmt.Errorf(
 			"location provider binding has no endpoint material for environment=%s",
 			appEnv,

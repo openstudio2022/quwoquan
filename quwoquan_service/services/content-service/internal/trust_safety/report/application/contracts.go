@@ -55,7 +55,7 @@ type ReportCommandResult struct {
 	ID       string             `json:"id"`
 	Version  int64              `json:"version"`
 	Status   reportmodel.Status `json:"status"`
-	Replayed bool               `json:"replayed,omitempty"`
+	Replayed bool               `json:"replayed"`
 }
 
 type ReportDetailSlice struct {

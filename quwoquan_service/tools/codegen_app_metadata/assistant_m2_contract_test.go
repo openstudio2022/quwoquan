@@ -13,7 +13,7 @@ func TestAssistantM2ContractSchemasGovernance(t *testing.T) {
 	}{
 		{domain: "assistant", name: "runtime_failure"},
 		{domain: "assistant", name: "assistant_session"},
-		{domain: "assistant", name: "assistant_run_envelope"},
+		{domain: "assistant", name: "assistant_run"},
 		{domain: "assistant", name: "skill_subscription"},
 		{domain: "assistant", name: "device_context"},
 		{domain: "assistant", name: "tool_use"},
@@ -30,7 +30,9 @@ func TestAssistantM2ContractSchemasGovernance(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.domain+"/"+tc.name, func(t *testing.T) {
 			schemaPath := filepath.Join(metadataDir, tc.domain, tc.name, "schema.yaml")
-			if tc.name == "assistant_session" || tc.name == "skill_subscription" {
+			if tc.name == "assistant_session" ||
+				tc.name == "skill_subscription" ||
+				tc.name == "assistant_run" {
 				schemaPath = filepath.Join(
 					metadataDir,
 					tc.domain,

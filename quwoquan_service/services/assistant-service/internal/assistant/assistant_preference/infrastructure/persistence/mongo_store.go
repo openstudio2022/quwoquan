@@ -15,11 +15,11 @@ import (
 )
 
 type MongoStore struct {
-	facts *mongo.Collection
+	preferences *mongo.Collection
 }
 
 func NewMongoStore(db *mongo.Database) *MongoStore {
-	return &MongoStore{facts: db.Collection("assistant_preferences")}
+	return &MongoStore{preferences: db.Collection("assistant_preferences")}
 }
 
 func (s *MongoStore) EnsureIndexes(ctx context.Context) error {
@@ -55,7 +55,7 @@ func (s *MongoStore) EnsureIndexes(ctx context.Context) error {
 				SetSparse(true),
 		},
 	}
-	if _, err := s.facts.Indexes().CreateMany(ctx, indexes); err != nil {
+	if _, err := s.preferences.Indexes().CreateMany(ctx, indexes); err != nil {
 		return fmt.Errorf("create assistant preference indexes: %w", err)
 	}
 	return nil
@@ -64,7 +64,7 @@ func (s *MongoStore) EnsureIndexes(ctx context.Context) error {
 func (s *MongoStore) Upsert(
 	ctx context.Context,
 	input preferenceports.UpsertInput,
-) (preferencemodel.Fact, error) {
+) (preferencemodel.AssistantPreference, error) {
 	return s.upsert(ctx, input, true)
 }
 
@@ -72,7 +72,7 @@ func (s *MongoStore) upsert(
 	ctx context.Context,
 	input preferenceports.UpsertInput,
 	allowInsert bool,
-) (preferencemodel.Fact, error) {
+) (preferencemodel.AssistantPreference, error) {
 	filter := bson.M{
 		"userId":    strings.TrimSpace(input.UserID),
 		"scope":     input.Scope,
@@ -106,22 +106,22 @@ func (s *MongoStore) upsert(
 	if allowInsert {
 		opts.SetUpsert(true)
 	}
-	var fact preferencemodel.Fact
-	err := s.facts.FindOneAndUpdate(ctx, filter, update, opts).Decode(&fact)
+	var preference preferencemodel.AssistantPreference
+	err := s.preferences.FindOneAndUpdate(ctx, filter, update, opts).Decode(&preference)
 	if mongo.IsDuplicateKeyError(err) && allowInsert {
 		return s.upsert(ctx, input, false)
 	}
 	if err != nil {
-		return preferencemodel.Fact{}, err
+		return preferencemodel.AssistantPreference{}, err
 	}
-	return fact, nil
+	return preference, nil
 }
 
 func (s *MongoStore) List(
 	ctx context.Context,
 	userID string,
 	filter preferenceports.ListFilter,
-) ([]preferencemodel.Fact, error) {
+) ([]preferencemodel.AssistantPreference, error) {
 	query := bson.M{
 		"userId": strings.TrimSpace(userID),
 		"status": filter.Status,
@@ -136,7 +136,7 @@ func (s *MongoStore) List(
 	if limit <= 0 || limit > 100 {
 		limit = 50
 	}
-	cursor, err := s.facts.Find(
+	cursor, err := s.preferences.Find(
 		ctx,
 		query,
 		options.Find().
@@ -150,7 +150,7 @@ func (s *MongoStore) List(
 		return nil, err
 	}
 	defer cursor.Close(ctx)
-	items := []preferencemodel.Fact{}
+	items := []preferencemodel.AssistantPreference{}
 	if err := cursor.All(ctx, &items); err != nil {
 		return nil, err
 	}
@@ -162,11 +162,11 @@ func (s *MongoStore) ListActiveForRun(
 	userID string,
 	sessionID string,
 	limitPerScope int,
-) ([]preferencemodel.Fact, error) {
+) ([]preferencemodel.AssistantPreference, error) {
 	if limitPerScope <= 0 || limitPerScope > 16 {
 		limitPerScope = 16
 	}
-	cursor, err := s.facts.Find(
+	cursor, err := s.preferences.Find(
 		ctx,
 		bson.M{
 			"userId": strings.TrimSpace(userID),
@@ -190,7 +190,7 @@ func (s *MongoStore) ListActiveForRun(
 		return nil, err
 	}
 	defer cursor.Close(ctx)
-	items := []preferencemodel.Fact{}
+	items := []preferencemodel.AssistantPreference{}
 	if err := cursor.All(ctx, &items); err != nil {
 		return nil, err
 	}
@@ -201,19 +201,19 @@ func (s *MongoStore) GetOwned(
 	ctx context.Context,
 	userID string,
 	preferenceID string,
-) (preferencemodel.Fact, bool, error) {
-	var fact preferencemodel.Fact
-	err := s.facts.FindOne(ctx, bson.M{
+) (preferencemodel.AssistantPreference, bool, error) {
+	var preference preferencemodel.AssistantPreference
+	err := s.preferences.FindOne(ctx, bson.M{
 		"_id":    strings.TrimSpace(preferenceID),
 		"userId": strings.TrimSpace(userID),
-	}).Decode(&fact)
+	}).Decode(&preference)
 	if errors.Is(err, mongo.ErrNoDocuments) {
-		return preferencemodel.Fact{}, false, nil
+		return preferencemodel.AssistantPreference{}, false, nil
 	}
 	if err != nil {
-		return preferencemodel.Fact{}, false, err
+		return preferencemodel.AssistantPreference{}, false, err
 	}
-	return fact, true, nil
+	return preference, true, nil
 }
 
 func (s *MongoStore) UpdateStatus(
@@ -222,7 +222,7 @@ func (s *MongoStore) UpdateStatus(
 	preferenceID string,
 	expectedVersion int64,
 	update preferenceports.StatusUpdate,
-) (preferencemodel.Fact, bool, error) {
+) (preferencemodel.AssistantPreference, bool, error) {
 	set := bson.M{
 		"status":    update.Status,
 		"updatedAt": update.UpdatedAt.UTC(),
@@ -240,8 +240,8 @@ func (s *MongoStore) UpdateStatus(
 			"revocationDeadline": "",
 		}
 	}
-	var fact preferencemodel.Fact
-	err := s.facts.FindOneAndUpdate(
+	var preference preferencemodel.AssistantPreference
+	err := s.preferences.FindOneAndUpdate(
 		ctx,
 		bson.M{
 			"_id":     strings.TrimSpace(preferenceID),
@@ -250,12 +250,12 @@ func (s *MongoStore) UpdateStatus(
 		},
 		mutation,
 		options.FindOneAndUpdate().SetReturnDocument(options.After),
-	).Decode(&fact)
+	).Decode(&preference)
 	if errors.Is(err, mongo.ErrNoDocuments) {
-		return preferencemodel.Fact{}, false, nil
+		return preferencemodel.AssistantPreference{}, false, nil
 	}
 	if err != nil {
-		return preferencemodel.Fact{}, false, err
+		return preferencemodel.AssistantPreference{}, false, err
 	}
-	return fact, true, nil
+	return preference, true, nil
 }

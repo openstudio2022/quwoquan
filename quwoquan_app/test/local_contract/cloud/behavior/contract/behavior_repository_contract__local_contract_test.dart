@@ -1,42 +1,16 @@
-import 'dart:convert';
-
-import 'package:fake_async/fake_async.dart';
-import 'package:http/http.dart' as http;
 import 'package:test/test.dart';
 import 'package:quwoquan_app/cloud/runtime/context/actor_queue_partition.dart';
-import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../../support/cloud_services/behavior_repository_double.dart';
 
-final class _UnavailableCloudHttpClient extends CloudHttpClient {
-  _UnavailableCloudHttpClient() : super(client: http.Client());
+final class _RecordingBehaviorWriter implements ContentBehaviorCommandWriter {
+  final commands = <ReportContentBehaviorsCommand>[];
 
   @override
-  Future<http.Response> postBytes(
-    Uri uri, {
-    required Map<String, String> headers,
-    required List<int> body,
-  }) async => http.Response('', 503);
-}
-
-final class _CapturingCloudHttpClient extends CloudHttpClient {
-  _CapturingCloudHttpClient() : super(client: http.Client());
-
-  Map<String, String>? lastHeaders;
-  List<int>? lastBody;
-  final headersHistory = <Map<String, String>>[];
-
-  @override
-  Future<http.Response> postBytes(
-    Uri uri, {
-    required Map<String, String> headers,
-    required List<int> body,
-  }) async {
-    lastHeaders = Map<String, String>.from(headers);
-    lastBody = List<int>.from(body);
-    headersHistory.add(lastHeaders!);
-    return http.Response('', 204);
+  Future<void> reportBehaviors(ReportContentBehaviorsCommand command) async {
+    commands.add(command);
   }
 }
 
@@ -51,8 +25,11 @@ void main() {
     test('reportEvents 记录行为事件', () async {
       await repo.reportEvents(
         events: [
-          BehaviorEvent(contentId: 'post_1', action: BehaviorAction.impression),
-          BehaviorEvent(contentId: 'post_2', action: BehaviorAction.click),
+          BehaviorEvent(
+            contentId: 'post_1',
+            action: BehaviorEventType.impression,
+          ),
+          BehaviorEvent(contentId: 'post_2', action: BehaviorEventType.click),
         ],
       );
       expect(repo.recorded.length, 2);
@@ -61,35 +38,43 @@ void main() {
     test('reportSingle 记录单个事件', () async {
       await repo.reportSingle(
         contentId: 'post_3',
-        action: BehaviorAction.share,
+        action: BehaviorEventType.share,
       );
       expect(repo.recorded.length, 1);
-      expect(repo.recorded.first.action, BehaviorAction.share);
+      expect(repo.recorded.first.action, BehaviorEventType.share);
       expect(repo.recorded.first.contentId, 'post_3');
     });
 
     test('BehaviorEvent 支持 tags 和 duration', () {
       final event = BehaviorEvent(
         contentId: 'post_4',
-        action: BehaviorAction.dwell,
+        action: BehaviorEventType.dwell,
         tags: ['photo'],
         duration: 3.5,
       );
       expect(event.contentId, 'post_4');
-      expect(event.action, BehaviorAction.dwell);
+      expect(event.action, BehaviorEventType.dwell);
       expect(event.tags, ['photo']);
       expect(event.duration, 3.5);
     });
 
-    test('toJson 使用 tagRefs wire key（对齐云侧 BehaviorEventInput，无旧 tags 键残留）', () {
-      final json = BehaviorEvent(
-        contentId: 'post_5',
-        action: BehaviorAction.dwell,
-        tags: ['Topic/旅行', 'Entity/地点/景区'],
-      ).toJson();
-      expect(json['tagRefs'], ['Topic/旅行', 'Entity/地点/景区']);
-      expect(json.containsKey('tags'), isFalse);
-    });
+    test(
+      'storage codec 使用 canonical tagRefs，generated wire 由 typed constructor 构造',
+      () {
+        final event = BehaviorEvent(
+          contentId: 'post_5',
+          action: BehaviorEventType.dwell,
+          contentType: 'image',
+          tags: ['Topic/旅行', 'Entity/地点/景区'],
+        );
+        final storage = event.toStorageJson();
+        final wire = event.toWire();
+        expect(storage['tagRefs'], ['Topic/旅行', 'Entity/地点/景区']);
+        expect(storage.containsKey('tags'), isFalse);
+        expect(wire.contentType, ContentType.image);
+        expect(wire.tagRefs, ['Topic/旅行', 'Entity/地点/景区']);
+      },
+    );
 
     test(
       'onboarding event binds catalog selection to taxonomy release',
@@ -103,19 +88,19 @@ void main() {
         final event = repo.recorded.single;
         expect(event.taxonomyReleaseId, 'tag-taxonomy-20260723-001');
         expect(
-          event.toJson()['taxonomyReleaseId'],
+          event.toStorageJson()['taxonomyReleaseId'],
           'tag-taxonomy-20260723-001',
         );
       },
     );
 
     test(
-      'remote batch binds the queue owner actor to request headers',
+      'remote queue delegates one typed command and binds feed session per event',
       () async {
-        final httpClient = _CapturingCloudHttpClient();
+        final writer = _RecordingBehaviorWriter();
         final remote = RemoteBehaviorRepository(
-          httpClient: httpClient,
-          baseUrl: 'https://api.example.com',
+          writer: writer,
+          feedSessionIdProvider: () => 'feed-session-1',
           queuePartition: ActorQueuePartition(
             environment: 'gamma',
             accountId: 'account-1',
@@ -123,10 +108,7 @@ void main() {
             deviceId: 'device-1',
           ),
         );
-        addTearDown(() {
-          remote.dispose();
-          httpClient.close();
-        });
+        addTearDown(remote.dispose);
 
         await remote.submitOnboardingInterest(
           clientEventId: 'onboarding:actor-bound',
@@ -134,42 +116,22 @@ void main() {
           tagRefs: const <String>['Topic/兴趣/旅行'],
         );
 
-        expect(httpClient.lastHeaders, isNotNull);
-        expect(httpClient.lastHeaders!['X-Client-User-Id'], 'account-1');
-        expect(httpClient.lastHeaders!['X-Client-Persona-Id'], 'persona-1');
-        expect(httpClient.lastHeaders!['X-Client-Device-Actor-Id'], 'device-1');
-        expect(
-          httpClient.lastHeaders!['Idempotency-Key'],
-          matches(RegExp(r'^behavior-batch-[0-9a-f]{64}$')),
-        );
-        final payload = jsonDecode(utf8.decode(httpClient.lastBody!)) as Map;
-        final event = (payload['events'] as List).single as Map;
-        expect(event['taxonomyReleaseId'], 'tag-taxonomy-20260723-001');
-        // Retired catalogVersion must not be emitted on the canonical wire.
-        expect(event.keys, isNot(contains('catalogVersion')));
-
-        await remote.submitOnboardingInterest(
-          clientEventId: 'onboarding:actor-bound',
-          taxonomyReleaseId: 'tag-taxonomy-20260723-001',
-          tagRefs: const <String>['Topic/兴趣/旅行'],
-        );
-
-        expect(
-          httpClient.headersHistory.last['Idempotency-Key'],
-          httpClient.headersHistory.first['Idempotency-Key'],
-        );
+        final event = writer.commands.single.events.single;
+        expect(event.taxonomyReleaseId, 'tag-taxonomy-20260723-001');
+        expect(event.feedSessionId, 'feed-session-1');
+        expect(event.toWire(), isNot(contains('sessionId')));
       },
     );
 
-    test('toJson 固化 occurredAt 并生成稳定 clientEventId', () {
+    test('storage codec 固化 occurredAt 并生成稳定 clientEventId', () {
       final occurredAt = DateTime.utc(2026, 7, 19, 6, 0, 0);
       final event = BehaviorEvent(
         contentId: 'post_stable_id',
-        action: BehaviorAction.click,
+        action: BehaviorEventType.click,
         occurredAt: occurredAt,
       );
-      final first = event.toJson();
-      final second = event.toJson();
+      final first = event.toStorageJson();
+      final second = event.toStorageJson();
       expect(first['occurredAt'], occurredAt.toIso8601String());
       expect(first['clientEventId'], startsWith('evt_'));
       expect(second['clientEventId'], first['clientEventId']);
@@ -188,39 +150,29 @@ void main() {
       expect(repo.recorded, isEmpty);
     });
 
-    test('Remote dispose 会取消退避计时器并结束在途重试', () {
-      fakeAsync((clock) {
-        final remote = RemoteBehaviorRepository(
-          httpClient: _UnavailableCloudHttpClient(),
-          baseUrl: 'https://api.example.com',
-          queuePartition: ActorQueuePartition(environment: ''),
-        );
-        var completed = false;
-        remote
-            .reportEvents(
-              events: <BehaviorEvent>[
-                BehaviorEvent(
-                  contentId: 'post_retry',
-                  action: BehaviorAction.impression,
-                ),
-              ],
-            )
-            .then((_) => completed = true);
+    test('Remote dispose 后不再调用 generated writer', () async {
+      final writer = _RecordingBehaviorWriter();
+      final remote = RemoteBehaviorRepository(
+        writer: writer,
+        queuePartition: ActorQueuePartition(environment: ''),
+      );
+      remote.dispose();
 
-        clock.flushMicrotasks();
-        expect(clock.pendingTimers, hasLength(1));
+      await remote.reportEvents(
+        events: <BehaviorEvent>[
+          BehaviorEvent(
+            contentId: 'post_disposed',
+            action: BehaviorEventType.impression,
+          ),
+        ],
+      );
 
-        remote.dispose();
-        clock.flushMicrotasks();
-
-        expect(clock.pendingTimers, isEmpty);
-        expect(completed, isTrue);
-      });
+      expect(writer.commands, isEmpty);
     });
   });
 
-  group('BehaviorAction — 端云枚举一致性', () {
-    test('wireValue 与 Go supportedBehaviorActions 对齐', () {
+  group('BehaviorEventType — 端云枚举一致性', () {
+    test('wireName 与 canonical BehaviorEventType 对齐', () {
       const expectedWireValues = <String>[
         'impression',
         'click',
@@ -243,6 +195,7 @@ void main() {
         'effective_play',
         'content_depth',
         'join_circle',
+        'leave_circle',
         'add_contact',
         'assistant_interest',
         'onboarding_interest',
@@ -250,8 +203,8 @@ void main() {
         'wishlist_add',
         'wishlist_remove',
       ];
-      final actualWireValues = BehaviorAction.values
-          .map((a) => a.wireValue)
+      final actualWireValues = BehaviorEventType.values
+          .map((a) => a.wireName)
           .toList();
       expect(actualWireValues, containsAll(expectedWireValues));
       expect(actualWireValues.length, expectedWireValues.length);
@@ -291,24 +244,24 @@ void main() {
       );
     });
 
-    test('toJson 使用 wireValue 而非 enum name', () {
+    test('storage codec 使用 generated wireName 而非 enum name', () {
       final event = BehaviorEvent(
         contentId: 'post_1',
-        action: BehaviorAction.authorView,
+        action: BehaviorEventType.authorView,
       );
-      final json = event.toJson();
+      final json = event.toStorageJson();
       expect(json['action'], 'author_view');
     });
 
     test('深度行为事件包含 engagementDepth 和 consumedRatio', () {
       final event = BehaviorEvent(
         contentId: 'post_1',
-        action: BehaviorAction.contentDepth,
+        action: BehaviorEventType.contentDepth,
         engagementDepth: 3,
         consumedRatio: 0.85,
         totalUnits: 12,
       );
-      final json = event.toJson();
+      final json = event.toStorageJson();
       expect(json['engagementDepth'], 3);
       expect(json['consumedRatio'], 0.85);
       expect(json['totalUnits'], 12);
@@ -317,12 +270,12 @@ void main() {
     test('feedRequestId 透传到 JSON', () {
       final event = BehaviorEvent(
         contentId: 'post_1',
-        action: BehaviorAction.impression,
+        action: BehaviorEventType.impression,
         clientEventId: 'evt-1',
         state: 'impressed',
         feedRequestId: 'req-uuid-123',
       );
-      final json = event.toJson();
+      final json = event.toStorageJson();
       expect(json['clientEventId'], 'evt-1');
       expect(json['state'], 'impressed');
       expect(json['feedRequestId'], 'req-uuid-123');
@@ -331,7 +284,7 @@ void main() {
     test('推荐归因字段透传到 JSON（阶段五 common_fields + P0+ attribution）', () {
       final json = BehaviorEvent(
         contentId: 'post_1',
-        action: BehaviorAction.click,
+        action: BehaviorEventType.click,
         feedRequestId: 'frq_01H',
         referralSource: ReferralSource.organicFeed,
         position: 7,
@@ -341,7 +294,7 @@ void main() {
         recallPath: 'collab_i2i',
         contentVertical: 'travel_photography',
         supplySource: 'data_engineering',
-      ).toJson();
+      ).toStorageJson();
       expect(json['feedRequestId'], 'frq_01H');
       expect(json['referralSource'], 'organic_feed');
       expect(json['position'], 7);
@@ -358,12 +311,12 @@ void main() {
     test('来源未提供推荐归因时不写入 JSON', () {
       final json = BehaviorEvent(
         contentId: 'post_1',
-        action: BehaviorAction.impression,
+        action: BehaviorEventType.impression,
         channelId: '',
         recallPath: '',
         contentVertical: '',
         supplySource: '',
-      ).toJson();
+      ).toStorageJson();
       expect(json.containsKey('channelId'), isFalse);
       expect(json.containsKey('policyDigest'), isFalse);
       expect(json.containsKey('recallPath'), isFalse);
@@ -379,13 +332,13 @@ void main() {
         'rank-v3',
         ' $canonical',
         '$canonical ',
-        'sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
-        'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        invalidSha256Fixture(List<String>.filled(64, 'A').join()),
+        invalidSha256Fixture(List<String>.filled(63, 'a').join()),
       ]) {
         expect(
           () => BehaviorEvent(
             contentId: 'post_1',
-            action: BehaviorAction.impression,
+            action: BehaviorEventType.impression,
             policyDigest: invalid,
           ),
           throwsFormatException,
@@ -397,19 +350,19 @@ void main() {
     test('hide_author / hide_content_type 透传 authorId 与 contentType', () {
       final hideAuthorJson = BehaviorEvent(
         contentId: 'post_1',
-        action: BehaviorAction.hideAuthor,
+        action: BehaviorEventType.hideAuthor,
         authorId: 'author_1',
         contentType: 'photo',
-      ).toJson();
+      ).toStorageJson();
       expect(hideAuthorJson['action'], 'hide_author');
       expect(hideAuthorJson['authorId'], 'author_1');
       expect(hideAuthorJson['contentType'], 'photo');
 
       final hideTypeJson = BehaviorEvent(
         contentId: 'post_2',
-        action: BehaviorAction.hideContentType,
+        action: BehaviorEventType.hideContentType,
         contentType: 'video',
-      ).toJson();
+      ).toStorageJson();
       expect(hideTypeJson['action'], 'hide_content_type');
       expect(hideTypeJson['contentType'], 'video');
     });
@@ -417,7 +370,7 @@ void main() {
     test('wishlist_add 透传 objectId/objectKind/displayName/sourceSurface', () {
       final json = BehaviorEvent(
         contentId: 'homepage_west_lake',
-        action: BehaviorAction.wishlistAdd,
+        action: BehaviorEventType.wishlistAdd,
         objectId: 'homepage_west_lake',
         objectKind: 'homepage',
         displayName: '西湖日落机位',
@@ -425,7 +378,7 @@ void main() {
         entityRefs: const <String>['homepage_west_lake'],
         feedRequestId: 'frq_wish_1',
         referralSource: ReferralSource.entityPage,
-      ).toJson();
+      ).toStorageJson();
 
       expect(json['action'], 'wishlist_add');
       expect(json['contentId'], 'homepage_west_lake');
@@ -439,3 +392,5 @@ void main() {
     });
   });
 }
+
+String invalidSha256Fixture(String payload) => 'sha256:$payload';

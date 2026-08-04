@@ -4,14 +4,15 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 void main() {
   group('实体主页 generated operation ABI', () {
     test('查询编码只输出 metadata 声明的 path 与 query', () {
-      final search = encodeEntityHomepageSearchHomepagesGeneratedRequest(
-        const HomepageSearchQuery(
-          query: '普陀山',
-          homepageType: 'sight',
-          city: '舟山',
-          limit: 20,
-        ),
-      );
+      final search =
+          encodeEntityHomepageSearchItemViewSearchHomepagesGeneratedRequest(
+            const HomepageSearchQuery(
+              query: '普陀山',
+              homepageType: 'sight',
+              city: '舟山',
+              limit: 20,
+            ),
+          );
       expect(search.pathParameters, isEmpty);
       expect(search.queryParameters, <String, String>{
         'query': '普陀山',
@@ -54,14 +55,26 @@ void main() {
     });
 
     test('主页详情仅以 homepageId 为唯一主页身份并严格解码', () {
-      final detail = decodeHomepageDetail(<String, Object?>{
+      final detail = decodeHomepageDetailView(<String, Object?>{
         'homepageId': 'homepage-1',
         'homepageType': 'sight',
         'title': '普陀山',
-        'canonicalEntityId': 'entity:putuoshan',
+        'status': 'published',
+        'claimStatus': 'unclaimed',
         'categoryTags': <String>['travel', 'sight'],
-        'viewerFollowsHomepage': false,
-        'followerCount': 12,
+        'viewerFollow': <String, Object?>{
+          'viewerFollowsHomepage': false,
+          'followerCount': 12,
+        },
+        'verified': false,
+        'ratingCount': 0,
+        'contentPreview': <Object?>[],
+        'questionPreview': <Object?>[],
+        'relatedGroups': <Object?>[],
+        'relationEdges': <Object?>[],
+        'introductionAssets': <Object?>[],
+        'sourceUrls': <String>[],
+        'createdAt': '2026-07-17T00:00:00Z',
         'updatedAt': '2026-07-17T00:00:00Z',
       });
 
@@ -70,7 +83,7 @@ void main() {
       expect(detail.categoryTags, <String>['travel', 'sight']);
       expect(detail.updatedAt, DateTime.utc(2026, 7, 17));
       expect(
-        () => decodeHomepageDetail(<String, Object?>{
+        () => decodeHomepageDetailView(<String, Object?>{
           'id': 'homepage-by-id',
           'homepageType': 'sight',
           'title': '拒绝 id',
@@ -78,7 +91,7 @@ void main() {
         throwsFormatException,
       );
       expect(
-        () => decodeHomepageDetail(<String, Object?>{
+        () => decodeHomepageDetailView(<String, Object?>{
           '_id': 'retired-storage-key',
           'homepageType': 'sight',
           'title': '拒绝 _id',
@@ -94,6 +107,7 @@ void main() {
         'requesterPersonaId': 'persona-1',
         'claimTier': 'verified',
         'status': 'pending_review',
+        'createdAt': '2026-07-17T00:00:00Z',
       });
       final report = decodeHomepageStatusReportView(<String, Object?>{
         'reportId': 'report-1',
@@ -101,6 +115,7 @@ void main() {
         'reporterPersonaId': 'persona-2',
         'reason': 'offline',
         'status': 'pending_review',
+        'createdAt': '2026-07-17T00:00:00Z',
       });
 
       expect(claim.claimRequestId, 'claim-1');
@@ -133,7 +148,9 @@ void main() {
           <String, Object?>{
             'homepageId': 'homepage-1',
             'homepageType': 'sight',
+            'canonicalEntityId': 'entity:putuoshan',
             'title': '普陀山',
+            'status': 'published',
             'ratingCount': 8,
           },
         ],
@@ -142,38 +159,39 @@ void main() {
       expect(search.items.single.homepageId, 'homepage-1');
       expect(search.nextCursor, 'cursor-1');
 
-      final objectPage = decodeHomepageObjectPageBundle(<String, Object?>{
+      final objectPage = decodeObjectPageBundle(<String, Object?>{
         'objectType': 'homepage',
         'objectId': 'homepage-1',
         'canonicalEntityId': 'entity:putuoshan',
         'title': '普陀山',
+        'objectPageTemplate': 'homepage-default',
         'tagRefs': <String>['travel'],
         'stats': <String, Object?>{'followers': 12},
-        'intersectionReasons': <Object?>[
-          <String, Object?>{'primaryText': '你们都关注海岛旅行'},
-        ],
+        'intersectionReasons': <Object?>[],
+        'highlightItems': <Object?>[],
         'contentSections': <String, Object?>{},
         'relatedObjects': <Object?>[],
         'relationEdges': <Object?>[],
       });
-      expect(
-        objectPage.stats.fields['followers'],
-        isA<CloudStructuredNumber>(),
-      );
-      expect(objectPage.intersectionReasons, hasLength(1));
+      expect(objectPage.stats['followers'], 12);
+      expect(objectPage.intersectionReasons, isEmpty);
 
-      final groups = decodeHomepageRelatedGroups(<String, Object?>{
+      final groups = decodeHomepageRelatedGroupSummaryView(<String, Object?>{
         'groups': <Object?>[
           <String, Object?>{
             'circleId': 'circle-1',
             'name': '海岛旅行',
             'memberCount': 20,
+            'ownerUserId': 'user-1',
+            'ownerDisplayNameSnapshot': '主理人',
+            'ownerAvatarUrlSnapshot': '',
+            'evidenceSnapshotId': 'circle:circle-1:members',
           },
         ],
       });
-      expect(groups.groups.single.circleId, 'circle-1');
+      expect(groups.groups!.single.circleId, 'circle-1');
       expect(
-        () => decodeHomepageRelatedGroups(<String, Object?>{
+        () => decodeHomepageRelatedGroupSummaryView(<String, Object?>{
           'groups': <Object?>['invalid'],
         }),
         throwsFormatException,

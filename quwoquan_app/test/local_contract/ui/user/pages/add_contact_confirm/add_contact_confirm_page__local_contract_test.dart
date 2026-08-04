@@ -65,8 +65,10 @@ final class _ConfirmCapabilityRepository
   bool get reconcilesCapabilityWithSharedRelationshipState => true;
 
   @override
-  Future<RelationshipCapabilityDto> getCapability(String targetUserId) async {
-    return RelationshipCapabilityDto(
+  Future<RelationshipCapabilityViewData> getCapability(
+    String targetUserId,
+  ) async {
+    return RelationshipCapabilityViewData(
       viewerPersonaId: 'persona-current',
       targetPersonaId: targetUserId,
       relationState: 'not_following',

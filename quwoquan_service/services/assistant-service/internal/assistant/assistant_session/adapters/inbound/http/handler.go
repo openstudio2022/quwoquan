@@ -8,7 +8,7 @@ import (
 	"io"
 	"log"
 	"net/http"
-	assistantstreaming "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/streaming"
+	assistantstreaming "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/streaming"
 	"strconv"
 	"strings"
 	"time"
@@ -21,8 +21,9 @@ import (
 	sessionerrors "quwoquan_service/services/assistant-service/generated/assistant/assistant_session"
 	runapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
+	assistant "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/model"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
+	sessionmodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/model"
 )
 
 type Handler struct {
@@ -86,7 +87,6 @@ func (h *Handler) Routes() http.Handler {
 		h.handleContinueToolUse,
 	)
 	mux.HandleFunc("GET /assistant/runs/{runId}/events", h.handleStreamRunEvents)
-	mux.HandleFunc("POST /assistant/intersections/reminders/tick", h.handleTickIntersectionReminders)
 	mux.HandleFunc("POST /assistant/sessions", h.handleCreateSession)
 	mux.HandleFunc("GET /assistant/sessions", h.handleListSessions)
 	mux.HandleFunc("GET /assistant/sessions/{sessionId}", h.handleGetSession)
@@ -95,23 +95,6 @@ func (h *Handler) Routes() http.Handler {
 
 func (h *Handler) handleHealthz(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
-}
-
-func (h *Handler) handleTickIntersectionReminders(w http.ResponseWriter, r *http.Request) {
-	var input orchestration.IntersectionReminderTickInput
-	if err := readJSON(r, &input); err != nil && err != io.EOF {
-		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleAssistant, "请求体无效", err.Error()))
-		return
-	}
-	if strings.TrimSpace(input.UserID) == "" {
-		input.UserID = resolveUserID(r)
-	}
-	result, err := h.service.TickIntersectionReminders(r.Context(), input)
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, result)
 }
 
 // requireIdentifiedUser 供对象公开读写路径使用：身份来自 JWT principal
@@ -204,7 +187,7 @@ func (h *Handler) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 		writeHTTPError(w, r, err)
 		return
 	}
-	var input assistant.CreateSessionInput
+	var input sessionmodel.CreateSessionInput
 	if err := readJSON(r, &input); err != nil && err != io.EOF {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleAssistant, "请求体无效", err.Error()))
 		return
@@ -670,8 +653,8 @@ func projectAssistantRunEnvelope(run runruntime.Run) map[string]any {
 		completedAt = run.CompletedAt.UTC().Format(time.RFC3339Nano)
 	}
 	terminalSnapshot := any(nil)
-	if len(run.TerminalSnapshot) > 0 {
-		terminalSnapshot = projectAssistantRunTerminalSnapshot(run.TerminalSnapshot)
+	if run.TerminalSnapshot != nil {
+		terminalSnapshot = run.TerminalSnapshot
 	}
 	return map[string]any{
 		"runId":            run.RunID,
@@ -693,23 +676,6 @@ func projectAssistantRunEnvelope(run runruntime.Run) map[string]any {
 		"createdAt":   run.CreatedAt.UTC().Format(time.RFC3339Nano),
 		"completedAt": completedAt,
 	}
-}
-
-func projectAssistantRunTerminalSnapshot(snapshot map[string]any) map[string]any {
-	processes := any([]map[string]any{})
-	if value, found := snapshot["processes"]; found && value != nil {
-		processes = value
-	}
-	projected := map[string]any{
-		"answerText": snapshot["answerText"],
-		"processes":  processes,
-	}
-	for _, field := range []string{"failure", "selectedPolicyRef"} {
-		if value, found := snapshot[field]; found && value != nil {
-			projected[field] = value
-		}
-	}
-	return projected
 }
 
 func projectRunJournalEventType(event runruntime.JournalEvent) string {

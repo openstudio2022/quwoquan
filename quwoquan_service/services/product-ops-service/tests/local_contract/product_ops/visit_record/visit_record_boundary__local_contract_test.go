@@ -8,6 +8,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -21,7 +22,7 @@ import (
 func TestVisitServiceOwnsValidationAndImmutableReplay(t *testing.T) {
 	store := newLocalVisitStore()
 	service := visitapplication.NewService(store)
-	input := visitapplication.VisitInput{
+	input := visitapplication.RecordVisitCommand{
 		UserID: "actor-1", TargetType: "page", TargetKey: "home",
 	}
 	first, err := service.RecordVisit(context.Background(), input, "command-1")
@@ -33,7 +34,7 @@ func TestVisitServiceOwnsValidationAndImmutableReplay(t *testing.T) {
 		!replay.OccurredAt.Equal(first.OccurredAt) {
 		t.Fatalf("replay changed first receipt: first=%+v replay=%+v err=%v", first, replay, err)
 	}
-	if _, err := service.RecordVisit(context.Background(), visitapplication.VisitInput{
+	if _, err := service.RecordVisit(context.Background(), visitapplication.RecordVisitCommand{
 		UserID: "actor-1", TargetType: "page", TargetKey: "other",
 	}, "command-1"); !errors.Is(err, visitapplication.ErrIdempotencyConflict) {
 		t.Fatalf("conflicting key error=%v", err)
@@ -41,7 +42,10 @@ func TestVisitServiceOwnsValidationAndImmutableReplay(t *testing.T) {
 	if _, err := service.RecordVisit(context.Background(), input, " "); !errors.Is(err, visitapplication.ErrIdempotencyRequired) {
 		t.Fatalf("missing key error=%v", err)
 	}
-	if _, err := service.RecordVisit(context.Background(), visitapplication.VisitInput{
+	if _, err := service.RecordVisit(context.Background(), input, strings.Repeat("x", 257)); !errors.Is(err, visitapplication.ErrInvalidInput) {
+		t.Fatalf("oversized key error=%v", err)
+	}
+	if _, err := service.RecordVisit(context.Background(), visitapplication.RecordVisitCommand{
 		UserID: "actor-1", TargetType: "unknown", TargetKey: "home",
 	}, "command-2"); !errors.Is(err, visitapplication.ErrInvalidInput) {
 		t.Fatalf("unknown target type error=%v", err)
@@ -91,6 +95,18 @@ func TestVisitHTTPBoundaryRejectsSpoofingAndMapsObjectErrors(t *testing.T) {
 	mux.ServeHTTP(firstResponse, first)
 	if firstResponse.Code != http.StatusOK {
 		t.Fatalf("first status=%d body=%s", firstResponse.Code, firstResponse.Body.String())
+	}
+	var firstReceipt visitapplication.RecordVisitReceipt
+	if err := json.Unmarshal(firstResponse.Body.Bytes(), &firstReceipt); err != nil {
+		t.Fatalf("decode RecordVisitReceipt: %v", err)
+	}
+	if firstReceipt.TargetType != "page" || firstReceipt.TargetKey != "home" ||
+		firstReceipt.VisitCount != 1 || firstReceipt.Replayed ||
+		firstReceipt.OccurredAt.IsZero() {
+		t.Fatalf("unexpected RecordVisitReceipt: %+v", firstReceipt)
+	}
+	if bytes.Contains(firstResponse.Body.Bytes(), []byte(`"userId"`)) {
+		t.Fatalf("RecordVisitReceipt leaked actor: %s", firstResponse.Body.String())
 	}
 	if store.lastInput.UserID == "" || store.lastInput.UserID == "persona-local" {
 		t.Fatalf("adapter must persist only a namespaced irreversible actor hash: %+v", store.lastInput)
@@ -168,7 +184,7 @@ type localVisitStore struct {
 	mu        sync.Mutex
 	visits    map[string]visitapplication.VisitRecord
 	receipts  map[string]localReceipt
-	lastInput visitapplication.VisitInput
+	lastInput visitapplication.RecordVisitCommand
 	commitErr error
 }
 
@@ -182,18 +198,18 @@ func newLocalVisitStore() *localVisitStore {
 func (s *localVisitStore) CommitVisit(
 	_ context.Context,
 	command visitapplication.CommitCommand,
-) (visitapplication.CommandResult, error) {
+) (visitapplication.RecordVisitReceipt, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.commitErr != nil {
-		return visitapplication.CommandResult{}, s.commitErr
+		return visitapplication.RecordVisitReceipt{}, s.commitErr
 	}
 	s.lastInput = command.Input
 	if receipt, ok := s.receipts[command.ReceiptID]; ok {
 		if receipt.digest != command.CommandDigest {
-			return visitapplication.CommandResult{}, visitapplication.ErrIdempotencyConflict
+			return visitapplication.RecordVisitReceipt{}, visitapplication.ErrIdempotencyConflict
 		}
-		return visitapplication.CommandResult{VisitRecord: receipt.result, Replayed: true}, nil
+		return visitapplication.RecordVisitReceipt{VisitRecord: receipt.result, Replayed: true}, nil
 	}
 	key := command.Input.UserID + ":" + command.Input.TargetType + ":" + command.Input.TargetKey
 	record := s.visits[key]
@@ -207,7 +223,7 @@ func (s *localVisitStore) CommitVisit(
 		digest: command.CommandDigest,
 		result: record,
 	}
-	return visitapplication.CommandResult{VisitRecord: record}, nil
+	return visitapplication.RecordVisitReceipt{VisitRecord: record}, nil
 }
 
 func (s *localVisitStore) GetVisitStats(

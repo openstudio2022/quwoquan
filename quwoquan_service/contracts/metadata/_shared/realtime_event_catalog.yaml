@@ -1,0 +1,24 @@
+description: >-
+  WebSocket 与 LongPoll 共用的跨服务实时事件闭集。这里只登记 canonical owner、
+  event_ref、payload_entity 与 wire_type；payload 字段继续由对象本地 contracts
+  唯一拥有，禁止在本目录复制。
+events:
+  - {wire_type: ConversationAvatarUpdated, owner: chat.conversation, event_ref: chat.conversation.ConversationAvatarUpdated, payload_entity: ConversationAvatarUpdatedEventPayload}
+  - {wire_type: ConversationDissolved, owner: chat.conversation, event_ref: chat.conversation.ConversationDissolved, payload_entity: ConversationDissolvedEventPayload}
+  - {wire_type: ConversationMemberLeft, owner: chat.conversation_membership, event_ref: chat.conversation_membership.ConversationMemberLeft, payload_entity: ConversationMemberLeftEventPayload}
+  - {wire_type: ConversationMemberRemoved, owner: chat.conversation_membership, event_ref: chat.conversation_membership.ConversationMemberRemoved, payload_entity: ConversationMemberRemovedEventPayload}
+  - {wire_type: ConversationRosterUpdated, owner: chat.conversation, event_ref: chat.conversation.ConversationRosterUpdated, payload_entity: ConversationRosterUpdatedEventPayload}
+  - {wire_type: ConversationUserSettingsChanged, owner: chat.conversation_user_state, event_ref: chat.conversation_user_state.ConversationUserSettingsChanged, payload_entity: ConversationUserSettingsChangedEventPayload}
+  - {wire_type: MessageRecalled, owner: chat.message, event_ref: chat.message.MessageRecalled, payload_entity: MessageRecalledEventPayload}
+  - {wire_type: MessageSent, owner: chat.message, event_ref: chat.message.MessageSent, payload_entity: MessageSentEventPayload}
+  - {wire_type: call.answered, owner: rtc.call_session, event_ref: rtc.call_session.CallAnswered, payload_entity: CallEventPayload}
+  - {wire_type: call.connected, owner: rtc.call_session, event_ref: rtc.call_session.CallConnected, payload_entity: CallEventPayload}
+  - {wire_type: call.ended, owner: rtc.call_session, event_ref: rtc.call_session.CallEnded, payload_entity: CallEventPayload}
+  - {wire_type: call.initiated, owner: rtc.call_session, event_ref: rtc.call_session.CallInitiated, payload_entity: CallEventPayload}
+  - {wire_type: call.ringing, owner: rtc.call_session, event_ref: rtc.call_session.CallRinging, payload_entity: CallEventPayload}
+  - {wire_type: feed.patch, owner: content.post, event_ref: content.post.RecommendationFeedPatch, payload_entity: FeedRealtimePatch}
+  - {wire_type: participant.joined, owner: rtc.call_session, event_ref: rtc.call_session.ParticipantJoined, payload_entity: CallEventPayload}
+  - {wire_type: participant.left, owner: rtc.call_session, event_ref: rtc.call_session.ParticipantLeft, payload_entity: CallEventPayload}
+  - {wire_type: screen_share.started, owner: rtc.call_session, event_ref: rtc.call_session.ScreenShareStarted, payload_entity: CallEventPayload}
+  - {wire_type: screen_share.stopped, owner: rtc.call_session, event_ref: rtc.call_session.ScreenShareStopped, payload_entity: CallEventPayload}
+  - {wire_type: sync_hint, owner: user.user_account, event_ref: user.user_account.UserSyncHinted, payload_entity: UserSyncHintEventPayload}

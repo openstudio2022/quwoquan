@@ -1,8 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/rtc/rtc_signal_payloads.g.dart';
 import 'package:quwoquan_app/cloud/rtc/rtc_signal_events.dart';
-import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
-    show CallType;
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {
   group('isRtcSignalWireType', () {
@@ -30,26 +28,40 @@ void main() {
       expect((p as RtcCallRingingWsPayload).data.callType, CallType.video);
     });
 
-    test('未知 type → RtcWsUnknownPayload', () {
-      final p = parseRtcWsPayload(
-        wireType: 'x.unknown',
-        payload: const <String, dynamic>{'a': 1},
+    test('未知 type 失败关闭', () {
+      expect(
+        () => parseRtcWsPayload(
+          wireType: 'x.unknown',
+          payload: const <String, dynamic>{'a': 1},
+        ),
+        throwsFormatException,
       );
-      expect(p, isA<RtcWsUnknownPayload>());
-      final u = p as RtcWsUnknownPayload;
-      expect(u.wireType, equals('x.unknown'));
-      expect(u.raw['a'], equals(1));
     });
   });
 
-  group('RtcSignalEvent.fromJson', () {
-    test('payload 非 Map<String,dynamic> 仍可解析为具体 WsPayload', () {
-      final raw = <String, dynamic>{
+  group('RtcSignalEvent.fromEnvelope', () {
+    test('共享 tagged union 提供同一 RTC payload 与 call identity', () {
+      final envelope = RealtimeEventEnvelope.fromWire(<String, Object?>{
         'type': 'call.ringing',
-        'callId': 'c1',
-        'payload': <String, Object?>{'callType': 'video'},
-      };
-      final e = RtcSignalEvent.fromJson(raw);
+        'eventId': 'event-1',
+        'occurredAt': '2026-08-04T10:00:00Z',
+        'payload': <String, Object?>{
+          'eventId': 'event-1',
+          'callId': 'c1',
+          'targetPersonaId': 'persona-2',
+          'callType': 'video',
+          'callerName': 'Alice',
+          'callerAvatarUrl': '',
+          'sourceLabel': 'conversation',
+          'trustRelation': 'contact',
+          'expiresAt': '2026-08-04T10:00:30Z',
+          'deliveryKey': 'delivery-1',
+        },
+      });
+      final e = RtcSignalEvent.fromEnvelope(
+        envelope as RtcRealtimeEventEnvelope,
+      );
+      expect(e.callId, 'c1');
       expect(e.payload, isA<RtcCallRingingWsPayload>());
       expect(
         (e.payload as RtcCallRingingWsPayload).data.callType,
@@ -57,19 +69,23 @@ void main() {
       );
     });
 
-    test('payload 缺失或类型错误 → 空 map 解析；未知 type → Unknown', () {
-      final e1 = RtcSignalEvent.fromJson(<String, dynamic>{
-        'type': 'x',
-        'callId': 'c',
-        'payload': 'not-a-map',
-      });
-      expect(e1.payload, isA<RtcWsUnknownPayload>());
-
-      final e2 = RtcSignalEvent.fromJson(<String, dynamic>{
-        'type': 'x',
-        'callId': 'c',
-      });
-      expect(e2.payload, isA<RtcWsUnknownPayload>());
+    test('未知 type 与非对象 payload 均失败关闭', () {
+      expect(
+        () => RealtimeEventEnvelope.fromWire(<String, Object?>{
+          'type': 'x.unknown',
+          'occurredAt': '2026-08-04T10:00:00Z',
+          'payload': <String, Object?>{},
+        }),
+        throwsFormatException,
+      );
+      expect(
+        () => RealtimeEventEnvelope.fromWire(<String, Object?>{
+          'type': 'call.answered',
+          'occurredAt': '2026-08-04T10:00:00Z',
+          'payload': 'not-a-map',
+        }),
+        throwsFormatException,
+      );
     });
   });
 
@@ -79,11 +95,22 @@ void main() {
       addTearDown(bus.dispose);
 
       final ringing = bus.incomingCalls.first;
-      bus.emit(<String, dynamic>{
+      bus.emit(RealtimeEventEnvelope.fromWire(<String, Object?>{
         'type': 'call.ringing',
-        'callId': 'c-bus',
-        'payload': <String, dynamic>{'callType': 'audio'},
-      });
+        'occurredAt': '2026-08-04T10:00:00Z',
+        'payload': <String, Object?>{
+          'eventId': 'event-bus',
+          'callId': 'c-bus',
+          'targetPersonaId': 'persona-2',
+          'callType': 'audio',
+          'callerName': 'Alice',
+          'callerAvatarUrl': '',
+          'sourceLabel': 'conversation',
+          'trustRelation': 'contact',
+          'expiresAt': '2026-08-04T10:00:30Z',
+          'deliveryKey': 'delivery-bus',
+        },
+      }));
       expect((await ringing).callId, equals('c-bus'));
     });
   });

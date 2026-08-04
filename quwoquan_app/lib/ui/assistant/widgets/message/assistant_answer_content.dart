@@ -25,6 +25,7 @@ class AssistantAnswerContent extends StatelessWidget {
     required this.textColor,
     this.answerBlocks = const <AssistantAnswerDisplayBlock>[],
     this.presentation,
+    this.presentationMediaUrlResolver,
     this.onPresentationAction,
     this.canHandlePresentationAction,
     this.onPresentationFallback,
@@ -36,6 +37,7 @@ class AssistantAnswerContent extends StatelessWidget {
   final Color textColor;
   final List<AssistantAnswerDisplayBlock> answerBlocks;
   final AssistantPresentationDocumentWire? presentation;
+  final AssistantPresentationMediaUrlResolver? presentationMediaUrlResolver;
   final AssistantPresentationActionHandler? onPresentationAction;
   final AssistantPresentationActionPredicate? canHandlePresentationAction;
   final void Function(String reason)? onPresentationFallback;
@@ -163,6 +165,7 @@ class AssistantAnswerContent extends StatelessWidget {
           linkColor: linkColor,
         ),
         onAction: onPresentationAction,
+        mediaUrlResolver: presentationMediaUrlResolver,
         canHandleAction: canHandlePresentationAction,
         onFallback: (reason, document) {
           onPresentationFallback?.call(reason);

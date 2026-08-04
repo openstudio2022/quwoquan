@@ -15,7 +15,7 @@ final class AlphaContactDiscoveryFacet
     final now = DateTime.now().toUtc();
     final result = ContactDiscoveryResult(
       id: 'alpha-contact-discovery-${++_sequence}',
-      status: 'completed',
+      status: DiscoveryStatus.completed,
       matchedPersonaIds: const <String>[],
       matchCount: 0,
       matches: const <ContactDiscoveryMatchResult>[],
@@ -32,7 +32,7 @@ final class AlphaContactDiscoveryFacet
     return _latest ??
         const ContactDiscoveryResult(
           id: '',
-          status: 'completed',
+          status: DiscoveryStatus.completed,
           matchedPersonaIds: <String>[],
           matchCount: 0,
           matches: <ContactDiscoveryMatchResult>[],
@@ -46,6 +46,8 @@ final class AlphaContactDiscoveryFacet
     if (_latest?.id == command.discoveryId) {
       _latest = null;
     }
-    return const ContactDiscoveryDismissResult(status: 'dismissed');
+    return const ContactDiscoveryDismissResult(
+      status: DiscoveryStatus.dismissed,
+    );
   }
 }

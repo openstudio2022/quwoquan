@@ -172,12 +172,13 @@ func TestIncomingCallIntegrationPayloadAndAcceptedSemantics(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC()
+	deliveryKey := canonicalFixtureDigest("incoming-job-1", "persona-target-1")
 	job := notification.IncomingCallDeliveryJob{
 		ID:              "incoming-job-1",
 		CallID:          "76c0ee4a-1540-44fd-a291-c5593ac3d95d",
 		TargetPersonaID: "persona-target-1",
 		DestinationRef:  strings.Repeat("c", 64),
-		DeliveryKey:     "sha256:delivery-1",
+		DeliveryKey:     deliveryKey,
 		CallType:        "video",
 		CallerName:      "caller",
 		CallerAvatarURL: "https://cdn.example.invalid/avatar.png",

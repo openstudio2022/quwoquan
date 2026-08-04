@@ -149,12 +149,18 @@ def _project_fleet_outcomes(
     stage: ExecutionStage,
     queue_stage: QueueJobStage,
     *,
+    expected_job_ids: frozenset[str],
     outcomes: tuple[object, ...],
 ) -> tuple[DataIssue, ...]:
     jobs = {job.job_id: job for job in _declared_jobs(execution_id, queue_stage)}
     outcome_ids = {str(getattr(outcome, "job_id", "")) for outcome in outcomes}
-    if outcome_ids != set(jobs):
-        return (_contract_issue(stage, "ReliableTask fleet receipt does not match declared jobs"),)
+    if outcome_ids != expected_job_ids or not outcome_ids.issubset(jobs):
+        return (
+            _contract_issue(
+                stage,
+                "ReliableTask fleet receipt does not match dispatched jobs",
+            ),
+        )
     issues: list[DataIssue] = []
     for outcome in outcomes:
         job_id = str(getattr(outcome, "job_id", ""))
@@ -204,6 +210,11 @@ def _dispatch_fleet(
     from content.execution.reliabletask_fleet import run_reliabletask_fleet
 
     policy = active_runtime_policy()
+    expected_job_ids = frozenset(
+        job.job_id
+        for job in _remaining_jobs(ctx.execution_id, queue_stage)
+        if job.state is not QueueJobState.DEAD
+    )
     try:
         report = run_reliabletask_fleet(
             ctx.execution_id,
@@ -230,6 +241,7 @@ def _dispatch_fleet(
         ctx.execution_id,
         stage,
         queue_stage,
+        expected_job_ids=expected_job_ids,
         outcomes=report.outcomes,
     )
     all_remote_jobs_terminal = all(

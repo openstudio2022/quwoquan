@@ -218,8 +218,8 @@ void main() {
     expect(
       () => decodePrivacySettingsView(
         _privacyResponse()
-          ..['profileVisibility'] = 'legacy'
-          ..['legacyAlias'] = true,
+          ..['profileVisibility'] = 'retired'
+          ..['retiredAlias'] = true,
       ),
       throwsFormatException,
     );

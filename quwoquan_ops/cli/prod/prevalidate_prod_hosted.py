@@ -27,6 +27,12 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.cli.lib.output_paths import deployment_render_dir
+from quwoquan_ops.cli.prod.prod_hosted_topology import (
+    DeploymentReplica,
+    ProdHostedTopologyError,
+    load_access_manifest,
+    resolve_plan,
+)
 
 ACCESS_MANIFEST = ROOT / "quwoquan_ops/environments/prod/access-isolation.yaml"
 DEFAULT_KEY_DIR = Path.home() / ".ssh" / "quwoquan-prod"
@@ -51,7 +57,8 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Private prod-hosted first-party prevalidation executor."
     )
-    parser.add_argument("--host", required=True)
+    parser.add_argument("--host", default="")
+    parser.add_argument("--host-id", action="append", default=[])
     parser.add_argument("--release-manifest", required=True, type=Path)
     parser.add_argument("--image-transport-tag", required=True)
     parser.add_argument("--candidate-digest", required=True)
@@ -89,7 +96,7 @@ def load_projection() -> tuple[dict[str, Any], dict[str, PlaneProjection]]:
         raise PrevalidationError(
             "prevalidation must keep container runtime and Provider readiness separate"
         )
-    if spec.get("capacityStrategy") != "constrained-single-host":
+    if spec.get("capacityStrategy") != "constrained-per-replica-host":
         raise PrevalidationError("prevalidation capacity strategy must be explicit")
     reclaim = spec.get("staleRuntimeReclaimPolicy") or {}
     if not (
@@ -548,10 +555,11 @@ def _install_unit(
     host: str,
     projection: PlaneProjection,
     key_dir: Path,
+    replica_id: str,
+    remote_root: str,
 ) -> dict[str, Any]:
     key = _resolve_key(projection, key_dir)
-    unit = f"quwoquan-{projection.name}-prevalidate.service"
-    remote_root = f"/home/{projection.account}/stack/prevalidate"
+    unit = f"quwoquan-{projection.name}-prevalidate-{replica_id}.service"
     command = (
         "set -euo pipefail; "
         "unit_dir=${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user; "
@@ -586,6 +594,7 @@ def _install_unit(
         )
     return {
         "plane": projection.name,
+        "replicaId": replica_id,
         "unit": unit,
         "exitCode": result.returncode,
         "stdout": result.stdout,
@@ -596,6 +605,7 @@ def execute_deployment(
     args: argparse.Namespace,
     spec: dict[str, Any],
     projections: dict[str, PlaneProjection],
+    placements: dict[str, DeploymentReplica],
 ) -> dict[str, Any]:
     steps: list[dict[str, Any]] = []
     image_reports: dict[str, Any] = {}
@@ -605,7 +615,7 @@ def execute_deployment(
     )
     reclaim_reports = [
         _reclaim_stale_runtime(
-            host=args.host,
+            host=placements[projection.name].ssh_host,
             projection=projection,
             key_dir=args.key_dir,
             policy=reclaim_policy,
@@ -617,8 +627,9 @@ def execute_deployment(
         str(item) for item in readiness_policy.get("providerBoundServices") or []
     )
     for name, projection in projections.items():
+        placement = placements[name]
         render_dir = deployment_render_dir(
-            "prod", target="prod-hosted", name=f"{name}-prevalidate"
+            "prod", target="prod-hosted", name=placement.render_name
         )
         steps.append(
             _run(
@@ -629,6 +640,10 @@ def execute_deployment(
                     name,
                     "--instance",
                     "prevalidate",
+                    "--replica-id",
+                    placement.replica_id,
+                    "--host-id",
+                    placement.host_id,
                     "--candidate-digest",
                     args.candidate_digest,
                     "--image-transport-tag",
@@ -636,7 +651,7 @@ def execute_deployment(
                     "--output-dir",
                     str(render_dir),
                     "--host",
-                    args.host,
+                    placement.ssh_host,
                     "--data-mode",
                     args.data_mode,
                     "--prevalidate-scope",
@@ -654,7 +669,7 @@ def execute_deployment(
                 "--plane",
                 name,
                 "--host",
-                args.host,
+                placement.ssh_host,
                 "--key-dir",
                 str(args.key_dir),
                 "--services",
@@ -677,16 +692,22 @@ def execute_deployment(
                     "--plane",
                     name,
                     "--host",
-                    args.host,
+                    placement.ssh_host,
                     "--source-dir",
                     str(render_dir),
                     "--root-suffix",
-                    str(spec.get("remoteRootSuffix") or "prevalidate"),
+                    f"instances/prevalidate/{placement.replica_id}",
                 ]
             )
         )
     units = [
-        _install_unit(host=args.host, projection=item, key_dir=args.key_dir)
+        _install_unit(
+            host=placements[item.name].ssh_host,
+            projection=item,
+            key_dir=args.key_dir,
+            replica_id=placements[item.name].replica_id,
+            remote_root=placements[item.name].remote_root,
+        )
         for item in projections.values()
     ]
     runtime: dict[str, Any] = {}
@@ -694,19 +715,25 @@ def execute_deployment(
         runtime = {}
         ready = True
         for name, projection in projections.items():
+            placement = placements[name]
+            inspect_argv = [
+                "python3",
+                "quwoquan_ops/cli/prod/inspect_prod_plane_runtime.py",
+                "--plane",
+                name,
+                "--instance",
+                "prevalidate",
+                "--host-id",
+                placement.host_id,
+                "--replica-id",
+                placement.replica_id,
+                "--key-dir",
+                str(args.key_dir),
+            ]
+            if args.host:
+                inspect_argv.extend(["--host", args.host])
             step = _run(
-                [
-                    "python3",
-                    "quwoquan_ops/cli/prod/inspect_prod_plane_runtime.py",
-                    "--plane",
-                    name,
-                    "--instance",
-                    "prevalidate",
-                    "--host",
-                    args.host,
-                    "--key-dir",
-                    str(args.key_dir),
-                ]
+                inspect_argv
             )
             report = json.loads(step["stdout"])
             runtime[name] = report
@@ -782,6 +809,8 @@ def execute_deployment(
     return {
         "status": "passed",
         "namespace": spec.get("namespace"),
+        "replicaId": next(iter(placements.values())).replica_id,
+        "hostId": next(iter(placements.values())).host_id,
         "containerRuntime": "running",
         "providerReadiness": {
             "status": str(
@@ -808,7 +837,8 @@ def main() -> int:
     args = parse_args()
     result: dict[str, Any] = {
         "schema": "prod-hosted-first-party-prevalidation",
-        "host": args.host,
+        "hostOverride": args.host,
+        "selectedHostIds": list(args.host_id),
         "dataMode": args.data_mode,
         "scope": args.scope,
         "dryRun": args.dry_run,
@@ -833,34 +863,94 @@ def main() -> int:
             raise PrevalidationError(f"scope is not allowed: {args.scope}")
         if args.data_mode not in (spec.get("allowedDataModes") or []):
             raise PrevalidationError(f"data mode is not allowed: {args.data_mode}")
-        snapshots = collect_host_snapshots(args.host, projections, args.key_dir)
-        result["hostPreflight"] = {"status": "checked", "planes": snapshots}
-        issues = evaluate_host_snapshots(
-            snapshots, spec, projections, data_mode=args.data_mode
+        plan = resolve_plan(
+            load_access_manifest(),
+            instance="prevalidate",
+            host_ids=args.host_id or None,
+            ssh_host_override=args.host,
         )
-        if issues:
-            result["hostPreflight"]["status"] = "GATE_BLOCK"
-            result["hostPreflight"]["issues"] = issues
-            result["containerDeployment"] = {"status": "GATE_BLOCK", "issues": issues}
+        groups: dict[str, dict[str, DeploymentReplica]] = {}
+        for placement in plan:
+            groups.setdefault(placement.replica_id, {})[placement.plane] = placement
+        preflight_replicas: list[dict[str, Any]] = []
+        all_issues: list[str] = []
+        for replica_id, placements in groups.items():
+            if set(placements) != {"service", "edge"}:
+                raise PrevalidationError(
+                    f"prevalidation replica {replica_id} must include service and edge"
+                )
+            hosts = {item.ssh_host for item in placements.values()}
+            if len(hosts) != 1:
+                raise PrevalidationError(
+                    f"prevalidation replica {replica_id} is not co-located"
+                )
+            host = next(iter(hosts))
+            snapshots = collect_host_snapshots(host, projections, args.key_dir)
+            issues = evaluate_host_snapshots(
+                snapshots, spec, projections, data_mode=args.data_mode
+            )
+            scoped_issues = [f"{replica_id}: {issue}" for issue in issues]
+            all_issues.extend(scoped_issues)
+            preflight_replicas.append(
+                {
+                    "replicaId": replica_id,
+                    "hostId": placements["service"].host_id,
+                    "sshHost": host,
+                    "status": "GATE_BLOCK" if issues else "checked",
+                    "planes": snapshots,
+                    "issues": scoped_issues,
+                }
+            )
+        result["hostPreflight"] = {
+            "status": "GATE_BLOCK" if all_issues else "checked",
+            "replicas": preflight_replicas,
+        }
+        if len(preflight_replicas) == 1:
+            result["hostPreflight"]["planes"] = preflight_replicas[0]["planes"]
+        if all_issues:
+            result["containerDeployment"] = {
+                "status": "GATE_BLOCK",
+                "issues": all_issues,
+            }
             print(json.dumps(result, ensure_ascii=False))
             return 2
         if args.dry_run:
             result["containerDeployment"] = {
                 "status": "planned",
                 "namespace": spec.get("namespace"),
-                "planes": {
-                    name: {
-                        "startupServices": list(item.startup_services),
-                        "imageAndConfigOnlyServices": list(item.image_only_services),
+                "replicas": [
+                    {
+                        "replicaId": replica_id,
+                        "hostId": placements["service"].host_id,
+                        "planes": {
+                            name: {
+                                "startupServices": list(item.startup_services),
+                                "imageAndConfigOnlyServices": list(
+                                    item.image_only_services
+                                ),
+                            }
+                            for name, item in projections.items()
+                        },
                     }
-                    for name, item in projections.items()
-                },
+                    for replica_id, placements in groups.items()
+                ],
             }
         else:
-            result["containerDeployment"] = execute_deployment(
-                args, spec, projections
-            )
-    except (OSError, ValueError, json.JSONDecodeError, PrevalidationError) as error:
+            deployments = [
+                execute_deployment(args, spec, projections, placements)
+                for placements in groups.values()
+            ]
+            result["containerDeployment"] = {
+                "status": "passed",
+                "replicas": deployments,
+            }
+    except (
+        OSError,
+        ValueError,
+        json.JSONDecodeError,
+        PrevalidationError,
+        ProdHostedTopologyError,
+    ) as error:
         result["containerDeployment"] = {
             "status": "GATE_BLOCK",
             "issues": [str(error)],

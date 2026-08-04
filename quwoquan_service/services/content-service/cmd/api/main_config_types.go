@@ -1,6 +1,9 @@
 package main
 
-import "quwoquan_service/services/content-service/internal/content/post/infrastructure/searchindex"
+import (
+	postruntimeconfig "quwoquan_service/services/content-service/internal/content/post/infrastructure/runtimeconfig"
+	"quwoquan_service/services/content-service/internal/content/post/infrastructure/searchindex"
+)
 
 // redisSceneCfg holds configuration for a single Redis deployment (one logical scene).
 type redisSceneCfg struct {
@@ -75,11 +78,7 @@ type config struct {
 		Realtime redisSceneCfg `yaml:"realtime"`
 	} `yaml:"redis"`
 
-	RecModelService struct {
-		URL       string `yaml:"url"`
-		TimeoutMs int    `yaml:"timeout_ms"`
-		Enabled   bool   `yaml:"enabled"`
-	} `yaml:"rec_model_service"`
+	RecModelService postruntimeconfig.RecommendationModelConfig `yaml:"rec_model_service"`
 
 	TagService struct {
 		URL       string `yaml:"url"`

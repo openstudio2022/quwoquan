@@ -17,7 +17,7 @@ from quwoquan_service.scripts.verify.verify_login_dependency_config import (
 
 NONPROD_DEFAULTS = {
     "sys.user-service.integration.external_interaction_base_url": (
-        "https://integration-service.local"
+        "http://integration-service:18086"
     ),
 }
 NONPROD_BINDINGS = {
@@ -42,8 +42,13 @@ def test_login_dependency_config__repository_matrix__security__local_contract() 
 
 def test_login_dependency_config__retired_bypass__security__local_contract() -> None:
     config = {
+        "overrides": {
+            "sys.user-service.integration.external_interaction_base_url": (
+                "http://integration-service:18086"
+            ),
+        },
         "integration": {
-            "external_interaction_base_url": "https://integration-service.local",
+            "external_interaction_base_url": "http://integration-service:18086",
             "otp": {"mode": "retired"},
             "sms_otp": {"sandbox_allowlist": {"enabled": True}},
             "social": {"providers": {}},

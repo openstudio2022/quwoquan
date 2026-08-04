@@ -3,6 +3,7 @@ from __future__ import annotations
 
 
 from support.content_plan_source_reject_fixtures import *  # noqa: F401,F403
+from content.execution.production_contracts import sha256_file
 
 
 
@@ -103,7 +104,7 @@ def test_content_plan_accepts_off_entity_source_as_multi_tag_work():
                 {
                     "fileName": image_file.name,
                     "sourceAssetId": "weak_img",
-                    "sha256": "sha256:weak-img",
+                    "sha256": sha256_file(image_file),
                     "sourceCollectionId": "weak:image",
                     "license": "CC-BY-4.0",
                     "credit": "fixture",
@@ -566,7 +567,7 @@ def test_content_plan_rejects_travel_asset_without_required_rights_fields():
             "assets": [
                 {
                     "fileName": asset_path.name,
-                    "sha256": "sha256:test",
+                    "sha256": sha256_file(asset_path),
                     "rightsAuditStatus": "unverified",
                     "rightsAuditIssues": ["license evidence unavailable"],
                 }

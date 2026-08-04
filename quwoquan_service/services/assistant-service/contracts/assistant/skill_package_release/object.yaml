@@ -1,8 +1,8 @@
 kind: aggregate_root
 description: >-
-  SkillPackageRelease 是 manifest、catalog、activation、input、context、capability、
-  orchestration、trigger、memory、presentation、evaluation、prompt 与 replay
-  资产的一次不可变发布；active 指针只通过
+  SkillPackageRelease 是 manifest、catalog、activation、input、input_schema、
+  context、capability、orchestration、trigger、memory、presentation、
+  presentation_template、evaluation、prompt 与 replay 资产的一次不可变发布；active 指针只通过
   compare-and-swap 激活或回滚到已验证 release。
 identity:
   fields:
@@ -38,7 +38,7 @@ capabilities:
 business_rules:
 - packageId、packageVersion、releaseDigest、assets、runtimeCompatibility、provenance、signature 与 capabilityGrants 在 Stage 后不可改写
 - releaseDigest 必须等于 canonical package descriptor 的 SHA-256，所有 assetDigest 必须在暴露资产前逐项复算
-- manifest、catalog、activation、input、context、capability、orchestration、trigger、memory、presentation、evaluation、prompt 与 replay 资产种类缺一不可
+- manifest、catalog、activation、input、input_schema、context、capability、orchestration、trigger、memory、presentation、presentation_template、evaluation、prompt 与 replay 资产种类缺一不可
 - runtimeCompatibility 不匹配、签名无可信 key、能力未授权或 Consent 不可用时必须 fail-closed
 - 同一 packageId 最多一个 active release；Activate 必须 compare-and-swap，Rollback 只能精确恢复 previousReleaseDigest
 - 运行时缓存只允许以 releaseDigest 为键缓存完整验证后的不可变发布；每次解析仍须读取 active 指针

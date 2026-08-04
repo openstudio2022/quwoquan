@@ -13,5 +13,6 @@ func validateMetadataGovernance(contractGraph *graph.ContractGraph) []Issue {
 	issues = append(issues, validateErrorGovernance(contractGraph)...)
 	issues = append(issues, validateEventGovernance(contractGraph)...)
 	issues = append(issues, validatePrivacyGovernance(contractGraph)...)
+	issues = append(issues, validateAppSurfaceGovernance(contractGraph)...)
 	return issues
 }

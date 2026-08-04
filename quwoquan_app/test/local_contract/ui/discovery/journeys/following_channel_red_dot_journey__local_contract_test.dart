@@ -15,10 +15,10 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 /// renders the following-channel red dot.
 final class _StatefulFollowingSubjectFacet
     implements FollowingSubjectQuery, FollowedSubjectVisitCommandWriter {
-  _StatefulFollowingSubjectFacet(List<FollowingSubjectResult> seed)
-    : _items = List<FollowingSubjectResult>.from(seed);
+  _StatefulFollowingSubjectFacet(List<FollowingSubjectItemView> seed)
+    : _items = List<FollowingSubjectItemView>.from(seed);
 
-  final List<FollowingSubjectResult> _items;
+  final List<FollowingSubjectItemView> _items;
   final List<String> markedClientRequestIds = <String>[];
 
   @override
@@ -26,7 +26,7 @@ final class _StatefulFollowingSubjectFacet
     ListFollowingSubjectsQuery query,
   ) async {
     return FollowingSubjectSlice(
-      items: List<FollowingSubjectResult>.unmodifiable(_items),
+      items: List<FollowingSubjectItemView>.unmodifiable(_items),
     );
   }
 
@@ -42,7 +42,7 @@ final class _StatefulFollowingSubjectFacet
     );
     if (index >= 0) {
       final current = _items[index];
-      _items[index] = FollowingSubjectResult(
+      _items[index] = FollowingSubjectItemView(
         subjectId: current.subjectId,
         subjectType: current.subjectType,
         displayName: current.displayName,
@@ -68,13 +68,13 @@ final class _StatefulFollowingSubjectFacet
   }
 }
 
-FollowingSubjectResult _seedSubject({
+FollowingSubjectItemView _seedSubject({
   required String id,
   required FollowSubjectKind type,
   required String displayName,
   required bool unread,
 }) {
-  return FollowingSubjectResult(
+  return FollowingSubjectItemView(
     subjectId: id,
     subjectType: type,
     displayName: displayName,
@@ -95,7 +95,7 @@ List<Override> _overrides(_StatefulFollowingSubjectFacet facet) {
 
 void main() {
   testWidgets('关注频道红点点击后清除且刷新不复现（UAT 旅程）', (tester) async {
-    final facet = _StatefulFollowingSubjectFacet(<FollowingSubjectResult>[
+    final facet = _StatefulFollowingSubjectFacet(<FollowingSubjectItemView>[
       _seedSubject(
         id: 'homepage_emeishan',
         type: FollowSubjectKind.homepage,
@@ -109,7 +109,7 @@ void main() {
         unread: false,
       ),
     ]);
-    FollowingSubjectResult? opened;
+    FollowingSubjectItemView? opened;
 
     await tester.pumpWidget(
       ProviderScope(

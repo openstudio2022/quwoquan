@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 )
 
 type HookPhase string
@@ -42,6 +43,7 @@ type HookInput struct {
 type HookResult struct {
 	Decision             HookDecision
 	Reason               string
+	ConfirmationRef      string
 	Data                 map[string]any
 	ProtectedFactsDigest string
 }
@@ -58,11 +60,82 @@ type RegisteredHook struct {
 }
 
 type HookRegistry struct {
-	byPhase map[HookPhase][]RegisteredHook
+	byPhase    map[HookPhase][]RegisteredHook
+	byName     map[string]RegisteredHook
+	verifiers  *VerifierRegistry
+}
+
+type executionHookContext struct {
+	registry *HookRegistry
+	run      Run
+}
+
+type executionHookContextKey struct{}
+
+// WithExecutionHooks freezes the Run and its hook registry into one execution
+// claim. The context is process-local wiring only; hook decisions are still
+// projected through the durable Run state machine by the worker.
+func WithExecutionHooks(
+	ctx context.Context,
+	registry *HookRegistry,
+	run Run,
+) context.Context {
+	return context.WithValue(ctx, executionHookContextKey{}, executionHookContext{
+		registry: registry,
+		run:      run,
+	})
+}
+
+// InvokeExecutionHook is the sole AgentLoop entry point for lifecycle hooks.
+// It deliberately exposes decision summaries and bounded structured data, not
+// provider reasoning or chain-of-thought.
+func InvokeExecutionHook(
+	ctx context.Context,
+	phase HookPhase,
+	taskID string,
+	toolName string,
+	data map[string]any,
+) (HookResult, error) {
+	wiring, ok := ctx.Value(executionHookContextKey{}).(executionHookContext)
+	if !ok || wiring.registry == nil {
+		return HookResult{
+			Decision: HookAllow,
+			Data:     cloneMap(data),
+		}, nil
+	}
+	startedAt := time.Now()
+	result, err := wiring.registry.Run(ctx, HookInput{
+		Phase:                phase,
+		Run:                  wiring.run,
+		TaskID:               strings.TrimSpace(taskID),
+		ToolName:             strings.TrimSpace(toolName),
+		Data:                 cloneMap(data),
+		ProtectedFactsDigest: ProtectedRunFactsDigest(wiring.run),
+	})
+	observeHookInvocation(phase, result.Decision, startedAt, err)
+	return result, err
 }
 
 func NewHookRegistry(hooks ...RegisteredHook) (*HookRegistry, error) {
-	registry := &HookRegistry{byPhase: map[HookPhase][]RegisteredHook{}}
+	verifiers, err := NewPlatformVerifierRegistry(nil)
+	if err != nil {
+		return nil, err
+	}
+	return newHookRegistry(verifiers, hooks...)
+}
+
+func newHookRegistry(
+	verifiers *VerifierRegistry,
+	hooks ...RegisteredHook,
+) (*HookRegistry, error) {
+	if verifiers == nil {
+		return nil, errors.New("assistant run verifier registry is required")
+	}
+	registry := &HookRegistry{
+		byPhase:   map[HookPhase][]RegisteredHook{},
+		byName:    map[string]RegisteredHook{},
+		verifiers: verifiers,
+	}
 	seen := map[string]struct{}{}
 	for _, registration := range hooks {
 		if registration.Hook == nil || strings.TrimSpace(registration.Hook.Name()) == "" {
@@ -73,6 +146,7 @@ func NewHookRegistry(hooks ...RegisteredHook) (*HookRegistry, error) {
 			return nil, fmt.Errorf("duplicate assistant run hook %q", name)
 		}
 		seen[name] = struct{}{}
+		registry.byName[name] = registration
 		for _, phase := range registration.Hook.Phases() {
 			if !validHookPhase(phase) {
 				return nil, fmt.Errorf("invalid assistant run hook phase %q", phase)
@@ -111,12 +185,27 @@ func (r *HookRegistry) Run(ctx context.Context, input HookInput) (HookResult, er
 		if next.ProtectedFactsDigest != "" {
 			result.ProtectedFactsDigest = next.ProtectedFactsDigest
 		}
-		if input.Phase == HookPostCompact && result.ProtectedFactsDigest != input.ProtectedFactsDigest {
-			return HookResult{}, errors.New("protected canonical facts changed during compaction")
+		if result.ProtectedFactsDigest != input.ProtectedFactsDigest {
+			return HookResult{}, errors.New("protected canonical facts changed during lifecycle hook")
+		}
+		if next.Decision != "" && next.Decision != HookAllow &&
+			next.Decision != HookBlock && next.Decision != HookRequireConfirmation {
+			return HookResult{}, fmt.Errorf(
+				"assistant run hook %s returned invalid decision %q",
+				registration.Hook.Name(),
+				next.Decision,
+			)
 		}
 		if next.Decision == HookBlock || next.Decision == HookRequireConfirmation {
 			result.Decision = next.Decision
 			result.Reason = strings.TrimSpace(next.Reason)
+			result.ConfirmationRef = strings.TrimSpace(next.ConfirmationRef)
+			if next.Decision == HookRequireConfirmation && result.ConfirmationRef == "" {
+				return HookResult{}, fmt.Errorf(
+					"assistant run hook %s omitted confirmation reference",
+					registration.Hook.Name(),
+				)
+			}
 			return result, nil
 		}
 	}

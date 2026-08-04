@@ -82,6 +82,10 @@ class SMSProviderSubstituteSecurityTest(unittest.TestCase):
             alpha.environment["SMS_SUBSTITUTE_PROVIDER_TOKEN"],
         )
         self.assertNotEqual(
+            alpha.environment["PROVIDER_SUBSTITUTE_OPERATOR_TOKEN"],
+            alpha.environment["SMS_SUBSTITUTE_OPERATOR_TOKEN"],
+        )
+        self.assertNotEqual(
             alpha.environment["SMS_SUBSTITUTE_CAPTURE_KEY_B64"],
             alpha.environment["OTP_CODE_REF_KEYS_JSON"],
         )

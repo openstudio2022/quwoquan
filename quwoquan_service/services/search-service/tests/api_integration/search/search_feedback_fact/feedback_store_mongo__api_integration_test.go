@@ -11,9 +11,9 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	signalapplication "quwoquan_service/services/search-service/internal/search/recommendation_signal_fact/application"
 	feedbackapplication "quwoquan_service/services/search-service/internal/search/search_feedback_fact/application"
 	"quwoquan_service/services/search-service/internal/search/search_feedback_fact/infrastructure/feedbackstore"
-	signalapplication "quwoquan_service/services/search-service/internal/search/recommendation_signal_fact/application"
 )
 
 func newFeedbackStore(t *testing.T) *feedbackstore.Store {
@@ -308,12 +308,12 @@ func TestFeedbackIndexesAndRetiredFieldMigration(t *testing.T) {
 		t.Fatalf("create retired index: %v", err)
 	}
 	if _, err := feedback.InsertOne(ctx, bson.M{
-		"searchRequestId":   "legacy-request",
+		"searchRequestId":   "retired-request",
 		"eventType":         "click",
-		"objectId":          "legacy-post",
-		"idempotencyKey":    "legacy-key",
+		"objectId":          "retired-post",
+		"idempotencyKey":    "retired-key",
 		"signalPublishedAt": time.Now().UTC(),
-		"commandDigest":     "legacy-digest",
+		"commandDigest":     "retired-digest",
 		"createdAt":         time.Now().UTC(),
 	}); err != nil {
 		t.Fatalf("seed retired fact shape: %v", err)

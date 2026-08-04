@@ -211,9 +211,9 @@ void main() {
     test(
       'timeline read preserves canonical payload and beforeSeq order',
       () async {
-        final messages = <MessageDto>[
+        final messages = <ChatMessageViewData>[
           for (var seq = 1; seq <= 3; seq += 1)
-            MessageDto(
+            ChatMessageViewData(
               id: 'timeline_$seq',
               conversationId: 'conv_timeline',
               seq: seq,
@@ -235,7 +235,7 @@ void main() {
         await store.upsertMessages(
           namespace: namespace,
           messages: messages
-              .map(LocalChatSearchMessageRecord.fromMessageDto)
+              .map(LocalChatSearchMessageRecord.fromMessageViewData)
               .toList(growable: false),
         );
 
@@ -327,10 +327,10 @@ void main() {
       expect(record.toCacheMap()['conversationId'], 'conv_cache_1');
       expect(record.toCacheMap().containsKey('id'), isFalse);
       expect(record.toCacheMap().containsKey('_id'), isFalse);
-      expect(record.lastMessageType.wireValue, 'text');
+      expect(record.lastMessageType.wireName, 'text');
       expect(
         () => ConversationCacheRecord.fromCacheMap(const <String, dynamic>{
-          'conversationId': 'conv_cache_legacy_type',
+          'conversationId': 'conv_cache_retired_type',
           'lastMessageType': 'voice',
         }),
         throwsFormatException,

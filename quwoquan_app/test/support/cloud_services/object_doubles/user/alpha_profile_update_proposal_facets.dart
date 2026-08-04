@@ -29,8 +29,14 @@ final class AlphaProfileUpdateProposalFacet
       evidenceRefs: command.evidenceRefs,
       impactScope: command.impactScope,
       createdBy: command.personaId,
-      status: ProfileUpdateProposalStatus.pending,
-      changes: command.changes,
+      status: ProposalStatus.pending,
+      displayName: command.displayName,
+      bio: command.bio,
+      avatarMediaAssetId: command.avatarMediaAssetId,
+      backgroundMediaAssetId: command.backgroundMediaAssetId,
+      isPrivate: command.isPrivate,
+      isolationLevel: command.isolationLevel,
+      purposeHint: command.purposeHint,
       reviewedBy: null,
       applyAuditId: null,
       rollbackDeadline: null,
@@ -49,15 +55,15 @@ final class AlphaProfileUpdateProposalFacet
     ConfirmProfileUpdateProposalCommand command,
   ) async {
     final current = _required(command.proposalId);
-    if (current.status == ProfileUpdateProposalStatus.confirmed ||
-        current.status == ProfileUpdateProposalStatus.applying ||
-        current.status == ProfileUpdateProposalStatus.applied) {
+    if (current.status == ProposalStatus.confirmed ||
+        current.status == ProposalStatus.applying ||
+        current.status == ProposalStatus.applied) {
       return _result(current, replayed: true);
     }
-    _requireStatus(current, ProfileUpdateProposalStatus.pending);
+    _requireStatus(current, ProposalStatus.pending);
     final next = _copy(
       current,
-      status: ProfileUpdateProposalStatus.confirmed,
+      status: ProposalStatus.confirmed,
       reviewedBy: current.personaId,
     );
     _proposals[next.id] = next;
@@ -69,16 +75,16 @@ final class AlphaProfileUpdateProposalFacet
     ApplyProfileUpdateProposalCommand command,
   ) async {
     final current = _required(command.proposalId);
-    if (current.status == ProfileUpdateProposalStatus.applied) {
+    if (current.status == ProposalStatus.applied) {
       return _result(current, replayed: true);
     }
-    if (current.status != ProfileUpdateProposalStatus.confirmed &&
-        current.status != ProfileUpdateProposalStatus.applying) {
+    if (current.status != ProposalStatus.confirmed &&
+        current.status != ProposalStatus.applying) {
       throw StateError('only confirmed/applying proposal can be applied');
     }
     final next = _copy(
       current,
-      status: ProfileUpdateProposalStatus.applied,
+      status: ProposalStatus.applied,
       applyAuditId: 'alpha-apply-audit-${current.id}',
       rollbackDeadline: DateTime.now().toUtc().add(const Duration(days: 7)),
       resolvedAt: DateTime.now().toUtc(),
@@ -92,13 +98,13 @@ final class AlphaProfileUpdateProposalFacet
     RollbackProfileUpdateProposalCommand command,
   ) async {
     final current = _required(command.proposalId);
-    if (current.status == ProfileUpdateProposalStatus.rolledBack) {
+    if (current.status == ProposalStatus.rolledBack) {
       return _result(current, replayed: true);
     }
-    _requireStatus(current, ProfileUpdateProposalStatus.applied);
+    _requireStatus(current, ProposalStatus.applied);
     final next = _copy(
       current,
-      status: ProfileUpdateProposalStatus.rolledBack,
+      status: ProposalStatus.rolledBack,
       rollbackAuditId: 'alpha-rollback-audit-${current.id}',
       resolvedAt: DateTime.now().toUtc(),
     );
@@ -111,13 +117,13 @@ final class AlphaProfileUpdateProposalFacet
     RejectProfileUpdateProposalCommand command,
   ) async {
     final current = _required(command.proposalId);
-    if (current.status == ProfileUpdateProposalStatus.rejected) {
+    if (current.status == ProposalStatus.rejected) {
       return _result(current, replayed: true);
     }
-    _requireStatus(current, ProfileUpdateProposalStatus.pending);
+    _requireStatus(current, ProposalStatus.pending);
     final next = _copy(
       current,
-      status: ProfileUpdateProposalStatus.rejected,
+      status: ProposalStatus.rejected,
       reviewedBy: current.personaId,
       resolvedAt: DateTime.now().toUtc(),
     );
@@ -154,19 +160,19 @@ final class AlphaProfileUpdateProposalFacet
 
   void _requireStatus(
     ProfileUpdateProposalView proposal,
-    ProfileUpdateProposalStatus expected,
+    ProposalStatus expected,
   ) {
     if (proposal.status != expected) {
       throw StateError(
-        'proposal ${proposal.id} must be ${expected.name}, '
-        'got ${proposal.status.name}',
+        'proposal ${proposal.id} must be ${expected.wireName}, '
+        'got ${proposal.status.wireName}',
       );
     }
   }
 
   ProfileUpdateProposalView _copy(
     ProfileUpdateProposalView current, {
-    required ProfileUpdateProposalStatus status,
+    required ProposalStatus status,
     String? reviewedBy,
     String? applyAuditId,
     DateTime? rollbackDeadline,
@@ -183,7 +189,13 @@ final class AlphaProfileUpdateProposalFacet
       impactScope: current.impactScope,
       createdBy: current.createdBy,
       status: status,
-      changes: current.changes,
+      displayName: current.displayName,
+      bio: current.bio,
+      avatarMediaAssetId: current.avatarMediaAssetId,
+      backgroundMediaAssetId: current.backgroundMediaAssetId,
+      isPrivate: current.isPrivate,
+      isolationLevel: current.isolationLevel,
+      purposeHint: current.purposeHint,
       reviewedBy: reviewedBy ?? current.reviewedBy,
       applyAuditId: applyAuditId ?? current.applyAuditId,
       rollbackDeadline: rollbackDeadline ?? current.rollbackDeadline,

@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
-    show BehaviorAction, BehaviorEvent, ReferralSource;
+    show BehaviorEventType, BehaviorEvent, ReferralSource;
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -12,7 +12,6 @@ import 'package:quwoquan_app/ui/discovery/services/media_viewer_interaction_brid
 import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_state.dart';
-import 'package:quwoquan_app/ui/discovery/services/home_feed_media_viewer_wiring.dart';
 
 /// 首页 / 精品 / 发现内容流统一的「点击 post → 沉浸 viewer」打开动作。
 ///
@@ -48,7 +47,7 @@ Future<void> openHomeFeedPost(
         events: <BehaviorEvent>[
           BehaviorEvent(
             contentId: post.id,
-            action: BehaviorAction.click,
+            action: BehaviorEventType.click,
             state: 'click',
             clientEventId:
                 'home_click:${post.id}:${DateTime.now().toUtc().microsecondsSinceEpoch}',
@@ -61,14 +60,8 @@ Future<void> openHomeFeedPost(
         ],
       );
 
-  final rawPostsById = homeFollowingMediaViewerRaws(viewerPosts: viewerPosts);
   final postViews = viewerPosts
-      .map(
-        (dto) => ContentSurfaceViewMapper.fromDto(
-          dto,
-          wire: rawPostsById[dto.id]!.toDynamicMap(),
-        ),
-      )
+      .map(ContentSurfaceViewMapper.fromDto)
       .toList(growable: false);
   final initialIndex = viewerPosts
       .indexWhere((item) => item.id == post.id)
@@ -96,7 +89,6 @@ Future<void> openHomeFeedPost(
       initialIndex: initialIndex,
       source: 'home_feed',
       initialImageIndex: mediaIndex,
-      rawPostsById: rawPostsById,
       interactionSnapshot: interactionSnapshot,
       feedRequestId: navFeedRequestId,
       policyDigest: navPolicyDigest,

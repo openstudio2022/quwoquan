@@ -1,17 +1,17 @@
 import 'package:flutter/cupertino.dart';
+import '../../../support/fixtures/intersection_fixtures.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/components/object_page/interactive_intersection_text.dart';
 import 'package:quwoquan_app/components/object_page/intersection_target_navigator.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {
   test('IntersectionTargetNavigator 使用 metadata 路由逻辑名解析对象页', () {
     expect(
       IntersectionTargetNavigator.resolvePath(
-        IntersectionTarget(
+        intersectionTargetFixture(
           objectId: 'fixture_user_lin',
           objectKind: 'person',
           routeId: 'userProfile',
@@ -21,7 +21,7 @@ void main() {
     );
     expect(
       IntersectionTargetNavigator.resolvePath(
-        IntersectionTarget(
+        intersectionTargetFixture(
           objectId: 'circle_photo',
           objectKind: 'circle',
           routeId: 'circleDetail',
@@ -31,7 +31,7 @@ void main() {
     );
     expect(
       IntersectionTargetNavigator.resolvePath(
-        IntersectionTarget(
+        intersectionTargetFixture(
           objectId: 'homepage_dali',
           objectKind: 'place',
           routeId: 'homepageDetail',
@@ -41,7 +41,7 @@ void main() {
     );
     expect(
       IntersectionTargetNavigator.resolvePath(
-        IntersectionTarget(
+        intersectionTargetFixture(
           objectId: 'relationship',
           objectKind: 'tag',
           routeId: 'myIntersections',
@@ -62,27 +62,27 @@ void main() {
           child: InteractiveIntersectionText(
             fallbackText: '你与林清越等 3 位都来这里互动过',
             spans: <IntersectionTextSpan>[
-              IntersectionTextSpan(text: '你与', role: 'plain'),
-              IntersectionTextSpan(
+              intersectionTextSpanFixture(text: '你与', role: 'plain'),
+              intersectionTextSpanFixture(
                 text: '林清越',
                 role: 'object',
-                target: IntersectionTarget(
+                target: intersectionTargetFixture(
                   objectId: 'fixture_user_lin',
                   objectKind: 'person',
                   routeId: 'userProfile',
                 ),
               ),
-              IntersectionTextSpan(text: '等 ', role: 'plain'),
-              IntersectionTextSpan(
+              intersectionTextSpanFixture(text: '等 ', role: 'plain'),
+              intersectionTextSpanFixture(
                 text: '3',
                 role: 'count',
-                target: IntersectionTarget(
+                target: intersectionTargetFixture(
                   objectId: 'relationship',
                   objectKind: 'tag',
                   routeId: 'myIntersections',
                 ),
               ),
-              IntersectionTextSpan(text: ' 位都来这里互动过', role: 'plain'),
+              intersectionTextSpanFixture(text: ' 位都来这里互动过', role: 'plain'),
             ],
             onSpanTap: (span) => tapped.add(span.role),
             onFallbackTap: () => tapped.add('fallback'),
@@ -134,7 +134,7 @@ void main() {
                   onPressed: () {
                     navigator.open(
                       context,
-                      IntersectionTarget(
+                      intersectionTargetFixture(
                         objectId: 'fixture_user_lin',
                         objectKind: 'person',
                         routeId: 'userProfile',
@@ -177,7 +177,7 @@ void main() {
                   onPressed: () {
                     navigator.open(
                       context,
-                      IntersectionTarget(
+                      intersectionTargetFixture(
                         objectId: 'relationship',
                         objectKind: 'tag',
                         routeId: 'myIntersections',

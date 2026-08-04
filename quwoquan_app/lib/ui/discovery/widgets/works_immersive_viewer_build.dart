@@ -301,7 +301,10 @@ extension _WorksImmersiveViewerBuild on _WorksImmersiveViewerState {
                               presentation: UiErrorPresentation.emptyPage,
                               appearanceMode: UiErrorAppearanceMode.dark,
                             ),
-                            onAction: (_) async => _dismissViewer(),
+                            onRecovery: (_) async {
+                              _dismissViewer();
+                              return UiRecoveryOutcome.handedOff;
+                            },
                           );
                         }
                         return AppRequestFeedback.section();
@@ -395,7 +398,7 @@ extension _WorksImmersiveViewerBuild on _WorksImmersiveViewerState {
               if (currentPost != null && videoBottomChrome != null)
                 Positioned.fill(child: videoBottomChrome),
 
-              // 文章页码：正文下方、作者工具栏上方（V1.0：`‹ 1 / 6 ›`，chevron 可点切页）。
+              // 文章页码：正文下方、作者工具栏上方（`‹ 1 / 6 ›`，chevron 可点切页）。
               if (currentPost != null && _isArticleLikePost(currentPost))
                 Positioned(
                   left: 0,
@@ -716,11 +719,16 @@ extension _WorksImmersiveViewerBuild on _WorksImmersiveViewerState {
         return AppPageErrorState(
           key: ValueKey<String>('article-hydration-error-${post.id}'),
           semantic: _articleHydrationErrorSemantic(post),
-          onAction: (action) async {
+          onRecovery: (action) async {
             if (action.type == UiErrorActionType.retry ||
                 action.type == UiErrorActionType.resubmit) {
               await _maybeHydrateArticleDetail(post, force: true);
+              final refreshed = _articleViewFor(post);
+              return _shouldShowArticleHydrationError(post, refreshed)
+                  ? UiRecoveryOutcome.stillBlocked
+                  : UiRecoveryOutcome.recovered;
             }
+            return UiRecoveryOutcome.cancelled;
           },
         );
       }
@@ -772,7 +780,7 @@ extension _WorksImmersiveViewerBuild on _WorksImmersiveViewerState {
     return Container(color: AppColors.worksBackground);
   }
 
-  /// 页码 chevron 切页（V1.0 `‹ n / m ›`）：更新 inner index 后由
+  /// 页码 chevron 切页（`‹ n / m ›`）：更新 inner index 后由
   /// `_WorksArticleCanvas.initialPage` 驱动 deck `didUpdateWidget` 跳页，
   /// 不引入第二套翻页控制通路。
   void _stepArticlePage(ContentPostViewData post, int delta) {

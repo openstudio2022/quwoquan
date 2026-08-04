@@ -70,7 +70,7 @@ class ExternalProviderGovernanceContractTest(unittest.TestCase):
             "quwoquan_service/services/integration-service/generated/external_integration/location/external_provider_bindings.g.go",
         )
 
-    def test_bindings_cover_exactly_four_environments_and_all_capabilities(self) -> None:
+    def test_bindings_cover_exactly_four_environments_and_owned_capabilities(self) -> None:
         registry = governance.load_registry()
         bindings = governance.load_bindings()
         self.assertEqual(
@@ -79,13 +79,20 @@ class ExternalProviderGovernanceContractTest(unittest.TestCase):
         for environment, scope in bindings["environments"].items():
             self.assertTrue(scope, environment)
             for capability in registry["capabilities"]:
+                owner_service = capability["service_id"]
+                self.assertIn(
+                    capability["capability_id"],
+                    scope[owner_service],
+                    (environment, owner_service, capability["capability_id"]),
+                )
                 for root in capability["binding_roots"]:
                     self.assertIn(root["descriptor_owner"], scope, environment)
-                    self.assertIn(
-                        capability["capability_id"],
-                        scope[root["descriptor_owner"]],
-                        (environment, root),
-                    )
+                    if root["role"] != "owner":
+                        self.assertNotIn(
+                            capability["capability_id"],
+                            scope[root["descriptor_owner"]],
+                            (environment, root),
+                        )
 
     def test_prod_rejects_mock_or_fixture_adapter(self) -> None:
         bindings = governance.load_bindings()
@@ -256,19 +263,13 @@ class ExternalProviderGovernanceContractTest(unittest.TestCase):
         bindings = deepcopy(governance.load_bindings())
         bindings["environments"]["beta"]["assistant-service"][
             "runtime.message.transport"
-        ]["adapter"] = "infra.redis.message_transport"
+        ] = {"state": "enabled"}
         issues = governance.binding_issues(registry, bindings)
         self.assertTrue(
-            any("consumer binding may only declare local state" in issue.message for issue in issues)
-        )
-
-        bindings = deepcopy(governance.load_bindings())
-        bindings["environments"]["beta"]["assistant-service"][
-            "runtime.message.transport"
-        ]["state"] = "blocked"
-        issues = governance.binding_issues(registry, bindings)
-        self.assertTrue(
-            any("consumer local state must match" in issue.message for issue in issues)
+            any(
+                "consumer binding is generated from capability-use" in issue.message
+                for issue in issues
+            )
         )
 
     def test_phone_otp_consumer_is_bound_to_integration_owner_in_every_environment(self) -> None:
@@ -311,17 +312,18 @@ class ExternalProviderGovernanceContractTest(unittest.TestCase):
 
         bindings = governance.load_bindings()
         for environment in ("alpha", "beta", "gamma", "prod"):
-            self.assertEqual(
-                bindings["environments"][environment]["user-service"]["identity.sms.otp"],
-                {"state": "enabled"},
+            self.assertNotIn(
+                "identity.sms.otp",
+                bindings["environments"][environment]["user-service"],
             )
+        compiled, issues = governance.load_and_compile()
+        self.assertEqual(issues, [])
+        for environment in ("alpha", "beta", "gamma", "prod"):
             self.assertEqual(
-                bindings["environments"][environment]["user-service"]["identity.sms.otp"][
-                    "state"
-                ],
-                bindings["environments"][environment]["integration-service"][
-                    "identity.sms.otp"
-                ]["state"],
+                compiled["selectedRootBindings"][environment][
+                    "user.account.authentication_challenge"
+                ]["identity.sms.otp"]["state"],
+                compiled["selectedBindings"][environment]["identity.sms.otp"]["state"],
             )
 
     def test_compiler_and_composition_are_closed(self) -> None:
@@ -329,6 +331,21 @@ class ExternalProviderGovernanceContractTest(unittest.TestCase):
         registry = governance.load_registry()
         self.assertEqual(issues, [])
         self.assertEqual(compiled["capabilityCount"], len(registry["capabilities"]))
+        self.assertEqual(compiled["capabilityCount"], 17)
+        self.assertEqual(compiled["providerConformanceCapabilityCount"], 14)
+        self.assertEqual(
+            set(compiled["providerConformanceCapabilityIds"]),
+            {
+                capability["capability_id"]
+                for capability in registry["capabilities"]
+                if capability["capability_id"]
+                not in {
+                    "chat.conversation.membership.read",
+                    "circle.membership.self.read",
+                    "integration.connector_grant.read",
+                }
+            },
+        )
         self.assertEqual(compiled["adapterCount"], len(registry["adapters"]))
         self.assertTrue(
             {

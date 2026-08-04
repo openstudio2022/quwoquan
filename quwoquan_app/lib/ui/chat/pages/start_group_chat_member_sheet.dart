@@ -383,11 +383,15 @@ class _MemberSelectSheetState extends ConsumerState<_MemberSelectSheet> {
     if (_errorSemantic != null) {
       return AppPageErrorState(
         semantic: _errorSemantic!,
-        onAction: (action) async {
+        onRecovery: (action) async {
           if (action.type == UiErrorActionType.retry ||
               action.type == UiErrorActionType.resubmit) {
             await _reloadMembers();
+            return _errorSemantic == null
+                ? UiRecoveryOutcome.recovered
+                : UiRecoveryOutcome.stillBlocked;
           }
+          return UiRecoveryOutcome.cancelled;
         },
       );
     }

@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"crypto/sha256"
+	"fmt"
 	"net/http"
 	"testing"
 )
@@ -9,7 +11,7 @@ func TestOperationPathTemplateResolverBoundsDynamicAndUnknownRoutes(t *testing.T
 	resolver := NewOperationPathTemplateResolver([]OperationSecurityDescriptor{
 		{
 			CanonicalOperationID: "assistant.assistant_run.GetAssistantRun",
-			ContractGraphSHA256:  "sha256:test",
+			ContractGraphSHA256:  fmt.Sprintf("sha256:%x", sha256.Sum256([]byte("operation-security:test-graph"))),
 			Method:               http.MethodGet,
 			PathTemplate:         "/assistant/runs/{runId}",
 			OperationKind:        "query",

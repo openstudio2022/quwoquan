@@ -1,95 +1,119 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/micro_post_dto.g.dart';
-import 'package:quwoquan_app/cloud/services/content/feed_item_discovery_wire_map.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/feed_item_dto.g.dart';
+import '../../../support/fixtures/intersection_fixtures.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-/// V1-A/V1-E/V1-H T1：交集理由强类型贯通 FeedItemDto → wire → MicroPostDto。
-///
-/// 特性树：content-intersection-reason
+import '../../../support/cloud_services/content/content_post_contract_fixture.dart';
+
+ContentPostViewData _moment({
+  required String postId,
+  required String body,
+  List<IntersectionReason>? intersectionReasons,
+}) => ContentPostViewData.fromWire(
+  contentPostProjectionFixture(
+    postId: postId,
+    contentType: 'micro',
+    contentIdentity: 'moment',
+    authorId: 'u1',
+    body: body,
+    intersectionReasons: intersectionReasons,
+  ),
+);
+
 void main() {
-  group('MicroPostDto.intersectionReasons', () {
-    test('从 wire map 解析为强类型 List<IntersectionReason>', () {
-      final dto = MicroPostDto.fromMap(<String, dynamic>{
-        'postId': 'm-test',
-        'contentType': 'micro',
-        'authorId': 'u1',
-        'body': 'hello',
-        'intersectionReasons': [
-          {
-            'dimension': 'identity',
-            'tagRefs': ['identity/campus/xdf'],
-            'primaryText': '你和 TA 都来自新东方校友圈',
-            'totalPointCount': 3,
-            'source': 'identity',
-          },
-        ],
-      });
+  group('ContentPostProjection.intersectionReasons', () {
+    test('canonical wire 解析为强类型 IntersectionReason', () {
+      final reason = intersectionReasonFixture(
+        dimension: 'identity',
+        tagRefs: const <String>['identity/campus/xdf'],
+        primaryText: '你和 TA 都来自新东方校友圈',
+        totalPointCount: 3,
+      );
+      final projection = contentPostProjectionFixture(
+        postId: 'm-test',
+        contentType: 'micro',
+        contentIdentity: 'moment',
+        body: 'hello',
+        intersectionReasons: <IntersectionReason>[reason],
+      );
 
-      expect(dto.intersectionReasons, isNotNull);
-      expect(dto.intersectionReasons!.length, 1);
-      final reason = dto.intersectionReasons!.first;
-      expect(reason.dimension, 'identity');
-      expect(reason.primaryText, '你和 TA 都来自新东方校友圈');
-      expect(reason.tagRefs, contains('identity/campus/xdf'));
+      final decoded = ContentPostProjection.fromWire(projection.toWire());
+      final view = ContentPostViewData.fromWire(decoded);
+
+      expect(view.intersectionReasons, hasLength(1));
+      expect(view.intersectionReasons!.single.dimension, 'identity');
+      expect(view.intersectionReasons!.single.primaryText, '你和 TA 都来自新东方校友圈');
+      expect(
+        view.intersectionReasons!.single.tagRefs,
+        contains('identity/campus/xdf'),
+      );
     });
 
-    test('无交集来源时为 null（内容卡无来源不展示）', () {
-      final dto = MicroPostDto.fromMap(<String, dynamic>{
-        'postId': 'm-empty',
-        'contentType': 'micro',
-        'authorId': 'u1',
-        'body': 'hello',
-      });
+    test('无交集来源时为 null，内容卡不伪造理由', () {
+      final view = _moment(postId: 'm-empty', body: 'hello');
 
-      expect(dto.intersectionReasons, isNull);
+      expect(view.intersectionReasons, isNull);
     });
 
-    test('content 维度（Topic/旅行）解析为强类型（T4 旅行内容命中）', () {
-      final dto = MicroPostDto.fromMap(<String, dynamic>{
-        'postId': 'm-travel-content',
-        'contentType': 'micro',
-        'authorId': 'u1',
-        'body': '去了趟洱海',
-        'intersectionReasons': [
-          {
-            'dimension': 'content',
-            'tagRefs': ['Topic/旅行'],
-            'primaryText': '你和 TA 都在聊 旅行',
-            'totalPointCount': 12,
-            'source': 'tagRef',
-          },
+    test('content 维度与旅行 tag 保持 canonical typed facts', () {
+      final view = _moment(
+        postId: 'm-travel-content',
+        body: '去了趟洱海',
+        intersectionReasons: <IntersectionReason>[
+          intersectionReasonFixture(
+            dimension: 'content',
+            tagRefs: const <String>['Topic/旅行'],
+            primaryText: '你和 TA 都在聊 旅行',
+            totalPointCount: 12,
+          ),
         ],
-      });
+      );
 
-      final reason = dto.intersectionReasons!.single;
+      final reason = view.intersectionReasons!.single;
       expect(reason.dimension, 'content');
       expect(reason.tagRefs, contains('Topic/旅行'));
       expect(reason.primaryText, '你和 TA 都在聊 旅行');
     });
 
-    test('FeedItemDto → 发现 wire → MicroPostDto 往返保留交集理由', () {
-      final feedItem = FeedItemDto.fromMap(<String, dynamic>{
-        'postId': 'm-roundtrip',
-        'contentType': 'micro',
-        'authorId': 'u1',
-        'body': '左边董宇辉右边俞敏洪',
-        'intersectionReasons': [
-          {
-            'dimension': 'location',
-            'tagRefs': ['location/geo/west-lake'],
-            'primaryText': '你和 TA 都看过 西湖',
-            'totalPointCount': 5,
-            'source': 'location',
-          },
+    test('ContentPostProjection wire 往返保留 location 交集理由', () {
+      final projection = contentPostProjectionFixture(
+        postId: 'm-roundtrip',
+        contentType: 'micro',
+        contentIdentity: 'moment',
+        authorId: 'u1',
+        body: '左边董宇辉右边俞敏洪',
+        intersectionReasons: <IntersectionReason>[
+          intersectionReasonFixture(
+            dimension: 'location',
+            tagRefs: const <String>['location/geo/west-lake'],
+            primaryText: '你和 TA 都看过 西湖',
+            totalPointCount: 5,
+          ),
         ],
-      });
+      );
 
-      final wire = feedItem.toDiscoveryWireMap();
-      final dto = MicroPostDto.fromMap(wire);
+      final decoded = ContentPostProjection.fromWire(projection.toWire());
+      final view = ContentPostViewData.fromWire(decoded);
 
-      expect(dto.intersectionReasons, isNotNull);
-      expect(dto.intersectionReasons!.single.primaryText, '你和 TA 都看过 西湖');
-      expect(dto.intersectionReasons!.single.dimension, 'location');
+      expect(view.intersectionReasons, isNotNull);
+      expect(view.intersectionReasons!.single.primaryText, '你和 TA 都看过 西湖');
+      expect(view.intersectionReasons!.single.dimension, 'location');
+    });
+
+    test('generated decoder 拒绝旧 displayText 等第二字段轨', () {
+      final reason = intersectionReasonFixture();
+      final wire = contentPostProjectionFixture(
+        postId: 'm-noncanonical-reason',
+        contentType: 'micro',
+        intersectionReasons: <IntersectionReason>[reason],
+      ).toWire();
+      final reasons = wire['intersectionReasons']! as List<Object?>;
+      final noncanonicalReason = Map<String, Object?>.from(
+        reasons.single! as Map,
+      )..['displayText'] = 'retired alias';
+      wire['intersectionReasons'] = <Object?>[noncanonicalReason];
+
+      expect(() => ContentPostProjection.fromWire(wire), throwsFormatException);
     });
   });
 }

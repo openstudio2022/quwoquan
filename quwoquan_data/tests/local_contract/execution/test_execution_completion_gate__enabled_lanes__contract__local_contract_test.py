@@ -375,11 +375,13 @@ def test_homepage_pending_entities_skip_absorbed_ineligible_targets(monkeypatch,
     assert pending == ["可用景区甲", "可用博物馆丙"]
 
 
-def test_video_source_ready_runtime_spec_projects_absorbed_ready_targets(
+@pytest.mark.parametrize("carrier", ["article", "video"])
+def test_source_ready_runtime_spec_projects_absorbed_ready_targets(
     monkeypatch,
     tmp_path,
+    carrier,
 ):
-    execution_id = "20260716--travel-video-m100--test-region-a--pilot-104"
+    execution_id = f"20260716--travel-{carrier}-m100--test-region-a--pilot-104"
     spec = ExecutionFixtureBuilder(
         execution_id,
         targets=(

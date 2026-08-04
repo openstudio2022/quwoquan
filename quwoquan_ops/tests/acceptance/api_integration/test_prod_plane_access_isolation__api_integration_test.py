@@ -71,7 +71,19 @@ class ProdPlaneAccessIsolationTest(unittest.TestCase):
         self.assertNotIn("sshHost", runtime["targets"]["prod-hosted"])
         self.assertNotIn(
             data["management"]["sshHost"],
-            "\n".join(runtime["targets"]["prod-hosted"]["publicBases"].values()),
+            "\n".join(
+                str(role.get("host") or "")
+                for role in runtime["urlRoles"].values()
+            ),
+        )
+        self.assertEqual(data["management"]["defaultHostId"], "prod-host-01")
+        self.assertEqual(
+            data["management"]["hosts"][0]["sshHost"],
+            data["management"]["sshHost"],
+        )
+        self.assertEqual(
+            set(data["deploymentInstances"]),
+            {"prevalidate", "gray", "prod"},
         )
         planes = {p["plane"]: p for p in data["planes"]}
         self.assertEqual(set(planes), {"edge", "media", "service", "data"})
@@ -158,8 +170,8 @@ class ProdPlaneAccessIsolationTest(unittest.TestCase):
             ["bash", "quwoquan_ops/cli/prod/deploy_to_prod.sh"],
             DRY_RUN="true",
             ROLLOUT_STAGE="gray-initial",
-            IMAGE_VERSION="img",
-            CONFIG_VERSION="cfg",
+            IMAGE_TRANSPORT_TAG="transport-test",
+            CANDIDATE_DIGEST="sha256:" + ("b" * 64),
             PROD_SSH_HOST="203.0.113.10",
         )
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -168,6 +180,10 @@ class ProdPlaneAccessIsolationTest(unittest.TestCase):
         self.assertIn("edge-gray", result.stdout)
         self.assertIn("prod-service-svc@203.0.113.10", result.stdout)
         self.assertIn("service-gray", result.stdout)
+        self.assertIn("replica=r0/1", result.stdout)
+        self.assertIn("host=prod-host-01", result.stdout)
+        self.assertIn("/instances/gray/r0", result.stdout)
+        self.assertIn("placementCoverage hosts=1 planeReplicas=", result.stdout)
         self.assertNotIn("prod-data-svc", result.stdout)
 
 

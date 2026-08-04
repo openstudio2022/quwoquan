@@ -66,6 +66,11 @@ final class _TemplateFacet implements TripTemplateFacet {
   String? idempotencyKey;
 
   @override
+  Future<TripPlanTemplate> getTemplate(GetTripPlanTemplateQuery query) async {
+    return template;
+  }
+
+  @override
   Future<TripPlanTemplate> createTemplate(
     CreateTripPlanTemplateRequest request, {
     required String idempotencyKey,

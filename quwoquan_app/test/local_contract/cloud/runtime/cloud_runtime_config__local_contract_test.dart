@@ -110,6 +110,17 @@ void main() {
       );
     });
 
+    test('不具备 native launch binding 的平台不伪造 release 绑定要求', () {
+      CloudRuntimeConfig.hydrateFromNativeRuntimePackage(<String, String>{
+        ..._nativeRuntimePackageFor('alpha'),
+        'QWQ_APP_LAUNCH_MODE': 'direct_flutter_run',
+      }, enforceNativeLaunchBinding: false);
+
+      expect(CloudRuntimeConfig.requiresReleaseBoundContent, isFalse);
+      expect(CloudRuntimeConfig.missingRequiredDefineKeys, isEmpty);
+      expect(CloudRuntimeConfig.validateRequiredEndpoints, returnsNormally);
+    });
+
     test('Alpha、Beta、Gamma native 包不会混合 endpoint 或启动上下文', () {
       for (final environment in <String>['alpha', 'beta', 'gamma']) {
         CloudRuntimeConfig.clearNativeRuntimePackageForTest();

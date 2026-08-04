@@ -1,13 +1,12 @@
 import 'package:flutter/cupertino.dart';
+import '../../../../support/fixtures/intersection_fixtures.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_visual.g.dart';
 import 'package:quwoquan_app/components/object_page/interactive_intersection_text.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// 取 InteractiveIntersectionText 最外层（DFS 首个）RichText——槽②行内头像由 WidgetSpan
 /// 承载，其子树可能含独立 RichText，这里只关心承载结论句的根 RichText。
@@ -126,26 +125,26 @@ void main() {
 
   group('InteractiveIntersectionText 富文本点击分发（按角色）', () {
     final spans = <IntersectionTextSpan>[
-      IntersectionTextSpan(text: '你与', role: 'plain'),
-      IntersectionTextSpan(
+      intersectionTextSpanFixture(text: '你与', role: 'plain'),
+      intersectionTextSpanFixture(
         text: '林清越',
         role: 'object',
-        target: IntersectionTarget(
+        target: intersectionTargetFixture(
           objectId: 'u_lin',
           objectKind: 'person',
           routeId: 'userProfile',
         ),
       ),
-      IntersectionTextSpan(text: '等 ', role: 'plain'),
-      IntersectionTextSpan(
+      intersectionTextSpanFixture(text: '等 ', role: 'plain'),
+      intersectionTextSpanFixture(
         text: '3',
         role: 'count',
-        target: IntersectionTarget(
+        target: intersectionTargetFixture(
           objectId: 'relationship',
           routeId: 'myIntersections',
         ),
       ),
-      IntersectionTextSpan(text: ' 位都来这里互动过', role: 'plain'),
+      intersectionTextSpanFixture(text: ' 位都来这里互动过', role: 'plain'),
     ];
 
     testWidgets('object 片段与 count 片段各自分发对应 span', (tester) async {
@@ -233,8 +232,8 @@ void main() {
         _host(
           InteractiveIntersectionText(
             spans: <IntersectionTextSpan>[
-              IntersectionTextSpan(text: '23', role: 'count'),
-              IntersectionTextSpan(text: ' 人因你加入圈子', role: 'plain'),
+              intersectionTextSpanFixture(text: '23', role: 'count'),
+              intersectionTextSpanFixture(text: ' 人因你加入圈子', role: 'plain'),
             ],
             fallbackText: '23 人因你加入圈子',
             onSpanTap: tapped.add,
@@ -250,20 +249,20 @@ void main() {
 
   group('InteractiveIntersectionText 槽②行内头像（visual）', () {
     final spans = <IntersectionTextSpan>[
-      IntersectionTextSpan(
+      intersectionTextSpanFixture(
         text: '林清越',
         role: 'object',
-        visual: IntersectionVisual(
+        visual: intersectionVisualFixture(
           assetKind: 'avatar',
           imageUrl: 'https://example.com/lin.png',
         ),
-        target: IntersectionTarget(
+        target: intersectionTargetFixture(
           objectId: 'u_lin',
           objectKind: 'person',
           routeId: 'userProfile',
         ),
       ),
-      IntersectionTextSpan(text: '等 3 位都来这里互动过', role: 'plain'),
+      intersectionTextSpanFixture(text: '等 3 位都来这里互动过', role: 'plain'),
     ];
 
     testWidgets(
@@ -297,7 +296,7 @@ void main() {
         _host(
           InteractiveIntersectionText(
             spans: <IntersectionTextSpan>[
-              IntersectionTextSpan(text: '你与林清越互动过', role: 'plain'),
+              intersectionTextSpanFixture(text: '你与林清越互动过', role: 'plain'),
             ],
             fallbackText: '你与林清越互动过',
             onSpanTap: (_) {},

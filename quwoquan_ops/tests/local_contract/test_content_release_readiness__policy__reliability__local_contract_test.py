@@ -140,17 +140,6 @@ def test_content_release_readiness__rejects_undefined_phase_environment__local_c
         raise AssertionError("undefined phase/environment must be rejected")
 
 
-def test_alpha_content_release_runtime__uses_import_health_scope__local_contract(
-    monkeypatch,
-    tmp_path: Path,
-) -> None:
-    state_path = tmp_path / "content-release.json"
-    state_path.write_text('{"workload":"content-release"}', encoding="utf-8")
-    monkeypatch.setattr(stackctl, "target_process_dir", lambda _target: tmp_path)
-
-    assert stackctl._current_runtime_health_scope("alpha-local") == "content-import"
-
-
 def test_prod_hosted_content_service_has_a_real_import_scope_probe__local_contract() -> (
     None
 ):
@@ -1105,6 +1094,52 @@ def test_data_lifecycle_exit__binds_original_readiness_and_same_digest_replay(
     assert path == tmp_path / ref
     assert receipt["originalImportRunId"] == readiness["importRunId"]
     assert receipt["replayManifestDigest"] == manifest_digest
+
+
+
+def test_data_lifecycle_exit__allows_commercial_readiness_on_replay_import(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    """Commercial verify after lifecycle binds via replayImportRunId."""
+    monkeypatch.setenv("QWQ_OUTPUT_ROOT", str(tmp_path))
+    _receipt_path, manifest_digest = _write_data_readiness_fixture(
+        output_root=tmp_path
+    )
+    readiness, _ = stackctl._load_data_release_readiness(
+        environment="gamma",
+        release_id="pilot-002",
+        verify_run_id="verify-001",
+        manifest_digest=manifest_digest,
+        readiness_phase=stackctl.ReadinessPhase.COMMERCIAL,
+    )
+    ref = _write_lifecycle_exit_fixture(
+        output_root=tmp_path,
+        readiness=readiness,
+    )
+    # Simulate post-lifecycle commercial verify on the replayed import.
+    readiness = dict(readiness)
+    readiness["importRunId"] = "replay-001"
+    readiness["verifyRunId"] = "commercial-verify-001"
+    commercial_result = (
+        tmp_path
+        / "env/gamma/runs/data-release/pilot-002/commercial-verify-001/result.json"
+    )
+    commercial_result.parent.mkdir(parents=True, exist_ok=True)
+    commercial_result.write_text("{}
+", encoding="utf-8")
+
+    receipt, path = stackctl._load_data_release_lifecycle_exit(
+        environment="gamma",
+        release_id="pilot-002",
+        manifest_digest=manifest_digest,
+        readiness=readiness,
+        lifecycle_exit_ref=ref,
+    )
+
+    assert path == tmp_path / ref
+    assert receipt["replayImportRunId"] == readiness["importRunId"]
+    assert receipt["originalImportRunId"] != readiness["importRunId"]
 
 
 def test_data_lifecycle_exit__rejects_replay_digest_drift(

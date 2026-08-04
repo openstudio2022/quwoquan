@@ -1,16 +1,32 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/feed_item_dto.g.dart';
-import '../../../../support/cloud_services/repository_mock_reexports.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import '../../../../support/cloud_services/object_doubles/object_scenario_seed_reader.dart';
 import '../../../../support/cloud_services/content/mock_content_repository.dart';
 
-List<FeedItemDto> _contractDiscoveryItems() {
+List<ContentPostViewData> _contractDiscoveryItems() {
   final posts = objectScenarioSeedReader.contentSeedSet()?['posts'];
   if (posts is! List) {
     throw StateError('content_discovery_core.posts fixture is missing');
   }
   return posts
       .whereType<Map>()
-      .map((item) => FeedItemDto.fromReadModelMap(item.cast<String, dynamic>()))
+      .map((raw) {
+        final item = raw.cast<String, dynamic>();
+        return ContentPostViewData.fromWire(
+          ContentPostProjection(
+            postId: item['postId']! as String,
+            contentType: item['contentType']! as String,
+            contentIdentity: item['contentIdentity'] as String?,
+            authorId: item['authorId'] as String?,
+            authorDisplayName: item['authorDisplayName'] as String?,
+            authorAvatarUrl: item['authorAvatarUrl'] as String?,
+            likeCount: item['likeCount']! as int,
+            commentCount: item['commentCount']! as int,
+            shareCount: item['shareCount']! as int,
+          ),
+        );
+      })
       .toList(growable: false);
 }
 
@@ -22,19 +38,19 @@ void main() {
             .where((item) => item.type == 'image')
             .take(1)
             .toList(growable: false),
-        video: const <FeedItemDto>[],
-        article: const <FeedItemDto>[],
-        moment: const <FeedItemDto>[],
+        video: const <ContentPostViewData>[],
+        article: const <ContentPostViewData>[],
+        moment: const <ContentPostViewData>[],
       );
       final row = findDiscoveryWireRowByPostId('fixture_photo_001', rows);
       expect(row, isNotNull);
-      expect(row!['id'], 'fixture_photo_001');
+      expect(row!['postId'], 'fixture_photo_001');
     });
 
     test('lookupCanonicalDiscoveryWireRowByPostId resolves canonical row', () {
       final row = lookupCanonicalDiscoveryWireRowByPostId('m1');
       expect(row, isNotNull);
-      expect(row!['id'], 'm1');
+      expect(row!['postId'], 'm1');
     });
 
     // 契约单轨：mockDiscoveryWireFallback / prototypeDiscoveryWireRowForMock

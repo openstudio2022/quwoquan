@@ -12,25 +12,35 @@
 library;
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import '../../../../support/fixtures/intersection_fixtures.dart';
 import 'package:quwoquan_app/components/object_page/intersection_target_navigator.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {
   group('IntersectionTargetNavigator.targetForReason（交集行 → 统一导航 target）', () {
     test('objectKind 闭集直出（person/circle/place）', () {
       final person = IntersectionTargetNavigator.targetForReason(
-        IntersectionReason(actionTargetId: 'u_lin', objectKind: 'person'),
+        intersectionReasonFixture(
+          actionTargetId: 'u_lin',
+          objectKind: 'person',
+        ),
       );
       expect(person.objectId, 'u_lin');
       expect(person.objectKind, 'person');
 
       final circle = IntersectionTargetNavigator.targetForReason(
-        IntersectionReason(actionTargetId: 'c_ride', objectKind: 'circle'),
+        intersectionReasonFixture(
+          actionTargetId: 'c_ride',
+          objectKind: 'circle',
+        ),
       );
       expect(circle.objectKind, 'circle');
 
       final place = IntersectionTargetNavigator.targetForReason(
-        IntersectionReason(actionTargetId: 'p_west', objectKind: 'place'),
+        intersectionReasonFixture(
+          actionTargetId: 'p_west',
+          objectKind: 'place',
+        ),
       );
       expect(place.objectKind, 'place');
     });
@@ -39,7 +49,7 @@ void main() {
       // §23 去桥接：relationKind 不再回写对象类型；objectKind 缺省即保持空，
       // 由 resolvePath 判定不可路由（优雅降级），不再伪造 person/place/enterprise。
       final viaRelationKind = IntersectionTargetNavigator.targetForReason(
-        IntersectionReason(actionTargetId: 'u1', relationKind: 'mutual'),
+        intersectionReasonFixture(actionTargetId: 'u1', relationKind: 'mutual'),
       );
       expect(viaRelationKind.objectKind, '');
       expect(IntersectionTargetNavigator.resolvePath(viaRelationKind), isNull);
@@ -47,7 +57,10 @@ void main() {
 
     test('actionTargetId 两端空白裁剪', () {
       final t = IntersectionTargetNavigator.targetForReason(
-        IntersectionReason(actionTargetId: '  u2  ', objectKind: 'person'),
+        intersectionReasonFixture(
+          actionTargetId: '  u2  ',
+          objectKind: 'person',
+        ),
       );
       expect(t.objectId, 'u2');
     });
@@ -62,7 +75,10 @@ void main() {
     test('person → userProfile', () {
       expect(
         pathFor(
-          IntersectionReason(actionTargetId: 'u_lin', objectKind: 'person'),
+          intersectionReasonFixture(
+            actionTargetId: 'u_lin',
+            objectKind: 'person',
+          ),
         ),
         contains('u_lin'),
       );
@@ -71,7 +87,10 @@ void main() {
     test('circle → circleDetail', () {
       expect(
         pathFor(
-          IntersectionReason(actionTargetId: 'c_ride', objectKind: 'circle'),
+          intersectionReasonFixture(
+            actionTargetId: 'c_ride',
+            objectKind: 'circle',
+          ),
         ),
         contains('c_ride'),
       );
@@ -81,7 +100,10 @@ void main() {
       for (final kind in const <String>['place', 'school', 'enterprise']) {
         expect(
           pathFor(
-            IntersectionReason(actionTargetId: 'h_$kind', objectKind: kind),
+            intersectionReasonFixture(
+              actionTargetId: 'h_$kind',
+              objectKind: kind,
+            ),
           ),
           contains('h_$kind'),
           reason: '$kind 应映射到实体主页路由',
@@ -91,7 +113,9 @@ void main() {
 
     test('actionTargetId 空 → 不可路由（优雅降级，不跳转）', () {
       expect(
-        pathFor(IntersectionReason(actionTargetId: '', objectKind: 'person')),
+        pathFor(
+          intersectionReasonFixture(actionTargetId: '', objectKind: 'person'),
+        ),
         isNull,
       );
     });

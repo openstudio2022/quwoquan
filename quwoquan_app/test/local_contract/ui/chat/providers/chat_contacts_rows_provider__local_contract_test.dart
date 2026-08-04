@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/contact_home_row_dto.g.dart';
+import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
 import '../../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -77,7 +77,7 @@ void main() {
 
     test('无服务端事实交集时不从关系态或标题本地合成摘要', () {
       final row = ChatContactsRow.fromContactHomeDto(
-        ContactHomeRowDto(
+        _contactHomeRow(
           id: 'user_without_intersection',
           kind: 'user',
           objectId: 'user_without_intersection',
@@ -99,15 +99,15 @@ final class _FakeChatRepository extends MockChatRepository {
   final List<String> requestedFilters = <String>[];
 
   @override
-  Future<List<ContactHomeRowDto>> listContactHome({
+  Future<List<ContactHomeRow>> listContactHome({
     String filter = 'all',
     String? cursor,
     int limit = 500,
   }) async {
     requestedFilters.add(filter);
     final rows = switch (filter) {
-      'mutual' => <ContactHomeRowDto>[
-        ContactHomeRowDto(
+      'mutual' => <ContactHomeRow>[
+        _contactHomeRow(
           id: 'user_mutual_01',
           kind: 'user',
           objectId: 'user_mutual_01',
@@ -119,8 +119,8 @@ final class _FakeChatRepository extends MockChatRepository {
           summaryIntersections: const <String>['摄影圈', '九寨沟'],
         ),
       ],
-      'circle' => <ContactHomeRowDto>[
-        ContactHomeRowDto(
+      'circle' => <ContactHomeRow>[
+        _contactHomeRow(
           id: 'circle_01',
           kind: 'circle',
           objectId: 'circle_01',
@@ -131,8 +131,8 @@ final class _FakeChatRepository extends MockChatRepository {
               'media/avatar/s/archived-avatar/group/circle_01/v1/composite.png',
         ),
       ],
-      'group' => <ContactHomeRowDto>[
-        ContactHomeRowDto(
+      'group' => <ContactHomeRow>[
+        _contactHomeRow(
           id: 'group_01',
           kind: 'group',
           objectId: 'group_01',
@@ -143,8 +143,8 @@ final class _FakeChatRepository extends MockChatRepository {
               'media/avatar/s/archived-avatar/group/group_01/v1/composite.png',
         ),
       ],
-      _ => <ContactHomeRowDto>[
-        ContactHomeRowDto(
+      _ => <ContactHomeRow>[
+        _contactHomeRow(
           userId: 'user_mutual_01',
           id: 'user_mutual_01',
           kind: 'user',
@@ -155,7 +155,7 @@ final class _FakeChatRepository extends MockChatRepository {
           relationState: 'mutual',
           summaryIntersections: const <String>['摄影圈', '九寨沟'],
         ),
-        ContactHomeRowDto(
+        _contactHomeRow(
           id: 'circle_01',
           kind: 'circle',
           objectId: 'circle_01',
@@ -163,7 +163,7 @@ final class _FakeChatRepository extends MockChatRepository {
           title: '测试圈子',
           subtitle: '圈子摘要',
         ),
-        ContactHomeRowDto(
+        _contactHomeRow(
           id: 'group_01',
           kind: 'group',
           objectId: 'group_01',
@@ -176,3 +176,37 @@ final class _FakeChatRepository extends MockChatRepository {
     return rows.take(limit).toList(growable: false);
   }
 }
+
+ContactHomeRow _contactHomeRow({
+  required String id,
+  required String kind,
+  required String objectId,
+  String? userId,
+  String userHandle = '',
+  String? conversationId,
+  String? circleId,
+  String? circleGroupId,
+  String? entityId,
+  required String title,
+  String subtitle = '',
+  String avatarUrl = '',
+  String? relationState,
+  List<String> summaryIntersections = const <String>[],
+}) => ContactHomeRow(
+  id: id,
+  kind: kind,
+  objectId: objectId,
+  userId: userId,
+  userHandle: userHandle,
+  conversationId: conversationId,
+  circleId: circleId,
+  circleGroupId: circleGroupId,
+  entityId: entityId,
+  title: title,
+  subtitle: subtitle,
+  avatarUrl: avatarUrl,
+  relationState: relationState,
+  summaryIntersections: summaryIntersections,
+  contactCount: 0,
+  sortKey: '',
+);

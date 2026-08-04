@@ -22,6 +22,7 @@ api_routes:
       anonymous_policy: deny
       visibility: private
     response_entity: PersonaManagementItemView
+    response_entity_ref: user.UserAccount
     response_fields:
       - personaId
       - displayName
@@ -103,6 +104,7 @@ api_routes:
       anonymous_policy: deny
       visibility: private
     response_entity: PersonaManagementItemView
+    response_entity_ref: user.UserAccount
     response_fields:
       - personaId
       - displayName
@@ -246,6 +248,7 @@ api_routes:
       anonymous_policy: deny
       visibility: private
     response_entity: PersonaLifecycleGuardView
+    response_entity_ref: user.UserAccount
     response_fields:
       - personaId
       - requestedAction
@@ -315,6 +318,7 @@ api_routes:
       anonymous_policy: deny
       visibility: private
     response_entity: ActivePersonaContextView
+    response_entity_ref: user.UserAccount
     response_fields:
       - ownerUserId
       - personaId

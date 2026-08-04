@@ -2341,17 +2341,49 @@ class NonprodDataProvisioner:
         epoch: str,
     ) -> dict[str, Any] | None:
         receipt = self._load_receipt(recipe, epoch)
-        if receipt is None or receipt.get("cleanupState") != "cleaned":
-            return receipt
-        path = self._receipt_path(recipe, epoch)
-        history = path.parent / "history"
-        history.mkdir(parents=True, exist_ok=True)
-        receipt_digest = hashlib.sha256(path.read_bytes()).hexdigest()[:16]
-        archived = history / f"{recipe.dataset_id}-{receipt_digest}.json"
-        if archived.exists():
-            raise RuntimeError("cleaned dataset receipt history identity collision")
-        path.replace(archived)
-        return None
+        if receipt is None:
+            return None
+        if self._should_archive_receipt_before_provision(receipt, recipe):
+            path = self._receipt_path(recipe, epoch)
+            history = path.parent / "history"
+            history.mkdir(parents=True, exist_ok=True)
+            receipt_digest = hashlib.sha256(path.read_bytes()).hexdigest()[:16]
+            archived = history / f"{recipe.dataset_id}-{receipt_digest}.json"
+            if archived.exists():
+                raise RuntimeError(
+                    "dataset receipt history identity collision while archiving"
+                )
+            path.replace(archived)
+            return None
+        return receipt
+
+    def _should_archive_receipt_before_provision(
+        self,
+        receipt: Mapping[str, Any],
+        recipe: DatasetRecipe,
+    ) -> bool:
+        """Archive cleaned or mid-flight incomplete identity receipts for retry.
+
+        Incomplete identity receipts (before or after some actors/commands)
+        cannot be reused as passed/retained evidence. Keeping them active
+        permanently blocks candidate-bound provision retries and health
+        integration auth.
+        """
+
+        if receipt.get("cleanupState") == "cleaned":
+            return True
+        if recipe.dataset_id != NONPROD_REFERENCE_IDENTITY.dataset_id:
+            return False
+        # Mid-flight identity failures keep status=GATE_BLOCK even after some
+        # actors or domain commands succeed. Archive and retry rather than
+        # permanently blocking candidate-bound provision/health auth.
+        failure_class = str(receipt.get("failureClass") or "").strip()
+        return (
+            receipt.get("status") == "GATE_BLOCK"
+            and receipt.get("cleanupState") == "pending"
+            and failure_class
+            in {"identity_provision_incomplete", "provision_incomplete"}
+        )
 
     def _verify_existing_identity_receipt(
         self,

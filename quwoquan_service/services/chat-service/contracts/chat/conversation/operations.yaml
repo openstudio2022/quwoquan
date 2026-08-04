@@ -11,6 +11,11 @@ externalDependencies:
     operations: [publishEphemeral, subscribeEphemeral, appendDurable, consumeDurable]
     scenes: [general, realtime]
     conformance: redis_message_transport
+    adapterContracts:
+      infra.redis.message_transport:
+        endpointEnvs: {}
+        secretRefs: []
+        defaultTimeoutMs: 5000
 api_routes:
   - method: GET
     path: /chat/conversations

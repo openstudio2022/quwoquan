@@ -109,33 +109,6 @@ class RetrieveHit {
   final List<String> matchedTerms;
   final List<String> matchedTags;
   final Map<String, dynamic> payload;
-
-  factory RetrieveHit.fromMap(Map<String, dynamic> map) {
-    return RetrieveHit(
-      target:
-          RetrieveTarget.fromWire(map['target']?.toString()) ??
-          RetrieveTarget.article,
-      objectId: map['objectId']?.toString() ?? '',
-      title: map['title']?.toString() ?? '',
-      snippet: map['snippet']?.toString() ?? '',
-      score: (map['score'] as num?)?.toDouble() ?? 0,
-      matchedTerms: _stringList(map['matchedTerms']),
-      matchedTags: _stringList(map['matchedTags']),
-      payload: map['payload'] is Map<String, dynamic>
-          ? map['payload'] as Map<String, dynamic>
-          : const <String, dynamic>{},
-    );
-  }
-
-  static List<String> _stringList(Object? value) {
-    if (value is List) {
-      return value
-          .map((e) => e.toString())
-          .where((e) => e.isNotEmpty)
-          .toList(growable: false);
-    }
-    return const <String>[];
-  }
 }
 
 /// Unified retrieve response envelope.

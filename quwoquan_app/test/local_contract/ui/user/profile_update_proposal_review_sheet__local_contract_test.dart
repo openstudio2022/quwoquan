@@ -78,7 +78,7 @@ void main() {
     await _pumpReview(
       tester,
       writer: writer,
-      proposal: _proposal(status: ProfileUpdateProposalStatus.applying),
+      proposal: _proposal(status: ProposalStatus.applying),
     );
 
     expect(
@@ -100,7 +100,7 @@ void main() {
     await _pumpReview(
       tester,
       writer: writer,
-      proposal: _proposal(status: ProfileUpdateProposalStatus.applied),
+      proposal: _proposal(status: ProposalStatus.applied),
     );
 
     expect(
@@ -143,22 +143,21 @@ Future<void> _pumpReview(
 }
 
 ProfileUpdateProposalView _proposal({
-  ProfileUpdateProposalStatus status = ProfileUpdateProposalStatus.pending,
+  ProposalStatus status = ProposalStatus.pending,
 }) => ProfileUpdateProposalView(
   id: 'proposal-1',
   personaId: 'persona-1',
-  source: ProfileUpdateProposalSource.assistant,
+  source: ProposalSource.assistant,
   reason: 'assistant evidence',
   evidenceRefs: const <String>['assistant-run:run-1'],
   impactScope: const <String>['bio', 'displayName'],
   createdBy: 'persona-1',
   status: status,
-  changes: ProfileChangeSet(displayName: 'new name', bio: ''),
+  displayName: 'new name',
+  bio: '',
   reviewedBy: null,
-  applyAuditId: status == ProfileUpdateProposalStatus.applied
-      ? 'audit-apply-1'
-      : null,
-  rollbackDeadline: status == ProfileUpdateProposalStatus.applied
+  applyAuditId: status == ProposalStatus.applied ? 'audit-apply-1' : null,
+  rollbackDeadline: status == ProposalStatus.applied
       ? DateTime.utc(2026, 7, 23)
       : null,
   rollbackAuditId: null,
@@ -188,7 +187,7 @@ final class _RecordingWriter implements ProfileUpdateProposalCommandWriter {
     return const ProfileUpdateProposalCommandResult(
       proposalId: 'proposal-1',
       version: 2,
-      status: ProfileUpdateProposalStatus.confirmed,
+      status: ProposalStatus.confirmed,
       replayed: false,
     );
   }
@@ -202,7 +201,7 @@ final class _RecordingWriter implements ProfileUpdateProposalCommandWriter {
     return const ProfileUpdateProposalCommandResult(
       proposalId: 'proposal-1',
       version: 3,
-      status: ProfileUpdateProposalStatus.applied,
+      status: ProposalStatus.applied,
       replayed: false,
     );
   }
@@ -216,7 +215,7 @@ final class _RecordingWriter implements ProfileUpdateProposalCommandWriter {
     return const ProfileUpdateProposalCommandResult(
       proposalId: 'proposal-1',
       version: 4,
-      status: ProfileUpdateProposalStatus.rolledBack,
+      status: ProposalStatus.rolledBack,
       replayed: false,
     );
   }
@@ -230,7 +229,7 @@ final class _RecordingWriter implements ProfileUpdateProposalCommandWriter {
     return const ProfileUpdateProposalCommandResult(
       proposalId: 'proposal-1',
       version: 2,
-      status: ProfileUpdateProposalStatus.rejected,
+      status: ProposalStatus.rejected,
       replayed: false,
     );
   }

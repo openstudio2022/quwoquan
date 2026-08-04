@@ -65,7 +65,7 @@ func TestProcessBatchRoutesIntersectionFeedbackToSink(t *testing.T) {
 	sink := &fakeIntersectionFeedbackSink{}
 	svc := newFeedbackRoutingService(sink)
 
-	err := svc.ProcessBatch(context.Background(), []behavior.BehaviorEventInput{
+	_, err := svc.ProcessBatch(context.Background(), []behavior.BehaviorEventInput{
 		{
 			ClientEventID:         "evt-intersection-feedback-001",
 			OccurredAt:            validOccurredAt(),
@@ -94,7 +94,7 @@ func TestProcessBatchDoesNotRouteNonIntersectionFeedback(t *testing.T) {
 	sink := &fakeIntersectionFeedbackSink{}
 	svc := newFeedbackRoutingService(sink)
 
-	err := svc.ProcessBatch(context.Background(), []behavior.BehaviorEventInput{
+	_, err := svc.ProcessBatch(context.Background(), []behavior.BehaviorEventInput{
 		{
 			ClientEventID: "evt-dislike-001",
 			OccurredAt:    validOccurredAt(),
@@ -115,12 +115,12 @@ func TestProcessBatchRejectsInvalidIntersectionFeedback(t *testing.T) {
 	sink := &fakeIntersectionFeedbackSink{}
 	svc := newFeedbackRoutingService(sink)
 
-	if err := svc.ProcessBatch(context.Background(), []behavior.BehaviorEventInput{
+	if _, err := svc.ProcessBatch(context.Background(), []behavior.BehaviorEventInput{
 		{UserID: "user-302", Action: "intersection_feedback", FeedbackKind: "notInterested"},
 	}); err == nil {
 		t.Fatalf("missing subjectId must be rejected")
 	}
-	if err := svc.ProcessBatch(context.Background(), []behavior.BehaviorEventInput{
+	if _, err := svc.ProcessBatch(context.Background(), []behavior.BehaviorEventInput{
 		{UserID: "user-302", Action: "intersection_feedback", SubjectID: "subj-1", FeedbackKind: "bogus_kind"},
 	}); err == nil {
 		t.Fatalf("invalid feedbackKind must be rejected")
@@ -139,7 +139,7 @@ func TestProcessBatchProjectsWishlistAddAndRemove(t *testing.T) {
 		behavior.WithWishlistEventStore(wishlist),
 	)
 
-	err := svc.ProcessBatch(context.Background(), []behavior.BehaviorEventInput{
+	_, err := svc.ProcessBatch(context.Background(), []behavior.BehaviorEventInput{
 		{
 			OccurredAt:     validOccurredAt(),
 			UserID:         "user-wish-1",
@@ -192,12 +192,12 @@ func TestProcessBatchRejectsInvalidWishlistEvent(t *testing.T) {
 		persistence.NewPostStore([]postmodel.Post{}),
 		behavior.WithWishlistEventStore(wishlist),
 	)
-	if err := svc.ProcessBatch(context.Background(), []behavior.BehaviorEventInput{
+	if _, err := svc.ProcessBatch(context.Background(), []behavior.BehaviorEventInput{
 		{UserID: "user-wish-2", Action: "wishlist_add", ObjectKind: "homepage"},
 	}); err == nil {
 		t.Fatalf("missing objectId must be rejected")
 	}
-	if err := svc.ProcessBatch(context.Background(), []behavior.BehaviorEventInput{
+	if _, err := svc.ProcessBatch(context.Background(), []behavior.BehaviorEventInput{
 		{UserID: "user-wish-2", Action: "wishlist_add", ObjectID: "homepage_west_lake"},
 	}); err == nil {
 		t.Fatalf("missing objectKind must be rejected")

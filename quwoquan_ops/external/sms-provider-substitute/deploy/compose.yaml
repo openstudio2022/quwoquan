@@ -1,7 +1,7 @@
 services:
   sms-provider-substitute:
     profiles: ["debug-sms-substitute"]
-    image: "quwoquan/sms-provider-substitute-debug:${QWQ_COMPOSE_IMAGE_VERSION:-local}"
+    image: "quwoquan/sms-provider-substitute-debug:${QWQ_COMPOSE_IMAGE_TAG:-local}"
     build:
       context: ..
       dockerfile: deploy/Dockerfile

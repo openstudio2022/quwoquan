@@ -6,14 +6,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	assistantstreaming "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/streaming"
+	assistantstreaming "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/streaming"
 	"strings"
 	"testing"
 
 	"quwoquan_service/runtime/streaming"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
-	toolpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/tool"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/orchestration"
+	toolpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/tool"
+	assistant "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/model"
 	"quwoquan_service/services/assistant-service/tests/support/promptassets"
 	"quwoquan_service/services/assistant-service/tests/support/skillfixture"
 )
@@ -64,20 +64,19 @@ func (model *plannerStubModel) Complete(
 
 func plannerLoop(t *testing.T, model orchestration.ModelProvider, toolCalls *int) *orchestration.AgentLoop {
 	t.Helper()
-	registry := toolpkg.BaseRegistry()
-	registry.Register(
-		toolpkg.WebSearchMetadata(),
-		func(_ context.Context, _ toolpkg.Request) (toolpkg.Result, error) {
+	registry := canonicalTestToolRegistry(map[string]toolpkg.Handler{
+		"web_search": func(_ context.Context, _ toolpkg.Request) (toolpkg.Result, error) {
 			if toolCalls != nil {
 				*toolCalls++
 			}
 			return toolpkg.Result{Output: map[string]any{
-				"summary":    "杭州周末多云，适合安排室外行程。",
-				"references": []any{},
-				"reliable":   true,
+				"summary":            "杭州周末多云，适合安排室外行程。",
+				"references":         []any{},
+				"reliable":           true,
+				"evidenceAssessment": acceptedEvidenceAssessment("planner_web_search_stub"),
 			}}, nil
 		},
-	)
+	})
 	loop := orchestration.NewAgentLoop(
 		nil,
 		orchestration.ReactRuntime{

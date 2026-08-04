@@ -1,7 +1,7 @@
 /// R-ID03 端云契约：创作者影响力完整证据分页明细（ListAuthorImpactEvidence）端侧接入。
 ///
 /// 覆盖：
-/// - response_body 框架契约（R-ID02）：kind=object、model=AuthorImpactEvidencePage；
+/// - response_body 框架契约（R-ID02）：kind=object，具体类型由 generated method 唯一拥有；
 /// - Remote：path/query 经 codegen path builder 对齐、object 解码为 AuthorImpactEvidencePage、
 ///   cursor 翻页透传；
 /// - Mock：无 seed authorImpact（alpha lite）/未命中 impactId 时返回空页，不编造、不崩溃。
@@ -10,28 +10,22 @@ library;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/application/content/post/author_impact_query.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_evidence_item.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_evidence_page.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/remote/content/post/author_impact_remote.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
-import '../../../../support/cloud_services/repository_mock_reexports.dart';
+import '../../../../support/cloud_services/object_doubles/user/profile/alpha_user_profile_repository.dart';
 
 const _personaId = 'fixture_user_current';
 
 void main() {
   group('ListAuthorImpactEvidence response_body 框架契约（R-ID02）', () {
-    test('kind=object、model=AuthorImpactEvidencePage', () {
+    test('kind=object，读模型不再由第二张 metadata 映射维护', () {
       expect(
         ContentApiMetadata.operationToResponseKind[ContentApiMetadata
             .listAuthorImpactEvidenceOperation],
         'object',
       );
-      expect(
-        ContentApiMetadata.operationToResponseModel[ContentApiMetadata
-            .listAuthorImpactEvidenceOperation],
-        'AuthorImpactEvidencePage',
-      );
+      expect(ContentApiMetadata.operationToResponseModel, isEmpty);
     });
   });
 
@@ -88,14 +82,22 @@ void main() {
             <String, Object?>{
               'evidenceId': 'imp_1_ev_0',
               'impactId': 'imp_1',
+              'helpType': 'decision',
+              'action': 'wishlist',
+              'intersectionDimension': 'content',
               'summaryText': '有人收藏了《城市夜骑指南》',
               'occurredAt': '2026-06-19T08:00:00Z',
+              'actionHints': <Object?>[],
             },
             <String, Object?>{
               'evidenceId': 'imp_1_ev_1',
               'impactId': 'imp_1',
+              'helpType': 'reach',
+              'action': 'share',
+              'intersectionDimension': 'content',
               'summaryText': '有人转发了《城市夜骑指南》',
               'occurredAt': '2026-06-18T08:00:00Z',
+              'actionHints': <Object?>[],
             },
           ],
           'nextCursor': '2',
@@ -136,9 +138,19 @@ void main() {
       final repo = repoReturning(<Map<String, Object?>>[
         <String, Object?>{
           'impactId': 'imp_1',
+          'evidenceSnapshotId': 'snap_1',
           'totalCount': 3,
           'items': <Object?>[
-            <String, Object?>{'evidenceId': 'e2', 'summaryText': '末页一条'},
+            <String, Object?>{
+              'evidenceId': 'e2',
+              'impactId': 'imp_1',
+              'helpType': 'decision',
+              'action': 'like',
+              'intersectionDimension': 'content',
+              'occurredAt': '2026-06-17T08:00:00Z',
+              'summaryText': '末页一条',
+              'actionHints': <Object?>[],
+            },
           ],
           'nextCursor': '',
           'hasMore': false,

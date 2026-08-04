@@ -51,7 +51,9 @@ api_routes:
       trace: true
     request_entity: CreateContentReportCommand
     request_body_kind: object
-    response_body_kind: ack
+    response_entity: ReportCommandResult
+    response_body: ReportCommandResult
+    response_body_kind: object
   - actor: persona
     application:
       facet: ReportQueryFacet

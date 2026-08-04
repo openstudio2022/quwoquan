@@ -5,6 +5,7 @@ package api_integration
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -16,7 +17,7 @@ import (
 	generated "quwoquan_service/services/assistant-service/generated/assistant/assistant_session"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
 	assistanthttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/adapters/inbound/http"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
+	assistant "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/model"
 )
 
 func TestAssistantRunExpiredMongoClaimIsRecoveredByAnotherWorker(
@@ -37,19 +38,19 @@ func TestAssistantRunExpiredMongoClaimIsRecoveredByAnotherWorker(
 	}
 	commands := runruntime.NewCommandService(
 		integrationRunRepository,
-		runruntime.SessionAuthorizerFunc(func(
+		runruntime.SessionResolverFunc(func(
 			ctx context.Context,
 			userID string,
 			sessionID string,
-		) error {
+		) (runruntime.SessionContinuity, error) {
 			_, authorizeErr := service.GetSession(ctx, userID, sessionID)
-			return authorizeErr
+			return runruntime.SessionContinuity{}, authorizeErr
 		}),
 		testSkillPackageIdentityResolver(),
 		runruntime.AllowAllStartAccessPolicy{},
 		time.Now,
 		nil,
-		integrationRunPolicyResolver(),
+		runruntime.WithPolicyResolver(integrationRunPolicyResolver()),
 	)
 	run, err := commands.Start(ctx, runruntime.StartCommand{
 		UserID:          "worker-recovery-owner",
@@ -106,8 +107,17 @@ func TestAssistantRunExpiredMongoClaimIsRecoveredByAnotherWorker(
 		t.Fatalf("load recovered run: %v", err)
 	}
 	if stored.State != generated.AssistantRunStateCompleted ||
-		stored.TerminalSnapshot["answerText"] != "恢复后的可回查答案" {
+		stored.TerminalSnapshot == nil ||
+		stored.TerminalSnapshot.AnswerText != "恢复后的可回查答案" {
 		t.Fatalf("unexpected recovered terminal run: %#v", stored)
+	}
+	if stored.Checkpoint == nil ||
+		stored.Checkpoint.BudgetConsumption.ToolCalls != 1 ||
+		stored.Checkpoint.BudgetConsumption.Tokens != 120 ||
+		stored.Checkpoint.BudgetConsumption.CostUnits != 100 ||
+		stored.Checkpoint.BudgetReceiptScope !=
+			"run:"+stored.RunID+":goal:"+fmt.Sprint(stored.GoalRevision) {
+		t.Fatalf("Mongo round trip lost budget receipt: %#v", stored.Checkpoint)
 	}
 }
 
@@ -128,19 +138,19 @@ func TestAssistantRunSSEFollowsJournalUntilWorkerTerminalEvent(t *testing.T) {
 	}
 	commands := runruntime.NewCommandService(
 		integrationRunRepository,
-		runruntime.SessionAuthorizerFunc(func(
+		runruntime.SessionResolverFunc(func(
 			ctx context.Context,
 			userID string,
 			sessionID string,
-		) error {
+		) (runruntime.SessionContinuity, error) {
 			_, authorizeErr := service.GetSession(ctx, userID, sessionID)
-			return authorizeErr
+			return runruntime.SessionContinuity{}, authorizeErr
 		}),
 		testSkillPackageIdentityResolver(),
 		runruntime.AllowAllStartAccessPolicy{},
 		time.Now,
 		nil,
-		integrationRunPolicyResolver(),
+		runruntime.WithPolicyResolver(integrationRunPolicyResolver()),
 	)
 	run, err := commands.Start(ctx, runruntime.StartCommand{
 		UserID:          userID,
@@ -218,19 +228,19 @@ func TestAssistantRunFailedSSECarriesStructuredRuntimeFailure(t *testing.T) {
 	}
 	commands := runruntime.NewCommandService(
 		integrationRunRepository,
-		runruntime.SessionAuthorizerFunc(func(
+		runruntime.SessionResolverFunc(func(
 			ctx context.Context,
 			userID string,
 			sessionID string,
-		) error {
+		) (runruntime.SessionContinuity, error) {
 			_, authorizeErr := service.GetSession(ctx, userID, sessionID)
-			return authorizeErr
+			return runruntime.SessionContinuity{}, authorizeErr
 		}),
 		testSkillPackageIdentityResolver(),
 		runruntime.AllowAllStartAccessPolicy{},
 		time.Now,
 		nil,
-		integrationRunPolicyResolver(),
+		runruntime.WithPolicyResolver(integrationRunPolicyResolver()),
 	)
 	run, err := commands.Start(ctx, runruntime.StartCommand{
 		UserID:          userID,
@@ -290,6 +300,19 @@ func (recoveredRunExecutor) Execute(
 	request runruntime.ExecutionRequest,
 	emit func(runruntime.ExecutionItemUpdate) error,
 ) (runruntime.ExecutionResult, error) {
+	consumption := request.BudgetConsumption
+	consumption.ToolCalls++
+	consumption.Tokens += 120
+	consumption.CostUnits += 100
+	if err := emit(runruntime.ExecutionItemUpdate{
+		Budget: &runruntime.BudgetConsumptionReceipt{
+			Scope:       request.IdempotencyPrefix,
+			Sequence:    request.BudgetReceiptSequence + 1,
+			Consumption: consumption,
+		},
+	}); err != nil {
+		return runruntime.ExecutionResult{}, err
+	}
 	itemID := request.IdempotencyPrefix + ":tool:recovered"
 	if err := emit(runruntime.ExecutionItemUpdate{
 		ItemID: itemID,
@@ -308,7 +331,14 @@ func (recoveredRunExecutor) Execute(
 		return runruntime.ExecutionResult{}, err
 	}
 	return runruntime.ExecutionResult{
-		AnswerText: "恢复后的可回查答案",
+		AnswerText:   "恢复后的可回查答案",
+		ArtifactRefs: []string{"assistant_run_item:answer:" + request.RunID},
+		VerificationEvidence: []runruntime.VerificationEvidence{{
+			Requirement:  "answer_present",
+			Passed:       true,
+			ArtifactRefs: []string{"assistant_run_item:answer:" + request.RunID},
+			Summary:      "durable final answer item is present",
+		}},
 		Presentation: map[string]any{
 			"templateRef":       "assistant.answer.default@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 			"templateDigest":    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -321,7 +351,5 @@ func (recoveredRunExecutor) Execute(
 			"fallbackPlainText": "恢复后的可回查答案",
 			"committedAt":       "",
 		},
-		Verified:            true,
-		VerificationSummary: "恢复后验证通过",
 	}, nil
 }

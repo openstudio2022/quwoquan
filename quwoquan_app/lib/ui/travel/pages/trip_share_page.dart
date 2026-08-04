@@ -91,16 +91,29 @@ final class _TripSharePageState extends ConsumerState<TripSharePage> {
                 sourceSurfaceId: AppUiSurfaces.travelShare.id,
               ),
             ),
-            onAction: (action) async {
-              if (action.type == UiErrorActionType.retry ||
-                  action.type == UiErrorActionType.resubmit) {
-                ref.invalidate(tripShareSnapshotProvider(widget.snapshotId));
-              }
-            },
+            onRecovery: _recoverSnapshot,
           ),
         ),
       ),
     );
+  }
+
+  Future<UiRecoveryOutcome> _recoverSnapshot(UiErrorAction action) async {
+    if (action.type != UiErrorActionType.retry &&
+        action.type != UiErrorActionType.resubmit) {
+      return UiRecoveryOutcome.cancelled;
+    }
+    try {
+      ref.invalidate(tripShareSnapshotProvider(widget.snapshotId));
+      await ref.read(tripShareSnapshotProvider(widget.snapshotId).future);
+      return mounted
+          ? UiRecoveryOutcome.recovered
+          : UiRecoveryOutcome.superseded;
+    } catch (_) {
+      return mounted
+          ? UiRecoveryOutcome.stillBlocked
+          : UiRecoveryOutcome.superseded;
+    }
   }
 
   Future<void> _createTravelogue(TripShareSnapshot snapshot) async {

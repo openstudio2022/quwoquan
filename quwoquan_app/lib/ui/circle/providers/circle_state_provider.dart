@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/cloud/circle/generated/circle_membership_errors.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/circle/models/circle_stats_view_data.dart';
@@ -42,7 +41,7 @@ class CircleState {
   });
 
   final String circleId;
-  final CircleDto? circleData;
+  final Circle? circleData;
   final CircleGroupSlice? defaultPublicGroup;
   final CircleRole role;
   final String joinStatus;
@@ -57,7 +56,7 @@ class CircleState {
   final CircleStatsViewData circleStats;
 
   CircleState copyWith({
-    CircleDto? circleData,
+    Circle? circleData,
     CircleGroupSlice? defaultPublicGroup,
     CircleRole? role,
     String? joinStatus,
@@ -118,7 +117,6 @@ class CircleStateNotifier extends Notifier<CircleState> {
         CircleStatsQuery(circleId: _circleId),
       );
       if (!ref.mounted) return;
-      final dto = ref.read(circleProjectionMapperProvider).toDto(detail);
       CircleMembershipSlice? membership;
       if (ref.read(resolvedOwnerUserIdProvider).trim().isNotEmpty) {
         await ref.read(activePersonaContextProvider.future);
@@ -137,7 +135,7 @@ class CircleStateNotifier extends Notifier<CircleState> {
       }
       if (!ref.mounted) return;
       CircleGroupSlice? defaultGroup;
-      final defaultGroupId = dto.defaultPublicGroupId?.trim() ?? '';
+      final defaultGroupId = detail.defaultPublicGroupId?.trim() ?? '';
       if (defaultGroupId.isNotEmpty && membership != null) {
         defaultGroup = await ref
             .read(circleDetailGroupQueryProvider)
@@ -147,7 +145,7 @@ class CircleStateNotifier extends Notifier<CircleState> {
         if (!ref.mounted) return;
       }
       state = state.copyWith(
-        circleData: dto,
+        circleData: detail,
         defaultPublicGroup: defaultGroup,
         role: _circleRoleFromRaw(membership?.role.name),
         joinStatus: membership == null

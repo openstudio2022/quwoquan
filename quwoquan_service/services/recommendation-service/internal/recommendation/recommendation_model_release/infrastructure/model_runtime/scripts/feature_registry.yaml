@@ -90,9 +90,10 @@ scenarios:
           Online ranking matches an edge to a candidate through its authorId or
           entityRefs, so this is the only real viewer<->candidate intersection
           strength; the item-side intersectionFactStrength is viewer-independent
-          capacity and must not substitute for it. Deferred kinds are dropped
-          before emission, and the exposure snapshot records the matched edge
-          (intersectionEdgeWeight / Freshness / Kind) so training sees the same
+          capacity and must not substitute for it. Edges without a canonical
+          emitted kind are dropped before emission, and the exposure snapshot
+          records the matched edge (intersectionEdgeWeight / Freshness / Kind)
+          so training sees the same
           edge the online scorer used. Go projects those three candidate-scoped
           scalars once through StrongestIntersectionEdgeFor; Python serving and
           training append the same 14-dimension intersection segment. Kind codes

@@ -18,29 +18,11 @@ secretRefs:
   sys.content-service.redis.realtime.password: CONTENT_REDIS_REALTIME_PASSWORD
   sys.content-service.redis.rec.password: CONTENT_REDIS_REC_PASSWORD
 externalBindings:
-  runtime.message.transport:
-    state: enabled
   content.embedding.generation:
     state: enabled
     adapter: ext.embed.openai_compatible
     endpointRef: environment_binding:content.embedding
-    endpointEnvs:
-      endpoint: CONTENT_EMBEDDING_ENDPOINT
-    secretRefs:
-    - CONTENT_EMBEDDING_API_KEY
-    timeoutMs: 10000
   runtime.object.storage:
     state: enabled
     adapter: ext.oss.s3_compatible
     endpointRef: environment_binding:content.object_storage
-    endpointEnvs:
-      endpoint: CONTENT_OSS_ENDPOINT
-      bucket: CONTENT_OSS_BUCKET
-      region: CONTENT_OSS_REGION
-      media_delivery_base_url: CONTENT_MEDIA_DELIVERY_BASE_URL
-      media_upload: CONTENT_MEDIA_UPLOAD_BASE_URL
-    secretRefs:
-    - CONTENT_OSS_ACCESS_KEY_ID
-    - CONTENT_OSS_ACCESS_KEY_SECRET
-    - CONTENT_CDN_SIGN_KEY
-    timeoutMs: 10000

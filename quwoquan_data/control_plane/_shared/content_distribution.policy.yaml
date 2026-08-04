@@ -1,7 +1,7 @@
 schema: quwoquan.content_distribution_policy
-policyId: research-cold-start
-productLifecycleState: research
-releaseClass: research
+policyId: commercial-rights-closure
+productLifecycleState: commercial
+releaseClass: commercial
 mediaGeneration:
   imageAllowed: false
   videoAllowed: false

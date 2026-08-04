@@ -1,5 +1,11 @@
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/article_detail_wire_keys.g.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
+import 'package:quwoquan_app/cloud/services/content/content_read_model_projection.dart';
 import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 import 'package:quwoquan_app/core/media/content_media_url.dart';
 import 'package:quwoquan_app/ui/content/models/article_detail_view.dart';
@@ -18,14 +24,24 @@ import 'package:quwoquan_app/ui/content/services/post_view_projection.dart';
 /// - 单轨拒旧键：likesCount/commentsCount/savesCount 不得被解析为计数。
 /// - 自包含 inline fixtures（不依赖 lib 端 mock data 类），契约数据由本文件就地构造。
 void main() {
+  setUpAll(() {
+    CloudRuntimeConfig.hydrateFromNativeRuntimePackage(const <String, String>{
+      'MEDIA_AVATAR_CDN_BASE_URL': 'https://cdn.example.test/media/avatar',
+      'MEDIA_IMAGE_CDN_BASE_URL': 'https://cdn.example.test/media/image',
+      'MEDIA_VIDEO_CDN_BASE_URL': 'https://cdn.example.test/media/video',
+    }, enforceNativeLaunchBinding: false);
+  });
+
+  tearDownAll(CloudRuntimeConfig.clearNativeRuntimePackageForTest);
+
   const Map<String, dynamic> minPhoto = {
-    'id': 'ph1',
-    'type': 'image',
+    'postId': 'ph1',
+    'contentType': 'image',
     'authorId': 'auth1',
-    'displayName': '摄影师',
-    'avatarUrl': 'media/avatar/s/test/content/ph1/v1/avatar.jpg',
+    'authorDisplayName': '摄影师',
+    'authorAvatarUrl': 'media/avatar/s/test/content/ph1/v1/avatar.jpg',
     'coverUrl': 'media/image/s/test/content/ph1/v1/cover.jpg',
-    'imageUrls': [
+    'mediaUrls': [
       'media/image/s/test/content/ph1/v1/img1.jpg',
       'media/image/s/test/content/ph1/v1/img2.jpg',
     ],
@@ -38,11 +54,11 @@ void main() {
   };
 
   const Map<String, dynamic> minVideo = {
-    'id': 'vd1',
-    'type': 'video',
+    'postId': 'vd1',
+    'contentType': 'video',
     'authorId': 'vauth1',
-    'displayName': '视频创作者',
-    'avatarUrl': 'media/avatar/s/test/content/vd1/v1/avatar.jpg',
+    'authorDisplayName': '视频创作者',
+    'authorAvatarUrl': 'media/avatar/s/test/content/vd1/v1/avatar.jpg',
     'videoUrl': 'media/video/s/test/content/vd1/v1/video.mp4',
     'thumbnailUrl': 'media/image/s/test/content/vd1/v1/thumb.jpg',
     'width': 1080,
@@ -55,11 +71,12 @@ void main() {
   };
 
   const Map<String, dynamic> minArticle = {
-    'id': 'art1',
-    'type': 'article',
+    'postId': 'art1',
+    'contentType': 'article',
+    'contentIdentity': 'work',
     'authorId': 'writer1',
-    'displayName': '技术作者',
-    'avatarUrl': 'media/avatar/s/test/content/art1/v1/avatar.jpg',
+    'authorDisplayName': '技术作者',
+    'authorAvatarUrl': 'media/avatar/s/test/content/art1/v1/avatar.jpg',
     'title': '2026年技术趋势',
     'body': '这是文章内容，包含多段落...',
     'coverUrl': 'media/image/s/test/content/art1/v1/cover.jpg',
@@ -70,7 +87,10 @@ void main() {
   };
 
   ContentSurfaceView surfaceOf(Map<String, dynamic> raw) {
-    return ContentSurfaceViewMapper.fromDto(contentPostViewDataFromReadModelMap(raw), wire: raw);
+    return ContentSurfaceViewMapper.fromDto(
+      ContentPostViewData.fromWire(contentPostProjectionFromReadModelMap(raw)),
+      wire: raw,
+    );
   }
 
   String resolvedAvatar(String raw) => resolveAvatarImageUrl(raw);
@@ -145,11 +165,11 @@ void main() {
 
     test('拒绝 likesCount/commentsCount/savesCount alias，只认 canonical 计数', () {
       final raw = <String, dynamic>{
-        'id': 'alias1',
-        'type': 'image',
+        'postId': 'alias1',
+        'contentType': 'image',
         'authorId': 'a',
-        'displayName': 'A',
-        'avatarUrl': '',
+        'authorDisplayName': 'A',
+        'authorAvatarUrl': '',
         'coverUrl': '',
         'likesCount': 200,
         'commentsCount': 10,
@@ -163,11 +183,11 @@ void main() {
 
     test('计数字段缺失时默认为 0，不抛异常', () {
       final raw = <String, dynamic>{
-        'id': 'no_counts',
-        'type': 'image',
+        'postId': 'no_counts',
+        'contentType': 'image',
         'authorId': 'a',
-        'displayName': 'A',
-        'avatarUrl': '',
+        'authorDisplayName': 'A',
+        'authorAvatarUrl': '',
         'coverUrl': '',
         'publishedAt': '2025-01-01T00:00:00Z',
       };
@@ -238,13 +258,13 @@ void main() {
 
   group('ContentSurfaceViewMapper.fromDto 异常边界', () {
     test('空 map 缺少 contentType 时显式拒绝', () {
-      expect(() => surfaceOf(const {}), throwsArgumentError);
+      expect(() => surfaceOf(const {}), throwsFormatException);
     });
 
     test('仅含无效字段时显式拒绝', () {
       expect(
         () => surfaceOf(<String, dynamic>{'unknown': 'value'}),
-        throwsArgumentError,
+        throwsFormatException,
       );
     });
   });
@@ -456,7 +476,7 @@ void main() {
         ..['articleAssetManifest'] = <String, dynamic>{
           'schema': 'article-asset-manifest',
           'markdownDialect': 'qwq-rich-md',
-          'articleMarkdownDigest': 'sha256:test',
+          'articleMarkdownDigest': _sha256Digest(dataArticleMarkdown),
           'assets': <Map<String, dynamic>>[
             {
               'assetId': 'data_asset_chuanxi_emeishan_weekend_cover',
@@ -507,17 +527,17 @@ void main() {
   });
 
   // ──────────────────────────────────────────────────────────────────
-  // MicroPostDto 投影契约
+  // ContentPostProjection micro 投影契约
   // ──────────────────────────────────────────────────────────────────
-  group('MicroPostDto 投影契约', () {
+  group('ContentPostProjection micro 投影契约', () {
     final momentWithImages = <String, dynamic>{
-      'id': 'moment_01',
-      'type': 'micro',
+      'postId': 'moment_01',
+      'contentType': 'micro',
       'authorId': 'u99',
-      'displayName': '小趣',
-      'avatarUrl': 'media/avatar/s/test/content/moment_01/v1/avatar.jpg',
+      'authorDisplayName': '小趣',
+      'authorAvatarUrl': 'media/avatar/s/test/content/moment_01/v1/avatar.jpg',
       'body': '今天天气真好 ☀️',
-      'imageUrls': [
+      'mediaUrls': [
         'media/image/s/test/content/moment_01/v1/img1.jpg',
         'media/image/s/test/content/moment_01/v1/img2.jpg',
       ],
@@ -528,13 +548,13 @@ void main() {
     };
 
     final momentWithVideo = <String, dynamic>{
-      'id': 'moment_02',
-      'type': 'micro',
+      'postId': 'moment_02',
+      'contentType': 'micro',
       'authorId': 'u88',
-      'displayName': '视频君',
-      'avatarUrl': 'media/avatar/s/test/content/moment_02/v1/avatar.jpg',
+      'authorDisplayName': '视频君',
+      'authorAvatarUrl': 'media/avatar/s/test/content/moment_02/v1/avatar.jpg',
       'body': '短视频时刻',
-      'imageUrls': <String>[],
+      'mediaUrls': <String>[],
       'videoUrl': 'media/video/s/test/content/moment_02/v1/moment_video.mp4',
       'durationMs': 8000,
       'likeCount': 12,
@@ -543,16 +563,16 @@ void main() {
       'publishedAt': '2025-06-01T11:00:00Z',
     };
 
-    test('micro type dispatches to MicroPostDto', () {
+    test('micro type 由 canonical ContentPostProjection 承载', () {
       expect(
-        contentPostViewDataFromReadModelMap(momentWithImages),
-        isA<MicroPostDto>(),
-        reason: 'contentType=micro must dispatch to MicroPostDto',
+        contentPostProjectionFromReadModelMap(momentWithImages).contentType,
+        'micro',
+        reason: 'contentType=micro must stay on ContentPostProjection',
       );
       expect(
-        contentPostViewDataFromReadModelMap(momentWithVideo),
-        isA<MicroPostDto>(),
-        reason: 'contentType=micro must dispatch to MicroPostDto',
+        contentPostProjectionFromReadModelMap(momentWithVideo).contentType,
+        'micro',
+        reason: 'video-backed micro must stay on ContentPostProjection',
       );
     });
 
@@ -565,18 +585,22 @@ void main() {
     });
 
     test('moment imageUrls projected correctly', () {
-      final dto = contentPostViewDataFromReadModelMap(momentWithImages) as MicroPostDto;
-      expect(dto.imageUrls, hasLength(2));
-      expect(dto.imageUrls.first, contains('img1.jpg'));
+      final viewData = ContentPostViewData.fromWire(
+        contentPostProjectionFromReadModelMap(momentWithImages),
+      );
+      expect(viewData.mediaImageUrls, hasLength(2));
+      expect(viewData.mediaImageUrls.first, contains('img1.jpg'));
     });
 
     test('moment videoUrl projected correctly', () {
-      final dto = contentPostViewDataFromReadModelMap(momentWithVideo) as MicroPostDto;
+      final viewData = ContentPostViewData.fromWire(
+        contentPostProjectionFromReadModelMap(momentWithVideo),
+      );
       expect(
-        dto.videoUrl,
+        viewData.mediaVideoUrl,
         equals('media/video/s/test/content/moment_02/v1/moment_video.mp4'),
       );
-      expect(dto.durationMs, equals(8000));
+      expect(viewData.durationMs, equals(8000));
     });
 
     test('moment stats projected to ContentSurfaceView', () {
@@ -586,9 +610,11 @@ void main() {
     });
 
     test('moment with no images has empty imageUrls list (not null)', () {
-      final dto = contentPostViewDataFromReadModelMap(momentWithVideo) as MicroPostDto;
+      final viewData = ContentPostViewData.fromWire(
+        contentPostProjectionFromReadModelMap(momentWithVideo),
+      );
       expect(
-        dto.imageUrls,
+        viewData.mediaImageUrls,
         isEmpty,
         reason: 'imageUrls must be an empty list when no images provided',
       );
@@ -603,3 +629,6 @@ void main() {
     });
   });
 }
+
+String _sha256Digest(String payload) =>
+    'sha256:${sha256.convert(utf8.encode(payload))}';

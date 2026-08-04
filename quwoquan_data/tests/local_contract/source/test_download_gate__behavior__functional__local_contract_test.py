@@ -37,6 +37,8 @@ from core.data_issue import (  # noqa: E402
     DataRecoveryAction,
     data_issue,
 )
+from core.control_types import ExecutionStage, StageKind, StageStatus  # noqa: E402
+from core.article_package import sha256_text  # noqa: E402
 from content.source.source_unit import iter_source_units, write_source_unit  # noqa: E402
 from content.source.source_inputs import curated_sources_for_entity  # noqa: E402
 from content.source.gate import (  # noqa: E402
@@ -394,6 +396,7 @@ def test_commercial_article_binding_survives_plan_to_fetch_projection():
     ensure_execution_layout(TASK)
     entity_dir = execution_entity_object_dir(TASK, "地点", "景区", "峨眉山")
     plan_path = entity_dir / "1.download" / "article_source_plan.json"
+    profile_digest = sha256_text("article frontier profile fixture")
     write_json(
         plan_path,
         {
@@ -409,7 +412,7 @@ def test_commercial_article_binding_survives_plan_to_fetch_projection():
                     "imageEvidenceMode": "same_source",
                     "articleCommercialAdmission": "commercial_release",
                     "articleSiteId": "wikivoyage_zh",
-                    "sourceDiscoveryProfileDigest": "sha256:frontier-profile",
+                    "sourceDiscoveryProfileDigest": profile_digest,
                     "candidateGate": {"passed": True, "issues": []},
                 }
             ]
@@ -426,7 +429,7 @@ def test_commercial_article_binding_survives_plan_to_fetch_projection():
     assert sources[0]["publishMediaMode"] == "illustrated"
     assert sources[0]["articleCommercialAdmission"] == "commercial_release"
     assert sources[0]["articleSiteId"] == "wikivoyage_zh"
-    assert sources[0]["sourceDiscoveryProfileDigest"] == "sha256:frontier-profile"
+    assert sources[0]["sourceDiscoveryProfileDigest"] == profile_digest
 
 
 def test_image_collection_source_catalog_accepts_attribution_contract():
@@ -596,7 +599,7 @@ def test_article_capacity_requires_quality_receipts_not_rejects_cache_or_manual_
     }
 
 
-def test_article_source_shortfall_cannot_be_absorbed_as_oversample_discard():
+def test_article_source_shortfall_is_absorbed_when_ready_pool_meets_quota():
     entity = "文章短缺景区"
     fixture = ExecutionFixtureBuilder(
         ARTICLE_TASK,
@@ -617,12 +620,13 @@ def test_article_source_shortfall_cannot_be_absorbed_as_oversample_discard():
         context,
         {"readyTargetCount": 1, "ineligibleTargetCount": 1},
         stage=DataIssueStage.DOWNLOAD_FETCH,
-        stage_enum=object,
-        auto_mode=object,
-        done_status=object,
+        stage_enum=ExecutionStage.DOWNLOAD_FETCH,
+        auto_mode=StageKind.AUTO,
+        done_status=StageStatus.DONE,
     )
 
-    assert absorbed is None
+    assert absorbed is not None
+    assert absorbed.status is StageStatus.DONE
 
 
 def test_gate_download_blocks_missing_homepage_lane_text_unit():

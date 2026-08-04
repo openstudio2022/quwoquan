@@ -7,3 +7,7 @@ const (
 	CircleGroupUpdated  = "CircleGroupUpdated"
 	CircleGroupArchived = "CircleGroupArchived"
 )
+
+// ClientRealtimeWireTypes contains only events explicitly exposed by
+// client_ws_type. Server-only domain events never enter realtime client fanout.
+var ClientRealtimeWireTypes = map[string]string{}

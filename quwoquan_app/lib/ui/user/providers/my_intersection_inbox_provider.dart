@@ -225,7 +225,12 @@ class MyIntersectionListNotifier extends Notifier<MyIntersectionListState> {
         await ref
             .read(intersectionVisitWriterProvider)
             .markIntersectionsVisited(
-              dimension: dimension.isEmpty ? null : dimension,
+              dimension: dimension.isEmpty
+                  ? null
+                  : IntersectionDimension.fromWire(
+                      dimension,
+                      'MyIntersectionInbox.dimension',
+                    ),
             );
         if (!ref.mounted) return;
         ref.read(myIntersectionSummaryProvider.notifier).load();

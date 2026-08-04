@@ -3,6 +3,7 @@ package persistence
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -13,7 +14,8 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
+	assistant "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/model"
+	sessionports "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/ports"
 )
 
 func encodeKeysetCursor(at time.Time, id string) string {
@@ -50,13 +52,17 @@ func clampPageLimit(limit int) int {
 
 type MongoSessionStore struct {
 	sessions *mongo.Collection
+	receipts *mongo.Collection
 }
 
 func NewMongoSessionStore(db *mongo.Database) *MongoSessionStore {
 	if db == nil {
 		panic("assistant session database is required")
 	}
-	return &MongoSessionStore{sessions: db.Collection("assistant_sessions")}
+	return &MongoSessionStore{
+		sessions: db.Collection("assistant_sessions"),
+		receipts: db.Collection("assistant_session_summary_receipts"),
+	}
 }
 
 func (store *MongoSessionStore) EnsureIndexes(ctx context.Context) error {
@@ -77,6 +83,18 @@ func (store *MongoSessionStore) EnsureIndexes(ctx context.Context) error {
 	})
 	if err != nil {
 		return fmt.Errorf("create assistant session indexes: %w", err)
+	}
+	_, err = store.receipts.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys: bson.D{
+			{Key: "sessionId", Value: 1},
+			{Key: "sourceSequence", Value: 1},
+		},
+		Options: options.Index().
+			SetName("uq_session_summary_source_sequence").
+			SetUnique(true),
+	})
+	if err != nil {
+		return fmt.Errorf("create assistant session summary receipt indexes: %w", err)
 	}
 	return nil
 }
@@ -174,42 +192,99 @@ func (store *MongoSessionStore) ListSessions(
 	return items, nextCursor, nil
 }
 
-func (store *MongoSessionStore) CompareAndSwapSessionSummary(
+type sessionSummaryReceiptDocument struct {
+	EventID        string    `bson:"_id"`
+	SessionID      string    `bson:"sessionId"`
+	SummaryID      string    `bson:"summaryId"`
+	SourceSequence int64     `bson:"sourceSequence"`
+	CreatedAt      time.Time `bson:"createdAt"`
+}
+
+func (store *MongoSessionStore) CommitSessionSummary(
 	ctx context.Context,
-	sessionID string,
-	expectedVersion int64,
-	expectedSourceSequence int64,
-	nextSourceSequence int64,
-	summary assistant.AssistantSessionContextSummary,
-	updatedAt time.Time,
-) (bool, error) {
-	result, err := store.sessions.UpdateOne(ctx, bson.M{
-		"_id":                   strings.TrimSpace(sessionID),
-		"summaryVersion":        expectedVersion,
-		"summarySourceSequence": expectedSourceSequence,
-	}, bson.M{
-		"$set": bson.M{
-			"summary":               summary.Text,
-			"contextSummary":        summary,
-			"summarySourceSequence": nextSourceSequence,
-			"summaryVersion":        expectedVersion + 1,
-			"updatedAt":             updatedAt.UTC(),
-		},
+	commit sessionports.SessionSummaryCommit,
+) (sessionports.SessionSummaryCommitResult, error) {
+	if err := validateSessionSummaryCommit(commit); err != nil {
+		return sessionports.SessionSummaryCommitResult{}, err
+	}
+	mongoSession, err := store.sessions.Database().Client().StartSession()
+	if err != nil {
+		return sessionports.SessionSummaryCommitResult{}, fmt.Errorf(
+			"start assistant session summary transaction: %w",
+			err,
+		)
+	}
+	defer mongoSession.EndSession(ctx)
+	result := sessionports.SessionSummaryCommitResult{}
+	_, err = mongoSession.WithTransaction(ctx, func(txCtx context.Context) (any, error) {
+		var receipt sessionSummaryReceiptDocument
+		findErr := store.receipts.FindOne(txCtx, bson.M{
+			"_id": commit.CompletionEventID,
+		}).Decode(&receipt)
+		switch {
+		case findErr == nil:
+			if receipt.SessionID != commit.SessionID {
+				return nil, fmt.Errorf(
+					"assistant session summary completion event conflicts with prior receipt",
+				)
+			}
+			result.Replayed = true
+			return nil, nil
+		case !errors.Is(findErr, mongo.ErrNoDocuments):
+			return nil, findErr
+		}
+		update, updateErr := store.sessions.UpdateOne(txCtx, bson.M{
+			"_id":                   commit.SessionID,
+			"summaryVersion":        commit.ExpectedVersion,
+			"summarySourceSequence": commit.ExpectedSourceSequence,
+		}, bson.M{
+			"$set": bson.M{
+				"summary":               commit.Summary.Text,
+				"contextSummary":        commit.Summary,
+				"summarySourceSequence": commit.NextSourceSequence,
+				"summaryVersion":        commit.ExpectedVersion + 1,
+				"updatedAt":             commit.UpdatedAt.UTC(),
+			},
+			"$inc": bson.M{"completionSequence": 1},
+		})
+		if updateErr != nil {
+			return nil, updateErr
+		}
+		if update.MatchedCount != 1 {
+			result.Conflict = true
+			return nil, nil
+		}
+		_, insertErr := store.receipts.InsertOne(txCtx, sessionSummaryReceiptDocument{
+			EventID:        commit.CompletionEventID,
+			SessionID:      commit.SessionID,
+			SummaryID:      commit.Summary.SummaryID,
+			SourceSequence: commit.NextSourceSequence,
+			CreatedAt:      commit.UpdatedAt.UTC(),
+		})
+		if insertErr != nil {
+			return nil, insertErr
+		}
+		result.Applied = true
+		return nil, nil
 	})
 	if err != nil {
-		return false, err
+		return sessionports.SessionSummaryCommitResult{}, err
 	}
-	return result.MatchedCount == 1, nil
+	return result, nil
 }
 
 // MemorySessionStore is a local-contract double; production wiring rejects it.
 type MemorySessionStore struct {
 	mu       sync.RWMutex
 	sessions map[string]assistant.AssistantSession
+	receipts map[string]sessionSummaryReceiptDocument
 }
 
 func NewMemorySessionStore() *MemorySessionStore {
-	return &MemorySessionStore{sessions: map[string]assistant.AssistantSession{}}
+	return &MemorySessionStore{
+		sessions: map[string]assistant.AssistantSession{},
+		receipts: map[string]sessionSummaryReceiptDocument{},
+	}
 }
 
 func (store *MemorySessionStore) InsertSession(
@@ -294,27 +369,56 @@ func (store *MemorySessionStore) ListSessions(
 	return items, nextCursor, nil
 }
 
-func (store *MemorySessionStore) CompareAndSwapSessionSummary(
+func (store *MemorySessionStore) CommitSessionSummary(
 	_ context.Context,
-	sessionID string,
-	expectedVersion int64,
-	expectedSourceSequence int64,
-	nextSourceSequence int64,
-	summary assistant.AssistantSessionContextSummary,
-	updatedAt time.Time,
-) (bool, error) {
+	commit sessionports.SessionSummaryCommit,
+) (sessionports.SessionSummaryCommitResult, error) {
+	if err := validateSessionSummaryCommit(commit); err != nil {
+		return sessionports.SessionSummaryCommitResult{}, err
+	}
 	store.mu.Lock()
 	defer store.mu.Unlock()
-	session, ok := store.sessions[strings.TrimSpace(sessionID)]
-	if !ok || session.SummaryVersion != expectedVersion ||
-		session.SummarySourceSequence != expectedSourceSequence {
-		return false, nil
+	if receipt, ok := store.receipts[commit.CompletionEventID]; ok {
+		if receipt.SessionID != commit.SessionID {
+			return sessionports.SessionSummaryCommitResult{}, fmt.Errorf(
+				"assistant session summary completion event conflicts with prior receipt",
+			)
+		}
+		return sessionports.SessionSummaryCommitResult{Replayed: true}, nil
 	}
-	session.Summary = summary.Text
-	session.ContextSummary = &summary
-	session.SummarySourceSequence = nextSourceSequence
-	session.SummaryVersion = expectedVersion + 1
-	session.UpdatedAt = updatedAt.UTC()
+	session, ok := store.sessions[commit.SessionID]
+	if !ok || session.SummaryVersion != commit.ExpectedVersion ||
+		session.SummarySourceSequence != commit.ExpectedSourceSequence {
+		return sessionports.SessionSummaryCommitResult{Conflict: true}, nil
+	}
+	session.Summary = commit.Summary.Text
+	session.ContextSummary = &commit.Summary
+	session.SummarySourceSequence = commit.NextSourceSequence
+	session.SummaryVersion = commit.ExpectedVersion + 1
+	session.CompletionSequence++
+	session.UpdatedAt = commit.UpdatedAt.UTC()
 	store.sessions[session.SessionID] = session
-	return true, nil
+	store.receipts[commit.CompletionEventID] = sessionSummaryReceiptDocument{
+		EventID:        commit.CompletionEventID,
+		SessionID:      commit.SessionID,
+		SummaryID:      commit.Summary.SummaryID,
+		SourceSequence: commit.NextSourceSequence,
+		CreatedAt:      commit.UpdatedAt.UTC(),
+	}
+	return sessionports.SessionSummaryCommitResult{Applied: true}, nil
+}
+
+func validateSessionSummaryCommit(commit sessionports.SessionSummaryCommit) error {
+	if strings.TrimSpace(commit.CompletionEventID) == "" ||
+		strings.TrimSpace(commit.SessionID) == "" ||
+		commit.ExpectedVersion < 0 || commit.ExpectedSourceSequence < 0 ||
+		commit.NextSourceSequence <= commit.ExpectedSourceSequence ||
+		strings.TrimSpace(commit.Summary.SummaryID) == "" ||
+		strings.TrimSpace(commit.Summary.Text) == "" ||
+		strings.TrimSpace(commit.Summary.FromTurnID) == "" ||
+		strings.TrimSpace(commit.Summary.ToTurnID) == "" ||
+		commit.Summary.TurnCount <= 0 || commit.UpdatedAt.IsZero() {
+		return fmt.Errorf("assistant session summary commit is invalid")
+	}
+	return nil
 }

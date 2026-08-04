@@ -75,7 +75,9 @@ void main() {
         catalog.presets
             .singleWhere((preset) => preset.presetId == 'original')
             .adjustments
-            .isIdentity,
+            .toWire()
+            .values
+            .every((value) => value == 0),
         isTrue,
       );
       final presetIds = catalog.presets

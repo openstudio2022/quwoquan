@@ -234,11 +234,15 @@ class _CircleMembershipApprovalPageState
     if (semantic != null) {
       return AppPageErrorState(
         semantic: ensureRetryUiErrorSemantic(semantic),
-        onAction: (action) async {
+        onRecovery: (action) async {
           if (action.type == UiErrorActionType.retry ||
               action.type == UiErrorActionType.resubmit) {
             await _loadPending(reset: true);
+            return _pageErrorSemantic == null
+                ? UiRecoveryOutcome.recovered
+                : UiRecoveryOutcome.stillBlocked;
           }
+          return UiRecoveryOutcome.cancelled;
         },
       );
     }

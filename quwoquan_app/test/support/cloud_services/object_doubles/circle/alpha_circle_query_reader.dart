@@ -6,7 +6,7 @@ import 'alpha_post_placement_writer.dart';
 /// Alpha/test only Circle query adapter.
 ///
 /// It replays immutable alpha fixtures into pure contracts. It deliberately
-/// has no dependency on App DTOs, Remote adapters, or legacy repositories.
+/// has no dependency on App DTOs, Remote adapters, or retired repositories.
 final class AlphaCircleQueryReader
     implements CircleQueryReader, CircleDiscoveryFeedQueryReader {
   AlphaCircleQueryReader({
@@ -28,47 +28,48 @@ final class AlphaCircleQueryReader
   }
 
   @override
-  Future<CircleSearchResultSlice> search(CircleSearchQuery query) async {
+  Future<CircleSearchResultView> search(CircleSearchQuery query) async {
     final normalized = query.query.trim().toLowerCase();
     final items = _circles.where((circle) {
       final matchesText =
           normalized.isEmpty ||
           circle.name.toLowerCase().contains(normalized) ||
           (circle.description?.toLowerCase().contains(normalized) ?? false) ||
-          circle.tags.any((tag) => tag.toLowerCase().contains(normalized));
+          (circle.tags ?? const <String>[]).any(
+            (tag) => tag.toLowerCase().contains(normalized),
+          );
       return matchesText &&
           _matchesOptional(circle.category, query.categoryId) &&
           _matchesOptional(circle.subCategory, query.subCategory);
     });
     final page = _pageCircles(items, cursor: query.cursor, limit: query.limit);
-    return CircleSearchResultSlice(
+    return CircleSearchResultView(
       items: page.items
           .map(
-            (circle) => CircleSearchItemProjection(
-              circleId: circle.circleId,
+            (circle) => CircleSearchItemView(
+              circleId: circle.id,
               name: circle.name,
               description: circle.description,
               coverUrl: circle.coverUrl,
               categoryId: circle.category,
               subCategory: circle.subCategory,
               domainId: circle.domainId,
-              kind: circle.kind.wireValue,
-              displaySubjectType: circle.displaySubjectType.wireValue,
+              kind: circle.kind,
+              displaySubjectType: circle.displaySubjectType,
               memberCount: circle.memberCount,
               postCount: circle.postCount,
               highlightText: normalized.isEmpty ? null : circle.name,
               matchedField: normalized.isEmpty ? null : 'name',
-              circleName: circle.name,
             ),
           )
           .toList(growable: false),
-      facetBuckets: const <CircleFacetBucketProjection>[],
-      nextCursor: page.nextCursor,
+      facetBuckets: const <CircleFacetBucketView>[],
+      cursor: page.cursor,
     );
   }
 
   @override
-  Future<CircleProjection> get(CircleDetailQuery query) async {
+  Future<Circle> get(CircleDetailQuery query) async {
     final circle = _circleById(query.circleId);
     if (circle == null) {
       throw StateError('alpha circle fixture is missing: ${query.circleId}');
@@ -83,14 +84,14 @@ final class AlphaCircleQueryReader
   }
 
   @override
-  Future<CircleStatsSlice> stats(CircleStatsQuery query) async {
+  Future<CircleStatsWire> stats(CircleStatsQuery query) async {
     final raw = _statsByCircleId[query.circleId];
     if (raw == null) {
       throw StateError(
         'alpha circle stats fixture is missing: ${query.circleId}',
       );
     }
-    return CircleStatsSlice(
+    return CircleStatsWire(
       circleId: _text(raw['circleId']),
       memberCount: _integer(raw['memberCount']),
       postCount: _integer(raw['postCount']),
@@ -103,16 +104,16 @@ final class AlphaCircleQueryReader
   }
 
   @override
-  Future<CircleImpactSlice> impact(CircleImpactQuery query) async {
+  Future<CircleImpactSummary> impact(CircleImpactQuery query) async {
     final raw = _impactsByCircleId[query.circleId];
     if (raw == null) {
-      return CircleImpactSlice(
+      return CircleImpactSummary(
         circleId: query.circleId,
         total: 0,
-        items: const <CircleImpactItemProjection>[],
+        items: const <CircleImpactItem>[],
       );
     }
-    return decodeCircleImpactSlice(raw);
+    return decodeCircleImpactSummary(raw);
   }
 
   @override
@@ -127,21 +128,21 @@ final class AlphaCircleQueryReader
         sort: query.sort,
       ),
     )).items;
-    final items = <CircleFeedPostProjection>[];
+    final items = <CircleFeedItemView>[];
     for (final circle in circles) {
       if (items.length >= query.limit) break;
       items.addAll(
-        _feedItemsForCircle(circle.circleId).take(query.limit - items.length),
+        _feedItemsForCircle(circle.id).take(query.limit - items.length),
       );
     }
     return CircleDiscoveryFeedPageSlice(
       circles: circles,
       items: items,
-      nextCursor: circles.length == query.limit ? circles.last.circleId : null,
+      cursor: circles.length == query.limit ? circles.last.id : null,
     );
   }
 
-  List<CircleProjection> get _circles {
+  List<Circle> get _circles {
     final raw = _list(
       _fixtures.requireSeedSet('circle', 'circle_core')['circles'],
     );
@@ -173,7 +174,7 @@ final class AlphaCircleQueryReader
     };
   }
 
-  List<CircleFeedPostProjection> _feedItemsForCircle(
+  List<CircleFeedItemView> _feedItemsForCircle(
     String circleId, {
     String? type,
   }) {
@@ -191,45 +192,45 @@ final class AlphaCircleQueryReader
           final postId = _text(placement['postId']);
           final post = _postsById[postId];
           if (post == null) return null;
-          final projection = _postProjection(post);
+          final contentType = _textOr(post['contentType'], 'image');
           if (normalizedType != null &&
               normalizedType.isNotEmpty &&
-              projection.contentType != normalizedType) {
+              contentType != normalizedType) {
             return null;
           }
           final placementId = 'alpha-placement-$circleId-$postId';
           final presentation = _placements.presentation(placementId);
           if (presentation.removed) return null;
-          return CircleFeedPostProjection(
+          return _feedItem(
             circleId: circleId,
             placementId: placementId,
-            post: projection,
+            raw: post,
             pinned: presentation.pinned,
             featured: presentation.featured,
           );
         })
-        .whereType<CircleFeedPostProjection>()
+        .whereType<CircleFeedItemView>()
         .toList(growable: false);
   }
 
   CirclePageSlice _pageCircles(
-    Iterable<CircleProjection> values, {
+    Iterable<Circle> values, {
     required String? cursor,
     required int limit,
   }) {
     final all = values.toList(growable: false);
-    final start = _cursorIndex(all.map((item) => item.circleId), cursor);
+    final start = _cursorIndex(all.map((item) => item.id), cursor);
     final items = all.skip(start).take(limit).toList(growable: false);
     return CirclePageSlice(
       items: items,
-      nextCursor: start + items.length < all.length && items.isNotEmpty
-          ? items.last.circleId
+      cursor: start + items.length < all.length && items.isNotEmpty
+          ? items.last.id
           : null,
     );
   }
 
   CircleFeedPageSlice _pageFeed(
-    List<CircleFeedPostProjection> values, {
+    List<CircleFeedItemView> values, {
     required String? cursor,
     required int limit,
   }) {
@@ -237,71 +238,99 @@ final class AlphaCircleQueryReader
     final items = values.skip(start).take(limit).toList(growable: false);
     return CircleFeedPageSlice(
       items: items,
-      nextCursor: start + items.length < values.length && items.isNotEmpty
+      cursor: start + items.length < values.length && items.isNotEmpty
           ? items.last.placementId
           : null,
     );
   }
 
-  CircleProjection? _circleById(String circleId) {
+  Circle? _circleById(String circleId) {
     for (final circle in _circles) {
-      if (circle.circleId == circleId) return circle;
+      if (circle.id == circleId) return circle;
     }
     return null;
   }
 }
 
-CircleProjection _circleProjection(Map<Object?, Object?> raw) {
-  return CircleProjection(
-    circleId: _text(raw['id']),
+Circle _circleProjection(Map<Object?, Object?> raw) {
+  return Circle(
+    id: _text(raw['id']),
     name: _text(raw['name']),
     description: _optionalText(raw['description']),
     coverUrl: _optionalText(raw['coverUrl']),
     iconUrl: _optionalText(raw['avatarUrl']),
     ownerId: _text(raw['ownerId']),
+    ownerDisplayNameSnapshot: _optionalText(raw['ownerDisplayNameSnapshot']),
     category: _optionalText(raw['categoryId']),
+    subCategory: _optionalText(raw['subCategory']),
     tags: _stringList(raw['tags']),
     memberCount: _integer(raw['memberCount']),
     postCount: _integer(raw['postCount']),
     weeklyActiveCount: _integer(raw['weeklyActiveCount']),
-    status: CircleStatus.fromWire(raw['status'] ?? 'active'),
-    visibility: CircleVisibility.fromWire(raw['visibility'] ?? 'public'),
-    joinPolicy: CircleJoinPolicy.fromWire(raw['joinPolicy'] ?? 'open'),
+    version: _integer(raw['version']) == 0 ? 1 : _integer(raw['version']),
+    status: CircleStatus.fromWire(raw['status'] ?? 'active', 'Circle.status'),
+    visibility: CircleVisibility.fromWire(
+      raw['visibility'] ?? 'public',
+      'Circle.visibility',
+    ),
+    joinPolicy: CircleJoinPolicy.fromWire(
+      raw['joinPolicy'] ?? 'open',
+      'Circle.joinPolicy',
+    ),
     // `circleType` 是 flagship/niche 等场景展示原型，不是 canonical CircleKind；
     // 只有 canonical `kind` 可以进入强类型边界。
-    kind: CircleKind.fromWire(raw['kind'] ?? 'interest'),
+    kind: CircleKind.fromWire(raw['kind'] ?? 'interest', 'Circle.kind'),
     displaySubjectType: CircleDisplaySubjectType.fromWire(
       raw['displaySubjectType'] ?? 'circle',
+      'Circle.displaySubjectType',
     ),
+    followEnabled: _boolean(raw['followEnabled'], fallback: true),
     defaultPublicGroupId: _optionalText(raw['defaultPublicGroupId']),
-    conversationId: _optionalText(raw['conversationId']),
     autoSyncChat: _boolean(raw['autoSyncChat'], fallback: true),
+    storageUsedBytes: _integer(raw['storageUsedBytes']),
+    storageQuotaBytes: _integer(raw['storageQuotaBytes']),
     domainId: _optionalText(raw['domainId']),
-    subCategory: _optionalText(raw['subCategory']),
-    viewerRole: _optionalText(raw['role']),
-    joinStatus: _optionalText(raw['joinStatus']),
-    isFollowed: raw['isFollowed'] is bool ? raw['isFollowed'] as bool : null,
-    createdAt: _date(raw['createdAt']),
-    updatedAt: _date(raw['updatedAt']),
+    linkedHomepageId: _optionalText(raw['linkedHomepageId']),
+    linkedHomepageType: _optionalText(raw['linkedHomepageType']) == null
+        ? null
+        : HomepageType.fromWire(
+            raw['linkedHomepageType'],
+            'Circle.linkedHomepageType',
+          ),
+    linkedHomepageTitle: _optionalText(raw['linkedHomepageTitle']),
+    createdAt: _date(raw['createdAt']) ?? _epoch,
+    updatedAt: _date(raw['updatedAt']) ?? _epoch,
   );
 }
 
-ContentPostProjection _postProjection(Map<Object?, Object?> raw) {
+CircleFeedItemView _feedItem({
+  required String circleId,
+  required String placementId,
+  required Map<Object?, Object?> raw,
+  required bool pinned,
+  required bool featured,
+}) {
   final contentType = _textOr(raw['contentType'], 'image');
   final mediaUrls = _stringList(raw['mediaUrls']);
-  return ContentPostProjection(
+  return CircleFeedItemView(
+    circleId: circleId,
+    placementId: placementId,
     postId: _text(raw['postId']),
     contentType: contentType,
     contentIdentity: _optionalText(raw['contentIdentity']),
+    assistantUsePolicy: _optionalText(raw['assistantUsePolicy']),
     authorId: _optionalText(raw['authorId']),
     authorDisplayName: _optionalText(raw['authorDisplayName']),
     authorAvatarUrl: _optionalText(raw['authorAvatarUrl']),
     authorBackgroundUrl: _optionalText(raw['authorBackgroundUrl']),
+    authorRoleLabel: _optionalText(raw['authorRoleLabel']),
+    authorIdentityTags: _stringList(raw['authorIdentityTags']),
+    authorVerified: _boolean(raw['authorVerified'], fallback: false),
     title: _optionalText(raw['title']),
     body: _optionalText(raw['body']),
     summary: _optionalText(raw['summary']),
     coverUrl: _optionalText(raw['coverUrl']),
-    mediaUrls: mediaUrls,
+    imageUrls: mediaUrls,
     videoUrl: _optionalText(raw['videoUrl']),
     thumbnailUrl: _optionalText(raw['thumbnailUrl']),
     width: _integerOrNull(raw['width']),
@@ -313,8 +342,15 @@ ContentPostProjection _postProjection(Map<Object?, Object?> raw) {
     createdAt: _date(raw['createdAt']),
     updatedAt: _date(raw['updatedAt']),
     publishedAt: _date(raw['publishedAt']),
+    contentVertical: _optionalText(raw['contentVertical']),
+    recallPath: _optionalText(raw['recallPath']),
+    supplySource: _optionalText(raw['supplySource']),
+    pinned: pinned,
+    featured: featured,
   );
 }
+
+final DateTime _epoch = DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
 
 List<Map<Object?, Object?>> _list(Object? value) {
   if (value is! List) return const <Map<Object?, Object?>>[];

@@ -21,7 +21,7 @@ import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/core/widgets/content_report_reason_sheet.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
-import 'package:quwoquan_app/ui/content/comments/models/comment_view_data.dart';
+import 'package:quwoquan_app/ui/content/models/comment_view_data.dart';
 import 'package:quwoquan_app/ui/content/comments/providers/comment_provider.dart';
 
 part 'comment_thread_rows.dart';

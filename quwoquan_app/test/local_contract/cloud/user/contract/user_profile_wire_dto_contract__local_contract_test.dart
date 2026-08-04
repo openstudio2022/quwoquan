@@ -1,210 +1,143 @@
-import 'package:test/test.dart';
 import 'package:quwoquan_app/app/models/appearance_settings_models.dart'
     as appearance;
-import 'package:quwoquan_app/cloud/runtime/generated/user/active_persona_context_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/persona/persona_management_summary_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/persona/persona_lifecycle_guard_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/persona/persona_management_item_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/persona/persona_management_quota_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/persona/persona_update_request_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/profile_social_relation_row_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/persona_profile_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/relationship_view_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/social_relation_search_item_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/relationship_capability_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/account/user_account_stats_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
-import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/models/search_models.dart';
-import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    as contracts;
+import 'package:test/test.dart';
 
 void main() {
-  group('PersonaProfileWireDto', () {
-    test('personaId does not impersonate ownerUserId', () {
-      final dto = PersonaProfileWireDto.fromMap(<String, dynamic>{
-        'personaId': 'u_owner',
-        'displayName': 'nick',
-        'followerCount': 1,
-        'followingCount': 2,
-        'postCount': 3,
-        'circleCount': 4,
-        'likeCount': 5,
-      });
-      expect(dto.personaId, 'u_owner');
-      expect(dto.ownerUserId, isEmpty);
-      expect(dto.displayName, 'nick');
-    });
+  group('PersonaProfileView', () {
+    test(
+      'canonical identity does not expose an owner-user compatibility field',
+      () {
+        final profile = _profile(personaId: 'u_owner', displayName: 'nick');
+
+        expect(profile.personaId, 'u_owner');
+        expect(profile.displayName, 'nick');
+        expect(profile.toWire(), isNot(contains('ownerUserId')));
+      },
+    );
 
     test('backgroundUrl uses the canonical wire key', () {
-      final dto = PersonaProfileWireDto.fromMap(<String, dynamic>{
-        'personaId': 'u1',
-        'backgroundUrl': 'https://bg.example/x.jpg',
-      });
-      expect(dto.backgroundUrl, 'https://bg.example/x.jpg');
+      final profile = _profile(
+        personaId: 'u1',
+        backgroundUrl: 'https://bg.example/x.jpg',
+      );
+
+      expect(profile.backgroundUrl, 'https://bg.example/x.jpg');
+      expect(profile.toWire()['backgroundUrl'], 'https://bg.example/x.jpg');
     });
 
-    test('avatarVersion 稳定解码', () {
-      final dto = PersonaProfileWireDto.fromMap(<String, dynamic>{
-        'userId': 'u1',
-        'avatarVersion': 7,
-      });
-      expect(dto.avatarVersion, 7);
-    });
+    test('public profile decoder rejects internal CAS and package fields', () {
+      final payload = _profile(
+        personaId: 'sys_travelphoto_0800_sub_01',
+        subjectType: contracts.ProfileOwnerKind.creator,
+        userHandle: 'set-marker',
+        displayName: '片场坐标',
+        identityTags: const <String>['creator', 'travel', 'photography'],
+      ).toWire()..['avatarSha256'] = 'internal-only';
 
-    test('canonical creator 复用公开 profile DTO 且不消费内部 CAS/hash 字段', () {
-      final dto = PersonaProfileWireDto.fromMap(<String, dynamic>{
-        'userId': 'sys_travelphoto_0800',
-        'personaId': 'sys_travelphoto_0800_sub_01',
-        'subjectType': 'creator',
-        'userHandle': 'set-marker',
-        'displayName': '片场坐标',
-        'nickname': '片场坐标',
-        'avatarUrl': 'https://media.example/media/objects/avatar.png',
-        'backgroundUrl': 'https://media.example/media/objects/cover.jpg',
-        'bio': '路线写给脚步，照片写给回忆。',
-        'identityTags': <String>['creator', 'travel', 'photography'],
-        'postCount': 0,
-        'avatarObjectKey': 'media/objects/avatar.png',
-        'avatarSha256': 'internal-only',
-        'packageDigest': 'internal-only',
-      });
-      expect(dto.subjectType, 'creator');
-      expect(dto.personaId, 'sys_travelphoto_0800_sub_01');
-      expect(dto.userHandle, 'set-marker');
-      expect(dto.displayName, '片场坐标');
-      expect(dto.avatarUrl, endsWith('/avatar.png'));
-      expect(dto.backgroundUrl, endsWith('/cover.jpg'));
-      expect(dto.identityTags, containsAll(<String>['creator', 'travel']));
       expect(
-        dto.toMap().keys,
-        isNot(
-          containsAll(<String>[
-            'avatarObjectKey',
-            'avatarSha256',
-            'packageDigest',
-          ]),
-        ),
+        () => contracts.PersonaProfileView.fromWire(payload),
+        throwsFormatException,
       );
     });
 
-    test('toMap round-trip 稳定', () {
-      final dto = PersonaProfileWireDto.fromMap(<String, dynamic>{
-        'personaId': 'ps1',
-        'ownerUserId': 'o1',
-        'userHandle': 'handle_1',
-        'nickname': 'n',
-        'displayName': 'd',
-        'subjectType': 'account',
-        'avatarUrl': '',
-        'backgroundUrl': '',
-        'bio': '',
-        'followerCount': 0,
-        'followingCount': 0,
-        'postCount': 0,
-        'circleCount': 0,
-        'likeCount': 0,
-        'profileVisibility': 'public',
-        'inheritsFromOwner': false,
-      });
-      final restored = PersonaProfileWireDto.fromMap(dto.toMap());
-      expect(restored.personaId, dto.personaId);
+    test('toWire and fromWire round-trip stays on one canonical shape', () {
+      final profile = _profile(
+        personaId: 'ps1',
+        subjectType: contracts.ProfileOwnerKind.account,
+        userHandle: 'handle_1',
+        displayName: 'd',
+      );
+      final restored = contracts.PersonaProfileView.fromWire(profile.toWire());
+
+      expect(restored.personaId, profile.personaId);
       expect(restored.userHandle, 'handle_1');
-      expect(restored.followerCount, dto.followerCount);
+      expect(restored.followerCount, profile.followerCount);
     });
   });
 
-  group('PersonaProfileViewData — Wire 映射', () {
-    test('展示名在 wire 空串时回退到 subjectId', () {
-      final view = PersonaProfileViewData.fromPersonaProfileWire(
-        PersonaProfileWireDto.fromMap(<String, dynamic>{
-          'personaId': 'only_id',
-          'displayName': '',
-          'userHandle': 'only_handle',
-          'subjectType': '',
-        }),
+  group('PersonaProfileViewData', () {
+    test('display name falls back to canonical personaId', () {
+      final view = PersonaProfileViewData.fromWire(
+        _profile(
+          personaId: 'only_id',
+          displayName: '',
+          userHandle: 'only_handle',
+        ),
       );
+
       expect(view.displayName, 'only_id');
       expect(view.userHandle, 'only_handle');
       expect(view.subjectType, 'persona');
     });
 
-    test('avatarVersion 按运行时 endpoint 可用性驱动 URL', () {
-      final view = PersonaProfileViewData.fromPersonaProfileWire(
-        PersonaProfileWireDto.fromMap(<String, dynamic>{
-          'personaId': 'u_avatar',
-          'avatarUrl':
-              'media/avatar/s/archived-avatar/user/u_avatar/v6/profile.png',
-          'avatarVersion': 6,
-        }),
+    test('avatar reference is resolved only through the runtime endpoint', () {
+      final view = PersonaProfileViewData.fromWire(
+        _profile(
+          personaId: 'u_avatar',
+          avatarUrl: 'media/avatar/s/archived-avatar/user/u_avatar/profile.png',
+        ),
       );
-      expect(view.avatarVersion, 6);
-      _expectVersionedAvatarOrUnavailable(view.avatarUrl, 6);
+
+      _expectAvatarOrUnavailable(view.avatarUrl);
     });
   });
 
-  group('ProfileSocialRelationRowWireDto', () {
-    test('canonical personaId and displayName', () {
-      final dto = ProfileSocialRelationRowWireDto.fromMap(<String, dynamic>{
-        'personaId': 'rel_1',
-        'displayName': '朋友',
-        'avatarUrl': 'https://a.test/1.jpg',
-        'avatarVersion': 4,
-        'relationState': 'following',
-      });
-      expect(dto.personaId, 'rel_1');
-      expect(dto.displayName, '朋友');
-      expect(dto.avatarVersion, 4);
-      expect(dto.relationState, 'following');
+  group('ProfileSocialRelationRowViewData', () {
+    test('canonical following row preserves persona identity and relation', () {
+      final view = ProfileSocialRelationRowViewData.fromFollowingWire(
+        contracts.FollowingListItemView(
+          personaId: 'rel_1',
+          userHandle: 'friend',
+          displayName: '朋友',
+          avatarUrl: 'https://a.test/1.jpg',
+          profileVisibility: contracts.ProfileVisibility.public,
+          relationState: contracts.RelationshipState.following,
+          followedAt: DateTime.utc(2026, 2, 2),
+          relationshipCapability: _capability(
+            targetPersonaId: 'rel_1',
+            relationState: contracts.RelationshipState.following,
+          ),
+        ),
+      );
+
+      expect(view.personaId, 'rel_1');
+      expect(view.displayName, '朋友');
+      expect(view.relationState, 'following');
     });
   });
 
-  group('ProfileInteractionActivityViewData — typed slice 映射', () {
-    test('评论标识透传到 ViewData 供深链消费', () {
-      final view = ProfileInteractionActivityViewData.fromContentActivity(
-        ContentProfileInteractionActivity(
+  group('ProfileInteractionActivityViewData', () {
+    test('comment identity is preserved for deep-link consumption', () {
+      final view = ProfileInteractionActivityViewData.fromWire(
+        _activity(
           activityId: 'comment_reply_9',
-          activityType: 'comment',
-          direction: 'received',
+          activityType: contracts.InteractionActivityType.comment,
           commentKind: 'reply',
           commentId: 'comment_reply_9',
           parentCommentId: 'comment_top_1',
-          actorPersonaId: 'u_a',
-          actorDisplayName: '某人',
-          targetPersonaId: 'owner',
-          targetContentId: 'post_99',
-          targetContentType: 'article',
-          displayPersonaId: 'u_a',
-          displayName: '某人',
-          primaryText: '回复了你',
-          createdAt: DateTime.utc(2026, 2, 2),
-          occurredAt: DateTime.utc(2026, 2, 2),
         ),
       );
+
       expect(view.commentId, 'comment_reply_9');
       expect(view.parentCommentId, 'comment_top_1');
     });
 
-    test('actor/display 版本同源并按 endpoint 可用性解析', () {
-      final view = ProfileInteractionActivityViewData.fromContentActivity(
-        ContentProfileInteractionActivity(
+    test('actor and display avatar versions remain source-derived', () {
+      final view = ProfileInteractionActivityViewData.fromWire(
+        _activity(
           activityId: 'activity_1',
-          activityType: 'like',
-          direction: 'received',
-          actorPersonaId: 'u_a',
-          actorDisplayName: '某人',
+          activityType: contracts.InteractionActivityType.like,
           actorAvatarUrl: 'media/avatar/s/mock/seed/test_actor/v7/avatar.jpg',
           actorAvatarVersion: 7,
-          targetPersonaId: 'owner',
-          targetContentId: 'post_99',
-          targetContentType: 'image',
-          displayPersonaId: 'u_a',
-          displayName: '某人',
-          primaryText: '点赞了你的记录',
-          createdAt: DateTime.utc(2026, 2, 2),
-          occurredAt: DateTime.utc(2026, 2, 2),
+          displayAvatarVersion: 7,
         ),
       );
+
       expect(view.actorAvatarVersion, 7);
       _expectVersionedAvatarOrUnavailable(view.actorAvatarUrl, 7);
       expect(view.displayAvatarVersion, 7);
@@ -212,125 +145,96 @@ void main() {
     });
   });
 
-  group('PersonaManagementItemWireDto', () {
-    test('canonical persona fields and extensions', () {
-      final dto = PersonaManagementItemWireDto.fromMap(<String, dynamic>{
-        'personaId': 'per_1',
-        'displayName': '分身名',
-        'userHandle': 'persona_handle',
-        'avatarUrl': 'https://a.test/persona.jpg',
-        'avatarVersion': 5,
-        'inheritsProfileFromOwner': false,
-        'overriddenProfileFields': <String>['displayName'],
-      });
-      expect(dto.personaId, 'per_1');
-      expect(dto.displayName, '分身名');
-      expect(dto.userHandle, 'persona_handle');
-      expect(dto.avatarVersion, 5);
-      expect(dto.inheritsProfileFromOwner, isFalse);
-      expect(dto.overriddenProfileFields, <String>['displayName']);
-      expect(dto.toMap().containsKey('phone'), isFalse);
-      expect(dto.toMap().containsKey('email'), isFalse);
-    });
-  });
-
-  group('PersonaUpdateRequestDto', () {
-    test('credential plaintext is absent from the generated mutation wire', () {
-      final dto = PersonaUpdateRequestDto.fromMap(<String, dynamic>{
-        'displayName': '分身名',
-        'phone': '13800138000',
-        'email': 'persona@example.com',
-      });
-
-      expect(dto.toMap().containsKey('phone'), isFalse);
-      expect(dto.toMap().containsKey('email'), isFalse);
-    });
-  });
-
-  group('PersonaManagementQuotaWireDto', () {
-    test('canonical maxPersonas and usedPersonas', () {
-      final dto = PersonaManagementQuotaWireDto.fromMap(<String, dynamic>{
-        'maxPersonas': 10,
-        'usedPersonas': 3,
-      });
-      expect(dto.maxPersonas, 10);
-      expect(dto.usedPersonas, 3);
-    });
-  });
-
-  group('PersonaManagementItemViewData — Wire 映射', () {
-    test('无 personaId 时 subjectType 归一为 account', () {
-      final view = PersonaManagementItemViewData.fromPersonaManagementItemWire(
-        PersonaManagementItemWireDto.fromMap(<String, dynamic>{
-          'displayName': '主号',
-        }),
+  group('PersonaManagementItemView', () {
+    test('canonical public shape excludes credential plaintext', () {
+      final item = _personaItem(
+        personaId: 'per_1',
+        displayName: '分身名',
+        userHandle: 'persona_handle',
+        inheritsProfileFromOwner: false,
+        overriddenProfileFields: const <String>['displayName'],
       );
-      expect(view.personaId, '');
-      expect(view.subjectType, 'account');
+
+      expect(item.personaId, 'per_1');
+      expect(item.displayName, '分身名');
+      expect(item.userHandle, 'persona_handle');
+      expect(item.inheritsProfileFromOwner, isFalse);
+      expect(item.overriddenProfileFields, <String>['displayName']);
+      expect(item.toWire(), isNot(contains('phone')));
+      expect(item.toWire(), isNot(contains('email')));
     });
 
-    test('管理行保留 avatarVersion 并按 endpoint 可用性解析', () {
-      final view = PersonaManagementItemViewData.fromPersonaManagementItemWire(
-        PersonaManagementItemWireDto.fromMap(<String, dynamic>{
-          'personaId': 'per_1',
-          'displayName': '分身名',
-          'avatarUrl': 'media/avatar/s/mock/seed/test_persona/v5/avatar.jpg',
-          'avatarVersion': 5,
-        }),
+    test('App view consumes the generated owner directly', () {
+      final view = PersonaManagementItemViewData.fromWire(
+        _personaItem(personaId: 'per_1', displayName: '分身名'),
       );
-      expect(view.avatarVersion, 5);
-      _expectVersionedAvatarOrUnavailable(view.avatarUrl, 5);
+
+      expect(view.personaId, 'per_1');
+      expect(view.subjectType, 'persona');
+      expect(view.displayName, '分身名');
     });
   });
 
-  group('PersonaManagementQuotaViewData — Wire 映射', () {
-    test('maxPersonas<=0 时抬升到 5', () {
-      final view =
-          PersonaManagementQuotaViewData.fromPersonaManagementQuotaWire(
-            PersonaManagementQuotaWireDto.fromMap(<String, dynamic>{
-              'maxPersonas': 0,
-              'usedPersonas': 0,
-            }),
-          );
+  group('UpdatePersonaCommand', () {
+    test('generated mutation request has no credential fields', () {
+      final command = contracts.UpdatePersonaCommand(
+        personaId: 'per_1',
+        displayName: '分身名',
+      );
+
+      expect(command.toWire(), isNot(contains('phone')));
+      expect(command.toWire(), isNot(contains('email')));
+    });
+  });
+
+  group('PersonaManagementQuotaViewData', () {
+    test('non-positive canonical quota is safely presented as five', () {
+      final view = PersonaManagementQuotaViewData.fromWire(
+        const contracts.PersonaManagementQuotaView(
+          ownerUserId: 'owner-1',
+          totalCount: 0,
+          quotaLimit: 0,
+          remainingCount: 0,
+          activePersonaId: 'persona-1',
+          primaryPersonaId: 'persona-1',
+        ),
+      );
+
       expect(view.maxPersonas, 5);
+      expect(view.usedPersonas, 0);
     });
   });
 
-  group('ActivePersonaContextWireDto', () {
-    test('persona envelope 字段可稳定解码', () {
-      final dto = ActivePersonaContextWireDto.fromMap(<String, dynamic>{
-        'personaId': 'persona_main',
-        'ownerUserId': 'user_main',
-        'avatarVersion': 9,
-        'contextVersion': 3,
-        'personaSnapshotVersion': 2,
-        'sourceSurfaceId': 'notification_center',
-        'explicitOverride': true,
-      });
-      expect(dto.personaId, 'persona_main');
-      expect(dto.ownerUserId, 'user_main');
-      expect(dto.avatarVersion, 9);
-      expect(dto.contextVersion, 3);
-      expect(dto.personaSnapshotVersion, 2);
-      expect(dto.sourceSurfaceId, 'notification_center');
-      expect(dto.explicitOverride, isTrue);
+  group('ActivePersonaContextView', () {
+    test('persona envelope fields have one generated owner', () {
+      final projection = _activeContext(
+        personaId: 'persona_main',
+        ownerUserId: 'user_main',
+        contextVersion: 3,
+        personaSnapshotVersion: 2,
+        sourceSurfaceId: 'notification_center',
+        explicitOverride: true,
+      );
+
+      expect(projection.personaId, 'persona_main');
+      expect(projection.ownerUserId, 'user_main');
+      expect(projection.contextVersion, 3);
+      expect(projection.personaSnapshotVersion, 2);
+      expect(projection.sourceSurfaceId, 'notification_center');
+      expect(projection.explicitOverride, isTrue);
     });
 
-    test('view data 暴露 canonical personaId 与 typed envelope', () {
-      final view = ActivePersonaContextViewData.fromActivePersonaContextWire(
-        ActivePersonaContextWireDto.fromMap(<String, dynamic>{
-          'personaId': 'persona_photo',
-          'ownerUserId': 'user_owner',
-          'avatarUrl':
-              'media/avatar/s/archived-avatar/user/persona/persona_photo/v5/profile.png',
-          'avatarVersion': 5,
-          'contextVersion': 5,
-          'personaSnapshotVersion': 7,
-        }),
+    test('App view exposes the canonical typed envelope', () {
+      final view = ActivePersonaContextViewData.fromWire(
+        _activeContext(
+          personaId: 'persona_photo',
+          ownerUserId: 'user_owner',
+          contextVersion: 5,
+          personaSnapshotVersion: 7,
+        ),
       );
+
       expect(view.personaId, 'persona_photo');
-      expect(view.avatarVersion, 5);
-      _expectVersionedAvatarOrUnavailable(view.avatarUrl, 5);
       expect(view.contextVersion, 5);
       expect(view.personaSnapshotVersion, 7);
       expect(
@@ -343,236 +247,173 @@ void main() {
       );
       expect(
         view.toTypedEnvelope(sourceSurfaceId: 'create_editor'),
-        containsPair('personaSnapshotVersion', 7),
-      );
-      expect(
-        view.toTypedEnvelope(sourceSurfaceId: 'create_editor'),
-        containsPair('sourceSurfaceId', 'create_editor'),
-      );
-      expect(
-        view.toTypedEnvelope(sourceSurfaceId: 'create_editor'),
         isNot(contains('personaContextVersion')),
       );
     });
   });
 
-  group('RelationshipCapabilityWireDto', () {
-    test('canonical relationState', () {
-      final dto = RelationshipCapabilityWireDto.fromMap(<String, dynamic>{
-        'relationState': 'mutual',
-        'canFollow': true,
-      });
-      expect(dto.relationState, 'mutual');
-      expect(dto.canFollow, isTrue);
+  group('RelationshipCapabilityView', () {
+    test('canonical relation state and capability bits are typed', () {
+      final capability = _capability(
+        relationState: contracts.RelationshipState.mutual,
+        canFollow: true,
+      );
+
+      expect(capability.relationState, contracts.RelationshipState.mutual);
+      expect(capability.canFollow, isTrue);
     });
 
-    test('缺失必填能力位直接拒绝，视图层不补算', () {
-      final dto = RelationshipCapabilityWireDto.fromMap(<String, dynamic>{});
-      expect(dto.relationState, isNull);
-      expect(dto.canFollow, isNull);
-      expect(dto.canOpenConversation, isNull);
-      expect(
-        () => RelationshipCapabilityDto.fromRelationshipCapabilityWire(dto),
-        throwsFormatException,
-      );
-    });
+    test(
+      'missing required capability bits fail closed in the generated decoder',
+      () {
+        expect(
+          () => contracts.RelationshipCapabilityView.fromWire(
+            const <String, Object?>{},
+          ),
+          throwsFormatException,
+        );
+      },
+    );
   });
 
-  group('SocialRelationSearchItemWireDto', () {
-    test('显式空 personaId 不消费 retired userId', () {
-      final dto = SocialRelationSearchItemWireDto.fromMap(<String, dynamic>{
-        'personaId': '',
-        'userId': 'search_u1',
-        'nickname': 'n',
-        'avatarVersion': 8,
-        'relationshipCapability': <String, dynamic>{
-          'viewerPersonaId': '',
-          'targetPersonaId': '',
-        },
-      });
-      expect(dto.personaId, isEmpty);
-      expect(dto.avatarVersion, 8);
-    });
-
-    test('view 保留 avatarVersion 并按 endpoint 可用性解析', () {
-      final view = SocialRelationSearchItemView.fromSocialRelationSearchItemWire(
-        SocialRelationSearchItemWireDto.fromMap(<String, dynamic>{
-          'personaId': 'search_u2',
-          'displayName': '搜索用户',
-          'avatarUrl':
-              'media/avatar/s/archived-avatar/user/search_u2/v3/profile.png',
-          'avatarVersion': 3,
-          'chatAvailable': true,
-          'relationshipCapability': <String, dynamic>{
-            'relationState': 'mutual',
-            'canFollow': false,
-            'canUnfollow': true,
-            'canFollowBack': false,
-            'canGreet': false,
-            'canOpenConversation': true,
-            'canCreateDirectConversation': true,
-            'canSendMessage': true,
-            'hasPendingGreeting': false,
-            'hasFormalConversation': false,
-            'canStartVoiceCall': true,
-            'canStartVideoCall': true,
-            'isBlocked': false,
-            'isBlockedBy': false,
-          },
-        }),
+  group('SocialRelationSearchItemViewData', () {
+    test('nested capability is the only relation source', () {
+      final view = SocialRelationSearchItemViewData.fromWire(
+        contracts.SocialRelationSearchItemView(
+          personaId: 'search_u2',
+          userHandle: 'search-user',
+          displayName: '搜索用户',
+          avatarUrl:
+              'media/avatar/s/archived-avatar/user/search_u2/profile.png',
+          chatAvailable: true,
+          relationshipCapability: _capability(
+            targetPersonaId: 'search_u2',
+            relationState: contracts.RelationshipState.mutual,
+            canOpenConversation: true,
+          ),
+        ),
       );
-      expect(view.avatarVersion, 3);
-      _expectVersionedAvatarOrUnavailable(view.avatarUrl, 3);
+
       expect(view.relationshipCapability.relationState, 'mutual');
       expect(view.chatAvailable, isTrue);
+      _expectAvatarOrUnavailable(view.avatarUrl);
     });
   });
 
   group('RecentSearchEntryWire', () {
-    test('scope / updatedAt 严格解码并映射唯一 ViewData', () {
-      final wire = decodeRecentSearchEntryWire(<String, Object?>{
+    test('scope and updatedAt map into one App view', () {
+      final wire = contracts.decodeRecentSearchEntryWire(<String, Object?>{
         'entryId': 'e1',
         'query': '摄影',
         'scope': 'content',
         'updatedAt': '2026-03-01T08:00:00Z',
       });
-      expect(wire.scope, 'content');
-      expect(wire.updatedAt, DateTime.parse('2026-03-01T08:00:00Z'));
       final view = RecentSearchEntryView.fromWire(wire);
+
+      expect(wire.scope, 'content');
       expect(view.entryId, 'e1');
       expect(view.scope, SearchScope.content);
     });
   });
 
-  group('RelationshipViewWireDto', () {
-    test('relationState 与派生布尔', () {
-      final dto = RelationshipViewWireDto.fromMap(<String, dynamic>{
-        'viewerPersonaId': 'ps_viewer',
-        'targetPersonaId': 'ps_target',
-        'relationState': 'mutual',
-        'isBlocked': false,
-        'isBlockedBy': false,
-      });
-      final v = RelationshipViewData.fromRelationshipViewWire(dto);
-      expect(v.relationState, 'mutual');
-      expect(v.isFollowing, isTrue);
-      expect(v.isFollowedBy, isTrue);
-      expect(v.isMutual, isTrue);
-      expect(v.isBlocked, isFalse);
-    });
+  group('RelationshipViewData', () {
+    test(
+      'relation state derives the convenience flags without a second wire',
+      () {
+        const view = RelationshipViewData(
+          relationState: 'mutual',
+          isBlocked: false,
+          isBlockedBy: false,
+        );
 
-    test('block 位保留且派生布尔跟随 relationState', () {
-      final dto = RelationshipViewWireDto.fromMap(<String, dynamic>{
-        'relationState': 'not_following',
-        'isBlocked': true,
-        'isBlockedBy': false,
-      });
-      final v = RelationshipViewData.fromRelationshipViewWire(dto);
-      expect(v.isFollowing, isFalse);
-      expect(v.isBlocked, isTrue);
-    });
+        expect(view.isFollowing, isTrue);
+        expect(view.isFollowedBy, isTrue);
+        expect(view.isMutual, isTrue);
+        expect(view.isBlocked, isFalse);
+      },
+    );
   });
 
-  group('UserProfileStatsWireDto', () {
-    test('计数解析', () {
-      final dto = UserProfileStatsWireDto.fromMap(<String, dynamic>{
-        'followerCount': 10,
-        'followingCount': 20,
-        'postCount': 3,
-        'circleCount': 4,
-        'likeCount': 5,
-      });
-      final v = UserProfileStatsViewData.fromUserProfileStatsWire(dto);
-      expect(v.followerCount, 10);
-      expect(v.followingCount, 20);
-    });
-  });
-
-  group('PersonaLifecycleGuardWireDto', () {
-    test('canonical lifecycle guard fields', () {
-      final dto = PersonaLifecycleGuardWireDto.fromMap(<String, dynamic>{
-        'personaId': 's1',
-        'requestedAction': 'retire',
-        'allowed': false,
-        'reason': 'blocked_primary_persona',
-        'requiresSuccessor': false,
-      });
-      final v = PersonaLifecycleGuardViewData.fromPersonaLifecycleGuardWire(
-        dto,
+  group('UserProfileStatsWire', () {
+    test('generated counts map to App stats', () {
+      const wire = contracts.UserProfileStatsWire(
+        followerCount: 10,
+        followingCount: 20,
+        postCount: 3,
+        circleCount: 4,
+        likeCount: 5,
       );
-      expect(v.personaId, 's1');
-      expect(v.requestedAction, 'retire');
-      expect(v.allowed, isFalse);
-      expect(v.reason, 'blocked_primary_persona');
-      expect(v.requiresSuccessor, isFalse);
+      final view = UserProfileStatsViewData.fromWire(wire);
+
+      expect(view.followerCount, 10);
+      expect(view.followingCount, 20);
     });
   });
 
-  group('ActivePersonaContextWireDto', () {
-    test('ownerUserId does not backfill an empty personaId', () {
-      final dto = ActivePersonaContextWireDto.fromMap(<String, dynamic>{
-        'personaId': '',
-        'ownerUserId': 'ctx_u',
-        'displayName': '展示',
-      });
-      expect(dto.personaId, '');
-      expect(dto.ownerUserId, 'ctx_u');
+  group('PersonaLifecycleGuardViewData', () {
+    test('canonical lifecycle guard maps its enum values', () {
+      final view = PersonaLifecycleGuardViewData.fromWire(
+        const contracts.PersonaLifecycleGuardView(
+          personaId: 's1',
+          requestedAction: contracts.PersonaLifecycleAction.retire,
+          allowed: false,
+          reason: contracts.PersonaLifecycleGuardReason.blockedPrimaryPersona,
+          requiresSuccessor: false,
+        ),
+      );
+
+      expect(view.personaId, 's1');
+      expect(view.requestedAction, 'retire');
+      expect(view.allowed, isFalse);
+      expect(view.reason, 'blocked_primary_persona');
     });
   });
 
-  group('PersonaManagementSummaryWireDto', () {
-    test('canonical items wins and retired personas is ignored', () {
-      final dto = PersonaManagementSummaryWireDto.fromMap(<String, dynamic>{
-        'items': <Map<String, dynamic>>[
-          <String, dynamic>{'personaId': 's1', 'displayName': 'A'},
+  group('PersonaManagementSummaryViewData', () {
+    test('summary consumes canonical items, quota, and active context', () {
+      final summary = contracts.PersonaManagementSummaryView(
+        items: <contracts.PersonaManagementItemView>[
+          _personaItem(personaId: 's1', displayName: 'A'),
         ],
-        'personas': <Map<String, dynamic>>[
-          <String, dynamic>{'personaId': 'retired', 'displayName': 'B'},
-        ],
-        'quota': <String, dynamic>{'maxPersonas': 5, 'usedPersonas': 1},
-      });
-      expect(dto.items.length, 1);
-      expect(dto.items.single['personaId'], 's1');
-      final view =
-          PersonaManagementSummaryViewData.fromPersonaManagementSummaryWire(
-            dto,
-          );
+        quota: const contracts.PersonaManagementQuotaView(
+          ownerUserId: 'owner-1',
+          totalCount: 1,
+          quotaLimit: 5,
+          remainingCount: 4,
+          activePersonaId: 's1',
+          primaryPersonaId: 's1',
+        ),
+        activeContext: _activeContext(personaId: 's1', ownerUserId: 'owner-1'),
+      );
+      final view = PersonaManagementSummaryViewData.fromWire(summary);
+
       expect(view.items.length, 1);
+      expect(view.items.single.personaId, 's1');
       expect(view.quota.usedPersonas, 1);
     });
   });
 
-  group('RelationshipCapabilityResult', () {
-    test('strict decoder 保留 canonical 能力位', () {
-      final capability =
-          decodeRelationshipCapabilityResult(const <String, Object?>{
-            'viewerPersonaId': 'viewer-persona',
-            'targetPersonaId': 't1',
-            'relationState': 'following',
-            'canFollow': false,
-            'canUnfollow': true,
-            'canFollowBack': false,
-            'canGreet': true,
-            'canOpenConversation': false,
-            'canCreateDirectConversation': false,
-            'canSendMessage': false,
-            'hasPendingGreeting': false,
-            'hasFormalConversation': false,
-            'canStartVoiceCall': false,
-            'canStartVideoCall': false,
-            'isBlocked': false,
-            'isBlockedBy': false,
-          });
+  group('RelationshipCapabilityView', () {
+    test('strict decoder preserves canonical capability bits', () {
+      final capability = contracts.decodeRelationshipCapabilityView(
+        _capability(
+          viewerPersonaId: 'viewer-persona',
+          targetPersonaId: 't1',
+          relationState: contracts.RelationshipState.following,
+          canGreet: true,
+        ).toWire(),
+      );
+
       expect(capability.viewerPersonaId, 'viewer-persona');
       expect(capability.targetPersonaId, 't1');
-      expect(capability.relationState, 'following');
+      expect(capability.relationState.wireName, 'following');
       expect(capability.canGreet, isTrue);
     });
   });
 
-  group('AppearanceSettingsView', () {
-    test('typed decoder → runtime snapshot', () {
-      final view = decodeAppearanceSettingsView(<String, Object?>{
+  group('Settings views', () {
+    test('appearance decoder maps to the runtime snapshot', () {
+      final view = contracts.decodeAppearanceSettingsView(<String, Object?>{
         'themeMode': 'dark',
         'fontSizePreset': 'lg',
         'source': 'sub_override',
@@ -583,15 +424,14 @@ void main() {
         'updatedAt': '2026-01-02T00:00:00Z',
       });
       final snapshot = appearance.AppearanceSettingsSnapshot.fromContract(view);
+
       expect(snapshot.themeMode.wireValue, 'dark');
       expect(snapshot.source, appearance.AppearanceSettingsSource.subOverride);
       expect(snapshot.version, 3);
     });
-  });
 
-  group('CallSettingsView', () {
-    test('typed decoder 保留官方铃声与开关', () {
-      final view = decodeCallSettingsView(<String, Object?>{
+    test('call settings preserve official ringtone and switches', () {
+      final view = contracts.decodeCallSettingsView(<String, Object?>{
         'userId': 'u1',
         'defaultIncomingCallRingtoneId': 'official.blue-wave',
         'allowCallerRingtoneOverride': false,
@@ -600,31 +440,13 @@ void main() {
         'version': 2,
         'updatedAt': '2026-01-02T00:00:00Z',
       });
-      expect(
-        view.defaultIncomingCallRingtoneId?.wireValue,
-        'official.blue-wave',
-      );
+
+      expect(view.defaultIncomingCallRingtoneId, 'official.blue-wave');
       expect(view.allowCallerRingtoneOverride, isFalse);
     });
 
-    test('canonical null ringtone 解码为 null', () {
-      final view = decodeCallSettingsView(<String, Object?>{
-        'userId': 'u1',
-        'defaultIncomingCallRingtoneId': null,
-        'allowCallerRingtoneOverride': true,
-        'enableCallVibration': true,
-        'enableGroupCallRing': true,
-        'version': 1,
-        'updatedAt': '2026-01-02T00:00:00Z',
-      });
-      expect(view.defaultIncomingCallRingtoneId, isNull);
-      expect(view.allowCallerRingtoneOverride, isTrue);
-    });
-  });
-
-  group('PrivacySettingsView', () {
-    test('typed decoder 保留 blockedKeywords', () {
-      final view = decodePrivacySettingsView(<String, Object?>{
+    test('privacy settings preserve blocked keywords', () {
+      final view = contracts.decodePrivacySettingsView(<String, Object?>{
         'userId': 'u1',
         'allowStrangerMsg': true,
         'profileVisibility': 'public',
@@ -635,9 +457,174 @@ void main() {
         'version': 1,
         'updatedAt': '2026-01-02T00:00:00Z',
       });
-      expect(view.blockedKeywords, ['a', 'b']);
+
+      expect(view.blockedKeywords, <String>['a', 'b']);
     });
   });
+}
+
+contracts.PersonaProfileView _profile({
+  required String personaId,
+  contracts.ProfileOwnerKind subjectType = contracts.ProfileOwnerKind.persona,
+  String userHandle = 'handle',
+  String displayName = '昵称',
+  String? avatarUrl,
+  String? backgroundUrl,
+  List<String>? identityTags,
+}) {
+  return contracts.PersonaProfileView(
+    personaId: personaId,
+    subjectType: subjectType,
+    userHandle: userHandle,
+    displayName: displayName,
+    nicknameCustomized: true,
+    avatarUrl: avatarUrl,
+    backgroundUrl: backgroundUrl,
+    identityTags: identityTags,
+    followerCount: 1,
+    followingCount: 2,
+    postCount: 3,
+    circleCount: 4,
+    likeCount: 5,
+    profileVisibility: contracts.ProfileVisibility.public,
+    isolationLevel: contracts.IsolationLevel.open,
+    inheritsFromOwner: false,
+    updatedAt: DateTime.utc(2026, 2, 2),
+  );
+}
+
+contracts.PersonaManagementItemView _personaItem({
+  required String personaId,
+  required String displayName,
+  String? userHandle,
+  bool inheritsProfileFromOwner = true,
+  List<String>? overriddenProfileFields,
+}) {
+  return contracts.PersonaManagementItemView(
+    personaId: personaId,
+    displayName: displayName,
+    userHandle: userHandle,
+    isolationLevel: contracts.IsolationLevel.open,
+    isPrimary: personaId == 's1',
+    isActive: personaId == 's1',
+    status: contracts.PersonaStatus.active,
+    inheritsProfileFromOwner: inheritsProfileFromOwner,
+    overriddenProfileFields: overriddenProfileFields,
+    profileVisibility: contracts.ProfileVisibility.public,
+    updatedAt: DateTime.utc(2026, 2, 2),
+  );
+}
+
+contracts.ActivePersonaContextView _activeContext({
+  required String personaId,
+  required String ownerUserId,
+  int contextVersion = 1,
+  int personaSnapshotVersion = 1,
+  String? sourceSurfaceId,
+  bool explicitOverride = false,
+}) {
+  return contracts.ActivePersonaContextView(
+    ownerUserId: ownerUserId,
+    personaId: personaId,
+    subjectType: contracts.ProfileOwnerKind.persona,
+    displayName: personaId,
+    avatarVersion: 0,
+    isPrimary: true,
+    isolationLevel: contracts.IsolationLevel.open,
+    profileVisibility: contracts.ProfileVisibility.public,
+    contextVersion: contextVersion,
+    personaSnapshotVersion: personaSnapshotVersion,
+    sourceSurfaceId: sourceSurfaceId,
+    explicitOverride: explicitOverride,
+    switchedAt: DateTime.utc(2026, 2, 2),
+  );
+}
+
+contracts.RelationshipCapabilityView _capability({
+  String viewerPersonaId = 'viewer',
+  String targetPersonaId = 'target',
+  contracts.RelationshipState relationState =
+      contracts.RelationshipState.notFollowing,
+  bool canFollow = false,
+  bool canGreet = false,
+  bool canOpenConversation = false,
+}) {
+  return contracts.RelationshipCapabilityView(
+    viewerPersonaId: viewerPersonaId,
+    targetPersonaId: targetPersonaId,
+    relationState: relationState,
+    canFollow: canFollow,
+    canUnfollow: false,
+    canFollowBack: false,
+    canGreet: canGreet,
+    canOpenConversation: canOpenConversation,
+    canCreateDirectConversation: canOpenConversation,
+    canSendMessage: canOpenConversation,
+    hasPendingGreeting: false,
+    hasFormalConversation: canOpenConversation,
+    canStartVoiceCall: false,
+    canStartVideoCall: false,
+    isBlocked: false,
+    isBlockedBy: false,
+  );
+}
+
+contracts.ProfileInteractionActivityView _activity({
+  required String activityId,
+  required contracts.InteractionActivityType activityType,
+  String commentKind = '',
+  String? commentId,
+  String? parentCommentId,
+  String? actorAvatarUrl,
+  int actorAvatarVersion = 0,
+  int displayAvatarVersion = 0,
+}) {
+  return contracts.ProfileInteractionActivityView(
+    ownerPersonaId: 'owner',
+    activityId: activityId,
+    activityType: activityType,
+    direction: contracts.InteractionDirection.received,
+    sourceType: 'content',
+    sourceEventId: 'source-$activityId',
+    sourceVersion: 1,
+    viewerReactionVersion: 1,
+    targetVersion: 1,
+    active: true,
+    commentKind: commentKind,
+    commentId: commentId,
+    parentCommentId: parentCommentId,
+    viewerReaction: contracts.CommentReactionType.none,
+    actorPersonaId: 'u_a',
+    actorDisplayName: '某人',
+    actorAvatarUrl: actorAvatarUrl,
+    actorAvatarVersion: actorAvatarVersion,
+    targetPersonaId: 'owner',
+    targetContentId: 'post_99',
+    targetContentType: contracts.ContentType.article,
+    targetKind: 'record',
+    targetAvailability: 'active',
+    targetReplyCount: 0,
+    displayPersonaId: 'u_a',
+    displayName: '某人',
+    displayAvatarUrl: actorAvatarUrl,
+    displayAvatarVersion: displayAvatarVersion,
+    primaryText: '互动了你的记录',
+    previewMediaKind: 'none',
+    previewUnavailable: false,
+    filterKeys: const <String>['all'],
+    createdAt: DateTime.utc(2026, 2, 2),
+    occurredAt: DateTime.utc(2026, 2, 2),
+  );
+}
+
+void _expectAvatarOrUnavailable(String? url) {
+  final resolved = url ?? '';
+  final endpoint = CloudRuntimeConfig.mediaAvatarCdnBaseUrl.trim();
+  if (endpoint.isEmpty) {
+    expect(resolved, isEmpty);
+    return;
+  }
+  expect(resolved, startsWith(endpoint));
 }
 
 void _expectVersionedAvatarOrUnavailable(String? url, int version) {

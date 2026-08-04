@@ -8,30 +8,40 @@ void main() {
       'postId': 'post-image-canonical',
       'contentType': 'image',
       'status': 'pending_review',
+      'visibility': 'private',
       'mediaUrls': <String>['media/image/s/asset/post-image-canonical'],
+      'likeCount': 0,
+      'commentCount': 0,
+      'shareCount': 0,
+      'viewCount': 0,
+      'createdAt': '2026-08-01T00:00:00Z',
+      'updatedAt': '2026-08-01T00:00:00Z',
     });
 
-    expect(detail.post.mediaUrls, <String>[
+    expect(detail.mediaUrls, <String>[
       'media/image/s/asset/post-image-canonical',
     ]);
-    final dto = const ContentPostProjectionMapper().toDto(detail.post);
-    expect(dto.imageUrls, detail.post.mediaUrls);
   });
 
   test('详情读取不接受已退役 imageUrls 别名', () {
-    final projection = decodeContentPostProjection(<String, Object?>{
-      'postId': 'post-image-retired-alias',
-      'contentType': 'image',
-      'imageUrls': <String>['https://legacy.example.test/image.jpg'],
-    });
-
-    expect(projection.mediaUrls, isEmpty);
+    expect(
+      () => ContentPostProjection.fromWire(<String, Object?>{
+        ..._projectionWire(
+          postId: 'post-image-retired-alias',
+          contentType: 'image',
+        ),
+        'imageUrls': <String>['https://noncanonical.example.test/image.jpg'],
+      }),
+      throwsFormatException,
+    );
   });
 
   test('视频详情从 canonical mediaUrls 形成播放地址', () {
-    final projection = decodeContentPostProjection(<String, Object?>{
-      'postId': 'post-video-canonical',
-      'contentType': 'video',
+    final projection = ContentPostProjection.fromWire(<String, Object?>{
+      ..._projectionWire(
+        postId: 'post-video-canonical',
+        contentType: 'video',
+      ),
       'mediaUrls': <String>['media/video/s/asset/post-video-canonical'],
     });
 
@@ -41,9 +51,11 @@ void main() {
   });
 
   test('首页视频投影保留同 asset/version 的 HLS/CMAF typed 绑定', () {
-    final projection = decodeContentPostProjection(<String, Object?>{
-      'postId': 'post-video-adaptive',
-      'contentType': 'video',
+    final projection = ContentPostProjection.fromWire(<String, Object?>{
+      ..._projectionWire(
+        postId: 'post-video-adaptive',
+        contentType: 'video',
+      ),
       'videoUrl': 'media/video/m/asset/mas-video-adaptive/v3/delivery.mp4',
       'mediaAssetId': 'mas-video-adaptive',
       'mediaAssetVersion': 3,
@@ -59,7 +71,7 @@ void main() {
       'media/video/m/asset/mas-video-adaptive/v3/hls/master.m3u8',
     );
     expect(projection.hlsCmafDescriptorVersion, 1);
-    final wire = const ContentPostProjectionMapper().toWire(projection);
+    final wire = projection.toWire();
     expect(wire['mediaAssetId'], 'mas-video-adaptive');
     expect(wire['mediaAssetVersion'], 3);
     expect(
@@ -69,3 +81,14 @@ void main() {
     expect(wire['hlsCmafDescriptorVersion'], 1);
   });
 }
+
+Map<String, Object?> _projectionWire({
+  required String postId,
+  required String contentType,
+}) => <String, Object?>{
+  'postId': postId,
+  'contentType': contentType,
+  'likeCount': 0,
+  'commentCount': 0,
+  'shareCount': 0,
+};

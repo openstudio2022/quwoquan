@@ -1,7 +1,7 @@
-import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
-import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_cloud_contracts/generated/circle_contracts.dart'
+    show Circle, CircleStatsWire;
 
-/// 圈子详情页统计条与摘要行用的强类型视图数据（由 getCircleStats wire + CircleDto 派生）。
+/// 圈子详情页统计条与摘要行用的强类型视图数据（由 canonical wire 派生）。
 class CircleStatsViewData {
   const CircleStatsViewData({
     required this.members,
@@ -43,8 +43,8 @@ class CircleStatsViewData {
     );
   }
 
-  /// 详情头 [CircleStatsRow]：帖子/成员/周活以 [CircleDto] 为准，点赞保留 wire。
-  CircleStatsViewData forDetailRow(CircleDto? circle) {
+  /// 详情头 [CircleStatsRow]：帖子/成员/周活以 [Circle] 为准，点赞保留 wire。
+  CircleStatsViewData forDetailRow(Circle? circle) {
     if (circle == null) return this;
     return CircleStatsViewData(
       members: circle.memberCount,

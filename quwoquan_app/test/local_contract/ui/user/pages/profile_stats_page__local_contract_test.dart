@@ -8,7 +8,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/application/user/persona_relationship/persona_relationship_facets.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
@@ -273,14 +272,14 @@ class _TestUserProfileRepository extends MockUserProfileRepository
     required this.bundle,
     this.followers = const <ProfileSocialRelationRowViewData>[],
     this.following = const <ProfileSocialRelationRowViewData>[],
-    this.circles = const <CircleDto>[],
+    this.circles = const <PersonaCircleSlice>[],
     this.followersError,
   });
 
   final UserHomepageBundleViewData bundle;
   final List<ProfileSocialRelationRowViewData> followers;
   final List<ProfileSocialRelationRowViewData> following;
-  final List<CircleDto> circles;
+  final List<PersonaCircleSlice> circles;
   final Object? followersError;
 
   @override
@@ -349,7 +348,7 @@ class _TestUserProfileRepository extends MockUserProfileRepository
 final class _TestCircleMembershipQuery implements CircleMembershipQuery {
   _TestCircleMembershipQuery(this.circles);
 
-  final List<CircleDto> circles;
+  final List<PersonaCircleSlice> circles;
   PersonaCircleListQuery? lastPersonaCircleQuery;
 
   @override
@@ -387,39 +386,8 @@ final class _TestCircleMembershipQuery implements CircleMembershipQuery {
     final candidateEnd = start + query.limit;
     final end = candidateEnd < filtered.length ? candidateEnd : filtered.length;
     return PersonaCirclePageSlice(
-      items: filtered
-          .sublist(start, end)
-          .map(
-            (circle) => PersonaCircleSummary(
-              circleId: circle.id,
-              name: circle.name,
-              description: circle.description ?? '',
-              coverUrl: circle.coverUrl ?? '',
-              iconUrl: circle.iconUrl ?? '',
-              ownerPersonaId: circle.ownerId,
-              ownerDisplayNameSnapshot: '',
-              category: circle.category ?? '',
-              subCategory: circle.subCategory ?? '',
-              tags: circle.tags,
-              memberCount: circle.memberCount,
-              postCount: circle.postCount,
-              weeklyActiveCount: circle.weeklyActiveCount,
-              status: circle.status,
-              visibility: circle.visibility,
-              joinPolicy: circle.joinPolicy,
-              kind: circle.kind,
-              displaySubjectType: circle.displaySubjectType,
-              followEnabled: circle.followEnabled,
-              defaultPublicGroupId: circle.defaultPublicGroupId ?? '',
-              linkedHomepageId: '',
-              linkedHomepageType: null,
-              linkedHomepageTitle: '',
-              createdAt: circle.createdAt,
-              updatedAt: circle.updatedAt,
-            ),
-          )
-          .toList(growable: false),
-      nextCursor: end < filtered.length ? '$end' : null,
+      items: filtered.sublist(start, end),
+      cursor: end < filtered.length ? '$end' : null,
     );
   }
 }
@@ -434,7 +402,7 @@ UserHomepageBundleViewData _bundle({
   bool canViewFullProfile = true,
   String relationToTarget = 'not_following',
   String displayName = '测试主页',
-  RelationshipCapabilityDto? relationshipCapability,
+  RelationshipCapabilityViewData? relationshipCapability,
 }) {
   final profile = PersonaProfileViewData(
     personaId: subjectUserId,
@@ -473,7 +441,7 @@ UserHomepageBundleViewData _bundle({
   );
 }
 
-RelationshipCapabilityDto _capability({
+RelationshipCapabilityViewData _capability({
   required String targetId,
   required String relationState,
   bool isBlocked = false,
@@ -485,7 +453,7 @@ RelationshipCapabilityDto _capability({
   final isMutual = relationState == 'mutual';
   final isFollowing = relationState == 'following' || isMutual;
   final isFollowedBy = relationState == 'followed_by' || isMutual;
-  return RelationshipCapabilityDto(
+  return RelationshipCapabilityViewData(
     viewerPersonaId: isSelf ? targetId : 'viewer_001',
     targetPersonaId: targetId,
     relationState: relationState,
@@ -526,7 +494,7 @@ ProfileSocialRelationRowViewData _row({
   );
 }
 
-CircleDto _circle({
+PersonaCircleSlice _circle({
   required String id,
   required String name,
   int memberCount = 0,
@@ -534,14 +502,20 @@ CircleDto _circle({
   CircleVisibility visibility = CircleVisibility.public,
 }) {
   final timestamp = DateTime(2026, 6, 25);
-  return CircleDto(
-    id: id,
+  return PersonaCircleSlice(
+    circleId: id,
     name: name,
     coverUrl: 'https://example.com/$id-cover.png',
-    ownerId: 'owner_$id',
+    ownerPersonaId: 'owner_$id',
     memberCount: memberCount,
     postCount: postCount,
+    weeklyActiveCount: 0,
+    status: CircleStatus.active,
     visibility: visibility,
+    joinPolicy: CircleJoinPolicy.open,
+    kind: CircleKind.interest,
+    displaySubjectType: CircleDisplaySubjectType.circle,
+    followEnabled: true,
     createdAt: timestamp,
     updatedAt: timestamp,
   );
@@ -683,7 +657,7 @@ void main() {
             relationState: 'following',
           ),
         ],
-        circles: <CircleDto>[
+        circles: <PersonaCircleSlice>[
           _circle(
             id: 'circle_001',
             name: '极简摄影俱乐部',
@@ -731,7 +705,7 @@ void main() {
             relationState: 'following',
           ),
         ],
-        circles: <CircleDto>[
+        circles: <PersonaCircleSlice>[
           _circle(
             id: 'circle_001',
             name: '极简摄影俱乐部',
@@ -792,7 +766,9 @@ void main() {
             relationState: 'mutual',
           ),
         ],
-        circles: <CircleDto>[_circle(id: 'circle_001', name: '极简摄影俱乐部')],
+        circles: <PersonaCircleSlice>[
+          _circle(id: 'circle_001', name: '极简摄影俱乐部'),
+        ],
       );
 
       await tester.pumpWidget(
@@ -869,7 +845,7 @@ void main() {
           circleCount: 2,
           relationToTarget: 'not_following',
         ),
-        circles: <CircleDto>[
+        circles: <PersonaCircleSlice>[
           _circle(
             id: 'c_public',
             name: '极简摄影俱乐部',
@@ -906,7 +882,7 @@ void main() {
           followingCount: 0,
           circleCount: 2,
         ),
-        circles: <CircleDto>[
+        circles: <PersonaCircleSlice>[
           _circle(id: 'c_photo', name: '极简摄影俱乐部'),
           _circle(id: 'c_travel', name: '旅行手账'),
         ],

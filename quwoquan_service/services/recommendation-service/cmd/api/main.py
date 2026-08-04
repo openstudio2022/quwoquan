@@ -90,7 +90,7 @@ from internal.recommendation.recommendation_feedback_fact.adapters.inbound.strea
     ContentBehaviorConsumer as FeedbackContentBehaviorConsumer,
 )
 from internal.recommendation.recommendation_feedback_fact.infrastructure.mongo_store import (  # noqa: E402
-    MongoFeedbackFactStore,
+    MongoRecommendationFeedbackFactStore,
 )
 from internal.recommendation.recommendation_model_release.adapters.inbound.http.router import (  # noqa: E402
     build_router as build_model_release_router,
@@ -282,7 +282,7 @@ async def lifespan(app: FastAPI):
         feature_store = MongoFeatureProfileStore(database)
         subject_closure_store = MongoSubjectClosureStore(database)
         exposure_store = MongoExposureFactStore(database)
-        feedback_store = MongoFeedbackFactStore(database)
+        feedback_store = MongoRecommendationFeedbackFactStore(database)
         model_release_store.ensure_indexes()
         candidate_store.ensure_indexes()
         feature_store.ensure_indexes()

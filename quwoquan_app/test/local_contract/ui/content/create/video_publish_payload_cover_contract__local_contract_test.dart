@@ -57,7 +57,7 @@ void main() {
 
       expect(
         media.initCommands.map((command) => command.mediaType),
-        <ContentMediaType>[ContentMediaType.video, ContentMediaType.image],
+        <MediaType>[MediaType.video, MediaType.image],
       );
       expect(uploads.map((call) => call.mimeType).toList(), <String>[
         'video/mp4',

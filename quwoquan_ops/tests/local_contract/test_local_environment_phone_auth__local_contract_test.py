@@ -122,6 +122,405 @@ class LocalEnvironmentPhoneAuthContractTest(unittest.TestCase):
                 headers={"X-Client-User-Id": "forged"},
             )
 
+    def test_reference_session_reuses_cache_without_otp(self) -> None:
+        epoch = "c" * 64
+        baseline = "sha256:91e4ec0346e6856159480135150a31020240f414ef940064f3da96de718a39dd"
+        package = "sha256:b7e8e5147c91f8a823198dfe83b3096677ff4c8ef5dd4f21e2d4634787f2bf29"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            secret_root = root / "gamma-local/secrets"
+            secret_root.mkdir(parents=True)
+            runs = root / "runs/nonprod-data" / epoch
+            runs.mkdir(parents=True)
+            (runs / "nonprod_reference_identity.json").write_text(
+                json.dumps(
+                    {
+                        "schema": "qwq.nonprod_acceptance_dataset_receipt",
+                        "target": "gamma-local",
+                        "baselineId": baseline,
+                        "packageDigest": package,
+                        "datasetId": "nonprod_reference_identity",
+                        "datasetEpoch": epoch,
+                        "status": "passed",
+                        "cleanupState": "retained",
+                        "expiresAt": "2099-01-01T00:00:00+00:00",
+                        "actorReceiptRefs": [
+                            {
+                                "role": "primary",
+                                "ownerId": "owner-cache",
+                                "accountState": "active",
+                                "identityOrigin": "phone",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            cache = secret_root / "nonprod-reference-session.cache.json"
+            cache.write_text(
+                json.dumps(
+                    {
+                        "schema": "qwq.nonprod_reference_session_cache",
+                        "target": "gamma-local",
+                        "baselineId": baseline,
+                        "packageDigest": package,
+                        "datasetEpoch": epoch,
+                        "actorIndex": 0,
+                        "ownerId": "owner-cache",
+                        "personaId": "persona-cache",
+                        "accessToken": "cached-token",
+                        "expiresAt": "2099-01-01T00:00:00+00:00",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            cache.chmod(0o600)
+            candidate_dir = root / "candidate"
+            candidate_dir.mkdir()
+            (candidate_dir / "manifest.json").write_text(
+                json.dumps(
+                    {"baselineId": baseline, "packageDigest": package},
+                ),
+                encoding="utf-8",
+            )
+            with (
+                mock.patch.object(
+                    local_environment_auth,
+                    "active_deployment_candidate",
+                    return_value={
+                        "baselineId": baseline,
+                        "candidateDir": str(candidate_dir),
+                    },
+                ),
+                mock.patch.object(
+                    local_environment_auth,
+                    "env_runs_root",
+                    return_value=root / "runs",
+                ),
+                mock.patch.object(
+                    local_environment_auth,
+                    "deployment_target_path",
+                    return_value=secret_root,
+                ),
+                mock.patch.object(
+                    local_environment_auth,
+                    "request_local_environment_json",
+                    return_value={"ownerId": "owner-cache"},
+                ) as me_request,
+                mock.patch.object(
+                    local_environment_auth,
+                    "open_local_phone_acceptance_session",
+                    side_effect=AssertionError("cache hit must not resend OTP"),
+                ),
+            ):
+                session = local_environment_auth.open_reference_acceptance_session(
+                    "https://api.gamma.quwoquan.com:19000",
+                    environment="gamma",
+                    target_name="gamma-local",
+                )
+
+        self.assertEqual(session.owner_id, "owner-cache")
+        self.assertEqual(session.persona_id, "persona-cache")
+        self.assertEqual(session.access_token, "cached-token")
+        me_request.assert_called_once()
+
+    def test_reference_session_rechecks_cache_under_lock_without_otp(self) -> None:
+        epoch = "d" * 64
+        baseline = "sha256:91e4ec0346e6856159480135150a31020240f414ef940064f3da96de718a39dd"
+        package = "sha256:b7e8e5147c91f8a823198dfe83b3096677ff4c8ef5dd4f21e2d4634787f2bf29"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            secret_root = root / "gamma-local/secrets"
+            secret_root.mkdir(parents=True)
+            runs = root / "runs/nonprod-data" / epoch
+            runs.mkdir(parents=True)
+            (runs / "nonprod_reference_identity.json").write_text(
+                json.dumps(
+                    {
+                        "schema": "qwq.nonprod_acceptance_dataset_receipt",
+                        "target": "gamma-local",
+                        "baselineId": baseline,
+                        "packageDigest": package,
+                        "datasetId": "nonprod_reference_identity",
+                        "datasetEpoch": epoch,
+                        "status": "passed",
+                        "cleanupState": "retained",
+                        "expiresAt": "2099-01-01T00:00:00+00:00",
+                        "actorReceiptRefs": [
+                            {
+                                "role": "primary",
+                                "ownerId": "owner-lock",
+                                "accountState": "active",
+                                "identityOrigin": "phone",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            candidate_dir = root / "candidate"
+            candidate_dir.mkdir()
+            (candidate_dir / "manifest.json").write_text(
+                json.dumps(
+                    {"baselineId": baseline, "packageDigest": package},
+                ),
+                encoding="utf-8",
+            )
+            peer_session = local_environment_auth.LocalAcceptanceSession(
+                owner_id="owner-lock",
+                persona_id="persona-lock",
+                access_token="peer-token",
+            )
+            with (
+                mock.patch.object(
+                    local_environment_auth,
+                    "active_deployment_candidate",
+                    return_value={
+                        "baselineId": baseline,
+                        "candidateDir": str(candidate_dir),
+                    },
+                ),
+                mock.patch.object(
+                    local_environment_auth,
+                    "env_runs_root",
+                    return_value=root / "runs",
+                ),
+                mock.patch.object(
+                    local_environment_auth,
+                    "deployment_target_path",
+                    return_value=secret_root,
+                ),
+                mock.patch.object(
+                    local_environment_auth,
+                    "_try_cached_reference_session",
+                    side_effect=[None, peer_session],
+                ),
+                mock.patch.object(
+                    local_environment_auth,
+                    "_clear_local_otp_send_throttle",
+                    side_effect=AssertionError("peer cache hit must not clear OTP"),
+                ),
+                mock.patch.object(
+                    local_environment_auth,
+                    "open_local_phone_acceptance_session",
+                    side_effect=AssertionError("peer cache hit must not resend OTP"),
+                ),
+            ):
+                session = local_environment_auth.open_reference_acceptance_session(
+                    "https://api.gamma.quwoquan.com:19000",
+                    environment="gamma",
+                    target_name="gamma-local",
+                )
+
+        self.assertEqual(session.access_token, "peer-token")
+
+    def test_retained_receipt_clears_otp_throttle_before_single_provision(
+        self,
+    ) -> None:
+        epoch = "e" * 64
+        baseline = "sha256:91e4ec0346e6856159480135150a31020240f414ef940064f3da96de718a39dd"
+        package = "sha256:b7e8e5147c91f8a823198dfe83b3096677ff4c8ef5dd4f21e2d4634787f2bf29"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            secret_root = root / "gamma-local/secrets"
+            secret_root.mkdir(parents=True)
+            runs = root / "runs/nonprod-data" / epoch
+            runs.mkdir(parents=True)
+            (runs / "nonprod_reference_identity.json").write_text(
+                json.dumps(
+                    {
+                        "schema": "qwq.nonprod_acceptance_dataset_receipt",
+                        "target": "gamma-local",
+                        "baselineId": baseline,
+                        "packageDigest": package,
+                        "datasetId": "nonprod_reference_identity",
+                        "datasetEpoch": epoch,
+                        "status": "passed",
+                        "cleanupState": "retained",
+                        "expiresAt": "2099-01-01T00:00:00+00:00",
+                        "actorReceiptRefs": [
+                            {
+                                "role": "primary",
+                                "ownerId": "owner-provision",
+                                "accountState": "active",
+                                "identityOrigin": "phone",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            candidate_dir = root / "candidate"
+            candidate_dir.mkdir()
+            (candidate_dir / "manifest.json").write_text(
+                json.dumps(
+                    {"baselineId": baseline, "packageDigest": package},
+                ),
+                encoding="utf-8",
+            )
+            actor = local_environment_auth.LocalAcceptanceActor(
+                role="primary",
+                session=local_environment_auth.LocalAcceptanceSession(
+                    owner_id="owner-provision",
+                    persona_id="persona-provision",
+                    access_token="fresh-token",
+                ),
+                challenge_id="challenge-provision",
+                account_state="active",
+                identity_origin="phone",
+            )
+            with (
+                mock.patch.object(
+                    local_environment_auth,
+                    "active_deployment_candidate",
+                    return_value={
+                        "baselineId": baseline,
+                        "candidateDir": str(candidate_dir),
+                    },
+                ),
+                mock.patch.object(
+                    local_environment_auth,
+                    "env_runs_root",
+                    return_value=root / "runs",
+                ),
+                mock.patch.object(
+                    local_environment_auth,
+                    "deployment_target_path",
+                    return_value=secret_root,
+                ),
+                mock.patch.object(
+                    local_environment_auth,
+                    "_try_cached_reference_session",
+                    return_value=None,
+                ),
+                mock.patch.object(
+                    local_environment_auth,
+                    "_restore_retained_reference_session",
+                    return_value=None,
+                ),
+                mock.patch.object(
+                    local_environment_auth,
+                    "_nonprod_acceptance_phone",
+                    return_value="+8613900001001",
+                ),
+                mock.patch.object(
+                    local_environment_auth,
+                    "_clear_local_otp_send_throttle",
+                ) as clear_throttle,
+                mock.patch.object(
+                    local_environment_auth,
+                    "open_local_phone_acceptance_session",
+                    return_value=actor,
+                ) as open_phone,
+            ):
+                session = local_environment_auth.open_reference_acceptance_session(
+                    "https://api.gamma.quwoquan.com:19000",
+                    environment="gamma",
+                    target_name="gamma-local",
+                )
+                self.assertEqual(session.access_token, "fresh-token")
+                clear_throttle.assert_called_once_with(
+                    target_name="gamma-local",
+                    phone="+8613900001001",
+                )
+                open_phone.assert_called_once()
+                cache = secret_root / "nonprod-reference-session.cache.json"
+                self.assertTrue(cache.is_file())
+
+    def test_retained_receipt_restores_session_without_otp(self) -> None:
+        epoch = "f" * 64
+        baseline = "sha256:91e4ec0346e6856159480135150a31020240f414ef940064f3da96de718a39dd"
+        package = "sha256:b7e8e5147c91f8a823198dfe83b3096677ff4c8ef5dd4f21e2d4634787f2bf29"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            secret_root = root / "gamma-local/secrets"
+            secret_root.mkdir(parents=True)
+            runs = root / "runs/nonprod-data" / epoch
+            runs.mkdir(parents=True)
+            (runs / "nonprod_reference_identity.json").write_text(
+                json.dumps(
+                    {
+                        "schema": "qwq.nonprod_acceptance_dataset_receipt",
+                        "target": "gamma-local",
+                        "baselineId": baseline,
+                        "packageDigest": package,
+                        "datasetId": "nonprod_reference_identity",
+                        "datasetEpoch": epoch,
+                        "status": "passed",
+                        "cleanupState": "retained",
+                        "expiresAt": "2099-01-01T00:00:00+00:00",
+                        "actorReceiptRefs": [
+                            {
+                                "role": "primary",
+                                "ownerId": "owner-restore",
+                                "personaIds": ["persona-restore"],
+                                "accountState": "active",
+                                "identityOrigin": "phone",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            candidate_dir = root / "candidate"
+            candidate_dir.mkdir()
+            (candidate_dir / "manifest.json").write_text(
+                json.dumps(
+                    {"baselineId": baseline, "packageDigest": package},
+                ),
+                encoding="utf-8",
+            )
+            restored = local_environment_auth.LocalAcceptanceSession(
+                owner_id="owner-restore",
+                persona_id="persona-restore",
+                access_token="restored-token",
+            )
+            with (
+                mock.patch.object(
+                    local_environment_auth,
+                    "active_deployment_candidate",
+                    return_value={
+                        "baselineId": baseline,
+                        "candidateDir": str(candidate_dir),
+                    },
+                ),
+                mock.patch.object(
+                    local_environment_auth,
+                    "env_runs_root",
+                    return_value=root / "runs",
+                ),
+                mock.patch.object(
+                    local_environment_auth,
+                    "deployment_target_path",
+                    return_value=secret_root,
+                ),
+                mock.patch.object(
+                    local_environment_auth,
+                    "_try_cached_reference_session",
+                    return_value=None,
+                ),
+                mock.patch.object(
+                    local_environment_auth,
+                    "_restore_retained_reference_session",
+                    return_value=restored,
+                ) as restore,
+                mock.patch.object(
+                    local_environment_auth,
+                    "open_local_phone_acceptance_session",
+                    side_effect=AssertionError("retained restore must not resend OTP"),
+                ),
+            ):
+                session = local_environment_auth.open_reference_acceptance_session(
+                    "https://api.gamma.quwoquan.com:19000",
+                    environment="gamma",
+                    target_name="gamma-local",
+                )
+                self.assertEqual(session.access_token, "restored-token")
+                restore.assert_called_once()
+                self.assertTrue(
+                    (secret_root / "nonprod-reference-session.cache.json").is_file()
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

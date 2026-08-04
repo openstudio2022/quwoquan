@@ -7,10 +7,10 @@ import (
 	"time"
 
 	publicwebtool "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/adapters/outbound/tool"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/orchestration"
 	publicweb "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/publicweb"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
-	toolpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/tool"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
+	toolpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/tool"
+	assistant "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/model"
 )
 
 type recordingDiscoveryLedger struct {
@@ -279,6 +279,15 @@ func TestPublicWebFabricInjectsDurableRunIdentityAndReturnsAssessment(t *testing
 		assessment["evidenceSufficient"] != true ||
 		assessment["replanRequired"] != false {
 		t.Fatalf("durable assessment = %#v", assessment)
+	}
+	if _, err := fabric.Execute(
+		context.Background(),
+		publicwebtool.DurableRequest{
+			ToolName: "weather_lookup",
+			RunID:    "run_authoritative",
+		},
+	); err == nil {
+		t.Fatal("public web fabric accepted a tool owned by another adapter")
 	}
 }
 

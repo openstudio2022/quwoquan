@@ -112,12 +112,13 @@ class _HomepageIntroductionPageState
               category: UiErrorCategory.pageLoad,
               scope: UiErrorScope.page,
             ),
-            onAction: (action) {
+            onRecovery: (action) async {
               if (action.type == UiErrorActionType.retry ||
                   action.type == UiErrorActionType.resubmit) {
                 ref.invalidate(homepageIntroductionProvider(widget.homepageId));
+                return UiRecoveryOutcome.superseded;
               }
-              return Future<void>.value();
+              return UiRecoveryOutcome.cancelled;
             },
           ),
           data: (introduction) {

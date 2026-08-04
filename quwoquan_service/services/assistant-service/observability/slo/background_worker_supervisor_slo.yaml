@@ -1,0 +1,31 @@
+service: assistant-service
+domain: assistant
+capability: background-worker-supervision
+
+# Worker readiness is derived from the latest canonical business cycle or
+# durable lease heartbeat. A running goroutine is never treated as liveness.
+metrics:
+  readiness_status: runtime_health_check_status # labels: check
+  readiness_last_success_timestamp_seconds: runtime_health_check_last_success_timestamp_seconds # labels: check
+  readiness_duration_seconds: runtime_health_check_duration_seconds # labels: check
+
+privacy:
+  permitted_labels: [check]
+  prohibited_labels:
+    [account_id, session_id, run_id, skill_id, task_id, event_id, instruction, error]
+
+slis:
+  - id: assistant_background_worker_readiness
+    description: 所有 Assistant 后台 Worker 的最近一次真实业务周期或 durable lease heartbeat 均成功；任一依赖故障、panic、意外退出或超时陈旧都会使实例 readiness fail-closed。
+    sli: min(runtime_health_check_status{check=~"assistant_run_terminal_relay|assistant_skill_subscription_scheduler|assistant_learning_projection_scheduler|assistant_learning_fact_outbox_relay|assistant_policy_release_outbox_relay|assistant_policy_rollout_outbox_relay|assistant_mentioned_consumer|assistant_membership_consumer|assistant_durable_run_worker"})
+    objective: 1
+
+alerts:
+  background_worker_unhealthy:
+    condition: max_over_time(runtime_health_check_status{check=~"assistant_run_terminal_relay|assistant_skill_subscription_scheduler|assistant_learning_projection_scheduler|assistant_learning_fact_outbox_relay|assistant_policy_release_outbox_relay|assistant_policy_rollout_outbox_relay|assistant_mentioned_consumer|assistant_membership_consumer|assistant_durable_run_worker"}[2m]) < 1
+    severity: critical
+
+failure_semantics:
+  dependency_or_business_cycle_failed: mark_readiness_unhealthy_and_keep_durable_work_pending
+  worker_panicked_or_exited: cancel_sibling_workers_and_mark_readiness_unhealthy
+  shutdown_timeout: report_process_failure_but_join_all_workers_before_closing_dependencies

@@ -34,6 +34,7 @@ from content.execution.reliabletask_worker import (  # noqa: E402
 )
 from content.execution.workspace import execution_root  # noqa: E402
 from content.execution.recipe import _runtime_preflight_argv  # noqa: E402
+from content.templates.registry import TemplateRegistry  # noqa: E402
 from core.control_types import (  # noqa: E402
     AgentFailureKind,
     ContentType,
@@ -45,6 +46,7 @@ from core.control_types import (  # noqa: E402
     ReliableTaskDispatchStatus,
     RuntimeEnvironment,
 )
+from governance.creators.assignment import creator_assignment_from_profile  # noqa: E402
 from support.execution_manifest_fixture import ExecutionFixtureBuilder  # noqa: E402
 
 
@@ -169,6 +171,96 @@ def test_local_controller_delegates_declared_job_to_service_fleet(monkeypatch) -
         is None
     )
     shutil.rmtree(execution_root(EXECUTION_ID), ignore_errors=True)
+
+
+def test_reliabletask_resume_accepts_receipt_for_only_remaining_jobs__reliability__local_contract(
+    monkeypatch,
+) -> None:
+    execution_id = "20260803--travel-article-generate--test-region-a--pilot-902"
+    names = ("测试实体甲", "测试实体乙")
+    shutil.rmtree(execution_root(execution_id), ignore_errors=True)
+    fixture = ExecutionFixtureBuilder(
+        execution_id,
+        targets=tuple(
+            {"name": name, "entityType": "地点/景区"} for name in names
+        ),
+        approved_quota=2,
+    )
+    fixture.build()
+    ctx = ExecutionContext(
+        execution_id=execution_id,
+        entity_ids=names,
+        spec=fixture.spec(),
+        managed=True,
+        runtime=RuntimeEnvironment.LOCAL,
+    )
+    creator_assignment = creator_assignment_from_profile(
+        TemplateRegistry.load().creators["qwq_creator_highland_travel_blogger_001"]
+    )
+    jobs = tuple(
+        enqueue_ref_job(
+            execution_id,
+            f"/entity/地点/景区/{name}",
+            "author",
+            mutex_key=f"/entity/地点/景区/{name}",
+            queue_backend=QueueBackend.RELIABLE_TASK,
+            meta={
+                "contentType": ContentType.ARTICLE.value,
+                "carrier": ContentType.ARTICLE.value,
+                "entityRef": f"/entity/地点/景区/{name}",
+                "sourceRevision": "sha256:" + (str(index + 1) * 64),
+                "contentObjectDir": f"posts/article/攻略/{name}/1",
+                **creator_assignment,
+            },
+        )
+        for index, name in enumerate(names)
+    )
+    _write_job(
+        _read_job(execution_id, jobs[0].job_id).with_timing(
+            QueueTimelineEvent.SUCCEEDED,
+            at="2026-08-03T00:00:00Z",
+            state=QueueJobState.SUCCEEDED,
+            lease=QueueLease(),
+        )
+    )
+
+    def run_fleet(_execution_id, _stage, *, workers, completion_grace_seconds):
+        assert _execution_id == execution_id
+        assert workers == ctx.max_workers
+        assert completion_grace_seconds > 0
+        _write_job(
+            _read_job(execution_id, jobs[1].job_id).with_timing(
+                QueueTimelineEvent.SUCCEEDED,
+                at="2026-08-03T00:01:00Z",
+                state=QueueJobState.SUCCEEDED,
+                lease=QueueLease(),
+            )
+        )
+        return ReliableTaskFleetReport(
+            total=1,
+            succeeded=1,
+            outcomes=(
+                ReliableTaskFleetOutcome(
+                    job_id=jobs[1].job_id,
+                    status="succeeded",
+                    attempts=1,
+                ),
+            ),
+        )
+
+    from content.execution import reliabletask_fleet
+
+    monkeypatch.setattr(reliabletask_fleet, "run_reliabletask_fleet", run_fleet)
+    result = reliabletask_dispatch.dispatch_reliabletask_checkpoint(
+        ctx,
+        ExecutionStage.POST_AUTHOR,
+    )
+
+    assert result is not None
+    assert result.status is ReliableTaskDispatchStatus.COMPLETED
+    assert result.completed_count == 2
+    assert result.issues == ()
+    shutil.rmtree(execution_root(execution_id), ignore_errors=True)
 
 
 def test_execution_runtime_preflight__requires_ops_fleet_before_authoring__contract__local_contract() -> None:

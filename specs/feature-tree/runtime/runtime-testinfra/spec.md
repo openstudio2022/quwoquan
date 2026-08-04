@@ -48,7 +48,7 @@
 <a id="req-002"></a>
 ### REQ-002 测试文件必须物理位于 canonical 目录
 
-- 测试文件必须物理位于 canonical 目录；禁止 bridge、legacy allowlist 和手写绿色报告
+- 测试文件必须物理位于 canonical 目录；禁止 bridge、历史豁免 allowlist 和手写绿色报告
 - `support/` 只保存 fixture、harness、builder，不得保存测试入口
 
 ## 6. 契约与依赖

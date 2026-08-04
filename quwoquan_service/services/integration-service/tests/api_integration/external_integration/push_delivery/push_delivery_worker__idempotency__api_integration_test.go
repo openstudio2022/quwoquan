@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/runtime/runtime-external-integration/integration-service-foundation/spec.md#gwt-001
 package api_integration
 
 import (
@@ -108,7 +109,7 @@ func TestPushDeliveryWorkerDispatchesIdempotentlyExactlyOnce(t *testing.T) {
 			Env:            "gamma",
 			IdempotencyKey: "delivery-api-001",
 			PayloadRef:     "push:delivery-api-001",
-			PayloadDigest:  "sha256:push-api",
+			PayloadDigest:  integrationsupport.CanonicalTestSHA256("push:delivery-api-001"),
 			Sensitivity:    "private",
 			ExpiresAt:      expiresAt,
 			Payload: map[string]string{

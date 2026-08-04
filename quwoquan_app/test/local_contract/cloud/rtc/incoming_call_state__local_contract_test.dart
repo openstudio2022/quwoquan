@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import '../../../support/cloud_services/object_doubles/rtc/rtc_contract_test_builders.dart';
 
 void main() {
   test('ringing payload paints first frame before GetCall completes', () {
@@ -28,7 +29,7 @@ void main() {
 
     final state = container.read(callSessionProvider);
     expect(state.status, CallStatus.ringing);
-    expect(state.session?.callId, 'call-incoming');
+    expect(state.session?.id, 'call-incoming');
     expect(state.session?.initiatorId, 'persona-caller');
     expect(state.incomingPresentation?.displayName, '契约好友');
     expect(
@@ -83,7 +84,7 @@ void main() {
 
       final state = container.read(callSessionProvider);
       expect(state.status, CallStatus.ringing);
-      expect(state.session?.callId, 'call-incoming');
+      expect(state.session?.id, 'call-incoming');
       expect(state.error, isNotEmpty);
     },
   );
@@ -102,8 +103,8 @@ final class _CallQuery implements CallQuery {
       throw StateError('fixture get call failed');
     }
     final now = DateTime.utc(2026, 7, 19);
-    return CallSession(
-      callId: query.callId,
+    return buildCallSessionContract(
+      id: query.callId,
       callType: CallType.audio,
       status: CallStatus.ringing,
       initiatorId: 'persona-caller',
@@ -111,12 +112,12 @@ final class _CallQuery implements CallQuery {
       maxParticipants: 2,
       participantCount: 2,
       participants: <CallParticipant>[
-        const CallParticipant(
+        buildCallParticipantContract(
           userId: 'persona-caller',
           role: ParticipantRole.initiator,
           status: ParticipantStatus.ringing,
         ),
-        const CallParticipant(
+        buildCallParticipantContract(
           userId: 'persona-current',
           role: ParticipantRole.invitee,
           status: ParticipantStatus.ringing,

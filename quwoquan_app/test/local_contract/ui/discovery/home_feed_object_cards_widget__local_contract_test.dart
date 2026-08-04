@@ -11,39 +11,40 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/media/media_download_cache.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/feed_object_card_dto.g.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/home_multi_form_feed.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show ContentPostProjection, FeedObjectCard;
 
 import '../../../support/cloud_services/content_facet_overrides.dart';
 import '../../../support/cloud_services/content/mock_content_repository.dart';
 
-MicroPostDto _post(int index) {
-  return MicroPostDto(
-    id: 'post_object_card_widget_$index',
-    type: 'moment',
-    identity: 'moment',
-    authorId: 'user_demo',
-    displayName: '小趣用户',
-    avatarUrl: '',
-    authorBackgroundUrl: null,
-    authorRoleLabel: '旅行创作者',
-    authorIdentityTags: const <String>['摄影'],
-    authorVerified: false,
-    assistantUsePolicy: 'allow',
-    likeCount: 0,
-    commentCount: 0,
-    shareCount: 0,
-    createdAt: DateTime(2026),
-    updatedAt: null,
-    publishedAt: null,
-    body: '对象卡混排锚点内容 $index',
-    imageUrls: const <String>[],
-    videoUrl: null,
-    durationMs: null,
-    intersectionReasons: const [],
+ContentPostViewData _post(int index) {
+  return ContentPostViewData.fromWire(
+    ContentPostProjection(
+      postId: 'post_object_card_widget_$index',
+      contentType: 'micro',
+      contentIdentity: 'moment',
+      authorId: 'user_demo',
+      authorDisplayName: '小趣用户',
+      authorAvatarUrl: '',
+      authorBackgroundUrl: null,
+      authorRoleLabel: '旅行创作者',
+      authorIdentityTags: const <String>['摄影'],
+      authorVerified: false,
+      assistantUsePolicy: 'allow',
+      likeCount: 0,
+      commentCount: 0,
+      shareCount: 0,
+      createdAt: DateTime(2026),
+      updatedAt: null,
+      publishedAt: null,
+      body: '对象卡混排锚点内容 $index',
+      mediaUrls: const <String>[],
+      intersectionReasons: const [],
+    ),
   );
 }
 
@@ -51,7 +52,7 @@ class _ObjectCardsFeedMapNotifier extends DiscoveryFeedMapNotifier {
   _ObjectCardsFeedMapNotifier(this.posts, this.cards);
 
   final List<ContentPostViewData> posts;
-  final List<FeedObjectCardDto> cards;
+  final List<FeedObjectCard> cards;
 
   @override
   Map<String, AsyncValue<DiscoveryFeedState>> build() {
@@ -77,7 +78,7 @@ class _NoopMediaDownloadCache extends MediaDownloadCache {
   Future<String?> getCachedFilePath(String url) async => null;
 }
 
-Widget _buildFeed(List<ContentPostViewData> posts, List<FeedObjectCardDto> cards) {
+Widget _buildFeed(List<ContentPostViewData> posts, List<FeedObjectCard> cards) {
   return ProviderScope(
     overrides: [
       ...mockContentFacetOverrides(MockContentRepository()),
@@ -109,8 +110,8 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     final posts = List<ContentPostViewData>.generate(3, _post);
-    final cards = <FeedObjectCardDto>[
-      FeedObjectCardDto(
+    final cards = <FeedObjectCard>[
+      FeedObjectCard(
         objectKind: 'entity_homepage',
         objectId: 'homepage_sight_west_lake',
         title: '西湖',
@@ -137,7 +138,7 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     final posts = List<ContentPostViewData>.generate(2, _post);
-    await tester.pumpWidget(_buildFeed(posts, const <FeedObjectCardDto>[]));
+    await tester.pumpWidget(_buildFeed(posts, const <FeedObjectCard>[]));
     await tester.pump();
 
     expect(

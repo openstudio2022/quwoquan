@@ -1,5 +1,6 @@
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/remote/circle/circle_feed_post_projection_mapper.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/post_read_presentation.g.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 

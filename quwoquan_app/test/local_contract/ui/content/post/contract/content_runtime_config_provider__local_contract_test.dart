@@ -1,29 +1,31 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/models/app_remote_config_snapshot.dart';
-import 'package:quwoquan_app/cloud/runtime/models/content_app_config_wire.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import '../../../../../support/cloud_services/content_facet_overrides.dart';
 import '../../../../../support/cloud_services/content/mock_content_repository.dart';
+import '../../../../../support/cloud_services/content/test_content_app_config.dart';
 
 class _RuntimeConfigRepository extends MockContentRepository {
   _RuntimeConfigRepository(this._config);
 
-  Map<String, dynamic> _config;
+  AppConfigSlice _config;
 
-  void replace(Map<String, dynamic> next) {
+  void replace(AppConfigSlice next) {
     _config = next;
   }
 
   @override
-  Future<ContentAppConfigWire> getAppConfig() async =>
-      ContentAppConfigWire.fromResponseObject(_config);
+  Future<AppConfigSlice> getAppConfig() async => _config;
 }
 
-Map<String, dynamic> _remoteConfig(Map<String, dynamic> root) {
-  return AppRemoteConfigSnapshot.defaults(
-    ContentAppConfigWire.fromResponseObject(root),
-  ).toPersistedMap();
+AppConfigSlice _remoteConfig(Map<String, Object?> root) {
+  final rawContent = root['content'];
+  return testAppConfigSlice(
+    content: rawContent is Map<String, Object?>
+        ? rawContent
+        : Map<String, Object?>.from(rawContent! as Map),
+  );
 }
 
 ContentRuntimeConfigState _effectiveState(ProviderContainer container) {
@@ -216,31 +218,17 @@ void main() {
     expect(container.read(personaProfileSyncFeatureFlagProvider), isTrue);
   });
 
-  test('remote app config 可关闭 persona management 与 sync flags', () async {
-    final container = ProviderContainer(
-      overrides: [
-        ...mockContentFacetOverrides(
-          _RuntimeConfigRepository(
-            _remoteConfig({
-              'content': {
-                'feature_flags': {
-                  'ops.user.persona_management': false,
-                  'ops.user.persona_profile_sync': false,
-                },
-              },
-            }),
-          ),
-        ),
-      ],
+  test('Content config 拒绝跨域 persona feature flag', () {
+    expect(
+      () => _remoteConfig(<String, Object?>{
+        'content': <String, Object?>{
+          'feature_flags': <String, Object?>{
+            'ops.user.persona_management': false,
+            'ops.user.persona_profile_sync': false,
+          },
+        },
+      }),
+      throwsFormatException,
     );
-    addTearDown(container.dispose);
-
-    container.read(contentRuntimeConfigProvider);
-    await Future<void>.delayed(const Duration(milliseconds: 1));
-    await Future<void>.delayed(const Duration(milliseconds: 1));
-
-    final pending = container.read(appRemoteConfigProvider).pending;
-    expect(pending?.isEnabled('ops.user.persona_management'), isFalse);
-    expect(pending?.isEnabled('ops.user.persona_profile_sync'), isFalse);
   });
 }

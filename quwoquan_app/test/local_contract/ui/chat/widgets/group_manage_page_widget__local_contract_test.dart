@@ -4,8 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_group_settings_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import 'package:quwoquan_app/cloud/services/chat/chat_view_data.dart';
 import '../../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -200,15 +200,19 @@ void main() {
 
 class _ErrorSettingsRepo extends MockChatRepository {
   @override
-  Future<ChatGroupSettingsDto> getGroupSettings(String conversationId) async {
+  Future<ChatGroupSettingsViewData> getGroupSettings(
+    String conversationId,
+  ) async {
     throw Exception('settings error');
   }
 }
 
 class _CircleGroupManagedSettingsRepo extends MockChatRepository {
   @override
-  Future<ChatGroupSettingsDto> getGroupSettings(String conversationId) async {
-    return ChatGroupSettingsDto(
+  Future<ChatGroupSettingsViewData> getGroupSettings(
+    String conversationId,
+  ) async {
+    return const ChatGroupSettingsViewData(
       conversationType: 'group',
       circleId: 'fixture_circle',
       circleGroupId: 'fixture_circle_group',
@@ -217,12 +221,12 @@ class _CircleGroupManagedSettingsRepo extends MockChatRepository {
 }
 
 class _TrackingSettingsRepo extends MockChatRepository {
-  ChatGroupSettingsDto? lastSettings;
+  ChatGroupSettingsViewData? lastSettings;
 
   @override
   Future<void> updateGroupSettings(
     String conversationId,
-    ChatGroupSettingsDto settings,
+    ChatGroupSettingsViewData settings,
   ) async {
     lastSettings = settings;
   }

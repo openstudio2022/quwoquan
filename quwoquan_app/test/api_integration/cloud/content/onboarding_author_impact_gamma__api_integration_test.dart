@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
 import 'package:quwoquan_app/cloud/remote/content/post/author_impact_remote.dart';
+import 'package:quwoquan_app/cloud/remote/content/post/content_behavior_remote.dart';
 import 'package:quwoquan_app/cloud/remote/tag/tag_catalog_remote.dart';
 import 'package:quwoquan_app/cloud/runtime/auth/cloud_auth_token_provider.dart';
 import 'package:quwoquan_app/cloud/runtime/config/cloud_runtime_environment.dart';
@@ -12,7 +13,6 @@ import 'package:quwoquan_app/cloud/runtime/context/actor_queue_partition.dart';
 import 'package:quwoquan_app/cloud/runtime/context/cloud_client_context.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/executor/cloud_operation_client_factory.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_summary.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/runtime/observability/cloud_operation_telemetry.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
@@ -29,9 +29,29 @@ void main() {
     'onboarding interest is confirmed by Gamma and rejects non-leaf taxonomy paths',
     () async {
       final httpClient = _newCloudHttpClient();
-      final repository = RemoteBehaviorRepository(
+      final client = buildGeneratedCloudOperationClient(
         httpClient: httpClient,
-        baseUrl: _gatewayURL,
+        clientContextProvider: const _GammaClientContext(),
+        telemetrySink: _RecordingTelemetry(),
+        environment: CloudRuntimeEnvironment(
+          environment: CloudEnvironment.gamma,
+          gatewayBaseUri: Uri.parse(_gatewayURL),
+        ),
+      );
+      final repository = RemoteBehaviorRepository(
+        writer: RemoteContentBehaviorCommandAdapter(
+          client: client,
+          invocationContext: (pageID) => CloudOperationInvocationContext(
+            surfaceId: AppUiSurfaces.interestOnboarding.id,
+            routeId: AppUiSurfaces.interestOnboarding.routeId,
+            clientPageId: pageID,
+            actor: CloudOperationActorContext(
+              accountId: _personaID,
+              personaId: _personaID,
+              deviceActorId: 'gamma-uat-device',
+            ),
+          ),
+        ),
         queuePartition: ActorQueuePartition(
           environment: 'gamma',
           accountId: _personaID,

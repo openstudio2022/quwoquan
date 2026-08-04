@@ -14,7 +14,7 @@ import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_statement_synthesizer.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
@@ -48,7 +48,6 @@ import 'package:quwoquan_app/components/post/post_preview_list_tile.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
     show ReferralSource;
 import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
-import 'package:quwoquan_app/cloud/runtime/models/discovery_presentation_wire.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
@@ -654,7 +653,6 @@ class HomeMultiFormFeed extends ConsumerWidget {
     runWhenLoggedIn(ref, context, AuthGateReason.share, () {
       final template = buildDiscoveryShareTemplate(
         post: post,
-        wire: _rawDiscoveryItem(post),
         enableIdentityTemplate: enableIdentityTemplate,
       );
       ContentShareSheet.show(
@@ -976,7 +974,6 @@ class HomeMultiFormFeed extends ConsumerWidget {
       context,
       buildDiscoveryShareTemplate(
         post: post,
-        wire: _rawDiscoveryItem(post),
         enableIdentityTemplate: enableIdentityTemplate,
       ),
       ContentShareAction(id: 'copy_link', label: FoundationText.copyLink),
@@ -1022,9 +1019,5 @@ class HomeMultiFormFeed extends ConsumerWidget {
               },
       );
     }
-  }
-
-  DiscoveryPresentationWire _rawDiscoveryItem(ContentPostViewData post) {
-    return DiscoveryPresentationWire(post.toPresentationMap());
   }
 }

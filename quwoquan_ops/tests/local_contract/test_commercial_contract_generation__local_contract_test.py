@@ -37,6 +37,7 @@ assistantAssistantEntryViewGetAssistantEntry(
                 source,
                 response_type="AssistantEntryResponse",
                 method_name="assistantAssistantEntryViewGetAssistantEntry",
+                transport="json",
             )
         )
         self.assertTrue(
@@ -60,12 +61,59 @@ Future<assistantContracts.OtherResponse> operation() {
                 source,
                 response_type="AssistantEntryResponse",
                 method_name="operation",
+                transport="json",
             )
         )
         self.assertFalse(
             MODULE._has_response_decoder(
                 source,
                 "decodeAssistantEntryResponse",
+            )
+        )
+
+    def test_sse_operation_requires_a_typed_stream_method(self) -> None:
+        source = """
+Stream<assistantContracts.AssistantStreamEventWire>
+assistantAssistantRunStreamAssistantRunEvents(
+  assistantContracts.AssistantRunEventStreamQuery request,
+) {
+  return executor.stream<assistantContracts.AssistantStreamEventWire>(
+    responseDecoder: assistantContracts.decodeAssistantStreamEventWire,
+  );
+}
+"""
+
+        self.assertTrue(
+            MODULE._has_typed_method(
+                source,
+                response_type="AssistantStreamEventWire",
+                method_name="assistantAssistantRunStreamAssistantRunEvents",
+                transport="sse",
+            )
+        )
+        self.assertFalse(
+            MODULE._has_typed_method(
+                source,
+                response_type="AssistantStreamEventWire",
+                method_name="assistantAssistantRunStreamAssistantRunEvents",
+                transport="json",
+            )
+        )
+
+    def test_sse_operation_rejects_a_future_method(self) -> None:
+        source = """
+Future<assistantContracts.AssistantStreamEventWire>
+assistantAssistantRunStreamAssistantRunEvents(
+  assistantContracts.AssistantRunEventStreamQuery request,
+) async => throw UnimplementedError();
+"""
+
+        self.assertFalse(
+            MODULE._has_typed_method(
+                source,
+                response_type="AssistantStreamEventWire",
+                method_name="assistantAssistantRunStreamAssistantRunEvents",
+                transport="sse",
             )
         )
 

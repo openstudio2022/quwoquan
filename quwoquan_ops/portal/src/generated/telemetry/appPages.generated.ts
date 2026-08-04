@@ -347,6 +347,31 @@ export const appPages = {
     },
     {
       "collect_page_access": true,
+      "page_name": "travel_timeline",
+      "route_id": "travelTimeline"
+    },
+    {
+      "collect_page_access": true,
+      "page_name": "travel_map",
+      "route_id": "travelMap"
+    },
+    {
+      "collect_page_access": true,
+      "page_name": "travel_trips",
+      "route_id": "travelTrips"
+    },
+    {
+      "collect_page_access": true,
+      "page_name": "travel_templates",
+      "route_id": "travelTemplates"
+    },
+    {
+      "collect_page_access": true,
+      "page_name": "travel_share",
+      "route_id": "travelShare"
+    },
+    {
+      "collect_page_access": true,
       "page_name": "settings",
       "route_id": "settings"
     },

@@ -27,7 +27,7 @@ final class _ProfileUpdateProposalReviewSheetState
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      _track('expose', result: widget.proposal.status);
+      _track('expose', result: widget.proposal.status.wireName);
     });
   }
 
@@ -57,14 +57,14 @@ final class _ProfileUpdateProposalReviewSheetState
     });
     try {
       final writer = ref.read(profileEditProposalCommandWriterProvider);
-      if (widget.proposal.status == 'pending') {
+      if (widget.proposal.status == ProposalStatus.pending) {
         await writer.confirm(
           ConfirmProfileUpdateProposalCommand(proposalId: widget.proposal.id),
         );
       }
-      if (widget.proposal.status == 'pending' ||
-          widget.proposal.status == 'confirmed' ||
-          widget.proposal.status == 'applying') {
+      if (widget.proposal.status == ProposalStatus.pending ||
+          widget.proposal.status == ProposalStatus.confirmed ||
+          widget.proposal.status == ProposalStatus.applying) {
         await writer.apply(
           ApplyProfileUpdateProposalCommand(proposalId: widget.proposal.id),
         );
@@ -160,13 +160,13 @@ final class _ProfileUpdateProposalReviewSheetState
     final changes = _changeRows(widget.proposal);
     final reviewBasis = _reviewBasisRows(widget.proposal);
     final canApprove =
-        widget.proposal.status == 'pending' ||
-        widget.proposal.status == 'confirmed' ||
-        widget.proposal.status == 'applying';
+        widget.proposal.status == ProposalStatus.pending ||
+        widget.proposal.status == ProposalStatus.confirmed ||
+        widget.proposal.status == ProposalStatus.applying;
     final canReject =
-        widget.proposal.status == 'pending' ||
-        widget.proposal.status == 'confirmed';
-    final canRollback = widget.proposal.status == 'applied';
+        widget.proposal.status == ProposalStatus.pending ||
+        widget.proposal.status == ProposalStatus.confirmed;
+    final canRollback = widget.proposal.status == ProposalStatus.applied;
     return AppBottomModalSurface(
       panelKey: const ValueKey<String>('profile-proposal-review-sheet'),
       onDismiss: _busy ? () {} : () => Navigator.of(context).pop(false),
@@ -260,7 +260,7 @@ final class _ProfileUpdateProposalReviewSheetState
                   if (canApprove) ...<Widget>[
                     ProfileIosActionButton(
                       key: const ValueKey<String>('profile-proposal-approve'),
-                      label: widget.proposal.status == 'applying'
+                      label: widget.proposal.status == ProposalStatus.applying
                           ? ProfileText.editProfileProposalResumeApply
                           : ProfileText.editProfileProposalApprove,
                       style: ProfileIosActionStyle.filled,
@@ -352,9 +352,8 @@ String _profileChangeFieldLabel(String field) => switch (field) {
   _ => ProfileText.editProfileProposalImpactScope,
 };
 
-String _sourceLabel(String source) => switch (source) {
-  'assistant' => ProfileText.editProfileProposalSourceAssistant,
-  'external' => ProfileText.editProfileProposalSourceExternal,
-  'persona' => ProfileText.editProfileProposalSourcePersona,
-  _ => ProfileText.editProfileProposalSourceExternal,
+String _sourceLabel(ProposalSource source) => switch (source) {
+  ProposalSource.assistant => ProfileText.editProfileProposalSourceAssistant,
+  ProposalSource.external => ProfileText.editProfileProposalSourceExternal,
+  ProposalSource.persona => ProfileText.editProfileProposalSourcePersona,
 };

@@ -53,6 +53,9 @@
 - 每个第一方镜像的 build input 必须覆盖服务 owner 与实际编译消费的共享 runtime、generated ContractGraph binding、platform package 和 module lock，不能只散列 owner 目录。
 - 包内 OCI manifest 必须记录实际 image ID；`up` 只能使用该精确 ID，不能使用可漂移 tag。
 - `stackctl up / health / verify` 只能消费已激活的不可变候选及其唯一 `environment_runtime.yaml`，不得隐式 package、build、重新解析工作树 URL 或重选候选；工作区与 active candidate 漂移只能诊断并阻断。
+- `stackctl dev-session` 是开发者显式拥有的唯一冷/热编排入口：它可按明确 release attestation 执行 package、full up、health 与 App handoff，但不得执行破坏性 repair、猜测“最新” release 或把生命周期责任交给 App launcher；每个阶段必须有独立 report 与首个机器可读 blocker。
+- `dev-session --all-nonprod` 在单工作站按 Alpha→Beta→Gamma 串行运行；隔离 runner 可并行执行不同 target，但不得共享端口、Compose project、secret、CA、release 或 runtime receipt。
+- full runtime 是 App 会话的唯一 baseline。bounded content workload 在 full 健康时只复用其能力且不得覆盖 baseline receipt；独立 bounded runtime 必须使用 workload-scoped receipt，并在结束后恢复进入前状态。
 - 四环境内容 consumer/commercial readiness 必须绑定同一份 immutable release 的 `releaseId + manifestDigest + sourceOwner=qwq_data`，并校验 discovery `identity=work`、视频书 `identity=work&type=video` 与 `premium_stream` 的 release-bound 非空读回；缺少 Data readiness receipt 或任一 exact query 为空时不得产生通过回执。
 - commercial readiness 必须从同一 release 对象闭包投影 canonical `appUatEnvelope`，包含 homepage、article、image、video、Creator、Tag 与 attribution 的验收身份。App 自动验收不得从手工环境变量、fixture 或旧回执重建该信封。
 
@@ -96,6 +99,8 @@
 - AND `stackctl package --env prod --target prod-sim|prod-hosted` 分别生成 target 隔离的 App 包，包内 URL 与 resolver 生成的 `publicBases` 一致，且 `prod-hosted` 仍拒绝本地或测试 host。
 - AND Alpha/Beta/Gamma 完整 package 在同一 `baselineId` 下分别生成不可变候选根 manifest，绑定相同 Data candidate/rollback release digest、包内 effective runtime bytes 与实际 OCI image ID；打包期间 workspace 漂移、manifest 缺失或 digest 不一致均阻断激活。
 - AND `stackctl up / health / verify` 只读取 active candidate，重复 package 只在完整 manifest 和全部 digest 相同的情况下返回原始 receipt，不隐式重建或覆盖候选。
+- AND `stackctl dev-session` 在冷路径按显式 candidate/rollback attestation 完成 package→full up→health，在热路径复用相同候选与健康 runtime；`--all-nonprod` 顺序生成三份 target 隔离回执。
+- AND bounded content workload 复用健康 full runtime 后，App preflight 仍读取原 full receipt；独立 bounded runtime 的 receipt 不冒充 full readiness。
 - AND `stackctl status` 在环境未启动、secret 缺失或 Provider 不可用时只返回诊断失败，不创建 secret、不启动或修复任何组件；consumer/commercial readiness 只有在 canonical Data receipt 与三个 release-bound exact query 均通过时才返回成功。
 - AND 失败时返回 canonical failure，且不产生伪成功事实。
 

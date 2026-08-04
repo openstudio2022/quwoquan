@@ -10,14 +10,18 @@ class AssistantRequestPageIds {
     'AppendAssistantLearningFact': 'assistant.learning.facts.append',
     'AppendAssistantServiceLearningFact': 'assistant.append.assistant.service.learning.fact',
     'CancelAssistantRun': 'assistant.cancel.assistant.run',
+    'ConfirmSkillDataControlRequest': 'assistant.confirm.skill.data.control.request',
     'ContinueAssistantToolUse': 'assistant.continue.assistant.tool.use',
     'CreateAssistantSession': 'assistant.create.assistant.session',
+    'CreateSkillDataControlRequest': 'assistant.create.skill.data.control.request',
     'CreateSkillSubscription': 'assistant.create.skill.subscription',
     'GetAssistantEntry': 'assistant.entry.get',
     'GetAssistantRun': 'assistant.get.assistant.run',
     'GetAssistantSession': 'assistant.get.assistant.session',
+    'GetDomainReaderDescriptor': 'assistant.get.domain.reader.descriptor',
     'GetLearningOpsSummary': 'assistant.get.learning.ops.summary',
     'GetSkillCatalogItem': 'assistant.get.skill.catalog.item',
+    'GetSkillDataControlRequest': 'assistant.get.skill.data.control.request',
     'GetSkillSubscription': 'assistant.get.skill.subscription',
     'GetSkillSurfacePlacement': 'assistant.get.skill.surface.placement',
     'GetSkillUserSetting': 'assistant.get.skill.user.setting',
@@ -26,7 +30,9 @@ class AssistantRequestPageIds {
     'ListAssistantSessions': 'assistant.list.assistant.sessions',
     'ListAssistantTasks': 'assistant.list.assistant.tasks',
     'ListConsents': 'assistant.list.consents',
+    'ListDomainReaderDescriptors': 'assistant.list.domain.reader.descriptors',
     'ListSessionTurns': 'assistant.list.session.turns',
+    'ListSkillActivities': 'assistant.list.skill.activities',
     'ListSkillSubscriptions': 'assistant.list.skill.subscriptions',
     'ListSkillUserSettings': 'assistant.list.skill.user.settings',
     'ListSkills': 'assistant.skills.list',
@@ -55,14 +61,18 @@ class AssistantRequestPageIds {
   static const String appendAssistantLearningFact = 'assistant.learning.facts.append';
   static const String appendAssistantServiceLearningFact = 'assistant.append.assistant.service.learning.fact';
   static const String cancelAssistantRun = 'assistant.cancel.assistant.run';
+  static const String confirmSkillDataControlRequest = 'assistant.confirm.skill.data.control.request';
   static const String continueAssistantToolUse = 'assistant.continue.assistant.tool.use';
   static const String createAssistantSession = 'assistant.create.assistant.session';
+  static const String createSkillDataControlRequest = 'assistant.create.skill.data.control.request';
   static const String createSkillSubscription = 'assistant.create.skill.subscription';
   static const String getAssistantEntry = 'assistant.entry.get';
   static const String getAssistantRun = 'assistant.get.assistant.run';
   static const String getAssistantSession = 'assistant.get.assistant.session';
+  static const String getDomainReaderDescriptor = 'assistant.get.domain.reader.descriptor';
   static const String getLearningOpsSummary = 'assistant.get.learning.ops.summary';
   static const String getSkillCatalogItem = 'assistant.get.skill.catalog.item';
+  static const String getSkillDataControlRequest = 'assistant.get.skill.data.control.request';
   static const String getSkillSubscription = 'assistant.get.skill.subscription';
   static const String getSkillSurfacePlacement = 'assistant.get.skill.surface.placement';
   static const String getSkillUserSetting = 'assistant.get.skill.user.setting';
@@ -71,7 +81,9 @@ class AssistantRequestPageIds {
   static const String listAssistantSessions = 'assistant.list.assistant.sessions';
   static const String listAssistantTasks = 'assistant.list.assistant.tasks';
   static const String listConsents = 'assistant.list.consents';
+  static const String listDomainReaderDescriptors = 'assistant.list.domain.reader.descriptors';
   static const String listSessionTurns = 'assistant.list.session.turns';
+  static const String listSkillActivities = 'assistant.list.skill.activities';
   static const String listSkillSubscriptions = 'assistant.list.skill.subscriptions';
   static const String listSkillUserSettings = 'assistant.list.skill.user.settings';
   static const String listSkills = 'assistant.skills.list';

@@ -821,7 +821,7 @@ func TestDataContentFleetReportRejectsUnboundOrMalformedCommercialEvidence(t *te
 			ExecutionID:           job.ExecutionID,
 			JobID:                 "different-job",
 			CanonicalObjectRef:    job.Ref,
-			CanonicalObjectSHA256: "sha256:not-a-digest",
+			CanonicalObjectSHA256: invalidSHA256Fixture("sha256:not-a-digest"),
 			ObjectTransactionID:   "txn-invalid-001",
 			ResultEnvelopeRef:     "result_envelope.json",
 			AcceptanceClass:       DataContentAcceptanceCommercialCanonical,
@@ -845,4 +845,8 @@ func TestDataContentFleetReportRejectsUnboundOrMalformedCommercialEvidence(t *te
 		report.EndToEndAcceptedThroughputPerHour != 0 {
 		t.Fatalf("invalid commercial evidence was accepted: %#v", report)
 	}
+}
+
+func invalidSHA256Fixture(value string) string {
+	return value
 }

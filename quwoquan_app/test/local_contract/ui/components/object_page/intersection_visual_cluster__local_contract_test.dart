@@ -1,11 +1,12 @@
 import 'package:flutter/cupertino.dart';
+import '../../../../support/fixtures/intersection_fixtures.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_visual.g.dart';
 import 'package:quwoquan_app/components/object_page/intersection_visual_cluster.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-Widget _host(Widget child) =>
-    CupertinoApp(home: CupertinoPageScaffold(child: Center(child: child)));
+Widget _host(Widget child) => CupertinoApp(
+  home: CupertinoPageScaffold(child: Center(child: child)),
+);
 
 void main() {
   group('IntersectionVisualCluster 按 assetKind 渲染', () {
@@ -28,8 +29,14 @@ void main() {
         _host(
           IntersectionVisualCluster(
             visuals: <IntersectionVisual>[
-              IntersectionVisual(assetKind: 'avatar', displayName: '林清越'),
-              IntersectionVisual(assetKind: 'cover', displayName: '黄金投资圈'),
+              intersectionVisualFixture(
+                assetKind: 'avatar',
+                displayName: '林清越',
+              ),
+              intersectionVisualFixture(
+                assetKind: 'cover',
+                displayName: '黄金投资圈',
+              ),
             ],
           ),
         ),
@@ -48,10 +55,10 @@ void main() {
           IntersectionVisualCluster(
             maxVisuals: 2,
             visuals: <IntersectionVisual>[
-              IntersectionVisual(assetKind: 'avatar', displayName: 'a'),
-              IntersectionVisual(assetKind: 'avatar', displayName: 'b'),
-              IntersectionVisual(assetKind: 'avatar', displayName: 'c'),
-              IntersectionVisual(assetKind: 'avatar', displayName: 'd'),
+              intersectionVisualFixture(assetKind: 'avatar', displayName: 'a'),
+              intersectionVisualFixture(assetKind: 'avatar', displayName: 'b'),
+              intersectionVisualFixture(assetKind: 'avatar', displayName: 'c'),
+              intersectionVisualFixture(assetKind: 'avatar', displayName: 'd'),
             ],
           ),
         ),
@@ -67,10 +74,10 @@ void main() {
           IntersectionVisualCluster(
             onVisualTap: tapped.add,
             visuals: <IntersectionVisual>[
-              IntersectionVisual(
+              intersectionVisualFixture(
                 assetKind: 'avatar',
                 displayName: '林清越',
-                target: IntersectionTarget(
+                target: intersectionTargetFixture(
                   objectId: 'u_lin',
                   objectKind: 'person',
                   routeId: 'userProfile',

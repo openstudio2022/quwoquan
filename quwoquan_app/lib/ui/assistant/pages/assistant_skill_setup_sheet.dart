@@ -1,7 +1,23 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
+import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/core/widgets/app_request_feedback.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_skill_setup_schema.dart';
+
+final class AssistantSkillConsentScopePresentation {
+  const AssistantSkillConsentScopePresentation({
+    required this.displayText,
+    required this.description,
+    required this.granted,
+  });
+
+  final String displayText;
+  final String description;
+  final bool granted;
+}
 
 Future<void> showAssistantSkillSetupSheet({
   required BuildContext context,
@@ -10,7 +26,10 @@ Future<void> showAssistantSkillSetupSheet({
   required String dataUseSummary,
   required List<String> targetUserLabels,
   required List<String> surfaceLabels,
-  required List<String> permissionLabels,
+  required List<AssistantSkillConsentScopePresentation>
+  requiredPermissionScopes,
+  required List<AssistantSkillConsentScopePresentation>
+  optionalPermissionScopes,
   required AssistantSkillSetupSchema? schema,
   required Map<String, Object?> initialConfiguration,
   required Future<void> Function(Map<String, Object?> value)? onSave,
@@ -24,7 +43,8 @@ Future<void> showAssistantSkillSetupSheet({
       dataUseSummary: dataUseSummary,
       targetUserLabels: targetUserLabels,
       surfaceLabels: surfaceLabels,
-      permissionLabels: permissionLabels,
+      requiredPermissionScopes: requiredPermissionScopes,
+      optionalPermissionScopes: optionalPermissionScopes,
       schema: schema,
       initialConfiguration: initialConfiguration,
       onSave: onSave,
@@ -40,7 +60,8 @@ class AssistantSkillSetupSheet extends StatefulWidget {
     required this.dataUseSummary,
     required this.targetUserLabels,
     required this.surfaceLabels,
-    required this.permissionLabels,
+    required this.requiredPermissionScopes,
+    required this.optionalPermissionScopes,
     required this.schema,
     required this.initialConfiguration,
     required this.onSave,
@@ -51,7 +72,8 @@ class AssistantSkillSetupSheet extends StatefulWidget {
   final String dataUseSummary;
   final List<String> targetUserLabels;
   final List<String> surfaceLabels;
-  final List<String> permissionLabels;
+  final List<AssistantSkillConsentScopePresentation> requiredPermissionScopes;
+  final List<AssistantSkillConsentScopePresentation> optionalPermissionScopes;
   final AssistantSkillSetupSchema? schema;
   final Map<String, Object?> initialConfiguration;
   final Future<void> Function(Map<String, Object?> value)? onSave;
@@ -113,7 +135,9 @@ class _AssistantSkillSetupSheetState extends State<AssistantSkillSetupSheet> {
       isSurfacePainted: true,
       child: Container(
         key: const ValueKey<String>('assistant_skill_detail_sheet'),
-        height: MediaQuery.sizeOf(context).height * 0.88,
+        height:
+            MediaQuery.sizeOf(context).height *
+            AppSpacing.modalSheetMaxHeightRatio,
         color: background,
         child: SafeArea(
           top: false,
@@ -122,7 +146,12 @@ class _AssistantSkillSetupSheetState extends State<AssistantSkillSetupSheet> {
               _buildHeader(context, primary, secondary),
               Expanded(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.twenty,
+                    AppSpacing.sm,
+                    AppSpacing.twenty,
+                    AppSpacing.twentyEight,
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -130,37 +159,39 @@ class _AssistantSkillSetupSheetState extends State<AssistantSkillSetupSheet> {
                         Text(
                           widget.valueDescription.trim(),
                           style: theme.textTheme.textStyle.copyWith(
-                            height: 1.45,
+                            height: AppTypography.lineHeightRelaxed,
                           ),
                         ),
-                      const SizedBox(height: 18),
+                      const SizedBox(height: AppSpacing.eighteen),
                       _buildDetailCard(
                         background: grouped,
                         primary: primary,
                         secondary: secondary,
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: AppSpacing.twenty),
                       if (schema == null)
                         _buildUnavailableCard(grouped, primary, secondary)
                       else if (schema.fields.isNotEmpty) ...[
                         Text(
-                          schema.title.isEmpty ? '个性化设置' : schema.title,
+                          schema.title.isEmpty
+                              ? AssistantText.assistantSkillSetupPersonalization
+                              : schema.title,
                           style: theme.textTheme.navTitleTextStyle.copyWith(
                             color: primary,
                           ),
                         ),
                         if (schema.description.isNotEmpty) ...[
-                          const SizedBox(height: 6),
+                          const SizedBox(height: AppSpacing.six),
                           Text(
                             schema.description,
                             style: theme.textTheme.textStyle.copyWith(
                               color: secondary,
-                              fontSize: 13,
-                              height: 1.4,
+                              fontSize: AppTypography.smPlus,
+                              height: AppTypography.bodyLineHeight,
                             ),
                           ),
                         ],
-                        const SizedBox(height: 12),
+                        const SizedBox(height: AppSpacing.sm + AppSpacing.xs),
                         ...schema.fields.map(
                           (field) => _buildField(
                             field,
@@ -170,7 +201,7 @@ class _AssistantSkillSetupSheetState extends State<AssistantSkillSetupSheet> {
                           ),
                         ),
                         if (_saveError != null) ...[
-                          const SizedBox(height: 8),
+                          const SizedBox(height: AppSpacing.sm),
                           Text(
                             _saveError!,
                             key: const ValueKey<String>(
@@ -180,11 +211,11 @@ class _AssistantSkillSetupSheetState extends State<AssistantSkillSetupSheet> {
                               color: CupertinoColors.systemRed.resolveFrom(
                                 context,
                               ),
-                              fontSize: 13,
+                              fontSize: AppTypography.smPlus,
                             ),
                           ),
                         ],
-                        const SizedBox(height: 8),
+                        const SizedBox(height: AppSpacing.sm),
                         CupertinoButton.filled(
                           key: const ValueKey<String>(
                             'assistant_skill_setup_save',
@@ -193,8 +224,10 @@ class _AssistantSkillSetupSheetState extends State<AssistantSkillSetupSheet> {
                               ? null
                               : _save,
                           child: _saving
-                              ? const CupertinoActivityIndicator()
-                              : const Text('保存设置'),
+                              ? AppRequestFeedback.inline()
+                              : const Text(
+                                  AssistantText.assistantSkillSetupSave,
+                                ),
                         ),
                       ],
                     ],
@@ -210,20 +243,25 @@ class _AssistantSkillSetupSheetState extends State<AssistantSkillSetupSheet> {
 
   Widget _buildHeader(BuildContext context, Color primary, Color secondary) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 12, 8),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.sm + AppSpacing.xs,
+        AppSpacing.sm + AppSpacing.xs,
+        AppSpacing.sm,
+      ),
       child: Row(
         children: [
           Expanded(
             child: Text(
               widget.title,
               style: CupertinoTheme.of(context).textTheme.navLargeTitleTextStyle
-                  .copyWith(color: primary, fontSize: 24),
+                  .copyWith(color: primary, fontSize: AppTypography.iosTitle2),
             ),
           ),
           CupertinoButton(
             key: const ValueKey<String>('assistant_skill_detail_close'),
-            padding: const EdgeInsets.all(8),
-            minimumSize: const Size.square(44),
+            padding: const EdgeInsets.all(AppSpacing.sm),
+            minimumSize: const Size.square(AppSpacing.minInteractiveSize),
             onPressed: () => Navigator.of(context).pop(),
             child: Icon(CupertinoIcons.xmark_circle_fill, color: secondary),
           ),
@@ -239,33 +277,53 @@ class _AssistantSkillSetupSheetState extends State<AssistantSkillSetupSheet> {
   }) {
     final rows = <(String, String)>[
       if (widget.targetUserLabels.isNotEmpty)
-        ('适合谁', widget.targetUserLabels.join('、')),
+        (
+          AssistantText.assistantSkillSetupTargetUsers,
+          widget.targetUserLabels.join('、'),
+        ),
       if (widget.surfaceLabels.isNotEmpty)
-        ('可使用位置', widget.surfaceLabels.join('、')),
+        (
+          AssistantText.assistantSkillSetupSurfaces,
+          widget.surfaceLabels.join('、'),
+        ),
       if (widget.dataUseSummary.trim().isNotEmpty)
-        ('数据使用', widget.dataUseSummary.trim()),
-      if (widget.permissionLabels.isNotEmpty)
-        ('需要授权', widget.permissionLabels.join('、')),
+        (
+          AssistantText.assistantSkillSetupDataUse,
+          widget.dataUseSummary.trim(),
+        ),
+      if (widget.requiredPermissionScopes.isNotEmpty)
+        (
+          AssistantText.assistantSkillRequiredConsentScopes,
+          _permissionScopeSummary(widget.requiredPermissionScopes),
+        ),
+      if (widget.optionalPermissionScopes.isNotEmpty)
+        (
+          AssistantText.assistantSkillOptionalConsentScopes,
+          _permissionScopeSummary(widget.optionalPermissionScopes),
+        ),
     ];
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(AppSpacing.fourteen),
       decoration: BoxDecoration(
         color: background,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
       ),
       child: Column(
         children: rows
             .map(
               (row) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
+                padding: const EdgeInsets.symmetric(vertical: AppSpacing.six),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     SizedBox(
-                      width: 76,
+                      width: AppSpacing.minInteractiveSize + AppSpacing.xl,
                       child: Text(
                         row.$1,
-                        style: TextStyle(color: secondary, fontSize: 13),
+                        style: TextStyle(
+                          color: secondary,
+                          fontSize: AppTypography.smPlus,
+                        ),
                       ),
                     ),
                     Expanded(
@@ -273,8 +331,8 @@ class _AssistantSkillSetupSheetState extends State<AssistantSkillSetupSheet> {
                         row.$2,
                         style: TextStyle(
                           color: primary,
-                          fontSize: 13,
-                          height: 1.4,
+                          fontSize: AppTypography.smPlus,
+                          height: AppTypography.bodyLineHeight,
                         ),
                       ),
                     ),
@@ -287,6 +345,18 @@ class _AssistantSkillSetupSheetState extends State<AssistantSkillSetupSheet> {
     );
   }
 
+  String _permissionScopeSummary(
+    List<AssistantSkillConsentScopePresentation> scopes,
+  ) {
+    return scopes
+        .map(
+          (scope) =>
+              '${scope.description.trim().isEmpty ? scope.displayText : '${scope.displayText}：${scope.description.trim()}'} · '
+              '${scope.granted ? AssistantText.assistantSkillConsentGranted : AssistantText.assistantSkillConsentRequired}',
+        )
+        .join('、');
+  }
+
   Widget _buildUnavailableCard(
     Color background,
     Color primary,
@@ -294,19 +364,26 @@ class _AssistantSkillSetupSheetState extends State<AssistantSkillSetupSheet> {
   ) {
     return Container(
       key: const ValueKey<String>('assistant_skill_setup_unavailable'),
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(AppSpacing.fourteen),
       decoration: BoxDecoration(
         color: background,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('设置暂不可用', style: TextStyle(color: primary)),
-          const SizedBox(height: 4),
           Text(
-            '当前 Skill package 没有提供此版本可安全渲染的设置定义。你仍可使用或停用该 Skill。',
-            style: TextStyle(color: secondary, fontSize: 13, height: 1.4),
+            AssistantText.assistantSkillSetupUnavailable,
+            style: TextStyle(color: primary),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            AssistantText.assistantSkillSetupUnavailableDescription,
+            style: TextStyle(
+              color: secondary,
+              fontSize: AppTypography.smPlus,
+              height: AppTypography.bodyLineHeight,
+            ),
           ),
         ],
       ),
@@ -322,31 +399,38 @@ class _AssistantSkillSetupSheetState extends State<AssistantSkillSetupSheet> {
     final error = _fieldErrors[field.id];
     return Container(
       key: ValueKey<String>('assistant_skill_setup_field_${field.id}'),
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
+      margin: const EdgeInsets.only(bottom: AppSpacing.sm + AppSpacing.xs),
+      padding: const EdgeInsets.all(AppSpacing.fourteen),
       decoration: BoxDecoration(
         color: background,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            '${field.title}${field.required ? ' *' : ''}',
-            style: TextStyle(color: primary, fontWeight: FontWeight.w600),
+            '${field.title}${field.required ? AssistantText.assistantSkillSetupRequiredFieldMarker : ''}',
+            style: TextStyle(
+              color: primary,
+              fontWeight: AppTypography.semiBold,
+            ),
           ),
           if (field.description.isNotEmpty) ...[
-            const SizedBox(height: 4),
+            const SizedBox(height: AppSpacing.xs),
             Text(
               field.description,
-              style: TextStyle(color: secondary, fontSize: 12, height: 1.35),
+              style: TextStyle(
+                color: secondary,
+                fontSize: AppTypography.sm,
+                height: AppSpacing.textLineHeightBody,
+              ),
             ),
           ],
-          const SizedBox(height: 10),
+          const SizedBox(height: AppSpacing.ten),
           if (field.kind == AssistantSkillSetupFieldKind.choice)
             Wrap(
-              spacing: 8,
-              runSpacing: 8,
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
               children: field.options
                   .map(
                     (option) => CupertinoButton(
@@ -354,8 +438,8 @@ class _AssistantSkillSetupSheetState extends State<AssistantSkillSetupSheet> {
                         'assistant_skill_setup_${field.id}_$option',
                       ),
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 8,
+                        horizontal: AppSpacing.fourteen,
+                        vertical: AppSpacing.sm,
                       ),
                       color: _choices[field.id] == option
                           ? CupertinoColors.activeBlue.resolveFrom(context)
@@ -387,19 +471,19 @@ class _AssistantSkillSetupSheetState extends State<AssistantSkillSetupSheet> {
                   ? 4
                   : 1,
               placeholder: field.kind == AssistantSkillSetupFieldKind.stringList
-                  ? '多项请用逗号分隔'
+                  ? AssistantText.assistantSkillSetupListPlaceholder
                   : null,
               onChanged: (_) => setState(() {
                 _fieldErrors.remove(field.id);
               }),
             ),
           if (error != null) ...[
-            const SizedBox(height: 6),
+            const SizedBox(height: AppSpacing.six),
             Text(
               error,
               style: TextStyle(
                 color: CupertinoColors.systemRed.resolveFrom(context),
-                fontSize: 12,
+                fontSize: AppTypography.sm,
               ),
             ),
           ],
@@ -445,7 +529,7 @@ class _AssistantSkillSetupSheetState extends State<AssistantSkillSetupSheet> {
       if (!mounted) return;
       setState(() {
         _saving = false;
-        _saveError = '设置没有保存，请稍后重试。';
+        _saveError = AssistantText.assistantSkillSetupSaveFailed;
       });
     }
   }

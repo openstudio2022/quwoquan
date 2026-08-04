@@ -8,13 +8,9 @@ import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/secondary_capsule_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/tab_swipe_switch_region.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/contact_home_row_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/message_home_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import 'package:quwoquan_app/cloud/services/chat/chat_view_data.dart';
 import 'package:quwoquan_app/cloud/services/notification/notification_facets.dart';
 import '../../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
@@ -42,9 +38,12 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
         GetAppMessageQuery,
         GetAppMessageUnreadCountQuery,
         GreetingRequestRecord,
+        GreetingRequestSource,
+        GreetingRequestStatus,
         ListAppMessagesQuery,
         NotificationType,
         ReadAppMessageCommand;
+import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
 
 import '../../../../support/cloud_services/user_typed_facet_test_support.dart';
 import '../../../../support/fixtures/chat/chat_inbox_fixture_builder.dart';
@@ -54,6 +53,95 @@ const _primaryAvatarDataUri =
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PyBqWQAAAABJRU5ErkJggg==';
 const _staleConversationAvatarDataUri =
     'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
+
+MessageHomeRow _messageHomeRow({
+  required String id,
+  String kind = 'conversation',
+  String conversationId = '',
+  String notificationId = '',
+  String conversationType = '',
+  required String title,
+  String summary = '',
+  String avatarUrl = '',
+  int groupAvatarVersion = 0,
+  DateTime? lastActiveAt,
+  int unreadCount = 0,
+  int mentionUnreadCount = 0,
+  bool muted = false,
+  bool pinned = false,
+  String notificationType = '',
+  bool read = true,
+}) => MessageHomeRow(
+  id: id,
+  kind: kind,
+  conversationId: conversationId,
+  notificationId: notificationId,
+  conversationType: conversationType,
+  title: title,
+  summary: summary,
+  avatarUrl: avatarUrl,
+  groupAvatarVersion: groupAvatarVersion,
+  lastActiveAt: lastActiveAt,
+  unreadCount: unreadCount,
+  mentionUnreadCount: mentionUnreadCount,
+  muted: muted,
+  pinned: pinned,
+  notificationType: notificationType,
+  read: read,
+);
+
+ContactHomeRow _contactHomeRow({
+  required String id,
+  required String kind,
+  required String objectId,
+  String? userId,
+  String userHandle = '',
+  String? conversationId,
+  String? circleId,
+  String? circleGroupId,
+  String? entityId,
+  required String title,
+  String subtitle = '',
+  String avatarUrl = '',
+  String? relationState,
+  bool? isStarred,
+}) => ContactHomeRow(
+  id: id,
+  kind: kind,
+  objectId: objectId,
+  userId: userId,
+  userHandle: userHandle,
+  conversationId: conversationId,
+  circleId: circleId,
+  circleGroupId: circleGroupId,
+  entityId: entityId,
+  title: title,
+  subtitle: subtitle,
+  avatarUrl: avatarUrl,
+  relationState: relationState,
+  summaryIntersections: const <String>[],
+  contactCount: 0,
+  sortKey: id,
+  isStarred: isStarred,
+);
+
+ConversationMemberListRow _conversationMember({
+  required String userId,
+  required String displayName,
+  String avatarUrl = '',
+  String role = 'member',
+  String memberType = 'user',
+  bool isCurrentUser = false,
+}) => ConversationMemberListRow(
+  userId: userId,
+  userHandle: userId,
+  displayName: displayName,
+  avatarUrl: avatarUrl,
+  role: role,
+  memberType: memberType,
+  joinedAt: null,
+  isCurrentUser: isCurrentUser,
+);
 
 Widget _scopedApp({
   ChatRepository? mock,
@@ -556,8 +644,8 @@ void main() {
           requesterPersonaId: 'user_requester',
           targetPersonaId: 'mock_me',
           requestMessage: '想和你聊聊川西路线',
-          status: 'pending',
-          source: 'profile',
+          status: GreetingRequestStatus.pending,
+          source: GreetingRequestSource.profile,
           createdAt: DateTime.utc(2026, 1, 1),
           updatedAt: DateTime.utc(2026, 1, 1),
         ),
@@ -816,7 +904,7 @@ void main() {
 
 abstract class _ListInboxDrivenChatRepository extends MockChatRepository {
   @override
-  Future<List<MessageHomeRowDto>> listMessageHome({
+  Future<List<MessageHomeRow>> listMessageHome({
     String filter = 'all',
     String? cursor,
     int limit = 20,
@@ -833,7 +921,7 @@ abstract class _ListInboxDrivenChatRepository extends MockChatRepository {
           };
         })
         .map(
-          (item) => MessageHomeRowDto(
+          (item) => _messageHomeRow(
             id: item.id,
             conversationId: item.id,
             conversationType: item.type,
@@ -855,23 +943,29 @@ abstract class _ListInboxDrivenChatRepository extends MockChatRepository {
 
 class _EmptyChatRepository extends _ListInboxDrivenChatRepository {
   @override
-  Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
-    return const <ChatInboxDto>[];
-  }
-
-  @override
-  Future<List<ChatInboxDto>> listConversations({
+  Future<List<ChatInboxViewData>> listInbox({
     String? cursor,
     int limit = 20,
   }) async {
-    return const <ChatInboxDto>[];
+    return const <ChatInboxViewData>[];
+  }
+
+  @override
+  Future<List<ChatInboxViewData>> listConversations({
+    String? cursor,
+    int limit = 20,
+  }) async {
+    return const <ChatInboxViewData>[];
   }
 }
 
 class _NavigationChatRepository extends _ListInboxDrivenChatRepository {
   @override
-  Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
-    return <ChatInboxDto>[
+  Future<List<ChatInboxViewData>> listInbox({
+    String? cursor,
+    int limit = 20,
+  }) async {
+    return <ChatInboxViewData>[
       chatInboxFixture(
         id: 'conv_navigation_test',
         type: 'direct',
@@ -882,7 +976,7 @@ class _NavigationChatRepository extends _ListInboxDrivenChatRepository {
   }
 
   @override
-  Future<List<ChatInboxDto>> listConversations({
+  Future<List<ChatInboxViewData>> listConversations({
     String? cursor,
     int limit = 20,
   }) async {
@@ -890,13 +984,13 @@ class _NavigationChatRepository extends _ListInboxDrivenChatRepository {
   }
 
   @override
-  Future<CursorPage<ChatContactRowDto>> listContacts({
+  Future<CursorPage<ChatContactRowViewData>> listContacts({
     String? cursor,
     int limit = 20,
   }) async {
-    return CursorPage<ChatContactRowDto>(
-      items: <ChatContactRowDto>[
-        ChatContactRowDto(
+    return CursorPage<ChatContactRowViewData>(
+      items: <ChatContactRowViewData>[
+        ChatContactRowViewData(
           userId: 'user_navigation_contact',
           displayName: '李明',
           avatarUrl: 'https://example.com/contact.jpg',
@@ -910,13 +1004,13 @@ class _NavigationChatRepository extends _ListInboxDrivenChatRepository {
 
 class _StarredContactsChatRepository extends MockChatRepository {
   @override
-  Future<List<ContactHomeRowDto>> listContactHome({
+  Future<List<ContactHomeRow>> listContactHome({
     String filter = 'all',
     String? cursor,
     int limit = 20,
   }) async {
-    return <ContactHomeRowDto>[
-      ContactHomeRowDto(
+    return <ContactHomeRow>[
+      _contactHomeRow(
         id: 'user_starred_contact',
         kind: 'user',
         objectId: 'user_starred_contact',
@@ -927,7 +1021,7 @@ class _StarredContactsChatRepository extends MockChatRepository {
         relationState: 'mutual',
         isStarred: true,
       ),
-      ContactHomeRowDto(
+      _contactHomeRow(
         id: 'user_regular_contact',
         kind: 'user',
         objectId: 'user_regular_contact',
@@ -947,14 +1041,14 @@ class _ContactIndexThresholdChatRepository extends MockChatRepository {
   final int count;
 
   @override
-  Future<List<ContactHomeRowDto>> listContactHome({
+  Future<List<ContactHomeRow>> listContactHome({
     String filter = 'all',
     String? cursor,
     int limit = 20,
   }) async {
-    return List<ContactHomeRowDto>.generate(
+    return List<ContactHomeRow>.generate(
       count,
-      (index) => ContactHomeRowDto(
+      (index) => _contactHomeRow(
         id: 'threshold_contact_$index',
         kind: 'user',
         objectId: 'threshold_contact_$index',
@@ -968,15 +1062,15 @@ class _ContactIndexThresholdChatRepository extends MockChatRepository {
 
 class _XiaoquDeliveryChatRepository extends MockChatRepository {
   @override
-  Future<List<MessageHomeRowDto>> listMessageHome({
+  Future<List<MessageHomeRow>> listMessageHome({
     String filter = 'all',
     String? cursor,
     int limit = 20,
   }) async {
     final now = DateTime.utc(2026, 5, 1, 12);
     if (filter == 'notification') {
-      return <MessageHomeRowDto>[
-        MessageHomeRowDto(
+      return <MessageHomeRow>[
+        _messageHomeRow(
           id: 'app_msg_homepage_reminder',
           kind: 'notification',
           notificationId: 'app_msg_homepage_reminder',
@@ -987,8 +1081,8 @@ class _XiaoquDeliveryChatRepository extends MockChatRepository {
         ),
       ];
     }
-    return <MessageHomeRowDto>[
-      MessageHomeRowDto(
+    return <MessageHomeRow>[
+      _messageHomeRow(
         id: 'conv_regular_group',
         kind: 'conversation',
         conversationId: 'conv_regular_group',
@@ -1001,9 +1095,12 @@ class _XiaoquDeliveryChatRepository extends MockChatRepository {
   }
 
   @override
-  Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
+  Future<List<ChatInboxViewData>> listInbox({
+    String? cursor,
+    int limit = 20,
+  }) async {
     final now = DateTime.utc(2026, 5, 1, 12);
-    return <ChatInboxDto>[
+    return <ChatInboxViewData>[
       chatInboxFixture(
         id: 'conv_xiaoqu_comment_reply',
         type: 'group',
@@ -1032,7 +1129,7 @@ class _XiaoquDeliveryChatRepository extends MockChatRepository {
   }
 
   @override
-  Future<List<ChatInboxDto>> listConversations({
+  Future<List<ChatInboxViewData>> listConversations({
     String? cursor,
     int limit = 20,
   }) async {
@@ -1042,14 +1139,14 @@ class _XiaoquDeliveryChatRepository extends MockChatRepository {
 
 class _UnreadBadgeConsistencyChatRepository extends MockChatRepository {
   @override
-  Future<List<MessageHomeRowDto>> listMessageHome({
+  Future<List<MessageHomeRow>> listMessageHome({
     String filter = 'all',
     String? cursor,
     int limit = 20,
   }) async {
     final now = DateTime.utc(2026, 6, 16, 10);
-    final unreadRows = <MessageHomeRowDto>[
-      MessageHomeRowDto(
+    final unreadRows = <MessageHomeRow>[
+      _messageHomeRow(
         id: 'conv_group_photo',
         kind: 'conversation',
         conversationId: 'conv_group_photo',
@@ -1059,7 +1156,7 @@ class _UnreadBadgeConsistencyChatRepository extends MockChatRepository {
         lastActiveAt: now,
         unreadCount: 2,
       ),
-      MessageHomeRowDto(
+      _messageHomeRow(
         id: 'conv_group_product',
         kind: 'conversation',
         conversationId: 'conv_group_product',
@@ -1069,7 +1166,7 @@ class _UnreadBadgeConsistencyChatRepository extends MockChatRepository {
         lastActiveAt: now.subtract(const Duration(minutes: 3)),
         unreadCount: 1,
       ),
-      MessageHomeRowDto(
+      _messageHomeRow(
         id: 'conv_group_travel',
         kind: 'conversation',
         conversationId: 'conv_group_travel',
@@ -1084,14 +1181,17 @@ class _UnreadBadgeConsistencyChatRepository extends MockChatRepository {
       return unreadRows;
     }
     if (filter == 'direct' || filter == 'notification') {
-      return const <MessageHomeRowDto>[];
+      return const <MessageHomeRow>[];
     }
     return unreadRows;
   }
 
   @override
-  Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
-    return <ChatInboxDto>[
+  Future<List<ChatInboxViewData>> listInbox({
+    String? cursor,
+    int limit = 20,
+  }) async {
+    return <ChatInboxViewData>[
       chatInboxFixture(
         id: 'conv_direct_mismatch_seed',
         type: 'direct',
@@ -1104,7 +1204,7 @@ class _UnreadBadgeConsistencyChatRepository extends MockChatRepository {
   }
 
   @override
-  Future<List<ChatInboxDto>> listConversations({
+  Future<List<ChatInboxViewData>> listConversations({
     String? cursor,
     int limit = 20,
   }) async {
@@ -1117,8 +1217,11 @@ class _GroupAvatarFallbackChatRepository
   int memberRequestCount = 0;
 
   @override
-  Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
-    return <ChatInboxDto>[
+  Future<List<ChatInboxViewData>> listInbox({
+    String? cursor,
+    int limit = 20,
+  }) async {
+    return <ChatInboxViewData>[
       chatInboxFixture(
         id: 'conv_fallback_group',
         type: 'group',
@@ -1129,7 +1232,7 @@ class _GroupAvatarFallbackChatRepository
   }
 
   @override
-  Future<List<ChatInboxDto>> listConversations({
+  Future<List<ChatInboxViewData>> listConversations({
     String? cursor,
     int limit = 20,
   }) async {
@@ -1137,7 +1240,7 @@ class _GroupAvatarFallbackChatRepository
   }
 
   @override
-  Future<List<ChatConversationMemberDto>> listMembers({
+  Future<List<ConversationMemberListRow>> listMembers({
     required String conversationId,
     String? cursor,
     int limit = 20,
@@ -1145,17 +1248,13 @@ class _GroupAvatarFallbackChatRepository
     String? sort,
   }) async {
     memberRequestCount += 1;
-    return <ChatConversationMemberDto>[
-      ChatConversationMemberDto(
+    return <ConversationMemberListRow>[
+      _conversationMember(
         userId: 'user_002',
         displayName: '李明',
         avatarUrl: 'https://example.com/user_002.jpg',
       ),
-      ChatConversationMemberDto(
-        userId: 'user_003',
-        displayName: '张华',
-        avatarUrl: '',
-      ),
+      _conversationMember(userId: 'user_003', displayName: '张华', avatarUrl: ''),
     ];
   }
 }
@@ -1163,8 +1262,11 @@ class _GroupAvatarFallbackChatRepository
 class _RenderedGroupAvatarChatRepository
     extends _ListInboxDrivenChatRepository {
   @override
-  Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
-    return <ChatInboxDto>[
+  Future<List<ChatInboxViewData>> listInbox({
+    String? cursor,
+    int limit = 20,
+  }) async {
+    return <ChatInboxViewData>[
       chatInboxFixture(
         id: 'conv_rendered_group',
         type: 'group',
@@ -1176,7 +1278,7 @@ class _RenderedGroupAvatarChatRepository
   }
 
   @override
-  Future<List<ChatInboxDto>> listConversations({
+  Future<List<ChatInboxViewData>> listConversations({
     String? cursor,
     int limit = 20,
   }) async {
@@ -1189,8 +1291,11 @@ class _ConvGrid12GroupAvatarChatRepository
   int memberRequestCount = 0;
 
   @override
-  Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
-    return <ChatInboxDto>[
+  Future<List<ChatInboxViewData>> listInbox({
+    String? cursor,
+    int limit = 20,
+  }) async {
+    return <ChatInboxViewData>[
       chatInboxFixture(
         id: 'conv_grid_12',
         type: 'group',
@@ -1202,7 +1307,7 @@ class _ConvGrid12GroupAvatarChatRepository
   }
 
   @override
-  Future<List<ChatInboxDto>> listConversations({
+  Future<List<ChatInboxViewData>> listConversations({
     String? cursor,
     int limit = 20,
   }) async {
@@ -1210,7 +1315,7 @@ class _ConvGrid12GroupAvatarChatRepository
   }
 
   @override
-  Future<List<ChatConversationMemberDto>> listMembers({
+  Future<List<ConversationMemberListRow>> listMembers({
     required String conversationId,
     String? cursor,
     int limit = 20,
@@ -1218,7 +1323,7 @@ class _ConvGrid12GroupAvatarChatRepository
     String? sort,
   }) async {
     memberRequestCount += 1;
-    return const <ChatConversationMemberDto>[];
+    return const <ConversationMemberListRow>[];
   }
 }
 
@@ -1227,8 +1332,11 @@ class _NonAuthoritativeGroupAvatarChatRepository
   int memberRequestCount = 0;
 
   @override
-  Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
-    return <ChatInboxDto>[
+  Future<List<ChatInboxViewData>> listInbox({
+    String? cursor,
+    int limit = 20,
+  }) async {
+    return <ChatInboxViewData>[
       chatInboxFixture(
         id: 'conv_wrong_group_avatar',
         type: 'group',
@@ -1240,7 +1348,7 @@ class _NonAuthoritativeGroupAvatarChatRepository
   }
 
   @override
-  Future<List<ChatInboxDto>> listConversations({
+  Future<List<ChatInboxViewData>> listConversations({
     String? cursor,
     int limit = 20,
   }) async {
@@ -1248,7 +1356,7 @@ class _NonAuthoritativeGroupAvatarChatRepository
   }
 
   @override
-  Future<List<ChatConversationMemberDto>> listMembers({
+  Future<List<ConversationMemberListRow>> listMembers({
     required String conversationId,
     String? cursor,
     int limit = 20,
@@ -1256,18 +1364,18 @@ class _NonAuthoritativeGroupAvatarChatRepository
     String? sort,
   }) async {
     memberRequestCount += 1;
-    return <ChatConversationMemberDto>[
-      ChatConversationMemberDto(
+    return <ConversationMemberListRow>[
+      _conversationMember(
         userId: 'user_002',
         displayName: '李明',
         avatarUrl: 'https://example.com/wrong-single.jpg',
       ),
-      ChatConversationMemberDto(
+      _conversationMember(
         userId: 'user_003',
         displayName: '张华',
         avatarUrl: 'https://example.com/user_003.jpg',
       ),
-      ChatConversationMemberDto(
+      _conversationMember(
         userId: 'user_004',
         displayName: '王芳',
         avatarUrl: 'https://example.com/user_004.jpg',
@@ -1281,8 +1389,11 @@ class _GroupAvatarCompositeChatRepository
   int memberRequestCount = 0;
 
   @override
-  Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
-    return <ChatInboxDto>[
+  Future<List<ChatInboxViewData>> listInbox({
+    String? cursor,
+    int limit = 20,
+  }) async {
+    return <ChatInboxViewData>[
       chatInboxFixture(
         id: 'conv_composite_group',
         type: 'group',
@@ -1293,7 +1404,7 @@ class _GroupAvatarCompositeChatRepository
   }
 
   @override
-  Future<List<ChatInboxDto>> listConversations({
+  Future<List<ChatInboxViewData>> listConversations({
     String? cursor,
     int limit = 20,
   }) async {
@@ -1301,7 +1412,7 @@ class _GroupAvatarCompositeChatRepository
   }
 
   @override
-  Future<List<ChatConversationMemberDto>> listMembers({
+  Future<List<ConversationMemberListRow>> listMembers({
     required String conversationId,
     String? cursor,
     int limit = 20,
@@ -1309,18 +1420,18 @@ class _GroupAvatarCompositeChatRepository
     String? sort,
   }) async {
     memberRequestCount += 1;
-    return <ChatConversationMemberDto>[
-      ChatConversationMemberDto(
+    return <ConversationMemberListRow>[
+      _conversationMember(
         userId: 'user_002',
         displayName: '李明',
         avatarUrl: 'https://example.com/user_002.jpg',
       ),
-      ChatConversationMemberDto(
+      _conversationMember(
         userId: 'user_003',
         displayName: '张华',
         avatarUrl: 'https://example.com/user_003.jpg',
       ),
-      ChatConversationMemberDto(
+      _conversationMember(
         userId: 'user_004',
         displayName: '王芳',
         avatarUrl: 'https://example.com/user_004.jpg',
@@ -1332,8 +1443,11 @@ class _GroupAvatarCompositeChatRepository
 class _DirectAvatarFallbackChatRepository
     extends _ListInboxDrivenChatRepository {
   @override
-  Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
-    return <ChatInboxDto>[
+  Future<List<ChatInboxViewData>> listInbox({
+    String? cursor,
+    int limit = 20,
+  }) async {
+    return <ChatInboxViewData>[
       chatInboxFixture(
         id: 'conv_direct_fallback',
         type: 'direct',
@@ -1344,7 +1458,7 @@ class _DirectAvatarFallbackChatRepository
   }
 
   @override
-  Future<List<ChatInboxDto>> listConversations({
+  Future<List<ChatInboxViewData>> listConversations({
     String? cursor,
     int limit = 20,
   }) async {
@@ -1352,21 +1466,21 @@ class _DirectAvatarFallbackChatRepository
   }
 
   @override
-  Future<List<ChatConversationMemberDto>> listMembers({
+  Future<List<ConversationMemberListRow>> listMembers({
     required String conversationId,
     String? cursor,
     int limit = 20,
     String? role,
     String? sort,
   }) async {
-    return <ChatConversationMemberDto>[
-      ChatConversationMemberDto(
+    return <ConversationMemberListRow>[
+      _conversationMember(
         userId: 'user_me',
         displayName: '我',
         avatarUrl: 'https://example.com/user_me.jpg',
         isCurrentUser: true,
       ),
-      ChatConversationMemberDto(
+      _conversationMember(
         userId: 'user_002',
         displayName: '契约撰稿人',
         avatarUrl: _primaryAvatarDataUri,
@@ -1378,8 +1492,11 @@ class _DirectAvatarFallbackChatRepository
 class _DirectAvatarConsistencyChatRepository
     extends _ListInboxDrivenChatRepository {
   @override
-  Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
-    return <ChatInboxDto>[
+  Future<List<ChatInboxViewData>> listInbox({
+    String? cursor,
+    int limit = 20,
+  }) async {
+    return <ChatInboxViewData>[
       chatInboxFixture(
         id: 'conv_direct_consistency',
         type: 'direct',
@@ -1390,7 +1507,7 @@ class _DirectAvatarConsistencyChatRepository
   }
 
   @override
-  Future<List<ChatInboxDto>> listConversations({
+  Future<List<ChatInboxViewData>> listConversations({
     String? cursor,
     int limit = 20,
   }) async {
@@ -1398,21 +1515,21 @@ class _DirectAvatarConsistencyChatRepository
   }
 
   @override
-  Future<List<ChatConversationMemberDto>> listMembers({
+  Future<List<ConversationMemberListRow>> listMembers({
     required String conversationId,
     String? cursor,
     int limit = 20,
     String? role,
     String? sort,
   }) async {
-    return <ChatConversationMemberDto>[
-      ChatConversationMemberDto(
+    return <ConversationMemberListRow>[
+      _conversationMember(
         userId: 'user_me',
         displayName: '我',
         avatarUrl: 'https://example.com/me.jpg',
         isCurrentUser: true,
       ),
-      ChatConversationMemberDto(
+      _conversationMember(
         userId: 'user_contact',
         displayName: '手机端头像一致性',
         avatarUrl: _primaryAvatarDataUri,
@@ -1426,8 +1543,11 @@ class _PrefetchedGroupAvatarChatRepository
   int memberRequestCount = 0;
 
   @override
-  Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
-    return List<ChatInboxDto>.generate(10, (index) {
+  Future<List<ChatInboxViewData>> listInbox({
+    String? cursor,
+    int limit = 20,
+  }) async {
+    return List<ChatInboxViewData>.generate(10, (index) {
       final number = index + 1;
       return chatInboxFixture(
         id: 'conv_prefetch_$number',
@@ -1439,7 +1559,7 @@ class _PrefetchedGroupAvatarChatRepository
   }
 
   @override
-  Future<List<ChatInboxDto>> listConversations({
+  Future<List<ChatInboxViewData>> listConversations({
     String? cursor,
     int limit = 20,
   }) async {
@@ -1447,7 +1567,7 @@ class _PrefetchedGroupAvatarChatRepository
   }
 
   @override
-  Future<List<ChatConversationMemberDto>> listMembers({
+  Future<List<ConversationMemberListRow>> listMembers({
     required String conversationId,
     String? cursor,
     int limit = 20,
@@ -1456,13 +1576,13 @@ class _PrefetchedGroupAvatarChatRepository
   }) async {
     memberRequestCount += 1;
     final suffix = conversationId.replaceFirst('conv_prefetch_', '');
-    return <ChatConversationMemberDto>[
-      ChatConversationMemberDto(
+    return <ConversationMemberListRow>[
+      _conversationMember(
         userId: 'user_$suffix',
         displayName: '用户$suffix',
         avatarUrl: 'https://example.com/user_$suffix.jpg',
       ),
-      ChatConversationMemberDto(
+      _conversationMember(
         userId: 'user_${suffix}_b',
         displayName: '成员$suffix',
         avatarUrl: 'https://example.com/user_${suffix}_b.jpg',

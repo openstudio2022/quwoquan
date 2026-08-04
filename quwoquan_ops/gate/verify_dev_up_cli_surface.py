@@ -477,8 +477,10 @@ def main() -> int:
         issues.append(
             "local release runtime state must use the environment/target-scoped output process root"
         )
-    if 'LOCAL_GAMMA_STACK_STATUS_REPORT="${LOCAL_GAMMA_PROCESS_ROOT}/stack_status.json"' not in gamma_script:
-        issues.append("local release status receipt must live under its process root")
+    if "startup_attempt_receipt.py" not in gamma_script:
+        issues.append("local release runtime must write the canonical startup attempt receipt")
+    if "LOCAL_GAMMA_STACK_STATUS_REPORT" in gamma_script or "stack_status.json" in gamma_script:
+        issues.append("local release runtime must not write a second stack status receipt")
     for marker, message in (
         (
             'image_key="LOCAL_GAMMA_${service_key}_IMAGE"',

@@ -100,6 +100,17 @@ fields:
   description: Run 全生命周期使用的不可变 Skill Package 内容身份；恢复、Steer、重放和 Presentation 均按该 digest 解析。
   role: authoritative_state
   reference: true
+- name: sessionContinuity
+  source: sessionContinuity
+  type: AssistantRunSessionContinuity
+  constraints:
+  - NULLABLE
+  classification: SENSITIVE
+  log_policy: drop
+  api_exposure: drop
+  ops_exposure: drop
+  description: StartAssistantRun 从 owner AssistantSession 冻结的个人对话滚动摘要；共享 surface 必须为空，且不包含权限、安全或对象归属。
+  role: authoritative_state
 - name: pageType
   source: pageType
   type: enum
@@ -302,8 +313,8 @@ fields:
   ops_exposure: read
   description: 回合协议标识或版本标签
   role: authoritative_state
-- name: sessionPreferenceFacts
-  source: sessionPreferenceFacts
+- name: sessionPreferences
+  source: sessionPreferences
   type: '[]AssistantPreferenceSnapshot'
   constraints:
   - NULLABLE
@@ -311,10 +322,10 @@ fields:
   log_policy: metadata_only
   api_exposure: read
   ops_exposure: read
-  description: 本会话即时生效的偏好事实快照
+  description: AssistantRun 创建时固化、仅在本会话生效的显式偏好快照
   role: authoritative_state
-- name: longTermPreferenceFacts
-  source: longTermPreferenceFacts
+- name: longTermPreferences
+  source: longTermPreferences
   type: '[]AssistantPreferenceSnapshot'
   constraints:
   - NULLABLE
@@ -322,7 +333,7 @@ fields:
   log_policy: metadata_only
   api_exposure: read
   ops_exposure: read
-  description: 长期偏好事实快照（可见、可撤销）
+  description: AssistantRun 创建时固化的长期显式偏好快照（可见、可撤销）
   role: authoritative_state
 - name: toolsCalled
   source: toolsCalled
@@ -503,6 +514,18 @@ fields:
   ops_exposure: read
   role: authoritative_state
 types:
+  AssistantRunSessionContinuity:
+    description: AssistantRun 侧 anti-corruption snapshot；仅用于模型上下文连续性。
+    fields:
+    - {name: summaryId, source: summaryId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: drop, ops_exposure: read}
+    - {name: text, source: text, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: drop, api_exposure: drop, ops_exposure: drop}
+    - {name: fromTurnId, source: fromTurnId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: drop, ops_exposure: read, reference: true}
+    - {name: toTurnId, source: toTurnId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: drop, ops_exposure: read, reference: true}
+    - {name: turnCount, source: turnCount, type: int, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: currentGoal, source: currentGoal, type: string, constraints: [NULLABLE], classification: SENSITIVE, log_policy: drop, api_exposure: drop, ops_exposure: drop}
+    - {name: confirmedFacts, source: confirmedFacts, type: '[]string', constraints: [NULLABLE], classification: SENSITIVE, log_policy: drop, api_exposure: drop, ops_exposure: drop}
+    - {name: pendingItems, source: pendingItems, type: '[]string', constraints: [NULLABLE], classification: SENSITIVE, log_policy: drop, api_exposure: drop, ops_exposure: drop}
+    - {name: confirmedSlots, source: confirmedSlots, type: object, constraints: [NULLABLE], classification: SENSITIVE, log_policy: drop, api_exposure: drop, ops_exposure: drop}
   AssistantRunRequestContext:
     description: StartAssistantRun 由服务端可信 transport metadata 归一化后的审计上下文；禁止由请求 body 写入或向 App response 回显。
     fields:
@@ -1543,7 +1566,7 @@ types:
       ops_exposure: read
 
   AssistantPreferenceSnapshot:
-    description: AssistantRun 创建时固化的 active 偏好值对象
+    description: AssistantRun 创建时从 active AssistantPreference 固化的不可变值对象
     fields:
     - name: preferenceId
       source: preferenceId
@@ -1581,6 +1604,34 @@ types:
       - NOT_NULL
       classification: SENSITIVE
       log_policy: redact
+      api_exposure: read
+      ops_exposure: read
+    - name: sourceType
+      source: sourceType
+      type: enum
+      enum_ref: AssistantPreferenceSourceType
+      constraints:
+      - NOT_NULL
+      classification: SENSITIVE
+      log_policy: metadata_only
+      api_exposure: read
+      ops_exposure: read
+    - name: sourceSessionId
+      source: sourceSessionId
+      type: string
+      constraints:
+      - NULLABLE
+      classification: SENSITIVE
+      log_policy: metadata_only
+      api_exposure: read
+      ops_exposure: read
+    - name: confirmedAt
+      source: confirmedAt
+      type: timestamp
+      constraints:
+      - NULLABLE
+      classification: SENSITIVE
+      log_policy: metadata_only
       api_exposure: read
       ops_exposure: read
     - name: version
@@ -1641,7 +1692,7 @@ types:
     - {name: graphRevision, source: graphRevision, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
     - {name: tasks, source: tasks, type: '[]AssistantRunTaskNode', constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
   AssistantRunTaskNode:
-    description: TaskGraph 中一个有依赖、有预算、有验收的任务节点。
+    description: TaskGraph 中一个有依赖、有预算、有验收的任务节点；Subagent 的 claim、lease、fencing、幂等身份与终态回执仍属于同一 AssistantRun 聚合，不另建执行事实。
     fields:
     - {name: taskId, source: taskId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
     - {name: goal, source: goal, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: mask, api_exposure: read, ops_exposure: read}
@@ -1649,6 +1700,14 @@ types:
     - {name: status, source: status, type: enum, enum_ref: AssistantTaskStatus, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
     - {name: ownerAgent, source: ownerAgent, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
     - {name: attempt, source: attempt, type: int, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: claimId, source: claimId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
+    - {name: claimOwner, source: claimOwner, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
+    - {name: fencingToken, source: fencingToken, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: heartbeatAt, source: heartbeatAt, type: timestamp, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: leaseExpiresAt, source: leaseExpiresAt, type: timestamp, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: idempotencyKey, source: idempotencyKey, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
+    - {name: resultArtifactRef, source: resultArtifactRef, type: string, constraints: [NULLABLE], classification: SENSITIVE, log_policy: hash, api_exposure: none, ops_exposure: read}
+    - {name: terminalReceiptRef, source: terminalReceiptRef, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
     - {name: budget, source: budget, type: object, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
     - {name: artifactRefs, source: artifactRefs, type: '[]string', constraints: [NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: read, ops_exposure: read}
     - {name: verification, source: verification, type: object, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
@@ -1665,8 +1724,46 @@ types:
     - {name: evidenceRefs, source: evidenceRefs, type: '[]string', constraints: [NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: read, ops_exposure: read}
     - {name: pendingApprovalRef, source: pendingApprovalRef, type: string, constraints: [NULLABLE], classification: SENSITIVE, log_policy: hash, api_exposure: read, ops_exposure: read}
     - {name: deviceActionReceipts, source: deviceActionReceipts, type: '[]AssistantDeviceActionExecutionReceipt', constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+    - {name: budgetConsumption, source: budgetConsumption, type: AssistantRunBudgetConsumption, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: none, ops_exposure: read}
+    - {name: budgetReceiptScope, source: budgetReceiptScope, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
+    - {name: budgetReceiptSeq, source: budgetReceiptSeq, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: contextState, source: contextState, type: AssistantRunContextExecutionState, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: none, ops_exposure: read}
+    - {name: contextCompaction, source: contextCompaction, type: AssistantRunContextCompactionCheckpoint, constraints: [NULLABLE], classification: SENSITIVE, log_policy: metadata_only, api_exposure: none, ops_exposure: read}
+    - {name: contextReceiptScope, source: contextReceiptScope, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
+    - {name: contextReceiptSeq, source: contextReceiptSeq, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
     - {name: remainingBudget, source: remainingBudget, type: object, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
     - {name: createdAt, source: createdAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+  AssistantRunBudgetConsumption:
+    description: Run 级绝对预算消耗账本；Worker 重启或 Steer 不得重置。
+    fields:
+    - {name: toolCalls, source: toolCalls, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: tokens, source: tokens, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: costUnits, source: costUnits, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
+  AssistantRunContextObservationSnapshot:
+    description: 仅保留工具名、公开观察摘要与来源标识的有界恢复快照；禁止保存原始工具结果、Prompt 或模型推理。
+    fields:
+    - {name: iteration, source: iteration, type: int, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: toolName, source: toolName, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: status, source: status, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: summary, source: summary, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: mask, api_exposure: none, ops_exposure: read}
+    - {name: sourceIds, source: sourceIds, type: '[]string', constraints: [NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: none, ops_exposure: read}
+  AssistantRunContextExecutionState:
+    description: AgentLoop 的绝对计划游标、工具/反思计数和公开网来源深度账本；同一 Run 恢复时单调延续。
+    fields:
+    - {name: planCursor, source: planCursor, type: int, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: toolIteration, source: toolIteration, type: int, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: reflectionIteration, source: reflectionIteration, type: int, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: navigationDepth, source: navigationDepth, type: int, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: sourceIds, source: sourceIds, type: '[]string', constraints: [NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: none, ops_exposure: read}
+    - {name: toolHistory, source: toolHistory, type: '[]string', constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: recentObservations, source: recentObservations, type: '[]AssistantRunContextObservationSnapshot', constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: none, ops_exposure: read}
+  AssistantRunContextCompactionCheckpoint:
+    description: CheckpointEvery 边界生成的有界语义摘要及其精确执行游标；权限、同意、对象归属和完成条件从 Run canonical source 重注入。
+    fields:
+    - {name: contextRevision, source: contextRevision, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: summaryText, source: summaryText, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: mask, api_exposure: none, ops_exposure: read}
+    - {name: state, source: state, type: AssistantRunContextExecutionState, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: none, ops_exposure: read}
+    - {name: compactedAt, source: compactedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
   AssistantRunItem:
     description: Run journal 的公开可恢复 Item；payload 禁止包含模型原始思维链。
     fields:
@@ -1697,6 +1794,7 @@ types:
     fields:
     - {name: surfaceId, source: surfaceId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
     - {name: supportedNodeKinds, source: supportedNodeKinds, type: '[]string', constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: supportedActionIntents, source: supportedActionIntents, type: '[]string', constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
     - {name: viewportClass, source: viewportClass, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
     - {name: platform, source: platform, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
     - {name: theme, source: theme, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}

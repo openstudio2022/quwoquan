@@ -115,6 +115,17 @@ final class WorkBrowserViewData {
               })
               .toList(growable: false)
         : const <WorkBrowserMediaViewData>[];
+    final supplementalMentions = supplemental?['entityMentions'];
+    final localEntityMentions = supplementalMentions is List
+        ? supplementalMentions
+              .whereType<Map>()
+              .map(
+                (mention) => PostEntityMention.fromWire(
+                  Map<String, Object?>.from(mention),
+                ),
+              )
+              .toList(growable: false)
+        : const <PostEntityMention>[];
     return WorkBrowserViewData(
       authorBadge: null,
       mediaAssetId: post.mediaAssetId,
@@ -141,7 +152,7 @@ final class WorkBrowserViewData {
           post.contentVertical,
       paperTexture: supplemental?['paperTexture']?.toString(),
       entityMentions: List<WorkBrowserEntityMentionViewData>.unmodifiable(
-        (detail?.entityMentions ?? const <PostEntityMention>[]).map(
+        (detail?.entityMentions ?? localEntityMentions).map(
           (mention) => WorkBrowserEntityMentionViewData(
             subjectType: mention.subjectType,
             subjectId: mention.subjectId,

@@ -14,6 +14,17 @@ final class RemoteTripCollaborationFacet implements TripCollaborationFacet {
   final TripShareInvocationContextFactory invocationContext;
 
   @override
+  Future<TripPlanPlacementListSlice> listSurfacePlacements(
+    ListSurfaceTripPlacementsQuery query,
+  ) => client.travelTripPlanPlacementListSurfaceTripPlacements(
+    query,
+    context: invocationContext(
+      AppUiSurfaces.travelTrips,
+      TravelRequestPageIds.listSurfaceTripPlacements,
+    ),
+  );
+
+  @override
   Future<TripMembershipSlice> putMembership(
     PutTripMembershipRequest request, {
     required String idempotencyKey,

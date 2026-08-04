@@ -6,7 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
+import 'package:quwoquan_app/application/entity/homepage_view_data.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_ui_config.g.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
@@ -116,13 +116,18 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
         ),
         body: AppPageErrorState(
           semantic: ensureRetryUiErrorSemantic(_errorSemantic!),
-          onAction: (action) async {
+          onRecovery: (action) async {
             if (action.type == UiErrorActionType.retry ||
                 action.type == UiErrorActionType.resubmit) {
               await _load();
+              return _errorSemantic == null
+                  ? UiRecoveryOutcome.recovered
+                  : UiRecoveryOutcome.stillBlocked;
             } else if (action.type == UiErrorActionType.dismiss) {
               _back();
+              return UiRecoveryOutcome.handedOff;
             }
+            return UiRecoveryOutcome.cancelled;
           },
         ),
       );
@@ -496,8 +501,8 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
       trackHomepageProductAction(
         ref,
         action: wishlisted
-            ? BehaviorAction.wishlistAdd.wireValue
-            : BehaviorAction.wishlistRemove.wireValue,
+            ? BehaviorEventType.wishlistAdd.wireName
+            : BehaviorEventType.wishlistRemove.wireName,
         pageName: AppUiSurfaces.homepageDetail.id,
         result: 'success',
         startedAt: startedAt,

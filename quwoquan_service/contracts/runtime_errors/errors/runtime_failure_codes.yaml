@@ -1,4 +1,4 @@
-schema: 1
+schema: runtime-failure-codes
 codes:
   - code: ASSISTANT.MIDDLEWARE.llm_timeout
     origin: remoteDependency

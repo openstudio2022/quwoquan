@@ -1,8 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/contact_home_row_dto.g.dart';
+import 'package:quwoquan_app/cloud/services/chat/chat_view_data.dart';
 import '../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
@@ -10,10 +9,12 @@ import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/core/errors/ui_error_models.dart';
 import 'package:quwoquan_app/core/platform/native_bridge.dart';
 import 'package:quwoquan_app/core/platform/platform_capabilities.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/widgets/app_modal_surface.dart';
+import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/ui/share/forward_external_share_service.dart';
 import 'package:quwoquan_app/ui/share/forward_share_models.dart';
 import 'package:quwoquan_app/ui/share/widgets/forward_confirm_sheet.dart';
@@ -98,7 +99,7 @@ void main() {
 
       final card = payload.toMessageCardCommand(message: '请看看');
 
-      expect(card.kind, kind.wire);
+      expect(card.kind.wireName, kind.wire);
       expect(card.title, payload.title);
       expect(card.subtitle, payload.subtitle);
       expect(card.thumbnailUrl, payload.thumbnailUrl);
@@ -174,11 +175,15 @@ void main() {
 
     await tester.tap(find.text('open-error'));
     await tester.pumpAndSettle();
-    expect(find.text(SearchText.recoveryReloadLaterTitle), findsOneWidget);
+    final errorCard = tester.widget<AppSectionErrorCard>(
+      find.byType(AppSectionErrorCard),
+    );
+    expect(errorCard.semantic.scope, UiErrorScope.section);
+    expect(errorCard.semantic.primaryAction?.type, UiErrorActionType.retry);
     expect(find.text(ChatText.forwardActionAppContacts), findsOneWidget);
 
     repository.failListConversations = false;
-    await tester.tap(find.text(SearchText.reload));
+    await tester.tap(find.text(errorCard.semantic.primaryAction!.label));
     await tester.pumpAndSettle();
     expect(find.byType(ForwardRecentRecipientItem), findsNWidgets(10));
   });
@@ -386,7 +391,7 @@ void main() {
     expect(repository.lastConversationId, 'conv_0');
     expect(repository.lastType, 'card');
     expect(repository.lastContent, '一起看看');
-    expect(repository.lastCard?.kind, 'profile_qr');
+    expect(repository.lastCard?.kind, MessageCardKind.profileQr);
     expect(repository.lastCard?.message, '一起看看');
     expect(repository.writer.lastCommand?.senderDisplayNameSnapshot, '转发测试分身');
     await tester.pump(const Duration(seconds: 4));
@@ -403,7 +408,7 @@ class _ForwardSheetChatRepository extends MockChatRepository {
   MessageCard? get lastCard => writer.lastCommand?.card;
 
   @override
-  Future<List<ChatInboxDto>> listConversations({
+  Future<List<ChatInboxViewData>> listConversations({
     String? cursor,
     int limit = 500,
   }) async {
@@ -411,7 +416,7 @@ class _ForwardSheetChatRepository extends MockChatRepository {
       throw StateError('recent conversations unavailable');
     }
     final base = DateTime.utc(2026, 6, 27, 12);
-    return List<ChatInboxDto>.generate(
+    return List<ChatInboxViewData>.generate(
       12,
       (index) => chatInboxFixture(
         id: 'conv_$index',
@@ -424,36 +429,53 @@ class _ForwardSheetChatRepository extends MockChatRepository {
   }
 
   @override
-  Future<List<ContactHomeRowDto>> listContactHome({
+  Future<List<ContactHomeRow>> listContactHome({
     String filter = 'all',
     String? cursor,
     int limit = 500,
   }) async {
-    return <ContactHomeRowDto>[
-      ContactHomeRowDto(
+    return <ContactHomeRow>[
+      ContactHomeRow(
         id: 'user_a',
         kind: 'user',
         objectId: 'user_a',
         userId: 'user_a',
+        userHandle: 'user_a',
         title: '联系人 A',
         subtitle: '互相关注',
+        avatarUrl: '',
+        summaryIntersections: const <String>[],
+        contactCount: 1,
         lastActiveAt: DateTime.utc(2026, 6, 27, 11),
+        sortKey: '2026-06-27T11:00:00Z:user_a',
       ),
-      ContactHomeRowDto(
+      ContactHomeRow(
         id: 'group_a',
         kind: 'group',
         objectId: 'group_a',
+        userHandle: '',
         conversationId: 'group_a',
         title: '群聊 A',
+        subtitle: '',
+        avatarUrl: '',
+        summaryIntersections: const <String>[],
         memberCount: 8,
+        contactCount: 0,
         lastActiveAt: DateTime.utc(2026, 6, 27, 10),
+        sortKey: '2026-06-27T10:00:00Z:group_a',
       ),
-      ContactHomeRowDto(
+      ContactHomeRow(
         id: 'circle_a',
         kind: 'circle',
         objectId: 'circle_a',
+        userHandle: '',
         circleId: 'circle_a',
         title: '圈子行',
+        subtitle: '',
+        avatarUrl: '',
+        summaryIntersections: const <String>[],
+        contactCount: 0,
+        sortKey: 'circle_a',
       ),
     ].take(limit).toList(growable: false);
   }

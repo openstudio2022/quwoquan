@@ -6,8 +6,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/media/media_download_cache.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/feed_object_card_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
 import 'package:quwoquan_app/cloud/runtime/models/discovery_feed_page.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository_contract.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -17,38 +16,41 @@ import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart
 import 'package:quwoquan_app/ui/discovery/providers/home_feed_scroll_anchor_provider.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/home_multi_form_feed.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
-    show CloudOperationCancellationSignal;
+    show
+        CloudOperationCancellationSignal,
+        ContentPostProjection,
+        FeedObjectCard;
 
 import '../../../support/cloud_services/behavior_repository_double.dart';
 
-MicroPostDto _post(String channel, int index, {int bodyRepeats = 1}) {
-  return MicroPostDto(
-    id: '${channel}_anchor_post_$index',
-    type: 'moment',
-    identity: 'moment',
-    authorId: '${channel}_author_$index',
-    displayName: 'Anchor Author $index',
-    avatarUrl: '',
-    authorBackgroundUrl: null,
-    authorRoleLabel: '',
-    authorIdentityTags: const <String>[],
-    authorVerified: false,
-    assistantUsePolicy: 'allow',
-    likeCount: index,
-    commentCount: index,
-    shareCount: 0,
-    createdAt: DateTime.utc(2026, 7, 28),
-    updatedAt: null,
-    publishedAt: null,
-    body: List<String>.filled(
-      bodyRepeats,
-      'Stable channel anchor post $index keeps enough body text to produce '
-      'a deterministic single-column card height during the widget test.',
-    ).join(' '),
-    imageUrls: const <String>[],
-    videoUrl: null,
-    durationMs: null,
-    intersectionReasons: const [],
+ContentPostViewData _post(String channel, int index, {int bodyRepeats = 1}) {
+  return ContentPostViewData.fromWire(
+    ContentPostProjection(
+      postId: '${channel}_anchor_post_$index',
+      contentType: 'micro',
+      contentIdentity: 'moment',
+      authorId: '${channel}_author_$index',
+      authorDisplayName: 'Anchor Author $index',
+      authorAvatarUrl: '',
+      authorBackgroundUrl: null,
+      authorRoleLabel: '',
+      authorIdentityTags: const <String>[],
+      authorVerified: false,
+      assistantUsePolicy: 'allow',
+      likeCount: index,
+      commentCount: index,
+      shareCount: 0,
+      createdAt: DateTime.utc(2026, 7, 28),
+      updatedAt: null,
+      publishedAt: null,
+      body: List<String>.filled(
+        bodyRepeats,
+        'Stable channel anchor post $index keeps enough body text to produce '
+        'a deterministic single-column card height during the widget test.',
+      ).join(' '),
+      mediaUrls: const <String>[],
+      intersectionReasons: const [],
+    ),
   );
 }
 
@@ -56,12 +58,12 @@ class _TwoChannelFeedMapNotifier extends DiscoveryFeedMapNotifier {
   _TwoChannelFeedMapNotifier(
     this.recommend,
     this.campus, [
-    this._recommendObjectCards = const <FeedObjectCardDto>[],
+    this._recommendObjectCards = const <FeedObjectCard>[],
   ]);
 
   final List<ContentPostViewData> recommend;
   final List<ContentPostViewData> campus;
-  List<FeedObjectCardDto> _recommendObjectCards;
+  List<FeedObjectCard> _recommendObjectCards;
 
   @override
   Map<String, AsyncValue<DiscoveryFeedState>> build() {
@@ -87,7 +89,7 @@ class _TwoChannelFeedMapNotifier extends DiscoveryFeedMapNotifier {
 
   void replaceRecommend(
     List<ContentPostViewData> items, {
-    List<FeedObjectCardDto>? objectCards,
+    List<FeedObjectCard>? objectCards,
   }) {
     if (objectCards != null) {
       _recommendObjectCards = objectCards;
@@ -421,10 +423,11 @@ void main() {
         12,
         (index) => _post('object_anchor_campus', index),
       );
-      final objectCard = FeedObjectCardDto(
+      final objectCard = FeedObjectCard(
         objectKind: 'homepage',
         objectId: 'volatile-object-card',
         title: 'Volatile object card',
+        tagRefs: const <String>[],
         anchorIndex: 8,
       );
       final activeChannel = ValueNotifier<String>('recommend');
@@ -432,7 +435,7 @@ void main() {
       final feedNotifier = _TwoChannelFeedMapNotifier(
         recommend,
         campus,
-        <FeedObjectCardDto>[objectCard],
+        <FeedObjectCard>[objectCard],
       );
       addTearDown(activeChannel.dispose);
 
@@ -504,7 +507,7 @@ void main() {
 
       feedNotifier.replaceRecommend(
         recommend,
-        objectCards: const <FeedObjectCardDto>[],
+        objectCards: const <FeedObjectCard>[],
       );
       await tester.pump();
       activeChannel.value = 'recommend';

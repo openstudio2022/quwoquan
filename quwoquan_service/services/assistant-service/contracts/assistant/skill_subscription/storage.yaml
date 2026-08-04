@@ -59,8 +59,4 @@ redis_cache:
   ttl_seconds: 172800
   type: string
   description: 订阅 UTC 自然日投递配额槽；成功后保留到 TTL，失败时按持有值校验后释放，原子限制 maxPerDay。
-- key: assistant:intersection:lease:{userId}:{window}
-  ttl_seconds: 300
-  type: string
-  description: 交集提醒调度租约，同上语义。
 role: authoritative

@@ -210,8 +210,8 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
                 integration_env["INTEGRATION_MONGO_URI"],
                 "mongodb://host.containers.internal:19410/?directConnection=true",
             )
-            self.assertEqual(integration_env["INTEGRATION_PUSH_ENABLED"], "true")
-            self.assertEqual(integration_env["INTEGRATION_PUSH_MODE"], "real")
+            self.assertNotIn("INTEGRATION_PUSH_ENABLED", integration_env)
+            self.assertNotIn("INTEGRATION_PUSH_MODE", integration_env)
             self.assertEqual(
                 integration_env["INTEGRATION_PUSH_APNS_ENVIRONMENT"],
                 "production",

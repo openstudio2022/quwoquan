@@ -10,10 +10,10 @@ final assistantScheduleTasksProvider =
           .listAssistantTasks(limit: 32);
     });
 
-/// 助理管理页显式偏好事实，统一走可撤销的 AssistantPreferenceFacet。
+/// 助理管理页显式偏好，统一走可撤销的 AssistantPreferenceFacet。
 final assistantPreferencesProvider =
     FutureProvider.autoDispose<List<AssistantPreference>>((ref) async {
-      final facet = ref.read(assistantPreferenceFactFacetProvider);
+      final facet = ref.read(assistantPreferenceFacetProvider);
       final results = await Future.wait(<Future<List<AssistantPreference>>>[
         facet.listAssistantPreferences(),
         facet.listAssistantPreferences(

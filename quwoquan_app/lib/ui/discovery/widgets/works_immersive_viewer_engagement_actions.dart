@@ -20,7 +20,10 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
     );
   }
 
-  ContentPostViewData? _postById(List<ContentPostViewData> posts, String postId) {
+  ContentPostViewData? _postById(
+    List<ContentPostViewData> posts,
+    String postId,
+  ) {
     for (final post in posts) {
       if (post.id == postId) {
         return post;
@@ -210,7 +213,7 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
       }
       try {
         await ref
-            .read(contentWriteRepositoryProvider)
+            .read(contentPostDeleteCommandWriterProvider)
             .deletePost(
               postId: post.id,
               idempotencyKey: contentPostDeleteIdempotencyKey(post.id),
@@ -592,7 +595,10 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
     );
   }
 
-  Future<void> _applyBlockKeyword(ContentPostViewData post, String keyword) async {
+  Future<void> _applyBlockKeyword(
+    ContentPostViewData post,
+    String keyword,
+  ) async {
     try {
       await ref.read(blockedKeywordWriterProvider).add(keyword);
       final attribution = _feedAttributionForPost(post);
@@ -638,7 +644,8 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
     final posts = _buildFeed();
     final post = posts.isEmpty
         ? null
-        : posts[_currentPage.clamp(0, posts.length - 1)] as ContentPostViewData?;
+        : posts[_currentPage.clamp(0, posts.length - 1)]
+              as ContentPostViewData?;
     if (post == null) return;
     final journeyTracker = ref.read(journeyEventTrackerProvider);
     unawaited(

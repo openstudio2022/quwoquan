@@ -2,8 +2,6 @@ package application
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"time"
 
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
@@ -75,17 +73,9 @@ func terminalProjection(
 	record runruntime.TerminalRunRecord,
 ) (turnviewmodel.Projection, error) {
 	run := record.Run
-	var terminalSnapshot *turnviewmodel.TerminalSnapshotView
-	if len(run.TerminalSnapshot) > 0 {
-		encoded, err := json.Marshal(run.TerminalSnapshot)
-		if err != nil {
-			return turnviewmodel.Projection{}, fmt.Errorf("encode assistant run terminal snapshot: %w", err)
-		}
-		var decoded turnviewmodel.TerminalSnapshotView
-		if err := json.Unmarshal(encoded, &decoded); err != nil {
-			return turnviewmodel.Projection{}, fmt.Errorf("decode assistant run terminal snapshot: %w", err)
-		}
-		terminalSnapshot = &decoded
+	var terminalSnapshot = run.TerminalSnapshot
+	if run.TerminalSnapshot != nil {
+		terminalSnapshot = run.TerminalSnapshot.Clone()
 	}
 	return turnviewmodel.Projection{
 		TurnID:           run.RunID,

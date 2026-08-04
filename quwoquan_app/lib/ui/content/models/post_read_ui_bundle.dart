@@ -1,4 +1,6 @@
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/post_read_presentation.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/post_read_surface_id.g.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
 import 'package:quwoquan_app/cloud/runtime/models/post_read_presentation_mapper.dart';
 
 /// 页面边界三元组：wire DTO + 只读投影 + 表面（P2 SurfaceSpec 数据化）。

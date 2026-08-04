@@ -198,20 +198,20 @@ class _ShareRepository
   final bool _deferred;
   bool failWrites = false;
   int appendCalls = 0;
-  final List<Completer<ContentProfileInteractionPage>> pending =
-      <Completer<ContentProfileInteractionPage>>[];
+  final List<Completer<ProfileInteractionActivityPageSlice>> pending =
+      <Completer<ProfileInteractionActivityPageSlice>>[];
 
   @override
-  Future<ContentProfileInteractionPage> listActivities(
+  Future<ProfileInteractionActivityPageSlice> listActivities(
     ContentProfileInteractionPageQuery query, {
-    required ContentProfileInteractionDirection direction,
+    required InteractionDirection direction,
   }) {
     if (!_deferred) {
       return Future.value(
-        _page('share-${direction.wireValue}', direction.wireValue),
+        _page('share-${direction.wireName}', direction.wireName),
       );
     }
-    final completer = Completer<ContentProfileInteractionPage>();
+    final completer = Completer<ProfileInteractionActivityPageSlice>();
     pending.add(completer);
     return completer.future;
   }
@@ -225,9 +225,9 @@ class _ShareRepository
       throw StateError('read fact unavailable');
     }
     return ProfileInteractionReadFactAck(
-      factId: 'fact-${command.activityId}-${command.state.wireValue}',
+      factId: 'fact-${command.activityId}-${command.state.wireName}',
       activityId: command.activityId,
-      state: command.state.wireValue,
+      state: command.state,
       occurredAt: DateTime.utc(2026, 7, 12),
       replayed: false,
     );
@@ -258,28 +258,47 @@ final class _CapturingTelemetryRecorder implements AppTelemetryRecorder {
   }
 }
 
-ContentProfileInteractionPage _page(String id, String direction) {
-  return ContentProfileInteractionPage(
-    items: <ContentProfileInteractionActivity>[
-      ContentProfileInteractionActivity(
+ProfileInteractionActivityPageSlice _page(String id, String direction) {
+  return ProfileInteractionActivityPageSlice(
+    items: <ProfileInteractionActivityView>[
+      ProfileInteractionActivityView(
+        ownerPersonaId: 'persona-a',
         activityId: id,
-        activityType: 'share',
-        direction: direction,
+        activityType: InteractionActivityType.share,
+        direction: InteractionDirection.fromWire(
+          direction,
+          'ProfileInteractionActivityView.direction',
+        ),
+        sourceType: 'local_contract',
+        sourceEventId: 'event-$id',
+        sourceVersion: 1,
+        viewerReactionVersion: 1,
+        targetVersion: 1,
+        active: true,
+        commentKind: 'none',
+        viewerReaction: CommentReactionType.none,
         actorPersonaId: 'actor',
         actorDisplayName: '山海来信',
+        actorAvatarVersion: 1,
         targetPersonaId: 'persona-a',
         targetContentId: 'target',
-        targetContentType: 'image',
+        targetContentType: ContentType.image,
         targetContentSummary: '川西晨光',
+        targetKind: 'post',
+        targetAvailability: 'available',
+        targetReplyCount: 0,
         displayPersonaId: 'actor',
         displayName: '山海来信',
+        displayAvatarVersion: 1,
         primaryText: '转发互动',
         previewMediaKind: 'text',
         previewText: '川西晨光',
+        previewUnavailable: false,
         filterKeys: const <String>['shares'],
         createdAt: DateTime.utc(2026, 7, 12),
         occurredAt: DateTime.utc(2026, 7, 12),
       ),
     ],
+    hasMore: false,
   );
 }

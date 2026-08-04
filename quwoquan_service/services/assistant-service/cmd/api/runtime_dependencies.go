@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -22,8 +23,10 @@ import (
 	taskpersistence "quwoquan_service/services/assistant-service/internal/assistant/assistant_task_view/infrastructure/persistence"
 	turnviewapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_turn_view/application"
 	turnviewpersistence "quwoquan_service/services/assistant-service/internal/assistant/assistant_turn_view/infrastructure/persistence"
+	activitypersistence "quwoquan_service/services/assistant-service/internal/assistant/skill_activity_view/infrastructure/persistence"
 	consentports "quwoquan_service/services/assistant-service/internal/assistant/skill_consent/domain/ports"
 	consentpersistence "quwoquan_service/services/assistant-service/internal/assistant/skill_consent/infrastructure/persistence"
+	datacontrolpersistence "quwoquan_service/services/assistant-service/internal/assistant/skill_data_control_request/infrastructure/persistence"
 	skillpackagepersistence "quwoquan_service/services/assistant-service/internal/assistant/skill_package_release/infrastructure/persistence"
 	subscriptionports "quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/domain/ports"
 	subscriptionpersistence "quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/infrastructure/persistence"
@@ -47,7 +50,9 @@ func validateRuntimeDependenciesConfig(cfg config) error {
 
 type persistentDependencies struct {
 	subscriptionStore  subscriptionports.Store
+	subscriptionReader *subscriptionpersistence.MongoStore
 	consentStore       consentports.Store
+	consentActivity    consentports.ActivityReader
 	settingStore       settingports.Store
 	placementStore     placementports.Store
 	sessionStore       sessionports.SessionStore
@@ -66,6 +71,8 @@ type persistentDependencies struct {
 	publicWebEvidence  *publicwebpersistence.MongoEvidenceStore
 	publicWebBudget    *publicwebpersistence.MongoRunBudgetGate
 	skillPackageStore  *skillpackagepersistence.MongoStore
+	skillActivityStore *activitypersistence.MongoVisibilityStore
+	dataControlStore   *datacontrolpersistence.Store
 	mongoClient        *mongo.Client
 	postgresPool       *pgxpool.Pool
 	inner              *runtimewiring.PersistentDependencies
@@ -89,6 +96,15 @@ func openPersistentDependencies(ctx context.Context, cfg config) (*persistentDep
 		return nil, err
 	}
 	database := inner.MongoClient.Database(strings.TrimSpace(cfg.MongoDB.Database))
+	subscriptionReader, ok := inner.SubscriptionStore.(*subscriptionpersistence.MongoStore)
+	if !ok {
+		_ = inner.Close(ctx)
+		return nil, dependencyError(
+			"mongodb.skill_subscriptions",
+			"object_reader",
+			fmt.Errorf("runtime store %T does not expose canonical skill readers", inner.SubscriptionStore),
+		)
+	}
 	consentStore := consentpersistence.NewPgStore(inner.PostgresPool)
 	if err := consentStore.EnsureSchema(ctx); err != nil {
 		_ = inner.Close(ctx)
@@ -203,9 +219,29 @@ func openPersistentDependencies(ctx context.Context, cfg config) (*persistentDep
 			err,
 		)
 	}
+	skillActivityStore := activitypersistence.NewMongoVisibilityStore(database)
+	if err := skillActivityStore.EnsureIndexes(ctx); err != nil {
+		_ = inner.Close(ctx)
+		return nil, dependencyError(
+			"mongodb.skill_activity_visibility_controls",
+			"indexes",
+			err,
+		)
+	}
+	dataControlStore := datacontrolpersistence.NewStore(database)
+	if err := dataControlStore.EnsureIndexes(ctx); err != nil {
+		_ = inner.Close(ctx)
+		return nil, dependencyError(
+			"mongodb.skill_data_control_requests",
+			"indexes",
+			err,
+		)
+	}
 	return &persistentDependencies{
 		subscriptionStore:  inner.SubscriptionStore,
+		subscriptionReader: subscriptionReader,
 		consentStore:       consentStore,
+		consentActivity:    consentStore,
 		settingStore:       settingStore,
 		placementStore:     placementStore,
 		sessionStore:       inner.SessionStore,
@@ -224,6 +260,8 @@ func openPersistentDependencies(ctx context.Context, cfg config) (*persistentDep
 		publicWebEvidence:  publicWebEvidence,
 		publicWebBudget:    publicWebBudget,
 		skillPackageStore:  skillPackageStore,
+		skillActivityStore: skillActivityStore,
+		dataControlStore:   dataControlStore,
 		mongoClient:        inner.MongoClient,
 		postgresPool:       inner.PostgresPool,
 		inner:              inner,

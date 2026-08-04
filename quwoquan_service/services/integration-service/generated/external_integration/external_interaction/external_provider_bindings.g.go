@@ -21,7 +21,7 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 		"identity.sms.otp": {
 			State:       "enabled",
 			AdapterID:   "ext.sms.local_capture",
-			EndpointRef: "local_topology:integration.local_capture",
+			EndpointRef: "local_topology:sms-provider-substitute",
 			EndpointEnvironmentKeys: map[string]string{
 				"endpoint": "INTEGRATION_SMS_ENDPOINT",
 			},
@@ -32,13 +32,15 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 			RequiredRedisScenes: []string{},
 		},
 		"integration.push.delivery": {
-			State:                   "enabled",
-			AdapterID:               "ext.push.local_recorder",
-			EndpointRef:             "local_topology:integration.local_recorder",
-			EndpointEnvironmentKeys: map[string]string{},
-			SecretEnvironmentKeys:   []string{},
-			TimeoutMilliseconds:     10000,
-			RequiredRedisScenes:     []string{},
+			State:       "enabled",
+			AdapterID:   "ext.push.protocol_substitute",
+			EndpointRef: "local_topology:provider-protocol-substitute",
+			EndpointEnvironmentKeys: map[string]string{
+				"endpoint": "INTEGRATION_PUSH_SUBSTITUTE_ENDPOINT",
+			},
+			SecretEnvironmentKeys: []string{},
+			TimeoutMilliseconds:   10000,
+			RequiredRedisScenes:   []string{},
 		},
 		"runtime.message.transport": {
 			State:                   "enabled",
@@ -56,7 +58,7 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 		"identity.sms.otp": {
 			State:       "enabled",
 			AdapterID:   "ext.sms.local_capture",
-			EndpointRef: "local_topology:integration.local_capture",
+			EndpointRef: "local_topology:sms-provider-substitute",
 			EndpointEnvironmentKeys: map[string]string{
 				"endpoint": "INTEGRATION_SMS_ENDPOINT",
 			},
@@ -67,13 +69,15 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 			RequiredRedisScenes: []string{},
 		},
 		"integration.push.delivery": {
-			State:                   "enabled",
-			AdapterID:               "ext.push.local_recorder",
-			EndpointRef:             "local_topology:integration.local_recorder",
-			EndpointEnvironmentKeys: map[string]string{},
-			SecretEnvironmentKeys:   []string{},
-			TimeoutMilliseconds:     10000,
-			RequiredRedisScenes:     []string{},
+			State:       "enabled",
+			AdapterID:   "ext.push.protocol_substitute",
+			EndpointRef: "local_topology:provider-protocol-substitute",
+			EndpointEnvironmentKeys: map[string]string{
+				"endpoint": "INTEGRATION_PUSH_SUBSTITUTE_ENDPOINT",
+			},
+			SecretEnvironmentKeys: []string{},
+			TimeoutMilliseconds:   10000,
+			RequiredRedisScenes:   []string{},
 		},
 		"runtime.message.transport": {
 			State:                   "enabled",
@@ -91,7 +95,7 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 		"identity.sms.otp": {
 			State:       "enabled",
 			AdapterID:   "ext.sms.local_capture",
-			EndpointRef: "local_topology:integration.local_capture",
+			EndpointRef: "local_topology:sms-provider-substitute",
 			EndpointEnvironmentKeys: map[string]string{
 				"endpoint": "INTEGRATION_SMS_ENDPOINT",
 			},
@@ -102,13 +106,15 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 			RequiredRedisScenes: []string{},
 		},
 		"integration.push.delivery": {
-			State:                   "enabled",
-			AdapterID:               "ext.push.local_recorder",
-			EndpointRef:             "local_topology:integration.local_recorder",
-			EndpointEnvironmentKeys: map[string]string{},
-			SecretEnvironmentKeys:   []string{},
-			TimeoutMilliseconds:     10000,
-			RequiredRedisScenes:     []string{},
+			State:       "enabled",
+			AdapterID:   "ext.push.protocol_substitute",
+			EndpointRef: "local_topology:provider-protocol-substitute",
+			EndpointEnvironmentKeys: map[string]string{
+				"endpoint": "INTEGRATION_PUSH_SUBSTITUTE_ENDPOINT",
+			},
+			SecretEnvironmentKeys: []string{},
+			TimeoutMilliseconds:   10000,
+			RequiredRedisScenes:   []string{},
 		},
 		"runtime.message.transport": {
 			State:                   "enabled",

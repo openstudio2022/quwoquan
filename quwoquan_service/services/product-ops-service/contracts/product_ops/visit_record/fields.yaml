@@ -26,6 +26,7 @@ fields:
   type: string
   constraints:
   - NOT_NULL
+  - MAX_LENGTH_256
   classification: PUBLIC
   log_policy: allow
   api_exposure: drop
@@ -56,3 +57,76 @@ fields:
 enums:
   VisitTargetType:
     values: [page, post, circle, user]
+types:
+  RecordVisitRequest:
+    description: 记录一次真实访问的唯一公开命令；actor 由受信主体派生，occurredAt 由服务端时钟生成，Idempotency-Key 只从 header 注入。
+    fields:
+    - name: idempotencyKey
+      source: header.Idempotency-Key
+      type: string
+      constraints: [NOT_BLANK, MAX_LENGTH_256]
+      classification: INTERNAL
+      log_policy: hash
+      api_exposure: write
+      ops_exposure: none
+    - name: targetType
+      source: targetType
+      type: enum
+      enum_ref: VisitTargetType
+      constraints: [NOT_NULL]
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: write
+      ops_exposure: none
+    - name: targetKey
+      source: targetKey
+      type: string
+      constraints: [NOT_BLANK, MAX_LENGTH_256]
+      classification: PUBLIC
+      log_policy: hash
+      api_exposure: write
+      ops_exposure: none
+  RecordVisitReceipt:
+    description: VisitRecord 聚合与 actor-scoped 幂等回执同事务提交后的唯一公开命令结果；不暴露 actor 身份。
+    fields:
+    - name: targetType
+      source: targetType
+      type: enum
+      enum_ref: VisitTargetType
+      constraints: [NOT_NULL]
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: targetKey
+      source: targetKey
+      type: string
+      constraints: [NOT_BLANK, MAX_LENGTH_256]
+      classification: PUBLIC
+      log_policy: hash
+      api_exposure: read
+      ops_exposure: read
+    - name: visitCount
+      source: visitCount
+      type: int
+      constraints: [NOT_NULL, POSITIVE]
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: occurredAt
+      source: occurredAt
+      type: timestamp
+      constraints: [NOT_NULL]
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: replayed
+      source: replayed
+      type: bool
+      constraints: [NOT_NULL]
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read

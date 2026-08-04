@@ -47,6 +47,9 @@ func TestCanonicalSearchClientFieldsPreserveNestedTypesAndWireNames(t *testing.T
 	if fields[1].DartType != "ContentType" || fields[1].EnumRef != "ContentType" {
 		t.Fatalf("canonical enum degraded: %#v", fields[1])
 	}
+	if !fields[1].DartEnumDecoderWithPath || fields[1].DartEnumWireGetter != "wireName" {
+		t.Fatalf("canonical enum owner ABI degraded: %#v", fields[1])
+	}
 
 	hitField, err := canonicalSearchClientField(
 		"evidence",
@@ -92,25 +95,39 @@ func TestCanonicalSearchGeneratedModelIsStrictAndUsesCanonicalNestedDecoder(t *t
 	}
 }
 
-func TestContentContractEnumsUseSharedCanonicalValues(t *testing.T) {
-	content, err := renderSharedContractEnumsDart(
-		map[string][]string{
-			"ContentType":     {"image", "video", "micro", "article"},
-			"ContentIdentity": {"moment", "work"},
-		},
-		[]string{"ContentType", "ContentIdentity"},
+func TestCanonicalSearchContentEnumsUseContentOperationOwner(t *testing.T) {
+	field, err := canonicalSearchClientField(
+		"contentType",
+		"contentType",
+		"enum",
+		"ContentType",
+		false,
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
+	model := canonicalSearchClientModel{
+		className: "CanonicalSearchContentHit",
+		fields:    []projectionFieldDef{field},
+	}
+	imports, err := canonicalSearchModelImports(model, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(imports) != 1 || imports[0] != "../../content/content_operation_contracts.g.dart" {
+		t.Fatalf("canonical enum import=%v", imports)
+	}
+	content := renderStandaloneDtoDart(clientProjection{
+		DartClass: "CanonicalSearchContentHit",
+		Strict:    true,
+		Fields:    []projectionFieldDef{field},
+	}, "search/search/search_index_view/fields.yaml#types.CanonicalSearchContentHit")
 	for _, expected := range []string{
-		"enum ContentType",
-		"micro(\"micro\")",
-		"enum ContentIdentity",
-		"static ContentIdentity fromWire(Object? raw)",
+		"ContentType.fromWire(m['contentType'], 'CanonicalSearchContentHit.contentType')",
+		"'contentType': contentType.wireName",
 	} {
 		if !strings.Contains(content, expected) {
-			t.Fatalf("generated Content enum missing %q:\n%s", expected, content)
+			t.Fatalf("generated Search model missing canonical Content enum ABI %q:\n%s", expected, content)
 		}
 	}
 }

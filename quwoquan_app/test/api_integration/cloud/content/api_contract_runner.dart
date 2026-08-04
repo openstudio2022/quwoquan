@@ -35,7 +35,7 @@ import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
 import 'package:quwoquan_app/cloud/services/content/content_read_model_projection.dart';
 
 import '../../../support/api_contract/local_gamma_anonymous_session.dart';
@@ -165,7 +165,10 @@ void main() {
       expect(body.containsKey('cursor'), isTrue);
 
       final items = (body['items'] as List)
-          .map((e) => contentPostViewDataFromReadModelMap(e as Map<String, dynamic>))
+          .map(
+            (e) =>
+                contentPostViewDataFromReadModelMap(e as Map<String, dynamic>),
+          )
           .toList();
       expect(items, isNotEmpty);
 
@@ -214,46 +217,55 @@ void main() {
       );
     });
 
-    test('服务 read model 投影为 PhotoPostDto 且包含 aspectRatio', () async {
-      if (!_apiAvailable) {
-        return markTestSkipped('$_apiContractEnv unavailable');
-      }
-      final url = Uri.parse('$_apiBase/content/feed?type=image&limit=5');
-      final resp = await _client
-          .get(url, headers: _authHeaders('content.feed'))
-          .timeout(const Duration(seconds: 10));
-      expect(resp.statusCode, 200);
-
-      final items = (jsonDecode(resp.body)['items'] as List)
-          .map((e) => contentPostViewDataFromReadModelMap(e as Map<String, dynamic>))
-          .whereType<PhotoPostDto>()
-          .toList();
-
-      for (final item in items) {
-        final hasDimensions =
-            item.width != null && item.height != null && item.height! > 0;
-        if (hasDimensions) {
-          expect(
-            item.aspectRatio,
-            isNotNull,
-            reason: 'aspectRatio must be computable when width/height exist',
-          );
-          expect(
-            item.aspectRatio,
-            greaterThan(0),
-            reason: 'aspectRatio must be positive when dimensions exist',
-          );
-        } else {
-          expect(
-            item.aspectRatio,
-            isNull,
-            reason: 'aspectRatio must stay null when dimensions are absent',
-          );
+    test(
+      '服务 read model 投影为 canonical image ViewData 且包含 aspectRatio',
+      () async {
+        if (!_apiAvailable) {
+          return markTestSkipped('$_apiContractEnv unavailable');
         }
-      }
-    });
+        final url = Uri.parse('$_apiBase/content/feed?type=image&limit=5');
+        final resp = await _client
+            .get(url, headers: _authHeaders('content.feed'))
+            .timeout(const Duration(seconds: 10));
+        expect(resp.statusCode, 200);
 
-    test('视频书查询返回可播放的 VideoPostDto', () async {
+        final items = (jsonDecode(resp.body)['items'] as List)
+            .map(
+              (item) => contentPostViewDataFromReadModelMap(
+                item as Map<String, dynamic>,
+              ),
+            )
+            .toList(growable: false);
+
+        expect(items, isNotEmpty, reason: 'image feed must not be empty');
+        expect(items, everyElement(isA<ContentPostViewData>()));
+        expect(items.map((item) => item.type), everyElement('image'));
+        for (final item in items) {
+          final hasDimensions =
+              item.width != null && item.height != null && item.height! > 0;
+          if (hasDimensions) {
+            expect(
+              item.aspectRatio,
+              isNotNull,
+              reason: 'aspectRatio must be computable when width/height exist',
+            );
+            expect(
+              item.aspectRatio,
+              greaterThan(0),
+              reason: 'aspectRatio must be positive when dimensions exist',
+            );
+          } else {
+            expect(
+              item.aspectRatio,
+              isNull,
+              reason: 'aspectRatio must stay null when dimensions are absent',
+            );
+          }
+        }
+      },
+    );
+
+    test('视频书查询返回可播放的 canonical video ViewData', () async {
       if (!_apiAvailable) {
         return markTestSkipped('$_apiContractEnv unavailable');
       }
@@ -269,15 +281,17 @@ void main() {
       final body = jsonDecode(resp.body) as Map<String, dynamic>;
       final items = (body['items'] as List)
           .map(
-            (item) =>
-                contentPostViewDataFromReadModelMap(item as Map<String, dynamic>),
+            (item) => contentPostViewDataFromReadModelMap(
+              item as Map<String, dynamic>,
+            ),
           )
           .toList(growable: false);
       expect(items, isNotEmpty, reason: 'video book feed must not be empty');
-      expect(items, everyElement(isA<VideoPostDto>()));
-      for (final item in items.whereType<VideoPostDto>()) {
+      expect(items, everyElement(isA<ContentPostViewData>()));
+      for (final item in items) {
         expect(item.identity, 'work');
         expect(item.type, 'video');
+        expect(item.videoUrl, isNotNull);
         expect(item.videoUrl, isNotEmpty);
       }
     });

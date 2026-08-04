@@ -23,6 +23,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import '../../../../support/cloud_services/repository_mock_reexports.dart';
 
 import '../typed_circle_query_test_double.dart';
+import '../../../../support/cloud_services/object_doubles/circle/circle_contract_test_builders.dart';
 
 class _AuthenticatedCircleSession extends AuthSessionController {
   @override
@@ -84,7 +85,7 @@ final class _FixtureCircleMembershipQuery implements CircleMembershipQuery {
     version: 1,
     circleId: circleId,
     personaId: personaId,
-    role: CircleMembershipRole.owner,
+    role: CircleMemberRole.owner,
     state: CircleMembershipState.active,
     joinedAt: DateTime.utc(2026, 5, 6),
     leftAt: null,
@@ -109,7 +110,7 @@ final class _FixtureCircleMembershipQuery implements CircleMembershipQuery {
   @override
   Future<PersonaCirclePageSlice> listPersonaCircles(
     PersonaCircleListQuery query,
-  ) async => const PersonaCirclePageSlice(items: <PersonaCircleSummary>[]);
+  ) async => const PersonaCirclePageSlice(items: <PersonaCircleSlice>[]);
 }
 
 final class _NoopCircleBehaviorFactWriter implements CircleBehaviorFactWriter {
@@ -130,7 +131,7 @@ final class _FixtureCircleMembershipCommandWriter
     membershipId: 'fixture_membership',
     version: ++_version,
     state: CircleMembershipState.pending,
-    role: CircleMembershipRole.member,
+    role: CircleMemberRole.member,
     idempotentReplay: false,
   );
 
@@ -141,7 +142,7 @@ final class _FixtureCircleMembershipCommandWriter
     membershipId: 'fixture_membership',
     version: ++_version,
     state: CircleMembershipState.left,
-    role: CircleMembershipRole.member,
+    role: CircleMemberRole.member,
     idempotentReplay: false,
   );
 
@@ -171,8 +172,8 @@ Widget _scopedApp({
       ? query as CircleDiscoveryFeedQueryReader
       : CircleDiscoveryFeedQueryTestDouble(
           (CircleDiscoveryFeedQuery query) => CircleDiscoveryFeedPageSlice(
-            circles: const <CircleProjection>[],
-            items: const <CircleFeedPostProjection>[],
+            circles: const <Circle>[],
+            items: const <CircleFeedItemView>[],
           ),
         );
   return ProviderScope(
@@ -636,41 +637,35 @@ void main() {
 
 class _PrivateVisitorCircleQuery extends CircleQueryReaderTestDouble {
   @override
-  Future<CircleProjection> get(CircleDetailQuery query) async =>
-      CircleProjection(
+  Future<Circle> get(CircleDetailQuery query) async =>
+      buildCircleContract(
         circleId: query.circleId,
         name: '私密测试圈子',
         ownerId: 'fixture_user_owner',
         visibility: CircleVisibility.private,
-        viewerRole: 'visitor',
-        joinStatus: 'none',
-        isFollowed: false,
       );
 }
 
 class _ApprovalVisitorCircleQuery extends CircleQueryReaderTestDouble {
   @override
-  Future<CircleProjection> get(CircleDetailQuery query) async =>
-      CircleProjection(
+  Future<Circle> get(CircleDetailQuery query) async =>
+      buildCircleContract(
         circleId: query.circleId,
         name: '审批测试圈子',
         ownerId: 'fixture_user_owner',
         visibility: CircleVisibility.public,
         joinPolicy: CircleJoinPolicy.approval,
-        viewerRole: 'visitor',
-        joinStatus: 'none',
-        isFollowed: false,
       );
 }
 
 class _ImpactCircleQuery extends CircleQueryReaderTestDouble {
   @override
-  Future<CircleImpactSlice> impact(CircleImpactQuery query) async {
-    return CircleImpactSlice(
+  Future<CircleImpactSummary> impact(CircleImpactQuery query) async {
+    return CircleImpactSummary(
       circleId: query.circleId,
       total: 21,
-      items: <CircleImpactItemProjection>[
-        CircleImpactItemProjection(
+      items: <CircleImpactItem>[
+        buildCircleImpactItemContract(
           helpType: 'relationship',
           action: 'establish_connection',
           intersectionDimension: 'relationship',
@@ -678,7 +673,7 @@ class _ImpactCircleQuery extends CircleQueryReaderTestDouble {
           count: 12,
           primaryText: '12人在这里建立了新连接',
         ),
-        CircleImpactItemProjection(
+        buildCircleImpactItemContract(
           helpType: 'community',
           action: 'start_discussion',
           intersectionDimension: 'content',
@@ -686,7 +681,7 @@ class _ImpactCircleQuery extends CircleQueryReaderTestDouble {
           count: 5,
           primaryText: '5个讨论正在这里发生',
         ),
-        CircleImpactItemProjection(
+        buildCircleImpactItemContract(
           helpType: 'spread',
           action: 'active_participation',
           intersectionDimension: 'interest',
@@ -694,7 +689,7 @@ class _ImpactCircleQuery extends CircleQueryReaderTestDouble {
           count: 3,
           primaryText: '3人最近参与了这里',
         ),
-        CircleImpactItemProjection(
+        buildCircleImpactItemContract(
           helpType: 'spread',
           action: 'hidden',
           intersectionDimension: 'interest',
@@ -709,29 +704,29 @@ class _ImpactCircleQuery extends CircleQueryReaderTestDouble {
 
 class _EmptyImpactCircleQuery extends CircleQueryReaderTestDouble {
   @override
-  Future<CircleImpactSlice> impact(CircleImpactQuery query) async =>
-      CircleImpactSlice(
+  Future<CircleImpactSummary> impact(CircleImpactQuery query) async =>
+      CircleImpactSummary(
         circleId: query.circleId,
         total: 0,
-        items: const <CircleImpactItemProjection>[],
+        items: const <CircleImpactItem>[],
       );
 }
 
 class _ImpactErrorCircleQuery extends CircleQueryReaderTestDouble {
   @override
-  Future<CircleImpactSlice> impact(CircleImpactQuery query) async {
+  Future<CircleImpactSummary> impact(CircleImpactQuery query) async {
     throw Exception('impact failed');
   }
 }
 
 class _ErrorCircleQuery extends CircleQueryReaderTestDouble {
   @override
-  Future<CircleProjection> get(CircleDetailQuery query) async {
+  Future<Circle> get(CircleDetailQuery query) async {
     throw Exception('Network error');
   }
 
   @override
-  Future<CircleStatsSlice> stats(CircleStatsQuery query) async {
+  Future<CircleStatsWire> stats(CircleStatsQuery query) async {
     throw Exception('Network error');
   }
 }

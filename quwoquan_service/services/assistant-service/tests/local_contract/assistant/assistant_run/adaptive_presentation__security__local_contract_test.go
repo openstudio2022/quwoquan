@@ -43,7 +43,12 @@ func TestAdaptivePresentationResolvesValidatedTemplateDataAndVariant(t *testing.
 	if err != nil {
 		t.Fatalf("NewCatalog() error = %v", err)
 	}
-	resolver := presentation.NewResolver(catalog, actionPolicyStub{}, mediaPolicyStub{})
+	resolver := presentation.NewResolver(
+		catalog,
+		actionPolicyStub{},
+		mediaPolicyStub{},
+		presentation.NewOfficialNodeDataPolicies(),
+	)
 	document, err := resolver.Resolve(
 		context.Background(),
 		"travel",
@@ -76,6 +81,113 @@ func TestAdaptivePresentationResolvesValidatedTemplateDataAndVariant(t *testing.
 	}
 	if document.TemplateDigest != template.AssetDigest || document.FallbackMarkdown == "" || document.FallbackPlainText == "" {
 		t.Fatalf("fallback/template fields = %#v", document)
+	}
+}
+
+func TestAdaptivePresentationOldClientFallbackComesFromFrozenTemplateBinding(t *testing.T) {
+	template := validPresentationTemplate()
+	properties := template.InputSchema["properties"].(map[string]any)
+	properties["answer"] = map[string]any{"type": "string"}
+	template.FallbackMarkdownBinding = "$.answer"
+	catalog, err := presentation.NewCatalog([]presentation.Template{template})
+	if err != nil {
+		t.Fatalf("NewCatalog() error = %v", err)
+	}
+	resolver := presentation.NewResolver(
+		catalog,
+		actionPolicyStub{},
+		mediaPolicyStub{},
+		presentation.NewOfficialNodeDataPolicies(),
+	)
+	const answer = "## 西湖行程\n\n明早从断桥出发。"
+	document, err := resolver.Resolve(
+		t.Context(),
+		"travel",
+		presentation.Selection{
+			TemplateRef: presentation.TemplateRef(template),
+			Data: map[string]any{
+				"title": "西湖一日行程", "showRisk": true, "answer": answer,
+			},
+		},
+		presentation.SurfaceCapabilities{},
+		1,
+	)
+	if err != nil || !document.UseFallback || document.FallbackMarkdown != answer ||
+		document.FallbackPlainText == "" {
+		t.Fatalf("old-client fallback document=%#v err=%v", document, err)
+	}
+}
+
+func TestAdaptivePresentationUnknownNodeDataPolicyFailsClosed(t *testing.T) {
+	template := validRouteMapTemplate()
+	template.Nodes[0].DataPolicyRef = "travel.unknown.route_map"
+	catalog, err := presentation.NewCatalog([]presentation.Template{template})
+	if err != nil {
+		t.Fatalf("NewCatalog() error = %v", err)
+	}
+	resolver := presentation.NewResolver(
+		catalog,
+		actionPolicyStub{},
+		mediaPolicyStub{},
+		presentation.NewOfficialNodeDataPolicies(),
+	)
+	document, err := resolver.Resolve(
+		t.Context(),
+		"travel_companion",
+		presentation.Selection{
+			TemplateRef: presentation.TemplateRef(template),
+			Data:        map[string]any{"routeMap": routeMapData()},
+		},
+		presentation.SurfaceCapabilities{
+			SupportedNodeKinds: map[generated.AssistantPresentationNodeKind]bool{
+				generated.AssistantPresentationNodeKindRouteMap: true,
+			},
+			ViewportClass: "narrow",
+			Density:       generated.AssistantPresentationDensityCompact,
+		},
+		1,
+	)
+	if err != nil || !document.UseFallback ||
+		document.FallbackReason != presentation.ErrDataPolicyRejected.Error() {
+		t.Fatalf("unknown-policy document=%#v err=%v", document, err)
+	}
+}
+
+func TestAdaptivePresentationRejectsOversizedStructuredDataBeforeResolution(t *testing.T) {
+	template := validRouteMapTemplate()
+	template.InputSchema = map[string]any{
+		"type":                 "object",
+		"additionalProperties": false,
+		"properties": map[string]any{
+			"routeMap": map[string]any{"type": "object"},
+		},
+		"required": []any{"routeMap"},
+	}
+	catalog, err := presentation.NewCatalog([]presentation.Template{template})
+	if err != nil {
+		t.Fatalf("NewCatalog() error = %v", err)
+	}
+	resolver := presentation.NewResolver(
+		catalog,
+		actionPolicyStub{},
+		mediaPolicyStub{},
+		presentation.NewOfficialNodeDataPolicies(),
+	)
+	document, err := resolver.Resolve(
+		t.Context(),
+		"travel_companion",
+		presentation.Selection{
+			TemplateRef: presentation.TemplateRef(template),
+			Data: map[string]any{
+				"routeMap": map[string]any{"oversized": strings.Repeat("x", 300<<10)},
+			},
+		},
+		presentation.SurfaceCapabilities{},
+		1,
+	)
+	if err != nil || !document.UseFallback ||
+		!strings.Contains(document.FallbackReason, presentation.ErrInvalidData.Error()) {
+		t.Fatalf("oversized data document=%#v err=%v", document, err)
 	}
 }
 
@@ -129,6 +241,7 @@ func TestAdaptivePresentationFallsBackForInvalidDataUnsupportedNodeOrPolicyFailu
 				catalog,
 				actionPolicyStub{reject: test.actionReject},
 				mediaPolicyStub{reject: test.mediaReject},
+				presentation.NewOfficialNodeDataPolicies(),
 			)
 			document, err := resolver.Resolve(
 				context.Background(),
@@ -192,6 +305,48 @@ func TestAdaptivePresentationTemplateRejectsUnsafeStructureStyleAndActions(t *te
 				template.FallbackMarkdown = "<script>alert(1)</script>"
 			},
 		},
+		{
+			name: "fallback binding outside input schema",
+			mutate: func(template *presentation.Template) {
+				template.FallbackMarkdownBinding = "$.missingAnswer"
+			},
+		},
+		{
+			name: "semantic data policy ref is invalid",
+			mutate: func(template *presentation.Template) {
+				template.Nodes[0].DataPolicyRef = "https://adapter.example"
+			},
+		},
+		{
+			name: "route map without data policy",
+			mutate: func(template *presentation.Template) {
+				template.Nodes[0].Kind = generated.AssistantPresentationNodeKindRouteMap
+			},
+		},
+		{
+			name: "media dimensions are absent",
+			mutate: func(template *presentation.Template) {
+				template.Nodes[0].Media.Width = 0
+			},
+		},
+		{
+			name: "responsive variant id is duplicated",
+			mutate: func(template *presentation.Template) {
+				template.ResponsiveVariants = append(
+					template.ResponsiveVariants,
+					template.ResponsiveVariants[0],
+				)
+			},
+		},
+		{
+			name: "responsive variant requires an absent node kind",
+			mutate: func(template *presentation.Template) {
+				template.ResponsiveVariants[0].RequiredNodeKinds = append(
+					template.ResponsiveVariants[0].RequiredNodeKinds,
+					generated.AssistantPresentationNodeKindRouteMap,
+				)
+			},
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -210,7 +365,12 @@ func TestAdaptivePresentationRejectsTamperedBoundActionIntent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewCatalog() error = %v", err)
 	}
-	resolver := presentation.NewResolver(catalog, actionPolicyStub{}, nil)
+	resolver := presentation.NewResolver(
+		catalog,
+		actionPolicyStub{},
+		nil,
+		presentation.NewOfficialNodeDataPolicies(),
+	)
 	validAction := map[string]any{
 		"intentId":             "continue_tool_use",
 		"operation":            "ContinueAssistantToolUse",
@@ -268,42 +428,94 @@ func TestAdaptivePresentationRejectsTamperedBoundActionIntent(t *testing.T) {
 	}
 }
 
-func TestAdaptivePresentationRouteMapUsesOnlyCanonicalTravelProjectionFacts(t *testing.T) {
-	projection := map[string]any{
-		"tripId": "trip_hangzhou", "currentRevisionId": "revision_2",
-		"sourceDigest": "sha256:" + strings.Repeat("c", 64),
-		"stops": []any{
-			map[string]any{
-				"stopId": "stop_1", "sequence": float64(0), "dayIndex": float64(2),
-				"itemId": "item_1", "title": "灵隐寺",
-				"placeRef": map[string]any{"objectTypeRef": "entity.Place", "objectId": "lingyin"},
-			},
-			map[string]any{
-				"stopId": "stop_2", "sequence": float64(1), "dayIndex": float64(2),
-				"itemId": "item_2", "title": "西湖",
-				"placeRef": map[string]any{"objectTypeRef": "entity.Place", "objectId": "west_lake"},
-			},
+func TestAdaptivePresentationBindsOnlyTypedMediaReferences(t *testing.T) {
+	template := validBoundMediaTemplate()
+	catalog, err := presentation.NewCatalog([]presentation.Template{template})
+	if err != nil {
+		t.Fatalf("NewCatalog() error = %v", err)
+	}
+	resolver := presentation.NewResolver(
+		catalog,
+		nil,
+		mediaPolicyStub{},
+		presentation.NewOfficialNodeDataPolicies(),
+	)
+	media := map[string]any{
+		"mediaAssetId":  "asset_west_lake_01",
+		"alt":           "西湖边的行程随拍",
+		"width":         1600,
+		"height":        900,
+		"provenanceRef": "travel_moment_01",
+	}
+	document, resolveErr := resolver.Resolve(
+		t.Context(),
+		"travel_companion",
+		presentation.Selection{
+			TemplateRef: presentation.TemplateRef(template),
+			Data:        map[string]any{"media": media},
 		},
-		"routeSegments": []any{map[string]any{
-			"segmentId": "segment_1", "sequence": float64(0),
-			"fromStopId": "stop_1", "toStopId": "stop_2",
-		}},
-		"momentMarkers": []any{map[string]any{
-			"momentId": "moment_1", "dayIndex": float64(2), "itemId": "item_1",
-			"placeRef": map[string]any{"objectTypeRef": "entity.Place", "objectId": "lingyin"},
-		}},
+		presentation.SurfaceCapabilities{
+			SupportedNodeKinds: map[generated.AssistantPresentationNodeKind]bool{
+				generated.AssistantPresentationNodeKindMedia: true,
+			},
+			ViewportClass: "standard",
+			Density:       generated.AssistantPresentationDensityStandard,
+		},
+		1,
+	)
+	if resolveErr != nil || document.UseFallback || len(document.Nodes) != 1 ||
+		document.Nodes[0].Media == nil ||
+		document.Nodes[0].Media.MediaAssetID != "asset_west_lake_01" {
+		t.Fatalf("bound media document=%#v err=%v", document, resolveErr)
 	}
-	routeMap, ok := presentation.RouteMapFromTravelProjection(projection)
-	if !ok {
-		t.Fatal("canonical Travel projection did not produce route_map")
+
+	tampered := cloneTestObject(media)
+	tampered["cdnUrl"] = "https://untrusted.example/media.jpg"
+	document, resolveErr = resolver.Resolve(
+		t.Context(),
+		"travel_companion",
+		presentation.Selection{
+			TemplateRef: presentation.TemplateRef(template),
+			Data:        map[string]any{"media": tampered},
+		},
+		presentation.SurfaceCapabilities{
+			SupportedNodeKinds: map[generated.AssistantPresentationNodeKind]bool{
+				generated.AssistantPresentationNodeKindMedia: true,
+			},
+			ViewportClass: "standard",
+			Density:       generated.AssistantPresentationDensityStandard,
+		},
+		1,
+	)
+	if resolveErr != nil || !document.UseFallback || document.FallbackReason == "" {
+		t.Fatalf("tampered media document=%#v err=%v", document, resolveErr)
 	}
-	if _, leaked := routeMap["routeSegments"]; leaked {
-		t.Fatal("Travel provider-neutral segments leaked into route_map without a canonical mode")
+}
+
+func TestAdaptivePresentationRouteMapPolicyAcceptsOnlyCanonicalSemanticData(t *testing.T) {
+	canonicalData := routeMapData()
+	routeMap, err := presentation.NewOfficialNodeDataPolicies().ResolveNodeData(
+		t.Context(),
+		presentation.CanonicalRouteMapDataPolicyRef,
+		generated.AssistantPresentationNodeKindRouteMap,
+		canonicalData,
+	)
+	if err != nil {
+		t.Fatalf("canonical semantic route_map was rejected: %v", err)
 	}
 	for _, forbidden := range []string{"url", "provider", "coordinates", "routeSegments"} {
 		if _, leaked := routeMap[forbidden]; leaked {
 			t.Fatalf("route_map leaked forbidden field %q: %#v", forbidden, routeMap)
 		}
+	}
+	canonicalData["routeSegments"] = []any{}
+	if _, err := presentation.NewOfficialNodeDataPolicies().ResolveNodeData(
+		t.Context(),
+		presentation.CanonicalRouteMapDataPolicyRef,
+		generated.AssistantPresentationNodeKindRouteMap,
+		canonicalData,
+	); err == nil {
+		t.Fatal("generic Presentation accepted a vertical TripMapView field")
 	}
 }
 
@@ -313,7 +525,12 @@ func TestAdaptivePresentationRouteMapAcceptsOnlyCanonicalPlaceAndSegmentReferenc
 	if err != nil {
 		t.Fatalf("NewCatalog() error = %v", err)
 	}
-	resolver := presentation.NewResolver(catalog, actionPolicyStub{}, mediaPolicyStub{})
+	resolver := presentation.NewResolver(
+		catalog,
+		actionPolicyStub{},
+		mediaPolicyStub{},
+		presentation.NewOfficialNodeDataPolicies(),
+	)
 	capabilities := presentation.SurfaceCapabilities{
 		SupportedNodeKinds: map[generated.AssistantPresentationNodeKind]bool{
 			generated.AssistantPresentationNodeKindRouteMap: true,
@@ -440,8 +657,9 @@ func validRouteMapTemplate() presentation.Template {
 		},
 		RootNodeID: "route",
 		Nodes: []presentation.Node{{
-			NodeID: "route",
-			Kind:   generated.AssistantPresentationNodeKindRouteMap,
+			NodeID:        "route",
+			Kind:          generated.AssistantPresentationNodeKindRouteMap,
+			DataPolicyRef: presentation.CanonicalRouteMapDataPolicyRef,
 			Binding: map[string]string{
 				"data": "$.routeMap",
 			},
@@ -489,6 +707,40 @@ func validBoundActionTemplate() presentation.Template {
 		AllowedActionIntents: []string{"ContinueAssistantToolUse"},
 		FallbackMarkdown:     "需要确认后才能执行此操作。",
 		AssetDigest:          "sha256:" + strings.Repeat("d", 64),
+	}
+}
+
+func validBoundMediaTemplate() presentation.Template {
+	return presentation.Template{
+		TemplateID: "travel.media.grounded",
+		SkillID:    "travel_companion",
+		InputSchema: map[string]any{
+			"type":                 "object",
+			"additionalProperties": false,
+			"properties": map[string]any{
+				"media": map[string]any{"type": "object"},
+			},
+			"required": []any{"media"},
+		},
+		RootNodeID: "media",
+		Nodes: []presentation.Node{{
+			NodeID: "media",
+			Kind:   generated.AssistantPresentationNodeKindMedia,
+			Binding: map[string]string{
+				"media": "$.media",
+			},
+			Style: presentation.Style{
+				Tone:           generated.AssistantPresentationToneNeutral,
+				Density:        generated.AssistantPresentationDensityStandard,
+				Emphasis:       "normal",
+				Variant:        "standard",
+				Alignment:      "start",
+				SpacingRole:    "related",
+				ResponsiveSpan: 12,
+			},
+		}},
+		FallbackMarkdown: "媒体暂时无法展示。",
+		AssetDigest:      "sha256:" + strings.Repeat("e", 64),
 	}
 }
 

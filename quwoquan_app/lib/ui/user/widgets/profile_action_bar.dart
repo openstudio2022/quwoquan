@@ -32,7 +32,7 @@ class ProfileActionBar extends StatelessWidget {
   final bool profileComplete;
 
   /// 关系能力位（他人主页须由外层在就绪后再构建本组件）
-  final RelationshipCapabilityDto? capability;
+  final RelationshipCapabilityViewData? capability;
 
   final VoidCallback? onEditProfile;
   final VoidCallback? onManagePersonas;

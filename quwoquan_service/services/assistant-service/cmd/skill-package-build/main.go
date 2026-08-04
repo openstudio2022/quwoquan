@@ -66,7 +66,11 @@ func parseOptions(
 ) (options, error) {
 	flags := flag.NewFlagSet("assistant-skill-package-build", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
-	sourceRoot := flags.String("source-root", "", "official Skill source root")
+	sourceRoot := flags.String(
+		"source-root",
+		"",
+		"official Skill source root (canonical checkout: resources/skill_packages/official)",
+	)
 	outputRoot := flags.String("output-root", "", "official immutable package root")
 	packageVersion := flags.String("package-version", "", "semantic package version")
 	buildID := flags.String("build-id", "", "immutable build identity")

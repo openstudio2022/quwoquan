@@ -1,4 +1,4 @@
-import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
+import 'package:quwoquan_app/application/entity/homepage_view_data.dart';
 
 /// 上下文化创作入口参数（经 GoRoute `extra` 传入 `/create`）。
 ///

@@ -1,12 +1,9 @@
 import 'package:flutter/cupertino.dart';
+import '../../../../support/fixtures/intersection_fixtures.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_representative_actor.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/components/object_page/interactive_intersection_text.dart';
 import 'package:quwoquan_app/components/object_page/intersection_icon_resolver.dart';
@@ -16,6 +13,7 @@ import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/components/content/intersection_reason_chip.dart';
 
 import '../../../../support/cloud_services/behavior_repository_double.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// A4 / N5：内容卡交集理由位 / post 作者信任徽标口径一致（云侧主结论句直出，G2 端不本地
 /// 拼装）+ 渲染归一（统一 [IntersectionTypeIcon] + 可点击 [InteractiveIntersectionText]）。
@@ -27,14 +25,14 @@ Widget _wrap(Widget child) {
 
 const String _validPrimaryText = '联系人林清越等2人赞过《川西雪山和校园摄影路线》';
 
-IntersectionTarget _actorTarget() => IntersectionTarget(
+IntersectionTarget _actorTarget() => intersectionTargetFixture(
   objectType: 'user',
   objectId: 'u_lin',
   objectKind: 'person',
   routeId: 'userProfile',
 );
 
-IntersectionTarget _objectTarget() => IntersectionTarget(
+IntersectionTarget _objectTarget() => intersectionTargetFixture(
   objectType: 'post',
   objectId: 'post_snow_route',
   objectKind: 'content',
@@ -42,21 +40,25 @@ IntersectionTarget _objectTarget() => IntersectionTarget(
 );
 
 List<IntersectionTextSpan> _validPrimarySpans() => <IntersectionTextSpan>[
-  IntersectionTextSpan(text: '联系人', role: 'plain'),
-  IntersectionTextSpan(text: '林清越', role: 'object', target: _actorTarget()),
-  IntersectionTextSpan(text: '等', role: 'plain'),
-  IntersectionTextSpan(
+  intersectionTextSpanFixture(text: '联系人', role: 'plain'),
+  intersectionTextSpanFixture(
+    text: '林清越',
+    role: 'object',
+    target: _actorTarget(),
+  ),
+  intersectionTextSpanFixture(text: '等', role: 'plain'),
+  intersectionTextSpanFixture(
     text: '2',
     role: 'count',
-    target: IntersectionTarget(
+    target: intersectionTargetFixture(
       objectType: 'dimension',
       objectId: 'content',
       objectKind: 'dimension',
       routeId: 'myIntersections',
     ),
   ),
-  IntersectionTextSpan(text: '人赞过', role: 'plain'),
-  IntersectionTextSpan(
+  intersectionTextSpanFixture(text: '人赞过', role: 'plain'),
+  intersectionTextSpanFixture(
     text: '《川西雪山和校园摄影路线》',
     role: 'object',
     target: _objectTarget(),
@@ -77,7 +79,7 @@ IntersectionReason _reason({
   String objectKind = 'content',
   String displayBinding = 'explicit_link',
 }) {
-  return IntersectionReason(
+  return intersectionReasonFixture(
     dimension: dimension,
     source: source,
     iconKey: iconKey,
@@ -92,7 +94,7 @@ IntersectionReason _reason({
     displayBinding: displayBinding,
     actorEvidenceTotalCount: 2,
     actorEvidenceCompleteness: 'complete',
-    representativeActor: IntersectionRepresentativeActor(
+    representativeActor: intersectionRepresentativeActorFixture(
       actorId: 'u_lin',
       displayName: '林清越',
       relationLabel: '联系人',
@@ -185,7 +187,7 @@ void main() {
     test('无可展示结论句 → null（不展示）', () {
       expect(
         IntersectionReasonChip.primaryText(<IntersectionReason>[
-          IntersectionReason(dimension: 'relationship'),
+          intersectionReasonFixture(dimension: 'relationship'),
         ]),
         isNull,
       );
@@ -196,24 +198,24 @@ void main() {
         displayBinding: 'host_implicit',
         primaryText: '联系人林清越等2人赞过',
         primarySpans: <IntersectionTextSpan>[
-          IntersectionTextSpan(text: '联系人', role: 'plain'),
-          IntersectionTextSpan(
+          intersectionTextSpanFixture(text: '联系人', role: 'plain'),
+          intersectionTextSpanFixture(
             text: '林清越',
             role: 'object',
             target: _actorTarget(),
           ),
-          IntersectionTextSpan(text: '等', role: 'plain'),
-          IntersectionTextSpan(
+          intersectionTextSpanFixture(text: '等', role: 'plain'),
+          intersectionTextSpanFixture(
             text: '2',
             role: 'count',
-            target: IntersectionTarget(
+            target: intersectionTargetFixture(
               objectType: 'dimension',
               objectId: 'content',
               objectKind: 'dimension',
               routeId: 'myIntersections',
             ),
           ),
-          IntersectionTextSpan(text: '人赞过', role: 'plain'),
+          intersectionTextSpanFixture(text: '人赞过', role: 'plain'),
         ],
       );
 
@@ -379,7 +381,7 @@ void main() {
 
       // 埋点保 tag_click 语义（未降级 click，保推荐 1.8 权重）+ 完整交集归因。
       final tagClicks = repo.recorded
-          .where((e) => e.action == BehaviorAction.tagClick)
+          .where((e) => e.action == BehaviorEventType.tagClick)
           .toList(growable: false);
       expect(tagClicks, hasLength(1));
       final event = tagClicks.single;

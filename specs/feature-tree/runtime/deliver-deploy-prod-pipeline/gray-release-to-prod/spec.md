@@ -43,10 +43,11 @@
 <a id="req-003"></a>
 ### REQ-003 prod 单环境分阶段放量
 
-- 系统必须只有一个 `prod` 生产环境；`gray-initial / carry-on / full` 只是同一 `prod-hosted` 目标的 rollout stage。
+- 系统必须只有一个 `prod` 生产环境。`gray-initial / carry-on / full` 只是同一 `prod-hosted` 目标的 rollout stage，`prevalidate / gray / prod` 只是同一 hosted 内的 deployment instance。
+- 多主机 / 多 replica 仍是一次 `stackctl deploy --target prod-hosted` 事务；不得新增环境名或第二执行面。
 - 发布前真实远端复验统一收敛到 `prod-hosted` 的 `gray-initial`，不引入 `prod-gray` 第二环境，且失败时不得写入成功事实。
 - 三个 rollout stage 必须位于同一个保留 production approval 的事务 job；ReleaseEvidenceManifest 拉取、验签、治理校验和逐服务配置包物化只执行一次。
-- 正式 apply 按 `5% -> 25% -> 100%` 执行并复用 hosted ledger；任一 SLO、health、inspect、doctor 或 integration probe 失败，由 `stackctl` 回滚到 `fromCandidateDigest`。
+- 正式 apply 按 `5% -> 25% -> 100%` 执行并复用 hosted ledger；任一 SLO、health、inspect、doctor、placement coverage 或 integration probe 失败，由 `stackctl` 回滚到 `fromCandidateDigest`。
 - dry-run 不写 hosted ledger，只允许完成 gray-initial 只读校验并明确报告 carry-on/full 未执行，不得生成正式发布回执。
 - 生产晋级与恢复只比较 `fromCandidateDigest/toCandidateDigest`；镜像 transport tag 与配置包路径/摘要只用于实际装配。
 - workflow 创建后达到 1500 秒时不得开始下一 rollout stage；整个主链超过 1800 秒即失败，600 秒以上必须标记 `released_over_soft_budget`。
@@ -92,7 +93,7 @@
 - 类型：`external_blocker`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：CI 与 stackctl 接线不能替代真实 ACK 灰度、SLO gate 和回滚证据。
+- 影响或价值：CI 与 stackctl 接线不能替代真实 ssh-hosted 灰度、SLO gate 和回滚证据。
 - 完成判定：通过 `stackctl deploy --target prod-hosted`，使用按 `edge / media / service / data` 平面隔离的 `PROD_*_SSH_KEY` 与发布 secrets，完成 `gray-initial -> carry-on -> full`、故障注入、SLO 阻断和自动回滚；全部证据绑定同一 candidate digest。
 - 依赖：生产托管主机账号、各平面 SSH 凭据、渠道/数据面 secrets 与发布审批。
 

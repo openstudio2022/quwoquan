@@ -17,7 +17,7 @@ func TestIntersectionVisitStateAcceptsOnlyCanonicalPositiveWatermarks(t *testing
 	if err := state.Validate(); err != nil {
 		t.Fatalf("valid IntersectionVisitState rejected: %v", err)
 	}
-	state.Watermarks["legacy_dimension"] = 300
+	state.Watermarks["unknown_dimension"] = 300
 	if err := state.Validate(); err == nil {
 		t.Fatal("non-canonical intersection dimension must be rejected")
 	}

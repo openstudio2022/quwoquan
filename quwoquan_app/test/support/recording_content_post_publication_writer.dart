@@ -18,11 +18,11 @@ final class RecordingContentPostPublicationWriter
   }
 
   @override
-  Future<ContentPostPublicationReceipt> submitPostPublication(
+  Future<PostPublicationReceipt> submitPostPublication(
     SubmitContentPostPublicationCommand command,
   ) async {
     submitCommands.add(command);
-    return ContentPostPublicationReceipt(
+    return PostPublicationReceipt(
       publishIntentId: command.publishIntentId,
       localDraftId: command.localDraftId,
       postId: 'post_test_1',

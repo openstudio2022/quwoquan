@@ -42,28 +42,4 @@ class RealtimeConfig {
     );
   }
 
-  factory RealtimeConfig.fromMap(Map<String, dynamic> map) {
-    final canonical = RealtimeConfig.fromRuntime();
-    final declaredWsUrl = (map['wsUrl'] as String? ?? '').trim();
-    if (declaredWsUrl.isNotEmpty && declaredWsUrl != canonical.wsUrl) {
-      throw const FormatException(
-        'Realtime config cannot replace the topology WebSocket URL',
-      );
-    }
-    return RealtimeConfig(
-      wsUrl: canonical.wsUrl,
-      gatewayBaseUrl: canonical.gatewayBaseUrl,
-      heartbeatIntervalSec:
-          (map['heartbeatIntervalSec'] as num?)?.toInt() ?? 15,
-      authAckTimeoutSec: (map['authAckTimeoutSec'] as num?)?.toInt() ?? 5,
-      wsIdleTimeoutSec: (map['wsIdleTimeoutSec'] as num?)?.toInt() ?? 120,
-      longPollHoldSec: (map['longPollHoldSec'] as num?)?.toInt() ?? 60,
-      maxReconnectAttempts:
-          (map['maxReconnectAttempts'] as num?)?.toInt() ?? 10,
-      reconnectBaseDelayMs:
-          (map['reconnectBaseDelayMs'] as num?)?.toInt() ?? 1000,
-      reconnectMaxDelayMs:
-          (map['reconnectMaxDelayMs'] as num?)?.toInt() ?? 30000,
-    );
-  }
 }

@@ -19,7 +19,7 @@ final class AlphaCircleLifecycleFacet
     final result = CircleCommandResult(
       circleId: 'alpha_circle_${_circles.length + 1}',
       version: 1,
-      status: CircleLifecycleStatus.active,
+      status: CircleStatus.active,
       idempotentReplay: false,
     );
     _byIdempotentIntent[intentKey] = result;
@@ -29,7 +29,7 @@ final class AlphaCircleLifecycleFacet
 
   @override
   Future<CircleCommandResult> updateCircle(UpdateCircleCommand command) async {
-    return _advance(command.circleId, CircleLifecycleStatus.active);
+    return _advance(command.circleId, CircleStatus.active);
   }
 
   @override
@@ -37,20 +37,20 @@ final class AlphaCircleLifecycleFacet
     ArchiveCircleCommand command,
   ) async {
     final current = _circles[command.circleId];
-    if (current != null && current.status == CircleLifecycleStatus.archived) {
+    if (current != null && current.status == CircleStatus.archived) {
       return _replayOf(current);
     }
-    return _advance(command.circleId, CircleLifecycleStatus.archived);
+    return _advance(command.circleId, CircleStatus.archived);
   }
 
   @override
   Future<CircleCommandResult> updateCircleSections(
     UpdateCircleSectionsCommand command,
   ) async {
-    return _advance(command.circleId, CircleLifecycleStatus.active);
+    return _advance(command.circleId, CircleStatus.active);
   }
 
-  CircleCommandResult _advance(String circleId, CircleLifecycleStatus status) {
+  CircleCommandResult _advance(String circleId, CircleStatus status) {
     final current = _circles[circleId];
     final next = CircleCommandResult(
       circleId: circleId,

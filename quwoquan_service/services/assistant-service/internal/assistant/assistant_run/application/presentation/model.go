@@ -54,6 +54,7 @@ type Node struct {
 	Body          string                                  `json:"body"`
 	Data          map[string]any                          `json:"data"`
 	Binding       map[string]string                       `json:"binding"`
+	DataPolicyRef string                                  `json:"dataPolicyRef,omitempty"`
 	Style         Style                                   `json:"style"`
 	Media         *MediaRef                               `json:"media,omitempty"`
 	Action        *ActionIntent                           `json:"action,omitempty"`
@@ -68,16 +69,17 @@ type ResponsiveVariant struct {
 }
 
 type Template struct {
-	TemplateID           string              `json:"templateId"`
-	SkillID              string              `json:"skillId"`
-	InputSchema          map[string]any      `json:"inputSchema"`
-	RootNodeID           string              `json:"rootNodeId"`
-	Nodes                []Node              `json:"nodes"`
-	ResponsiveVariants   []ResponsiveVariant `json:"responsiveVariants"`
-	AllowedActionIntents []string            `json:"allowedActionIntents"`
-	FallbackMarkdown     string              `json:"fallbackMarkdown"`
-	Accessibility        map[string]any      `json:"accessibility"`
-	AssetDigest          string              `json:"assetDigest"`
+	TemplateID              string              `json:"templateId"`
+	SkillID                 string              `json:"skillId"`
+	InputSchema             map[string]any      `json:"inputSchema"`
+	RootNodeID              string              `json:"rootNodeId"`
+	Nodes                   []Node              `json:"nodes"`
+	ResponsiveVariants      []ResponsiveVariant `json:"responsiveVariants"`
+	AllowedActionIntents    []string            `json:"allowedActionIntents"`
+	FallbackMarkdown        string              `json:"fallbackMarkdown"`
+	FallbackMarkdownBinding string              `json:"fallbackMarkdownBinding,omitempty"`
+	Accessibility           map[string]any      `json:"accessibility"`
+	AssetDigest             string              `json:"assetDigest"`
 }
 
 type Selection struct {
@@ -86,9 +88,10 @@ type Selection struct {
 }
 
 type SurfaceCapabilities struct {
-	SupportedNodeKinds map[generated.AssistantPresentationNodeKind]bool `json:"supportedNodeKinds"`
-	ViewportClass      string                                           `json:"viewportClass"`
-	Density            generated.AssistantPresentationDensity           `json:"density"`
+	SupportedNodeKinds     map[generated.AssistantPresentationNodeKind]bool `json:"supportedNodeKinds"`
+	SupportedActionIntents map[string]bool                                  `json:"supportedActionIntents"`
+	ViewportClass          string                                           `json:"viewportClass"`
+	Density                generated.AssistantPresentationDensity           `json:"density"`
 }
 
 type Document struct {
@@ -114,10 +117,23 @@ type MediaPolicy interface {
 	ValidateMedia(context.Context, MediaRef) error
 }
 
+// NodeDataPolicy is the dependency-inversion boundary for semantic node data.
+// The immutable template selects a policy by reference; Resolver never knows
+// about a vertical domain or rewrites its read model itself.
+type NodeDataPolicy interface {
+	ResolveNodeData(
+		context.Context,
+		string,
+		generated.AssistantPresentationNodeKind,
+		map[string]any,
+	) (map[string]any, error)
+}
+
 var (
 	ErrInvalidTemplate     = errors.New("invalid assistant presentation template")
 	ErrTemplateUnavailable = errors.New("assistant presentation template unavailable")
 	ErrInvalidData         = errors.New("invalid assistant presentation data")
 	ErrActionRejected      = errors.New("assistant presentation action rejected")
 	ErrMediaRejected       = errors.New("assistant presentation media rejected")
+	ErrDataPolicyRejected  = errors.New("assistant presentation data policy rejected")
 )

@@ -78,7 +78,6 @@ type ErrorResponse struct {
 	Module       string               `json:"module"`
 	Kind         string               `json:"kind"`
 	Reason       string               `json:"reason"`
-	Message      string               `json:"message,omitempty"`
 	RequestID    string               `json:"requestId,omitempty"`
 	TraceID      string               `json:"traceId,omitempty"`
 	Location     RuntimeErrorLocation `json:"location"`
@@ -393,7 +392,6 @@ func ToResponseWithOptions(err *AppError, opts ResponseOptions) ErrorResponse {
 		Module:       string(err.Code.Module),
 		Kind:         runtimeKindFromCurrent(err.Code.Kind, semanticReason),
 		Reason:       semanticReason,
-		Message:      debugMessage,
 		RequestID:    opts.RequestID,
 		TraceID:      opts.TraceID,
 		Location:     normalizeRuntimeErrorLocation(err.Location),

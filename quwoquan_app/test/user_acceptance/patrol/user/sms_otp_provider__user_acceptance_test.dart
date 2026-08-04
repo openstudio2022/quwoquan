@@ -1,5 +1,8 @@
 library;
 
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:patrol/patrol.dart';
@@ -11,15 +14,71 @@ import 'auth_provider_journey_support.dart';
 
 const _phone = String.fromEnvironment('QWQ_PROVIDER_UAT_SMS_PHONE');
 const _otp = String.fromEnvironment('QWQ_PROVIDER_UAT_SMS_OTP');
+const _otpBrokerUrl = String.fromEnvironment('QWQ_PROVIDER_UAT_OTP_BROKER_URL');
+const _otpBrokerToken = String.fromEnvironment(
+  'QWQ_PROVIDER_UAT_OTP_BROKER_TOKEN',
+);
+
+Future<String> _resolveOneTimeOtp() async {
+  final brokerUrl = _otpBrokerUrl.trim();
+  final brokerToken = _otpBrokerToken.trim();
+  final hasBroker = brokerUrl.isNotEmpty || brokerToken.isNotEmpty;
+  if (hasBroker) {
+    if (brokerUrl.isEmpty || brokerToken.isEmpty) {
+      throw StateError(
+        'local-capture OTP UAT requires both broker URL and token',
+      );
+    }
+    if (_otp.trim().isNotEmpty) {
+      throw StateError(
+        'local-capture OTP UAT must use protected readback, not argv OTP',
+      );
+    }
+    final client = HttpClient();
+    try {
+      final request = await client.postUrl(Uri.parse(brokerUrl));
+      request.headers.set(
+        HttpHeaders.authorizationHeader,
+        'Bearer $brokerToken',
+      );
+      final response = await request.close();
+      final body = await utf8.decoder.bind(response).join();
+      if (response.statusCode != HttpStatus.ok) {
+        throw StateError('protected OTP broker did not return a code');
+      }
+      final payload = jsonDecode(body);
+      final code = payload is Map<String, dynamic>
+          ? (payload['code'] as String? ?? '')
+          : '';
+      if (!RegExp(r'^[0-9]{6}$').hasMatch(code)) {
+        throw StateError('protected OTP broker returned an invalid code');
+      }
+      return code;
+    } finally {
+      client.close(force: true);
+    }
+  }
+  if (!RegExp(r'^[0-9]{6}$').hasMatch(_otp.trim())) {
+    throw StateError(
+      'managed-nonprod Provider UAT requires a six-digit OTP or broker',
+    );
+  }
+  return _otp.trim();
+}
 
 void main() {
   patrolTest(
-    '真实短信验证码完成登录',
+    'Provider 短信验证码完成登录',
     tags: const ['t4', 'user', 'provider', 'sms'],
     skip: !kRunPatrolT4,
     ($) async {
       expect(_phone.trim(), isNotEmpty);
-      expect(_otp.trim(), isNotEmpty);
+      expect(
+        _otp.trim().isNotEmpty ||
+            (_otpBrokerUrl.trim().isNotEmpty &&
+                _otpBrokerToken.trim().isNotEmpty),
+        isTrue,
+      );
       await launchProviderLogin($);
 
       if (find.byType(LoginPhoneField).evaluate().isEmpty) {
@@ -45,7 +104,8 @@ void main() {
         of: find.byType(OtpCodeBoxes),
         matching: find.byType(CupertinoTextField),
       );
-      await $(otpField).enterText(_otp.trim());
+      final otp = await _resolveOneTimeOtp();
+      await $(otpField).enterText(otp);
       await $(find.text(FoundationText.loginPhoneSubmit)).tap();
       await waitForProviderLoginSuccess($);
     },

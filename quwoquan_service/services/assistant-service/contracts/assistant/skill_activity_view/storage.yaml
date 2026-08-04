@@ -1,0 +1,13 @@
+backend: mongodb
+role: projection
+collections:
+  skill_activity_visibility_controls:
+    entity: SkillActivityVisibilityControl
+    role: projection
+    description: owner+skill 的活动可见性 watermark；隐藏投影不删除各 source owner 的法定审计。
+    indexes:
+    - {name: uq_skill_activity_visibility_owner_skill, keys: {accountId: 1, skillId: 1}, unique: true}
+  skill_activity_projection_checkpoints:
+    entity: SkillActivityProjectionCheckpoint
+    role: checkpoint
+

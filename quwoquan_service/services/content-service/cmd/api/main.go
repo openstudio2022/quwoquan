@@ -719,7 +719,7 @@ func main() {
 	}
 
 	// like/comment 权威信号 relay 只追加 ContentBehaviorFact。Recommendation
-	// 通过 typed stream 形成 FeedbackFact；Content 不再保有第二套学习事实。
+	// 通过 typed stream 形成 RecommendationFeedbackFact；Content 不再保有第二套学习事实。
 	if authoritativeSignalSink != nil {
 		if reactionStore != nil {
 			startReactionOutboxRelay(

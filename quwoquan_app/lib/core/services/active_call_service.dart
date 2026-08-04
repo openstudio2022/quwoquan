@@ -1,7 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/cloud/rtc/models/call_participant_dto.dart';
+import 'package:quwoquan_cloud_contracts/generated/rtc_contracts.dart'
+    show CallParticipant;
 
 class ActiveCallState {
   final String? callId;

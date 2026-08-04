@@ -74,7 +74,7 @@ def load_media_delivery_manifest(
                 f"{path} assets[{index}] publicSliceKey 版本段必须与 version 一致"
             )
         if not _SHA256_RE.fullmatch(sha256):
-            raise ValueError(f"{path} assets[{index}] sha256 必须是 sha256:hex")
+            raise ValueError(f"{path} assets[{index}] sha256 必须是 64 位小写十六进制 SHA-256")
         if "/" not in mime_type:
             raise ValueError(f"{path} assets[{index}] mimeType 非法")
         seen_ids.add(logical_id)

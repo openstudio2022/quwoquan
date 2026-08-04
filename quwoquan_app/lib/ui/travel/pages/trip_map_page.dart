@@ -46,10 +46,21 @@ final class TripMapPage extends ConsumerWidget {
                 sourceSurfaceId: AppUiSurfaces.travelMap.id,
               ),
             ),
-            onAction: (action) async {
-              if (action.type == UiErrorActionType.retry ||
-                  action.type == UiErrorActionType.resubmit) {
+            onRecovery: (action) async {
+              if (action.type != UiErrorActionType.retry &&
+                  action.type != UiErrorActionType.resubmit) {
+                return UiRecoveryOutcome.cancelled;
+              }
+              try {
                 ref.invalidate(tripMapProvider(tripId));
+                await ref.read(tripMapProvider(tripId).future);
+                return context.mounted
+                    ? UiRecoveryOutcome.recovered
+                    : UiRecoveryOutcome.superseded;
+              } catch (_) {
+                return context.mounted
+                    ? UiRecoveryOutcome.stillBlocked
+                    : UiRecoveryOutcome.superseded;
               }
             },
           ),

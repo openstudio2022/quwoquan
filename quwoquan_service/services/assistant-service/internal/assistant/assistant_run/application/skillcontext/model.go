@@ -65,18 +65,20 @@ type ResolvedContext struct {
 }
 
 type Segment struct {
-	SegmentID   string
-	SlotID      string
-	Kind        string
-	SourceRef   string
-	Authority   generated.AssistantContextAuthority
-	Sensitivity generated.AssistantContextSensitivity
-	CapturedAt  time.Time
-	ExpiresAt   time.Time
-	Digest      string
-	TokenCost   int
-	Value       map[string]any
-	ArtifactRef string
+	SegmentID        string
+	SlotID           string
+	Kind             string
+	SourceRef        string
+	DescriptorID     string
+	DescriptorDigest string
+	Authority        generated.AssistantContextAuthority
+	Sensitivity      generated.AssistantContextSensitivity
+	CapturedAt       time.Time
+	ExpiresAt        time.Time
+	Digest           string
+	TokenCost        int
+	Value            map[string]any
+	ArtifactRef      string
 }
 
 type Snapshot struct {

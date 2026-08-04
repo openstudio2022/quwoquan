@@ -60,13 +60,14 @@ Future<void> _pumpProposalJourney(
           proposal: ProfileUpdateProposalView(
             id: 'proposal-uat',
             personaId: 'persona-uat',
-            source: ProfileUpdateProposalSource.assistant,
+            source: ProposalSource.assistant,
             reason: 'assistant evidence',
             evidenceRefs: const <String>['assistant-run:run-uat'],
             impactScope: const <String>['bio', 'displayName'],
             createdBy: 'persona-uat',
-            status: ProfileUpdateProposalStatus.pending,
-            changes: ProfileChangeSet(displayName: '商用昵称', bio: '商用简介'),
+            status: ProposalStatus.pending,
+            displayName: '商用昵称',
+            bio: '商用简介',
             reviewedBy: null,
             applyAuditId: null,
             rollbackDeadline: null,
@@ -105,7 +106,7 @@ final class _JourneyProposalWriter
     return ProfileUpdateProposalCommandResult(
       proposalId: command.proposalId,
       version: 2,
-      status: ProfileUpdateProposalStatus.confirmed,
+      status: ProposalStatus.confirmed,
       replayed: false,
     );
   }
@@ -121,7 +122,7 @@ final class _JourneyProposalWriter
     return ProfileUpdateProposalCommandResult(
       proposalId: command.proposalId,
       version: 3,
-      status: ProfileUpdateProposalStatus.applied,
+      status: ProposalStatus.applied,
       replayed: false,
     );
   }
@@ -141,7 +142,7 @@ final class _JourneyProposalWriter
     return ProfileUpdateProposalCommandResult(
       proposalId: command.proposalId,
       version: 2,
-      status: ProfileUpdateProposalStatus.rejected,
+      status: ProposalStatus.rejected,
       replayed: false,
     );
   }

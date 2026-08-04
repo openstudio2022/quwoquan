@@ -5,8 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
 import 'package:quwoquan_app/cloud/services/user/greeting_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart'
     show PersonaProfileViewData;
@@ -30,7 +29,6 @@ class ProfileState {
     this.interactionSubTab = InteractionSubTab.likes,
     this.interactionDirection = InteractionDirection.received,
     this.creations = const [],
-    this.circles = const [],
     this.isIdentityLoading = false,
     this.isIdentitySlow = false,
     this.identityFailure,
@@ -50,7 +48,6 @@ class ProfileState {
   final InteractionDirection interactionDirection;
 
   final List<ContentPostViewData> creations;
-  final List<CircleDto> circles;
   final bool isIdentityLoading;
   final bool isIdentitySlow;
   final RuntimeFailureBase? identityFailure;
@@ -60,7 +57,7 @@ class ProfileState {
   final bool isFollowing;
 
   /// 关系能力位投影（null = 未载入）
-  final RelationshipCapabilityDto? capability;
+  final RelationshipCapabilityViewData? capability;
 
   bool get isLoading => isIdentityLoading || isWorksLoading;
 
@@ -79,7 +76,7 @@ class ProfileState {
 
   /// 仅暴露服务端确认的 canonical capability；本地关注意图由
   /// [isFollowing] 单独表达，不得改写或补算动作矩阵。
-  RelationshipCapabilityDto? get displayCapability => capability;
+  RelationshipCapabilityViewData? get displayCapability => capability;
 
   ProfileState copyWith({
     PersonaProfileViewData? profile,
@@ -89,7 +86,6 @@ class ProfileState {
     InteractionSubTab? interactionSubTab,
     InteractionDirection? interactionDirection,
     List<ContentPostViewData>? creations,
-    List<CircleDto>? circles,
     bool? isIdentityLoading,
     bool? isIdentitySlow,
     RuntimeFailureBase? identityFailure,
@@ -97,7 +93,7 @@ class ProfileState {
     bool? isWorksSlow,
     RuntimeFailureBase? worksFailure,
     bool? isFollowing,
-    RelationshipCapabilityDto? capability,
+    RelationshipCapabilityViewData? capability,
     bool clearCapability = false,
     bool clearIdentityFailure = false,
     bool clearWorksFailure = false,
@@ -111,7 +107,6 @@ class ProfileState {
       interactionSubTab: interactionSubTab ?? this.interactionSubTab,
       interactionDirection: interactionDirection ?? this.interactionDirection,
       creations: creations ?? this.creations,
-      circles: circles ?? this.circles,
       isIdentityLoading: isIdentityLoading ?? this.isIdentityLoading,
       isIdentitySlow: isIdentitySlow ?? this.isIdentitySlow,
       identityFailure: clearIdentityFailure

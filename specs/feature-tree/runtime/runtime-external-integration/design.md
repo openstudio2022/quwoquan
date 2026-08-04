@@ -36,10 +36,11 @@
 
 <a id="dec-002"></a>
 ### DEC-002 共享 capability 的消费者与 Binding 从对象路径派生
-- 决策：capability owner 仅在其对象 `operations.yaml.externalDependencies` 声明 canonical
-  Port、操作和 conformance profile；其他对象以本地 capability-use 声明同一 Port 的实际
-  消费语义。BindingCompiler 从这些对象路径和各服务的
-  `environments/<env>/config.yaml.externalBindings` 派生 root-scoped descriptor。
+- 决策：capability owner 在对象 `operations.yaml.externalDependencies` 声明 canonical
+  Port、操作、conformance profile 与逐 Adapter 的 endpoint env roles、required secret
+  refs、默认 timeout；其他对象以本地 capability-use 声明同一 Port 的实际消费语义。
+  环境 `externalBindings` 仅选择 state/adapter/endpointRef。Prod 明确登记的 vendor
+  差异可 override；BindingCompiler 从这些对象路径派生 root-scoped descriptor。
 - 理由：Redis Streams/PubSub 等平台能力有多个真实 producer/consumer。把 consumer
   root、endpoint、secret 或 adapter 复制到全局 registry、manifest 或 path 清单会重新
   建立第二真相源，也会允许调用方绕开 Binding 和启动预检。
@@ -53,11 +54,18 @@
 
 <a id="dec-003"></a>
 ### DEC-003 Alpha/Beta/Gamma 受管非生产 Provider 与 Prod hosted receipt
-- 决策：Alpha、Beta、Gamma 的 required 验收由环境 Binding 显式选择受管 `protocol_fixture/local_*` Port 对等 Adapter；Assistant/Content 通过 integration-service 独立内部 listener 走真实 HTTP/wire decoder，SMS/Push/Location/User 在服务端 typed Port 边界替代，RTC 运行真实本地 LiveKit。App 不含 Mock 或 Provider 选择器。Gamma 仍运行完整第一方 Remote composition、黑盒 API 与真机 Journey。Prod 只选择真实厂商 Adapter 和生产租户，非生产内部 listener 不启动。
+- 决策：Alpha、Beta、Gamma 的 required 验收由环境 Binding 显式选择受管
+  `protocol_fixture/local_*` Port 对等 Adapter；LLM/Search/Weather/Finance/Embedding/
+  Map/Carrier/Federated/Push 统一访问 Ops 外置、独立镜像的
+  `provider-protocol-substitute`，SMS 访问独立 TLS substitute，RTC 运行真实本地
+  LiveKit。App 与第一方 Service 制品不含 substitute 实现或 Provider 选择器。Prod
+  只选择真实厂商 Adapter 和生产租户，且其 OCI/SBOM/可达图排除 substitute。
 - 理由：Alpha/Beta/Gamma 需要无生产凭据、可重复、可故障注入的端云功能闭环；显式替代 Adapter 仍执行正式 Port、命令、事件、HTTP 与观测链，而 Prod hosted receipt 另行证明真实 SDK、鉴权、限流、回调、推送与 RTC 媒体链。
 - 被否决方案：以 nonprod evidence 提升 Prod readiness、在 Gamma 注入生产租户凭据、缺 Provider 时运行时 fallback、App/UI Mock，以及不经 Binding 的临时环境变量 override。
 - 约束与影响：governance 要求 Alpha/Beta/Gamma 选择 fixture/local_* Port 对等 Adapter；Prod 禁止 mock、fixture、recorder 与本地替代 Adapter。
-- 约束与影响：Alpha/Beta/Gamma 的替代 endpoint 只由 stackctl 从 local topology 投影，LiveKit key/secret 仅存放在 target-scoped deploy secret root；Prod 验证外部注入的生产 Provider 材料并拒绝替代 Adapter。
+- 约束与影响：stackctl 只从 local topology 投影 Alpha/Beta/Gamma 的替代 endpoint。
+  capability-scoped Secret Bundle、TLS 和渲染材料仅位于 target-scoped deploy root，
+  `provider-config` 输出只含 digest/缺失 key；Prod 验证外部注入的生产 Provider 材料并拒绝替代 Adapter。
 - 约束与影响：九格证据绑定当前环境 config、candidate image、ContractGraph、Adapter digest 与真实 CaseResult；Gamma nonprod receipt 不能替代 Prod hosted receipt。Object Storage 与四环境 Elasticsearch Log sink 都必须登记 capability 并走 Binding。
 - 关联要求：`REQ-006`
 - 关联验收：`SIT-002`、`SIT-003`

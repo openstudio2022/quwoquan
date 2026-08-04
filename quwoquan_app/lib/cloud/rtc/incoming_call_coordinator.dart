@@ -9,7 +9,7 @@ import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/application/rtc/call_session/incoming_call_presentation_acknowledger.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
-import 'package:quwoquan_app/cloud/rtc/models/rtc_signal_payloads.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/cloud/rtc/rtc_signal_events.dart';
 import 'package:quwoquan_app/core/platform/firebase_incoming_call_runtime.dart';
 import 'package:quwoquan_app/core/platform/callkit_service.dart';
@@ -19,7 +19,6 @@ import 'package:quwoquan_app/core/platform/platform_capabilities.dart';
 import 'package:quwoquan_app/core/platform/platform_providers.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
-import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 final callKitServiceProvider = Provider<CallKitService>((ref) {
   final service = CallKitService(

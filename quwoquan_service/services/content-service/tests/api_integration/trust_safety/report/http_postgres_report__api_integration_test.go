@@ -2,6 +2,7 @@ package api_integration
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -32,26 +33,49 @@ func TestReportHTTPRealPostgresAtomicAggregateReceiptAndOutbox(t *testing.T) {
 		reportapp.NewReportService(reportapp.BindDataPorts(store)),
 	))
 
-	request := httptest.NewRequest(
-		http.MethodPost,
-		"/content/reports",
-		strings.NewReader(`{"targetType":"post","targetId":"post-report-1","reason":"spam"}`),
-	)
-	request.Header.Set("Idempotency-Key", "report-http-postgres-1")
-	request = request.WithContext(operation.WithContext(request.Context(), operation.Context{
-		OperationID:    "content.report.create",
-		RequestID:      "request-report-1",
-		TraceID:        "trace-report-1",
-		IdempotencyKey: "report-http-postgres-1",
-		Actor: operation.ActorContext{
-			AccountID: "account-reporter-1",
-			PersonaID: "persona-reporter-1",
-		},
-	}))
-	response := httptest.NewRecorder()
-	handler.Create(response, request)
-	if response.Code != http.StatusNoContent {
-		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	performCreate := func(requestID string) *httptest.ResponseRecorder {
+		request := httptest.NewRequest(
+			http.MethodPost,
+			"/content/reports",
+			strings.NewReader(`{"targetType":"post","targetId":"post-report-1","reason":"spam"}`),
+		)
+		request.Header.Set("Idempotency-Key", "report-http-postgres-1")
+		request = request.WithContext(operation.WithContext(request.Context(), operation.Context{
+			OperationID:    "content.report.CreateReport",
+			RequestID:      requestID,
+			TraceID:        "trace-report-1",
+			IdempotencyKey: "report-http-postgres-1",
+			Actor: operation.ActorContext{
+				AccountID: "account-reporter-1",
+				PersonaID: "persona-reporter-1",
+			},
+		}))
+		response := httptest.NewRecorder()
+		handler.Create(response, request)
+		return response
+	}
+	first := performCreate("request-report-1")
+	if first.Code != http.StatusOK {
+		t.Fatalf("first status=%d body=%s", first.Code, first.Body.String())
+	}
+	var firstResult reportapp.ReportCommandResult
+	if err := json.Unmarshal(first.Body.Bytes(), &firstResult); err != nil {
+		t.Fatalf("decode first report result: %v", err)
+	}
+	if firstResult.ID == "" || firstResult.Version != 1 || firstResult.Status != "pending" || firstResult.Replayed {
+		t.Fatalf("first report result=%+v", firstResult)
+	}
+	replay := performCreate("request-report-2")
+	if replay.Code != http.StatusOK {
+		t.Fatalf("replay status=%d body=%s", replay.Code, replay.Body.String())
+	}
+	var replayResult reportapp.ReportCommandResult
+	if err := json.Unmarshal(replay.Body.Bytes(), &replayResult); err != nil {
+		t.Fatalf("decode replay report result: %v", err)
+	}
+	if replayResult.ID != firstResult.ID || replayResult.Version != firstResult.Version ||
+		replayResult.Status != firstResult.Status || !replayResult.Replayed {
+		t.Fatalf("replay report result=%+v first=%+v", replayResult, firstResult)
 	}
 
 	counts := map[string]int{}

@@ -4,7 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
+import 'package:quwoquan_app/application/entity/homepage_view_data.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/ui/entity/models/homepage_action_observability.dart';
@@ -97,7 +97,7 @@ class _HomepageClaimPageState extends ConsumerState<HomepageClaimPage> {
         backgroundColor: SettingsSemanticConstants.pageBackground(isDark),
         body: AppPageErrorState(
           semantic: ensureRetryUiErrorSemantic(_pageErrorSemantic!),
-          onAction: _handlePageErrorAction,
+          onRecovery: _handlePageErrorAction,
         ),
       );
     }
@@ -530,18 +530,20 @@ class _HomepageClaimPageState extends ConsumerState<HomepageClaimPage> {
     }
   }
 
-  Future<void> _handlePageErrorAction(UiErrorAction action) async {
+  Future<UiRecoveryOutcome> _handlePageErrorAction(UiErrorAction action) async {
     switch (action.type) {
       case UiErrorActionType.retry:
       case UiErrorActionType.resubmit:
         await _load();
-        return;
+        return _pageErrorSemantic == null
+            ? UiRecoveryOutcome.recovered
+            : UiRecoveryOutcome.stillBlocked;
       case UiErrorActionType.dismiss:
-        return;
+        return UiRecoveryOutcome.cancelled;
       case UiErrorActionType.openSettings:
       case UiErrorActionType.openUpdate:
       case UiErrorActionType.login:
-        return;
+        return UiRecoveryOutcome.cancelled;
     }
   }
 }

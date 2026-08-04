@@ -89,7 +89,7 @@ void main() {
       }
       expect(
         media.completeCommands.map((command) => command.accessPolicy),
-        everyElement(ContentMediaAccessPolicy.referencedPost),
+        everyElement(MediaAssetAccessPolicy.referencedPost),
       );
     },
   );

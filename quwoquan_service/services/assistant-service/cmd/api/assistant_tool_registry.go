@@ -8,23 +8,24 @@ import (
 
 	runtimeconfig "quwoquan_service/runtime/config"
 	publicwebtool "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/adapters/outbound/tool"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/orchestration"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
 	skillcontextapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/skillcontext"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/tool"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/ports"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/infrastructure/domainreader"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/infrastructure/finance"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/infrastructure/modelprovider"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/infrastructure/providerbinding"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/infrastructure/publicsearch"
 	publicwebpersistence "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/infrastructure/publicweb"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/infrastructure/searchclient"
 	skillcontextinfra "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/infrastructure/skillcontext"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
-	skillpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/skill"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/tool"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/ports"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/finance"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/modelprovider"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/providerbinding"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/publicsearch"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/infrastructure/weather"
 	serviceruntimeconfig "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/runtimeconfig"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/searchclient"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/weather"
+	readerports "quwoquan_service/services/assistant-service/internal/assistant/domain_reader_descriptor/domain/ports"
 	consentports "quwoquan_service/services/assistant-service/internal/assistant/skill_consent/domain/ports"
+	skillpkg "quwoquan_service/services/assistant-service/internal/assistant/skill_package_release/application/packageasset"
 	subscriptionports "quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/domain/ports"
 )
 
@@ -41,6 +42,8 @@ func buildAgentLoop(
 	interests ports.ProactiveInterestReader,
 	consents consentports.Reader,
 	travelContext domainreader.TravelContextReader,
+	canonicalDomainReaders domainreader.CanonicalReaders,
+	descriptorCatalog readerports.Catalog,
 	skillCatalog skillpkg.Loader,
 	promptAssets ports.PromptAssetResolver,
 ) (*orchestration.AgentLoop, error) {
@@ -79,10 +82,15 @@ func buildAgentLoop(
 	loop.Catalog = skillCatalog
 	loop.PromptAssets = promptAssets
 	loop.Subagents = orchestration.ModelSubagentPlanner{Model: model, Loader: skillCatalog}
-	contextResolvers, err := skillcontextinfra.NewRuntimeRegistry(
+	if descriptorCatalog == nil {
+		return nil, fmt.Errorf("domain reader descriptor catalog is required")
+	}
+	contextResolvers, err := skillcontextinfra.NewRuntimeRegistryWithCanonicalReaders(
+		descriptorCatalog,
 		runs,
 		subscriptions,
 		interests,
+		canonicalDomainReaders,
 		skillcontextapplication.RegisteredResolver{
 			ResolverRef: "trip.current_context",
 			Resolver: skillcontextinfra.TravelContextResolver{
@@ -196,8 +204,10 @@ func buildToolRegistry(
 	weatherProvider := buildWeatherProvider(appEnv, configProvider, newEgressClient)
 	financeProvider := buildFinanceProvider(appEnv, configProvider, newEgressClient)
 	handlers := map[string]tool.Handler{
-		"app_search": internalSearch.Handler(),
-		"web_search": orchestration.NewExternalWebSearchHandler(public, weatherProvider, financeProvider),
+		"app_search":     internalSearch.Handler(),
+		"web_search":     orchestration.NewPublicWebSearchHandler(public),
+		"weather_lookup": orchestration.NewWeatherLookupHandler(weatherProvider),
+		"finance_quote":  orchestration.NewFinanceQuoteHandler(financeProvider),
 	}
 	publicWebHandlers, err := buildPublicWebToolHandlers(
 		publicWebEvidence,
@@ -209,10 +219,16 @@ func buildToolRegistry(
 	for name, handler := range publicWebHandlers {
 		handlers[name] = handler
 	}
-	handlers["web_search"] = publicwebtool.SearchHandler(
-		handlers["web_search"],
-		publicWebEvidence,
-	)
+	for _, toolName := range []string{
+		"web_search",
+		"weather_lookup",
+		"finance_quote",
+	} {
+		handlers[toolName] = publicwebtool.SearchHandler(
+			handlers[toolName],
+			publicWebEvidence,
+		)
+	}
 	if err := tool.RegisterCanonical(&registry, handlers); err != nil {
 		return tool.Registry{}, err
 	}

@@ -180,6 +180,19 @@ func containsIssue(issues []string, target string) bool {
 	return false
 }
 
+func TestControlPlaneOperationScopesFollowCanonicalPrincipalAuthority(t *testing.T) {
+	t.Parallel()
+
+	if controlPlaneOperationRequiresScopes("public") {
+		t.Fatal("canonical public principal must retain actor and ownership authority without inventing an operator scope")
+	}
+	for _, principal := range []string{"", "operator", "service", "owner"} {
+		if !controlPlaneOperationRequiresScopes(principal) {
+			t.Fatalf("principal %q must remain scope-bound in the control plane", principal)
+		}
+	}
+}
+
 func TestRepositoryMetadataUsesObjectFirstSingleTrack(t *testing.T) {
 	metadataDir := contractsview.Build(t)
 	source, err := contractcodegen.NewSource(metadataDir, validate.ProfileBaseline)

@@ -183,15 +183,15 @@ fields:
     type: object
     ref: historical_thinking_snapshot
     default: {}
-  - name: sessionPreferenceFacts
-    source: sessionPreferenceFacts
+  - name: sessionPreferences
+    source: sessionPreferences
     type: list<object>
-    ref: PreferenceFact
+    ref: AssistantPreferenceSnapshot
     default: []
-  - name: longTermPreferenceFacts
-    source: longTermPreferenceFacts
+  - name: longTermPreferences
+    source: longTermPreferences
     type: list<object>
-    ref: PreferenceFact
+    ref: AssistantPreferenceSnapshot
     default: []
 subcontracts:
   decision:

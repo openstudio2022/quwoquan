@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
+	assistant "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/model"
 )
 
 const testPolicyReleaseDigest = "e1a0a7e3379c544c2551da7aafba674ddae2ac9c7d08fdb5762301e9097c771d"

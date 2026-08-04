@@ -89,7 +89,7 @@
 - [`profile-proposal-apply-loop`](./profile-proposal-apply-loop/spec.md)：定义画像提案从生成、确认/拒绝到应用落档的完整闭环。
 - [`run-stream-policy`](./run-stream-policy/spec.md)：规范助手 Run/Stream 主链路的协议、策略模板与域路由行为。
 - [`skill-product-integration-platform`](./skill-product-integration-platform/spec.md)：交付 active Skill package 驱动的目录、个人设置、Consent、主动 Subscription、共享 Placement、Domain Reader 与 Connector grant 用户生命周期。
-- [`world-class-trinity-experience-baseline`](./world-class-trinity-experience-baseline/spec.md)：以统一 Agent 主线、Skill 中心、Markdown-first 输出、可解释折叠过程与偏好事实回注，提供可持续扩展且可回退的小趣体验。
+- [`world-class-trinity-experience-baseline`](./world-class-trinity-experience-baseline/spec.md)：以统一 Agent 主线、Skill 中心、Markdown-first 输出、可解释折叠过程与显式偏好回注，提供可持续扩展且可回退的小趣体验。
 
 ## 5. 领域要求
 

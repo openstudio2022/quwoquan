@@ -5,10 +5,8 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/application/rtc/call_session/rtc_call_entry_coordinator.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_group_settings_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/group_home_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import 'package:quwoquan_app/cloud/services/chat/chat_view_data.dart';
 import '../../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/components/rtc/rtc_call_entry_presenter.dart';
 import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
@@ -18,6 +16,7 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_settings_page.dart';
 import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/call_permission_guard.dart';
+import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
 import '../../../../support/fixtures/chat/chat_mock_seed_refs.dart';
 
 List<Override> _chatTestOverrides(ChatRepository repo) => [
@@ -534,7 +533,7 @@ class _RecordingChatRepository extends MockChatRepository {
 
 class _ErrorChatRepository extends MockChatRepository {
   @override
-  Future<List<ChatConversationMemberDto>> listMembers({
+  Future<List<ConversationMemberListRow>> listMembers({
     required String conversationId,
     String? cursor,
     int limit = 20,
@@ -548,7 +547,7 @@ class _ErrorChatRepository extends MockChatRepository {
 /// 当前用户为普通成员
 class _MemberRoleChatRepository extends MockChatRepository {
   @override
-  Future<List<ChatConversationMemberDto>> listMembers({
+  Future<List<ConversationMemberListRow>> listMembers({
     required String conversationId,
     String? cursor,
     int limit = 20,
@@ -556,8 +555,9 @@ class _MemberRoleChatRepository extends MockChatRepository {
     String? sort,
   }) async {
     return [
-      ChatConversationMemberDto(
+      ConversationMemberListRow(
         userId: 'fixture_user_current',
+        userHandle: 'fixture_user_current',
         displayName: '我',
         avatarUrl: '',
         role: 'member',
@@ -565,8 +565,9 @@ class _MemberRoleChatRepository extends MockChatRepository {
         joinedAt: null,
         isCurrentUser: true,
       ),
-      ChatConversationMemberDto(
+      ConversationMemberListRow(
         userId: 'fixture_user_friend',
+        userHandle: 'fixture_user_friend',
         displayName: '李明',
         avatarUrl: '',
         role: 'member',
@@ -580,8 +581,10 @@ class _MemberRoleChatRepository extends MockChatRepository {
 
 class _MemberRoleAdminOnlyNameRepository extends _MemberRoleChatRepository {
   @override
-  Future<ChatGroupSettingsDto> getGroupSettings(String conversationId) async {
-    return ChatGroupSettingsDto(
+  Future<ChatGroupSettingsViewData> getGroupSettings(
+    String conversationId,
+  ) async {
+    return const ChatGroupSettingsViewData(
       nameEditableByAdminOnly: true,
       conversationType: 'group',
     );
@@ -590,8 +593,10 @@ class _MemberRoleAdminOnlyNameRepository extends _MemberRoleChatRepository {
 
 class _CircleGroupManagedChatRepository extends MockChatRepository {
   @override
-  Future<ChatGroupSettingsDto> getGroupSettings(String conversationId) async {
-    return ChatGroupSettingsDto(
+  Future<ChatGroupSettingsViewData> getGroupSettings(
+    String conversationId,
+  ) async {
+    return const ChatGroupSettingsViewData(
       conversationType: 'group',
       circleId: 'fixture_circle',
       circleGroupId: 'fixture_circle_group',
@@ -599,14 +604,23 @@ class _CircleGroupManagedChatRepository extends MockChatRepository {
   }
 
   @override
-  Future<GroupHomeDto> getGroupHome(String conversationId) async {
-    return GroupHomeDto(
+  Future<GroupHome> getGroupHome(String conversationId) async {
+    return GroupHome(
       conversationId: conversationId,
       title: '圈群',
+      avatarUrl: '',
+      groupAvatarVersion: 0,
       circleId: 'fixture_circle',
       circleGroupId: 'fixture_circle_group',
+      entityId: '',
+      sourceEntityTitle: '',
+      sourceCircleTitle: '',
       memberCount: 3,
+      announcement: '',
       capabilities: const <String>['voice_call'],
+      originType: 'circle_group',
+      canManageMembers: false,
+      canDissolve: false,
     );
   }
 }

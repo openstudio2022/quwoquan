@@ -222,7 +222,13 @@ final class _RecordingExecutor implements CloudOperationExecutor {
     headers = payload.headers;
     return responseDecoder(<String, Object?>{
       'items': const <Object?>[
-        <String, Object?>{'postId': 'post-1'},
+        <String, Object?>{
+          'postId': 'post-1',
+          'contentType': 'micro',
+          'likeCount': 0,
+          'commentCount': 0,
+          'shareCount': 0,
+        },
       ],
       'outcome': 'content',
       'objectCards': const <Object?>[],
@@ -232,7 +238,6 @@ final class _RecordingExecutor implements CloudOperationExecutor {
       'feedRequestId': 'server-feed-request',
       'policyDigest':
           'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-      'hasMore': true,
     });
   }
 }

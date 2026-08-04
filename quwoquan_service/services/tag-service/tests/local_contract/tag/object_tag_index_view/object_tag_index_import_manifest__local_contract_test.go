@@ -78,7 +78,7 @@ func TestObjectTagManifestRejectsInvalidOrDuplicateIdentity(t *testing.T) {
 	}
 
 	invalidTag := []byte(`[
-		{"objectId":"same","objectType":"user","tagRefs":["legacy-interest"]}
+		{"objectId":"same","objectType":"user","tagRefs":["retired-interest"]}
 	]`)
 	if _, err := importmanifest.Decode(invalidTag); err == nil ||
 		!strings.Contains(err.Error(), "outside the canonical taxonomy") {

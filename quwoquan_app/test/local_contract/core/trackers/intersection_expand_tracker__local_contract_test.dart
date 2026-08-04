@@ -34,7 +34,7 @@ void main() {
 
     expect(reporter.events, hasLength(1));
     final event = reporter.events.single;
-    expect(event.action, BehaviorAction.intersectionExpand);
+    expect(event.action, BehaviorEventType.intersectionExpand);
     expect(event.state, 'interaction');
     expect(event.contentId, 'homepage_dali');
     expect(event.intersectionId, 'ix_001');
@@ -46,7 +46,7 @@ void main() {
 
   test('intersection_expand 的 wire action 与 behaviors.yaml 对齐', () {
     expect(
-      BehaviorAction.intersectionExpand.wireValue,
+      BehaviorEventType.intersectionExpand.wireName,
       'intersection_expand',
       reason: '端云 action 单轨：与 behaviors.yaml type 及云侧 SignalWeights 键一致',
     );

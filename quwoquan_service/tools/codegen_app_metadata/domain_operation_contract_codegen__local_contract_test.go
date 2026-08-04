@@ -10,6 +10,199 @@ import (
 	"quwoquan_service/internal/testsupport/contractsview"
 )
 
+func TestCrossDomainCanonicalEnumHasOneGeneratedOwner(t *testing.T) {
+	metadataDir := contractsview.Build(t)
+	if err := initializeMetadataSourceForServiceOutput(metadataDir); err != nil {
+		t.Fatal(err)
+	}
+	graphSourceOperations := activeMetadataSource.Graph().Operations
+	payload, err := json.Marshal(graphSourceOperations)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var graphOperations []appExposedOperation
+	if err := json.Unmarshal(payload, &graphOperations); err != nil {
+		t.Fatal(err)
+	}
+	wanted := map[string]struct{}{
+		"circle.circle_behavior_fact.ReportCircleBehavior": {},
+		"content.content_behavior_fact.ReportBehaviors":    {},
+	}
+	lock := appContractLock{}
+	for index, operation := range graphOperations {
+		operation.CanonicalOperationID = graphSourceOperations[index].ID
+		operation.LocalOperationID = graphSourceOperations[index].LocalID
+		if _, selected := wanted[operation.CanonicalOperationID]; !selected {
+			continue
+		}
+		if operation.ClientContract == nil {
+			t.Fatalf("%s is not App-exposed", operation.CanonicalOperationID)
+		}
+		lock.AppExposedOperations = append(lock.AppExposedOperations, operation)
+	}
+	if len(lock.AppExposedOperations) != len(wanted) {
+		t.Fatalf(
+			"cross-domain behavior operations = %d, want %d",
+			len(lock.AppExposedOperations),
+			len(wanted),
+		)
+	}
+	appDir := t.TempDir()
+	provided, err := generateDomainOperationContracts(metadataDir, appDir, lock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifacts, err := writeGeneratedOperationRequests(appDir, lock, provided)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(artifacts) != len(wanted) {
+		t.Fatalf("behavior request artifacts = %d, want %d", len(artifacts), len(wanted))
+	}
+	sharedPayload := readGeneratedTestFile(t, filepath.Join(
+		appDir,
+		"packages/quwoquan_cloud_contracts/lib/src/generated/shared_operation_enums.g.dart",
+	))
+	if got := strings.Count(sharedPayload, "enum BehaviorEventType {"); got != 1 {
+		t.Fatalf("shared BehaviorEventType declarations = %d, want 1", got)
+	}
+	if !strings.Contains(sharedPayload, `onboardingInterest("onboarding_interest");`) {
+		t.Fatal("shared BehaviorEventType does not contain the canonical final member")
+	}
+
+	for domain, field := range map[string]string{
+		"circle":  "final BehaviorEventType eventType;",
+		"content": "final BehaviorEventType action;",
+	} {
+		ownerPayload := readGeneratedTestFile(t, filepath.Join(
+			appDir,
+			"packages/quwoquan_cloud_contracts/lib/src",
+			domain,
+			domain+"_operation_contracts.g.dart",
+		))
+		if strings.Contains(ownerPayload, "enum BehaviorEventType {") {
+			t.Fatalf("%s retained a duplicate BehaviorEventType declaration", domain)
+		}
+		for _, directive := range []string{
+			`import "../generated/shared_operation_enums.g.dart";`,
+			`export "../generated/shared_operation_enums.g.dart";`,
+		} {
+			if strings.Count(ownerPayload, directive) != 1 {
+				t.Fatalf("%s owner does not reference canonical shared enum once: %s", domain, directive)
+			}
+		}
+		requestPayload := readGeneratedTestFile(t, filepath.Join(
+			appDir,
+			"packages/quwoquan_cloud_contracts/lib/src/generated/requests",
+			domain,
+			domain+"_operation_contracts.g.requests.g.dart",
+		))
+		if !strings.Contains(requestPayload, field) {
+			t.Fatalf("%s request does not use shared BehaviorEventType: %s", domain, field)
+		}
+	}
+}
+
+func TestHomepageTypeUsesTheCrossDomainGeneratedEnumOwner(t *testing.T) {
+	metadataDir := contractsview.Build(t)
+	if err := initializeMetadataSourceForServiceOutput(metadataDir); err != nil {
+		t.Fatal(err)
+	}
+	graphSourceOperations := activeMetadataSource.Graph().Operations
+	payload, err := json.Marshal(graphSourceOperations)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var graphOperations []appExposedOperation
+	if err := json.Unmarshal(payload, &graphOperations); err != nil {
+		t.Fatal(err)
+	}
+	wanted := map[string]struct{}{
+		"circle.circle.GetCircle":                          {},
+		"entity.homepage_search_item_view.SearchHomepages": {},
+	}
+	lock := appContractLock{}
+	for index, operation := range graphOperations {
+		operation.CanonicalOperationID = graphSourceOperations[index].ID
+		operation.LocalOperationID = graphSourceOperations[index].LocalID
+		if _, selected := wanted[operation.CanonicalOperationID]; !selected {
+			continue
+		}
+		if operation.ClientContract == nil {
+			t.Fatalf("%s is not App-exposed", operation.CanonicalOperationID)
+		}
+		lock.AppExposedOperations = append(lock.AppExposedOperations, operation)
+	}
+	if len(lock.AppExposedOperations) != len(wanted) {
+		t.Fatalf(
+			"HomepageType owner operations = %d, want %d",
+			len(lock.AppExposedOperations),
+			len(wanted),
+		)
+	}
+	appDir := t.TempDir()
+	if _, err := generateDomainOperationContracts(metadataDir, appDir, lock); err != nil {
+		t.Fatal(err)
+	}
+	sharedPayload := readGeneratedTestFile(t, filepath.Join(
+		appDir,
+		"packages/quwoquan_cloud_contracts/lib/src/generated/shared_operation_enums.g.dart",
+	))
+	if got := strings.Count(sharedPayload, "enum HomepageType {"); got != 1 {
+		t.Fatalf("shared HomepageType declarations = %d, want 1", got)
+	}
+	for _, domain := range []string{"circle", "entity"} {
+		ownerPayload := readGeneratedTestFile(t, filepath.Join(
+			appDir,
+			"packages/quwoquan_cloud_contracts/lib/src",
+			domain,
+			domain+"_operation_contracts.g.dart",
+		))
+		if strings.Contains(ownerPayload, "enum HomepageType {") {
+			t.Fatalf("%s retained a duplicate HomepageType declaration", domain)
+		}
+		for _, directive := range []string{
+			`import "../generated/shared_operation_enums.g.dart";`,
+			`export "../generated/shared_operation_enums.g.dart";`,
+		} {
+			if strings.Count(ownerPayload, directive) != 1 {
+				t.Fatalf("%s owner does not reference canonical HomepageType once: %s", domain, directive)
+			}
+		}
+	}
+	if _, err := os.Stat(filepath.Join(
+		appDir,
+		"packages/quwoquan_cloud_contracts/lib/src/generated/homepage_type.g.dart",
+	)); !os.IsNotExist(err) {
+		t.Fatalf("retired HomepageType owner was generated: %v", err)
+	}
+}
+
+func TestCrossDomainEnumWithoutSharedCanonicalOwnerFailsClosed(t *testing.T) {
+	metadataDir := contractsview.Build(t)
+	if err := initializeMetadataSourceForServiceOutput(metadataDir); err != nil {
+		t.Fatal(err)
+	}
+	members := []canonicalRequestEnumMember{{WireValue: "same", DartMember: "same"}}
+	newSpec := func(domain string) *domainOperationContractSpec {
+		return &domainOperationContractSpec{
+			Domain:          domain,
+			ExternalImports: map[string]struct{}{},
+			ExternalExports: map[string]struct{}{},
+			EnumMembers: map[string][]canonicalRequestEnumMember{
+				"CoincidentallyNamedEnum": members,
+			},
+		}
+	}
+	err := externalizeSharedDomainEnums(map[string]*domainOperationContractSpec{
+		generatedDomainOperationOwnerImport("circle"):  newSpec("circle"),
+		generatedDomainOperationOwnerImport("content"): newSpec("content"),
+	}, t.TempDir())
+	if err == nil || !strings.Contains(err.Error(), "has no canonical _shared/types.yaml owner") {
+		t.Fatalf("non-canonical cross-domain enum error = %v", err)
+	}
+}
+
 func TestTravelAppSurfaceGeneratesOneTypedOwnerForAllOperations(t *testing.T) {
 	metadataDir := contractsview.Build(t)
 	if err := initializeMetadataSourceForServiceOutput(metadataDir); err != nil {
@@ -257,7 +450,6 @@ func TestCircleAppSurfaceUsesCanonicalResponseEntitiesAndOneGeneratedOwner(t *te
 		"final class CircleGroupPageSlice {",
 		"final class CircleMembershipPageSlice {",
 		"CircleStatsWire decodeCircleStatsWire(Object? response)",
-		"void decodeEmptyResponse(Object? response)",
 	} {
 		if !strings.Contains(ownerPayload, expected) {
 			t.Fatalf("Circle owner is missing %q", expected)
@@ -267,6 +459,7 @@ func TestCircleAppSurfaceUsesCanonicalResponseEntitiesAndOneGeneratedOwner(t *te
 		"CircleProjection",
 		"CircleStatsSlice",
 		"CircleImpactSlice",
+		"decodeEmptyResponse",
 		"circle_query_contracts.dart",
 		"circle_contracts.dart",
 	} {
@@ -395,12 +588,12 @@ func TestContentAppSurfaceUsesCanonicalResponseEntitiesAndOneGeneratedOwner(t *t
 		}
 		lock.AppExposedOperations = append(lock.AppExposedOperations, operation)
 	}
-	if got := len(lock.AppExposedOperations); got != 41 {
+	if got := len(lock.AppExposedOperations); got != 44 {
 		ids := make([]string, 0, len(lock.AppExposedOperations))
 		for _, operation := range lock.AppExposedOperations {
 			ids = append(ids, operation.CanonicalOperationID)
 		}
-		t.Fatalf("Content App-exposed operations = %d, want 41: %s", got, strings.Join(ids, ", "))
+		t.Fatalf("Content App-exposed operations = %d, want 44: %s", got, strings.Join(ids, ", "))
 	}
 
 	appDir := t.TempDir()
@@ -412,8 +605,8 @@ func TestContentAppSurfaceUsesCanonicalResponseEntitiesAndOneGeneratedOwner(t *t
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := len(artifacts); got != 41 {
-		t.Fatalf("Content typed request artifacts = %d, want 41", got)
+	if got := len(artifacts); got != 44 {
+		t.Fatalf("Content typed request artifacts = %d, want 44", got)
 	}
 	ownerPayload := readGeneratedTestFile(t, filepath.Join(
 		appDir,
@@ -424,6 +617,14 @@ func TestContentAppSurfaceUsesCanonicalResponseEntitiesAndOneGeneratedOwner(t *t
 		"packages/quwoquan_cloud_contracts/lib/src/recommendation/recommendation_operation_contracts.g.dart",
 	))
 	for _, expected := range []string{
+		"final class AppConfigSlice {",
+		"final class AppConfigActivationPolicy {",
+		"final class ContentAppConfig {",
+		"final class ContentAppConfigFeatureFlags {",
+		"final class ContentAppConfigGrayRelease {",
+		"decodeAppConfigSlice",
+		`map["feature_flags"]`,
+		`map["gray_release"]`,
 		"final class ContentDiscoveryFeedPageSlice {",
 		"final class PostPublicationReceipt {",
 		"final class AuthorPostPageSlice {",
@@ -499,12 +700,12 @@ func TestUserAppSurfaceUsesCanonicalResponseEntitiesAndOneGeneratedOwner(t *test
 		}
 		lock.AppExposedOperations = append(lock.AppExposedOperations, operation)
 	}
-	if got := len(lock.AppExposedOperations); got != 72 {
+	if got := len(lock.AppExposedOperations); got != 73 {
 		ids := make([]string, 0, len(lock.AppExposedOperations))
 		for _, operation := range lock.AppExposedOperations {
 			ids = append(ids, operation.CanonicalOperationID)
 		}
-		t.Fatalf("User App-exposed operations = %d, want 72: %s", got, strings.Join(ids, ", "))
+		t.Fatalf("User App-exposed operations = %d, want 73: %s", got, strings.Join(ids, ", "))
 	}
 
 	appDir := t.TempDir()
@@ -516,8 +717,8 @@ func TestUserAppSurfaceUsesCanonicalResponseEntitiesAndOneGeneratedOwner(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := len(artifacts); got != 72 {
-		t.Fatalf("User typed request artifacts = %d, want 72", got)
+	if got := len(artifacts); got != 73 {
+		t.Fatalf("User typed request artifacts = %d, want 73", got)
 	}
 	ownerPayload := readGeneratedTestFile(t, filepath.Join(
 		appDir,
@@ -531,7 +732,16 @@ func TestUserAppSurfaceUsesCanonicalResponseEntitiesAndOneGeneratedOwner(t *test
 		"final class GreetingRequestSlice {",
 		"final class FollowingRelationshipPageSlice {",
 		"final class PersonaManagementSummaryView {",
+		"enum ProposalStatus {",
+		"final ProposalSource source;",
+		"final ProposalStatus status;",
 		"final class SearchSocialRelationsResult {",
+		"enum UserSyncPatchKind {",
+		"final class UserAvatarSyncPatchPayload {",
+		"final class ConversationAvatarSyncPatchPayload {",
+		"final class UserSyncPatch {",
+		"final class PullUserSyncSlice {",
+		"decodePullUserSyncSlice",
 	} {
 		if !strings.Contains(ownerPayload, expected) {
 			t.Fatalf("User owner is missing %q", expected)
@@ -614,6 +824,9 @@ func TestSearchAppSurfaceUsesOneGeneratedDomainOwner(t *testing.T) {
 		if !strings.Contains(ownerPayload, expected) {
 			t.Fatalf("Search owner is missing %q", expected)
 		}
+	}
+	if strings.Contains(ownerPayload, "import \"../generated/search/search_response_view.g.dart\";") {
+		t.Fatal("Search owner imported an external response that it only re-exports")
 	}
 	for _, expected := range []string{
 		"final class UpsertRecentSearchCommand",
@@ -902,6 +1115,25 @@ func TestResponseDecoderPreservesConstraintsAfterNullable(t *testing.T) {
 	}
 	if !strings.Contains(expression, "_requiredNonBlankString") {
 		t.Fatalf("nullable response constraint was discarded: %s", expression)
+	}
+}
+
+func TestResponseDecoderEnforcesCanonicalIntegerBounds(t *testing.T) {
+	expression, err := responseFieldDecodeExpression(
+		fieldDef{
+			Name:        "rating",
+			Type:        "int",
+			Constraints: []string{"NOT_NULL", "MIN_1", "MAX_5"},
+		},
+		"map['rating']",
+		"'$path.rating'",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "_requiredBoundedInt(map['rating'], '$path.rating', min: 1, max: 5)"
+	if expression != want {
+		t.Fatalf("bounded integer decoder = %q, want %q", expression, want)
 	}
 }
 

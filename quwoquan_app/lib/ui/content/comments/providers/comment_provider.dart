@@ -5,7 +5,7 @@ import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/trackers/comment_observability.dart';
 import 'package:quwoquan_app/core/trackers/page_lifecycle_observability.dart';
-import 'package:quwoquan_app/ui/content/comments/models/comment_view_data.dart';
+import 'package:quwoquan_app/ui/content/models/comment_view_data.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 part 'comment_provider_state.dart';

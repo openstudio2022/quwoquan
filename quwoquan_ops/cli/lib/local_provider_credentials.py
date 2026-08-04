@@ -1,7 +1,7 @@
 """Materialize the canonical Alpha/Beta/Gamma substitute topology.
 
-Service-local environment bindings remain the only adapter inventory. This
-module projects their non-production topology-owned endpoints and reuses the
+Object-owned adapter contracts plus service-local selections are the only
+adapter inventory. This module projects their topology-owned endpoints and reuses the
 target-scoped LiveKit material created by ``local_environment_auth``. It does
 not create business data, Provider success evidence, or any Prod material.
 """
@@ -12,7 +12,8 @@ import os
 from collections.abc import Mapping
 from pathlib import Path
 
-from .external_provider_governance import NONPROD_ENVIRONMENTS, load_bindings
+from .external_provider_governance import NONPROD_ENVIRONMENTS, load_and_compile
+from .provider_endpoint_contract import load_provider_endpoint_environment
 
 
 # Local infrastructure material is owned by its topology materializer.  It is
@@ -47,33 +48,6 @@ _OWNER_ONLY_FILE_KEYS = frozenset(
     }
 )
 
-_NONPROD_SUBSTITUTE_ENVIRONMENT = {
-    "INTEGRATION_SMS_ENDPOINT": (
-        "https://sms-provider-substitute:9443/v1/provider/sms/send"
-    ),
-    "ASSISTANT_MODEL_COMPLETION_URL": (
-        "http://integration-service:18089/v1/chat/completions"
-    ),
-    "ASSISTANT_PUBLIC_SEARCH_URL": (
-        "http://integration-service:18089/search/html"
-    ),
-    "ASSISTANT_WEATHER_GEOCODING_URL": (
-        "http://integration-service:18089/weather/geocoding"
-    ),
-    "ASSISTANT_WEATHER_FORECAST_URL": (
-        "http://integration-service:18089/weather/forecast"
-    ),
-    "ASSISTANT_FINANCE_CHART_URL": (
-        "http://integration-service:18089/finance/chart"
-    ),
-    "CONTENT_EMBEDDING_ENDPOINT": (
-        "http://integration-service:18089/v1/embeddings"
-    ),
-    "NONPROD_PROVIDER_SUBSTITUTE_ADDR": ":18089",
-    "RTC_MEDIA_CONNECTION_URL": "http://livekit-sfu:7880",
-}
-
-
 def load_nonprod_provider_environment(
     *,
     environment: str,
@@ -101,7 +75,19 @@ def load_nonprod_provider_environment(
     )
     # local_topology endpoints are derived below and can never be overridden
     # by the invoking shell. Only target-scoped secrets remain runtime inputs.
-    required_keys = sorted(secret_keys if debug_local else endpoint_keys | secret_keys)
+    runtime_secret_keys = set(secret_keys)
+    if debug_local:
+        runtime_secret_keys.update(
+            {
+                "SMS_SUBSTITUTE_OPERATOR_TOKEN",
+                "PROVIDER_SUBSTITUTE_OPERATOR_TOKEN",
+            }
+        )
+    required_keys = sorted(
+        runtime_secret_keys
+        if debug_local
+        else endpoint_keys | runtime_secret_keys
+    )
     missing = [key for key in required_keys if not str(material.get(key) or "").strip()]
     if missing:
         raise RuntimeError(
@@ -144,7 +130,7 @@ def load_nonprod_provider_environment(
             + ",".join(weak_file_modes)
         )
 
-    values = dict(_NONPROD_SUBSTITUTE_ENVIRONMENT) if debug_local else {}
+    values = load_provider_endpoint_environment() if debug_local else {}
     values.update({key: str(material[key]).strip() for key in required_keys})
     return values
 
@@ -171,39 +157,40 @@ def _required_material_for_environment(
     *,
     debug_local: bool = True,
 ) -> tuple[set[str], set[str]]:
-    bindings = load_bindings()
-    scope = bindings["environments"][environment]
+    compiled, issues = load_and_compile()
+    if issues:
+        raise RuntimeError("; ".join(issue.render() for issue in issues))
+    scope = compiled["selectedBindings"][environment]
     endpoint_keys: set[str] = set()
     secret_keys: set[str] = set()
-    for service_bindings in scope.values():
-        if not isinstance(service_bindings, Mapping):
+    for capability, binding in scope.items():
+        if not isinstance(binding, Mapping) or binding.get("state") != "enabled":
             continue
-        for capability, binding in service_bindings.items():
-            if not isinstance(binding, Mapping) or binding.get("state") != "enabled":
-                continue
-            if debug_local and str(capability) == "identity.sms.otp":
-                # The service-owned binding remains the managed Provider truth
-                # for formal Alpha/Beta/Gamma deployments. A local target is
-                # projected to the non-promotable Debug protocol substitute.
-                secret_keys.add("INTEGRATION_SMS_TOKEN")
-                continue
-            endpoint_ref = str(binding.get("endpointRef") or "")
-            # Local infrastructure endpoints are resolved by the packaged
-            # topology and must not be shadowed by protected Provider input.
-            topology_owned = endpoint_ref.startswith("local_topology:")
-            if not topology_owned:
-                endpoint_envs = binding.get("endpointEnvs") or {}
-                if isinstance(endpoint_envs, Mapping):
-                    endpoint_keys.update(
-                        str(value)
-                        for value in endpoint_envs.values()
-                        if str(value) not in _PLATFORM_OWNED_KEYS
-                    )
-            secret_keys.update(
-                str(value)
-                for value in (binding.get("secretRefs") or [])
-                if str(value) not in _PLATFORM_OWNED_KEYS
-            )
+        if debug_local and str(capability) == "identity.sms.otp":
+            # The service-owned binding remains the managed Provider truth
+            # for formal Alpha/Beta/Gamma deployments. A local target is
+            # projected to the non-promotable Debug protocol substitute.
+            secret_keys.add("INTEGRATION_SMS_TOKEN")
+            continue
+        endpoint_ref = str(binding.get("endpoint_ref") or "")
+        # Local infrastructure endpoints are resolved by the packaged
+        # topology and must not be shadowed by protected Provider input.
+        topology_owned = endpoint_ref.startswith(
+            ("local_topology:", "service_topology:")
+        )
+        if not topology_owned:
+            endpoint_envs = binding.get("endpoint_envs") or {}
+            if isinstance(endpoint_envs, Mapping):
+                endpoint_keys.update(
+                    str(value)
+                    for value in endpoint_envs.values()
+                    if str(value) not in _PLATFORM_OWNED_KEYS
+                )
+        secret_keys.update(
+            str(value)
+            for value in (binding.get("secret_refs") or [])
+            if str(value) not in _PLATFORM_OWNED_KEYS
+        )
     return endpoint_keys, secret_keys
 
 

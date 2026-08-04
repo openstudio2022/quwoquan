@@ -91,6 +91,23 @@ var assistantPresentationProjectionTotal = promauto.NewCounterVec(
 	[]string{"phase", "outcome"},
 )
 
+var assistantRunHookInvocationTotal = promauto.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "assistant_run_hook_invocation_total",
+		Help: "AssistantRun lifecycle hook invocations by bounded phase, decision and outcome.",
+	},
+	[]string{"phase", "decision", "outcome"},
+)
+
+var assistantRunHookDuration = promauto.NewHistogramVec(
+	prometheus.HistogramOpts{
+		Name:    "assistant_run_hook_duration_seconds",
+		Help:    "Time spent applying one AssistantRun lifecycle hook phase.",
+		Buckets: prometheus.DefBuckets,
+	},
+	[]string{"phase", "outcome"},
+)
+
 func observeWorkerClaim(claim WorkClaim, startedAt time.Time, err error) {
 	outcome := "succeeded"
 	if err != nil {
@@ -163,4 +180,34 @@ func observePresentationProjection(phase string, err error) {
 		outcome = "failed"
 	}
 	assistantPresentationProjectionTotal.WithLabelValues(phase, outcome).Inc()
+}
+
+func observeHookInvocation(
+	phase HookPhase,
+	decision HookDecision,
+	startedAt time.Time,
+	err error,
+) {
+	phaseLabel := string(phase)
+	if !validHookPhase(phase) {
+		phaseLabel = "other"
+	}
+	decisionLabel := string(decision)
+	switch decision {
+	case HookAllow, HookBlock, HookRequireConfirmation:
+	default:
+		decisionLabel = "other"
+	}
+	outcome := "succeeded"
+	if err != nil {
+		outcome = "failed"
+	}
+	assistantRunHookInvocationTotal.WithLabelValues(
+		phaseLabel,
+		decisionLabel,
+		outcome,
+	).Inc()
+	assistantRunHookDuration.WithLabelValues(phaseLabel, outcome).Observe(
+		time.Since(startedAt).Seconds(),
+	)
 }

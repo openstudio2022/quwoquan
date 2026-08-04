@@ -237,13 +237,9 @@ pages:
     surface_ids: [assistantManagement]
     experience_owner: assistant
     data_owners: [assistant, app]
-    object_ids:
-      - assistant.assistant_preference
-      - assistant.skill_consent
-    query_slices:
-      - assistant.assistant_preference
-      - assistant.skill_consent
-    typed_presentation: [PersonalContentAccessState, AssistantPreference]
+    object_ids: [assistant.assistant_preference]
+    query_slices: [assistant.assistant_preference]
+    typed_presentation: [AssistantPreference]
     auth_requirement: required
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { event_namespace: page.assistant.management, lifecycle: [enter, exit, update, failure] }
@@ -273,13 +269,38 @@ pages:
     route_id: assistantSkills
     surface_ids: [assistantSkills]
     experience_owner: assistant
-    data_owners: [assistant]
-    object_ids: [assistant.assistant_run, assistant.assistant_session, assistant.skill_consent]
-    query_slices:
-      - assistant.assistant_run
-      - assistant.assistant_session
+    data_owners: [assistant, integration]
+    object_ids:
+      - assistant.skill_catalog
+      - assistant.skill_user_setting
+      - assistant.skill_subscription
       - assistant.skill_consent
-    typed_presentation: [SkillSubscriptionWire, AssistantSessionWire]
+      - assistant.skill_activity_view
+      - assistant.skill_data_control_request
+      - integration.connector_definition
+      - integration.connector_connection
+      - integration.connector_invocation
+    query_slices:
+      - assistant.skill_catalog
+      - assistant.skill_user_setting
+      - assistant.skill_subscription
+      - assistant.skill_consent
+      - assistant.skill_activity_view
+      - assistant.skill_data_control_request
+      - integration.connector_definition
+      - integration.connector_connection
+      - integration.connector_invocation
+    typed_presentation:
+      - AssistantSkillCatalogItemView
+      - SkillUserSetting
+      - SkillSubscriptionWire
+      - SkillConsent
+      - SkillActivitySlice
+      - SkillDataControlRequest
+      - SkillDataControlMutationReceipt
+      - ConnectorDefinition
+      - ConnectorConnectionView
+      - ConnectorInvocationView
     auth_requirement: optional
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { event_namespace: page.assistant.skill_center, lifecycle: [enter, exit, refresh, update, failure] }
@@ -323,7 +344,7 @@ pages:
     query_slices:
       - chat.message.projection.chat_message_view
       - user.persona_relationship
-    typed_presentation: [ChatMessageViewData, RelationshipCapabilityDto]
+    typed_presentation: [ChatMessageViewData, RelationshipCapabilityViewData]
     auth_requirement: required
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { event_namespace: page.chat.conversation, lifecycle: [enter, exit, message_send, failure] }
@@ -574,7 +595,7 @@ pages:
       - chat.conversation
       - user.user_account
       - circle.circle
-    typed_presentation: [ChatInboxViewData, ChatConversationCreatedViewData, CircleDto]
+    typed_presentation: [ChatInboxViewData, ChatConversationCreatedViewData, Circle]
     auth_requirement: required
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { event_namespace: page.chat.start_group, lifecycle: [enter, exit, submit, failure] }
@@ -612,7 +633,7 @@ pages:
       - circle.circle.projection.circle_impact_summary
       - content.post.projection.post_read_presentation
       - recommendation.recommendation_feature_profile_view.projection.intersection_reason
-    typed_presentation: [CircleDto, PostReadPresentation, IntersectionReason]
+    typed_presentation: [Circle, PostReadPresentation, IntersectionReason]
     auth_requirement: optional
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { event_namespace: page.circle.detail, lifecycle: [enter, exit, refresh, failure] }
@@ -628,7 +649,7 @@ pages:
     data_owners: [circle]
     object_ids: [circle.circle]
     query_slices: [circle.circle]
-    typed_presentation: [CircleDto, CircleEditSubmitPayload]
+    typed_presentation: [Circle, CircleEditSubmitPayload]
     auth_requirement: required
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { inherit_from: circle.detail }
@@ -698,7 +719,7 @@ pages:
     query_slices:
       - circle.circle.projection.circle_feed
       - content.post.projection.post_read_presentation
-    typed_presentation: [CircleDto, PostReadPresentation]
+    typed_presentation: [Circle, PostReadPresentation]
     auth_requirement: optional
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { event_namespace: page.circle.list, lifecycle: [enter, exit, refresh, failure] }
@@ -716,7 +737,7 @@ pages:
     query_slices:
       - circle.circle.projection.circle_feed
       - content.post.projection.post_read_presentation
-    typed_presentation: [CircleDto, PostReadPresentation]
+    typed_presentation: [Circle, PostReadPresentation]
     auth_requirement: inherited
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { inherit_from: circle.list }
@@ -794,7 +815,7 @@ pages:
     query_slices:
       - circle.circle
       - content.post
-    typed_presentation: [CircleDto, CreateCircleOption, PublishSettings]
+    typed_presentation: [PersonaCircleSlice, CreateCircleOption, PublishSettings]
     auth_requirement: inherited
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { inherit_from: content.create }
@@ -1528,7 +1549,7 @@ pages:
     query_slices:
       - user.user_account
       - user.persona_relationship
-    typed_presentation: [PersonaProfileViewData, RelationshipCapabilityDto]
+    typed_presentation: [PersonaProfileViewData, RelationshipCapabilityViewData]
     auth_requirement: required
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { event_namespace: page.user.contact_confirm, lifecycle: [enter, exit, follow, failure] }
@@ -1546,7 +1567,7 @@ pages:
     query_slices:
       - user.user_account
       - user.persona_relationship
-    typed_presentation: [SocialRelationSearchItemViewData, RelationshipCapabilityDto]
+    typed_presentation: [SocialRelationSearchItemViewData, RelationshipCapabilityViewData]
     auth_requirement: required
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { event_namespace: page.user.contact_search, lifecycle: [enter, exit, search, follow, failure] }
@@ -1737,7 +1758,7 @@ pages:
       - user.user_account.projection.user_homepage_bundle_wire
       - content.post.projection.post_read_presentation
       - circle.circle
-    typed_presentation: [UserHomepageBundleViewData, PostReadPresentation, CircleDto]
+    typed_presentation: [UserHomepageBundleViewData, PostReadPresentation, PersonaCircleSlice]
     auth_requirement: optional
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { event_namespace: page.user.other_profile, lifecycle: [enter, exit, interaction, failure] }
@@ -1791,7 +1812,7 @@ pages:
     query_slices:
       - user.contact_discovery_record
       - user.persona_relationship
-    typed_presentation: [ContactDiscoveryMatchView, RelationshipCapabilityDto]
+    typed_presentation: [ContactDiscoveryMatchView, RelationshipCapabilityViewData]
     auth_requirement: required
     capability_requirements: { all_of: [contacts], any_of: [] }
     telemetry_descriptor: { event_namespace: page.user.phone_contacts, lifecycle: [enter, exit, discovery, follow, failure] }
@@ -1810,7 +1831,7 @@ pages:
       - user.user_account.projection.user_profile_stats_wire
       - user.persona_relationship
       - circle.circle
-    typed_presentation: [ProfileSocialRelationRowViewData, CircleDto]
+    typed_presentation: [ProfileSocialRelationRowViewData, PersonaCircleSlice]
     auth_requirement: required
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { event_namespace: page.user.profile_stats, lifecycle: [enter, exit, search, paginate, failure] }

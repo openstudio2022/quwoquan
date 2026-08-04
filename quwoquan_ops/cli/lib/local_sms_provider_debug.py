@@ -6,6 +6,8 @@ import hashlib
 import json
 import re
 import ssl
+import time
+import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
 
@@ -29,7 +31,11 @@ def read_latest_debug_otp(
     recipient: str,
     timeout_seconds: float = 3.0,
 ) -> ProtectedDebugOTP:
-    """Return one OTP in process memory without writing it to receipts or logs."""
+    """Return one OTP in process memory without writing it to receipts or logs.
+
+    SMS delivery is async through integration-service, so this polls the
+    protected capture endpoint until the OTP appears or the budget expires.
+    """
 
     if environment not in {"alpha", "beta", "gamma"}:
         raise ValueError("protected Debug OTP read is limited to Alpha/Beta/Gamma")
@@ -54,32 +60,45 @@ def read_latest_debug_otp(
         },
         separators=(",", ":"),
     ).encode("utf-8")
-    request = urllib.request.Request(
-        f"https://127.0.0.1:{port}/v1/debug/sms/otp/latest",
-        data=body,
-        method="POST",
-        headers={
-            "Authorization": "Bearer "
-            + auth.environment["SMS_SUBSTITUTE_OPERATOR_TOKEN"],
-            "Content-Type": "application/json",
-        },
-    )
     context = ssl.create_default_context(
         cafile=str(root_certificate_path(target_name))
     )
-    with urllib.request.urlopen(
-        request,
-        timeout=timeout_seconds,
-        context=context,
-    ) as response:
-        payload = json.loads(response.read().decode("utf-8"))
-    code = str(payload.get("code") or "")
-    request_id = str(payload.get("requestId") or "").strip()
-    expires_at = str(payload.get("expiresAt") or "").strip()
-    if re.fullmatch(r"[0-9]{6}", code) is None or not request_id or not expires_at:
-        raise RuntimeError("protected OTP readback is invalid")
-    return ProtectedDebugOTP(
-        request_id=request_id,
-        expires_at=expires_at,
-        code=code,
-    )
+    deadline = time.monotonic() + max(1.0, timeout_seconds)
+    last_error: Exception | None = None
+    while time.monotonic() < deadline:
+        request = urllib.request.Request(
+            f"https://127.0.0.1:{port}/v1/debug/sms/otp/latest",
+            data=body,
+            method="POST",
+            headers={
+                "Authorization": "Bearer "
+                + auth.environment["SMS_SUBSTITUTE_OPERATOR_TOKEN"],
+                "Content-Type": "application/json",
+            },
+        )
+        try:
+            with urllib.request.urlopen(
+                request,
+                timeout=min(5.0, max(0.5, deadline - time.monotonic())),
+                context=context,
+            ) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            last_error = exc
+            if exc.code != 404:
+                raise
+            time.sleep(0.25)
+            continue
+        code = str(payload.get("code") or "")
+        request_id = str(payload.get("requestId") or "").strip()
+        expires_at = str(payload.get("expiresAt") or "").strip()
+        if re.fullmatch(r"[0-9]{6}", code) is None or not request_id or not expires_at:
+            raise RuntimeError("protected OTP readback is invalid")
+        return ProtectedDebugOTP(
+            request_id=request_id,
+            expires_at=expires_at,
+            code=code,
+        )
+    if last_error is not None:
+        raise last_error
+    raise RuntimeError("protected OTP readback timed out")

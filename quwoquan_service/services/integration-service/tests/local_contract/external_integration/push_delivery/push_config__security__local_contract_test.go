@@ -13,22 +13,24 @@ import (
 	integrationconfig "quwoquan_service/services/integration-service/internal/external_integration/external_interaction/infrastructure/runtimeconfig"
 )
 
-func TestPushConfigAcceptsLocalRecorderOnlyOnNonprod(t *testing.T) {
+func TestPushConfigAcceptsProtocolSubstituteOnlyOnNonprod(t *testing.T) {
 	cfg := validBaseConfigForPushTest()
 	cfg.Integration.ExternalInteraction.Push.Enabled = true
-	cfg.Integration.ExternalInteraction.Push.Mode = "local_recorder"
+	cfg.Integration.ExternalInteraction.Push.Mode = "protocol_substitute"
 	cfg.Integration.ExternalInteraction.Push.TimeoutMs = 1000
+	cfg.Integration.ExternalInteraction.Push.Endpoint =
+		"https://provider-protocol-substitute:18089/push/send"
 	for _, appEnv := range []string{"alpha", "beta", "gamma"} {
 		cfg.Environment = appEnv
 		if err := integrationconfig.Validate(cfg); err != nil {
-			t.Fatalf("%s local_recorder must be accepted: %v", appEnv, err)
+			t.Fatalf("%s protocol_substitute must be accepted: %v", appEnv, err)
 		}
 	}
 	for _, appEnv := range []string{"prod"} {
 		cfg.Environment = appEnv
 		if err := integrationconfig.Validate(cfg); err == nil ||
 			!strings.Contains(err.Error(), "only permitted in alpha/beta/gamma") {
-			t.Fatalf("%s local_recorder must fail closed: %v", appEnv, err)
+			t.Fatalf("%s protocol_substitute must fail closed: %v", appEnv, err)
 		}
 	}
 }

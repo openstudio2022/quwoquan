@@ -23,6 +23,7 @@ import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_answer_toolb
 import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_journey_view_model.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_process_drawer.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_turn_message_resolver.dart';
+import 'package:quwoquan_app/ui/assistant/widgets/presentation/assistant_presentation_renderer.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/message/regenerate_options_popup.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/voice_message_bubble.dart';
 
@@ -111,6 +112,7 @@ class AssistantMessageBubble extends StatelessWidget {
     this.onSwitchModelAnswer,
     this.onActionHintTap,
     this.onPresentationAction,
+    this.presentationMediaUrlResolver,
     this.canHandlePresentationAction,
     this.onPresentationFallback,
     this.onReferenceTap,
@@ -157,6 +159,7 @@ class AssistantMessageBubble extends StatelessWidget {
   final VoidCallback? onSwitchModelAnswer;
   final Future<void> Function(String hint)? onActionHintTap;
   final void Function(AssistantActionIntentWire action)? onPresentationAction;
+  final AssistantPresentationMediaUrlResolver? presentationMediaUrlResolver;
   final bool Function(AssistantActionIntentWire action)?
   canHandlePresentationAction;
   final void Function(String reason)? onPresentationFallback;
@@ -393,6 +396,7 @@ class AssistantMessageBubble extends StatelessWidget {
           content: answerText,
           answerBlocks: resolvedDisplayState.answer.blocks,
           presentation: presentation,
+          presentationMediaUrlResolver: presentationMediaUrlResolver,
           textColor: textColor,
           onPresentationAction: onPresentationAction,
           canHandlePresentationAction: canHandlePresentationAction,

@@ -1,10 +1,12 @@
 package http
 
 import (
+	"encoding/json"
 	stdhttp "net/http"
 
 	rterr "quwoquan_service/runtime/errors"
 	"quwoquan_service/runtime/httpcodec"
+	behaviorerrors "quwoquan_service/services/circle-service/generated/circle_management/circle_behavior_fact"
 	app "quwoquan_service/services/circle-service/internal/circle_management/circle_behavior_fact/application"
 	model "quwoquan_service/services/circle-service/internal/circle_management/circle_behavior_fact/domain/model"
 )
@@ -33,13 +35,23 @@ func (handler *Handler) ServeHTTP(writer stdhttp.ResponseWriter, request *stdhtt
 		writeError(writer, request, rterr.NewInvalidArgument(rterr.ModuleCircle, "请求体无效", err.Error()))
 		return
 	}
-	if _, err := handler.writer.Append(request.Context(), app.AppendCommand{
+	result, err := handler.writer.Append(request.Context(), app.AppendCommand{
 		CircleID: body.CircleID, EventType: model.BehaviorEventType(body.EventType),
-	}); err != nil {
+	})
+	if err != nil {
 		writeError(writer, request, err)
 		return
 	}
-	writer.WriteHeader(stdhttp.StatusNoContent)
+	payload, err := json.Marshal(result)
+	if err != nil {
+		writeError(writer, request, behaviorerrors.AppErrorFromBehaviorFactWriteFailed(
+			"marshal CircleBehaviorFact AppendResult: "+err.Error(),
+		))
+		return
+	}
+	writer.Header().Set("Content-Type", "application/json")
+	writer.WriteHeader(stdhttp.StatusOK)
+	_, _ = writer.Write(payload)
 }
 
 func writeError(writer stdhttp.ResponseWriter, request *stdhttp.Request, err error) {

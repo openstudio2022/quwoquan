@@ -56,8 +56,8 @@ func ResolvePushBinding(
 		appEnv,
 		pushCapabilityID,
 		map[string]struct{}{
-			PushAdapterDispatch:      {},
-			PushAdapterLocalRecorder: {},
+			PushAdapterDispatch:           {},
+			PushAdapterProtocolSubstitute: {},
 		},
 		configProvider,
 	)

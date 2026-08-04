@@ -5,6 +5,10 @@ signed `SkillPackageRelease`. The assistant runtime never scans this tree; it
 opens only the exact `skill-package://official/...` locators declared by the
 currently active release and re-verifies every asset digest before use.
 
+Controlled publisher source lives separately at
+[`../../../skill_packages/official`](../../../skill_packages/official/README.md).
+Source files must never be copied or linked into this runtime asset root.
+
 Release descriptors and signatures are produced by the controlled Skill
 package publication pipeline. Signing private keys and credentials never live
 in this repository.

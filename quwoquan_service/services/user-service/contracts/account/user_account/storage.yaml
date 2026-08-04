@@ -642,6 +642,14 @@ redis_cache:
   ttl_seconds: 1800
   type: string
   description: 登录失败滑动窗口计数
+- key: otp:resend:{phone}
+  ttl_seconds: 60
+  type: string
+  description: 手机号发码的单次冷却占位；只承载 UserAccount 认证编排的短期限流状态，不持久化 OTP。
+- key: otp:quota:{phone}
+  ttl_seconds: 3600
+  type: string
+  description: 手机号发码的一小时原子计数；只承载 UserAccount 认证编排的短期配额，不持久化 OTP。
 role: authoritative
 codegen:
   enabled: true

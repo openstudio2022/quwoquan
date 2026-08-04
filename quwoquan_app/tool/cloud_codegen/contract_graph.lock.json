@@ -601,7 +601,7 @@
       "responseAdmission": null,
       "responseBody": "",
       "responseBodyKind": "",
-      "responseEntity": "AssistantRunEnvelope",
+      "responseEntity": "AssistantRunEnvelopeWire",
       "scopes": [],
       "slo": {
         "availabilityPercent": 99.9,
@@ -698,7 +698,7 @@
       "responseAdmission": null,
       "responseBody": "",
       "responseBodyKind": "",
-      "responseEntity": "AssistantRunEnvelope",
+      "responseEntity": "AssistantRunEnvelopeWire",
       "scopes": [],
       "slo": {
         "availabilityPercent": 99.9,
@@ -784,7 +784,7 @@
       "responseAdmission": null,
       "responseBody": "",
       "responseBodyKind": "",
-      "responseEntity": "AssistantRunEnvelope",
+      "responseEntity": "AssistantRunEnvelopeWire",
       "scopes": [],
       "slo": {
         "availabilityPercent": 99.9,
@@ -877,7 +877,7 @@
       "responseAdmission": null,
       "responseBody": "",
       "responseBodyKind": "",
-      "responseEntity": "AssistantRunEnvelope",
+      "responseEntity": "AssistantRunEnvelopeWire",
       "scopes": [],
       "slo": {
         "availabilityPercent": 99.9,
@@ -970,7 +970,7 @@
       "responseAdmission": null,
       "responseBody": "",
       "responseBodyKind": "",
-      "responseEntity": "AssistantRunEnvelope",
+      "responseEntity": "AssistantRunEnvelopeWire",
       "scopes": [],
       "slo": {
         "availabilityPercent": 99.9,
@@ -1067,7 +1067,7 @@
       "responseAdmission": null,
       "responseBody": "",
       "responseBodyKind": "",
-      "responseEntity": "AssistantRunEnvelope",
+      "responseEntity": "AssistantRunEnvelopeWire",
       "scopes": [],
       "slo": {
         "availabilityPercent": 99.9,
@@ -1162,7 +1162,7 @@
       "responseAdmission": null,
       "responseBody": "",
       "responseBodyKind": "",
-      "responseEntity": "AssistantRunEnvelope",
+      "responseEntity": "AssistantRunEnvelopeWire",
       "scopes": [],
       "slo": {
         "availabilityPercent": 99.9,
@@ -1349,7 +1349,7 @@
       "responseAdmission": null,
       "responseBody": "",
       "responseBodyKind": "",
-      "responseEntity": "AssistantSession",
+      "responseEntity": "AssistantSessionWire",
       "scopes": [],
       "slo": {
         "availabilityPercent": 99.9,
@@ -1433,7 +1433,7 @@
       "responseAdmission": null,
       "responseBody": "",
       "responseBodyKind": "",
-      "responseEntity": "AssistantSession",
+      "responseEntity": "AssistantSessionWire",
       "scopes": [],
       "slo": {
         "availabilityPercent": 99.9,
@@ -1808,6 +1808,101 @@
           "error_code"
         ],
         "metric": "assistant_page_context_session",
+        "trace": true
+      },
+      "transport": "json"
+    },
+    {
+      "actorRequirement": "account",
+      "aggregateOwner": "",
+      "authMode": "required",
+      "canonicalOperationId": "assistant.skill_activity_view.ListSkillActivities",
+      "clientContract": {
+        "dartImport": "../assistant/assistant_operation_contracts.g.dart",
+        "responseDecoder": "decodeSkillActivitySlice",
+        "responseType": "SkillActivitySlice"
+      },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
+      "domain": "assistant",
+      "errorCodes": [
+        "ASSISTANT.USER.skill_activity_invalid_argument",
+        "ASSISTANT.USER.skill_activity_unauthorized",
+        "ASSISTANT.SYSTEM.skill_activity_unavailable"
+      ],
+      "facadeMethod": "listActivities",
+      "facet": "SkillActivityViewQueryFacade",
+      "invariantTarget": "",
+      "kind": "query",
+      "localOperationId": "ListSkillActivities",
+      "method": "GET",
+      "mutationTarget": "",
+      "objectId": "assistant.skill_activity_view",
+      "ownershipPolicy": "requester_self",
+      "pagination": null,
+      "pathTemplate": "/assistant/skills/{skillId}/activities",
+      "permissions": [],
+      "principal": "account",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "INTERNAL",
+        "responseClassification": "SENSITIVE"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "none",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 1000
+      },
+      "requestBindings": {
+        "path": [
+          {
+            "field": "skillId",
+            "name": "skillId"
+          }
+        ],
+        "query": [
+          {
+            "field": "cursor",
+            "name": "cursor",
+            "required": false
+          },
+          {
+            "field": "limit",
+            "name": "limit",
+            "required": false
+          }
+        ]
+      },
+      "requestBodyKind": "none",
+      "requestConstants": null,
+      "requestEntity": "ListSkillActivitiesQuery",
+      "responseAdmission": null,
+      "responseBody": "",
+      "responseBodyKind": "",
+      "responseEntity": "SkillActivitySlice",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 800
+      },
+      "sourcePath": "assistant/assistant/skill_activity_view/operations.yaml",
+      "streaming": null,
+      "surfaceIds": [
+        "assistantSkills"
+      ],
+      "telemetry": {
+        "attributes": [
+          "operation",
+          "outcome",
+          "error_code",
+          "source_kind"
+        ],
+        "metric": "assistant_skill_activity_query",
         "trace": true
       },
       "transport": "json"
@@ -2259,6 +2354,270 @@
       "transport": "json"
     },
     {
+      "actorRequirement": "account",
+      "aggregateOwner": "SkillDataControlRequest",
+      "authMode": "required",
+      "canonicalOperationId": "assistant.skill_data_control_request.ConfirmSkillDataControlRequest",
+      "clientContract": {
+        "dartImport": "../assistant/assistant_operation_contracts.g.dart",
+        "responseDecoder": "decodeSkillDataControlMutationReceipt",
+        "responseType": "SkillDataControlMutationReceipt"
+      },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
+      "domain": "assistant",
+      "errorCodes": [
+        "ASSISTANT.USER.skill_data_control_invalid_argument",
+        "ASSISTANT.USER.skill_data_control_not_found",
+        "ASSISTANT.USER.skill_data_control_revision_conflict",
+        "ASSISTANT.USER.skill_data_control_idempotency_conflict",
+        "ASSISTANT.USER.skill_data_control_unauthorized",
+        "ASSISTANT.SYSTEM.skill_data_control_unavailable"
+      ],
+      "facadeMethod": "confirmRequest",
+      "facet": "SkillDataControlRequestCommandFacade",
+      "invariantTarget": "SkillDataControlRequest",
+      "kind": "command",
+      "localOperationId": "ConfirmSkillDataControlRequest",
+      "method": "POST",
+      "mutationTarget": "SkillDataControlRequest",
+      "objectId": "assistant.skill_data_control_request",
+      "ownershipPolicy": "data_control_request_owner",
+      "pagination": null,
+      "pathTemplate": "/assistant/skill-data-control-requests/{requestId}/confirm",
+      "permissions": [],
+      "principal": "account",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "SENSITIVE",
+        "responseClassification": "SENSITIVE"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "required",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 1500
+      },
+      "requestBindings": {
+        "injected": [
+          {
+            "field": "idempotencyKey",
+            "name": "Idempotency-Key"
+          }
+        ],
+        "path": [
+          {
+            "field": "requestId",
+            "name": "requestId"
+          }
+        ]
+      },
+      "requestBodyKind": "object",
+      "requestConstants": null,
+      "requestEntity": "ConfirmSkillDataControlRequestCommand",
+      "responseAdmission": null,
+      "responseBody": "",
+      "responseBodyKind": "",
+      "responseEntity": "SkillDataControlMutationReceipt",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 500
+      },
+      "sourcePath": "assistant/assistant/skill_data_control_request/operations.yaml",
+      "streaming": null,
+      "surfaceIds": [
+        "assistantSkills"
+      ],
+      "telemetry": {
+        "attributes": [
+          "operation",
+          "outcome",
+          "error_code",
+          "replayed"
+        ],
+        "metric": "assistant_skill_data_control_command",
+        "trace": true
+      },
+      "transport": "json"
+    },
+    {
+      "actorRequirement": "account",
+      "aggregateOwner": "SkillDataControlRequest",
+      "authMode": "required",
+      "canonicalOperationId": "assistant.skill_data_control_request.CreateSkillDataControlRequest",
+      "clientContract": {
+        "dartImport": "../assistant/assistant_operation_contracts.g.dart",
+        "responseDecoder": "decodeSkillDataControlMutationReceipt",
+        "responseType": "SkillDataControlMutationReceipt"
+      },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
+      "domain": "assistant",
+      "errorCodes": [
+        "ASSISTANT.USER.skill_data_control_invalid_argument",
+        "ASSISTANT.USER.skill_data_control_idempotency_conflict",
+        "ASSISTANT.USER.skill_data_control_unauthorized",
+        "ASSISTANT.SYSTEM.skill_data_control_unavailable"
+      ],
+      "facadeMethod": "createRequest",
+      "facet": "SkillDataControlRequestCommandFacade",
+      "invariantTarget": "SkillDataControlRequest",
+      "kind": "command",
+      "localOperationId": "CreateSkillDataControlRequest",
+      "method": "POST",
+      "mutationTarget": "SkillDataControlRequest",
+      "objectId": "assistant.skill_data_control_request",
+      "ownershipPolicy": "requester_self",
+      "pagination": null,
+      "pathTemplate": "/assistant/skills/{skillId}/data-control-requests",
+      "permissions": [],
+      "principal": "account",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "SENSITIVE",
+        "responseClassification": "SENSITIVE"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "required",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 1500
+      },
+      "requestBindings": {
+        "injected": [
+          {
+            "field": "idempotencyKey",
+            "name": "Idempotency-Key"
+          }
+        ],
+        "path": [
+          {
+            "field": "skillId",
+            "name": "skillId"
+          }
+        ]
+      },
+      "requestBodyKind": "object",
+      "requestConstants": null,
+      "requestEntity": "CreateSkillDataControlRequestCommand",
+      "responseAdmission": null,
+      "responseBody": "",
+      "responseBodyKind": "",
+      "responseEntity": "SkillDataControlMutationReceipt",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 500
+      },
+      "sourcePath": "assistant/assistant/skill_data_control_request/operations.yaml",
+      "streaming": null,
+      "surfaceIds": [
+        "assistantSkills"
+      ],
+      "telemetry": {
+        "attributes": [
+          "operation",
+          "outcome",
+          "error_code",
+          "replayed"
+        ],
+        "metric": "assistant_skill_data_control_command",
+        "trace": true
+      },
+      "transport": "json"
+    },
+    {
+      "actorRequirement": "account",
+      "aggregateOwner": "",
+      "authMode": "required",
+      "canonicalOperationId": "assistant.skill_data_control_request.GetSkillDataControlRequest",
+      "clientContract": {
+        "dartImport": "../assistant/assistant_operation_contracts.g.dart",
+        "responseDecoder": "decodeSkillDataControlRequest",
+        "responseType": "SkillDataControlRequest"
+      },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
+      "domain": "assistant",
+      "errorCodes": [
+        "ASSISTANT.USER.skill_data_control_not_found",
+        "ASSISTANT.USER.skill_data_control_unauthorized",
+        "ASSISTANT.SYSTEM.skill_data_control_unavailable"
+      ],
+      "facadeMethod": "getRequest",
+      "facet": "SkillDataControlRequestQueryFacade",
+      "invariantTarget": "",
+      "kind": "query",
+      "localOperationId": "GetSkillDataControlRequest",
+      "method": "GET",
+      "mutationTarget": "",
+      "objectId": "assistant.skill_data_control_request",
+      "ownershipPolicy": "data_control_request_owner",
+      "pagination": null,
+      "pathTemplate": "/assistant/skill-data-control-requests/{requestId}",
+      "permissions": [],
+      "principal": "account",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "INTERNAL",
+        "responseClassification": "SENSITIVE"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "none",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 500
+      },
+      "requestBindings": {
+        "path": [
+          {
+            "field": "requestId",
+            "name": "requestId"
+          }
+        ]
+      },
+      "requestBodyKind": "none",
+      "requestConstants": null,
+      "requestEntity": "GetSkillDataControlRequestQuery",
+      "responseAdmission": null,
+      "responseBody": "",
+      "responseBodyKind": "",
+      "responseEntity": "SkillDataControlRequest",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 300
+      },
+      "sourcePath": "assistant/assistant/skill_data_control_request/operations.yaml",
+      "streaming": null,
+      "surfaceIds": [
+        "assistantSkills"
+      ],
+      "telemetry": {
+        "attributes": [
+          "operation",
+          "outcome",
+          "error_code"
+        ],
+        "metric": "assistant_skill_data_control_query",
+        "trace": true
+      },
+      "transport": "json"
+    },
+    {
       "actorRequirement": "persona",
       "aggregateOwner": "SkillSubscription",
       "authMode": "required",
@@ -2314,7 +2673,7 @@
       "responseAdmission": null,
       "responseBody": "",
       "responseBodyKind": "",
-      "responseEntity": "SkillSubscription",
+      "responseEntity": "SkillSubscriptionWire",
       "scopes": [],
       "slo": {
         "availabilityPercent": 99.9,
@@ -2398,7 +2757,7 @@
       "responseAdmission": null,
       "responseBody": "",
       "responseBodyKind": "",
-      "responseEntity": "SkillSubscription",
+      "responseEntity": "SkillSubscriptionWire",
       "scopes": [],
       "slo": {
         "availabilityPercent": 99.9,
@@ -2570,7 +2929,7 @@
       "responseAdmission": null,
       "responseBody": "",
       "responseBodyKind": "",
-      "responseEntity": "SkillSubscription",
+      "responseEntity": "SkillSubscriptionWire",
       "scopes": [],
       "slo": {
         "availabilityPercent": 99.9,
@@ -6666,8 +7025,8 @@
       "canonicalOperationId": "circle.circle_behavior_fact.ReportCircleBehavior",
       "clientContract": {
         "dartImport": "../circle/circle_operation_contracts.g.dart",
-        "responseDecoder": "decodeEmptyResponse",
-        "responseType": "void"
+        "responseDecoder": "decodeAppendResult",
+        "responseType": "AppendResult"
       },
       "commercial": {
         "explicit": true,
@@ -6710,9 +7069,9 @@
       "requestConstants": null,
       "requestEntity": "AppendCircleBehaviorFactCommand",
       "responseAdmission": null,
-      "responseBody": "",
-      "responseBodyKind": "ack",
-      "responseEntity": "",
+      "responseBody": "AppendResult",
+      "responseBodyKind": "object",
+      "responseEntity": "AppendResult",
       "scopes": [],
       "slo": {
         "availabilityPercent": 99.9,
@@ -10457,8 +10816,8 @@
       "canonicalOperationId": "content.content_behavior_fact.ReportBehaviors",
       "clientContract": {
         "dartImport": "../content/content_operation_contracts.g.dart",
-        "responseDecoder": "decodeEmptyResponse",
-        "responseType": "void"
+        "responseDecoder": "decodeContentBehaviorReportReceipt",
+        "responseType": "ContentBehaviorReportReceipt"
       },
       "commercial": {
         "explicit": true,
@@ -10503,9 +10862,9 @@
       "requestConstants": null,
       "requestEntity": "ReportContentBehaviorsCommand",
       "responseAdmission": null,
-      "responseBody": "",
-      "responseBodyKind": "ack",
-      "responseEntity": "",
+      "responseBody": "ContentBehaviorReportReceipt",
+      "responseBodyKind": "object",
+      "responseEntity": "ContentBehaviorReportReceipt",
       "scopes": [],
       "slo": {
         "availabilityPercent": 99.9,
@@ -11219,6 +11578,80 @@
     },
     {
       "actorRequirement": "persona",
+      "aggregateOwner": "IntersectionVisitState",
+      "authMode": "required",
+      "canonicalOperationId": "content.intersection_visit_state.MarkIntersectionsVisited",
+      "clientContract": {
+        "dartImport": "../content/content_operation_contracts.g.dart",
+        "responseDecoder": "decodeMarkIntersectionsVisitedAck",
+        "responseType": "MarkIntersectionsVisitedAck"
+      },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
+      "domain": "content",
+      "errorCodes": [
+        "CONTENT.USER.unauthorized",
+        "CONTENT.USER.invalid_argument",
+        "CONTENT.SYSTEM.storage_write_failed"
+      ],
+      "facadeMethod": "markVisited",
+      "facet": "IntersectionVisitCommandFacet",
+      "invariantTarget": "IntersectionVisitState",
+      "kind": "command",
+      "localOperationId": "MarkIntersectionsVisited",
+      "method": "POST",
+      "mutationTarget": "IntersectionVisitState",
+      "objectId": "content.intersection_visit_state",
+      "ownershipPolicy": "own_intersections",
+      "pagination": null,
+      "pathTemplate": "/content/intersections/visit",
+      "permissions": [],
+      "principal": "persona",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "PII",
+        "responseClassification": "INTERNAL"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "optional",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 1500
+      },
+      "requestBindings": null,
+      "requestBodyKind": "object",
+      "requestConstants": null,
+      "requestEntity": "MarkIntersectionsVisitedRequest",
+      "responseAdmission": null,
+      "responseBody": "",
+      "responseBodyKind": "ack",
+      "responseEntity": "MarkIntersectionsVisitedAck",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 500
+      },
+      "sourcePath": "content/content/intersection_visit_state/operations.yaml",
+      "streaming": null,
+      "surfaceIds": [
+        "myIntersections"
+      ],
+      "telemetry": {
+        "attributes": [
+          "dimension",
+          "outcome"
+        ],
+        "metric": "content_intersection_visit_mark",
+        "trace": true
+      },
+      "transport": "json"
+    },
+    {
+      "actorRequirement": "persona",
       "aggregateOwner": "MediaAsset",
       "authMode": "required",
       "canonicalOperationId": "content.media_asset.DiscardMediaAsset",
@@ -11373,6 +11806,7 @@
       "streaming": null,
       "surfaceIds": [
         "homeFeed",
+        "personalAssistantDialog",
         "workBrowser"
       ],
       "telemetry": {
@@ -12073,6 +12507,163 @@
           "outcome"
         ],
         "metric": "content_outbound_share_append",
+        "trace": true
+      },
+      "transport": "json"
+    },
+    {
+      "actorRequirement": "persona",
+      "aggregateOwner": "Post",
+      "authMode": "required",
+      "canonicalOperationId": "content.post.DeletePost",
+      "clientContract": {
+        "dartImport": "../content/content_operation_contracts.g.dart",
+        "responseDecoder": "decodePostDeletionReceipt",
+        "responseType": "PostDeletionReceipt"
+      },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
+      "domain": "content",
+      "errorCodes": [
+        "CONTENT.USER.unauthorized",
+        "CONTENT.USER.post_not_found",
+        "CONTENT.USER.forbidden_delete",
+        "CONTENT.USER.idempotency_conflict",
+        "CONTENT.USER.version_conflict",
+        "CONTENT.SYSTEM.storage_write_failed",
+        "CONTENT.SYSTEM.internal_error"
+      ],
+      "facadeMethod": "deletePost",
+      "facet": "PostLifecycleCommandFacet",
+      "invariantTarget": "Post",
+      "kind": "command",
+      "localOperationId": "DeletePost",
+      "method": "DELETE",
+      "mutationTarget": "Post",
+      "objectId": "content.post",
+      "ownershipPolicy": "post_owner",
+      "pagination": null,
+      "pathTemplate": "/content/posts/{postId}",
+      "permissions": [],
+      "principal": "persona",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "PII",
+        "responseClassification": "INTERNAL"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "required",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 5000
+      },
+      "requestBindings": {
+        "path": [
+          {
+            "field": "postId",
+            "name": "postId"
+          }
+        ]
+      },
+      "requestBodyKind": "none",
+      "requestConstants": null,
+      "requestEntity": "DeletePostCommand",
+      "responseAdmission": null,
+      "responseBody": "PostDeletionReceipt",
+      "responseBodyKind": "object",
+      "responseEntity": "PostDeletionReceipt",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 800
+      },
+      "sourcePath": "content/content/post/operations.yaml",
+      "streaming": null,
+      "surfaceIds": [
+        "workBrowser"
+      ],
+      "telemetry": {
+        "attributes": [
+          "outcome"
+        ],
+        "metric": "content_post_delete",
+        "trace": true
+      },
+      "transport": "json"
+    },
+    {
+      "actorRequirement": "none",
+      "aggregateOwner": "",
+      "authMode": "public",
+      "canonicalOperationId": "content.post.GetAppConfig",
+      "clientContract": {
+        "dartImport": "../content/content_operation_contracts.g.dart",
+        "responseDecoder": "decodeAppConfigSlice",
+        "responseType": "AppConfigSlice"
+      },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
+      "domain": "content",
+      "errorCodes": [
+        "CONTENT.SYSTEM.storage_read_failed",
+        "CONTENT.SYSTEM.internal_error"
+      ],
+      "facadeMethod": "getAppConfig",
+      "facet": "AppConfigQueryFacet",
+      "invariantTarget": "",
+      "kind": "query",
+      "localOperationId": "GetAppConfig",
+      "method": "GET",
+      "mutationTarget": "",
+      "objectId": "content.post",
+      "ownershipPolicy": "public_runtime_configuration",
+      "pagination": null,
+      "pathTemplate": "/config/app",
+      "permissions": [],
+      "principal": "public",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "INTERNAL",
+        "responseClassification": "INTERNAL"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "none",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 500
+      },
+      "requestBindings": null,
+      "requestBodyKind": "none",
+      "requestConstants": null,
+      "requestEntity": "GetAppConfigQuery",
+      "responseAdmission": null,
+      "responseBody": "AppConfigSlice",
+      "responseBodyKind": "object",
+      "responseEntity": "AppConfigSlice",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 300
+      },
+      "sourcePath": "content/content/post/operations.yaml",
+      "streaming": null,
+      "surfaceIds": [
+        "homeFeed"
+      ],
+      "telemetry": {
+        "attributes": [
+          "outcome",
+          "config_hash"
+        ],
+        "metric": "content_app_config_get",
         "trace": true
       },
       "transport": "json"
@@ -13168,8 +13759,8 @@
       "canonicalOperationId": "content.report.CreateReport",
       "clientContract": {
         "dartImport": "../content/content_operation_contracts.g.dart",
-        "responseDecoder": "decodeEmptyResponse",
-        "responseType": "void"
+        "responseDecoder": "decodeReportCommandResult",
+        "responseType": "ReportCommandResult"
       },
       "commercial": {
         "explicit": true,
@@ -13213,9 +13804,9 @@
       "requestConstants": null,
       "requestEntity": "CreateContentReportCommand",
       "responseAdmission": null,
-      "responseBody": "",
-      "responseBodyKind": "ack",
-      "responseEntity": "",
+      "responseBody": "ReportCommandResult",
+      "responseBodyKind": "object",
+      "responseEntity": "ReportCommandResult",
       "scopes": [],
       "slo": {
         "availabilityPercent": 99.9,
@@ -16172,6 +16763,507 @@
       "transport": "json"
     },
     {
+      "actorRequirement": "persona_or_device",
+      "aggregateOwner": "",
+      "authMode": "required",
+      "canonicalOperationId": "ops.event_record.ReportEventBatch",
+      "clientContract": {
+        "dartImport": "../ops/ops_operation_contracts.g.dart",
+        "responseDecoder": "decodeEventRecordBatchReceipt",
+        "responseType": "EventRecordBatchReceipt"
+      },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
+      "domain": "ops",
+      "errorCodes": [
+        "OPS.USER.event_batch_invalid",
+        "OPS.USER.idempotency_key_invalid",
+        "OPS.SYSTEM.logstore_unavailable"
+      ],
+      "facadeMethod": "appendBatch",
+      "facet": "EventRecordCommandFacade",
+      "invariantTarget": "EventRecord",
+      "kind": "command",
+      "localOperationId": "ReportEventBatch",
+      "method": "POST",
+      "mutationTarget": "EventRecord",
+      "objectId": "ops.event_record",
+      "ownershipPolicy": "authenticated_persona_or_derived_device_actor",
+      "pagination": null,
+      "pathTemplate": "/ops/events",
+      "permissions": [],
+      "principal": "public",
+      "privacy": {
+        "logPolicy": "redacted",
+        "requestClassification": "SENSITIVE",
+        "responseClassification": "PUBLIC"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "required",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 1500
+      },
+      "requestBindings": null,
+      "requestBodyKind": "object",
+      "requestConstants": null,
+      "requestEntity": "EventRecordBatchRequest",
+      "responseAdmission": null,
+      "responseBody": "",
+      "responseBodyKind": "",
+      "responseEntity": "EventRecordBatchReceipt",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 800
+      },
+      "sourcePath": "ops/product_ops/event_record/operations.yaml",
+      "streaming": null,
+      "surfaceIds": [
+        "appShell"
+      ],
+      "telemetry": {
+        "attributes": [
+          "actor_dimension",
+          "event_count",
+          "outcome"
+        ],
+        "metric": "ops_event_batch_report",
+        "trace": true
+      },
+      "transport": "json"
+    },
+    {
+      "actorRequirement": "persona_or_device",
+      "aggregateOwner": "",
+      "authMode": "required",
+      "canonicalOperationId": "ops.event_record.ReportRuntimeLogBatch",
+      "clientContract": {
+        "dartImport": "../ops/ops_operation_contracts.g.dart",
+        "responseDecoder": "decodeEventRecordBatchReceipt",
+        "responseType": "EventRecordBatchReceipt"
+      },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
+      "domain": "ops",
+      "errorCodes": [
+        "OPS.USER.runtime_log_batch_invalid",
+        "OPS.USER.idempotency_key_invalid",
+        "OPS.SYSTEM.runtime_logstore_unavailable"
+      ],
+      "facadeMethod": "appendAppRuntimeBatch",
+      "facet": "RuntimeLogCommandFacet",
+      "invariantTarget": "EventRecord",
+      "kind": "command",
+      "localOperationId": "ReportRuntimeLogBatch",
+      "method": "POST",
+      "mutationTarget": "EventRecord",
+      "objectId": "ops.event_record",
+      "ownershipPolicy": "authenticated_persona_or_derived_device_actor",
+      "pagination": null,
+      "pathTemplate": "/ops/runtime-logs",
+      "permissions": [],
+      "principal": "public",
+      "privacy": {
+        "logPolicy": "redacted",
+        "requestClassification": "SENSITIVE",
+        "responseClassification": "PUBLIC"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "required",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 1500
+      },
+      "requestBindings": null,
+      "requestBodyKind": "object",
+      "requestConstants": null,
+      "requestEntity": "RuntimeLogBatchRequest",
+      "responseAdmission": null,
+      "responseBody": "",
+      "responseBodyKind": "",
+      "responseEntity": "EventRecordBatchReceipt",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 800
+      },
+      "sourcePath": "ops/product_ops/event_record/operations.yaml",
+      "streaming": null,
+      "surfaceIds": [
+        "appShell"
+      ],
+      "telemetry": {
+        "attributes": [
+          "record_count",
+          "outcome"
+        ],
+        "metric": "ops_runtime_log_batch_report",
+        "trace": true
+      },
+      "transport": "json"
+    },
+    {
+      "actorRequirement": "device",
+      "aggregateOwner": "",
+      "authMode": "optional",
+      "canonicalOperationId": "ops.event_record.ReportStartupEventBatch",
+      "clientContract": {
+        "dartImport": "../ops/ops_operation_contracts.g.dart",
+        "responseDecoder": "decodeStartupTelemetryBatchReceipt",
+        "responseType": "StartupTelemetryBatchReceipt"
+      },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
+      "domain": "ops",
+      "errorCodes": [
+        "OPS.USER.startup_event_invalid",
+        "OPS.SYSTEM.startup_telemetry_unavailable"
+      ],
+      "facadeMethod": "appendStartupBatch",
+      "facet": "StartupTelemetryCommandFacet",
+      "invariantTarget": "EventRecord",
+      "kind": "command",
+      "localOperationId": "ReportStartupEventBatch",
+      "method": "POST",
+      "mutationTarget": "EventRecord",
+      "objectId": "ops.event_record",
+      "ownershipPolicy": "restricted_anonymous_startup_proof",
+      "pagination": null,
+      "pathTemplate": "/ops/startup-events",
+      "permissions": [],
+      "principal": "public",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "SENSITIVE",
+        "responseClassification": "PUBLIC"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "required",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 1500
+      },
+      "requestBindings": {
+        "header": [
+          {
+            "field": "proof",
+            "name": "X-Qwq-Startup-Proof",
+            "required": true
+          }
+        ]
+      },
+      "requestBodyKind": "object",
+      "requestConstants": null,
+      "requestEntity": "ReportStartupEventBatchCommand",
+      "responseAdmission": null,
+      "responseBody": "",
+      "responseBodyKind": "",
+      "responseEntity": "StartupTelemetryBatchReceipt",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 800
+      },
+      "sourcePath": "ops/product_ops/event_record/operations.yaml",
+      "streaming": null,
+      "surfaceIds": [
+        "appShell"
+      ],
+      "telemetry": {
+        "attributes": [
+          "phase",
+          "platform",
+          "runtime_env",
+          "outcome"
+        ],
+        "metric": "ops_startup_event_batch_report",
+        "trace": true
+      },
+      "transport": "json"
+    },
+    {
+      "actorRequirement": "persona_or_device",
+      "aggregateOwner": "VisitRecord",
+      "authMode": "required",
+      "canonicalOperationId": "ops.visit_record.RecordVisit",
+      "clientContract": {
+        "dartImport": "../ops/ops_operation_contracts.g.dart",
+        "responseDecoder": "decodeRecordVisitReceipt",
+        "responseType": "RecordVisitReceipt"
+      },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
+      "domain": "ops",
+      "errorCodes": [
+        "OPS.USER.visit_invalid_argument",
+        "OPS.USER.visit_idempotency_conflict",
+        "OPS.SYSTEM.visit_storage_write_failed"
+      ],
+      "facadeMethod": "recordVisit",
+      "facet": "VisitRecordCommandFacade",
+      "invariantTarget": "VisitRecord",
+      "kind": "command",
+      "localOperationId": "RecordVisit",
+      "method": "POST",
+      "mutationTarget": "VisitRecord",
+      "objectId": "ops.visit_record",
+      "ownershipPolicy": "authenticated_persona_or_derived_device_actor",
+      "pagination": null,
+      "pathTemplate": "/ops/visits",
+      "permissions": [],
+      "principal": "public",
+      "privacy": {
+        "logPolicy": "redacted",
+        "requestClassification": "SENSITIVE",
+        "responseClassification": "PUBLIC"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "required",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 1500
+      },
+      "requestBindings": {
+        "injected": [
+          {
+            "field": "idempotencyKey",
+            "name": "Idempotency-Key"
+          }
+        ]
+      },
+      "requestBodyKind": "object",
+      "requestConstants": null,
+      "requestEntity": "RecordVisitRequest",
+      "responseAdmission": null,
+      "responseBody": "",
+      "responseBodyKind": "object",
+      "responseEntity": "RecordVisitReceipt",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 800
+      },
+      "sourcePath": "ops/product_ops/visit_record/operations.yaml",
+      "streaming": null,
+      "surfaceIds": [
+        "appShell"
+      ],
+      "telemetry": {
+        "attributes": [
+          "actor_dimension",
+          "target_type",
+          "outcome"
+        ],
+        "metric": "ops_visit_record",
+        "trace": true
+      },
+      "transport": "json"
+    },
+    {
+      "actorRequirement": "persona",
+      "aggregateOwner": "",
+      "authMode": "required",
+      "canonicalOperationId": "realtime.connection.IssueConnectionTicket",
+      "clientContract": {
+        "dartImport": "../realtime/realtime_operation_contracts.g.dart",
+        "responseDecoder": "decodeConnectionTicket",
+        "responseType": "ConnectionTicket"
+      },
+      "commercial": {
+        "blockReason": "gamma full cold-start and websocket runtime evidence still lacks a candidate-bound canonical observability receipt",
+        "explicit": true,
+        "gapId": "REALTIME_CONNECTION_COMMERCIAL_EVIDENCE",
+        "status": "blocked",
+        "targetStory": "app-cloud-business-object-commercial-closure"
+      },
+      "concurrency": {},
+      "domain": "realtime",
+      "errorCodes": [
+        "REALTIME.USER.unauthorized",
+        "REALTIME.USER.rate_limited",
+        "REALTIME.SYSTEM.account_security_authority_unavailable",
+        "REALTIME.SYSTEM.internal_error"
+      ],
+      "facadeMethod": "issueTicket",
+      "facet": "ConnectionSessionFacet",
+      "invariantTarget": "",
+      "kind": "session",
+      "localOperationId": "IssueConnectionTicket",
+      "method": "POST",
+      "mutationTarget": "",
+      "objectId": "realtime.connection",
+      "ownershipPolicy": "ticket_self",
+      "pagination": null,
+      "pathTemplate": "/realtime/tickets",
+      "permissions": [],
+      "principal": "account",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "INTERNAL",
+        "responseClassification": "SENSITIVE"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "none",
+        "maxAttempts": 1,
+        "retryMode": "none",
+        "timeoutMilliseconds": 1500
+      },
+      "requestBindings": {
+        "injected": [
+          {
+            "field": "accountId",
+            "name": "authenticatedAccountId"
+          },
+          {
+            "field": "personaId",
+            "name": "authenticatedPersonaId"
+          },
+          {
+            "field": "deviceId",
+            "name": "authenticatedDeviceId"
+          }
+        ]
+      },
+      "requestBodyKind": "none",
+      "requestConstants": null,
+      "requestEntity": "IssueConnectionTicketRequest",
+      "responseAdmission": null,
+      "responseBody": "ConnectionTicket",
+      "responseBodyKind": "object",
+      "responseEntity": "ConnectionTicket",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 200
+      },
+      "sourcePath": "realtime/realtime/connection/operations.yaml",
+      "streaming": null,
+      "surfaceIds": [
+        "appShell"
+      ],
+      "telemetry": {
+        "attributes": [
+          "operation",
+          "outcome",
+          "error_code"
+        ],
+        "metric": "realtime_connection_ticket",
+        "trace": true
+      },
+      "transport": "json"
+    },
+    {
+      "actorRequirement": "persona",
+      "aggregateOwner": "",
+      "authMode": "required",
+      "canonicalOperationId": "realtime.connection.LongPoll",
+      "clientContract": {
+        "dartImport": "../realtime/realtime_operation_contracts.g.dart",
+        "responseDecoder": "decodeLongPollResponse",
+        "responseType": "LongPollResponse"
+      },
+      "commercial": {
+        "blockReason": "gamma full cold-start and websocket runtime evidence still lacks a candidate-bound canonical observability receipt",
+        "explicit": true,
+        "gapId": "REALTIME_CONNECTION_COMMERCIAL_EVIDENCE",
+        "status": "blocked",
+        "targetStory": "app-cloud-business-object-commercial-closure"
+      },
+      "concurrency": {},
+      "domain": "realtime",
+      "errorCodes": [
+        "REALTIME.USER.invalid_argument",
+        "REALTIME.USER.unauthorized",
+        "REALTIME.SYSTEM.account_security_authority_unavailable",
+        "REALTIME.SYSTEM.internal_error"
+      ],
+      "facadeMethod": "longPoll",
+      "facet": "ConnectionQueryFacet",
+      "invariantTarget": "",
+      "kind": "query",
+      "localOperationId": "LongPoll",
+      "method": "GET",
+      "mutationTarget": "",
+      "objectId": "realtime.connection",
+      "ownershipPolicy": "connection_self",
+      "pagination": null,
+      "pathTemplate": "/realtime/poll",
+      "permissions": [],
+      "principal": "account",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "INTERNAL",
+        "responseClassification": "INTERNAL"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "none",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 30000
+      },
+      "requestBindings": {
+        "query": [
+          {
+            "field": "timeout",
+            "name": "timeout",
+            "required": false
+          },
+          {
+            "field": "cursor",
+            "name": "cursor",
+            "required": false
+          }
+        ]
+      },
+      "requestBodyKind": "none",
+      "requestConstants": null,
+      "requestEntity": "LongPollRequest",
+      "responseAdmission": null,
+      "responseBody": "LongPollResponse",
+      "responseBodyKind": "object",
+      "responseEntity": "LongPollResponse",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 500
+      },
+      "sourcePath": "realtime/realtime/connection/operations.yaml",
+      "streaming": null,
+      "surfaceIds": [
+        "appShell"
+      ],
+      "telemetry": {
+        "attributes": [
+          "operation",
+          "outcome",
+          "error_code",
+          "transport"
+        ],
+        "metric": "realtime_connection_session",
+        "trace": true
+      },
+      "transport": "json"
+    },
+    {
       "actorRequirement": "persona",
       "aggregateOwner": "CallSession",
       "authMode": "required",
@@ -17989,7 +19081,7 @@
           "target_count",
           "outcome"
         ],
-        "metric": "search_query",
+        "metric": "search_index_lookup",
         "trace": true
       },
       "transport": "json"
@@ -26526,6 +27618,84 @@
       "transport": "json"
     },
     {
+      "actorRequirement": "account",
+      "aggregateOwner": "",
+      "authMode": "required",
+      "canonicalOperationId": "user.user_account.PullUserSync",
+      "clientContract": {
+        "dartImport": "../user/user_operation_contracts.g.dart",
+        "responseDecoder": "decodePullUserSyncSlice",
+        "responseType": "PullUserSyncSlice"
+      },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
+      "domain": "user",
+      "errorCodes": [
+        "USER.USER.invalid_argument",
+        "USER.SYSTEM.internal_error",
+        "USER.AUTH.account_deleted",
+        "USER.AUTH.account_security_unavailable",
+        "USER.AUTH.account_suspended",
+        "USER.AUTH.token_stale"
+      ],
+      "facadeMethod": "pullUserSync",
+      "facet": "UserSyncQueryFacade",
+      "invariantTarget": "",
+      "kind": "query",
+      "localOperationId": "PullUserSync",
+      "method": "POST",
+      "mutationTarget": "",
+      "objectId": "user.user_account",
+      "ownershipPolicy": "current_account_sync_stream",
+      "pagination": null,
+      "pathTemplate": "/user/sync",
+      "permissions": [],
+      "principal": "account",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "PII",
+        "responseClassification": "INTERNAL"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "none",
+        "maxAttempts": 1,
+        "retryMode": "none",
+        "timeoutMilliseconds": 1500
+      },
+      "requestBindings": null,
+      "requestBodyKind": "object",
+      "requestConstants": null,
+      "requestEntity": "UserSyncPullRequestWire",
+      "responseAdmission": null,
+      "responseBody": "PullUserSyncSlice",
+      "responseBodyKind": "page",
+      "responseEntity": "PullUserSyncSlice",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 500
+      },
+      "sourcePath": "user/account/user_account/operations.yaml",
+      "streaming": null,
+      "surfaceIds": [
+        "chatList"
+      ],
+      "telemetry": {
+        "attributes": [
+          "afterSeq",
+          "limit",
+          "outcome"
+        ],
+        "metric": "user_sync_pull",
+        "trace": true
+      },
+      "transport": "json"
+    },
+    {
       "actorRequirement": "none",
       "aggregateOwner": "",
       "authMode": "optional",
@@ -27348,13 +28518,13 @@
   ],
   "breakingReport": {
     "path": "quwoquan_app/tool/cloud_codegen/contract_graph.breaking.json",
-    "sha256": "d794ce34863369c2ee3aea3a242c561139bf269178fea15a2c1e063c3891c477"
+    "sha256": "f0206c0915d7d62a10470f1fb68b1fcebfd6619d321324048bc27cdea3402d44"
   },
   "contractGraph": {
-    "compilerHash": "sha256:e56f6ac909598032da61d1beda3cf16706e86bf56711b25efe01b561229af655",
+    "compilerHash": "sha256:3e5002632f956ce0b0f2b912f91769a942da9e2bcf61bedaa678af2d4d2f79bb",
     "path": "quwoquan_service/generated/contract_graph.json",
-    "sha256": "9816b2b7d9fedea34ad78dd719fc16fdf3e982073304d7f50f7a8ea4064f6b7f",
-    "sourceDigestSetSha256": "5c6a119eaca86c3305f55128f131b85239d12106e85d42a503c8ed2ad951b79a"
+    "sha256": "93359367b8614f01bb5e1c51e37af383332b01f117cc1c6cf39e4fdf838e49d2",
+    "sourceDigestSetSha256": "ccc9ef7f7153772abe1304972f832557ad9ed53446366390c1bbf9de4aa703c3"
   },
   "generator": "app-cloud-handoff"
 }

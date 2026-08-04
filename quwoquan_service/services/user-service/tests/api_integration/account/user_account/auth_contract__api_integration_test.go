@@ -611,6 +611,30 @@ func TestAuth_SendOtp_ThrottlesResend(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	const phone = "+8618013813921"
+	for _, invalidPhone := range []string{
+		"18013813921",
+		"+0123456789",
+		"+86180138139210000",
+	} {
+		rejected := doRequest(
+			t,
+			http.MethodPost,
+			"/auth/otp/send",
+			`{"phone":"`+invalidPhone+`","deviceId":"ios-test","platform":"ios","appVersion":"1.0.0","sourceOperation":"test"}`,
+			nil,
+		)
+		rejectedBody := parseJSON(t, rejected)
+		if rejected.Code != http.StatusBadRequest ||
+			rejectedBody["code"] != "USER.USER.invalid_argument" ||
+			strings.Contains(rejected.Body.String(), invalidPhone) {
+			t.Fatalf(
+				"non-E.164 phone must be rejected without echo: phone=%q status=%d body=%s",
+				invalidPhone,
+				rejected.Code,
+				rejected.Body.String(),
+			)
+		}
+	}
 	first := doRequest(t, http.MethodPost, "/auth/otp/send", `{"phone":"`+phone+`","deviceId":"ios-test","platform":"ios","appVersion":"1.0.0","sourceOperation":"test"}`, nil)
 	if first.Code != http.StatusOK {
 		t.Fatalf("first send otp: expected 200, got %d: %s", first.Code, first.Body.String())
@@ -625,6 +649,14 @@ func TestAuth_SendOtp_ThrottlesResend(t *testing.T) {
 	if firstBody["deliveryStatus"] == "" {
 		t.Fatalf("expected deliveryStatus in send otp response, got %#v", firstBody)
 	}
+	otpCode, err := externalInteractionRuntime.captureBridge.readOTP(phone)
+	if err != nil {
+		t.Fatalf("protected readback after SendOtp: %v", err)
+	}
+	if strings.Contains(first.Body.String(), phone) ||
+		strings.Contains(first.Body.String(), otpCode) {
+		t.Fatalf("send OTP response leaked phone or OTP: %s", first.Body.String())
+	}
 	// 冷却窗口内立即重发应被限频拒绝。
 	second := doRequest(t, http.MethodPost, "/auth/otp/send", `{"phone":"`+phone+`","deviceId":"ios-test","platform":"ios","appVersion":"1.0.0","sourceOperation":"test"}`, nil)
 	if second.Code == http.StatusOK {
@@ -633,5 +665,92 @@ func TestAuth_SendOtp_ThrottlesResend(t *testing.T) {
 	secondBody := parseJSON(t, second)
 	if secondBody["code"] != "USER.AUTH.otp_rate_limited" {
 		t.Fatalf("expected otp_rate_limited, got %#v", secondBody)
+	}
+}
+
+func TestAuth_SendOtp_ProtectedRead_LoginWithPhone(t *testing.T) {
+	t.Cleanup(func() { cleanAll(t) })
+
+	const phone = "+8618013813933"
+	otpCode := requestOtpCode(t, phone)
+	login := doRequest(
+		t,
+		http.MethodPost,
+		"/auth/login/phone",
+		`{"phone":"`+phone+`","otpCode":"`+otpCode+`","deviceId":"ios-capture-1","platform":"ios","appVersion":"1.0.0","agreementVersion":"2026-06","privacyVersion":"2026-06"}`,
+		nil,
+	)
+	if login.Code != http.StatusOK {
+		t.Fatalf("LoginWithPhone after protected read: got %d: %s", login.Code, login.Body.String())
+	}
+	loginBody := parseJSON(t, login)
+	if loginBody["ownerId"] == "" || loginBody["accessToken"] == "" {
+		t.Fatalf("expected session grant after protected-read login: %#v", loginBody)
+	}
+	if strings.Contains(login.Body.String(), otpCode) ||
+		strings.Contains(login.Body.String(), phone) {
+		t.Fatalf("login response leaked OTP or phone: %s", login.Body.String())
+	}
+	if _, err := externalInteractionRuntime.captureBridge.readOTP(phone); err == nil {
+		t.Fatal("protected OTP readback must be one-time")
+	}
+}
+
+func TestAuth_LoginWithPhone_RejectsNonE164(t *testing.T) {
+	t.Cleanup(func() { cleanAll(t) })
+
+	for _, invalidPhone := range []string{
+		"18013813934",
+		"+0123456789",
+		"+86180138139340000",
+	} {
+		rejected := doRequest(
+			t,
+			http.MethodPost,
+			"/auth/login/phone",
+			`{"phone":"`+invalidPhone+`","otpCode":"123456","deviceId":"ios-test","platform":"ios","appVersion":"1.0.0","agreementVersion":"2026-06","privacyVersion":"2026-06"}`,
+			nil,
+		)
+		rejectedBody := parseJSON(t, rejected)
+		if rejected.Code != http.StatusBadRequest ||
+			rejectedBody["code"] != "USER.USER.invalid_argument" ||
+			strings.Contains(rejected.Body.String(), invalidPhone) {
+			t.Fatalf(
+				"LoginWithPhone must reject non-E.164 without echo: phone=%q status=%d body=%s",
+				invalidPhone,
+				rejected.Code,
+				rejected.Body.String(),
+			)
+		}
+	}
+}
+
+func TestAuth_SendOtp_ProviderFailureMapsToOtpProviderFailed(t *testing.T) {
+	t.Cleanup(func() { cleanAll(t) })
+
+	const phone = "+8618013813935"
+	externalInteractionRuntime.ForceNextProviderFailure()
+	failed := doRequest(
+		t,
+		http.MethodPost,
+		"/auth/otp/send",
+		`{"phone":"`+phone+`","deviceId":"ios-test","platform":"ios","appVersion":"1.0.0","sourceOperation":"test"}`,
+		nil,
+	)
+	failedBody := parseJSON(t, failed)
+	if failed.Code == http.StatusOK ||
+		failedBody["code"] != "USER.AUTH.otp_provider_failed" {
+		t.Fatalf(
+			"provider failure must map to otp_provider_failed: status=%d body=%s",
+			failed.Code,
+			failed.Body.String(),
+		)
+	}
+	if strings.Contains(failed.Body.String(), phone) ||
+		strings.Contains(strings.ToLower(failed.Body.String()), "otp=") {
+		t.Fatalf("provider failure response leaked credential material: %s", failed.Body.String())
+	}
+	if _, err := externalInteractionRuntime.captureBridge.readOTP(phone); err == nil {
+		t.Fatal("failed provider delivery must not leave a readable OTP capture")
 	}
 }

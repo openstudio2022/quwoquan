@@ -8,13 +8,20 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/app/recovery/recovery_version_client.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/app/startup/startup_telemetry.dart';
 import 'package:quwoquan_app/cloud/remote/ops/startup_telemetry_remote.dart';
+import 'package:quwoquan_app/cloud/runtime/config/cloud_runtime_environment.dart';
+import 'package:quwoquan_app/cloud/runtime/context/cloud_client_context.dart';
+import 'package:quwoquan_app/cloud/runtime/executor/cloud_operation_client_factory.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/ops_api_metadata.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/ops/ops_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../support/api_contract/local_gamma_anonymous_session.dart';
+import '../../../support/recording_cloud_operation_telemetry_sink.dart';
 
 const _apiContractEnv = String.fromEnvironment(
   'API_CONTRACT_ENV',
@@ -165,8 +172,23 @@ void main() {
         deadlineOrigin: 'android_process',
       );
       final transport = RemoteStartupTelemetryTransport(
-        httpClient: CloudHttpClient(client: _client),
-        baseUrl: _productOpsBase,
+        client: buildGeneratedCloudOperationClient(
+          httpClient: CloudHttpClient(client: _client),
+          clientContextProvider: const _ApiContractClientContextProvider(),
+          environment: CloudRuntimeEnvironment(
+            environment: CloudEnvironment.values.firstWhere(
+              (candidate) => candidate.name == _apiContractEnv,
+            ),
+            gatewayBaseUri: Uri.parse(_productOpsBase),
+          ),
+          telemetrySink: RecordingCloudOperationTelemetrySink(),
+        ),
+        invocationContext: () => CloudOperationInvocationContext(
+          surfaceId: AppUiSurfaces.appShell.id,
+          routeId: AppUiSurfaces.appShell.routeId,
+          clientPageId: OpsRequestPageIds.reportStartupEventBatch,
+          actor: const CloudOperationActorContext(),
+        ),
       );
       final proof = 'startup_proof_${suffix}_canonical';
 
@@ -233,4 +255,19 @@ void main() {
       expect(response.body, isEmpty);
     });
   });
+}
+
+final class _ApiContractClientContextProvider
+    implements CloudClientContextProvider {
+  const _ApiContractClientContextProvider();
+
+  @override
+  CloudClientContextSnapshot snapshot() {
+    return const CloudClientContextSnapshot(
+      sessionId: 'ops-api-contract',
+      platform: 'api-contract',
+      appVersion: 'contract',
+      locale: 'zh-CN',
+    );
+  }
 }

@@ -87,6 +87,25 @@ fields:
     ops_exposure: read
     role: append_only_fact
 types:
+  AppendResult:
+    description: CircleBehaviorFact 追加结果；factId 是稳定事实身份，idempotentReplay 明确同一命令是否为幂等重放。
+    fields:
+      - name: factId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: hash
+        api_exposure: read
+        ops_exposure: read
+      - name: idempotentReplay
+        type: bool
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
   ReportCircleBehaviorRequest:
     description: 调用方只提交业务目标和行为；禁止提交 actor、session、requestId 或 occurredAt。
     fields:

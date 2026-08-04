@@ -80,11 +80,11 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
             proposalSlice?.items
                 .where(
                   (proposal) =>
-                      proposal.status == 'pending' ||
-                      proposal.status == 'confirmed' ||
-                      proposal.status == 'applying' ||
-                      proposal.status == 'applied' ||
-                      proposal.status == 'rolling_back',
+                      proposal.status == ProposalStatus.pending ||
+                      proposal.status == ProposalStatus.confirmed ||
+                      proposal.status == ProposalStatus.applying ||
+                      proposal.status == ProposalStatus.applied ||
+                      proposal.status == ProposalStatus.rollingBack,
                 )
                 .toList(growable: false) ??
             const <ProfileUpdateProposalView>[];
@@ -479,11 +479,11 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
         _profileProposals = proposals.items
             .where(
               (proposal) =>
-                  proposal.status == 'pending' ||
-                  proposal.status == 'confirmed' ||
-                  proposal.status == 'applying' ||
-                  proposal.status == 'applied' ||
-                  proposal.status == 'rolling_back',
+                  proposal.status == ProposalStatus.pending ||
+                  proposal.status == ProposalStatus.confirmed ||
+                  proposal.status == ProposalStatus.applying ||
+                  proposal.status == ProposalStatus.applied ||
+                  proposal.status == ProposalStatus.rollingBack,
             )
             .toList(growable: false);
         _profileProposalLoadError = null;
@@ -566,10 +566,14 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                     scope: UiErrorScope.page,
                   ),
                 ),
-                onAction: (action) async {
+                onRecovery: (action) async {
                   if (action.type == UiErrorActionType.retry) {
                     await _loadSnapshot();
+                    return _snapshotLoadError == null
+                        ? UiRecoveryOutcome.recovered
+                        : UiRecoveryOutcome.stillBlocked;
                   }
+                  return UiRecoveryOutcome.cancelled;
                 },
               )
             : ListView(
@@ -765,13 +769,14 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
   }
 }
 
-String _profileProposalStatusLabel(String status) => switch (status) {
-  'pending' => ProfileText.editProfileProposalPending,
-  'confirmed' => ProfileText.editProfileProposalConfirmed,
-  'applying' => ProfileText.editProfileProposalApplying,
-  'applied' => ProfileText.editProfileProposalAppliedStatus,
-  'rolling_back' => ProfileText.editProfileProposalRollingBackStatus,
-  'rolled_back' => ProfileText.editProfileProposalRolledBack,
-  'rejected' || 'expired' => ProfileText.editProfileProposalConfirmed,
-  _ => ProfileText.editProfileProposalConfirmed,
+String _profileProposalStatusLabel(ProposalStatus status) => switch (status) {
+  ProposalStatus.pending => ProfileText.editProfileProposalPending,
+  ProposalStatus.confirmed => ProfileText.editProfileProposalConfirmed,
+  ProposalStatus.applying => ProfileText.editProfileProposalApplying,
+  ProposalStatus.applied => ProfileText.editProfileProposalAppliedStatus,
+  ProposalStatus.rollingBack =>
+    ProfileText.editProfileProposalRollingBackStatus,
+  ProposalStatus.rolledBack => ProfileText.editProfileProposalRolledBack,
+  ProposalStatus.rejected ||
+  ProposalStatus.expired => ProfileText.editProfileProposalConfirmed,
 };

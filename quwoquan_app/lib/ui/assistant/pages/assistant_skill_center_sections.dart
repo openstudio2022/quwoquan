@@ -105,20 +105,16 @@ extension _AssistantSkillCenterSections on _AssistantSkillCenterPageState {
     required Color fgSecondary,
     required Color blockBg,
   }) {
-    final packages = <String, List<AssistantSkillCenterItem>>{
-      l10n.assistantSkillCenterPackageLife: skills
-          .where((s) => _packageOf(s) == 'life')
-          .toList(growable: false),
-      l10n.assistantSkillCenterPackageWork: skills
-          .where((s) => _packageOf(s) == 'work')
-          .toList(growable: false),
-      l10n.assistantSkillCenterPackageKnowledge: skills
-          .where((s) => _packageOf(s) == 'knowledge')
-          .toList(growable: false),
-      l10n.assistantSkillCenterPackageCompanion: skills
-          .where((s) => _packageOf(s) == 'companion')
-          .toList(growable: false),
-    };
+    final packages = <String, List<AssistantSkillCenterItem>>{};
+    for (final skill in skills) {
+      final group = skill.catalog.catalogGroup;
+      final groupKey = group.id.trim().isNotEmpty
+          ? group.id.trim()
+          : group.displayText.trim();
+      packages
+          .putIfAbsent(groupKey, () => <AssistantSkillCenterItem>[])
+          .add(skill);
+    }
 
     return Container(
       padding: EdgeInsets.all(AppSpacing.containerMd),
@@ -140,10 +136,14 @@ extension _AssistantSkillCenterSections on _AssistantSkillCenterPageState {
           SizedBox(height: AppSpacing.intraGroupSm),
           ...packages.entries.map((entry) {
             final list = entry.value;
+            final packageLabel =
+                list.first.catalog.catalogGroup.displayText.trim().isNotEmpty
+                ? list.first.catalog.catalogGroup.displayText.trim()
+                : AssistantText.assistantSkillCategoryOther;
             final enabled =
                 list.isNotEmpty && list.every((skill) => skill.enabled);
             return _buildSwitchRow(
-              label: entry.key,
+              label: packageLabel,
               desc:
                   '${list.length} ${AssistantText.assistantSkillPackageSkillCount}',
               value: enabled,
@@ -617,7 +617,7 @@ extension _AssistantSkillCenterSections on _AssistantSkillCenterPageState {
                         ),
                       ),
                       Text(
-                        '${_skillCategoryLabel(skill)} · '
+                        '${skill.catalog.catalogGroup.displayText} · '
                         '${_skillStatusLabel(skill)}',
                         style: TextStyle(
                           fontSize: AppTypography.xs,
@@ -666,21 +666,60 @@ extension _AssistantSkillCenterSections on _AssistantSkillCenterPageState {
             ],
             if (skill.proactiveCapable) ...[
               SizedBox(height: AppSpacing.intraGroupXs),
-              _buildSwitchRow(
-                label: AssistantText.assistantSkillProactiveReminder,
-                desc: skill.hasSubscription
-                    ? (skill.proactiveEnabled
-                          ? AssistantText.assistantSkillSubscribed
-                          : AssistantText.assistantSkillPaused)
-                    : AssistantText.assistantSkillProactiveNotConfigured,
-                value: skill.proactiveEnabled,
-                switchKey: ValueKey<String>(
-                  'assistant_skill_proactive_${skill.skillId}',
-                ),
-                onChanged: (value) => _toggleProactive(skill, value),
-                fgPrimary: fgPrimary,
-                fgSecondary: fgSecondary,
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      AssistantText.assistantSkillProactiveReminder,
+                      style: TextStyle(
+                        fontSize: AppTypography.sm,
+                        color: fgPrimary,
+                      ),
+                    ),
+                  ),
+                  CupertinoButton(
+                    key: ValueKey<String>(
+                      'assistant_skill_subscription_add_${skill.skillId}',
+                    ),
+                    padding: EdgeInsets.zero,
+                    minimumSize: const Size.square(
+                      AppSpacing.minInteractiveSize,
+                    ),
+                    onPressed: _updating
+                        ? null
+                        : () => _createProactiveSubscription(skill),
+                    child: const Text(AssistantText.assistantSkillProactiveAdd),
+                  ),
+                ],
               ),
+              if (!skill.hasSubscription)
+                Text(
+                  AssistantText.assistantSkillProactiveNotConfigured,
+                  style: TextStyle(
+                    fontSize: AppTypography.xs,
+                    color: fgSecondary,
+                  ),
+                )
+              else
+                ...skill.subscriptions.map(
+                  (subscription) => _buildSwitchRow(
+                    label: subscription.searchQueryPlan.rawText.trim().isEmpty
+                        ? AssistantText.assistantSkillProactiveReminder
+                        : subscription.searchQueryPlan.rawText.trim(),
+                    desc: subscription.status == SkillSubscriptionStatus.active
+                        ? AssistantText.assistantSkillSubscribed
+                        : AssistantText.assistantSkillPaused,
+                    value:
+                        subscription.status == SkillSubscriptionStatus.active,
+                    switchKey: ValueKey<String>(
+                      'assistant_skill_subscription_${subscription.subscriptionId}',
+                    ),
+                    onChanged: (value) =>
+                        _toggleSubscription(subscription, value),
+                    fgPrimary: fgPrimary,
+                    fgSecondary: fgSecondary,
+                  ),
+                ),
             ],
             if (skill.catalog.requiredConsentScopes.isNotEmpty) ...[
               SizedBox(height: AppSpacing.intraGroupXs),
@@ -694,7 +733,7 @@ extension _AssistantSkillCenterSections on _AssistantSkillCenterPageState {
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    skill.consent == null
+                    !skill.consentGranted
                         ? AssistantText.assistantSkillConsentGrant
                         : AssistantText.assistantSkillConsentRevoke,
                     style: TextStyle(
@@ -727,6 +766,24 @@ extension _AssistantSkillCenterSections on _AssistantSkillCenterPageState {
                     color: AppColors.primaryColor,
                   ),
                 ],
+              ),
+            ),
+            CupertinoButton(
+              key: ValueKey<String>(
+                'assistant_skill_lifecycle_${skill.skillId}',
+              ),
+              padding: EdgeInsets.zero,
+              minimumSize: const Size.square(AppSpacing.minInteractiveSize),
+              onPressed: _updating ? null : () => _openSkillLifecycle(skill),
+              child: const Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  AssistantText.assistantSkillLifecycleAction,
+                  style: TextStyle(
+                    fontSize: AppTypography.sm,
+                    color: AppColors.primaryColor,
+                  ),
+                ),
               ),
             ),
           ],

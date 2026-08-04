@@ -30,10 +30,12 @@ func TestExternalInteractionBindingsSelectLocalCaptureOnlyInNonprod(t *testing.T
 		}
 		push, err := ResolvePushBinding(
 			environment,
-			runtimeconfig.MapRuntimeConfigProvider{Values: map[string]string{}},
+			runtimeconfig.MapRuntimeConfigProvider{Values: map[string]string{
+				"INTEGRATION_PUSH_SUBSTITUTE_ENDPOINT": "https://provider-protocol-substitute:18089/push/send",
+			}},
 		)
-		if err != nil || push.AdapterID != PushAdapterLocalRecorder ||
-			len(push.Endpoints) != 0 || len(push.Secrets) != 0 {
+		if err != nil || push.AdapterID != PushAdapterProtocolSubstitute ||
+			len(push.Endpoints) != 1 || len(push.Secrets) != 0 {
 			t.Fatalf("%s Push substitute binding=%+v err=%v", environment, push, err)
 		}
 	}

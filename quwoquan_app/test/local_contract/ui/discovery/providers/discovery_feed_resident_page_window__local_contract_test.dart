@@ -3,15 +3,17 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/feed_object_card_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
 import 'package:quwoquan_app/cloud/runtime/models/discovery_feed_page.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository_contract.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
-    show CloudOperationCancellationSignal;
+    show
+        CloudOperationCancellationSignal,
+        ContentPostProjection,
+        FeedObjectCard;
 
 const String _policyA =
     'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
@@ -466,15 +468,16 @@ final class _PagedDiscoveryFeedQuery implements ContentDiscoveryFeedQuery {
         (index) => _post(pageIndex, index),
       ),
       objectCards: pageIndex == 1
-          ? <FeedObjectCardDto>[
-              FeedObjectCardDto(
+          ? <FeedObjectCard>[
+              FeedObjectCard(
                 objectKind: 'homepage',
                 objectId: 'object_before_page_1',
                 title: 'Object before page 1',
+                tagRefs: const <String>[],
                 anchorIndex: 0,
               ),
             ]
-          : const <FeedObjectCardDto>[],
+          : const <FeedObjectCard>[],
       nextCursor: 'cursor_${pageIndex + 1}',
       previousCursor: pageIndex == 0 ? null : 'previous_${pageIndex - 1}',
       paginationExpiresAt: DateTime.now().toUtc().add(
@@ -558,23 +561,25 @@ final class _ChannelPolicyDiscoveryFeedQuery
   }
 }
 
-MicroPostDto _post(int pageIndex, int itemIndex) {
-  return MicroPostDto(
-    id: 'page_${pageIndex}_post_$itemIndex',
-    type: 'moment',
-    identity: 'moment',
-    assistantUsePolicy: 'allow',
-    authorId: 'author_$pageIndex',
-    displayName: 'Window Author',
-    avatarUrl: '',
-    authorRoleLabel: '',
-    authorIdentityTags: const <String>[],
-    authorVerified: false,
-    body: 'provider resident page item',
-    imageUrls: const <String>[],
-    likeCount: 0,
-    commentCount: 0,
-    shareCount: 0,
-    createdAt: DateTime.utc(2026, 7, 29),
+ContentPostViewData _post(int pageIndex, int itemIndex) {
+  return ContentPostViewData.fromWire(
+    ContentPostProjection(
+      postId: 'page_${pageIndex}_post_$itemIndex',
+      contentType: 'micro',
+      contentIdentity: 'moment',
+      assistantUsePolicy: 'allow',
+      authorId: 'author_$pageIndex',
+      authorDisplayName: 'Window Author',
+      authorAvatarUrl: '',
+      authorRoleLabel: '',
+      authorIdentityTags: const <String>[],
+      authorVerified: false,
+      body: 'provider resident page item',
+      mediaUrls: const <String>[],
+      likeCount: 0,
+      commentCount: 0,
+      shareCount: 0,
+      createdAt: DateTime.utc(2026, 7, 29),
+    ),
   );
 }

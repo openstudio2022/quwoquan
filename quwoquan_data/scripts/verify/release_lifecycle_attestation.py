@@ -199,10 +199,11 @@ def release_lifecycle_issues(
     if typed_attestation.tag_count != len(tag_refs):
         issues.append(f"{aggregate_file}: tagCount drift from desired state")
     if release_kind == "content" and (
-        not header_execution_ids or not entity_refs
+        not header_execution_ids or not (entity_refs or post_refs)
     ):
         issues.append(
-            f"{release_file}: content release requires executionIds and entity refs"
+            f"{release_file}: content release requires executionIds and "
+            "canonical entity or post refs"
         )
     if release_kind == "empty_baseline" and (
         header_execution_ids or entity_refs or post_refs or creator_refs or tag_refs

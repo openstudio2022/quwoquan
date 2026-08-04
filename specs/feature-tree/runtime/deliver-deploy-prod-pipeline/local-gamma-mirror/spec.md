@@ -90,8 +90,10 @@
   `--no-check-certificate`、App 私有 trust 注入或静默回退系统公网根。
 - Feed 黑盒探针必须校验 `outcome/emptyReason`；验收首页时必须证明非空结果来自当前
   immutable release。canonical empty 只能作为空态契约证据，不能替代首页可用性证据。
-- Alpha、Beta、Gamma 的 runtime health scope 必须优先读取共享 `stack_status` /
-  startup receipt；旧环境专用回执只能作为受控 legacy fallback，不能遮蔽当前 runtime。
+- Alpha、Beta、Gamma 的 runtime health scope 只能读取 target-scoped canonical current
+  startup attempt receipt，并校验 running、target/environment、workload、配置 digest 与镜像
+  identity；receipt 缺失、停止、损坏或 identity 漂移必须 fail-closed 到 full scope，禁止读取
+  环境专用状态文件或父运行报告作为 fallback。
 
 ## 4. 契约引用
 
@@ -136,8 +138,9 @@
 - GIVEN full runtime candidate 已绑定 candidate/rollback release，FilterCatalog active release
   已由显式短期 service JWT 操作激活，target local-managed CA 有效。
 - WHEN 启动 Alpha、Beta 或 Gamma `content-release` workload 并运行 App 首页与 Feed probe。
-- THEN runtime 只装载 canonical content consumer 服务，health scope 与 startup receipt
-  一致，Feed 返回 `outcome=content`、`emptyReason=null` 且至少一个 postId 命中当前 release。
+- THEN runtime 只装载 canonical content consumer 服务，health scope 与 target-scoped running
+  startup attempt receipt 一致，Feed 返回 `outcome=content`、`emptyReason=null` 且至少一个
+  postId 命中当前 release。
 - THEN host、Simulator/Emulator 与 App 默认信任栈均完成 TLS 验证，App 不含私有 CA 或
   TLS bypass。
 - AND FilterCatalog、TLS、Feed 契约或 release identity 任一失败均返回可区分的

@@ -32,7 +32,7 @@ api_routes:
       response_classification: PUBLIC
       log_policy: metadata_only
     telemetry:
-      metric: search_query
+      metric: search_index_lookup
       trace: true
       attributes: [mode, target_count, outcome]
     slo:

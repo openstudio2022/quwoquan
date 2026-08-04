@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
+import 'package:quwoquan_app/assistant/capabilities/assistant_presentation_capability_catalog.dart';
 import 'package:quwoquan_app/cloud/remote/assistant/assistant_learning_fact_remote.dart';
 import 'package:quwoquan_app/cloud/runtime/auth/cloud_auth_token_provider.dart';
 import 'package:quwoquan_app/cloud/runtime/config/cloud_runtime_environment.dart';
@@ -47,6 +48,7 @@ void main() {
       final repository = RemoteAssistantRepository(
         operationClient: buildAssistantRemoteTestOperationClient(httpClient),
         invocationContext: assistantRemoteTestInvocationContext,
+        presentationCapabilities: assistantRemoteTestPresentationCapabilities,
       );
 
       await repository.createAssistantSession(
@@ -85,9 +87,31 @@ void main() {
         containsPair('surfaceId', AppUiSurfaces.personalAssistantDialog.id),
       );
       expect(
-        (startBody['surfaceCapabilities']
-            as Map<String, dynamic>)['supportedNodeKinds'],
-        contains('markdown'),
+        (startBody['surfaceCapabilities'] as Map<String, dynamic>),
+        allOf(
+          containsPair('viewportClass', 'standard'),
+          isNot(containsPair('viewportClass', 'any')),
+          containsPair('platform', 'ios'),
+          containsPair('theme', 'light'),
+          containsPair('textScale', 1.2),
+          containsPair('reducedMotion', true),
+          containsPair('offline', false),
+        ),
+      );
+      final nodeKinds =
+          ((startBody['surfaceCapabilities']
+                      as Map<String, dynamic>)['supportedNodeKinds']
+                  as List<dynamic>)
+              .cast<String>();
+      expect(
+        nodeKinds,
+        containsAll(<String>[
+          'markdown',
+          'route_map',
+          'comparison_table',
+          'media',
+          'confirmation_card',
+        ]),
       );
       expect(start.headers['X-Client-Page-Id'], isNotEmpty);
       expect(start.headers['X-Client-Session-Id'], isNotEmpty);
@@ -107,6 +131,7 @@ void main() {
     final repository = RemoteAssistantRepository(
       operationClient: buildAssistantRemoteTestOperationClient(httpClient),
       invocationContext: assistantRemoteTestInvocationContext,
+      presentationCapabilities: assistantRemoteTestPresentationCapabilities,
     );
 
     await expectLater(
@@ -115,6 +140,61 @@ void main() {
     );
     expect(transport.requests, isEmpty);
   });
+
+  test(
+    'offline capability snapshot strips media and actions before StartAssistantRun',
+    () async {
+      final transport = _AssistantCommandClient(<Map<String, Object?>>[
+        <String, Object?>{
+          'runId': 'run-offline',
+          'sessionId': 'session-offline',
+          'status': 'queued',
+          'goal': 'offline request',
+          'streamState': <String, Object?>{},
+          'createdAt': '2026-07-24T09:00:01Z',
+        },
+      ]);
+      final httpClient = CloudHttpClient(
+        client: transport,
+        authTokenProvider: const AssistantRemoteTestAuthTokenProvider(),
+      );
+      final repository = RemoteAssistantRepository(
+        operationClient: buildAssistantRemoteTestOperationClient(httpClient),
+        invocationContext: assistantRemoteTestInvocationContext,
+        presentationCapabilities: (surfacePolicy) =>
+            AssistantPresentationCapabilitySnapshot(
+              surfacePolicy: surfacePolicy,
+              viewportClass: AssistantPresentationViewportClass.compact,
+              platform: 'android',
+              darkTheme: true,
+              textScale: 1.4,
+              reducedMotion: true,
+              offline: true,
+              mediaEnabled: true,
+              actionsEnabled: true,
+            ),
+      );
+
+      await repository.startAssistantRun(
+        sessionId: 'session-offline',
+        text: 'offline request',
+        clientRequestId: 'run-offline-request',
+      );
+
+      final body =
+          jsonDecode(transport.requests.single.body) as Map<String, dynamic>;
+      final capabilities = body['surfaceCapabilities'] as Map<String, dynamic>;
+      final nodeKinds = (capabilities['supportedNodeKinds'] as List<dynamic>)
+          .cast<String>();
+      expect(capabilities, containsPair('offline', true));
+      expect(capabilities, containsPair('viewportClass', 'compact'));
+      expect(nodeKinds, containsAll(<String>['route_map', 'comparison_table']));
+      expect(nodeKinds, isNot(contains('media')));
+      expect(nodeKinds, isNot(contains('media_gallery')));
+      expect(nodeKinds, isNot(contains('action_group')));
+      expect(nodeKinds, isNot(contains('confirmation_card')));
+    },
+  );
 
   test(
     'assistant learning fact command carries matching body and idempotency identity',

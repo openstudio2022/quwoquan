@@ -1,4 +1,4 @@
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/article_detail_wire_keys.g.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.dart';
 import 'package:quwoquan_app/cloud/runtime/models/post_read_presentation_mapper.dart';
 import 'package:quwoquan_app/cloud/services/content/content_read_model_projection.dart';

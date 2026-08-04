@@ -201,10 +201,14 @@ class _MyReportsPageState extends ConsumerState<MyReportsPage> {
           category: UiErrorCategory.pageLoad,
           scope: UiErrorScope.page,
         ),
-        onAction: (action) async {
+        onRecovery: (action) async {
           if (action.type == UiErrorActionType.retry) {
             await _load(reset: true);
+            return _rawError == null
+                ? UiRecoveryOutcome.recovered
+                : UiRecoveryOutcome.stillBlocked;
           }
+          return UiRecoveryOutcome.cancelled;
         },
       );
     }

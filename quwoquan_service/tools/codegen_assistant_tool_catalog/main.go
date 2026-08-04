@@ -23,6 +23,12 @@ type catalogDocument struct {
 	Tools   []map[string]any `yaml:"tools"`
 }
 
+type assistantRunErrorDocument struct {
+	Errors []struct {
+		Code string `yaml:"code"`
+	} `yaml:"errors"`
+}
+
 func main() {
 	var metadataDir string
 	var output string
@@ -66,7 +72,18 @@ func generate(metadataDir string) ([]byte, error) {
 	if document.Catalog != "assistant_tool_metadata" {
 		return nil, fmt.Errorf("unexpected assistant tool catalog %q", document.Catalog)
 	}
-	if err := validateTools(document.Tools); err != nil {
+	var errorsDocument assistantRunErrorDocument
+	if err := source.Decode(
+		"assistant/assistant/assistant_run/errors.yaml",
+		&errorsDocument,
+	); err != nil {
+		return nil, fmt.Errorf("decode AssistantRun errors: %w", err)
+	}
+	canonicalErrorCodes := make(map[string]bool, len(errorsDocument.Errors))
+	for _, entry := range errorsDocument.Errors {
+		canonicalErrorCodes[strings.TrimSpace(entry.Code)] = true
+	}
+	if err := validateTools(document.Tools, canonicalErrorCodes); err != nil {
 		return nil, err
 	}
 	sort.Slice(document.Tools, func(i, j int) bool {
@@ -93,7 +110,10 @@ const AssistantToolCatalogJSON = %s
 	return formatted, nil
 }
 
-func validateTools(tools []map[string]any) error {
+func validateTools(
+	tools []map[string]any,
+	canonicalErrorCodes map[string]bool,
+) error {
 	if len(tools) == 0 {
 		return fmt.Errorf("assistant tool catalog is empty")
 	}
@@ -140,10 +160,250 @@ func validateTools(tools []map[string]any) error {
 		if err := validateServerInjectedInputs(name, tool); err != nil {
 			return err
 		}
+		if err := validateResearchPolicy(name, tool); err != nil {
+			return err
+		}
+		if err := validateResearchOutput(name, tool); err != nil {
+			return err
+		}
+		if err := validateEmergentTagProjection(name, tool); err != nil {
+			return err
+		}
+		if err := validateFailurePolicy(name, tool, canonicalErrorCodes); err != nil {
+			return err
+		}
 	}
 	for namespace, count := range namespaceCounts {
 		if count >= 10 {
 			return fmt.Errorf("tool namespace %q has %d tools; limit is 9", namespace, count)
+		}
+	}
+	return nil
+}
+
+// validateEmergentTagProjection keeps interest extraction declarative. A tool
+// may opt in by declaring the standard emergedTagRefs output; AgentLoop then
+// consumes it without knowing the tool name or its vertical result shape.
+func validateEmergentTagProjection(name string, tool map[string]any) error {
+	outputSchema, _ := tool["outputSchema"].(map[string]any)
+	properties, _ := outputSchema["properties"].(map[string]any)
+	property, found := properties["emergedTagRefs"].(map[string]any)
+	if !found {
+		return nil
+	}
+	items, _ := property["items"].(map[string]any)
+	if property["type"] != "array" || items["type"] != "string" ||
+		!requiredContains(outputSchema["required"], "emergedTagRefs") {
+		return fmt.Errorf(
+			"tool %q emergedTagRefs must be a required string-array output",
+			name,
+		)
+	}
+	return nil
+}
+
+func validateResearchOutput(name string, tool map[string]any) error {
+	if _, found := tool["research"].(map[string]any); !found {
+		return nil
+	}
+	outputSchema, _ := tool["outputSchema"].(map[string]any)
+	properties, _ := outputSchema["properties"].(map[string]any)
+	assessment, found := properties["evidenceAssessment"].(map[string]any)
+	if !found || assessment["type"] != "object" ||
+		assessment["additionalProperties"] != false {
+		return fmt.Errorf(
+			"research tool %q requires a closed evidenceAssessment output",
+			name,
+		)
+	}
+	if !requiredContains(outputSchema["required"], "evidenceAssessment") {
+		return fmt.Errorf(
+			"research tool %q must require evidenceAssessment output",
+			name,
+		)
+	}
+	for _, field := range []string{
+		"status", "evidenceSufficient", "replanRequired", "reason",
+		"targetIds", "documentIds", "artifactRefs", "sourceIds",
+	} {
+		if !requiredContains(assessment["required"], field) {
+			return fmt.Errorf(
+				"research tool %q evidenceAssessment must require %s",
+				name,
+				field,
+			)
+		}
+	}
+	return nil
+}
+
+func requiredContains(value any, expected string) bool {
+	switch values := value.(type) {
+	case []any:
+		for _, value := range values {
+			if text, ok := value.(string); ok && text == expected {
+				return true
+			}
+		}
+	case []string:
+		for _, value := range values {
+			if value == expected {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func validateFailurePolicy(
+	name string,
+	tool map[string]any,
+	canonicalErrorCodes map[string]bool,
+) error {
+	policy, found := tool["failure"].(map[string]any)
+	if !found {
+		return nil
+	}
+	code := stringValue(policy, "providerFailureCode")
+	if code == "" || !strings.HasPrefix(code, "ASSISTANT.") {
+		return fmt.Errorf(
+			"tool %q failure providerFailureCode must reference an ASSISTANT error",
+			name,
+		)
+	}
+	if !canonicalErrorCodes[code] {
+		return fmt.Errorf(
+			"tool %q failure providerFailureCode %q is absent from AssistantRun errors",
+			name,
+			code,
+		)
+	}
+	return nil
+}
+
+func validateResearchPolicy(name string, tool map[string]any) error {
+	policy, found := tool["research"].(map[string]any)
+	if !found {
+		return nil
+	}
+	operation := stringValue(policy, "operation")
+	if operation != "discover" && operation != "navigate" && operation != "inspect" {
+		return fmt.Errorf("tool %q has unsupported research operation %q", name, operation)
+	}
+	readOnly, _ := tool["readOnly"].(bool)
+	if !readOnly {
+		return fmt.Errorf("mutating tool %q cannot declare research policy", name)
+	}
+	inputSchema, _ := tool["inputSchema"].(map[string]any)
+	properties, _ := inputSchema["properties"].(map[string]any)
+	parallelField := stringValue(policy, "parallelInputField")
+	if parallelField != "" {
+		if operation != "discover" {
+			return fmt.Errorf(
+				"tool %q research parallelInputField is only valid for discover",
+				name,
+			)
+		}
+		property, exists := properties[parallelField].(map[string]any)
+		if !exists || property["type"] != "array" {
+			return fmt.Errorf(
+				"tool %q research parallelInputField %q is not an array input",
+				name,
+				parallelField,
+			)
+		}
+	}
+	if operation != "navigate" {
+		for _, key := range []string{
+			"targetInputField", "targetKindField", "targetValueField",
+		} {
+			if stringValue(policy, key) != "" {
+				return fmt.Errorf(
+					"tool %q research %s is only valid for navigate",
+					name,
+					key,
+				)
+			}
+		}
+		for _, key := range []string{
+			"reusableSourceTargetKinds", "childTargetKinds",
+		} {
+			if values, exists := policy[key]; exists {
+				items, ok := values.([]any)
+				if !ok || len(items) != 0 {
+					return fmt.Errorf(
+						"tool %q research %s is only valid for navigate",
+						name,
+						key,
+					)
+				}
+			}
+		}
+		return nil
+	}
+	targetField := stringValue(policy, "targetInputField")
+	kindField := stringValue(policy, "targetKindField")
+	valueField := stringValue(policy, "targetValueField")
+	target, exists := properties[targetField].(map[string]any)
+	if targetField == "" || kindField == "" || valueField == "" || !exists ||
+		target["type"] != "object" {
+		return fmt.Errorf("tool %q navigate research bindings are incomplete", name)
+	}
+	targetProperties, _ := target["properties"].(map[string]any)
+	kindProperty, kindExists := targetProperties[kindField].(map[string]any)
+	if !kindExists || kindProperty["type"] != "string" {
+		return fmt.Errorf("tool %q navigate target kind binding is absent", name)
+	}
+	valueProperty, valueExists := targetProperties[valueField].(map[string]any)
+	if !valueExists || valueProperty["type"] != "string" {
+		return fmt.Errorf("tool %q navigate target value binding is absent", name)
+	}
+	allowedKinds := make(map[string]struct{})
+	if values, ok := kindProperty["enum"].([]any); ok {
+		for _, value := range values {
+			kind := strings.TrimSpace(fmt.Sprint(value))
+			if kind != "" {
+				allowedKinds[kind] = struct{}{}
+			}
+		}
+	}
+	seenKinds := make(map[string]string)
+	for _, key := range []string{
+		"reusableSourceTargetKinds", "childTargetKinds",
+	} {
+		values, exists := policy[key]
+		if !exists {
+			continue
+		}
+		items, ok := values.([]any)
+		if !ok {
+			return fmt.Errorf("tool %q research %s must be a string list", name, key)
+		}
+		for _, value := range items {
+			kind := strings.TrimSpace(fmt.Sprint(value))
+			if kind == "" {
+				return fmt.Errorf("tool %q research %s contains an empty kind", name, key)
+			}
+			if len(allowedKinds) > 0 {
+				if _, exists := allowedKinds[kind]; !exists {
+					return fmt.Errorf(
+						"tool %q research %s kind %q is outside target enum",
+						name,
+						key,
+						kind,
+					)
+				}
+			}
+			if owner, duplicate := seenKinds[kind]; duplicate {
+				return fmt.Errorf(
+					"tool %q research target kind %q is shared by %s and %s",
+					name,
+					kind,
+					owner,
+					key,
+				)
+			}
+			seenKinds[kind] = key
 		}
 	}
 	return nil
@@ -199,7 +459,11 @@ func validateServerInjectedInputs(name string, tool map[string]any) error {
 }
 
 func stringValue(value map[string]any, key string) string {
-	return strings.TrimSpace(fmt.Sprint(value[key]))
+	raw, exists := value[key]
+	if !exists || raw == nil {
+		return ""
+	}
+	return strings.TrimSpace(fmt.Sprint(raw))
 }
 
 func fail(message string) {

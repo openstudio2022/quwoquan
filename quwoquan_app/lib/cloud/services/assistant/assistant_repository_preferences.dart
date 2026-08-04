@@ -1,6 +1,6 @@
 part of 'assistant_repository.dart';
 
-/// Assistant preference fact command and query transport.
+/// AssistantPreference command and query transport.
 mixin _RemoteAssistantPreference on _RemoteAssistantRepositoryBase
     implements AssistantPreferenceFacet {
   @override

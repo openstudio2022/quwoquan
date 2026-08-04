@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/application/content/media/content_media_upload_coordinator.dart';
 import 'package:quwoquan_app/ui/content/entry/services/create_page_remote_helpers.dart';
 import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../../support/recording_content_media_facet.dart';
 import '../../../../support/recording_content_post_publication_writer.dart';
@@ -59,7 +60,10 @@ void main() {
     expect(prepared.payload, isNot(contains('videoUrl')));
     expect(prepared.payload, isNot(contains('thumbnailUrl')));
     expect(prepared.payload, isNot(contains('coverUrl')));
-    expect(prepared.payload['coverStrategy'], 'first_frame');
+    expect(
+      prepared.payload['coverStrategy'],
+      MediaCoverStrategy.firstFrame,
+    );
     expect(prepared.payload['durationMs'], 1600);
     expect(prepared.payload['width'], 1080);
     expect(prepared.payload['height'], 1920);

@@ -106,7 +106,7 @@ func TestIntersectionReaderClientFailsClosedOnIdentityAndDecoderDrift(t *testing
 			StatusCode: http.StatusOK,
 			Body: io.NopCloser(strings.NewReader(`{
 				"subjectId":"another-persona","intersectionClass":"fact","channel":"feed",
-				"reasons":[],"generatedAt":"2026-08-02T12:00:00Z","legacyReasons":[]
+				"reasons":[],"generatedAt":"2026-08-02T12:00:00Z","unknownReasons":[]
 			}`)),
 		}, nil
 	}))

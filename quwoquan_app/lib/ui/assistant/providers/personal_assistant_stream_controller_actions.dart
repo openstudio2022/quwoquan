@@ -2,6 +2,25 @@
 part of 'personal_assistant_stream_controller.dart';
 
 extension PersonalAssistantRunActions on PersonalAssistantStreamController {
+  Future<String?> resolvePresentationMedia(
+    AssistantPresentationMediaRefWire media,
+  ) async {
+    try {
+      final uri = await _actionsRef
+          .read(assistantPresentationMediaResolverProvider)
+          .resolve(mediaAssetId: media.mediaAssetId);
+      return uri.toString();
+    } catch (error, stackTrace) {
+      developer.log(
+        'assistant presentation media resolution rejected',
+        name: 'assistant.presentation',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return null;
+    }
+  }
+
   /// 停止当前生成：发送 CancelAssistantRun 命令；SSE 会以
   /// cancelled 终态事件结束流，send() 收尾时落停止态。
   Future<void> stopGeneration() async {
@@ -122,7 +141,7 @@ extension PersonalAssistantRunActions on PersonalAssistantStreamController {
         final candidate = _memoryConfirmation(action)!;
         if (candidate.decision == 'approved') {
           await _actionsRef
-              .read(assistantPreferenceFactFacetProvider)
+              .read(assistantPreferenceFacetProvider)
               .setAssistantPreference(
                 scope: AssistantPreferenceScope.longTerm,
                 kind: candidate.kind,

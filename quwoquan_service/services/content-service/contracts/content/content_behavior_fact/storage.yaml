@@ -4,9 +4,9 @@ collections:
     entity: ContentBehaviorFact
     role: append_only
     indexes:
-    - name: uq_behavior_events_persona_client_event
+    - name: uq_behavior_events_actor_client_event
       keys:
-        personaId: 1
+        userId: 1
         clientEventId: 1
       unique: true
       partial_filter:
@@ -16,9 +16,9 @@ collections:
       keys:
         contentId: 1
         createdAt: -1
-    - name: idx_behavior_persona_action_time
+    - name: idx_behavior_actor_action_time
       keys:
-        personaId: 1
+        userId: 1
         action: 1
         createdAt: -1
     - name: idx_behavior_feed_attribution

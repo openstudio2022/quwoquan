@@ -1,0 +1,34 @@
+{
+  "schema": "quwoquan_data.evidence_index",
+  "stage": "5.review",
+  "executionId": "20260803--travel-image-m3--china--pilot-004",
+  "executionBinding": "frozen",
+  "objectRef": "黄龙风景名胜区_image",
+  "evidence": [
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/deterministic_gate.json",
+      "sha256": "sha256:f820ef2513a75cc6735829be5117d0640cf7f962c870e274082c657d01c53211"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/media_ref_review.json",
+      "sha256": "sha256:1cf1790eb219fa0cdafa85d7e811d4c539d6a71085ac00fc82911f224d94b0da"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/provenance.json",
+      "sha256": "sha256:90e0f72159b20b48dc68b414de9122c1fbfae5cfd7947852526901ae072e6a4f"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/finalization_report.json",
+      "sha256": "sha256:b50ec5f2dab872e3c0154f20b570673efbf5a151014bc9bd87b510a9639324bc"
+    },
+    {
+      "kind": "independent_reviewer_result",
+      "ref": "5.review/reviewer_result.json",
+      "sha256": "sha256:88caf4abd41697242eac787a296926d115098e00ff1d75d013eadd60f82414a1"
+    }
+  ]
+}

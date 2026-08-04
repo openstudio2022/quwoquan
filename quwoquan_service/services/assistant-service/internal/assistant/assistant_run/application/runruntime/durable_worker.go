@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
 
 	generated "quwoquan_service/services/assistant-service/generated/assistant/assistant_session"
 	preferencemodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_preference/domain/model"
+	assistantmodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/model"
 )
 
 type ExecutionRequest struct {
@@ -25,15 +27,32 @@ type ExecutionRequest struct {
 	RequestContext            RequestContext
 	Trigger                   map[string]any
 	ReasoningProfile          generated.AssistantReasoningProfile
+	ReasoningPolicy           ReasoningProfileConfig
 	DefinitionOfDone          DefinitionOfDone
+	TaskGraph                 TaskGraph
 	GoalHistory               []GoalRevision
 	Checkpoint                *Checkpoint
+	BudgetConsumption         BudgetConsumption
+	BudgetReceiptSequence     int64
 	ContextSnapshot           map[string]any
 	SurfaceCapabilities       map[string]any
-	SessionPreferenceFacts    []preferencemodel.Snapshot
-	LongTermPreferenceFacts   []preferencemodel.Snapshot
+	SessionContinuity         *SessionContinuity
+	ConfirmedSlots            assistantmodel.AssistantRunConfirmedSlots
+	SessionPreferences        []preferencemodel.AssistantPreferenceSnapshot
+	LongTermPreferences       []preferencemodel.AssistantPreferenceSnapshot
+	FeedbackContextSnapshot   assistantmodel.AssistantFeedbackContextSnapshot
 	IdempotencyPrefix         string
 	CreatedAt                 time.Time
+}
+
+// ExecutionTaskUpdate binds one public execution process to a durable task.
+// The executor proposes the task's goal and dependency frontier; AssistantRun
+// remains the only authority that can add or transition the TaskGraph node.
+type ExecutionTaskUpdate struct {
+	Goal         string
+	Dependencies []string
+	OwnerAgent   string
+	Budget       TaskBudget
 }
 
 type ExecutionItemUpdate struct {
@@ -44,19 +63,21 @@ type ExecutionItemUpdate struct {
 	Summary      string
 	Payload      map[string]any
 	ArtifactRefs []string
+	Task         *ExecutionTaskUpdate
+	Budget       *BudgetConsumptionReceipt
 }
 
 type ExecutionResult struct {
-	AnswerText          string
-	Processes           []map[string]any
-	ArtifactRefs        []string
-	EvidenceRefs        []string
-	Presentation        map[string]any
-	Verified            bool
-	VerificationSummary string
-	WaitingState        generated.AssistantRunState
-	WaitReason          string
-	PendingApprovalRef  string
+	AnswerText           string
+	Processes            []assistantmodel.AssistantRunVisibleProcess
+	ArtifactRefs         []string
+	EvidenceRefs         []string
+	VerificationEvidence []VerificationEvidence
+	Presentation         map[string]any
+	WaitingState         generated.AssistantRunState
+	WaitReason           string
+	PendingApprovalRef   string
+	ConfirmedSlots       assistantmodel.AssistantRunConfirmedSlots
 }
 
 // ExecutionFailure preserves the public, metadata-derived runtime failure
@@ -93,6 +114,13 @@ type DurableWorker struct {
 	heartbeatInterval time.Duration
 	pollInterval      time.Duration
 	now               func() time.Time
+	reasoningProfiles *ReasoningProfileCatalog
+	hooks             *HookRegistry
+	logger            *slog.Logger
+
+	healthMu           sync.RWMutex
+	lastSuccessfulPoll time.Time
+	lastFailure        error
 }
 
 func NewDurableWorker(
@@ -101,8 +129,37 @@ func NewDurableWorker(
 	executor RunExecutor,
 	workerID string,
 ) *DurableWorker {
+	profiles, err := DefaultReasoningProfileCatalog()
+	if err != nil {
+		panic(fmt.Sprintf("default assistant reasoning profiles: %v", err))
+	}
+	hooks, err := NewHookRegistry()
+	if err != nil {
+		panic(fmt.Sprintf("default assistant run hooks: %v", err))
+	}
+	return NewConfiguredDurableWorker(
+		repository,
+		queue,
+		executor,
+		workerID,
+		profiles,
+		hooks,
+	)
+}
+
+// NewConfiguredDurableWorker is the single construction path for a worker
+// with explicit, provider-neutral execution policy and lifecycle hooks.
+
+func NewConfiguredDurableWorker(
+	repository WorkerRepository,
+	queue WorkQueue,
+	executor RunExecutor,
+	workerID string,
+	reasoningProfiles *ReasoningProfileCatalog,
+	hooks *HookRegistry,
+) *DurableWorker {
 	if repository == nil || queue == nil || executor == nil ||
-		strings.TrimSpace(workerID) == "" {
+		strings.TrimSpace(workerID) == "" || reasoningProfiles == nil || hooks == nil {
 		panic("assistant durable worker dependencies are required")
 	}
 	return &DurableWorker{
@@ -114,6 +171,9 @@ func NewDurableWorker(
 		heartbeatInterval: 3 * time.Second,
 		pollInterval:      250 * time.Millisecond,
 		now:               time.Now,
+		reasoningProfiles: reasoningProfiles,
+		hooks:             hooks,
+		logger:            slog.Default(),
 	}
 }
 
@@ -129,6 +189,13 @@ func (w *DurableWorker) Run(ctx context.Context) {
 			return
 		case <-timer.C:
 			worked, err := w.ProcessNext(ctx)
+			if err != nil && ctx.Err() == nil {
+				w.logger.ErrorContext(
+					ctx,
+					"assistant durable run worker poll failed",
+					slog.String("error", err.Error()),
+				)
+			}
 			delay := w.pollInterval
 			if worked && err == nil {
 				delay = 0
@@ -141,6 +208,9 @@ func (w *DurableWorker) Run(ctx context.Context) {
 func (w *DurableWorker) ProcessNext(
 	ctx context.Context,
 ) (worked bool, resultErr error) {
+	defer func() {
+		w.recordPoll(resultErr)
+	}()
 	claim, err := w.queue.ClaimNext(ctx, w.workerID, w.claimTTL)
 	if errors.Is(err, ErrNoWork) {
 		return false, nil
@@ -151,6 +221,9 @@ func (w *DurableWorker) ProcessNext(
 		}
 		return false, err
 	}
+	// A durable claim is a real queue round trip. Record it immediately so a
+	// long-running Run remains live while its lease heartbeats continue.
+	w.recordPoll(nil)
 	startedAt := w.now()
 	defer func() {
 		observeWorkerClaim(claim, startedAt, resultErr)
@@ -177,6 +250,7 @@ func (w *DurableWorker) ProcessNext(
 					w.claimTTL,
 				)
 				if heartbeat != nil {
+					w.recordPoll(heartbeat)
 					if errors.Is(heartbeat, ErrLeaseConflict) {
 						observeLeaseContention("heartbeat")
 					}
@@ -187,6 +261,7 @@ func (w *DurableWorker) ProcessNext(
 					cancel()
 					return
 				}
+				w.recordPoll(nil)
 				claimMu.Lock()
 				activeClaim = next
 				claimMu.Unlock()
@@ -241,6 +316,36 @@ func (w *DurableWorker) processClaim(ctx context.Context, runID string) error {
 	observeCheckpointAge(run.Checkpoint, w.now())
 	if terminalRunState(run.State) || !queueRunnableRun(run) {
 		return nil
+	}
+	reasoningPolicy := run.ReasoningPolicy
+	if reasoningPolicy.Profile == "" {
+		reasoningPolicy, err = w.reasoningProfiles.Resolve(run.ReasoningProfile)
+	} else if reasoningPolicy.Profile != run.ReasoningProfile {
+		err = fmt.Errorf(
+			"frozen reasoning profile %s does not match Run profile %s",
+			reasoningPolicy.Profile,
+			run.ReasoningProfile,
+		)
+	}
+	if err == nil {
+		err = validateReasoningProfileForRun(reasoningPolicy, run.DefinitionOfDone)
+	}
+	if err != nil {
+		return w.failRun(
+			ctx,
+			run,
+			"reasoning_profile_rejected",
+			&ExecutionFailure{
+				Code:   "ASSISTANT.SYSTEM.run_reasoning_profile_unavailable",
+				Origin: "system",
+				Kind:   "policy",
+				Nature: "permanent",
+			},
+		)
+	}
+	run, err = w.applyReasoningBudget(ctx, run, reasoningPolicy)
+	if err != nil {
+		return err
 	}
 	if run.State == generated.AssistantRunStateAccepted {
 		run, err = w.commitMutation(ctx, run.RunID, "run_state_changed", func(
@@ -330,13 +435,72 @@ func (w *DurableWorker) processClaim(ctx context.Context, runID string) error {
 		return nil
 	}
 
-	executionCtx, cancelExecution := context.WithCancel(ctx)
+	executionDeadline := run.CreatedAt.UTC().Add(reasoningPolicy.Budget.MaxDuration)
+	if !w.now().UTC().Before(executionDeadline) {
+		return w.failRun(
+			ctx,
+			run,
+			"reasoning_budget_exhausted",
+			context.DeadlineExceeded,
+		)
+	}
+	executionCtx, cancelExecution := context.WithDeadline(ctx, executionDeadline)
 	defer cancelExecution()
+	executionCtx = WithExecutionHooks(executionCtx, w.hooks, run)
+	initialContextState := ContextExecutionState{}
+	var initialContextCompaction *ContextCompactionCheckpoint
+	initialContextReceiptSequence := int64(0)
+	contextScope := ContextProgressScope(run)
+	if run.Checkpoint != nil {
+		initialContextState = cloneContextExecutionState(
+			run.Checkpoint.ContextState,
+		)
+		initialContextCompaction = cloneContextCompaction(
+			run.Checkpoint.ContextCompaction,
+		)
+		if run.Checkpoint.ContextReceiptScope == contextScope {
+			initialContextReceiptSequence = run.Checkpoint.ContextReceiptSeq
+		}
+	}
+	executionCtx, err = WithContextCompactionRuntime(
+		executionCtx,
+		ContextCompactionRuntimeConfig{
+			Scope:                  contextScope,
+			CheckpointEvery:        reasoningPolicy.CheckpointEvery,
+			StartedAt:              run.CreatedAt,
+			InitialState:           initialContextState,
+			InitialCompaction:      initialContextCompaction,
+			InitialReceiptSequence: initialContextReceiptSequence,
+			Now:                    w.now,
+			Sink: func(
+				receiptCtx context.Context,
+				receipt ContextProgressReceipt,
+			) error {
+				_, commitErr := w.commitMutation(
+					receiptCtx,
+					run.RunID,
+					"checkpoint_committed",
+					func(current *Run, now time.Time) error {
+						return current.RecordContextProgress(receipt, now)
+					},
+				)
+				return commitErr
+			},
+		},
+	)
+	if err != nil {
+		return w.failRun(
+			ctx,
+			run,
+			"context_checkpoint_rejected",
+			err,
+		)
+	}
 	controlDone := make(chan struct{})
 	go w.monitorRunControl(executionCtx, run.RunID, cancelExecution, controlDone)
 	result, executionErr := w.executor.Execute(
 		executionCtx,
-		executionRequest(run),
+		executionRequest(run, reasoningPolicy),
 		func(update ExecutionItemUpdate) error {
 			return w.persistExecutionUpdate(executionCtx, run.RunID, update)
 		},
@@ -357,7 +521,17 @@ func (w *DurableWorker) processClaim(ctx context.Context, runID string) error {
 			return nil
 		}
 		if current.PauseRequested {
-			return w.checkpointAndPause(context.WithoutCancel(ctx), current)
+			return w.checkpointAndPause(
+				context.WithoutCancel(ctx),
+				current,
+				result,
+			)
+		}
+		if errors.Is(executionErr, ErrExecutionReplanned) {
+			// A completed Item is the safe boundary: the revised goal and its
+			// audit Plan item were already committed. Keep the Run executable so
+			// the queue can claim it with the new goal revision.
+			return nil
 		}
 		if errors.Is(executionErr, context.Canceled) && ctx.Err() != nil {
 			return executionErr
@@ -377,589 +551,10 @@ func (w *DurableWorker) processClaim(ctx context.Context, runID string) error {
 		return nil
 	}
 	if current.PauseRequested {
-		return w.checkpointAndPause(ctx, current)
+		return w.checkpointAndPause(ctx, current, result)
 	}
 	if result.WaitingState != "" {
 		return w.waitRun(ctx, current, result)
 	}
 	return w.completeRun(ctx, current, result)
-}
-
-func (w *DurableWorker) awaitCoordinatedCancellation(
-	ctx context.Context,
-	runID string,
-) error {
-	deadline := time.NewTimer(10 * time.Second)
-	defer deadline.Stop()
-	ticker := time.NewTicker(50 * time.Millisecond)
-	defer ticker.Stop()
-	for {
-		run, err := w.repository.Load(ctx, runID)
-		if err != nil {
-			return err
-		}
-		if run.State == generated.AssistantRunStateCancelled {
-			return nil
-		}
-		if terminalRunState(run.State) {
-			return ErrExecutionCancelled
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-deadline.C:
-			return ErrExecutionCancelled
-		case <-ticker.C:
-		}
-	}
-}
-
-func (w *DurableWorker) monitorRunControl(
-	ctx context.Context,
-	runID string,
-	cancel context.CancelFunc,
-	done <-chan struct{},
-) {
-	ticker := time.NewTicker(500 * time.Millisecond)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-done:
-			return
-		case <-ticker.C:
-			run, err := w.repository.Load(ctx, runID)
-			if err != nil {
-				cancel()
-				return
-			}
-			if terminalRunState(run.State) || run.PauseRequested ||
-				run.State == generated.AssistantRunStatePaused {
-				cancel()
-				return
-			}
-		}
-	}
-}
-
-func (w *DurableWorker) persistExecutionUpdate(
-	ctx context.Context,
-	runID string,
-	update ExecutionItemUpdate,
-) error {
-	kind := "process_append"
-	_, err := w.commitMutation(ctx, runID, kind, func(run *Run, now time.Time) error {
-		switch update.Status {
-		case generated.AssistantRunItemStatusStarted:
-			return run.BeginItem(
-				update.ItemID,
-				update.Kind,
-				update.TaskID,
-				update.Summary,
-				update.Payload,
-				now,
-			)
-		case generated.AssistantRunItemStatusCompleted,
-			generated.AssistantRunItemStatusFailed,
-			generated.AssistantRunItemStatusCancelled:
-			return run.CompleteItem(
-				update.ItemID,
-				update.Status,
-				update.ArtifactRefs,
-				update.Summary,
-				now,
-			)
-		default:
-			return ErrItemStateConflict
-		}
-	})
-	return err
-}
-
-func (w *DurableWorker) checkpointAndPause(
-	ctx context.Context,
-	current Run,
-) error {
-	_, err := w.commitMutation(ctx, current.RunID, "checkpoint_committed", func(
-		run *Run,
-		now time.Time,
-	) error {
-		if run.State == generated.AssistantRunStateExecuting {
-			if err := run.Transition(
-				generated.AssistantRunStateCheckpointing,
-				"pause_requested",
-				now,
-			); err != nil {
-				return err
-			}
-		}
-		if _, err := run.CreateCheckpoint(
-			"checkpoint:"+run.RunID+":"+fmt.Sprint(run.Revision+1),
-			run.DefinitionOfDone.Outcome,
-			[]string{"执行已在安全边界暂停"},
-			"",
-			remainingBudget(*run),
-			now,
-		); err != nil {
-			return err
-		}
-		return run.ApplySafeBoundary(now)
-	})
-	return err
-}
-
-func (w *DurableWorker) waitRun(
-	ctx context.Context,
-	current Run,
-	result ExecutionResult,
-) error {
-	var err error
-	current, err = w.persistPresentation(ctx, current, result.Presentation)
-	if err != nil {
-		return err
-	}
-	_, err = w.commitMutation(ctx, current.RunID, "checkpoint_committed", func(
-		run *Run,
-		now time.Time,
-	) error {
-		if run.State == generated.AssistantRunStateExecuting {
-			if err := run.Transition(
-				generated.AssistantRunStateCheckpointing,
-				result.WaitReason,
-				now,
-			); err != nil {
-				return err
-			}
-		}
-		if _, err := run.CreateCheckpoint(
-			"checkpoint:"+run.RunID+":"+fmt.Sprint(run.Revision+1),
-			run.DefinitionOfDone.Outcome,
-			[]string{result.WaitReason},
-			result.PendingApprovalRef,
-			remainingBudget(*run),
-			now,
-		); err != nil {
-			return err
-		}
-		return run.Transition(result.WaitingState, result.WaitReason, now)
-	})
-	return err
-}
-
-func (w *DurableWorker) persistPresentation(
-	ctx context.Context,
-	current Run,
-	presentation map[string]any,
-) (Run, error) {
-	if len(presentation) == 0 {
-		return current, nil
-	}
-	nextRevision := int64(1)
-	if revision, ok := presentationRevision(current.PresentationDocument["revision"]); ok {
-		nextRevision = revision + 1
-	}
-	document := cloneMap(presentation)
-	document["revision"] = nextRevision
-	document["committedAt"] = ""
-	run, err := w.commitMutation(ctx, current.RunID, "presentation_snapshot", func(
-		run *Run,
-		now time.Time,
-	) error {
-		return run.SetPresentationDocument(document, now)
-	})
-	observePresentationProjection("snapshot", err)
-	if err != nil {
-		return Run{}, err
-	}
-	committed, err := w.commitMutation(ctx, run.RunID, "presentation_commit", func(
-		run *Run,
-		now time.Time,
-	) error {
-		return run.CommitPresentation(now)
-	})
-	observePresentationProjection("commit", err)
-	return committed, err
-}
-
-func (w *DurableWorker) completeRun(
-	ctx context.Context,
-	current Run,
-	result ExecutionResult,
-) error {
-	run, err := w.commitMutation(ctx, current.RunID, "process_commit", func(
-		run *Run,
-		now time.Time,
-	) error {
-		if err := run.Transition(generated.AssistantRunStateObserving, "", now); err != nil {
-			return err
-		}
-		return run.TaskGraph.Complete(
-			"task_root",
-			result.ArtifactRefs,
-			TaskVerification{
-				Requirements: run.DefinitionOfDone.VerificationRequirements,
-				EvidenceRefs: result.EvidenceRefs,
-				Passed:       result.Verified,
-				Summary:      result.VerificationSummary,
-			},
-		)
-	})
-	if err != nil {
-		if errors.Is(err, ErrCompletionRejected) {
-			return w.failRun(ctx, current, "verification_failed", err)
-		}
-		return err
-	}
-	run, err = w.commitMutation(ctx, run.RunID, "run_state_changed", func(
-		run *Run,
-		now time.Time,
-	) error {
-		if err := run.Transition(generated.AssistantRunStateReflecting, "", now); err != nil {
-			return err
-		}
-		return run.Transition(generated.AssistantRunStateSynthesizing, "", now)
-	})
-	if err != nil {
-		return err
-	}
-	run, err = w.commitMutation(ctx, run.RunID, "answer_delta", func(
-		run *Run,
-		now time.Time,
-	) error {
-		if err := run.BeginItem(
-			"answer:"+run.RunID,
-			generated.AssistantRunItemKindFinalAnswer,
-			"task_root",
-			"最终答案",
-			map[string]any{"text": strings.TrimSpace(result.AnswerText)},
-			now,
-		); err != nil {
-			return err
-		}
-		return run.CompleteItem(
-			"answer:"+run.RunID,
-			generated.AssistantRunItemStatusCompleted,
-			result.ArtifactRefs,
-			"最终答案",
-			now,
-		)
-	})
-	if err != nil {
-		return err
-	}
-	run, err = w.persistPresentation(ctx, run, result.Presentation)
-	if err != nil {
-		return err
-	}
-	run, err = w.commitMutation(ctx, run.RunID, "run_state_changed", func(
-		run *Run,
-		now time.Time,
-	) error {
-		return run.Transition(generated.AssistantRunStateVerifying, "", now)
-	})
-	if err != nil {
-		return err
-	}
-	if !result.Verified {
-		return w.failRun(ctx, run, "verification_failed", ErrCompletionRejected)
-	}
-	_, err = w.commitMutation(ctx, run.RunID, "completed", func(
-		run *Run,
-		now time.Time,
-	) error {
-		verdict := VerificationVerdict{
-			Accepted: true,
-			Evidence: []VerificationEvidence{{
-				Requirement:  strings.Join(run.DefinitionOfDone.VerificationRequirements, ","),
-				Passed:       true,
-				EvidenceRefs: result.EvidenceRefs,
-				Summary:      result.VerificationSummary,
-			}},
-			DecisionSummary: result.VerificationSummary,
-		}
-		if err := run.AcceptVerification(verdict, now); err != nil {
-			return err
-		}
-		snapshot := map[string]any{
-			"answerText": strings.TrimSpace(result.AnswerText),
-			"processes":  result.Processes,
-		}
-		if run.FrozenPolicySelection.PolicyID != "" {
-			snapshot["selectedPolicyRef"] = map[string]any{
-				"policyId":      run.FrozenPolicySelection.PolicyID,
-				"releaseDigest": run.FrozenPolicySelection.ReleaseDigest,
-				"cohort":        run.FrozenPolicySelection.Cohort,
-			}
-		}
-		return run.SetTerminalSnapshot(snapshot, now)
-	})
-	return err
-}
-
-func (w *DurableWorker) failRun(
-	ctx context.Context,
-	current Run,
-	reason string,
-	cause error,
-) error {
-	failurePayload := map[string]any{
-		"code":   "ASSISTANT.SYSTEM.run_execution_failed",
-		"origin": "system",
-		"kind":   "internal",
-		"nature": "transient",
-	}
-	var executionFailure *ExecutionFailure
-	if errors.As(cause, &executionFailure) {
-		if value := strings.TrimSpace(executionFailure.Code); value != "" {
-			failurePayload["code"] = value
-		}
-		if value := strings.TrimSpace(executionFailure.Origin); value != "" {
-			failurePayload["origin"] = value
-		}
-		if value := strings.TrimSpace(executionFailure.Kind); value != "" {
-			failurePayload["kind"] = value
-		}
-		if value := strings.TrimSpace(executionFailure.Nature); value != "" {
-			failurePayload["nature"] = value
-		}
-	}
-	_, err := w.commitMutation(ctx, current.RunID, "failed", func(
-		run *Run,
-		now time.Time,
-	) error {
-		if terminalRunState(run.State) {
-			return nil
-		}
-		run.CancelActiveWork(reason, now)
-		if err := run.Transition(
-			generated.AssistantRunStateFailed,
-			reason,
-			now,
-		); err != nil {
-			return err
-		}
-		return run.SetTerminalSnapshot(map[string]any{
-			"answerText": "",
-			"processes":  []map[string]any{},
-			"failure":    failurePayload,
-		}, now)
-	})
-	if err != nil {
-		return errors.Join(cause, err)
-	}
-	return nil
-}
-
-func (w *DurableWorker) commitMutation(
-	ctx context.Context,
-	runID string,
-	eventKind string,
-	change func(*Run, time.Time) error,
-) (Run, error) {
-	for attempt := 0; attempt < 4; attempt++ {
-		run, err := w.repository.Load(ctx, runID)
-		if err != nil {
-			return Run{}, err
-		}
-		if terminalRunState(run.State) {
-			return run, nil
-		}
-		expectedRevision := run.Revision
-		if err := change(&run, w.now().UTC()); err != nil {
-			return Run{}, err
-		}
-		if run.Revision == expectedRevision {
-			return run, nil
-		}
-		run.JournalSequence++
-		event := JournalEvent{
-			EventID:   run.RunID + ":" + int64String(run.JournalSequence),
-			RunID:     run.RunID,
-			Sequence:  run.JournalSequence,
-			Revision:  run.Revision,
-			Kind:      strings.TrimSpace(eventKind),
-			Payload:   mutationPayload(run, eventKind),
-			CreatedAt: w.now().UTC(),
-		}
-		if err := w.repository.Commit(
-			ctx,
-			expectedRevision,
-			run,
-			[]JournalEvent{event},
-			nil,
-		); err == nil {
-			return run, nil
-		} else if !errors.Is(err, ErrRevisionConflict) {
-			return Run{}, err
-		}
-	}
-	return Run{}, ErrRevisionConflict
-}
-
-func executionRequest(run Run) ExecutionRequest {
-	var checkpoint *Checkpoint
-	if run.Checkpoint != nil {
-		cloned := *run.Checkpoint
-		checkpoint = &cloned
-	}
-	return ExecutionRequest{
-		RunID:                     run.RunID,
-		UserID:                    run.UserID,
-		SessionID:                 run.SessionID,
-		Goal:                      run.InputText,
-		RequestedSkillID:          run.RequestedSkillID,
-		RequestedDomainID:         run.RequestedDomainID,
-		SkillPackageID:            run.SkillPackageID,
-		SkillPackageReleaseDigest: run.SkillPackageReleaseDigest,
-		FrozenPolicySelection:     clonePolicySelection(run.FrozenPolicySelection),
-		RequestContext:            normalizeRequestContext(run.RequestContext),
-		Trigger:                   cloneMap(run.Trigger),
-		ReasoningProfile:          run.ReasoningProfile,
-		DefinitionOfDone:          cloneDefinition(run.DefinitionOfDone),
-		GoalHistory:               append([]GoalRevision(nil), run.GoalHistory...),
-		Checkpoint:                checkpoint,
-		ContextSnapshot:           cloneMap(run.ContextSnapshot),
-		SurfaceCapabilities:       cloneMap(run.SurfaceCapabilities),
-		SessionPreferenceFacts: append(
-			[]preferencemodel.Snapshot(nil),
-			run.SessionPreferenceFacts...,
-		),
-		LongTermPreferenceFacts: append(
-			[]preferencemodel.Snapshot(nil),
-			run.LongTermPreferenceFacts...,
-		),
-		IdempotencyPrefix: "run:" + run.RunID + ":goal:" + fmt.Sprint(run.GoalRevision),
-		CreatedAt:         run.CreatedAt,
-	}
-}
-
-func mutationPayload(run Run, eventKind string) map[string]any {
-	if eventKind == "completed" || eventKind == "failed" || eventKind == "cancelled" {
-		return terminalMutationPayload(run, eventKind)
-	}
-	payload := map[string]any{
-		"status":       run.State.WireName(),
-		"runRevision":  run.Revision,
-		"goalRevision": run.GoalRevision,
-	}
-	switch eventKind {
-	case "answer_delta":
-		for index := len(run.Items) - 1; index >= 0; index-- {
-			if run.Items[index].Kind == generated.AssistantRunItemKindFinalAnswer {
-				payload["text"] = run.Items[index].Payload["text"]
-				break
-			}
-		}
-	case "process_append", "process_commit":
-		if process := latestVisibleProcess(run); process != nil {
-			payload["process"] = process
-		}
-	case "presentation_snapshot":
-		revision, _ := presentationRevision(run.PresentationDocument["revision"])
-		payload["baseRevision"] = int64(0)
-		payload["revision"] = revision
-		payload["document"] = cloneMap(run.PresentationDocument)
-	case "presentation_commit":
-		revision, _ := presentationRevision(run.PresentationDocument["revision"])
-		payload["baseRevision"] = revision - 1
-		payload["revision"] = revision
-	}
-	return payload
-}
-
-func terminalMutationPayload(run Run, eventKind string) map[string]any {
-	processes := any([]map[string]any{})
-	if value, found := run.TerminalSnapshot["processes"]; found && value != nil {
-		processes = value
-	}
-	payload := map[string]any{
-		"status":      run.State.WireName(),
-		"finalAnswer": run.TerminalSnapshot["answerText"],
-		"processes":   processes,
-	}
-	if eventKind == "failed" {
-		payload["runtimeFailure"] = run.TerminalSnapshot["failure"]
-	}
-	return payload
-}
-
-// TerminalReplayEvent projects the no-TTL terminal snapshot into the one
-// terminal SSE event required after the bounded journal has expired.
-func TerminalReplayEvent(run Run) (JournalEvent, bool) {
-	if run.CompletedAt == nil || len(run.TerminalSnapshot) == 0 ||
-		!terminalRunState(run.State) || run.JournalSequence <= 0 {
-		return JournalEvent{}, false
-	}
-	kind := run.State.WireName()
-	return JournalEvent{
-		EventID:   run.RunID + ":terminal-replay",
-		RunID:     run.RunID,
-		Sequence:  run.JournalSequence,
-		Revision:  run.Revision,
-		Kind:      kind,
-		Payload:   mutationPayload(run, kind),
-		CreatedAt: run.CompletedAt.UTC(),
-	}, true
-}
-
-func latestVisibleProcess(run Run) map[string]any {
-	for index := len(run.Items) - 1; index >= 0; index-- {
-		item := run.Items[index]
-		if item.Kind == generated.AssistantRunItemKindPlan ||
-			item.Kind == generated.AssistantRunItemKindFinalAnswer {
-			continue
-		}
-		process := cloneMap(item.Payload)
-		if process == nil {
-			process = map[string]any{}
-		}
-		process["processId"] = item.ItemID
-		process["order"] = item.Sequence
-		process["summary"] = item.Summary
-		if strings.TrimSpace(fmt.Sprint(process["scope"])) == "" {
-			process["scope"] = string(item.Kind)
-		}
-		if strings.TrimSpace(fmt.Sprint(process["stage"])) == "" {
-			process["stage"] = string(item.Kind)
-		}
-		switch item.Status {
-		case generated.AssistantRunItemStatusStarted:
-			process["status"] = "active"
-		default:
-			process["status"] = string(item.Status)
-		}
-		return process
-	}
-	return nil
-}
-
-func remainingBudget(run Run) map[string]int64 {
-	result := map[string]int64{}
-	for _, task := range run.TaskGraph.Tasks {
-		result["toolCalls"] += int64(task.Budget.MaxToolCalls)
-		result["tokens"] += task.Budget.MaxTokens
-		result["costUnits"] += task.Budget.MaxCostUnits
-	}
-	return result
-}
-
-func queueRunnableRun(run Run) bool {
-	if terminalRunState(run.State) || run.State == generated.AssistantRunStatePaused {
-		return false
-	}
-	switch run.State {
-	case generated.AssistantRunStateWaitingUser,
-		generated.AssistantRunStateWaitingApproval,
-		generated.AssistantRunStateWaitingExternal:
-		return false
-	default:
-		return true
-	}
-}
-
-func terminalRunState(state generated.AssistantRunState) bool {
-	return state == generated.AssistantRunStateCompleted ||
-		state == generated.AssistantRunStateFailed ||
-		state == generated.AssistantRunStateCancelled
 }

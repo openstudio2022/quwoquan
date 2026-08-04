@@ -73,6 +73,13 @@ func run() error {
 		return fmt.Errorf("config env override failed: %w", err)
 	}
 	normalizeDefaults(&cfg)
+	cfg, err = materializeReleaseExternalInteractionBindings(
+		cfg,
+		runtimeconfig.EnvRuntimeConfigProvider{},
+	)
+	if err != nil {
+		return fmt.Errorf("external provider binding invalid: %w", err)
+	}
 	if err := validateRuntimeConfig(cfg); err != nil {
 		return fmt.Errorf("config validation failed: %w", err)
 	}
@@ -498,20 +505,6 @@ func run() error {
 	externalhttp.NewHandler(externalService).RegisterRoutes(operationMux)
 	handler := http.Handler(operationMux)
 
-	providerSubstitute, err := startNonprodProviderSubstitute(cfg.Environment)
-	if err != nil {
-		return fmt.Errorf("nonprod provider substitute init failed: %w", err)
-	}
-	if providerSubstitute != nil {
-		defer func() {
-			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			if err := providerSubstitute.close(shutdownCtx); err != nil {
-				log.Printf("nonprod provider substitute shutdown failed: %v", err)
-			}
-		}()
-	}
-
 	rootMux := http.NewServeMux()
 	healthChecker := rthealth.NewChecker()
 	healthChecker.Register("account_security_authority", func(hctx context.Context) error {
@@ -526,12 +519,6 @@ func run() error {
 			return accountClosureConsumer.Healthy(10 * time.Second)
 		},
 	)
-	if providerSubstitute != nil {
-		healthChecker.Register(
-			"nonprod_provider_substitute",
-			providerSubstitute.health,
-		)
-	}
 	healthChecker.Register(
 		"external_interaction_result_relay",
 		func(hctx context.Context) error {

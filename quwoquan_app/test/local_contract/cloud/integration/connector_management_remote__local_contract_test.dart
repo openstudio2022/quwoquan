@@ -1,6 +1,7 @@
 // spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-001
 import 'dart:convert';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -165,9 +166,14 @@ Map<String, Object?> _definitionWire() => <String, Object?>{
   'dataClassification': 'private',
   'supportedSurfaceKinds': <String>['personal'],
   'status': 'active',
-  'releaseDigest': 'sha256:calendar-release',
+  'releaseDigest': _sha256Digest(
+    'system_calendar|active|calendar.event.create|personal',
+  ),
   'publishedAt': '2026-08-02T08:00:00Z',
 };
+
+String _sha256Digest(String payload) =>
+    'sha256:${sha256.convert(utf8.encode(payload))}';
 
 Map<String, Object?> _connectionWire({
   String status = 'active',

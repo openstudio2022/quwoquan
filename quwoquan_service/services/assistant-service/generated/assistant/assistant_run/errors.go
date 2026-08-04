@@ -28,6 +28,7 @@ var (
 	ErrRunUnauthorized                 = errors.New("ASSISTANT.USER.run_unauthorized")
 	ErrSkillConsentRequired            = errors.New("ASSISTANT.USER.skill_consent_required")
 	ErrStreamUnavailable               = errors.New("ASSISTANT.SYSTEM.stream_unavailable")
+	ErrToolUnavailable                 = errors.New("ASSISTANT.MIDDLEWARE.tool_unavailable")
 	ErrUpstreamTimeout                 = errors.New("ASSISTANT.MIDDLEWARE.upstream_timeout")
 	ErrWeatherProviderUnavailable      = errors.New("ASSISTANT.MIDDLEWARE.weather_provider_unavailable")
 	ErrWebBudgetExhausted              = errors.New("ASSISTANT.MIDDLEWARE.web_budget_exhausted")
@@ -149,6 +150,12 @@ func AppErrorFromSkillConsentRequired(debugMessage string) *rterr.AppError {
 func AppErrorFromStreamUnavailable(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.SYSTEM.stream_unavailable")
 	return rterr.NewAppError(code, "流式服务暂不可用，请稍后重试", debugMessage).WithMetadata("unavailable", 503).WithRecovery("retry", 3)
+}
+
+// AppErrorFromToolUnavailable returns *AppError for ASSISTANT.MIDDLEWARE.tool_unavailable (user_message from errors.yaml).
+func AppErrorFromToolUnavailable(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("ASSISTANT.MIDDLEWARE.tool_unavailable")
+	return rterr.NewAppError(code, "所需能力暂不可用，请稍后重试", debugMessage).WithMetadata("unavailable", 0).WithRecovery("retry", 3)
 }
 
 // AppErrorFromUpstreamTimeout returns *AppError for ASSISTANT.MIDDLEWARE.upstream_timeout (user_message from errors.yaml).

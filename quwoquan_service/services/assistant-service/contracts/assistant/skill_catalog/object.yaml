@@ -23,6 +23,8 @@ relationships:
   - packageId
   - releaseDigest
   target_object: assistant.SkillPackageRelease
+local_identity_reasons:
+  domainId: stable Skill domain classification from the immutable manifest; it groups and routes catalog entries but is not the SkillCatalog projection identity
 capabilities:
 - queryable
 taggable: false
@@ -31,6 +33,9 @@ business_rules:
 - ListSkills 只能使用 transport 验证后的 accountId，禁止信任客户端身份 header
 - active release、manifest、profile 或输入 schema 资产缺失及 digest 不一致均 fail-closed
 - 详情 configurationSchema 必须与 item.configurationSchemaDigest 来自同一 digest 已验证的 active package asset；ListSkills 不携带 schema document，客户端只在用户进入详情后按需读取
+- 只有 CatalogProfile.visibility=listed 且 domain、分组、受众、surface、scope 与至少一个成果示例全部通过一致性校验的 Skill 才进入目录；未达到产品质量门的内部路由 Skill 保持 hidden
+- 目录只返回服务端解析的 SkillCatalogSemanticLabel 与 digest-qualified ResolvedSkillExample；App 禁止按 domainId、surfaceKind、scope 或 skillId 硬编码垂类文案
+- ResolvedSkillExample 的模板必须属于同一 resolved PresentationProfile 和 immutable package，内部 asset locator 与未验证引用不得进入 API
 - 同一 skillId 只能存在一个目录项，清单项按 skillId 稳定排序后返回
 - 目录不得拼接、复制或推断账号 Consent、Setting 与 Subscription 状态
 lifecycle:

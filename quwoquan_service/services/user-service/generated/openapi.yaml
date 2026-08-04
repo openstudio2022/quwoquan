@@ -3237,7 +3237,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/PullUserSyncResponse'
+                                $ref: '#/components/schemas/PullUserSyncSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -3659,10 +3659,10 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ProfileUpdateSnapshot
             x-contract-placeholder: true
-        PullUserSyncResponse:
+        PullUserSyncSlice:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: PullUserSyncResponse
+            x-contract-entity: PullUserSyncSlice
             x-contract-placeholder: true
         PushEndpointSecret:
             type: object

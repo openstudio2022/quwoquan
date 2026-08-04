@@ -64,7 +64,7 @@ var allowedValues = map[Kind]map[string]struct{}{
 	},
 }
 
-type Fact struct {
+type AssistantPreference struct {
 	PreferenceID       string     `json:"preferenceId" bson:"_id"`
 	UserID             string     `json:"userId" bson:"userId"`
 	Scope              Scope      `json:"scope" bson:"scope"`
@@ -82,7 +82,7 @@ type Fact struct {
 	Version            int64      `json:"version" bson:"version"`
 }
 
-type Snapshot struct {
+type AssistantPreferenceSnapshot struct {
 	PreferenceID    string     `json:"preferenceId" bson:"preferenceId"`
 	Scope           Scope      `json:"scope" bson:"scope"`
 	Kind            Kind       `json:"kind" bson:"kind"`
@@ -93,16 +93,16 @@ type Snapshot struct {
 	Version         int64      `json:"version" bson:"version"`
 }
 
-func (f Fact) Snapshot() Snapshot {
-	return Snapshot{
-		PreferenceID:    f.PreferenceID,
-		Scope:           f.Scope,
-		Kind:            f.Kind,
-		Value:           f.Value,
-		SourceType:      f.SourceType,
-		SourceSessionID: f.SourceSessionID,
-		ConfirmedAt:     f.ConfirmedAt,
-		Version:         f.Version,
+func (preference AssistantPreference) Snapshot() AssistantPreferenceSnapshot {
+	return AssistantPreferenceSnapshot{
+		PreferenceID:    preference.PreferenceID,
+		Scope:           preference.Scope,
+		Kind:            preference.Kind,
+		Value:           preference.Value,
+		SourceType:      preference.SourceType,
+		SourceSessionID: preference.SourceSessionID,
+		ConfirmedAt:     preference.ConfirmedAt,
+		Version:         preference.Version,
 	}
 }
 
@@ -134,9 +134,9 @@ func Normalize(
 	default:
 		return "", "", "", "", "", "", ErrInvalidPreference
 	}
-	if IsFactualKind(normalizedKind) {
+	if RequiresExplicitConfirmation(normalizedKind) {
 		if normalizedScope != ScopeLongTerm || !confirmed ||
-			!validFactualValue(normalizedValue) {
+			!validConfirmedValue(normalizedValue) {
 			return "", "", "", "", "", "", ErrInvalidPreference
 		}
 		normalizedValue = strings.Join(strings.Fields(normalizedValue), " ")
@@ -148,7 +148,7 @@ func Normalize(
 	default:
 		return "", "", "", "", "", "", ErrInvalidPreference
 	}
-	if IsFactualKind(normalizedKind) {
+	if RequiresExplicitConfirmation(normalizedKind) {
 		switch normalizedSource {
 		case SourceSessionConfirmed:
 			if normalizedSourceSessionID == "" {
@@ -166,7 +166,7 @@ func Normalize(
 		normalizedSource, normalizedSourceSessionID, nil
 }
 
-func IsFactualKind(kind Kind) bool {
+func RequiresExplicitConfirmation(kind Kind) bool {
 	switch kind {
 	case KindFrequentLocations,
 		KindFamilyTerms,
@@ -178,7 +178,7 @@ func IsFactualKind(kind Kind) bool {
 	}
 }
 
-func validFactualValue(value string) bool {
+func validConfirmedValue(value string) bool {
 	if value == "" || len([]rune(value)) > 512 {
 		return false
 	}

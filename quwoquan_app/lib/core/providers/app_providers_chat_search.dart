@@ -216,6 +216,15 @@ final realtimeConnectionManagerProvider =
     NotifierProvider<RealtimeConnectionNotifier, TransportState>(
       () => RealtimeConnectionNotifier(
         currentUserIdResolver: (ref) => ref.read(currentUserIdProvider).trim(),
+        operationGatewayResolver: (ref) =>
+            RemoteRealtimeConnectionOperationGateway(
+              client: ref.read(generatedCloudOperationClientProvider),
+              invocationContext: (clientPageId) => _locationInvocationContext(
+                ref,
+                surface: AppUiSurfaces.appShell,
+                clientPageId: clientPageId,
+              ),
+            ),
       ),
     );
 
@@ -307,12 +316,24 @@ final localCircleGroupSearchIndexProvider =
 
 final userSyncRepositoryProvider = Provider<UserSyncRepository>((ref) {
   final ownerUserId = ref.watch(resolvedOwnerUserIdProvider);
-  return RemoteUserSyncRepository(
-    httpClient: ref.watch(cloudHttpClientProvider),
-    mergeRequestContext: (base) async {
-      return CloudRequestHeaders.withOwnerPersonaContext(
-        base,
-        ownerUserId: ownerUserId,
+  return AppProductionComposition.generatedAdapter<UserSyncRepository>(
+    AppProductionAdapter.userSync,
+    client: ref.watch(generatedCloudOperationClientProvider),
+    invocationContext: (String clientPageId) {
+      final persona = ref.read(activePersonaContextProvider).asData?.value;
+      final resolvedOwnerUserId = persona?.ownerUserId.trim() ?? '';
+      final accountId = resolvedOwnerUserId.isNotEmpty
+          ? resolvedOwnerUserId
+          : ownerUserId.trim();
+      final personaId = persona?.personaId.trim() ?? '';
+      return CloudOperationInvocationContext(
+        surfaceId: AppUiSurfaces.chatList.id,
+        routeId: AppUiSurfaces.chatList.routeId,
+        clientPageId: clientPageId,
+        actor: CloudOperationActorContext(
+          accountId: accountId.isEmpty ? null : accountId,
+          personaId: personaId.isEmpty ? null : personaId,
+        ),
       );
     },
   );
@@ -373,7 +394,7 @@ final behaviorRepositoryProvider = Provider<BehaviorRepository>((ref) {
   final accountId = ref.watch(resolvedOwnerUserIdProvider).trim();
   final personaId = ref.watch(currentUserIdProvider).trim();
   final repo = RemoteBehaviorRepository(
-    httpClient: ref.watch(cloudHttpClientProvider),
+    writer: ref.watch(contentBehaviorCommandWriterProvider),
     queuePartition: ActorQueuePartition(
       environment: CloudRuntimeConfig.appRuntimeEnv,
       accountId: accountId,
@@ -444,7 +465,12 @@ final intersectionVisitWriterProvider = Provider<IntersectionVisitWriter>((
   ref,
 ) {
   return RemoteIntersectionVisitWriter(
-    httpClient: ref.watch(cloudHttpClientProvider),
+    client: ref.watch(generatedCloudOperationClientProvider),
+    invocationContext: (clientPageId) => _contentQueryInvocationContext(
+      ref,
+      surface: AppUiSurfaces.myIntersections,
+      clientPageId: clientPageId,
+    ),
   );
 });
 

@@ -1,9 +1,8 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/spec.md#sit-001
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/profile_projection/following_subject_item_view_dto.g.dart';
 import 'package:quwoquan_app/core/di/app_production_composition.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
-import '../../../../support/cloud_services/repository_mock_reexports.dart';
+import '../../../../support/cloud_services/object_doubles/user/alpha_following_subject_facets.dart';
 
 void main() {
   group('FollowingSubject object ports', () {
@@ -14,26 +13,24 @@ void main() {
         'circle',
         'location',
       ]);
-      expect(FollowSubjectKind.fromWire('location'), FollowSubjectKind.location);
-      expect(() => FollowSubjectKind.fromWire('user'), throwsFormatException);
+      expect(
+        FollowSubjectKind.fromWire('location', 'FollowSubjectKind'),
+        FollowSubjectKind.location,
+      );
+      expect(
+        () => FollowSubjectKind.fromWire('user', 'FollowSubjectKind'),
+        throwsFormatException,
+      );
 
-      final generatedProjection = FollowingSubjectItemViewDto.fromMap(
-        <String, dynamic>{
-          'subjectId': 'location-west-sichuan',
-          'subjectType': 'location',
-          'displayName': '川西',
-          'avatarUrl': '',
-          'coverUrl': '',
-          'subtitle': '',
-          'targetRouteId': 'location_detail',
-          'targetObjectId': 'location-west-sichuan',
-          'followedAt': '2026-07-29T00:00:00Z',
-          'lastVisitedAt': '',
-          'latestChangedAt': '',
-          'unreadChangeCount': 0,
-          'hasUnreadChanges': false,
-          'latestChangeReason': '',
-        },
+      final generatedProjection = FollowingSubjectItemView(
+        subjectId: 'location-west-sichuan',
+        subjectType: FollowSubjectKind.location,
+        displayName: '川西',
+        targetRouteId: 'location_detail',
+        targetObjectId: 'location-west-sichuan',
+        followedAt: DateTime.utc(2026, 7, 29),
+        unreadChangeCount: 0,
+        hasUnreadChanges: false,
       );
       expect(generatedProjection.subjectType, FollowSubjectKind.location);
     });

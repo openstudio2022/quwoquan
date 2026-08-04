@@ -29,7 +29,7 @@ void main() {
         await expectLater(
           coordinator.uploadPreparedSource(
             source: source,
-            mediaType: ContentMediaType.video,
+            mediaType: MediaType.video,
             mimeType: 'video/mp4',
             uploadStream: _drainUpload,
           ),
@@ -66,7 +66,7 @@ void main() {
               <int>[3, 4],
             ]),
           ),
-          mediaType: ContentMediaType.video,
+          mediaType: MediaType.video,
           mimeType: 'video/mp4',
           uploadStream:
               (
@@ -113,9 +113,9 @@ void main() {
             sha256Digest: sha256.convert(const <int>[1]).toString(),
             openRead: () => Stream<List<int>>.value(const <int>[1]),
           ),
-          mediaType: ContentMediaType.image,
+          mediaType: MediaType.image,
           mimeType: 'image/jpeg',
-          captureMetadata: ContentMediaCaptureMetadata(
+          captureMetadata: MediaCaptureMetadata(
             cameraModel: 'ILCE-7M4',
             capturedAt: capturedAt,
           ),
@@ -148,7 +148,7 @@ void main() {
             sha256Digest: sha256.convert(bytes).toString(),
             openRead: () => Stream<List<int>>.value(bytes),
           ),
-          mediaType: ContentMediaType.video,
+          mediaType: MediaType.video,
           mimeType: 'video/mp4',
           cancellationSignal: cancellation,
           uploadStream:
@@ -195,7 +195,7 @@ void main() {
               sha256Digest: sha256.convert(bytes).toString(),
               openRead: () => Stream<List<int>>.value(bytes),
             ),
-            mediaType: ContentMediaType.image,
+            mediaType: MediaType.image,
             mimeType: 'image/jpeg',
             uploadStream:
                 (
@@ -239,7 +239,7 @@ void main() {
               sha256Digest: sha256.convert(bytes).toString(),
               openRead: () => Stream<List<int>>.value(bytes),
             ),
-            mediaType: ContentMediaType.image,
+            mediaType: MediaType.image,
             mimeType: 'image/jpeg',
             uploadStream:
                 (
@@ -296,7 +296,7 @@ void main() {
             sha256Digest: sha256.convert(bytes).toString(),
             openRead: () => Stream<List<int>>.value(bytes),
           ),
-          mediaType: ContentMediaType.video,
+          mediaType: MediaType.video,
           mimeType: 'video/mp4',
           uploadStream: _drainUpload,
         );
@@ -317,12 +317,12 @@ void main() {
         final checkpoint = ContentMediaPreparationCheckpoint.forSource(
           preparationIdentity: 'draft-durable-recovery',
           slot: 'video:0',
-          mediaType: ContentMediaType.video,
+          mediaType: MediaType.video,
           sha256Digest: sha256.convert(bytes).toString(),
         );
         final initialized = await media.initUpload(
           InitContentMediaUploadCommand(
-            mediaType: ContentMediaType.video,
+            mediaType: MediaType.video,
             mimeType: 'video/mp4',
             fileSize: bytes.length,
             expectedSha256: sha256.convert(bytes).toString(),
@@ -344,7 +344,7 @@ void main() {
             sha256Digest: sha256.convert(bytes).toString(),
             openRead: () => Stream<List<int>>.value(bytes),
           ),
-          mediaType: ContentMediaType.video,
+          mediaType: MediaType.video,
           mimeType: 'video/mp4',
           uploadStream: _drainUpload,
           checkpoint: persisted.single,
@@ -380,12 +380,12 @@ void main() {
         final initial = ContentMediaPreparationCheckpoint.forSource(
           preparationIdentity: 'draft-expired-recovery',
           slot: 'video:0',
-          mediaType: ContentMediaType.video,
+          mediaType: MediaType.video,
           sha256Digest: digest,
         );
         final expired = await media.initUpload(
           InitContentMediaUploadCommand(
-            mediaType: ContentMediaType.video,
+            mediaType: MediaType.video,
             mimeType: 'video/mp4',
             fileSize: bytes.length,
             expectedSha256: digest,
@@ -406,7 +406,7 @@ void main() {
             sha256Digest: digest,
             openRead: () => Stream<List<int>>.value(bytes),
           ),
-          mediaType: ContentMediaType.video,
+          mediaType: MediaType.video,
           mimeType: 'video/mp4',
           uploadStream: _drainUpload,
           checkpoint: durable,
@@ -442,7 +442,7 @@ void main() {
               sha256Digest: sha256.convert(bytes).toString(),
               openRead: () => Stream<List<int>>.value(bytes),
             ),
-            mediaType: ContentMediaType.video,
+            mediaType: MediaType.video,
             mimeType: 'video/mp4',
             uploadStream: _drainUpload,
           ),
@@ -474,7 +474,7 @@ void main() {
               sha256Digest: sha256.convert(bytes).toString(),
               openRead: () => Stream<List<int>>.value(bytes),
             ),
-            mediaType: ContentMediaType.video,
+            mediaType: MediaType.video,
             mimeType: 'video/mp4',
             uploadStream: _drainUpload,
           ),
@@ -497,7 +497,7 @@ void main() {
             ContentMediaPreparationCheckpoint.forSource(
               preparationIdentity: 'draft-discard',
               slot: 'image:0',
-              mediaType: ContentMediaType.image,
+              mediaType: MediaType.image,
               sha256Digest: sha256.convert(const <int>[1]).toString(),
             ).copyWith(
               sessionId: 'session-discard',

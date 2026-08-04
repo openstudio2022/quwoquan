@@ -143,6 +143,54 @@ class StackctlProviderReadinessContractTest(unittest.TestCase):
             ]
         )
 
+    def test_environment_matrix_executes_only_external_provider_capabilities(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            args = argparse.Namespace(
+                matrix=False,
+                environment_matrix=True,
+                capability_id="",
+                adapter_id="",
+                env="gamma",
+                layer="",
+                execute=True,
+                image_digest="",
+                data_digest="",
+                report_dir=str(Path(temporary) / "matrix"),
+            )
+            runner = mock.Mock()
+            runner.main.return_value = 0
+            conformance = mock.Mock()
+            conformance.discover_test_sources.return_value = ({}, [])
+            conformance.load_validate_and_derive.return_value = ({}, [])
+            conformance.readiness_issues.return_value = []
+            with (
+                mock.patch.object(
+                    stackctl,
+                    "_provider_conformance_runner",
+                    return_value=runner,
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "_provider_conformance",
+                    return_value=conformance,
+                ),
+            ):
+                result = stackctl.command_provider_conformance(args)
+
+        self.assertEqual(result["exitCode"], 0)
+        self.assertEqual(result["bindingCapabilityCount"], 17)
+        self.assertEqual(result["capabilityCount"], 14)
+        self.assertEqual(result["expectedCells"], 42)
+        self.assertEqual(result["executed"], 42)
+        runner.preflight_environment_matrix.assert_called_once()
+        self.assertEqual(runner.main.call_count, 42)
+        self.assertFalse(
+            any(
+                call.args[0][1] == "ext.first_party.http_authority"
+                for call in runner.main.call_args_list
+            )
+        )
+
     def test_release_verify_invokes_provider_readiness_for_gamma_and_prod(self) -> None:
         for environment in ("gamma", "prod"):
             with self.subTest(environment=environment), tempfile.TemporaryDirectory() as temporary:

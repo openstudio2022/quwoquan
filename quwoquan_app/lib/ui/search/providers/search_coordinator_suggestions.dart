@@ -196,7 +196,7 @@ extension SearchCoordinatorSuggestions on SearchCoordinator {
     final contacts = responseHits
         .where((hit) => hit.objectType == SearchObjectType.chatContact)
         .map((hit) => hit.asChatContactItem)
-        .whereType<ChatContactSearchItemDto>()
+        .whereType<ChatContactSearchItemViewData>()
         .toList(growable: false);
     final conversationHits = responseHits
         .where((hit) => hit.objectType == SearchObjectType.chatConversation)

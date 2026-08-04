@@ -1,7 +1,7 @@
 // spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/message-home-commercial-ia/spec.md#gwt-001
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/message_home_row_dto.g.dart';
+import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
 import '../../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/providers/message_home_rows_provider.dart';
@@ -125,7 +125,7 @@ final class _FakeChatRepository extends MockChatRepository {
   }
 
   @override
-  Future<List<MessageHomeRowDto>> listMessageHome({
+  Future<List<MessageHomeRow>> listMessageHome({
     String filter = 'all',
     String? cursor,
     int limit = 100,
@@ -135,8 +135,8 @@ final class _FakeChatRepository extends MockChatRepository {
       throw StateError('message home offline');
     }
     if (filter == 'notification') {
-      return <MessageHomeRowDto>[
-        MessageHomeRowDto(
+      return <MessageHomeRow>[
+        _messageHomeRow(
           id: 'app_msg_01',
           kind: 'notification',
           notificationId: 'app_msg_01',
@@ -147,10 +147,10 @@ final class _FakeChatRepository extends MockChatRepository {
       ];
     }
     if (filter == 'unread' && _readConversationIds.contains('conv_group_01')) {
-      return const <MessageHomeRowDto>[];
+      return const <MessageHomeRow>[];
     }
-    return <MessageHomeRowDto>[
-      MessageHomeRowDto(
+    return <MessageHomeRow>[
+      _messageHomeRow(
         id: 'conv_group_01',
         kind: 'conversation',
         conversationId: 'conv_group_01',
@@ -162,3 +162,30 @@ final class _FakeChatRepository extends MockChatRepository {
     ];
   }
 }
+
+MessageHomeRow _messageHomeRow({
+  required String id,
+  required String kind,
+  String conversationId = '',
+  String notificationId = '',
+  String conversationType = '',
+  required String title,
+  required String summary,
+  int unreadCount = 0,
+}) => MessageHomeRow(
+  id: id,
+  kind: kind,
+  conversationId: conversationId,
+  notificationId: notificationId,
+  conversationType: conversationType,
+  title: title,
+  summary: summary,
+  avatarUrl: '',
+  groupAvatarVersion: 0,
+  unreadCount: unreadCount,
+  mentionUnreadCount: 0,
+  muted: false,
+  pinned: false,
+  notificationType: '',
+  read: unreadCount == 0,
+);

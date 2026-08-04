@@ -13,6 +13,7 @@ import 'package:quwoquan_app/ui/rtc/models/call_state.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
+import '../../../../support/cloud_services/object_doubles/rtc/rtc_contract_test_builders.dart';
 
 /// A4 契约：realtime 信令（call.ended / call.answered / screen_share.*）是
 /// 会话状态的权威事实源；对端挂断/取消在任意阶段（含 connecting）都必须收尾，
@@ -25,21 +26,21 @@ void main() {
     CallStatus status = CallStatus.inCall,
   }) {
     final now = DateTime.utc(2026, 7, 20);
-    return CallSession(
-      callId: callId,
+    return buildCallSessionContract(
+      id: callId,
       callType: CallType.audio,
       status: status,
       initiatorId: 'user_a',
       roomId: 'rtc-room-$callId',
       maxParticipants: 2,
       participantCount: 2,
-      participants: const <CallParticipant>[
-        CallParticipant(
+      participants: <CallParticipant>[
+        buildCallParticipantContract(
           userId: 'user_a',
           role: ParticipantRole.initiator,
           status: ParticipantStatus.connected,
         ),
-        CallParticipant(
+        buildCallParticipantContract(
           userId: 'user_b',
           role: ParticipantRole.invitee,
           status: ParticipantStatus.connected,
@@ -97,7 +98,7 @@ void main() {
           .read(activeCallProvider.notifier)
           .startCall(callId: 'call_signal_001', callType: 'audio');
 
-      bus.emit(<String, dynamic>{
+      bus.emitCanonicalFixture(<String, dynamic>{
         'type': 'call.ended',
         'callId': 'call_signal_001',
         'payload': <String, dynamic>{
@@ -119,7 +120,7 @@ void main() {
       notifier.loadFromSession(session(status: CallStatus.connecting));
       expect(container.read(callSessionProvider).status, CallStatus.connecting);
 
-      bus.emit(<String, dynamic>{
+      bus.emitCanonicalFixture(<String, dynamic>{
         'type': 'call.ended',
         'callId': 'call_signal_001',
         'payload': <String, dynamic>{
@@ -140,7 +141,7 @@ void main() {
           .read(callSessionProvider.notifier)
           .loadFromSession(session(status: CallStatus.ringing));
 
-      bus.emit(<String, dynamic>{
+      bus.emitCanonicalFixture(<String, dynamic>{
         'type': 'call.ended',
         'callId': 'call_signal_001',
         'payload': <String, dynamic>{
@@ -167,7 +168,7 @@ void main() {
       final (container, bus) = createHarness();
       container.read(callSessionProvider.notifier).loadFromSession(session());
 
-      bus.emit(<String, dynamic>{
+      bus.emitCanonicalFixture(<String, dynamic>{
         'type': 'call.ended',
         'callId': 'call_other_999',
         'payload': <String, dynamic>{
@@ -226,7 +227,7 @@ void main() {
           .read(callSessionProvider.notifier)
           .loadFromSession(session(status: CallStatus.ringing));
 
-      bus.emit(<String, dynamic>{
+      bus.emitCanonicalFixture(<String, dynamic>{
         'type': 'call.answered',
         'callId': 'call_signal_001',
         'actorId': 'user_b',
@@ -244,7 +245,7 @@ void main() {
       final (container, bus) = createHarness();
       container.read(callSessionProvider.notifier).loadFromSession(session());
 
-      bus.emit(<String, dynamic>{
+      bus.emitCanonicalFixture(<String, dynamic>{
         'type': 'call.answered',
         'callId': 'call_signal_001',
         'payload': <String, dynamic>{'callId': 'call_signal_001'},
@@ -267,7 +268,7 @@ void main() {
           .read(callSessionProvider.notifier)
           .loadFromSession(session(status: CallStatus.connecting));
 
-      bus.emit(<String, dynamic>{
+      bus.emitCanonicalFixture(<String, dynamic>{
         'type': 'call.connected',
         'callId': 'call_signal_001',
         'payload': <String, dynamic>{
@@ -289,7 +290,7 @@ void main() {
       container.read(callSessionProvider.notifier).loadFromSession(session());
 
       for (final type in <String>['participant.joined', 'participant.left']) {
-        bus.emit(<String, dynamic>{
+        bus.emitCanonicalFixture(<String, dynamic>{
           'type': type,
           'callId': 'call_signal_001',
           'payload': <String, dynamic>{
@@ -300,7 +301,7 @@ void main() {
         });
         await pumpEventQueue();
       }
-      bus.emit(<String, dynamic>{
+      bus.emitCanonicalFixture(<String, dynamic>{
         'type': 'participant.joined',
         'callId': 'call_other_999',
         'payload': <String, dynamic>{
@@ -323,7 +324,7 @@ void main() {
       final (container, bus) = createHarness();
       container.read(callSessionProvider.notifier).loadFromSession(session());
 
-      bus.emit(<String, dynamic>{
+      bus.emitCanonicalFixture(<String, dynamic>{
         'type': 'screen_share.started',
         'callId': 'call_signal_001',
         'payload': <String, dynamic>{
@@ -337,7 +338,7 @@ void main() {
       expect(state.session?.screenShareUserId, 'user_b');
       expect(state.isLocalScreenSharing, isFalse);
 
-      bus.emit(<String, dynamic>{
+      bus.emitCanonicalFixture(<String, dynamic>{
         'type': 'screen_share.stopped',
         'callId': 'call_signal_001',
         'payload': <String, dynamic>{
@@ -625,21 +626,21 @@ CallSession _fixtureSession({
   CallStatus status = CallStatus.inCall,
 }) {
   final now = DateTime.utc(2026, 7, 20);
-  return CallSession(
-    callId: callId,
+  return buildCallSessionContract(
+    id: callId,
     callType: CallType.audio,
     status: status,
     initiatorId: 'user_a',
     roomId: 'rtc-room-$callId',
     maxParticipants: 2,
     participantCount: 2,
-    participants: const <CallParticipant>[
-      CallParticipant(
+    participants: <CallParticipant>[
+      buildCallParticipantContract(
         userId: 'user_a',
         role: ParticipantRole.initiator,
         status: ParticipantStatus.connected,
       ),
-      CallParticipant(
+      buildCallParticipantContract(
         userId: 'user_b',
         role: ParticipantRole.invitee,
         status: ParticipantStatus.connected,
@@ -909,4 +910,20 @@ final class _ScreenShareRtcRoomService extends RtcRoomService {
 
   @override
   void dispose() {}
+}
+
+extension on RtcSignalEventBus {
+  void emitCanonicalFixture(Map<String, dynamic> event) {
+    final payload = Map<String, Object?>.from(
+      event['payload'] as Map<String, dynamic>,
+    );
+    emit(
+      RealtimeEventEnvelope.fromWire(<String, Object?>{
+        'type': event['type'],
+        if (payload['eventId'] != null) 'eventId': payload['eventId'],
+        'occurredAt': '2026-08-04T10:00:00Z',
+        'payload': payload,
+      }),
+    );
+  }
 }

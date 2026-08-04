@@ -12,21 +12,34 @@ from quwoquan_ops.cli.lib import experiment_policy_activation as activation
 
 class ExperimentPolicyActivationLocalContractTest(unittest.TestCase):
     def test_create_is_package_bound_exact_and_never_persists_bearer(self) -> None:
-        create_result = {
+        search_create = {
             "id": "search_ranking",
             "key": "search_ranking",
+            "status": "running",
+            "experimentRevision": 1,
+        }
+        rec_create = {
+            "id": "rec_model_vs_rule",
+            "key": "rec_model_vs_rule",
             "status": "running",
             "experimentRevision": 1,
         }
         catalog = {
             "items": [
                 {
-                    **create_result,
+                    **search_create,
                     "variants": [
                         {"key": "control", "allocationBasisPoints": 5000},
                         {"key": "term_heat", "allocationBasisPoints": 5000},
                     ],
-                }
+                },
+                {
+                    **rec_create,
+                    "variants": [
+                        {"key": "rule", "allocationBasisPoints": 5000},
+                        {"key": "model", "allocationBasisPoints": 5000},
+                    ],
+                },
             ]
         }
         with (
@@ -56,7 +69,12 @@ class ExperimentPolicyActivationLocalContractTest(unittest.TestCase):
             mock.patch.object(
                 activation,
                 "_request_json",
-                side_effect=[(201, create_result), (200, catalog)],
+                side_effect=[
+                    (201, search_create),
+                    (200, catalog),
+                    (201, rec_create),
+                    (200, catalog),
+                ],
             ) as request_json,
         ):
             receipt = activation.activate_search_experiment_policy(
@@ -67,8 +85,12 @@ class ExperimentPolicyActivationLocalContractTest(unittest.TestCase):
 
         self.assertEqual(receipt["status"], "passed")
         self.assertEqual(receipt["operation"], "created")
-        self.assertEqual(receipt["caseResult"]["executed"], 1)
+        self.assertEqual(receipt["caseResult"]["executed"], 2)
         self.assertEqual(receipt["caseResult"]["skipped"], 0)
+        self.assertEqual(
+            [item["id"] for item in receipt["policies"]],
+            ["search_ranking", "rec_model_vs_rule"],
+        )
         self.assertNotIn("sensitive-bearer", json.dumps(receipt))
         create_call = request_json.call_args_list[0].kwargs
         self.assertEqual(create_call["method"], "POST")
@@ -87,7 +109,17 @@ class ExperimentPolicyActivationLocalContractTest(unittest.TestCase):
                         {"key": "control", "allocationBasisPoints": 5000},
                         {"key": "term_heat", "allocationBasisPoints": 5000},
                     ],
-                }
+                },
+                {
+                    "id": "rec_model_vs_rule",
+                    "key": "rec_model_vs_rule",
+                    "status": "running",
+                    "experimentRevision": 2,
+                    "variants": [
+                        {"key": "rule", "allocationBasisPoints": 5000},
+                        {"key": "model", "allocationBasisPoints": 5000},
+                    ],
+                },
             ]
         }
         with (
@@ -114,7 +146,12 @@ class ExperimentPolicyActivationLocalContractTest(unittest.TestCase):
             mock.patch.object(
                 activation,
                 "_request_json",
-                side_effect=[(409, {"code": "OPS.USER.version_conflict"}), (200, catalog)],
+                side_effect=[
+                    (409, {"code": "OPS.USER.version_conflict"}),
+                    (200, catalog),
+                    (409, {"code": "OPS.USER.version_conflict"}),
+                    (200, catalog),
+                ],
             ),
         ):
             receipt = activation.activate_search_experiment_policy(
@@ -124,6 +161,10 @@ class ExperimentPolicyActivationLocalContractTest(unittest.TestCase):
             )
         self.assertEqual(receipt["operation"], "reused")
         self.assertEqual(receipt["policy"]["experimentRevision"], 3)
+        self.assertEqual(
+            receipt["policyOperations"],
+            {"search_ranking": "reused", "rec_model_vs_rule": "reused"},
+        )
 
     def test_prod_is_rejected_before_any_credential_is_minted(self) -> None:
         with (

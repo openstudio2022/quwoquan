@@ -4,9 +4,9 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
 
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import 'package:quwoquan_app/cloud/runtime/models/discovery_feed_page.dart';
 import 'package:quwoquan_app/cloud/services/content/content_read_model_projection.dart';
@@ -853,19 +853,16 @@ String contentUserPostsQueryKey({
 }
 
 String _resolvePostVersion(ContentPostViewData post) {
-  final map = post.toPresentationMap();
   // 缓存版本只消费 canonical updatedAt；缺失时使用对象主键。
   // 不再用 publishedAt 借壳——发布时间不是内容变更时间。
-  final version = map['updatedAt']?.toString().trim();
+  final version = post.updatedAt?.toUtc().toIso8601String().trim();
   return version?.isNotEmpty == true ? version! : post.id;
 }
 
 Map<String, dynamic> _postSnapshotMap(ContentPostViewData post) {
-  final map = Map<String, dynamic>.from(post.toPresentationMap());
-  map['postId'] = post.id;
-  map['contentType'] = post.type;
-  map['contentIdentity'] = post.identity;
-  return map;
+  return Map<String, dynamic>.from(
+    contentPostProjectionFromViewData(post).toWire(),
+  );
 }
 
 Map<String, dynamic> _normalizePostSnapshotMap(Map<dynamic, dynamic> raw) {

@@ -1169,6 +1169,326 @@ extension SkillUserSettingStatusX on SkillUserSettingStatus {
   }
 }
 
+enum SkillDataControlRequestStatus {
+  pendingConfirmation,
+  executing,
+  completed,
+  cancelled,
+  failed,
+}
+
+SkillDataControlRequestStatus parseSkillDataControlRequestStatusStrict(String raw) {
+  switch (raw.trim()) {
+    case "pending_confirmation":
+      return SkillDataControlRequestStatus.pendingConfirmation;
+    case "executing":
+      return SkillDataControlRequestStatus.executing;
+    case "completed":
+      return SkillDataControlRequestStatus.completed;
+    case "cancelled":
+      return SkillDataControlRequestStatus.cancelled;
+    case "failed":
+      return SkillDataControlRequestStatus.failed;
+    default:
+      throw AssistantRuntimeEnumParseFailure("SkillDataControlRequestStatus", raw.trim());
+  }
+}
+
+extension SkillDataControlRequestStatusX on SkillDataControlRequestStatus {
+  String get wireName {
+    switch (this) {
+      case SkillDataControlRequestStatus.pendingConfirmation:
+        return "pending_confirmation";
+      case SkillDataControlRequestStatus.executing:
+        return "executing";
+      case SkillDataControlRequestStatus.completed:
+        return "completed";
+      case SkillDataControlRequestStatus.cancelled:
+        return "cancelled";
+      case SkillDataControlRequestStatus.failed:
+        return "failed";
+    }
+  }
+}
+
+enum SkillDataControlAction {
+  hideActivityHistory,
+  revokeConsent,
+  archiveSubscriptions,
+}
+
+SkillDataControlAction parseSkillDataControlActionStrict(String raw) {
+  switch (raw.trim()) {
+    case "hide_activity_history":
+      return SkillDataControlAction.hideActivityHistory;
+    case "revoke_consent":
+      return SkillDataControlAction.revokeConsent;
+    case "archive_subscriptions":
+      return SkillDataControlAction.archiveSubscriptions;
+    default:
+      throw AssistantRuntimeEnumParseFailure("SkillDataControlAction", raw.trim());
+  }
+}
+
+extension SkillDataControlActionX on SkillDataControlAction {
+  String get wireName {
+    switch (this) {
+      case SkillDataControlAction.hideActivityHistory:
+        return "hide_activity_history";
+      case SkillDataControlAction.revokeConsent:
+        return "revoke_consent";
+      case SkillDataControlAction.archiveSubscriptions:
+        return "archive_subscriptions";
+    }
+  }
+}
+
+enum SkillActivityKind {
+  run,
+  consent,
+  subscription,
+  dataControl,
+}
+
+SkillActivityKind parseSkillActivityKindStrict(String raw) {
+  switch (raw.trim()) {
+    case "run":
+      return SkillActivityKind.run;
+    case "consent":
+      return SkillActivityKind.consent;
+    case "subscription":
+      return SkillActivityKind.subscription;
+    case "data_control":
+      return SkillActivityKind.dataControl;
+    default:
+      throw AssistantRuntimeEnumParseFailure("SkillActivityKind", raw.trim());
+  }
+}
+
+extension SkillActivityKindX on SkillActivityKind {
+  String get wireName {
+    switch (this) {
+      case SkillActivityKind.run:
+        return "run";
+      case SkillActivityKind.consent:
+        return "consent";
+      case SkillActivityKind.subscription:
+        return "subscription";
+      case SkillActivityKind.dataControl:
+        return "data_control";
+    }
+  }
+}
+
+enum SkillActivityRecoveryAction {
+  retryRun,
+  provideInput,
+  reviewApproval,
+  resumeRun,
+  reviewConsent,
+  manageConsent,
+  resumeSubscription,
+  manageSubscription,
+  retryDataControl,
+}
+
+SkillActivityRecoveryAction parseSkillActivityRecoveryActionStrict(String raw) {
+  switch (raw.trim()) {
+    case "retry_run":
+      return SkillActivityRecoveryAction.retryRun;
+    case "provide_input":
+      return SkillActivityRecoveryAction.provideInput;
+    case "review_approval":
+      return SkillActivityRecoveryAction.reviewApproval;
+    case "resume_run":
+      return SkillActivityRecoveryAction.resumeRun;
+    case "review_consent":
+      return SkillActivityRecoveryAction.reviewConsent;
+    case "manage_consent":
+      return SkillActivityRecoveryAction.manageConsent;
+    case "resume_subscription":
+      return SkillActivityRecoveryAction.resumeSubscription;
+    case "manage_subscription":
+      return SkillActivityRecoveryAction.manageSubscription;
+    case "retry_data_control":
+      return SkillActivityRecoveryAction.retryDataControl;
+    default:
+      throw AssistantRuntimeEnumParseFailure("SkillActivityRecoveryAction", raw.trim());
+  }
+}
+
+extension SkillActivityRecoveryActionX on SkillActivityRecoveryAction {
+  String get wireName {
+    switch (this) {
+      case SkillActivityRecoveryAction.retryRun:
+        return "retry_run";
+      case SkillActivityRecoveryAction.provideInput:
+        return "provide_input";
+      case SkillActivityRecoveryAction.reviewApproval:
+        return "review_approval";
+      case SkillActivityRecoveryAction.resumeRun:
+        return "resume_run";
+      case SkillActivityRecoveryAction.reviewConsent:
+        return "review_consent";
+      case SkillActivityRecoveryAction.manageConsent:
+        return "manage_consent";
+      case SkillActivityRecoveryAction.resumeSubscription:
+        return "resume_subscription";
+      case SkillActivityRecoveryAction.manageSubscription:
+        return "manage_subscription";
+      case SkillActivityRecoveryAction.retryDataControl:
+        return "retry_data_control";
+    }
+  }
+}
+
+enum SkillActivityDisplayKey {
+  runAccepted,
+  runOrienting,
+  runPlanning,
+  runExecuting,
+  runObserving,
+  runReflecting,
+  runCheckpointing,
+  runWaitingUser,
+  runWaitingApproval,
+  runWaitingExternal,
+  runPaused,
+  runSynthesizing,
+  runVerifying,
+  runCompleted,
+  runFailed,
+  runCancelled,
+  consentGranted,
+  consentRevoked,
+  subscriptionActive,
+  subscriptionPaused,
+  subscriptionArchived,
+  dataControlPendingConfirmation,
+  dataControlExecuting,
+  dataControlCompleted,
+  dataControlCancelled,
+  dataControlFailed,
+}
+
+SkillActivityDisplayKey parseSkillActivityDisplayKeyStrict(String raw) {
+  switch (raw.trim()) {
+    case "assistant.skill_activity.run.accepted":
+      return SkillActivityDisplayKey.runAccepted;
+    case "assistant.skill_activity.run.orienting":
+      return SkillActivityDisplayKey.runOrienting;
+    case "assistant.skill_activity.run.planning":
+      return SkillActivityDisplayKey.runPlanning;
+    case "assistant.skill_activity.run.executing":
+      return SkillActivityDisplayKey.runExecuting;
+    case "assistant.skill_activity.run.observing":
+      return SkillActivityDisplayKey.runObserving;
+    case "assistant.skill_activity.run.reflecting":
+      return SkillActivityDisplayKey.runReflecting;
+    case "assistant.skill_activity.run.checkpointing":
+      return SkillActivityDisplayKey.runCheckpointing;
+    case "assistant.skill_activity.run.waiting_user":
+      return SkillActivityDisplayKey.runWaitingUser;
+    case "assistant.skill_activity.run.waiting_approval":
+      return SkillActivityDisplayKey.runWaitingApproval;
+    case "assistant.skill_activity.run.waiting_external":
+      return SkillActivityDisplayKey.runWaitingExternal;
+    case "assistant.skill_activity.run.paused":
+      return SkillActivityDisplayKey.runPaused;
+    case "assistant.skill_activity.run.synthesizing":
+      return SkillActivityDisplayKey.runSynthesizing;
+    case "assistant.skill_activity.run.verifying":
+      return SkillActivityDisplayKey.runVerifying;
+    case "assistant.skill_activity.run.completed":
+      return SkillActivityDisplayKey.runCompleted;
+    case "assistant.skill_activity.run.failed":
+      return SkillActivityDisplayKey.runFailed;
+    case "assistant.skill_activity.run.cancelled":
+      return SkillActivityDisplayKey.runCancelled;
+    case "assistant.skill_activity.consent.granted":
+      return SkillActivityDisplayKey.consentGranted;
+    case "assistant.skill_activity.consent.revoked":
+      return SkillActivityDisplayKey.consentRevoked;
+    case "assistant.skill_activity.subscription.active":
+      return SkillActivityDisplayKey.subscriptionActive;
+    case "assistant.skill_activity.subscription.paused":
+      return SkillActivityDisplayKey.subscriptionPaused;
+    case "assistant.skill_activity.subscription.archived":
+      return SkillActivityDisplayKey.subscriptionArchived;
+    case "assistant.skill_activity.data_control.pending_confirmation":
+      return SkillActivityDisplayKey.dataControlPendingConfirmation;
+    case "assistant.skill_activity.data_control.executing":
+      return SkillActivityDisplayKey.dataControlExecuting;
+    case "assistant.skill_activity.data_control.completed":
+      return SkillActivityDisplayKey.dataControlCompleted;
+    case "assistant.skill_activity.data_control.cancelled":
+      return SkillActivityDisplayKey.dataControlCancelled;
+    case "assistant.skill_activity.data_control.failed":
+      return SkillActivityDisplayKey.dataControlFailed;
+    default:
+      throw AssistantRuntimeEnumParseFailure("SkillActivityDisplayKey", raw.trim());
+  }
+}
+
+extension SkillActivityDisplayKeyX on SkillActivityDisplayKey {
+  String get wireName {
+    switch (this) {
+      case SkillActivityDisplayKey.runAccepted:
+        return "assistant.skill_activity.run.accepted";
+      case SkillActivityDisplayKey.runOrienting:
+        return "assistant.skill_activity.run.orienting";
+      case SkillActivityDisplayKey.runPlanning:
+        return "assistant.skill_activity.run.planning";
+      case SkillActivityDisplayKey.runExecuting:
+        return "assistant.skill_activity.run.executing";
+      case SkillActivityDisplayKey.runObserving:
+        return "assistant.skill_activity.run.observing";
+      case SkillActivityDisplayKey.runReflecting:
+        return "assistant.skill_activity.run.reflecting";
+      case SkillActivityDisplayKey.runCheckpointing:
+        return "assistant.skill_activity.run.checkpointing";
+      case SkillActivityDisplayKey.runWaitingUser:
+        return "assistant.skill_activity.run.waiting_user";
+      case SkillActivityDisplayKey.runWaitingApproval:
+        return "assistant.skill_activity.run.waiting_approval";
+      case SkillActivityDisplayKey.runWaitingExternal:
+        return "assistant.skill_activity.run.waiting_external";
+      case SkillActivityDisplayKey.runPaused:
+        return "assistant.skill_activity.run.paused";
+      case SkillActivityDisplayKey.runSynthesizing:
+        return "assistant.skill_activity.run.synthesizing";
+      case SkillActivityDisplayKey.runVerifying:
+        return "assistant.skill_activity.run.verifying";
+      case SkillActivityDisplayKey.runCompleted:
+        return "assistant.skill_activity.run.completed";
+      case SkillActivityDisplayKey.runFailed:
+        return "assistant.skill_activity.run.failed";
+      case SkillActivityDisplayKey.runCancelled:
+        return "assistant.skill_activity.run.cancelled";
+      case SkillActivityDisplayKey.consentGranted:
+        return "assistant.skill_activity.consent.granted";
+      case SkillActivityDisplayKey.consentRevoked:
+        return "assistant.skill_activity.consent.revoked";
+      case SkillActivityDisplayKey.subscriptionActive:
+        return "assistant.skill_activity.subscription.active";
+      case SkillActivityDisplayKey.subscriptionPaused:
+        return "assistant.skill_activity.subscription.paused";
+      case SkillActivityDisplayKey.subscriptionArchived:
+        return "assistant.skill_activity.subscription.archived";
+      case SkillActivityDisplayKey.dataControlPendingConfirmation:
+        return "assistant.skill_activity.data_control.pending_confirmation";
+      case SkillActivityDisplayKey.dataControlExecuting:
+        return "assistant.skill_activity.data_control.executing";
+      case SkillActivityDisplayKey.dataControlCompleted:
+        return "assistant.skill_activity.data_control.completed";
+      case SkillActivityDisplayKey.dataControlCancelled:
+        return "assistant.skill_activity.data_control.cancelled";
+      case SkillActivityDisplayKey.dataControlFailed:
+        return "assistant.skill_activity.data_control.failed";
+    }
+  }
+}
+
 enum SkillMemoryPolicy {
   packageDefault,
   confirmBeforeSave,

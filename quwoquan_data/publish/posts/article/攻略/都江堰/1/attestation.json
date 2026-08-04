@@ -1,0 +1,29 @@
+{
+  "schema": "quwoquan_data.review_attestation",
+  "stage": "5.review",
+  "executionId": "20260803--travel-article-commercial-rights-closure--china--pilot-001",
+  "executionBinding": "frozen",
+  "objectRef": "都江堰__article_frontier_wikivoyage_zh_f25bb21f8d47",
+  "decision": "approved",
+  "deterministicGate": {
+    "status": "passed",
+    "issues": []
+  },
+  "independentReviewer": {
+    "status": "passed",
+    "provider": "cursor_sdk",
+    "model": "auto",
+    "modelFamily": "auto",
+    "runId": "run-85e178e8-8563-4809-938a-b246a1bbfd7d",
+    "resultHash": "sha256:4c43dd36a801850f6722c933f305fa38beb27fb383145f9f8909b6a75fdfda73"
+  },
+  "mediaRefReview": {
+    "status": "passed",
+    "issues": []
+  },
+  "repair": {
+    "status": "not_required"
+  },
+  "finalizationRef": "5.review/finalization_report.json",
+  "evidenceIndexRef": "5.review/evidence_index.json"
+}

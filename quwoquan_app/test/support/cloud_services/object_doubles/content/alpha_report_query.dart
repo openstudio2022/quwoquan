@@ -2,10 +2,10 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 final class AlphaContentReportQueryAdapter
     implements ContentMyReportQueryFacet {
-  AlphaContentReportQueryAdapter(Iterable<ContentMyReportItem> items)
-    : _items = List<ContentMyReportItem>.unmodifiable(items);
+  AlphaContentReportQueryAdapter(Iterable<MyReportItemSlice> items)
+    : _items = List<MyReportItemSlice>.unmodifiable(items);
 
-  final List<ContentMyReportItem> _items;
+  final List<MyReportItemSlice> _items;
 
   @override
   Future<MyReportPageSlice> listMyReports(ContentMyReportsQuery query) async {

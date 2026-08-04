@@ -70,3 +70,25 @@ type Store interface {
 		time.Time,
 	) error
 }
+
+// ActivityReader and SkillScopedReader are separate read capabilities so
+// consumers cannot acquire the mutation Store merely to build a projection or
+// execute a bounded owner command fan-out.
+type ActivityReader interface {
+	ListSkillSubscriptionActivities(
+		context.Context,
+		string,
+		string,
+		int,
+	) ([]model.ActivityEvent, error)
+}
+
+type SkillScopedReader interface {
+	ListSkillSubscriptionsBySkill(
+		context.Context,
+		string,
+		string,
+		time.Time,
+		int,
+	) ([]model.SkillSubscription, error)
+}

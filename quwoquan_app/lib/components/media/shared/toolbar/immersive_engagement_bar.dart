@@ -49,7 +49,7 @@ class ImmersiveEngagementBar extends StatelessWidget {
   final String avatarUrl;
   final String displayName;
 
-  /// 作者认证角标（云侧快照字段，V1.0：头像 + 作者名 + 认证角标 + 关注）；
+  /// 作者认证角标（云侧快照字段：头像 + 作者名 + 认证角标 + 关注）；
   /// 空字符串不渲染。端侧只判空，不本地推断认证语义。
   final String authorBadge;
 
@@ -208,7 +208,7 @@ class ImmersiveEngagementBar extends StatelessWidget {
       style: nameStyle,
     );
 
-    // V1.0：作者认证角标紧跟作者名（云侧快照，空不渲染）。
+    // 作者认证角标紧跟作者名（云侧快照，空不渲染）。
     if (authorBadge.trim().isNotEmpty) {
       nameWidget = Row(
         mainAxisSize: MainAxisSize.min,

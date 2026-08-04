@@ -117,6 +117,43 @@ void main() {
       throwsA(isA<FormatException>()),
     );
   });
+
+  test('generated preview wire 对未知字段与缺失 mimeType fail-closed', () async {
+    final resolver = _resolver();
+    final descriptor = _descriptor(resolver);
+    final unknownFieldManifest = _manifestJson()..['legacyManifestVersion'] = 1;
+    final unknownFieldQuery = RemoteVideoPreviewTrackQuery(
+      httpClient: CloudHttpClient(
+        client: MockClient(
+          (_) async => http.Response(jsonEncode(unknownFieldManifest), 200),
+        ),
+      ),
+      mediaDeliveryResolver: resolver,
+      telemetry: telemetry,
+    );
+    await expectLater(
+      unknownFieldQuery.loadManifest(descriptor),
+      throwsA(isA<FormatException>()),
+    );
+
+    final missingMimeTypeManifest = _manifestJson();
+    final sprites =
+        missingMimeTypeManifest['sprites']! as List<Map<String, Object?>>;
+    sprites.single.remove('mimeType');
+    final missingMimeTypeQuery = RemoteVideoPreviewTrackQuery(
+      httpClient: CloudHttpClient(
+        client: MockClient(
+          (_) async => http.Response(jsonEncode(missingMimeTypeManifest), 200),
+        ),
+      ),
+      mediaDeliveryResolver: resolver,
+      telemetry: telemetry,
+    );
+    await expectLater(
+      missingMimeTypeQuery.loadManifest(descriptor),
+      throwsA(isA<FormatException>()),
+    );
+  });
 }
 
 MediaDeliveryResolver _resolver() {
@@ -160,6 +197,7 @@ Map<String, Object?> _manifestJson({int assetVersion = 2}) {
         'spriteId': 'sprite-000',
         'publicSliceKey':
             'media/video/s/media-canary-seek-125s/v$assetVersion/preview/sprite-000.webp',
+        'mimeType': 'image/webp',
         'sha256': digest,
         'width': 720,
         'height': 426,

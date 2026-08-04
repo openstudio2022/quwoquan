@@ -413,15 +413,12 @@ types:
       - name: searchQueryPlan
         type: SkillSubscriptionSearchQueryPlan
         client_dart_type: SkillSubscriptionSearchQueryPlanWire
-        client_wire: toJson
       - name: trigger
         type: SkillSubscriptionTrigger
         client_dart_type: SkillSubscriptionTriggerWire
-        client_wire: toJson
       - name: destination
         type: SkillSubscriptionDestination
         client_dart_type: SkillSubscriptionDestinationWire
-        client_wire: toJson
       - name: clientRequestId
         type: string
         constraints:

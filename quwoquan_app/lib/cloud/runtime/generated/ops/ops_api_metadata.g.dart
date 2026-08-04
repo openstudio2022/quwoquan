@@ -211,6 +211,7 @@ class OpsApiMetadata {
   static const Map<String, String> operationToResponseKind = <String, String>{
     'GetEventDrilldown': 'object',
     'GetRtcMediaQoeSummary': 'object',
+    'RecordVisit': 'object',
   };
 
   static const String acknowledgeAlertOperation = 'AcknowledgeAlert';

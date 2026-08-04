@@ -102,7 +102,8 @@ TripShareSnapshot _snapshot({
     tripId: 'trip-1',
     sourceRevisionId: 'revision-1',
     sourceRevisionNumber: 1,
-    sourceDigest: 'sha256:source',
+    sourceDigest:
+        'sha256:41cf6794ba4200b839c53531555f0f3998df4cbb01a4d5cb0b94e3ca5e23947d',
     scope: scope,
     dayIndex: dayIndex,
     itemId: itemId,

@@ -71,9 +71,7 @@ class PersonaProfileViewData {
   final DateTime? updatedAt;
 
   /// canonical generated wire 到 App 展示模型的唯一映射。
-  factory PersonaProfileViewData.fromWire(
-    PersonaProfileView projection,
-  ) {
+  factory PersonaProfileViewData.fromWire(PersonaProfileView projection) {
     final personaId = projection.personaId;
     final displayName = projection.displayName.isNotEmpty
         ? projection.displayName
@@ -84,10 +82,7 @@ class PersonaProfileViewData {
     final rawBackgroundUrl = projection.backgroundUrl ?? '';
     final avatarUrl = isLocalFileImageSource(rawAvatarUrl)
         ? rawAvatarUrl
-        : resolveAvatarImageUrl(
-            rawAvatarUrl,
-            avatarVersion: 0,
-          );
+        : resolveAvatarImageUrl(rawAvatarUrl, avatarVersion: 0);
     final backgroundUrl = isLocalFileImageSource(rawBackgroundUrl)
         ? rawBackgroundUrl
         : resolveContentMediaUrl(rawBackgroundUrl);
@@ -164,9 +159,7 @@ class UserProfileStatsViewData {
   final int followerCount;
   final int likeCount;
   final int postCount;
-  factory UserProfileStatsViewData.fromWire(
-    UserProfileStatsWire projection,
-  ) {
+  factory UserProfileStatsViewData.fromWire(UserProfileStatsWire projection) {
     return UserProfileStatsViewData(
       followingCount: projection.followingCount,
       circleCount: projection.circleCount,
@@ -206,7 +199,6 @@ class RelationshipViewData {
   bool get isMutual => relationState == 'mutual';
   bool get isFollowing => relationState == 'following' || isMutual;
   bool get isFollowedBy => relationState == 'followed_by' || isMutual;
-
 }
 
 /// 关注/粉丝列表行（`listFollowing` / `listFollowers` wire → 强类型，供 UI 使用）。
@@ -231,7 +223,7 @@ class ProfileSocialRelationRowViewData {
   final String profileVisibility;
   final String relationState;
   final DateTime? followedAt;
-  final RelationshipCapabilityDto? relationshipCapability;
+  final RelationshipCapabilityViewData? relationshipCapability;
   bool get isSelf => relationshipCapability?.isSelf ?? false;
   bool get isFollowing => relationshipCapability?.viewerFollowsTarget ?? false;
 
@@ -244,17 +236,14 @@ class ProfileSocialRelationRowViewData {
       personaId: id,
       userHandle: w.userHandle,
       displayName: name,
-      avatarUrl: resolveAvatarImageUrl(
-        w.avatarUrl ?? '',
-        avatarVersion: 0,
-      ),
+      avatarUrl: resolveAvatarImageUrl(w.avatarUrl ?? '', avatarVersion: 0),
       avatarVersion: 0,
       profileVisibility: w.profileVisibility.wireName,
       relationState: w.relationState.wireName,
       followedAt: w.followedAt,
       relationshipCapability: w.relationshipCapability == null
           ? null
-          : RelationshipCapabilityDto.fromWire(w.relationshipCapability!),
+          : RelationshipCapabilityViewData.fromWire(w.relationshipCapability!),
     );
   }
 
@@ -273,7 +262,7 @@ class ProfileSocialRelationRowViewData {
       followedAt: item.followedAt,
       relationshipCapability: item.relationshipCapability == null
           ? null
-          : RelationshipCapabilityDto.fromWire(
+          : RelationshipCapabilityViewData.fromWire(
               item.relationshipCapability!,
             ),
     );
@@ -288,7 +277,7 @@ class ProfileSocialRelationRowViewData {
     String? profileVisibility,
     String? relationState,
     DateTime? followedAt,
-    RelationshipCapabilityDto? relationshipCapability,
+    RelationshipCapabilityViewData? relationshipCapability,
   }) {
     return ProfileSocialRelationRowViewData(
       personaId: personaId ?? this.personaId,

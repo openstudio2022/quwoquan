@@ -1,20 +1,19 @@
 import 'dart:async';
+import '../../../../support/fixtures/intersection_fixtures.dart';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_action_hint.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_representative_actor.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_card.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_card_skeleton.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_provider.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_section.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
+import '../../../../support/cloud_services/behavior_repository_double.dart';
 
 /// T2：对象页交集 section 统一 async 三态 + 旅程一次性消费（V4 · 商用完整态）。
 IntersectionReason _reason({
@@ -33,7 +32,7 @@ IntersectionReason _reason({
   final kind = objectKind.trim().isEmpty ? 'person' : objectKind.trim();
   final primary = '$label $count';
   final objectTarget = _targetFor(kind, targetId);
-  return IntersectionReason(
+  return intersectionReasonFixture(
     source: source,
     dimension: dimension,
     actionTargetId: targetId,
@@ -41,11 +40,15 @@ IntersectionReason _reason({
     displayBinding: displayBinding,
     primaryText: primary,
     primarySpans: <IntersectionTextSpan>[
-      IntersectionTextSpan(text: primary, role: 'object', target: objectTarget),
+      intersectionTextSpanFixture(
+        text: primary,
+        role: 'object',
+        target: objectTarget,
+      ),
     ],
     actorEvidenceTotalCount: 1,
     actorEvidenceCompleteness: 'complete',
-    representativeActor: IntersectionRepresentativeActor(
+    representativeActor: intersectionRepresentativeActorFixture(
       actorId: 'u_lin',
       displayName: '林清越',
       relationLabel: '联系人',
@@ -58,7 +61,7 @@ IntersectionReason _reason({
 
 IntersectionReason _hostPlainSelfReason() {
   final actorTarget = _targetFor('person', 'u_zhou');
-  return IntersectionReason(
+  return intersectionReasonFixture(
     source: 'sharedFollowees',
     dimension: 'relationship',
     actionTargetId: 'u_lin',
@@ -66,13 +69,17 @@ IntersectionReason _hostPlainSelfReason() {
     displayBinding: 'host_plain',
     primaryText: '联系人周屿也关注了林清越',
     primarySpans: <IntersectionTextSpan>[
-      IntersectionTextSpan(text: '联系人', role: 'plain'),
-      IntersectionTextSpan(text: '周屿', role: 'object', target: actorTarget),
-      IntersectionTextSpan(text: '也关注了林清越', role: 'plain'),
+      intersectionTextSpanFixture(text: '联系人', role: 'plain'),
+      intersectionTextSpanFixture(
+        text: '周屿',
+        role: 'object',
+        target: actorTarget,
+      ),
+      intersectionTextSpanFixture(text: '也关注了林清越', role: 'plain'),
     ],
     actorEvidenceTotalCount: 1,
     actorEvidenceCompleteness: 'complete',
-    representativeActor: IntersectionRepresentativeActor(
+    representativeActor: intersectionRepresentativeActorFixture(
       actorId: 'u_zhou',
       displayName: '周屿',
       relationLabel: '联系人',
@@ -87,14 +94,14 @@ IntersectionTarget _targetFor(String objectKind, String objectId) {
   final kind = objectKind.trim();
   switch (kind) {
     case 'circle':
-      return IntersectionTarget(
+      return intersectionTargetFixture(
         objectType: 'circle',
         objectId: objectId,
         objectKind: kind,
         routeId: 'circleDetail',
       );
     case 'content':
-      return IntersectionTarget(
+      return intersectionTargetFixture(
         objectType: 'post',
         objectId: objectId,
         objectKind: kind,
@@ -106,7 +113,7 @@ IntersectionTarget _targetFor(String objectKind, String objectId) {
     case 'route':
     case 'photo_spot':
     case 'gear':
-      return IntersectionTarget(
+      return intersectionTargetFixture(
         objectType: 'homepage',
         objectId: objectId,
         objectKind: kind,
@@ -114,7 +121,7 @@ IntersectionTarget _targetFor(String objectKind, String objectId) {
       );
     case 'person':
     default:
-      return IntersectionTarget(
+      return intersectionTargetFixture(
         objectType: 'user',
         objectId: objectId,
         objectKind: 'person',
@@ -137,6 +144,7 @@ Widget _host({
   return ProviderScope(
     overrides: [
       ...overrides,
+      behaviorReporterProvider.overrideWithValue(MockBehaviorRepository()),
       objectSharedReasonsProvider(_query).overrideWith((_) => reasons()),
     ],
     child: const CupertinoApp(
@@ -181,6 +189,7 @@ Widget _routerHost({
   );
   return ProviderScope(
     overrides: [
+      behaviorReporterProvider.overrideWithValue(MockBehaviorRepository()),
       objectSharedReasonsProvider(_query).overrideWith((_) async => reasons),
     ],
     child: CupertinoApp.router(routerConfig: router),
@@ -216,6 +225,7 @@ Widget _companionHost({required List<IntersectionReason> reasons}) {
   );
   return ProviderScope(
     overrides: [
+      behaviorReporterProvider.overrideWithValue(MockBehaviorRepository()),
       objectSharedReasonsProvider(_query).overrideWith((_) async => reasons),
     ],
     child: CupertinoApp.router(routerConfig: router),
@@ -431,12 +441,12 @@ void main() {
             objectKind: 'place',
             source: 'coWishlistedEntity',
             actionHints: <IntersectionActionHint>[
-              IntersectionActionHint(
+              intersectionActionHintFixture(
                 actionKey: 'start_gathering',
                 label: '发起结伴',
                 dispatch: 'gathering',
                 isPrimary: true,
-                target: IntersectionTarget(
+                target: intersectionTargetFixture(
                   objectId: 'p_west_lake',
                   objectKind: 'place',
                 ),
@@ -472,12 +482,12 @@ void main() {
             objectKind: 'person',
             source: 'commonContact',
             actionHints: <IntersectionActionHint>[
-              IntersectionActionHint(
+              intersectionActionHintFixture(
                 actionKey: 'message_person',
                 label: '私信',
                 dispatch: 'message',
                 isPrimary: true,
-                target: IntersectionTarget(
+                target: intersectionTargetFixture(
                   objectId: 'u_zhou',
                   objectKind: 'person',
                 ),
@@ -510,12 +520,12 @@ void main() {
             objectKind: 'circle',
             source: 'commonContact',
             actionHints: <IntersectionActionHint>[
-              IntersectionActionHint(
+              intersectionActionHintFixture(
                 actionKey: 'message_person',
                 label: '私信',
                 dispatch: 'message',
                 isPrimary: true,
-                target: IntersectionTarget(
+                target: intersectionTargetFixture(
                   objectId: 'fixture_circle_photo',
                   objectKind: 'circle',
                 ),

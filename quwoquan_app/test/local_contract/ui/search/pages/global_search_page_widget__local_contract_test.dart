@@ -15,7 +15,7 @@ import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
+import 'package:quwoquan_app/application/entity/homepage_view_data.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
 import '../../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
@@ -708,7 +708,7 @@ class _FakeSearchRepository implements SearchRepository {
             title: '李明',
             resolvedFrom: SearchResolvedFrom.local,
             payload: SearchHitPayloadChatContact(
-              ChatContactSearchItemDto(
+              ChatContactSearchItemViewData(
                 contactId: 'user_li_ming',
                 userHandle: 'li_ming_public',
                 displayName: '李明',
@@ -722,7 +722,7 @@ class _FakeSearchRepository implements SearchRepository {
             title: '李想',
             resolvedFrom: SearchResolvedFrom.local,
             payload: SearchHitPayloadChatContact(
-              ChatContactSearchItemDto(
+              ChatContactSearchItemViewData(
                 contactId: 'user_li_xiang',
                 userHandle: 'li_xiang_public',
                 displayName: '李想',
@@ -736,7 +736,7 @@ class _FakeSearchRepository implements SearchRepository {
             title: '李青',
             resolvedFrom: SearchResolvedFrom.local,
             payload: SearchHitPayloadChatContact(
-              ChatContactSearchItemDto(
+              ChatContactSearchItemViewData(
                 contactId: 'user_li_qing',
                 userHandle: 'li_qing_public',
                 displayName: '李青',
@@ -750,7 +750,7 @@ class _FakeSearchRepository implements SearchRepository {
             title: '李悦',
             resolvedFrom: SearchResolvedFrom.local,
             payload: SearchHitPayloadChatContact(
-              ChatContactSearchItemDto(
+              ChatContactSearchItemViewData(
                 contactId: 'user_li_yue',
                 userHandle: 'li_yue_public',
                 displayName: '李悦',
@@ -764,7 +764,7 @@ class _FakeSearchRepository implements SearchRepository {
             title: '李泽',
             resolvedFrom: SearchResolvedFrom.local,
             payload: SearchHitPayloadChatContact(
-              ChatContactSearchItemDto(
+              ChatContactSearchItemViewData(
                 contactId: 'user_li_ze',
                 userHandle: 'li_ze_public',
                 displayName: '李泽',
@@ -781,7 +781,7 @@ class _FakeSearchRepository implements SearchRepository {
             title: '王芳',
             resolvedFrom: SearchResolvedFrom.local,
             payload: SearchHitPayloadChatContact(
-              ChatContactSearchItemDto(
+              ChatContactSearchItemViewData(
                 contactId: 'user_wang_fang',
                 userHandle: 'wang_fang_public',
                 displayName: '王芳',

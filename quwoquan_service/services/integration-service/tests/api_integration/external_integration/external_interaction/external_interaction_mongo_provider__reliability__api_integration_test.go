@@ -19,6 +19,7 @@ import (
 	"quwoquan_service/runtime/reliabletask"
 	"quwoquan_service/services/integration-service/internal/external_integration/external_interaction/application"
 	"quwoquan_service/services/integration-service/internal/external_integration/external_interaction/infrastructure/provider"
+	integrationsupport "quwoquan_service/services/integration-service/tests/support"
 )
 
 type callbackRecorder struct{}
@@ -129,13 +130,13 @@ func TestExternalInteractionPersistsIdempotentlyAndRecordsProviderAttempt(t *tes
 		Env:            "gamma",
 		IdempotencyKey: "otp:challenge-real-001",
 		PayloadRef:     "otp_challenge:challenge-real-001",
-		PayloadDigest:  "sha256:masked",
+		PayloadDigest:  integrationsupport.CanonicalTestSHA256("otp:challenge-real-001"),
 		Sensitivity:    "secret",
 		ExpiresAt:      expiresAt,
 		Payload: map[string]string{
 			"challengeId":     "challenge-real-001",
 			"codeRef":         codeRef,
-			"phoneHash":       "sha256:phone",
+			"phoneHash":       integrationsupport.CanonicalTestSHA256("+8618013813909"),
 			"maskedRecipient": "180****3909",
 			"templateId":      "sms_otp_login",
 		},

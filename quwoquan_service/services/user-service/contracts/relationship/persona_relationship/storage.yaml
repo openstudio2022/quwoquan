@@ -125,7 +125,7 @@ tables:
       constraints:
       - NOT_NULL
     - name: idempotency_key
-      type: VARCHAR(128)
+      type: VARCHAR(160)
       constraints:
       - NOT_NULL
     - name: operation

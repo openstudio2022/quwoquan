@@ -104,7 +104,7 @@ func TestVisitRecordHTTPUsesMongoAtomicReceiptAndTypedErrors(t *testing.T) {
 	if first.Code != http.StatusOK {
 		t.Fatalf("first status=%d body=%s", first.Code, first.Body.String())
 	}
-	var firstResult visitapplication.CommandResult
+	var firstResult visitapplication.RecordVisitReceipt
 	decodeResponse(t, first, &firstResult)
 	if firstResult.VisitCount != 1 || firstResult.Replayed || firstResult.OccurredAt.IsZero() {
 		t.Fatalf("unexpected first result: %+v", firstResult)
@@ -116,7 +116,7 @@ func TestVisitRecordHTTPUsesMongoAtomicReceiptAndTypedErrors(t *testing.T) {
 	if replay.Code != http.StatusOK {
 		t.Fatalf("replay status=%d body=%s", replay.Code, replay.Body.String())
 	}
-	var replayResult visitapplication.CommandResult
+	var replayResult visitapplication.RecordVisitReceipt
 	decodeResponse(t, replay, &replayResult)
 	if replayResult.VisitCount != 1 || !replayResult.Replayed ||
 		!replayResult.OccurredAt.Equal(firstResult.OccurredAt) {
@@ -134,7 +134,7 @@ func TestVisitRecordHTTPUsesMongoAtomicReceiptAndTypedErrors(t *testing.T) {
 	if second.Code != http.StatusOK {
 		t.Fatalf("second status=%d body=%s", second.Code, second.Body.String())
 	}
-	var secondResult visitapplication.CommandResult
+	var secondResult visitapplication.RecordVisitReceipt
 	decodeResponse(t, second, &secondResult)
 	if secondResult.VisitCount != 2 || secondResult.Replayed {
 		t.Fatalf("distinct command must increment once: %+v", secondResult)
@@ -172,7 +172,7 @@ func TestVisitRecordHTTPUsesMongoAtomicReceiptAndTypedErrors(t *testing.T) {
 func TestVisitRecordConcurrentReplayIncrementsExactlyOnce(t *testing.T) {
 	clearVisitCollections(t)
 	service := visitapplication.NewService(realVisitStore)
-	input := visitapplication.VisitInput{
+	input := visitapplication.RecordVisitCommand{
 		UserID:     "actor-concurrent",
 		TargetType: "post",
 		TargetKey:  "post-1",
@@ -180,7 +180,7 @@ func TestVisitRecordConcurrentReplayIncrementsExactlyOnce(t *testing.T) {
 	const requests = 12
 	var wg sync.WaitGroup
 	var failures atomic.Int64
-	results := make(chan visitapplication.CommandResult, requests)
+	results := make(chan visitapplication.RecordVisitReceipt, requests)
 	for range requests {
 		wg.Add(1)
 		go func() {
@@ -211,7 +211,7 @@ func TestVisitRecordConcurrentReplayIncrementsExactlyOnce(t *testing.T) {
 	}
 	assertCollectionCount(t, "visit_record_command_receipts", bson.D{}, 1)
 
-	if _, err := service.RecordVisit(context.Background(), visitapplication.VisitInput{
+	if _, err := service.RecordVisit(context.Background(), visitapplication.RecordVisitCommand{
 		UserID: "actor-concurrent", TargetType: "post", TargetKey: "post-2",
 	}, "same-key"); err != visitapplication.ErrIdempotencyConflict {
 		t.Fatalf("same actor/key with another target error=%v", err)

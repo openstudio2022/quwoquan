@@ -4,6 +4,8 @@ import 'package:quwoquan_app/core/services/cache/conversation_cache_record.dart'
 import 'package:quwoquan_app/core/services/cache/conversation_cache_service.dart';
 import 'package:quwoquan_app/core/services/cache/local_chat_search_store.dart';
 import 'package:quwoquan_app/core/services/cache/local_search_namespace.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show UserSyncPatchKind;
 
 /// 会话列表同步引擎
 ///
@@ -74,14 +76,10 @@ class ConversationSyncService {
         if (id.isEmpty) continue;
         cloudIds.add(id);
 
-        final cloudSettingsUpdatedAt = _firstNonEmpty(<Object?>[
-          ts.settingsUpdatedAt,
-          ts.updatedAt,
-        ]);
-        final cloudLastMessageAt = _firstNonEmpty(<Object?>[
-          ts.lastMessageAt,
-          ts.lastMessageTime,
-        ]);
+        final cloudSettingsUpdatedAt = ts.settingsUpdatedAt
+            .toUtc()
+            .toIso8601String();
+        final cloudLastMessageAt = ts.lastMessageAt.toUtc().toIso8601String();
         final localSettingsTs = cache.getSettingsTimestamp(id);
         final localMessageTs = cache.getMessageTimestamp(id);
 
@@ -218,15 +216,16 @@ class ConversationSyncService {
     LocalSearchNamespace namespace,
     UserSyncPatch patch,
   ) async {
-    switch (patch.type) {
-      case 'conversation.avatar.updated':
-        final conversationId =
-            patch.payload['conversationId']?.toString() ?? '';
-        final avatarUrl = patch.payload['avatarUrl']?.toString().trim() ?? '';
-        final groupAvatarVersion = (patch.payload['groupAvatarVersion'] as num?)
-            ?.toInt();
-        final groupAvatarSourceHash = patch.payload['groupAvatarSourceHash']
-            ?.toString();
+    switch (patch.kind) {
+      case UserSyncPatchKind.conversationAvatarUpdated:
+        final payload = patch.conversationAvatarUpdated;
+        if (payload == null || patch.userAvatarUpdated != null) {
+          throw StateError(
+            'conversation avatar patch payload does not match its kind',
+          );
+        }
+        final conversationId = payload.conversationId.trim();
+        final avatarUrl = payload.avatarUrl.trim();
         if (conversationId.isEmpty) {
           throw StateError('conversation avatar patch missing conversationId');
         }
@@ -237,22 +236,25 @@ class ConversationSyncService {
           conversationId,
           ConversationAvatarPatch(
             avatarUrl: avatarUrl,
-            groupAvatarVersion: groupAvatarVersion,
-            groupAvatarSourceHash: groupAvatarSourceHash,
+            groupAvatarVersion: payload.groupAvatarVersion,
+            groupAvatarSourceHash: payload.groupAvatarSourceHash,
           ),
         );
         await store.updateConversationAvatar(
           namespace: namespace,
           conversationId: conversationId,
           avatarUrl: avatarUrl,
-          groupAvatarVersion: groupAvatarVersion,
-          groupAvatarSourceHash: groupAvatarSourceHash,
+          groupAvatarVersion: payload.groupAvatarVersion,
+          groupAvatarSourceHash: payload.groupAvatarSourceHash,
         );
         return;
-      case 'user.avatar.updated':
-        final userId = patch.payload['userId']?.toString() ?? '';
-        final avatarUrl = patch.payload['avatarUrl']?.toString() ?? '';
-        final avatarVersion = (patch.payload['avatarVersion'] as num?)?.toInt();
+      case UserSyncPatchKind.userAvatarUpdated:
+        final payload = patch.userAvatarUpdated;
+        if (payload == null || patch.conversationAvatarUpdated != null) {
+          throw StateError('user avatar patch payload does not match its kind');
+        }
+        final userId = payload.userId.trim();
+        final avatarUrl = payload.avatarUrl.trim();
         if (userId.isEmpty || avatarUrl.isEmpty) {
           throw StateError('user avatar patch missing userId or avatarUrl');
         }
@@ -260,10 +262,8 @@ class ConversationSyncService {
           namespace: namespace,
           userId: userId,
           avatarUrl: avatarUrl,
-          avatarVersion: avatarVersion,
+          avatarVersion: payload.avatarVersion,
         );
-        return;
-      default:
         return;
     }
   }
@@ -306,15 +306,5 @@ class ConversationSyncService {
     _lastAvatarPatchSyncStackTrace = null;
     _lastAvatarPatchSyncFailedAt = null;
     _lastAvatarPatchSyncFailedAfterSeq = null;
-  }
-
-  String _firstNonEmpty(List<Object?> values) {
-    for (final value in values) {
-      final text = value?.toString().trim() ?? '';
-      if (text.isNotEmpty) {
-        return text;
-      }
-    }
-    return '';
   }
 }

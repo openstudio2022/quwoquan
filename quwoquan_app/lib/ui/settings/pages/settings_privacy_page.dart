@@ -151,10 +151,14 @@ class _SettingsPrivacyPageState extends ConsumerState<SettingsPrivacyPage> {
         category: UiErrorCategory.pageLoad,
         scope: UiErrorScope.page,
       ),
-      onAction: (action) async {
+      onRecovery: (action) async {
         if (action.type == UiErrorActionType.retry) {
           await ref.read(userSettingsSectionsProvider.notifier).load();
+          return ref.read(userSettingsSectionsProvider).rawError == null
+              ? UiRecoveryOutcome.recovered
+              : UiRecoveryOutcome.stillBlocked;
         }
+        return UiRecoveryOutcome.cancelled;
       },
     );
   }

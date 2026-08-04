@@ -1,34 +1,67 @@
 // spec_ref: specs/feature-tree/runtime/runtime-client-foundation/entity-link-templates-metadata/spec.md#gwt-001
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
 import 'package:quwoquan_app/core/links/app_public_content_links.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_template.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
+ContentPostViewData _post({
+  required String id,
+  required String contentType,
+  required String identity,
+  required String authorId,
+  required String displayName,
+  String? title,
+  required String body,
+  String? summary,
+}) => ContentPostViewData.fromWire(
+  ContentPostProjection(
+    postId: id,
+    contentType: contentType,
+    contentIdentity: identity,
+    assistantUsePolicy: 'inherit',
+    authorId: authorId,
+    authorDisplayName: displayName,
+    authorAvatarUrl: '',
+    authorRoleLabel: '',
+    authorIdentityTags: const <String>[],
+    authorVerified: false,
+    title: title,
+    body: body,
+    summary: summary,
+    coverUrl: '',
+    articleTemplate: contentType == 'article' ? 'gentle' : null,
+    articleFontPreset: contentType == 'article' ? 'clean' : null,
+    likeCount: 0,
+    commentCount: 0,
+    shareCount: 0,
+    createdAt: DateTime(2026, 6, 2),
+  ),
+);
 
 void main() {
+  setUp(() {
+    CloudRuntimeConfig.hydrateFromNativeRuntimePackage(const <String, String>{
+      'PUBLIC_WEB_BASE_URL': 'https://public.example.test',
+    });
+  });
+  tearDown(CloudRuntimeConfig.clearNativeRuntimePackageForTest);
+
   group('ContentShareTemplate public links', () {
     test(
       'public content keeps app deep link but defaults to HTTPS landing URL',
       () {
         final template = ContentShareTemplateBuilder.build(
           surfaceView: ContentSurfaceViewMapper.fromDto(
-            MicroPostDto(
+            _post(
               id: 'moment_public_link',
-              type: 'micro',
+              contentType: 'micro',
               identity: 'moment',
-              assistantUsePolicy: 'inherit',
               authorId: 'user_public_link',
               displayName: '阿宁',
-              avatarUrl: '',
-              authorRoleLabel: '',
-              authorIdentityTags: const <String>[],
-              authorVerified: false,
               body: '公开分享链路应该指向 Web 公共页',
-              imageUrls: const <String>[],
-              likeCount: 0,
-              commentCount: 0,
-              shareCount: 0,
-              createdAt: DateTime(2026, 6, 2),
             ),
           ),
           enableIdentityTemplate: true,
@@ -55,27 +88,15 @@ void main() {
         expect(
           () => ContentShareTemplateBuilder.build(
             surfaceView: ContentSurfaceViewMapper.fromDto(
-              ArticlePostDto(
+              _post(
                 id: 'work_circle_link',
-                type: 'article',
+                contentType: 'article',
                 identity: 'work',
-                assistantUsePolicy: 'inherit',
                 authorId: 'user_circle_link',
                 displayName: '洛白',
-                avatarUrl: '',
-                authorRoleLabel: '',
-                authorIdentityTags: const <String>[],
-                authorVerified: false,
                 title: '已退役可见性',
                 body: '该值必须失败关闭。',
                 summary: '该值必须失败关闭',
-                coverUrl: '',
-                articleTemplate: 'gentle',
-                articleFontPreset: 'clean',
-                likeCount: 0,
-                commentCount: 0,
-                shareCount: 0,
-                createdAt: DateTime(2026, 6, 2),
               ),
             ),
             enableIdentityTemplate: true,
@@ -89,27 +110,15 @@ void main() {
     test('private content does not expose public landing URL', () {
       final template = ContentShareTemplateBuilder.build(
         surfaceView: ContentSurfaceViewMapper.fromDto(
-          ArticlePostDto(
+          _post(
             id: 'private_link',
-            type: 'article',
+            contentType: 'article',
             identity: 'work',
-            assistantUsePolicy: 'inherit',
             authorId: 'user_private',
             displayName: '周周',
-            avatarUrl: '',
-            authorRoleLabel: '',
-            authorIdentityTags: const <String>[],
-            authorVerified: false,
             title: '私密内容',
             body: '仅自己可见',
             summary: '仅自己可见',
-            coverUrl: '',
-            articleTemplate: 'gentle',
-            articleFontPreset: 'clean',
-            likeCount: 0,
-            commentCount: 0,
-            shareCount: 0,
-            createdAt: DateTime(2026, 6, 2),
           ),
         ),
         enableIdentityTemplate: true,

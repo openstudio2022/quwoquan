@@ -1,0 +1,5 @@
+backend: service_resource
+role: external
+description: >-
+  DomainReaderDescriptor 由 canonical contracts/codegen 生成并在 composition root 与
+  owner-local adapter 一一绑定；不建立数据库副本，不扫描 Skill 源码目录。

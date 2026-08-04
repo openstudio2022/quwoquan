@@ -38,12 +38,12 @@ void main() {
           SubmitContentPostPublicationCommand(
             publishIntentId: 'publish-draft-1',
             localDraftId: 'draft-1',
-            contentType: ContentPostType.article,
-            contentIdentity: ContentPostIdentity.work,
+            contentType: ContentType.article,
+            contentIdentity: ContentIdentity.work,
             title: '对象闭环',
             articleMarkdown: '# 对象闭环',
             mediaAssetIds: const <String>['asset-1'],
-            visibility: ContentPostVisibility.public,
+            visibility: Visibility.public,
           ),
         );
         final request = captured;

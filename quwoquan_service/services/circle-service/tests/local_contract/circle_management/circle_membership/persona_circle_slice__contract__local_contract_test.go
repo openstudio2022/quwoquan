@@ -85,7 +85,7 @@ func TestPersonaCircleSliceUsesCanonicalTypedCircleFields(t *testing.T) {
 	}
 }
 
-func TestCircleSourceContractHasNoLegacyConversationBinding(t *testing.T) {
+func TestCircleSourceContractHasNoRetiredConversationBinding(t *testing.T) {
 	t.Parallel()
 
 	root := circleServiceRoot(t)
@@ -99,13 +99,13 @@ func TestCircleSourceContractHasNoLegacyConversationBinding(t *testing.T) {
 		root, "contracts", "circle_management", "circle", "events.yaml",
 	))
 	if strings.Contains(fields, "- name: conversationId") {
-		t.Fatal("Circle source fields retain legacy conversationId")
+		t.Fatal("Circle source fields retain retired conversationId")
 	}
 	if strings.Contains(object, "name: conversation\n") {
 		t.Fatal("Circle source object retains direct Chat Conversation relationship")
 	}
 	if strings.Contains(events, "name: CircleConversationLinked") {
-		t.Fatal("Circle source events retain legacy CircleConversationLinked backfill")
+		t.Fatal("Circle source events retain retired CircleConversationLinked backfill")
 	}
 }
 

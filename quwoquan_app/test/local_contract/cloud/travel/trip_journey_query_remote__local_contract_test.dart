@@ -124,7 +124,8 @@ Map<String, Object?> _timelineWire() => <String, Object?>{
   ],
   'sourceMomentIds': <Object?>[],
   'sourceContentLinkIds': <Object?>[],
-  'sourceDigest': 'sha256:timeline',
+  'sourceDigest':
+      'sha256:94d192b3a326be1f019b71ef13ea5a367ffe939c5e9a88f1b270e53753d9569a',
   'sourceEventId': 'event-timeline-1',
   'projectedAt': '2026-08-02T10:00:00Z',
 };
@@ -152,7 +153,8 @@ Map<String, Object?> _mapWire() => <String, Object?>{
   'momentMarkers': <Object?>[],
   'sourceMomentIds': <Object?>[],
   'sourceContentLinkIds': <Object?>[],
-  'sourceDigest': 'sha256:map',
+  'sourceDigest':
+      'sha256:60be9861750facbfad8758254a2f76c0cfe78d54459a3bc187d49b1401fcd8e8',
   'sourceEventId': 'event-map-1',
   'projectedAt': '2026-08-02T10:00:00Z',
 };

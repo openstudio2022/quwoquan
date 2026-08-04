@@ -12,26 +12,27 @@ import (
 
 	generated "quwoquan_service/services/assistant-service/generated/assistant/assistant_session"
 	preferencemodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_preference/domain/model"
+	assistantmodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/model"
 )
 
 type StartCommand struct {
-	UserID                  string
-	PersonaID               string
-	SessionID               string
-	ClientRequestID         string
-	TraceID                 string
-	RequestContext          RequestContext
-	IntentKind              string
-	InputText               string
-	RequestedSkillID        string
-	RequestedDomainID       string
-	Trigger                 map[string]any
-	ContextSnapshot         map[string]any
-	SurfaceCapabilities     map[string]any
-	SessionPreferenceFacts  []preferencemodel.Snapshot
-	LongTermPreferenceFacts []preferencemodel.Snapshot
-	ReasoningProfile        generated.AssistantReasoningProfile
-	DefinitionOfDone        DefinitionOfDone
+	UserID              string
+	PersonaID           string
+	SessionID           string
+	ClientRequestID     string
+	TraceID             string
+	RequestContext      RequestContext
+	IntentKind          string
+	InputText           string
+	RequestedSkillID    string
+	RequestedDomainID   string
+	Trigger             map[string]any
+	ContextSnapshot     map[string]any
+	SurfaceCapabilities map[string]any
+	SessionPreferences  []preferencemodel.AssistantPreferenceSnapshot
+	LongTermPreferences []preferencemodel.AssistantPreferenceSnapshot
+	ReasoningProfile    generated.AssistantReasoningProfile
+	DefinitionOfDone    DefinitionOfDone
 }
 
 type ContinueToolUseCommand struct {
@@ -44,17 +45,25 @@ type ContinueToolUseCommand struct {
 	ExecutionReceipt  *DeviceActionExecutionReceipt
 }
 
-type SessionAuthorizer interface {
-	AuthorizeSession(context.Context, string, string) error
+type SessionResolver interface {
+	ResolveAuthorizedSession(
+		context.Context,
+		string,
+		string,
+	) (SessionContinuity, error)
 }
 
-type SessionAuthorizerFunc func(context.Context, string, string) error
+type SessionResolverFunc func(
+	context.Context,
+	string,
+	string,
+) (SessionContinuity, error)
 
-func (f SessionAuthorizerFunc) AuthorizeSession(
+func (f SessionResolverFunc) ResolveAuthorizedSession(
 	ctx context.Context,
 	userID string,
 	sessionID string,
-) error {
+) (SessionContinuity, error) {
 	return f(ctx, userID, sessionID)
 }
 
@@ -105,6 +114,30 @@ func (resolve PolicyResolverFunc) ResolveFrozenPolicy(
 	domainID string,
 ) (FrozenPolicySelection, error) {
 	return resolve(ctx, policyID, personaID, skillID, domainID)
+}
+
+type FeedbackContextResolver interface {
+	ResolveFeedbackContext(
+		context.Context,
+		string,
+		string,
+		string,
+		string,
+		string,
+		string,
+		assistantmodel.AssistantFrozenLearningContextPolicy,
+		time.Time,
+	) assistantmodel.AssistantFeedbackContextSnapshot
+}
+
+type CommandServiceOption func(*CommandService)
+
+func WithPolicyResolver(resolver PolicyResolver) CommandServiceOption {
+	return func(service *CommandService) { service.policies = resolver }
+}
+
+func WithFeedbackContextResolver(resolver FeedbackContextResolver) CommandServiceOption {
+	return func(service *CommandService) { service.feedbackContext = resolver }
 }
 
 type StartAccessPolicyFunc func(context.Context, StartAccessRequest) error
@@ -160,24 +193,25 @@ func validSkillPackageDigest(value string) bool {
 // CommandService is the only writable AssistantRun command surface. Every
 // mutation loads one aggregate revision and commits its journal event with CAS.
 type CommandService struct {
-	repository    Repository
-	sessions      SessionAuthorizer
-	skillPackages SkillPackageIdentityResolver
-	startAccess   StartAccessPolicy
-	policies      PolicyResolver
-	now           func() time.Time
-	newRunID      func() (string, error)
-	cancel        *CancellationCoordinator
+	repository      Repository
+	sessions        SessionResolver
+	skillPackages   SkillPackageIdentityResolver
+	startAccess     StartAccessPolicy
+	policies        PolicyResolver
+	feedbackContext FeedbackContextResolver
+	now             func() time.Time
+	newRunID        func() (string, error)
+	cancel          *CancellationCoordinator
 }
 
 func NewCommandService(
 	repository Repository,
-	sessions SessionAuthorizer,
+	sessions SessionResolver,
 	skillPackages SkillPackageIdentityResolver,
 	startAccess StartAccessPolicy,
 	now func() time.Time,
 	cancel *CancellationCoordinator,
-	policies ...PolicyResolver,
+	options ...CommandServiceOption,
 ) *CommandService {
 	if repository == nil || sessions == nil || skillPackages == nil || startAccess == nil {
 		panic("assistant run command dependencies are required")
@@ -194,8 +228,10 @@ func NewCommandService(
 		newRunID:      newRunID,
 		cancel:        cancel,
 	}
-	if len(policies) > 0 {
-		service.policies = policies[0]
+	for _, option := range options {
+		if option != nil {
+			option(service)
+		}
 	}
 	return service
 }
@@ -250,12 +286,16 @@ func (s *CommandService) Start(
 	if !errors.Is(err, ErrRunNotFound) {
 		return Run{}, err
 	}
-	if err := s.sessions.AuthorizeSession(
+	continuity, err := s.sessions.ResolveAuthorizedSession(
 		ctx,
 		command.UserID,
 		command.SessionID,
-	); err != nil {
+	)
+	if err != nil {
 		return Run{}, err
+	}
+	if !personalSessionContinuityAllowed(command.RequestContext.SurfaceKind) {
+		continuity = SessionContinuity{}
 	}
 	if command.RequestedSkillID != "" {
 		if err := s.startAccess.AuthorizeStart(
@@ -290,6 +330,10 @@ func (s *CommandService) Start(
 	if err != nil || !validPolicySelection(policySelection) {
 		return Run{}, ErrPolicyUnavailable
 	}
+	feedbackSkillID := strings.TrimSpace(command.RequestedSkillID)
+	if feedbackSkillID == "" {
+		feedbackSkillID = strings.TrimSpace(policySelection.Template.SkillID)
+	}
 	runID, err := s.newRunID()
 	if err != nil {
 		return Run{}, err
@@ -302,6 +346,34 @@ func (s *CommandService) Start(
 		return Run{}, err
 	}
 	now := s.now().UTC().Truncate(time.Millisecond)
+	feedbackPolicy := projectFeedbackContextPolicy(
+		policySelection.LearningContextPolicy,
+	)
+	feedbackContext := assistantmodel.AssistantFeedbackContextSnapshot{
+		Decision:                 "resolver_unavailable",
+		WindowDays:               feedbackPolicy.WindowDays,
+		SnapshotTrainingEligible: false,
+	}
+	if !feedbackPolicy.Enabled {
+		feedbackContext.Decision = "policy_disabled"
+	} else if !personalSessionContinuityAllowed(command.RequestContext.SurfaceKind) {
+		feedbackContext.Decision = "shared_surface_excluded"
+	} else if s.feedbackContext != nil {
+		feedbackContext = s.feedbackContext.ResolveFeedbackContext(
+			ctx,
+			command.UserID,
+			command.PersonaID,
+			feedbackSkillID,
+			command.RequestContext.SurfaceKind,
+			skillPackageID,
+			skillPackageReleaseDigest,
+			feedbackPolicy,
+			now,
+		)
+	}
+	if feedbackContext.Decision == "injected" && feedbackContext.ConsentGrantedAt.After(now) {
+		return Run{}, ErrInvalidRun
+	}
 	run, err := NewRun(
 		runID,
 		command.ReasoningProfile,
@@ -334,6 +406,9 @@ func (s *CommandService) Start(
 	); err != nil {
 		return Run{}, err
 	}
+	if err := run.BindSessionContinuity(continuity); err != nil {
+		return Run{}, err
+	}
 	if err := run.BindSkillPackage(
 		skillPackageID,
 		skillPackageReleaseDigest,
@@ -341,13 +416,16 @@ func (s *CommandService) Start(
 		return Run{}, err
 	}
 	run.FrozenPolicySelection = clonePolicySelection(policySelection)
-	run.SessionPreferenceFacts = append(
-		[]preferencemodel.Snapshot(nil),
-		command.SessionPreferenceFacts...,
+	if err := run.BindFeedbackContext(feedbackContext); err != nil {
+		return Run{}, err
+	}
+	run.SessionPreferences = append(
+		[]preferencemodel.AssistantPreferenceSnapshot(nil),
+		command.SessionPreferences...,
 	)
-	run.LongTermPreferenceFacts = append(
-		[]preferencemodel.Snapshot(nil),
-		command.LongTermPreferenceFacts...,
+	run.LongTermPreferences = append(
+		[]preferencemodel.AssistantPreferenceSnapshot(nil),
+		command.LongTermPreferences...,
 	)
 	event := JournalEvent{
 		EventID:   run.RunID + ":1",
@@ -380,6 +458,20 @@ func (s *CommandService) Start(
 		return Run{}, err
 	}
 	return run, nil
+}
+
+func projectFeedbackContextPolicy(
+	policy FrozenLearningContextPolicy,
+) assistantmodel.AssistantFrozenLearningContextPolicy {
+	return assistantmodel.AssistantFrozenLearningContextPolicy{
+		Enabled:                  policy.Enabled,
+		AllowedSignals:           append([]string(nil), policy.AllowedSignals...),
+		AllowedMetricIDs:         append([]string(nil), policy.AllowedMetricIDs...),
+		AllowedReasonCodes:       append([]string(nil), policy.AllowedReasonCodes...),
+		MinimumFeedbackSamples:   policy.MinimumFeedbackSamples,
+		WindowDays:               policy.WindowDays,
+		SnapshotTrainingEligible: policy.SnapshotTrainingEligible,
+	}
 }
 
 func validPolicySelection(selection FrozenPolicySelection) bool {
@@ -503,16 +595,10 @@ func (s *CommandService) Cancel(
 		); err != nil {
 			return err
 		}
-		snapshot := map[string]any{
-			"answerText": "",
-			"processes":  []map[string]any{},
-		}
-		if run.FrozenPolicySelection.PolicyID != "" {
-			snapshot["selectedPolicyRef"] = map[string]any{
-				"policyId":      run.FrozenPolicySelection.PolicyID,
-				"releaseDigest": run.FrozenPolicySelection.ReleaseDigest,
-				"cohort":        run.FrozenPolicySelection.Cohort,
-			}
+		snapshot := assistantmodel.AssistantRunTerminalSnapshot{
+			AnswerText:        "",
+			Processes:         []assistantmodel.AssistantRunVisibleProcess{},
+			SelectedPolicyRef: terminalSelectedPolicyRef(run.FrozenPolicySelection),
 		}
 		return run.SetTerminalSnapshot(snapshot, now)
 	})
@@ -836,6 +922,15 @@ func normalizeStartCommand(command StartCommand, now time.Time) StartCommand {
 		command.DefinitionOfDone.FrozenAt = now.UTC()
 	}
 	return command
+}
+
+func personalSessionContinuityAllowed(surfaceKind string) bool {
+	switch strings.ToLower(strings.TrimSpace(surfaceKind)) {
+	case "conversation", "circle":
+		return false
+	default:
+		return true
+	}
 }
 
 func newRunID() (string, error) {

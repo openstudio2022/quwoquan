@@ -1,0 +1,8 @@
+schema: provider-endpoint-contract
+role: sms-provider-substitute
+endpoints:
+  INTEGRATION_SMS_ENDPOINT:
+    path: /v1/provider/sms/send
+protectedEndpoints:
+  SMS_SUBSTITUTE_PROTECTED_OTP_READ:
+    path: /v1/debug/sms/otp/latest

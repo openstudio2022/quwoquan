@@ -3,23 +3,20 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 /// Alpha-only deterministic Media fixture. Production has no dependency on
 /// this package; alpha runner supplies it explicitly through provider override.
 final class AlphaContentMediaFacet implements ContentMediaFacet {
-  AlphaContentMediaFacet({
-    this.completedAssetStatus = ContentMediaProcessingStatus.ready,
-  });
+  AlphaContentMediaFacet({this.completedAssetStatus = MediaAssetStatus.ready});
 
   final Map<String, _AlphaUpload> _uploads = <String, _AlphaUpload>{};
-  final Map<String, MediaAssetSlice> _assets =
-      <String, MediaAssetSlice>{};
-  final Map<String, ContentMediaUploadSessionCommandResult> _initReceipts =
-      <String, ContentMediaUploadSessionCommandResult>{};
-  final Map<String, ContentMediaUploadSessionCommandResult> _completeReceipts =
-      <String, ContentMediaUploadSessionCommandResult>{};
+  final Map<String, MediaAssetSlice> _assets = <String, MediaAssetSlice>{};
+  final Map<String, MediaUploadSessionCommandResult> _initReceipts =
+      <String, MediaUploadSessionCommandResult>{};
+  final Map<String, MediaUploadSessionCommandResult> _completeReceipts =
+      <String, MediaUploadSessionCommandResult>{};
   final Set<String> _discardedAssetIds = <String>{};
-  final ContentMediaProcessingStatus completedAssetStatus;
+  final MediaAssetStatus completedAssetStatus;
   int _sequence = 0;
 
   @override
-  Future<ContentMediaUploadSessionCommandResult> initUpload(
+  Future<MediaUploadSessionCommandResult> initUpload(
     InitContentMediaUploadCommand command,
     ContentMediaUploadCommandContext context,
   ) async {
@@ -31,10 +28,10 @@ final class AlphaContentMediaFacet implements ContentMediaFacet {
     final id = 'alpha_media_upload_${++_sequence}';
     final expiresAt = DateTime.utc(2030, 1, 1, 0, 15);
     _uploads[id] = _AlphaUpload(command, expiresAt);
-    final result = ContentMediaUploadSessionCommandResult(
+    final result = MediaUploadSessionCommandResult(
       sessionId: id,
       assetId: null,
-      status: ContentMediaUploadStatus.pending,
+      status: MediaUploadSessionStatus.pending,
       uploadUrl: Uri.parse('https://upload.alpha.example.invalid/$id'),
       expiresAt: expiresAt,
       replayed: false,
@@ -44,7 +41,7 @@ final class AlphaContentMediaFacet implements ContentMediaFacet {
   }
 
   @override
-  Future<ContentMediaUploadSessionCommandResult> completeUpload(
+  Future<MediaUploadSessionCommandResult> completeUpload(
     CompleteContentMediaUploadCommand command,
     ContentMediaUploadCommandContext context,
   ) async {
@@ -64,7 +61,7 @@ final class AlphaContentMediaFacet implements ContentMediaFacet {
     final cdnUrl = Uri.parse('https://alpha-cdn.invalid/$assetId');
     upload
       ..assetId = assetId
-      ..status = ContentMediaUploadStatus.completed;
+      ..status = MediaUploadSessionStatus.completed;
     _assets[assetId] = MediaAssetSlice(
       assetId: assetId,
       version: 1,
@@ -75,10 +72,10 @@ final class AlphaContentMediaFacet implements ContentMediaFacet {
       accessPolicy: command.accessPolicy,
       cdnUrl: cdnUrl,
     );
-    final result = ContentMediaUploadSessionCommandResult(
+    final result = MediaUploadSessionCommandResult(
       sessionId: command.sessionId,
       assetId: assetId,
-      status: ContentMediaUploadStatus.completed,
+      status: MediaUploadSessionStatus.completed,
       uploadUrl: null,
       expiresAt: upload.expiresAt,
       replayed: false,
@@ -89,7 +86,7 @@ final class AlphaContentMediaFacet implements ContentMediaFacet {
   }
 
   @override
-  Future<ContentMediaUploadSessionCommandResult> abortUpload(
+  Future<MediaUploadSessionCommandResult> abortUpload(
     AbortContentMediaUploadCommand command,
     ContentMediaUploadCommandContext context,
   ) async {
@@ -97,10 +94,10 @@ final class AlphaContentMediaFacet implements ContentMediaFacet {
     if (upload == null) {
       throw StateError('alpha media upload session not found');
     }
-    return ContentMediaUploadSessionCommandResult(
+    return MediaUploadSessionCommandResult(
       sessionId: command.sessionId,
       assetId: null,
-      status: ContentMediaUploadStatus.aborted,
+      status: MediaUploadSessionStatus.aborted,
       uploadUrl: null,
       expiresAt: upload.expiresAt,
       replayed: false,
@@ -108,16 +105,16 @@ final class AlphaContentMediaFacet implements ContentMediaFacet {
   }
 
   @override
-  Future<ContentMediaUploadSessionSlice> getUploadSession(
+  Future<MediaUploadSessionSlice> getUploadSession(
     GetContentMediaUploadSessionQuery query,
   ) async {
     final upload = _uploads[query.sessionId];
     if (upload == null) {
       throw StateError('alpha media upload session not found');
     }
-    return ContentMediaUploadSessionSlice(
+    return MediaUploadSessionSlice(
       sessionId: query.sessionId,
-      version: upload.status == ContentMediaUploadStatus.completed ? 2 : 1,
+      version: upload.status == MediaUploadSessionStatus.completed ? 2 : 1,
       assetId: upload.assetId,
       mediaType: upload.command.mediaType,
       mimeType: upload.command.mimeType,
@@ -130,9 +127,7 @@ final class AlphaContentMediaFacet implements ContentMediaFacet {
   }
 
   @override
-  Future<MediaAssetSlice> getMediaAsset(
-    GetContentMediaAssetQuery query,
-  ) async {
+  Future<MediaAssetSlice> getMediaAsset(GetContentMediaAssetQuery query) async {
     final asset = _assets[query.mediaId];
     if (asset == null) throw StateError('alpha media asset not found');
     return asset;
@@ -146,7 +141,7 @@ final class AlphaContentMediaFacet implements ContentMediaFacet {
     if (_discardedAssetIds.contains(command.mediaId)) {
       return MediaAssetDiscardResult(
         mediaId: command.mediaId,
-        status: ContentMediaProcessingStatus.deleted,
+        status: MediaAssetDiscardStatus.deleted,
         replayed: true,
       );
     }
@@ -156,7 +151,7 @@ final class AlphaContentMediaFacet implements ContentMediaFacet {
     _discardedAssetIds.add(command.mediaId);
     return MediaAssetDiscardResult(
       mediaId: command.mediaId,
-      status: ContentMediaProcessingStatus.deleted,
+      status: MediaAssetDiscardStatus.deleted,
       replayed: false,
     );
   }
@@ -181,24 +176,25 @@ final class AlphaContentMediaFacet implements ContentMediaFacet {
   }
 
   @override
-  Future<ContentMediaCoverSelectionResult> selectAutoCover(
+  Future<MediaCoverSelectionResult> selectAutoCover(
     SelectAutoContentMediaCoverCommand command,
     ContentMediaAssetCommandContext context,
-  ) async => _cover(command.mediaId, 'first_frame');
+  ) async => _cover(command.mediaId, MediaCoverStrategy.firstFrame);
 
   @override
-  Future<ContentMediaCoverSelectionResult> selectManualCover(
+  Future<MediaCoverSelectionResult> selectManualCover(
     SelectManualContentMediaCoverCommand command,
     ContentMediaAssetCommandContext context,
-  ) async => _cover(command.mediaId, 'manual', command.coverAssetId);
+  ) async =>
+      _cover(command.mediaId, MediaCoverStrategy.manual, command.coverAssetId);
 
-  ContentMediaCoverSelectionResult _cover(
+  MediaCoverSelectionResult _cover(
     String mediaId,
-    String strategy, [
+    MediaCoverStrategy strategy, [
     String? manualAssetId,
   ]) {
     final url = Uri.parse('https://alpha-cdn.invalid/$mediaId/cover');
-    return ContentMediaCoverSelectionResult(
+    return MediaCoverSelectionResult(
       mediaId: mediaId,
       coverStrategy: strategy,
       manualCoverAssetId: manualAssetId,
@@ -209,10 +205,10 @@ final class AlphaContentMediaFacet implements ContentMediaFacet {
   }
 }
 
-ContentMediaUploadSessionCommandResult _replayed(
-  ContentMediaUploadSessionCommandResult result,
+MediaUploadSessionCommandResult _replayed(
+  MediaUploadSessionCommandResult result,
 ) {
-  return ContentMediaUploadSessionCommandResult(
+  return MediaUploadSessionCommandResult(
     sessionId: result.sessionId,
     assetId: result.assetId,
     status: result.status,
@@ -229,5 +225,5 @@ final class _AlphaUpload {
   final InitContentMediaUploadCommand command;
   final DateTime expiresAt;
   String? assetId;
-  ContentMediaUploadStatus status = ContentMediaUploadStatus.pending;
+  MediaUploadSessionStatus status = MediaUploadSessionStatus.pending;
 }

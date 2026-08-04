@@ -50,6 +50,15 @@
 - 影响 Story：[`daily-merge-release-strategy`](./daily-merge-release-strategy/spec.md)、[`gray-release-to-prod`](./gray-release-to-prod/spec.md)、[`local-gamma-mirror`](./local-gamma-mirror/spec.md)、[`multi-environment-instance-isolation`](./multi-environment-instance-isolation/spec.md)、[`multi-environment-wave-deployment`](./multi-environment-wave-deployment/spec.md)、[`workflow-naming-consolidation`](./workflow-naming-consolidation/spec.md)
 - 关联验收：`SIT-001`
 
+<a id="dec-002"></a>
+### DEC-002 prod-hosted 扩容是同一 ssh-hosted 集群内的 member×instance×replica
+- 决策：生产扩容不新增环境名，也不恢复 K8s/ACK 第二执行面。`access-isolation.yaml` 拥有 `management.hosts` 与 `deploymentInstances.{prevalidate,gray,prod}.replicas`；`stackctl` / `deploy_to_prod.sh` / `render_prod_plane_stack.py` 只消费该拓扑。
+- 理由：当前可运行真相源已是 SSH + rootless Podman；规格若继续写 ACK Deployment 会制造第二主线。单 member / 单 replica 必须保持兼容。
+- 被否决方案：`prod-gray` 环境、`cluster_topology.yaml` 与 access-isolation 双真相源、按 replica 各自独立 ledger 绕过 service-plane CAS。
+- 约束与影响：每个 placement 有独立 remote root / project / unit / `SERVICE_INSTANCE_ID`，gray 与 prod 共置，正式 commit 前 `postChecks` 必须覆盖全部期望 placement，部分成功不得写 `full`。
+- 关联要求：`REQ-002`
+- 关联验收：`SIT-002`
+
 ## 5. 失败与恢复
 
 - 失败类型：权限拒绝、依赖超时、候选摘要冲突、证据缺失或持久化失败。

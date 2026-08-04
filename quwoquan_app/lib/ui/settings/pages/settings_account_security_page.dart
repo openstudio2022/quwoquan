@@ -58,10 +58,12 @@ class _SettingsAccountSecurityPageState
                     category: UiErrorCategory.pageLoad,
                     scope: UiErrorScope.page,
                   ),
-                  onAction: (action) async {
+                  onRecovery: (action) async {
                     if (action.type == UiErrorActionType.retry) {
                       setState(_reload);
+                      return UiRecoveryOutcome.superseded;
                     }
+                    return UiRecoveryOutcome.cancelled;
                   },
                 );
               }

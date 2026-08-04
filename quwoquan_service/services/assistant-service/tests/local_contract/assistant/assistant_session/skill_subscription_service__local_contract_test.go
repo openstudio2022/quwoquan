@@ -10,11 +10,13 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	rtredis "quwoquan_service/runtime/redis"
+	runorchestration "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/orchestration"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
+	assistant "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/model"
+	sessionorchestration "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/ports"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/persistence"
+	skillpkg "quwoquan_service/services/assistant-service/internal/assistant/skill_package_release/application/packageasset"
 	subscriptionapplication "quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/application"
 	skillmodel "quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/domain/model"
 	subscriptionports "quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/domain/ports"
@@ -70,8 +72,8 @@ type proactiveSkillRuntime struct{}
 func (proactiveSkillRuntime) SelectSkill(
 	context.Context,
 	assistant.AssistantTurn,
-) (orchestration.SkillSelection, error) {
-	return orchestration.SkillSelection{
+) (runorchestration.SkillSelection, error) {
+	return runorchestration.SkillSelection{
 		SkillID:     "news_briefing",
 		DomainID:    "assistant",
 		DisplayName: "资讯简报",
@@ -80,11 +82,15 @@ func (proactiveSkillRuntime) SelectSkill(
 
 type proactiveFinalModel struct{}
 
+func (proactiveFinalModel) ModelExecutionCapabilities() runorchestration.ModelExecutionCapabilities {
+	return durableTestModelCapabilities()
+}
+
 func (proactiveFinalModel) Complete(
 	context.Context,
-	orchestration.ModelRequest,
-) (orchestration.ModelResponse, error) {
-	return orchestration.ModelResponse{Text: "主动订阅结果"}, nil
+	runorchestration.ModelRequest,
+) (runorchestration.ModelResponse, error) {
+	return runorchestration.ModelResponse{Text: "主动订阅结果"}, nil
 }
 
 func newProactiveDeliveryService(
@@ -93,11 +99,14 @@ func newProactiveDeliveryService(
 	cache rtredis.Client,
 	policy *proactiveDeliveryPolicyReader,
 	notification *proactiveNotificationWriter,
-	options ...orchestration.AssistantServiceOption,
-) *orchestration.AssistantService {
-	loop := orchestration.NewAgentLoop(
+	options ...sessionorchestration.AssistantServiceOption,
+) *sessionorchestration.AssistantService {
+	loop := runorchestration.NewAgentLoop(
 		proactiveSkillRuntime{},
-		orchestration.ReactRuntime{Model: proactiveFinalModel{}},
+		runorchestration.ReactRuntime{
+			Model: proactiveFinalModel{},
+			Tools: canonicalTestToolCoordinator(nil),
+		},
 		func() time.Time { return time.Now().UTC() },
 	)
 	loop.Catalog = skillfixture.Loader{}
@@ -105,23 +114,23 @@ func newProactiveDeliveryService(
 	runRuntime := assistantruntest.NewMemoryRuntime()
 	runCommands := runruntime.NewCommandService(
 		runRuntime,
-		runruntime.SessionAuthorizerFunc(func(
+		runruntime.SessionResolverFunc(func(
 			context.Context,
 			string,
 			string,
-		) error {
-			return nil
+		) (runruntime.SessionContinuity, error) {
+			return runruntime.SessionContinuity{}, nil
 		}),
 		testSkillPackageIdentityResolver(),
 		runruntime.AllowAllStartAccessPolicy{},
 		time.Now,
 		nil,
-		testRunPolicyResolver(),
+		runruntime.WithPolicyResolver(testRunPolicyResolver()),
 	)
 	runWorker := runruntime.NewDurableWorker(
 		runRuntime,
 		runRuntime,
-		orchestration.NewDurableRunExecutor(loop),
+		runorchestration.NewDurableRunExecutor(loop),
 		"local-contract-proactive-worker",
 	)
 	workerContext, cancelWorker := context.WithTimeout(
@@ -132,22 +141,21 @@ func newProactiveDeliveryService(
 		defer cancelWorker()
 		runWorker.Run(workerContext)
 	}()
-	options = append(
-		options,
-		orchestration.WithSkillSubscriptionStore(store),
-		orchestration.WithAssistantDeliveryPolicyReader(policy),
-		orchestration.WithNotificationAppMessageCommandWriter(notification),
-		orchestration.WithSessionStore(
+	baseOptions := []sessionorchestration.AssistantServiceOption{
+		sessionorchestration.WithSkillSubscriptionStore(store),
+		sessionorchestration.WithAssistantDeliveryPolicyReader(policy),
+		sessionorchestration.WithNotificationAppMessageCommandWriter(notification),
+		sessionorchestration.WithSessionStore(
 			persistence.NewMemorySessionStore(),
 		),
-		orchestration.WithAgentLoop(loop),
-		orchestration.WithSkillCatalog(skillfixture.Loader{}),
-		orchestration.WithRunCommandService(runCommands),
-	)
-	return orchestration.NewAssistantService(
+		sessionorchestration.WithSkillCatalog(skillfixture.Loader{}),
+		sessionorchestration.WithRunCommandService(runCommands),
+	}
+	baseOptions = append(baseOptions, options...)
+	return sessionorchestration.NewAssistantService(
 		skillconsenttest.NewMemoryStore(),
 		cache,
-		options...,
+		baseOptions...,
 	)
 }
 
@@ -696,7 +704,8 @@ func TestSkillSubscriptionDeliveryFailsClosedForConsentAndGroupMembership(
 			"subscription-consent",
 			"* * * * *",
 		)
-		subscription.SkillID = orchestration.SkillPersonalContentAccess
+		subscription.SkillID = "travel_companion"
+		subscription.DomainID = "travel"
 		store.SeedSkillSubscription(subscription)
 		notification := &proactiveNotificationWriter{}
 		service := newProactiveDeliveryService(
@@ -707,6 +716,19 @@ func TestSkillSubscriptionDeliveryFailsClosedForConsentAndGroupMembership(
 				policy: allowProactiveDeliveryPolicy(),
 			},
 			notification,
+			sessionorchestration.WithSkillCatalog(skillfixture.StaticLoader{
+				Manifests: []skillpkg.Manifest{{
+					SkillID: "travel_companion",
+					ContextProfile: skillpkg.ContextProfile{
+						ProfileID: "context.travel_companion.required_test",
+						Requirements: []skillpkg.ContextRequirement{{
+							SlotID:        "trip_context",
+							Required:      true,
+							ConsentScopes: []string{"travel.trip.read"},
+						}},
+					},
+				}},
+			}),
 		)
 		result, err := service.TickSkillSubscriptionCron(
 			t.Context(),
@@ -746,7 +768,7 @@ func TestSkillSubscriptionDeliveryFailsClosedForConsentAndGroupMembership(
 				)
 				subscription.Destination.DestinationType = "chat_conversation"
 				subscription.Destination.DestinationID = "conv-1"
-				subscription.SkillID = "general"
+				subscription.SkillID = "news_briefing"
 				store.SeedSkillSubscription(subscription)
 				chat := &assistantSessionChatMentionServiceFakeChatGroundingClient{
 					membershipDenied: true,
@@ -759,7 +781,7 @@ func TestSkillSubscriptionDeliveryFailsClosedForConsentAndGroupMembership(
 						policy: allowProactiveDeliveryPolicy(),
 					},
 					&proactiveNotificationWriter{},
-					orchestration.WithChatGroundingClient(chat),
+					sessionorchestration.WithChatGroundingClient(chat),
 				)
 				result, err := service.TickSkillSubscriptionCron(
 					t.Context(),
@@ -810,7 +832,7 @@ func TestSkillSubscriptionDeliveryFailsClosedForConsentAndGroupMembership(
 				policy: allowProactiveDeliveryPolicy(),
 			},
 			&proactiveNotificationWriter{},
-			orchestration.WithChatGroundingClient(chat),
+			sessionorchestration.WithChatGroundingClient(chat),
 		).TickSkillSubscriptionCron(
 			t.Context(),
 			skillmodel.SkillSubscriptionCronTickInput{

@@ -395,6 +395,12 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
             compiled=compiled,
             sources=sources,
         )
+        self.assertEqual(
+            coverage,
+            [],
+            "all 14 external Provider capabilities must have three-layer sources; "
+            "first-party HTTP authority bindings are outside Provider Conformance",
+        )
         with tempfile.TemporaryDirectory() as temporary:
             report, issues = provider_conformance.load_validate_and_derive(
                 root=Path(temporary),
@@ -664,13 +670,19 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
             sources={},
         )
 
-        capability_ids = {
-            capability["capability_id"]
-            for capability in governance.load_registry()["capabilities"]
-        }
+        capability_ids = set(compiled["providerConformanceCapabilityIds"])
         self.assertEqual(len(issues), len(capability_ids))
         for capability_id in capability_ids:
             self.assertTrue(
+                any(issue.startswith(f"source_coverage.{capability_id}:") for issue in issues),
+                capability_id,
+            )
+        for capability_id in {
+            "chat.conversation.membership.read",
+            "circle.membership.self.read",
+            "integration.connector_grant.read",
+        }:
+            self.assertFalse(
                 any(issue.startswith(f"source_coverage.{capability_id}:") for issue in issues),
                 capability_id,
             )

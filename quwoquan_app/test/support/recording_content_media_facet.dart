@@ -11,6 +11,7 @@ final class RecordingContentMediaFacet implements ContentMediaFacet {
     this.failCompleteWithoutCommit = false,
     this.uploadExpirations = const <DateTime>[],
     this.completedAssetStatus = MediaAssetStatus.ready,
+    this.completedAssetAccessPolicy = MediaAssetAccessPolicy.ownerOnly,
   });
 
   final bool loseFirstCompleteResponse;
@@ -19,6 +20,7 @@ final class RecordingContentMediaFacet implements ContentMediaFacet {
   final bool failCompleteWithoutCommit;
   final List<DateTime> uploadExpirations;
   final MediaAssetStatus completedAssetStatus;
+  final MediaAssetAccessPolicy completedAssetAccessPolicy;
   final List<InitContentMediaUploadCommand> initCommands =
       <InitContentMediaUploadCommand>[];
   final List<String> initIdempotencyKeys = <String>[];
@@ -213,8 +215,11 @@ final class RecordingContentMediaFacet implements ContentMediaFacet {
       mimeType: upload.mimeType,
       fileSize: upload.fileSize,
       status: completedAssetStatus,
-      accessPolicy: MediaAssetAccessPolicy.ownerOnly,
-      cdnUrl: Uri.parse('https://cdn.quwoquan.test/${query.mediaId}'),
+      accessPolicy: completedAssetAccessPolicy,
+      cdnUrl: Uri.parse(
+        'https://cdn.quwoquan.test/media/image/s/asset/'
+        '${query.mediaId}/v1/source.jpg',
+      ),
     );
   }
 
@@ -232,7 +237,7 @@ final class RecordingContentMediaFacet implements ContentMediaFacet {
     }
     return MediaAssetDiscardResult(
       mediaId: command.mediaId,
-      status: MediaAssetStatus.deleted,
+      status: MediaAssetDiscardStatus.deleted,
       replayed: replayed,
     );
   }

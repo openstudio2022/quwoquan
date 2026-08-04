@@ -5,15 +5,40 @@ import (
 	"testing"
 	"time"
 
+	generated "quwoquan_service/services/assistant-service/generated/assistant/assistant_session"
+	runorchestration "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/orchestration"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
+	sessionorchestration "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
 	assistantruntest "quwoquan_service/services/assistant-service/tests/support/assistantrun"
 )
 
+func durableTestReasoningPolicy(
+	t *testing.T,
+) runruntime.ReasoningProfileConfig {
+	t.Helper()
+	catalog, err := runruntime.DefaultReasoningProfileCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy, err := catalog.Resolve(generated.AssistantReasoningProfileBalanced)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return policy
+}
+
+func durableTestModelCapabilities() runorchestration.ModelExecutionCapabilities {
+	return runorchestration.ModelExecutionCapabilities{
+		ToolCalling:     true,
+		ParallelTools:   true,
+		ReasoningEffort: true,
+	}
+}
+
 func canonicalRunTestOption(
 	t *testing.T,
-	loop *orchestration.AgentLoop,
-) orchestration.AssistantServiceOption {
+	loop *runorchestration.AgentLoop,
+) sessionorchestration.AssistantServiceOption {
 	t.Helper()
 	option, _ := canonicalRunTestRuntime(t, loop)
 	return option
@@ -21,35 +46,35 @@ func canonicalRunTestOption(
 
 func canonicalRunTestRuntime(
 	t *testing.T,
-	loop *orchestration.AgentLoop,
-) (orchestration.AssistantServiceOption, *assistantruntest.MemoryRuntime) {
+	loop *runorchestration.AgentLoop,
+) (sessionorchestration.AssistantServiceOption, *assistantruntest.MemoryRuntime) {
 	t.Helper()
 
 	runtime := assistantruntest.NewMemoryRuntime()
 	commands := runruntime.NewCommandService(
 		runtime,
-		runruntime.SessionAuthorizerFunc(func(
+		runruntime.SessionResolverFunc(func(
 			context.Context,
 			string,
 			string,
-		) error {
-			return nil
+		) (runruntime.SessionContinuity, error) {
+			return runruntime.SessionContinuity{}, nil
 		}),
 		testSkillPackageIdentityResolver(),
 		runruntime.AllowAllStartAccessPolicy{},
 		time.Now,
 		nil,
-		testRunPolicyResolver(),
+		runruntime.WithPolicyResolver(testRunPolicyResolver()),
 	)
 	worker := runruntime.NewDurableWorker(
 		runtime,
 		runtime,
-		orchestration.NewDurableRunExecutor(loop),
+		runorchestration.NewDurableRunExecutor(loop),
 		"local-contract-canonical-run-worker",
 	)
 	workerContext, cancelWorker := context.WithCancel(context.Background())
 	t.Cleanup(cancelWorker)
 	go worker.Run(workerContext)
 
-	return orchestration.WithRunCommandService(commands), runtime
+	return sessionorchestration.WithRunCommandService(commands), runtime
 }

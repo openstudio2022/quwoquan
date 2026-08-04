@@ -179,7 +179,7 @@ final class TestPersonaFacets
   }
 
   @override
-  Future<contracts.PersonaManagementItem> createPersona(
+  Future<contracts.PersonaManagementItemView> createPersona(
     contracts.CreatePersonaCommand command,
   ) async {
     final id = 'persona-test-${++_version}';
@@ -196,7 +196,7 @@ final class TestPersonaFacets
   }
 
   @override
-  Future<contracts.PersonaManagementItem> updatePersona(
+  Future<contracts.PersonaManagementItemView> updatePersona(
     contracts.UpdatePersonaCommand command,
   ) async {
     final item = _item(command.personaId);
@@ -243,7 +243,7 @@ final class TestPersonaFacets
   }
 
   @override
-  Future<contracts.PersonaLifecycleGuard> retirePersona(
+  Future<contracts.PersonaLifecycleGuardView> retirePersona(
     contracts.RetirePersonaCommand command,
   ) async {
     final item = _item(command.personaId);
@@ -255,17 +255,17 @@ final class TestPersonaFacets
     item.isActive = false;
     item.retiredAt = DateTime.parse(_now());
     _version += 1;
-    return contracts.PersonaLifecycleGuard(
+    return contracts.PersonaLifecycleGuardView(
       personaId: command.personaId,
-      requestedAction: 'retire',
+      requestedAction: contracts.PersonaLifecycleAction.retire,
       allowed: true,
-      reason: 'allowed',
+      reason: contracts.PersonaLifecycleGuardReason.allowed,
       requiresSuccessor: false,
     );
   }
 
   @override
-  Future<contracts.ActivePersonaContext> activatePersona(
+  Future<contracts.ActivePersonaContextView> activatePersona(
     contracts.ActivatePersonaCommand command,
   ) async {
     final target = _item(command.personaId);
@@ -277,15 +277,26 @@ final class TestPersonaFacets
     }
     target.lastActivatedAt = DateTime.parse(_now());
     _version += 1;
-    return contracts.ActivePersonaContext(
+    return contracts.ActivePersonaContextView(
       ownerUserId: 'owner-test',
       personaId: target.personaId,
-      isolationLevel: target.isolationLevel,
-      profileVisibility: target.profileVisibility,
+      subjectType: contracts.ProfileOwnerKind.persona,
+      displayName: target.displayName,
+      avatarUrl: target.avatarUrl,
+      avatarVersion: 1,
+      isPrimary: target.isPrimary,
+      isolationLevel: contracts.IsolationLevel.fromWire(
+        target.isolationLevel,
+        'ActivePersonaContextView.isolationLevel',
+      ),
+      profileVisibility: contracts.ProfileVisibility.fromWire(
+        target.profileVisibility,
+        'ActivePersonaContextView.profileVisibility',
+      ),
       contextVersion: _version,
       personaSnapshotVersion: _version,
       explicitOverride: true,
-      switchedAt: _now(),
+      switchedAt: DateTime.parse(_now()),
     );
   }
 
@@ -356,26 +367,35 @@ final class TestPersonaFacets
     );
   }
 
-  contracts.PersonaManagementItem _contract(_TestPersonaRecord item) {
-    return contracts.PersonaManagementItem(
+  contracts.PersonaManagementItemView _contract(_TestPersonaRecord item) {
+    return contracts.PersonaManagementItemView(
       personaId: item.personaId,
       displayName: item.displayName,
       userHandle: item.userHandle,
       avatarUrl: item.avatarUrl,
       backgroundUrl: item.backgroundUrl,
       bio: item.bio,
-      isolationLevel: item.isolationLevel,
+      isolationLevel: contracts.IsolationLevel.fromWire(
+        item.isolationLevel,
+        'PersonaManagementItemView.isolationLevel',
+      ),
       isActive: item.isActive,
       isPrimary: item.isPrimary,
-      status: item.status,
-      retiredAt: item.retiredAt?.toIso8601String(),
+      status: contracts.PersonaStatus.fromWire(
+        item.status,
+        'PersonaManagementItemView.status',
+      ),
+      retiredAt: item.retiredAt,
       inheritsProfileFromOwner: item.inheritsProfileFromOwner,
       overriddenProfileFields: item.overriddenProfileFields,
-      lastProfileSyncAt: item.lastProfileSyncAt?.toIso8601String(),
+      lastProfileSyncAt: item.lastProfileSyncAt,
       lastProfileSyncSource: item.lastProfileSyncSource,
-      profileVisibility: item.profileVisibility,
-      updatedAt: item.updatedAt,
-      lastActivatedAt: item.lastActivatedAt?.toIso8601String(),
+      profileVisibility: contracts.ProfileVisibility.fromWire(
+        item.profileVisibility,
+        'PersonaManagementItemView.profileVisibility',
+      ),
+      updatedAt: DateTime.parse(item.updatedAt),
+      lastActivatedAt: item.lastActivatedAt,
     );
   }
 

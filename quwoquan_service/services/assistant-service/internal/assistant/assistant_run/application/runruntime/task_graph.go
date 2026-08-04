@@ -21,6 +21,44 @@ func NewTaskGraph(tasks []TaskNode) (TaskGraph, error) {
 	return graph, nil
 }
 
+// Add appends a new task to a live graph. Dependencies may only point to
+// already-persisted tasks, which makes a newly introduced cycle impossible and
+// lets a worker apply each model-derived plan patch atomically.
+func (g *TaskGraph) Add(task TaskNode) error {
+	if g == nil || strings.TrimSpace(task.TaskID) == "" ||
+		strings.TrimSpace(task.Goal) == "" || g.taskIndex(task.TaskID) >= 0 {
+		return ErrInvalidTaskGraph
+	}
+	task.TaskID = strings.TrimSpace(task.TaskID)
+	task.Goal = strings.TrimSpace(task.Goal)
+	task.OwnerAgent = strings.TrimSpace(task.OwnerAgent)
+	if task.Status != "" && task.Status != generated.AssistantTaskStatusPending {
+		return ErrInvalidTaskGraph
+	}
+	seenDependencies := make(map[string]struct{}, len(task.Dependencies))
+	dependencies := make([]string, 0, len(task.Dependencies))
+	for _, dependency := range task.Dependencies {
+		dependency = strings.TrimSpace(dependency)
+		if dependency == "" || dependency == task.TaskID ||
+			g.taskIndex(dependency) < 0 {
+			return ErrInvalidTaskGraph
+		}
+		if _, duplicate := seenDependencies[dependency]; duplicate {
+			continue
+		}
+		seenDependencies[dependency] = struct{}{}
+		dependencies = append(dependencies, dependency)
+	}
+	task.Dependencies = dependencies
+	task.Status = generated.AssistantTaskStatusPending
+	task.ArtifactRefs = append([]string{}, task.ArtifactRefs...)
+	task.Verification = cloneVerification(task.Verification)
+	g.Tasks = append(g.Tasks, task)
+	g.GraphRevision++
+	g.refreshReadyTasks()
+	return nil
+}
+
 func (g *TaskGraph) Start(taskID string) error {
 	index := g.taskIndex(taskID)
 	if index < 0 || g.Tasks[index].Status != generated.AssistantTaskStatusReady {

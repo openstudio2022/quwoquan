@@ -461,8 +461,7 @@ class _HomeFeedVideoCard extends ConsumerWidget {
                 key: ValueKey<String>('home-video-player-${dto.id}'),
                 deliveryReference: videoReference,
                 adaptiveDeliveryReference: adaptiveReference,
-                adaptiveDescriptorVersion:
-                    dto.hlsCmafDescriptorVersion ?? 0,
+                adaptiveDescriptorVersion: dto.hlsCmafDescriptorVersion ?? 0,
                 thumbnailReference: coverReference,
                 initialize: initialize,
                 autoPlay: autoPlay,

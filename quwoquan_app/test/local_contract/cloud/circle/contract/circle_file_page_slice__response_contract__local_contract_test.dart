@@ -29,7 +29,7 @@ void main() {
       expect(page.items, hasLength(1));
       expect(page.items.single.fileId, 'file-1');
       expect(page.items.single.name, 'guide.png');
-      expect(page.nextCursor, 'next-page');
+      expect(page.cursor, 'next-page');
     });
 
     test('uses only circle id as a path parameter for list queries', () {

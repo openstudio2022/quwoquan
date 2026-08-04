@@ -17,15 +17,19 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from quwoquan_ops.cli.lib.output_paths import env_run_dir, target_process_dir  # noqa: E402
-# Gamma verification evidence belongs to one run. Stack status is process
-# state, so it remains in the only allowed local/process directory.
+from quwoquan_ops.cli.lib.output_paths import env_run_dir  # noqa: E402
+from quwoquan_ops.cli.lib.startup_attempt_receipt import (  # noqa: E402
+    SCHEMA as STARTUP_ATTEMPT_SCHEMA,
+    startup_attempt_path,
+)
+
+
 GAMMA_RUN_ROOT = Path(
     os.environ.get("QWQ_RUN_ROOT")
     or env_run_dir("gamma", "verify-local-gamma", target="gamma-local")
 )
 DEFAULT_REPORT = GAMMA_RUN_ROOT / "report.json"
-DEFAULT_STACK_REPORT = target_process_dir("gamma-local") / "stack_status.json"
+DEFAULT_STARTUP_RECEIPT = startup_attempt_path("gamma-local")
 START_SCRIPT = ROOT / "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh"
 README = ROOT / "quwoquan_ops/environments/gamma/local/README.md"
 
@@ -75,14 +79,16 @@ def static_contract_issues() -> list[str]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--report", default=str(DEFAULT_REPORT))
-    parser.add_argument("--stack-report", default=str(DEFAULT_STACK_REPORT))
+    parser.add_argument(
+        "--startup-receipt",
+        default=str(DEFAULT_STARTUP_RECEIPT),
+    )
     parser.add_argument("--t3-report", default=str(GAMMA_RUN_ROOT / "t3_report.json"))
     parser.add_argument("--t4-report", default=str(GAMMA_RUN_ROOT / "t4_report.json"))
     parser.add_argument(
         "--configuration-digest",
         default=os.environ.get("LOCAL_GAMMA_CONFIG_VERSION", ""),
     )
-    parser.add_argument("--image-version", default="0.0.1")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
     if re.fullmatch(r"sha256:[0-9a-f]{64}", args.configuration_digest) is None:
@@ -115,13 +121,32 @@ def main() -> int:
             },
         }
     else:
-        stack = load_json(Path(args.stack_report))
+        startup = load_json(Path(args.startup_receipt))
         t3 = load_json(Path(args.t3_report))
         t4 = load_json(Path(args.t4_report))
+        image_transport_tag = str(startup.get("imageTransportTag") or "")
+        image_composition = startup.get("imageComposition")
+        startup_ready = (
+            startup.get("schema") == STARTUP_ATTEMPT_SCHEMA
+            and startup.get("status") == "running"
+            and startup.get("target") == "gamma-local"
+            and startup.get("env") == "gamma"
+            and str(startup.get("composeProject") or "").strip()
+            and startup.get("workload") in {
+                "full",
+                "content-release",
+                "content-commercial",
+            }
+            and startup.get("configurationDigest") == args.configuration_digest
+            and re.fullmatch(r"sha256:[0-9a-f]{64}", image_transport_tag) is not None
+            and isinstance(image_composition, dict)
+            and image_composition.get("imageVersion") == image_transport_tag
+            and isinstance(image_composition.get("images"), dict)
+        )
         statuses = {
             "T1": "passed",
             "T2": "passed",
-            "stack": status_of(stack),
+            "startup": "passed" if startup_ready else "gate_block",
             "T3": status_of(t3),
             "T4": status_of(t4),
         }
@@ -136,12 +161,11 @@ def main() -> int:
             "dryRun": False,
             "commitSha": git_sha(),
             "configurationDigest": args.configuration_digest,
-            "imageVersion": args.image_version,
+            "imageVersion": image_transport_tag,
             "generatedAt": datetime.now(timezone.utc).isoformat(),
             "gammaValidationSuiteRegistry": "quwoquan_ops/environments/gamma/validation_suites.json",
-            "serviceMode": str(stack.get("serviceMode") or "single-stack"),
-            "restartedFromPrevious": bool(stack.get("restartedFromPrevious")),
-            "stack": stack,
+            "serviceMode": "single-stack",
+            "startupAttempt": startup,
             "tests": {
                 "T1": {"status": "passed", "source": "make gate"},
                 "T2": {"status": "passed", "source": "make gate"},

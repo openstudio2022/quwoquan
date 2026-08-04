@@ -11,6 +11,12 @@ type GeoPoint struct {
 
 var _ = time.Now
 
+// GeoPoint domain model.
+type GeoPoint struct {
+	Latitude  float64 `json:"latitude" bson:"latitude"`
+	Longitude float64 `json:"longitude" bson:"longitude"`
+}
+
 // Post domain model.
 type Post struct {
 	ID                        string                   `json:"id" bson:"_id"`

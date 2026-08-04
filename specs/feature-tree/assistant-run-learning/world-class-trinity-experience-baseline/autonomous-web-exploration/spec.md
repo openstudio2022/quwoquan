@@ -38,10 +38,20 @@
 - 被采用的网页事实必须可追踪到规范化目标、抓取摘要、来源血缘和用户可打开的引用。
 - 安全拒绝、预算耗尽与不支持内容必须进入可区分、可恢复终态，不得伪造已读取。
 
+### REQ-004 研究预算只依赖工具语义能力
+
+- 可参与证据探索的 Tool 必须在 canonical metadata 声明 `discover / navigate / inspect` 语义及其输入绑定；AgentLoop 不按工具名或垂类分支判断搜索广度、来源上限和导航深度。
+- 新增符合相同 metadata 合同的站内 Reader、公开网 Reader 或 Connector Reader 时，只增加 Tool metadata 与 adapter；不得修改 AgentLoop 才能获得既有研究预算、恢复和审计能力。
+- 公共网页搜索、天气事实与行情事实必须是独立 typed capability Tool；具体 Skill 只通过 active CapabilityProfile 组合工具，运行时不得按 `skillId`、中文关键词或入参形状猜测 Provider。
+- Tool Registry 必须在注册、读取和每次 Run 开始时生成隔离快照；模型声明、Hook 或 Adapter 对 schema map 的修改不得污染其他 Run。
+- Provider 失败必须由该 Tool metadata 绑定到真实存在的 AssistantRun error；AgentLoop 不得按 Provider capability、toolName 或垂类分支映射错误码。
+- 所有研究 Tool 的输出 schema 必须强制包含封闭且完整的 `evidenceAssessment`，至少表达充分性、是否重规划、原因及 target/document/artifact/source 引用集合；不得把缺失评估当作成功。
+- 需要把检索中浮现的兴趣反馈给用户体验或推荐系统的 Tool，必须在自身封闭输出 schema 中声明并返回标准 `emergedTagRefs`；Tool adapter 负责从所属领域的 canonical payload 生成路径制 tagRef，AgentLoop 只合并标准字段，不猜测 `results`、`payload` 或垂类字段。
+
 ## 4. 契约引用
 
 - object / projection：`AssistantWebTarget`、`AssistantWebDocument`、`AssistantSourceLedgerEntry`
-- tool：`web_search`、`web_open`、`web_find`
+- tool：`web_search`、`web_open`、`web_find`、`weather_lookup`、`finance_quote`
 - error / recovery：`ASSISTANT.USER.web_target_rejected`、`ASSISTANT.MIDDLEWARE.web_fetch_unavailable`、`ASSISTANT.MIDDLEWARE.web_budget_exhausted`、`ASSISTANT.SYSTEM.web_budget_unavailable`、`ASSISTANT.SYSTEM.web_evidence_unavailable`
 - event / metric：`assistant_web_fetch`、`assistant_web_security_rejection`
 
@@ -62,6 +72,24 @@
 - WHEN 小趣依据证据缺口继续探索。
 - THEN 公开目标在预算内可继续读取，非公开目标在每个解析边界均被拒绝。
 - AND 被拒绝内容不会被表述为已验证事实。
+
+<a id="gwt-003"></a>
+### GWT-003 新研究工具按 metadata 接入统一预算
+
+- GIVEN 一个新只读 Tool 声明 `discover`、`navigate` 或 `inspect` 语义及合法输入绑定。
+- WHEN Skill 在冻结的 Tool allowlist 中使用该 Tool 探索证据。
+- THEN AgentLoop 复用同一来源、广度、深度、循环与恢复预算，不新增该 Tool 名称分支。
+- AND 非法绑定、写工具冒充研究工具、target kind 超出其输入 schema 或缺少完整 `evidenceAssessment` 时，contract/codegen 在发布前失败。
+- AND 声明 `emergedTagRefs` 的 Tool 可以直接进入统一兴趣回流，新增 Tool 不需要修改 AgentLoop 的结果解析分支。
+
+<a id="gwt-004"></a>
+### GWT-004 垂类事实能力不由 Skill 名称猜测
+
+- GIVEN 天气、行情和公共网页分别由独立 Tool metadata、Provider port 与 active CapabilityProfile 声明。
+- WHEN 天气问题文本被提交给 `web_search`，或任意 Skill 显式调用 `weather_lookup / finance_quote`。
+- THEN `web_search` 始终只调用 public search；两个垂类 Tool 只调用各自 typed Provider，不跨能力降级或回退。
+- AND 新 Skill 采用这些能力只修改 Skill package profile，不增加 Go 中的 Skill 分支。
+- AND 任意新垂类 Tool 可用 metadata 绑定自己的 canonical Provider failure error，Coordinator 无需认识其 capability 名称。
 
 ## 6. 依赖
 

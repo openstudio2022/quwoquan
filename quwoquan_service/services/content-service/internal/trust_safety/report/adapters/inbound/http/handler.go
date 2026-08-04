@@ -52,7 +52,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		))
 		return
 	}
-	_, err := h.service.CreateReport(
+	payload, err := h.service.CreateReport(
 		r.Context(),
 		reportapp.CreateReportCommand{
 			ReporterID:        reporterID,
@@ -67,7 +67,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		writeHTTPError(w, r, err)
 		return
 	}
-	w.WriteHeader(http.StatusNoContent)
+	writeJSON(w, http.StatusOK, payload)
 }
 
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {

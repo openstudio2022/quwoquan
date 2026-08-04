@@ -14,9 +14,15 @@ class AssistantSkillManifestWire {
     this.tagRefs = const <String>[],
     this.executionTarget = "cloud",
     this.routingHints = const <String>[],
+    this.routingFallback = false,
+    required this.catalogProfileRef,
     required this.activationProfileRef,
+    required this.inputProfileRef,
     required this.contextProfileRef,
     required this.capabilityProfileRef,
+    required this.orchestrationProfileRef,
+    required this.triggerProfileRef,
+    required this.memoryProfileRef,
     required this.presentationProfileRef,
     required this.evaluationProfileRef,
     required this.replayAssetRef,
@@ -32,9 +38,15 @@ class AssistantSkillManifestWire {
   final List<String> tagRefs;
   final String executionTarget;
   final List<String> routingHints;
+  final bool routingFallback;
+  final String catalogProfileRef;
   final String activationProfileRef;
+  final String inputProfileRef;
   final String contextProfileRef;
   final String capabilityProfileRef;
+  final String orchestrationProfileRef;
+  final String triggerProfileRef;
+  final String memoryProfileRef;
   final String presentationProfileRef;
   final String evaluationProfileRef;
   final String replayAssetRef;
@@ -50,9 +62,15 @@ class AssistantSkillManifestWire {
         'tagRefs': tagRefs,
         'executionTarget': executionTarget,
         'routingHints': routingHints,
+        'routingFallback': routingFallback,
+        'catalogProfileRef': catalogProfileRef,
         'activationProfileRef': activationProfileRef,
+        'inputProfileRef': inputProfileRef,
         'contextProfileRef': contextProfileRef,
         'capabilityProfileRef': capabilityProfileRef,
+        'orchestrationProfileRef': orchestrationProfileRef,
+        'triggerProfileRef': triggerProfileRef,
+        'memoryProfileRef': memoryProfileRef,
         'presentationProfileRef': presentationProfileRef,
         'evaluationProfileRef': evaluationProfileRef,
         'replayAssetRef': replayAssetRef,
@@ -70,9 +88,15 @@ class AssistantSkillManifestWire {
       'tagRefs',
       'executionTarget',
       'routingHints',
+      'routingFallback',
+      'catalogProfileRef',
       'activationProfileRef',
+      'inputProfileRef',
       'contextProfileRef',
       'capabilityProfileRef',
+      'orchestrationProfileRef',
+      'triggerProfileRef',
+      'memoryProfileRef',
       'presentationProfileRef',
       'evaluationProfileRef',
       'replayAssetRef',
@@ -109,14 +133,32 @@ class AssistantSkillManifestWire {
     if (json.containsKey('routingHints') && json['routingHints'] != null && (json['routingHints'] is! List || (json['routingHints'] as List).any((item) => item is! String))) {
       throw const FormatException('AssistantSkillManifestWire field routingHints has an invalid wire value');
     }
+    if (json.containsKey('routingFallback') && json['routingFallback'] != null && (json['routingFallback'] is! bool)) {
+      throw const FormatException('AssistantSkillManifestWire field routingFallback has an invalid wire value');
+    }
+    if (!json.containsKey('catalogProfileRef') || json['catalogProfileRef'] == null || (json['catalogProfileRef'] is! String)) {
+      throw const FormatException('AssistantSkillManifestWire field catalogProfileRef has an invalid wire value');
+    }
     if (!json.containsKey('activationProfileRef') || json['activationProfileRef'] == null || (json['activationProfileRef'] is! String)) {
       throw const FormatException('AssistantSkillManifestWire field activationProfileRef has an invalid wire value');
+    }
+    if (!json.containsKey('inputProfileRef') || json['inputProfileRef'] == null || (json['inputProfileRef'] is! String)) {
+      throw const FormatException('AssistantSkillManifestWire field inputProfileRef has an invalid wire value');
     }
     if (!json.containsKey('contextProfileRef') || json['contextProfileRef'] == null || (json['contextProfileRef'] is! String)) {
       throw const FormatException('AssistantSkillManifestWire field contextProfileRef has an invalid wire value');
     }
     if (!json.containsKey('capabilityProfileRef') || json['capabilityProfileRef'] == null || (json['capabilityProfileRef'] is! String)) {
       throw const FormatException('AssistantSkillManifestWire field capabilityProfileRef has an invalid wire value');
+    }
+    if (!json.containsKey('orchestrationProfileRef') || json['orchestrationProfileRef'] == null || (json['orchestrationProfileRef'] is! String)) {
+      throw const FormatException('AssistantSkillManifestWire field orchestrationProfileRef has an invalid wire value');
+    }
+    if (!json.containsKey('triggerProfileRef') || json['triggerProfileRef'] == null || (json['triggerProfileRef'] is! String)) {
+      throw const FormatException('AssistantSkillManifestWire field triggerProfileRef has an invalid wire value');
+    }
+    if (!json.containsKey('memoryProfileRef') || json['memoryProfileRef'] == null || (json['memoryProfileRef'] is! String)) {
+      throw const FormatException('AssistantSkillManifestWire field memoryProfileRef has an invalid wire value');
     }
     if (!json.containsKey('presentationProfileRef') || json['presentationProfileRef'] == null || (json['presentationProfileRef'] is! String)) {
       throw const FormatException('AssistantSkillManifestWire field presentationProfileRef has an invalid wire value');
@@ -142,9 +184,15 @@ class AssistantSkillManifestWire {
       tagRefs: _assistantStringList(json['tagRefs']),
       executionTarget: (json['executionTarget'] as String?)?.trim() ?? "cloud",
       routingHints: _assistantStringList(json['routingHints']),
+      routingFallback: json['routingFallback'] == true,
+      catalogProfileRef: (json['catalogProfileRef'] as String?)?.trim() ?? "",
       activationProfileRef: (json['activationProfileRef'] as String?)?.trim() ?? "",
+      inputProfileRef: (json['inputProfileRef'] as String?)?.trim() ?? "",
       contextProfileRef: (json['contextProfileRef'] as String?)?.trim() ?? "",
       capabilityProfileRef: (json['capabilityProfileRef'] as String?)?.trim() ?? "",
+      orchestrationProfileRef: (json['orchestrationProfileRef'] as String?)?.trim() ?? "",
+      triggerProfileRef: (json['triggerProfileRef'] as String?)?.trim() ?? "",
+      memoryProfileRef: (json['memoryProfileRef'] as String?)?.trim() ?? "",
       presentationProfileRef: (json['presentationProfileRef'] as String?)?.trim() ?? "",
       evaluationProfileRef: (json['evaluationProfileRef'] as String?)?.trim() ?? "",
       replayAssetRef: (json['replayAssetRef'] as String?)?.trim() ?? "",
@@ -170,9 +218,15 @@ class AssistantSkillManifestWireFields {
   static const String tagRefs = 'tagRefs';
   static const String executionTarget = 'executionTarget';
   static const String routingHints = 'routingHints';
+  static const String routingFallback = 'routingFallback';
+  static const String catalogProfileRef = 'catalogProfileRef';
   static const String activationProfileRef = 'activationProfileRef';
+  static const String inputProfileRef = 'inputProfileRef';
   static const String contextProfileRef = 'contextProfileRef';
   static const String capabilityProfileRef = 'capabilityProfileRef';
+  static const String orchestrationProfileRef = 'orchestrationProfileRef';
+  static const String triggerProfileRef = 'triggerProfileRef';
+  static const String memoryProfileRef = 'memoryProfileRef';
   static const String presentationProfileRef = 'presentationProfileRef';
   static const String evaluationProfileRef = 'evaluationProfileRef';
   static const String replayAssetRef = 'replayAssetRef';

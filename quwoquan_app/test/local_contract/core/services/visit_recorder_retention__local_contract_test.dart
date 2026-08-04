@@ -32,7 +32,7 @@ void main() {
             count7d: 1,
             count30d: 1,
             lastSeenTimestamps: <String>[seenAt.toIso8601String()],
-          ).toJson(),
+          ).toStorageMap(),
         );
       }
       await box.putAll(seeded);

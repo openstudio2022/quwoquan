@@ -11,13 +11,15 @@ import (
 
 	"quwoquan_service/generated/serviceclients"
 	rterr "quwoquan_service/runtime/errors"
+	runorchestration "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/orchestration"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
-	skillpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/skill"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
+	assistant "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/model"
+	sessionorchestration "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/chatclient"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/messaging"
+	skillpkg "quwoquan_service/services/assistant-service/internal/assistant/skill_package_release/application/packageasset"
 	modeldouble "quwoquan_service/services/assistant-service/tests/support/modeldouble"
+	"quwoquan_service/services/assistant-service/tests/support/skillfixture"
 )
 
 func TestAssistantMentionedConsumerGroundsAndRepliesThroughChatHTTP(t *testing.T) {
@@ -102,47 +104,46 @@ func TestAssistantMentionedConsumerGroundsAndRepliesThroughChatHTTP(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	loop := orchestration.NewAgentLoop(
+	loop := runorchestration.NewAgentLoop(
 		integrationChatMentionSkillRuntime{},
-		orchestration.ReactRuntime{
+		runorchestration.ReactRuntime{
 			Model: modeldouble.DeterministicModelProvider{},
 		},
 		nil,
 	)
-	loop.Catalog = skillpkg.StaticLoader{Manifests: []skillpkg.Manifest{{
+	loop.Catalog = skillfixture.StaticLoader{Manifests: []skillpkg.Manifest{{
 		SkillID:     "fallback_general_search",
 		DomainID:    "fallback_general_search",
 		DisplayName: "通用搜索助手",
 	}}}
 	runCommands := runruntime.NewCommandService(
 		integrationRunRepository,
-		runruntime.SessionAuthorizerFunc(func(
+		runruntime.SessionResolverFunc(func(
 			context.Context,
 			string,
 			string,
-		) error {
-			return nil
+		) (runruntime.SessionContinuity, error) {
+			return runruntime.SessionContinuity{}, nil
 		}),
 		testSkillPackageIdentityResolver(),
 		runruntime.AllowAllStartAccessPolicy{},
 		time.Now,
 		nil,
-		integrationRunPolicyResolver(),
+		runruntime.WithPolicyResolver(integrationRunPolicyResolver()),
 	)
 	runWorker := runruntime.NewDurableWorker(
 		integrationRunRepository,
 		integrationRunRepository,
-		orchestration.NewDurableRunExecutor(loop),
+		runorchestration.NewDurableRunExecutor(loop),
 		"api-integration-chat-mention-worker",
 	)
 	workerContext, cancelWorker := context.WithCancel(ctx)
 	defer cancelWorker()
 	go runWorker.Run(workerContext)
 	service := newIntegrationAssistantService(
-		orchestration.WithAgentLoop(loop),
-		orchestration.WithSkillCatalog(loop.Catalog),
-		orchestration.WithRunCommandService(runCommands),
-		orchestration.WithChatGroundingClient(chatGrounding),
+		sessionorchestration.WithSkillCatalog(loop.Catalog),
+		sessionorchestration.WithRunCommandService(runCommands),
+		sessionorchestration.WithChatGroundingClient(chatGrounding),
 	)
 	consumer := messaging.NewAssistantMentionedConsumerWithTransport(
 		newIntegrationMessageTransport(),
@@ -233,7 +234,7 @@ type integrationChatMentionSkillRuntime struct{}
 func (integrationChatMentionSkillRuntime) SelectSkill(
 	_ context.Context,
 	turn assistant.AssistantTurn,
-) (orchestration.SkillSelection, error) {
+) (runorchestration.SkillSelection, error) {
 	skillID := turn.SkillID
 	if skillID == "" {
 		skillID = "fallback_general_search"
@@ -242,7 +243,7 @@ func (integrationChatMentionSkillRuntime) SelectSkill(
 	if domainID == "" {
 		domainID = "assistant"
 	}
-	return orchestration.SkillSelection{
+	return runorchestration.SkillSelection{
 		SkillID:  skillID,
 		DomainID: domainID,
 	}, nil

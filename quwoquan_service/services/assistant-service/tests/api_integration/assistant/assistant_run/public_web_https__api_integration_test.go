@@ -20,7 +20,7 @@ import (
 	publicwebtool "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/adapters/outbound/tool"
 	publicweb "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/publicweb"
 	publicwebinfra "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/infrastructure/publicweb"
-	toolpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/tool"
+	toolpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/tool"
 )
 
 type controlledDNS struct {

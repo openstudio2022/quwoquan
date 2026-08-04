@@ -168,5 +168,229 @@ class ProviderReleaseEvidenceTest(unittest.TestCase):
         self.assertNotIn("executableSourceCount", payload)
 
 
+class ProviderReleaseEvidenceProducerTest(unittest.TestCase):
+    def _component_manifest(self, *, candidate_id: object = None) -> dict:
+        return {
+            "candidateId": candidate_id,
+            "status": "component-ready",
+            "source": {
+                "gitSha": "a" * 40,
+                "treeDigest": "sha1:" + "b" * 40,
+                "repository": "owner/repo",
+                "workflowRunId": "123",
+            },
+            "images": {
+                "service": {"digest": "sha256:" + "c" * 64},
+            },
+        }
+
+    def test_identity_rejects_sealed_candidate_and_writes_binding_outputs(
+        self,
+    ) -> None:
+        import argparse
+        import json
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+
+        from quwoquan_ops.ci import provider_release_evidence as producer
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            manifest_path = root / "manifest.json"
+            github_output = root / "github_output"
+            sealed = self._component_manifest(candidate_id="sha256:" + "d" * 64)
+            manifest_path.write_text(json.dumps(sealed), encoding="utf-8")
+            with patch.object(
+                producer,
+                "validate_manifest",
+                side_effect=lambda payload, allowed_statuses=None: None,
+            ), patch.object(
+                producer.subprocess,
+                "run",
+                return_value=type(
+                    "Completed",
+                    (),
+                    {"stdout": "a" * 40 + "\n"},
+                )(),
+            ):
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "Provider qualification must precede candidate sealing",
+                ):
+                    producer._component_identity(
+                        manifest_path,
+                        "ghcr.io/owner/repo/component@sha256:" + "e" * 64,
+                    )
+
+            open_manifest = self._component_manifest()
+            manifest_path.write_text(json.dumps(open_manifest), encoding="utf-8")
+            github_output.write_text("", encoding="utf-8")
+            with patch.object(
+                producer,
+                "validate_manifest",
+                side_effect=lambda payload, allowed_statuses=None: None,
+            ), patch.object(
+                producer.subprocess,
+                "run",
+                return_value=type(
+                    "Completed",
+                    (),
+                    {"stdout": "a" * 40 + "\n"},
+                )(),
+            ):
+                code = producer.command_identity(
+                    argparse.Namespace(
+                        component_manifest=manifest_path,
+                        component_evidence_ref=(
+                            "ghcr.io/owner/repo/component@sha256:" + "e" * 64
+                        ),
+                        github_output=str(github_output),
+                    )
+                )
+            self.assertEqual(code, 0)
+            output = github_output.read_text(encoding="utf-8")
+            self.assertIn("expectedImageDigest=sha256:", output)
+            self.assertIn(
+                "componentEvidenceRef=ghcr.io/owner/repo/component@sha256:",
+                output,
+            )
+
+    def test_execute_prod_invokes_stackctl_for_enabled_bindings_only(self) -> None:
+        import argparse
+        import json
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+
+        from quwoquan_ops.ci import provider_release_evidence as producer
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            manifest_path = root / "manifest.json"
+            report_dir = root / "reports"
+            manifest_path.write_text(
+                json.dumps(self._component_manifest()),
+                encoding="utf-8",
+            )
+            commands: list[list[str]] = []
+
+            def _run(command, cwd=None, env=None, check=None, **_kwargs):
+                if command[:2] == ["git", "rev-parse"]:
+                    return type("Completed", (), {"stdout": "a" * 40 + "\n"})()
+                commands.append(list(command))
+                return type("Completed", (), {"stdout": ""})()
+
+            with patch.object(
+                producer,
+                "validate_manifest",
+                side_effect=lambda payload, allowed_statuses=None: None,
+            ), patch.object(
+                producer.governance,
+                "load_and_compile",
+                return_value=(
+                    {
+                        "selectedBindings": {
+                            "prod": {
+                                "required.capability": {
+                                    "state": "enabled",
+                                    "adapter_id": "ext.provider.canonical",
+                                },
+                                "blocked.capability": {
+                                    "state": "blocked",
+                                    "adapter_id": "ext.provider.blocked",
+                                },
+                            }
+                        }
+                    },
+                    [],
+                ),
+            ), patch.object(producer.subprocess, "run", side_effect=_run):
+                code = producer.command_execute_prod(
+                    argparse.Namespace(
+                        component_manifest=manifest_path,
+                        component_evidence_ref=(
+                            "ghcr.io/owner/repo/component@sha256:" + "e" * 64
+                        ),
+                        report_dir=report_dir,
+                    )
+                )
+            self.assertEqual(code, 0)
+            self.assertEqual(len(commands), 1)
+            command = commands[0]
+            self.assertEqual(command[1:4], [
+                "quwoquan_ops/cli/stackctl.py",
+                "provider-conformance",
+                "--adapter-id",
+            ])
+            self.assertIn("ext.provider.canonical", command)
+            self.assertIn("--env", command)
+            self.assertIn("prod", command)
+            self.assertIn("--execute", command)
+            self.assertIn("--layer", command)
+            self.assertIn("user_acceptance", command)
+
+    def test_package_gate_blocks_when_executed_evidence_is_empty(self) -> None:
+        import argparse
+        import json
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+
+        from quwoquan_ops.ci import provider_release_evidence as producer
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            manifest_path = root / "manifest.json"
+            output_dir = root / "oci"
+            manifest_path.write_text(
+                json.dumps(self._component_manifest()),
+                encoding="utf-8",
+            )
+            with patch.object(
+                producer,
+                "validate_manifest",
+                side_effect=lambda payload, allowed_statuses=None: None,
+            ), patch.object(
+                producer.subprocess,
+                "run",
+                return_value=type(
+                    "Completed",
+                    (),
+                    {"stdout": "a" * 40 + "\n"},
+                )(),
+            ), patch.object(
+                producer,
+                "output_root",
+                return_value=root,
+            ), patch.object(
+                producer.provider_conformance,
+                "load_validate_and_derive",
+                return_value=({"schema": "provider-conformance-readiness"}, []),
+            ), patch.object(
+                producer.provider_conformance,
+                "readiness_issues",
+                return_value=[],
+            ), patch.object(
+                producer.provider_conformance,
+                "evidence_files",
+                return_value=[],
+            ):
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "executed Provider evidence set is empty",
+                ):
+                    producer.command_package(
+                        argparse.Namespace(
+                            component_manifest=manifest_path,
+                            component_evidence_ref=(
+                                "ghcr.io/owner/repo/component@sha256:" + "e" * 64
+                            ),
+                            output_dir=output_dir,
+                            github_output="",
+                        )
+                    )
+
+
 if __name__ == "__main__":
     unittest.main()

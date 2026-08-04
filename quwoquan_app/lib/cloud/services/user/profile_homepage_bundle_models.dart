@@ -17,9 +17,7 @@ class UserHomepageTabCountsViewData {
   final int circlesCount;
   final int collectionsCount;
 
-  factory UserHomepageTabCountsViewData.fromWire(
-    UserHomepageTabCountsWire w,
-  ) {
+  factory UserHomepageTabCountsViewData.fromWire(UserHomepageTabCountsWire w) {
     return UserHomepageTabCountsViewData(
       worksCount: w.worksCount,
       likesCount: w.likesCount,
@@ -109,8 +107,8 @@ class UserHomepageBundleViewData {
   final UserProfileStatsViewData stats;
 
   /// viewer→target 关系能力位（关注/私信/打招呼/通话/拉黑），统一复用既有
-  /// [RelationshipCapabilityDto]（端侧关系能力唯一真相源）。本人态/游客态为 null。
-  final RelationshipCapabilityDto? relationshipCapability;
+  /// [RelationshipCapabilityViewData]（端侧关系能力唯一真相源）。本人态/游客态为 null。
+  final RelationshipCapabilityViewData? relationshipCapability;
   final UserHomepageTabCountsViewData tabCounts;
   final UserHomepageViewerContextViewData viewerContext;
 
@@ -133,20 +131,20 @@ class UserHomepageBundleViewData {
       stats: stats,
       relationshipCapability: capability == null
           ? null
-          : RelationshipCapabilityDto.fromWire(capability),
+          : RelationshipCapabilityViewData.fromWire(capability),
       tabCounts: UserHomepageTabCountsViewData(
-              worksCount: counts.worksCount,
-              likesCount: counts.likesCount,
-              circlesCount: counts.circlesCount,
-              collectionsCount: counts.collectionsCount,
-            ),
+        worksCount: counts.worksCount,
+        likesCount: counts.likesCount,
+        circlesCount: counts.circlesCount,
+        collectionsCount: counts.collectionsCount,
+      ),
       viewerContext: UserHomepageViewerContextViewData(
-              viewerPersonaId: viewer.viewerPersonaId,
-              isOwner: viewer.isOwner,
-              isGuest: viewer.isGuest,
-              relationToTarget: viewer.relationToTarget.wireName,
-              canViewFullProfile: viewer.canViewFullProfile,
-            ),
+        viewerPersonaId: viewer.viewerPersonaId,
+        isOwner: viewer.isOwner,
+        isGuest: viewer.isGuest,
+        relationToTarget: viewer.relationToTarget.wireName,
+        canViewFullProfile: viewer.canViewFullProfile,
+      ),
       cacheVersion: projection.cacheVersion,
     );
   }

@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .output_paths import deployment_target_path
+from .provider_endpoint_contract import load_provider_endpoint_environment
 from .public_domain_tls import PublicDomainTlsError, root_certificate_path
 
 
@@ -68,9 +69,9 @@ def prepare_local_sms_provider_substitute(
     return LocalSMSProviderSubstitute(
         environment={
             "QWQ_RUNTIME_TARGET": target_name,
-            "INTEGRATION_SMS_ENDPOINT": (
-                "https://sms-provider-substitute:9443/v1/provider/sms/send"
-            ),
+            "INTEGRATION_SMS_ENDPOINT": load_provider_endpoint_environment()[
+                "INTEGRATION_SMS_ENDPOINT"
+            ],
             "INTEGRATION_SMS_SUBSTITUTE_CA_FILE": (
                 "/run/secrets/sms-provider-substitute/ca.crt"
             ),

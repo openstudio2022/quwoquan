@@ -5,5 +5,3 @@ overrides:
   sys.realtime-gateway.user_service.account_security.timeout_ms: 500
 secretRefs: {}
 externalBindings:
-  runtime.message.transport:
-    state: enabled

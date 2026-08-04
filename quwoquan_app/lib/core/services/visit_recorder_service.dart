@@ -64,7 +64,7 @@ class VisitRecorderService {
         count30d: 1,
         lastSeenTimestamps: <String>[now.toIso8601String()],
       );
-      await box.put(key, jsonEncode(record.toJson()));
+      await box.put(key, jsonEncode(record.toStorageMap()));
       await _pruneRetainedRecords(box, protectedKey: key);
       shouldSyncRemote = true;
     } else {
@@ -72,7 +72,7 @@ class VisitRecorderService {
           now.difference(existing.lastSeenAt) < kVisitDedupWindow;
       if (withinDedup) {
         final updated = existing.copyWith(lastSeenAt: now);
-        await box.put(key, jsonEncode(updated.toJson()));
+        await box.put(key, jsonEncode(updated.toStorageMap()));
       } else {
         final timestamps = List<String>.from(existing.lastSeenTimestamps)
           ..add(now.toIso8601String());
@@ -95,7 +95,7 @@ class VisitRecorderService {
           count30d: count30d,
           lastSeenTimestamps: timestamps,
         );
-        await box.put(key, jsonEncode(updated.toJson()));
+        await box.put(key, jsonEncode(updated.toStorageMap()));
         shouldSyncRemote = true;
       }
     }
@@ -131,7 +131,7 @@ class VisitRecorderService {
     if (raw == null) return null;
     try {
       final map = jsonDecode(raw) as Map<String, dynamic>;
-      return VisitRecord.fromJson(map);
+      return VisitRecord.fromStorageMap(map);
     } catch (_) {
       return null;
     }

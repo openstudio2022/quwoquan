@@ -101,7 +101,8 @@ class VisitRecord {
     );
   }
 
-  Map<String, dynamic> toJson() => <String, dynamic>{
+  /// Hive local persistence codec. This map is never used as a Cloud payload.
+  Map<String, dynamic> toStorageMap() => <String, dynamic>{
     'targetKey': targetKey,
     'firstSeenAt': firstSeenAt.toIso8601String(),
     'lastSeenAt': lastSeenAt.toIso8601String(),
@@ -111,15 +112,15 @@ class VisitRecord {
     'lastSeenTimestamps': lastSeenTimestamps,
   };
 
-  factory VisitRecord.fromJson(Map<String, dynamic> json) {
-    final list = json['lastSeenTimestamps'];
+  factory VisitRecord.fromStorageMap(Map<String, dynamic> map) {
+    final list = map['lastSeenTimestamps'];
     return VisitRecord(
-      targetKey: json['targetKey'] as String,
-      firstSeenAt: DateTime.parse(json['firstSeenAt'] as String),
-      lastSeenAt: DateTime.parse(json['lastSeenAt'] as String),
-      visitCount: json['visitCount'] as int,
-      count7d: json['count7d'] as int? ?? 0,
-      count30d: json['count30d'] as int? ?? 0,
+      targetKey: map['targetKey'] as String,
+      firstSeenAt: DateTime.parse(map['firstSeenAt'] as String),
+      lastSeenAt: DateTime.parse(map['lastSeenAt'] as String),
+      visitCount: map['visitCount'] as int,
+      count7d: map['count7d'] as int? ?? 0,
+      count30d: map['count30d'] as int? ?? 0,
       lastSeenTimestamps: list is List<dynamic>
           ? list.map((e) => e as String).toList()
           : <String>[],

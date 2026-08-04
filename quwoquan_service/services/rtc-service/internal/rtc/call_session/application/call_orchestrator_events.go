@@ -2,9 +2,12 @@ package application
 
 import (
 	"encoding/json"
+	"errors"
 	"strings"
 	"time"
 
+	"quwoquan_service/runtime/clientrealtime"
+	generated "quwoquan_service/services/rtc-service/generated/rtc/call_session"
 	"quwoquan_service/services/rtc-service/internal/rtc/call_session/domain/event"
 	"quwoquan_service/services/rtc-service/internal/rtc/call_session/domain/model"
 )
@@ -126,6 +129,55 @@ type callEventBody struct {
 	Payload    CallEventPayload `json:"payload"`
 	Recipients []string         `json:"recipients"`
 	Timestamp  time.Time        `json:"timestamp"`
+}
+
+// MarshalRealtimeSignalEnvelope 从已提交的 CallSession outbox 事实生成唯一
+// client signal envelope。它同时验证 event type/call identity，防止损坏的
+// outbox 记录或错误 wire mapping 被传递为可信通话事实。
+func MarshalRealtimeSignalEnvelope(
+	evt CallOutboxEvent,
+	wireType string,
+) ([]byte, error) {
+	var body callEventBody
+	if err := json.Unmarshal(evt.Payload, &body); err != nil {
+		return nil, errors.New("decode rtc call outbox signal envelope")
+	}
+	expectedWireType := strings.TrimSpace(wireType)
+	if expectedWireType == "" || strings.TrimSpace(body.Type) != expectedWireType {
+		return nil, errors.New("rtc call outbox signal wire type mismatch")
+	}
+	callID := strings.TrimSpace(body.CallID)
+	if callID == "" || callID != strings.TrimSpace(evt.AggregateID) ||
+		strings.TrimSpace(body.Payload.CallID) != callID {
+		return nil, errors.New("rtc call outbox signal call identity mismatch")
+	}
+	if body.Timestamp.IsZero() {
+		return nil, errors.New("rtc call outbox signal timestamp is required")
+	}
+	payloadFields, exists := generated.ClientRealtimePayloadFieldNames(expectedWireType)
+	if !exists {
+		return nil, errors.New("rtc call outbox signal type is absent from canonical payload catalog")
+	}
+	encodedPayload, err := json.Marshal(body.Payload)
+	if err != nil {
+		return nil, errors.New("encode rtc call outbox client payload")
+	}
+	var fullPayload map[string]any
+	if err := json.Unmarshal(encodedPayload, &fullPayload); err != nil {
+		return nil, errors.New("decode rtc call outbox client payload")
+	}
+	clientPayload := make(map[string]any, len(payloadFields))
+	for _, field := range payloadFields {
+		if value, present := fullPayload[field]; present {
+			clientPayload[field] = value
+		}
+	}
+	return clientrealtime.MarshalClientRealtimeEventEnvelope(
+		expectedWireType,
+		evt.EventID,
+		body.Timestamp,
+		clientPayload,
+	)
 }
 
 func decodeRecipients(evt CallOutboxEvent) []string {

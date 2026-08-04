@@ -388,9 +388,9 @@ func TestListFeed_ChannelRecommendRoutesRankedWindow(t *testing.T) {
 	}
 }
 
-// TestListFeed_ChannelIgnoresLegacyIdentityType 守护频道推荐主链路与浏览流互斥：
+// TestListFeed_ChannelIgnoresNoncanonicalIdentityType 守护频道推荐主链路与浏览流互斥：
 // channelId 存在时 identity/type 被忽略，不得据此改走 PostReader 时间流。
-func TestListFeed_ChannelIgnoresLegacyIdentityType(t *testing.T) {
+func TestListFeed_ChannelIgnoresNoncanonicalIdentityType(t *testing.T) {
 	ctx := context.Background()
 	router := rtredis.MustNewRouter(rtredis.DefaultRouterConfig())
 	sessionCache := rtrec.NewSessionCache(rtrec.NewHotPath(rtredis.NewRecAdapter(router.Scene("rec"))), 2*time.Second, 1000)

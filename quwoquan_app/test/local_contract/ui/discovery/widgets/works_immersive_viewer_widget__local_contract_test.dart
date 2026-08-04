@@ -19,24 +19,18 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/media/media_download_cache.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/source_attribution_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_representative_actor.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_visual.g.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
-import 'package:quwoquan_app/cloud/runtime/models/app_remote_config_snapshot.dart';
-import 'package:quwoquan_app/cloud/runtime/models/content_app_config_wire.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
-import 'package:quwoquan_app/cloud/services/content/feed_item_discovery_wire_map.dart';
+import 'package:quwoquan_app/cloud/services/content/content_read_model_projection.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart'
     show ActivePersonaContextViewData;
 import '../../../../support/cloud_services/behavior_repository_double.dart';
 import '../../../../support/cloud_services/content/content_mock_data.dart';
+import '../../../../support/cloud_services/content/test_content_app_config.dart';
 import '../../../../support/cloud_services/test_content_comment_facet.dart';
+import '../../../../support/fixtures/intersection_fixtures.dart';
 import 'package:quwoquan_app/components/media/image/book/image_book_canvas.dart';
 import 'package:quwoquan_app/components/media/shared/pageflip/media_page_flip_book.dart';
 import 'package:quwoquan_app/components/media/shared/viewer/media_caption_widgets.dart';
@@ -78,6 +72,41 @@ Map<String, MediaViewerPostWireRow> _viewerRawByPostId(
 ) => raw.map(
   (id, row) => MapEntry(id, MediaViewerPostWireRow.fromDynamicMap(row)),
 );
+
+Map<String, dynamic> _canonicalPostWire(ContentPostViewData post) =>
+    Map<String, dynamic>.from(contentPostProjectionFromViewData(post).toWire());
+
+const String _canonicalTestSha256 =
+    'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+
+ContentPostDetailSlice _contentPostDetailSliceFromTestMap(
+  Map<String, dynamic> raw, {
+  String? postId,
+}) {
+  final wire = Map<String, Object?>.from(raw);
+  wire['postId'] = postId ?? wire['postId'];
+  wire.putIfAbsent('contentType', () => 'article');
+  wire.putIfAbsent('contentIdentity', () => 'work');
+  final now = DateTime.utc(2026).toIso8601String();
+  wire.putIfAbsent('status', () => 'published');
+  wire.putIfAbsent('visibility', () => 'public');
+  wire.putIfAbsent('likeCount', () => 0);
+  wire.putIfAbsent('commentCount', () => 0);
+  wire.putIfAbsent('shareCount', () => 0);
+  wire.putIfAbsent('viewCount', () => 0);
+  wire.putIfAbsent('createdAt', () => now);
+  wire.putIfAbsent('updatedAt', () => now);
+
+  final manifest = wire['articleAssetManifest'];
+  if (manifest is Map) {
+    final normalized = Map<String, Object?>.from(manifest);
+    normalized.putIfAbsent('documentSha256', () => _canonicalTestSha256);
+    normalized.putIfAbsent('assetManifestSha256', () => _canonicalTestSha256);
+    normalized.putIfAbsent('documentVersionSha256', () => _canonicalTestSha256);
+    wire['articleAssetManifest'] = normalized;
+  }
+  return ContentPostDetailSlice.fromWire(wire);
+}
 
 final MediaEndpointConfig _testMediaEndpointConfig = MediaEndpointConfig(
   avatarBaseUrl: 'https://example.com/media/avatar',
@@ -123,11 +152,18 @@ IntersectionReason _displayableIntersectionReason({
     objectKind: resolvedObjectKind,
     objectId: targetId,
   );
-  return IntersectionReason(
+  return intersectionReasonFixture(
+    kind: resolvedObjectKind,
+    vertical: 'content',
     intersectionId: intersectionId,
     dimension: dimension,
+    relationKind: source,
+    relationObjectId: targetId,
+    strength: 1,
     primaryText: text,
+    primaryTextL10nKey: '',
     displayBinding: displayBinding,
+    actionType: 'open',
     primarySpans: primarySpans ?? _defaultDisplaySpans(text),
     totalPointCount: totalPointCount,
     source: source,
@@ -142,14 +178,18 @@ IntersectionReason _displayableIntersectionReason({
     representativeActor: IntersectionRepresentativeActor(
       actorId: 'u_lin',
       displayName: '林清越',
+      avatarUrl: '',
       relationLabel: '联系人',
       privacyState: 'visible',
       target: _intersectionTargetFor(objectKind: 'person', objectId: 'u_lin'),
+      evidenceRank: 1,
+      snapshotVersion: pointSummarySnapshotId,
     ),
   );
 }
 
-IntersectionTextSpan _plain(String text) => IntersectionTextSpan(text: text);
+IntersectionTextSpan _plain(String text) =>
+    IntersectionTextSpan(text: text, role: 'plain');
 
 List<IntersectionTextSpan> _defaultDisplaySpans(String text) {
   final nameIndex = text.indexOf('林清越');
@@ -430,17 +470,14 @@ class _ConfigurableContentRepository extends MockContentRepository {
   int getPostCallCount = 0;
 
   @override
-  Future<ContentAppConfigWire> getAppConfig() async {
+  Future<AppConfigSlice> getAppConfig() async {
     if (appConfig != null) {
-      final root = <String, Object?>{
-        ...appConfig!,
-        'schema': AppRemoteConfigSnapshot.canonicalSchema,
-        'fetchedAt': DateTime.now().toUtc().toIso8601String(),
-        'maxAgeSec': 3600,
-        'activationPolicy': const <String, String>{'default': 'immediate'},
-      };
-      root['configHash'] = AppRemoteConfigSnapshot.calculateConfigHash(root);
-      return ContentAppConfigWire.fromWireRoot(root);
+      return testAppConfigSlice(
+        content: Map<String, Object?>.from(appConfig!['content']! as Map),
+        defaultActivation: 'immediate',
+        fetchedAt: DateTime.now().toUtc(),
+        maxAgeSec: 3600,
+      );
     }
     return super.getAppConfig();
   }
@@ -455,7 +492,7 @@ class _ConfigurableContentRepository extends MockContentRepository {
     final detail = detailById[postId];
     if (detail != null) {
       return ContentPostDetailPayload.fromWire(
-        Map<String, dynamic>.from(detail),
+        _contentPostDetailSliceFromTestMap(detail, postId: postId),
       );
     }
     return super.getPost(
@@ -499,10 +536,9 @@ class _BlockingArticleHydrationRepository extends MockContentRepository {
             result.completeError(const CloudOperationCancelledException());
           } else {
             result.complete(
-              ContentPostDetailPayload.fromWire(<String, dynamic>{
-                ...detail,
-                'postId': postId,
-              }),
+              ContentPostDetailPayload.fromWire(
+                _contentPostDetailSliceFromTestMap(detail, postId: postId),
+              ),
             );
           }
         }
@@ -524,7 +560,7 @@ class _PagedFeaturedContentRepository extends MockContentRepository {
   int appendCallCount = 0;
 
   List<ContentPostViewData> _postsForCategory(String category) {
-    List<FeedItemDto> source;
+    List<ContentPostViewData> source;
     switch (category) {
       case 'photo':
         source = ContentMockData.discoveryPhotoData
@@ -544,9 +580,7 @@ class _PagedFeaturedContentRepository extends MockContentRepository {
       default:
         return const <ContentPostViewData>[];
     }
-    return source
-        .map((item) => contentPostViewDataFromReadModelMap(item.toDiscoveryWireMap()))
-        .toList(growable: false);
+    return source;
   }
 
   @override
@@ -663,37 +697,43 @@ class _RecordingContentMediaFacet implements ContentMediaFacet {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-PhotoPostDto _photoPost({
+ContentPostViewData _photoPost({
+  String id = 'photo-1',
   List<String> imageUrls = const ['media/image/s/fixture/photo.jpg'],
+  String body = 'dto body',
+  String coverUrl = 'media/image/s/fixture/photo.jpg',
+  String avatarUrl = 'https://example.com/avatar.jpg',
   int? width,
   int? height,
   List<IntersectionReason>? intersectionReasons,
 }) {
-  return PhotoPostDto(
-    id: 'photo-1',
-    type: 'image',
-    identity: 'work',
-    assistantUsePolicy: 'inherit',
-    authorId: 'author-1',
-    displayName: '摄影师',
-    avatarUrl: 'https://example.com/avatar.jpg',
-    authorRoleLabel: '',
-    authorIdentityTags: const <String>[],
-    authorVerified: false,
-    body: 'dto body',
-    coverUrl: 'media/image/s/fixture/photo.jpg',
-    imageUrls: imageUrls,
-    width: width,
-    height: height,
-    likeCount: 0,
-    commentCount: 0,
-    shareCount: 0,
-    createdAt: DateTime.now(),
-    intersectionReasons: intersectionReasons,
+  return ContentPostViewData.fromWire(
+    ContentPostProjection(
+      postId: id,
+      contentType: 'image',
+      contentIdentity: 'work',
+      assistantUsePolicy: 'inherit',
+      authorId: 'author-1',
+      authorDisplayName: '摄影师',
+      authorAvatarUrl: avatarUrl,
+      authorRoleLabel: '',
+      authorIdentityTags: const <String>[],
+      authorVerified: false,
+      body: body,
+      coverUrl: coverUrl,
+      mediaUrls: imageUrls,
+      width: width,
+      height: height,
+      likeCount: 0,
+      commentCount: 0,
+      shareCount: 0,
+      createdAt: DateTime.now(),
+      intersectionReasons: intersectionReasons,
+    ),
   );
 }
 
-VideoPostDto _videoPost({
+ContentPostViewData _videoPost({
   int? width,
   int? height,
   String body = 'video body',
@@ -701,66 +741,75 @@ VideoPostDto _videoPost({
       'media/video/s/video-primary-0001/post/video-content-0001/v1/source.mp4',
   String coverUrl =
       'media/image/s/archived-image/post/fixture_video_001/v1/cover.png',
-  SourceAttributionDto? sourceAttribution,
+  SourceAttribution? sourceAttribution,
   List<IntersectionReason>? intersectionReasons,
 }) {
-  return VideoPostDto(
-    id: 'video-1',
-    type: 'video',
-    identity: 'work',
-    assistantUsePolicy: 'inherit',
-    authorId: 'author-video',
-    displayName: '视频作者',
-    avatarUrl: '',
-    authorRoleLabel: '',
-    authorIdentityTags: const <String>[],
-    authorVerified: false,
-    body: body,
+  return ContentPostViewData.fromWire(
+    ContentPostProjection(
+      postId: 'video-1',
+      contentType: 'video',
+      contentIdentity: 'work',
+      assistantUsePolicy: 'inherit',
+      authorId: 'author-video',
+      authorDisplayName: '视频作者',
+      authorAvatarUrl: '',
+      authorRoleLabel: '',
+      authorIdentityTags: const <String>[],
+      authorVerified: false,
+      body: body,
+      videoUrl: videoUrl,
+      thumbnailUrl: coverUrl,
+      coverUrl: coverUrl,
+      width: width,
+      height: height,
+      durationMs: 125000,
+      likeCount: 0,
+      commentCount: 0,
+      shareCount: 0,
+      createdAt: DateTime.now(),
+      intersectionReasons: intersectionReasons,
+    ),
     sourceAttribution: sourceAttribution,
-    videoUrl: videoUrl,
-    thumbnailUrl: coverUrl,
-    coverUrl: coverUrl,
-    width: width,
-    height: height,
-    durationMs: 125000,
-    likeCount: 0,
-    commentCount: 0,
-    shareCount: 0,
-    createdAt: DateTime.now(),
-    intersectionReasons: intersectionReasons,
   );
 }
 
-ArticlePostDto _articlePost({List<IntersectionReason>? intersectionReasons}) {
-  return ArticlePostDto(
-    id: 'article-1',
-    type: 'article',
-    identity: 'work',
-    assistantUsePolicy: 'inherit',
-    authorId: 'author-3',
-    displayName: '写作者',
-    avatarUrl: 'https://example.com/avatar-3.jpg',
-    authorRoleLabel: '',
-    authorIdentityTags: const <String>[],
-    authorVerified: false,
-    title: '图文翻页',
-    body: '文章摘要',
-    summary: '文章摘要',
-    coverUrl: 'https://example.com/article-cover.jpg',
-    articleTemplate: 'gentle',
-    articleFontPreset: 'clean',
-    likeCount: 0,
-    commentCount: 0,
-    shareCount: 0,
-    createdAt: DateTime.now(),
-    intersectionReasons: intersectionReasons,
+ContentPostViewData _articlePost({
+  List<IntersectionReason>? intersectionReasons,
+  DateTime? createdAt,
+  DateTime? updatedAt,
+}) {
+  return ContentPostViewData.fromWire(
+    ContentPostProjection(
+      postId: 'article-1',
+      contentType: 'article',
+      contentIdentity: 'work',
+      assistantUsePolicy: 'inherit',
+      authorId: 'author-3',
+      authorDisplayName: '写作者',
+      authorAvatarUrl: 'https://example.com/avatar-3.jpg',
+      authorRoleLabel: '',
+      authorIdentityTags: const <String>[],
+      authorVerified: false,
+      title: '图文翻页',
+      body: '文章摘要',
+      summary: '文章摘要',
+      coverUrl: 'https://example.com/article-cover.jpg',
+      articleTemplate: 'gentle',
+      articleFontPreset: 'clean',
+      likeCount: 0,
+      commentCount: 0,
+      shareCount: 0,
+      createdAt: createdAt ?? DateTime.now(),
+      updatedAt: updatedAt,
+      intersectionReasons: intersectionReasons,
+    ),
   );
 }
 
 /// 生成确定性多页文章 markdown（唯一内容真相源）。
 /// 替代旧 `cards` 借壳分页：markdown-only 契约下，多页由排版流引擎按视口高度切分。
 String _multiPageArticleMarkdown(
-  ArticlePostDto post, {
+  ContentPostViewData post, {
   int sections = 14,
   int paragraphsPerSection = 1,
 }) {
@@ -783,13 +832,12 @@ String _multiPageArticleMarkdown(
 
 /// 以 markdown 为唯一内容源构造沉浸 viewer 的文章原始行。
 Map<String, dynamic> _articleMarkdownRaw(
-  ArticlePostDto post,
+  ContentPostViewData post,
   String markdown, {
   Map<String, dynamic> extra = const <String, dynamic>{},
 }) {
   return <String, dynamic>{
     'postId': post.id,
-    'type': 'article',
     'contentType': 'article',
     'authorId': post.authorId,
     'authorDisplayName': post.displayName,
@@ -864,25 +912,29 @@ Future<void> _flipArticleToSecondPage(WidgetTester tester) async {
   await _pumpSettledFrames(tester);
 }
 
-MicroPostDto _textMoment({List<IntersectionReason>? intersectionReasons}) {
-  return MicroPostDto(
-    id: 'moment-1',
-    type: 'micro',
-    identity: 'moment',
-    assistantUsePolicy: 'inherit',
-    authorId: 'author-2',
-    displayName: '圈友',
-    avatarUrl: 'https://example.com/avatar-2.jpg',
-    authorRoleLabel: '',
-    authorIdentityTags: const <String>[],
-    authorVerified: false,
-    body: '今天风有点大，大家从南门集合。',
-    imageUrls: const <String>[],
-    likeCount: 0,
-    commentCount: 0,
-    shareCount: 0,
-    createdAt: DateTime.now(),
-    intersectionReasons: intersectionReasons,
+ContentPostViewData _textMoment({
+  List<IntersectionReason>? intersectionReasons,
+}) {
+  return ContentPostViewData.fromWire(
+    ContentPostProjection(
+      postId: 'moment-1',
+      contentType: 'micro',
+      contentIdentity: 'moment',
+      assistantUsePolicy: 'inherit',
+      authorId: 'author-2',
+      authorDisplayName: '圈友',
+      authorAvatarUrl: 'https://example.com/avatar-2.jpg',
+      authorRoleLabel: '',
+      authorIdentityTags: const <String>[],
+      authorVerified: false,
+      body: '今天风有点大，大家从南门集合。',
+      mediaUrls: const <String>[],
+      likeCount: 0,
+      commentCount: 0,
+      shareCount: 0,
+      createdAt: DateTime.now(),
+      intersectionReasons: intersectionReasons,
+    ),
   );
 }
 
@@ -979,7 +1031,11 @@ void _mockPathProviderForImmersiveViewerTest() {
       });
 }
 
-Widget _wrapWithRouter(Widget child, {List overrides = const []}) {
+Widget _wrapWithRouter(
+  Widget child, {
+  List overrides = const [],
+  MockContentRepository? contentRepository,
+}) {
   final router = GoRouter(
     routes: [
       GoRoute(
@@ -1011,7 +1067,9 @@ Widget _wrapWithRouter(Widget child, {List overrides = const []}) {
   );
   return ProviderScope(
     overrides: [
-      ...mockContentFacetOverrides(MockContentRepository()),
+      ...mockContentFacetOverrides(
+        contentRepository ?? MockContentRepository(),
+      ),
       mediaEndpointConfigProvider.overrideWithValue(_testMediaEndpointConfig),
       ...overrides,
     ].cast(),
@@ -1431,7 +1489,7 @@ void main() {
     container.dispose();
   });
 
-  testWidgets('视频书顶部仅保留返回与更多入口（V1.0 取消形态分段与一级 tab）', (tester) async {
+  testWidgets('视频书顶部仅保留返回与更多入口并取消形态分段与一级 tab', (tester) async {
     final repo = _PagedFeaturedContentRepository();
     final container = _testProviderContainer(
       overrides: [...mockContentFacetOverrides(repo)],
@@ -1461,7 +1519,7 @@ void main() {
     );
     await _pumpImmersiveViewerFirstFrames(tester);
 
-    // V1.0：顶部仅保留「返回 + 更多」，禁止形态分段 / 一级 tab。
+    // 顶部仅保留「返回 + 更多」，禁止形态分段 / 一级 tab。
     expect(
       find.byKey(const ValueKey<String>('works-top-back')),
       findsOneWidget,
@@ -1669,7 +1727,7 @@ void main() {
 
     expect(find.text('封面标题'), findsOneWidget);
     expect(find.textContaining('封面正文'), findsOneWidget);
-    // V1.0：禁止顶部页码；多图导航使用点指示器（内容下方、标题上方）。
+    // 禁止顶部页码；多图导航使用点指示器（内容下方、标题上方）。
     expect(
       find.byKey(const ValueKey<String>('works-top-progress-label')),
       findsNothing,
@@ -1699,8 +1757,10 @@ void main() {
       imageUrls: const ['media/image/s/fixture/home-first.jpg'],
     );
     final second = _photoPost(
+      id: 'photo-2',
       imageUrls: const ['media/image/s/fixture/home-second.jpg'],
-    ).copyWith(id: 'photo-2', body: 'second body');
+      body: 'second body',
+    );
 
     await tester.pumpWidget(
       _wrap(
@@ -1743,8 +1803,10 @@ void main() {
       imageUrls: const ['media/image/s/fixture/photo-first.jpg'],
     );
     final second = _photoPost(
+      id: 'photo-2',
       imageUrls: const ['media/image/s/fixture/photo-second.jpg'],
-    ).copyWith(id: 'photo-2', body: 'second body');
+      body: 'second body',
+    );
     final changed = <int>[];
 
     await tester.pumpWidget(
@@ -1879,7 +1941,8 @@ void main() {
     final post = _videoPost(
       width: 1920,
       height: 1080,
-      sourceAttribution: SourceAttributionDto(
+      sourceAttribution: SourceAttribution(
+        isOriginal: false,
         originalCreatorName: '山海旅行者',
         platform: '头条',
         sourcePostUrl: 'https://example.com/source-post',
@@ -2383,7 +2446,7 @@ void main() {
     final post = _videoPost(width: 1920, height: 1080, coverUrl: '');
     final raw = _viewerRawByPostId({
       post.id: <String, dynamic>{
-        ...post.toPresentationMap(),
+        ..._canonicalPostWire(post),
         'workId': post.id,
         'workType': 'video',
         'workIdentity': 'work',
@@ -2563,7 +2626,7 @@ void main() {
         'media/video/s/video-series-duplicate/post/video-1/v1/shared.mp4';
     final raw = _viewerRawByPostId({
       post.id: <String, dynamic>{
-        ...post.toPresentationMap(),
+        ..._canonicalPostWire(post),
         'workId': post.id,
         'workType': 'video',
         'workIdentity': 'work',
@@ -2638,7 +2701,7 @@ void main() {
     final post = _videoPost(width: 1920, height: 1080, coverUrl: '');
     final raw = _viewerRawByPostId({
       post.id: <String, dynamic>{
-        ...post.toPresentationMap(),
+        ..._canonicalPostWire(post),
         'workId': post.id,
         'workType': 'video',
         'workIdentity': 'work',
@@ -2784,7 +2847,7 @@ void main() {
       ];
       return _viewerRawByPostId({
         post.id: <String, dynamic>{
-          ...post.toPresentationMap(),
+          ..._canonicalPostWire(post),
           'workId': post.id,
           'workType': 'video',
           'workIdentity': 'work',
@@ -2959,7 +3022,7 @@ void main() {
     );
   });
 
-  testWidgets('首帧帖子延后就绪时 follow 按钮随工具栏常驻可见（V1.0 无定时）', (tester) async {
+  testWidgets('首帧帖子延后就绪时 follow 按钮随工具栏常驻可见且无定时', (tester) async {
     tester.view.devicePixelRatio = 1.0;
     tester.view.physicalSize = const Size(390, 844);
     addTearDown(() {
@@ -2996,7 +3059,7 @@ void main() {
 
     final followLane = find.byKey(const ValueKey('immersive-follow-lane'));
     expect(find.byType(ImmersiveEngagementBar), findsOneWidget);
-    // V1.0：关注按钮随工具栏常驻，不再有出现定时。
+    // 关注按钮随工具栏常驻，不再有出现定时。
     expect(tester.getSize(followLane).width, greaterThan(0));
     expect(
       find.byKey(const ValueKey('immersive-follow-button')),
@@ -3206,7 +3269,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('联系人林清越赞过和评论过'), findsNWidgets(2));
-    // V1.0：详情 sheet 为「为什么推荐给你」+ ✓ 证据列表。
+    // 详情 sheet 为「为什么推荐给你」+ ✓ 证据列表。
     expect(
       find.text(DiscoveryFeedText.intersectionDetailTitle),
       findsOneWidget,
@@ -3233,7 +3296,7 @@ void main() {
           dimension: 'relationship',
           primaryText: '联系人林清越收藏过',
           primarySpans: <IntersectionTextSpan>[
-            IntersectionTextSpan(text: '联系人'),
+            _plain('联系人'),
             IntersectionTextSpan(
               text: '林清越',
               role: 'object',
@@ -3244,7 +3307,7 @@ void main() {
                 routeId: 'userProfile',
               ),
             ),
-            IntersectionTextSpan(text: '收藏过'),
+            _plain('收藏过'),
           ],
           totalPointCount: 1,
           source: 'sharedFollowees',
@@ -3294,7 +3357,7 @@ void main() {
     await tracker.flush();
 
     final clicks = behaviorRepo.recorded
-        .where((event) => event.action == BehaviorAction.tagClick)
+        .where((event) => event.action == BehaviorEventType.tagClick)
         .toList(growable: false);
     expect(clicks, hasLength(1));
     final click = clicks.single;
@@ -3329,7 +3392,7 @@ void main() {
           objectKind: 'place',
           actionTargetId: 'hp_jianmen',
           primarySpans: <IntersectionTextSpan>[
-            IntersectionTextSpan(text: '联系人'),
+            _plain('联系人'),
             IntersectionTextSpan(
               text: '林清越',
               role: 'object',
@@ -3338,7 +3401,7 @@ void main() {
                 objectId: 'u_lin',
               ),
             ),
-            IntersectionTextSpan(text: '收藏过「'),
+            _plain('收藏过「'),
             IntersectionTextSpan(
               text: '剑门关',
               role: 'object',
@@ -3347,7 +3410,7 @@ void main() {
                 objectId: 'hp_jianmen',
               ),
             ),
-            IntersectionTextSpan(text: '」'),
+            _plain('」'),
           ],
           totalPointCount: 2,
           source: 'coLikedEntity',
@@ -3357,6 +3420,7 @@ void main() {
           sampleVisuals: <IntersectionVisual>[
             IntersectionVisual(
               assetKind: 'coverImage',
+              imageUrl: 'media/image/s/homepage/hp_jianmen/cover.jpg',
               displayName: '剑门关',
               target: IntersectionTarget(
                 objectType: 'homepage',
@@ -3409,7 +3473,7 @@ void main() {
     await tracker.flush();
 
     final clicks = behaviorRepo.recorded
-        .where((event) => event.action == BehaviorAction.tagClick)
+        .where((event) => event.action == BehaviorEventType.tagClick)
         .toList(growable: false);
     expect(clicks, hasLength(1));
     final click = clicks.single;
@@ -3440,7 +3504,7 @@ void main() {
           primaryText: '联系人林清越也想去「滇池路线」',
           displayBinding: 'explicit_link',
           primarySpans: <IntersectionTextSpan>[
-            IntersectionTextSpan(text: '联系人'),
+            _plain('联系人'),
             IntersectionTextSpan(
               text: '林清越',
               role: 'object',
@@ -3449,7 +3513,7 @@ void main() {
                 objectId: 'u_lin',
               ),
             ),
-            IntersectionTextSpan(text: '也想去「'),
+            _plain('也想去「'),
             IntersectionTextSpan(
               text: '滇池路线',
               role: 'object',
@@ -3458,7 +3522,7 @@ void main() {
                 objectId: 'hp_route_dianchi',
               ),
             ),
-            IntersectionTextSpan(text: '」'),
+            _plain('」'),
           ],
           totalPointCount: 3,
           source: 'coWishlistedEntity',
@@ -3510,7 +3574,7 @@ void main() {
     await tracker.flush();
 
     final clicks = behaviorRepo.recorded
-        .where((event) => event.action == BehaviorAction.tagClick)
+        .where((event) => event.action == BehaviorEventType.tagClick)
         .toList(growable: false);
     expect(clicks, hasLength(1));
     final click = clicks.single;
@@ -3759,7 +3823,7 @@ void main() {
     expect(pending, isA<SubmitContentReportContinuation>());
     final reportContinuation = pending! as SubmitContentReportContinuation;
     expect(reportContinuation.postId, post.id);
-    expect(reportContinuation.reason, ContentReportReason.spam);
+    expect(reportContinuation.reason, ReportReason.spam);
     expect(
       GoRouterState.of(
         tester.element(
@@ -3865,7 +3929,7 @@ void main() {
         .where(
           (event) =>
               event.contentId == post.id &&
-              event.action == BehaviorAction.impression &&
+              event.action == BehaviorEventType.impression &&
               event.state == 'visible',
         )
         .toList(growable: false);
@@ -3873,7 +3937,7 @@ void main() {
         .where(
           (event) =>
               event.contentId == post.id &&
-              event.action == BehaviorAction.dwell,
+              event.action == BehaviorEventType.dwell,
         )
         .toList(growable: false);
 
@@ -4033,7 +4097,9 @@ void main() {
     final video = _videoPost(width: 1920, height: 1080, coverUrl: '');
     final photo = _photoPost(
       imageUrls: const <String>[''],
-    ).copyWith(coverUrl: '', avatarUrl: '');
+      coverUrl: '',
+      avatarUrl: '',
+    );
     await tester.pumpWidget(
       _wrap(
         WorksImmersiveViewer(
@@ -4258,8 +4324,10 @@ void main() {
       ],
     );
     final second = _photoPost(
+      id: 'photo-2',
       imageUrls: const ['media/image/s/fixture/photo-3.jpg'],
-    ).copyWith(id: 'photo-2', body: 'second body');
+      body: 'second body',
+    );
     final changedPosts = <int>[];
 
     await tester.pumpWidget(
@@ -4325,8 +4393,10 @@ void main() {
       ],
     );
     final second = _photoPost(
+      id: 'photo-2',
       imageUrls: const ['media/image/s/fixture/photo-3.jpg'],
-    ).copyWith(id: 'photo-2', body: 'second body');
+      body: 'second body',
+    );
     final changedPosts = <int>[];
 
     await tester.pumpWidget(
@@ -4467,8 +4537,10 @@ void main() {
   testWidgets('文章纵向带角度拖动只切换作品不抢成翻页', (tester) async {
     final article = _articlePost();
     final nextPhoto = _photoPost(
+      id: 'photo-2',
       imageUrls: const ['media/image/s/fixture/photo-next.jpg'],
-    ).copyWith(id: 'photo-2', body: 'next photo body');
+      body: 'next photo body',
+    );
     final changedPosts = <int>[];
 
     await tester.pumpWidget(
@@ -4696,7 +4768,7 @@ void main() {
       isNot(UITextConstants.workArticlePageProgress(1, 1)),
     );
 
-    // V1.0：页码两侧 chevron `‹ ›` 可点切页（正文后、作者工具栏前）。
+    // 页码两侧 chevron `‹ ›` 可点切页（正文后、作者工具栏前）。
     final prevChevron = find.byKey(
       const ValueKey<String>('works-article-page-prev'),
     );
@@ -5135,7 +5207,7 @@ void main() {
       find.byKey(const ValueKey<String>('works-top-back')),
       findsOneWidget,
     );
-    // V1.0：文章页码在正文下方、作者工具栏上方，禁止顶部页码与点指示器。
+    // 文章页码在正文下方、作者工具栏上方，禁止顶部页码与点指示器。
     expect(
       find.byKey(const ValueKey<String>('works-top-progress-label')),
       findsNothing,
@@ -5356,6 +5428,32 @@ void main() {
 
   testWidgets('文章实体标签点击进入 homepageDetail metadata 路由', (tester) async {
     final post = _articlePost();
+    final detail = _articleMarkdownRaw(
+      post,
+      '---\n'
+      'title: 杭州一日游\n'
+      'template: journal\n'
+      'fontPreset: clean\n'
+      '---\n\n'
+      '# 杭州一日游\n\n'
+      '@[灵隐寺](entity:sight:west_lake)\n',
+      extra: const <String, dynamic>{
+        'contentVertical': 'travel',
+        'entityMentions': <Map<String, dynamic>>[
+          {
+            'subjectType': 'entity',
+            'subjectId': 'entity:sight:west_lake',
+            'homepageId': 'homepage_sight_west_lake',
+            'displayName': '灵隐寺',
+            'rangeStart': 3,
+            'rangeEnd': 6,
+          },
+        ],
+      },
+    );
+    final repository = _ConfigurableContentRepository(
+      detailById: <String, Map<String, dynamic>>{post.id: detail},
+    );
 
     await tester.pumpWidget(
       _wrapWithRouter(
@@ -5364,34 +5462,11 @@ void main() {
           showTopNavigation: false,
           externalPosts: [post],
           externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
-          rawPostsById: _viewerRawByPostId({
-            post.id: _articleMarkdownRaw(
-              post,
-              '---\n'
-              'title: 杭州一日游\n'
-              'template: journal\n'
-              'fontPreset: clean\n'
-              '---\n\n'
-              '# 杭州一日游\n\n'
-              '@[灵隐寺](entity:sight:west_lake)\n',
-              extra: const <String, dynamic>{
-                'contentVertical': 'travel',
-                'entityMentions': <Map<String, dynamic>>[
-                  {
-                    'subjectType': 'entity',
-                    'subjectId': 'entity:sight:west_lake',
-                    'homepageId': 'homepage_sight_west_lake',
-                    'displayName': '灵隐寺',
-                    'rangeStart': 3,
-                    'rangeEnd': 6,
-                  },
-                ],
-              },
-            ),
-          }),
+          rawPostsById: _viewerRawByPostId({post.id: detail}),
           onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
           onAssistantTap: () {},
         ),
+        contentRepository: repository,
       ),
     );
     await tester.pump();
@@ -5438,6 +5513,7 @@ void main() {
                   {
                     'subjectType': 'entity',
                     'subjectId': 'entity:photo_spot:unknown',
+                    'homepageId': '',
                     'displayName': '未知地点',
                     'rangeStart': 3,
                     'rangeEnd': 7,
@@ -5558,7 +5634,7 @@ void main() {
   });
 
   testWidgets('文章阅读纸面页头展示创作与更新时间语义', (tester) async {
-    final post = _articlePost().copyWith(
+    final post = _articlePost(
       createdAt: DateTime(2025, 5, 15),
       updatedAt: DateTime(2025, 6, 20),
     );
@@ -5662,9 +5738,6 @@ void main() {
     final analytics = _FakeAnalyticsService();
     final repo = _ConfigurableContentRepository(
       appConfig: <String, dynamic>{
-        'app_bootstrap': <String, dynamic>{
-          'activationPolicy': <String, dynamic>{'default': 'immediate'},
-        },
         'content': <String, dynamic>{
           'feature_flags': <String, dynamic>{
             'enable_article_book_reader': false,
@@ -5673,7 +5746,6 @@ void main() {
         },
       },
     );
-
     await tester.pumpWidget(
       _wrap(
         WorksImmersiveViewer(
@@ -5714,11 +5786,12 @@ void main() {
       detailById: <String, Map<String, dynamic>>{
         post.id: <String, dynamic>{
           'postId': post.id,
-          'type': 'article',
           'contentType': 'article',
           'authorId': post.authorId,
           'authorDisplayName': post.displayName,
           'authorAvatarUrl': post.avatarUrl,
+          'title': '水合后的标题',
+          'body': '水合后的正文第一段。\n\n水合后的正文第二段。',
           'coverUrl': post.coverUrl,
           'articleTemplate': post.articleTemplate,
           'articleFontPreset': post.articleFontPreset,
@@ -5745,7 +5818,6 @@ void main() {
         },
       },
     );
-
     await tester.pumpWidget(
       _wrap(
         WorksImmersiveViewer(
@@ -5756,7 +5828,6 @@ void main() {
           rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
-              'type': 'article',
               'contentType': 'article',
               'authorId': post.authorId,
               'authorDisplayName': post.displayName,
@@ -5776,15 +5847,23 @@ void main() {
     await tester.pump();
     _consumeImageLoadExceptions(tester);
     await _pumpSettledFrames(tester);
+    for (
+      var attempt = 0;
+      attempt < 40 && find.text('水合后的标题').evaluate().isEmpty;
+      attempt += 1
+    ) {
+      await tester.pump(const Duration(milliseconds: 16));
+      _consumeImageLoadExceptions(tester);
+    }
 
     expect(repo.getPostCallCount, equals(1));
-    expect(find.text('水合后的标题'), findsWidgets);
-    expect(find.textContaining('水合后的正文第一段'), findsWidgets);
-
     final hydrationEvent = analytics.events.firstWhere(
       (event) => event.eventName == 'article_reader_hydration_ms',
     );
     expect(hydrationEvent.properties['result'], equals('success'));
+    expect(find.text('水合后的标题'), findsWidgets);
+    expect(find.textContaining('水合后的正文第一段'), findsWidgets);
+
     final structureFallback = analytics.events.firstWhere(
       (event) =>
           event.eventName == 'article_reader_fallback_rate' &&
@@ -5801,7 +5880,6 @@ void main() {
     final analytics = _FakeAnalyticsService();
     final repo = _BlockingArticleHydrationRepository(
       lateSuccessDetail: <String, dynamic>{
-        'type': 'article',
         'contentType': 'article',
         'authorId': article.authorId,
         'authorDisplayName': article.displayName,
@@ -5825,7 +5903,6 @@ void main() {
           rawPostsById: _viewerRawByPostId({
             article.id: <String, dynamic>{
               'postId': article.id,
-              'type': 'article',
               'contentType': 'article',
               'authorId': article.authorId,
               'authorDisplayName': article.displayName,
@@ -5834,7 +5911,7 @@ void main() {
               'body': '分发摘要正文',
               'coverUrl': article.coverUrl,
             },
-            photo.id: photo.toPresentationMap(),
+            photo.id: _canonicalPostWire(photo),
           }),
           onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
           onAssistantTap: () {},

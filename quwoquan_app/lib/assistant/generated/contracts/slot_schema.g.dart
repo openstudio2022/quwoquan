@@ -2,64 +2,74 @@
 
 // ignore_for_file: avoid_classes_with_only_static_members
 
-class SlotSchemaDto {
-  const SlotSchemaDto({
-    this.requiredSlots = const <String>[],
-    this.optionalSlots = const <String>[],
-    this.carryOver = false,
-    this.stateId = "",
-    this.nextStateId = "",
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
+class AssistantSlotClarificationWire {
+  const AssistantSlotClarificationWire({
+    required this.policy,
+    this.targetSlot = ContextTargetSlot.unknown,
+    this.prompt = "",
+    this.suggestions = const <String>[],
+    this.retryPolicy = ContextRetryPolicy.unknown,
+    this.scopeExpansionPolicy = ContextScopeExpansionPolicy.none,
   });
 
-  final List<String> requiredSlots;
-  final List<String> optionalSlots;
-  final bool carryOver;
-  final String stateId;
-  final String nextStateId;
+  final String policy;
+  final ContextTargetSlot targetSlot;
+  final String prompt;
+  final List<String> suggestions;
+  final ContextRetryPolicy retryPolicy;
+  final ContextScopeExpansionPolicy scopeExpansionPolicy;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'requiredSlots': requiredSlots,
-        'optionalSlots': optionalSlots,
-        'carryOver': carryOver,
-        'stateId': stateId,
-        'nextStateId': nextStateId,
+        'policy': policy,
+        'targetSlot': targetSlot.wireName,
+        'prompt': prompt,
+        'suggestions': suggestions,
+        'retryPolicy': retryPolicy.wireName,
+        'scopeExpansionPolicy': scopeExpansionPolicy.wireName,
       };
 
-  factory SlotSchemaDto.fromJson(Map<String, dynamic> json) {
+  factory AssistantSlotClarificationWire.fromJson(Map<String, dynamic> json) {
     const allowedFields = <String>{
-      'requiredSlots',
-      'optionalSlots',
-      'carryOver',
-      'stateId',
-      'nextStateId',
+      'policy',
+      'targetSlot',
+      'prompt',
+      'suggestions',
+      'retryPolicy',
+      'scopeExpansionPolicy',
     };
     final unknownFields = json.keys
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('SlotSchemaDto response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException('AssistantSlotClarificationWire response contains unknown fields: ${unknownFields.join(', ')}');
     }
-    if (json.containsKey('requiredSlots') && json['requiredSlots'] != null && (json['requiredSlots'] is! List || (json['requiredSlots'] as List).any((item) => item is! String))) {
-      throw const FormatException('SlotSchemaDto field requiredSlots has an invalid wire value');
+    if (!json.containsKey('policy') || json['policy'] == null || (json['policy'] is! String)) {
+      throw const FormatException('AssistantSlotClarificationWire field policy has an invalid wire value');
     }
-    if (json.containsKey('optionalSlots') && json['optionalSlots'] != null && (json['optionalSlots'] is! List || (json['optionalSlots'] as List).any((item) => item is! String))) {
-      throw const FormatException('SlotSchemaDto field optionalSlots has an invalid wire value');
+    if (json.containsKey('targetSlot') && json['targetSlot'] != null && (json['targetSlot'] is! String)) {
+      throw const FormatException('AssistantSlotClarificationWire field targetSlot has an invalid wire value');
     }
-    if (json.containsKey('carryOver') && json['carryOver'] != null && (json['carryOver'] is! bool)) {
-      throw const FormatException('SlotSchemaDto field carryOver has an invalid wire value');
+    if (json.containsKey('prompt') && json['prompt'] != null && (json['prompt'] is! String)) {
+      throw const FormatException('AssistantSlotClarificationWire field prompt has an invalid wire value');
     }
-    if (json.containsKey('stateId') && json['stateId'] != null && (json['stateId'] is! String)) {
-      throw const FormatException('SlotSchemaDto field stateId has an invalid wire value');
+    if (json.containsKey('suggestions') && json['suggestions'] != null && (json['suggestions'] is! List || (json['suggestions'] as List).any((item) => item is! String))) {
+      throw const FormatException('AssistantSlotClarificationWire field suggestions has an invalid wire value');
     }
-    if (json.containsKey('nextStateId') && json['nextStateId'] != null && (json['nextStateId'] is! String)) {
-      throw const FormatException('SlotSchemaDto field nextStateId has an invalid wire value');
+    if (json.containsKey('retryPolicy') && json['retryPolicy'] != null && (json['retryPolicy'] is! String)) {
+      throw const FormatException('AssistantSlotClarificationWire field retryPolicy has an invalid wire value');
     }
-    return SlotSchemaDto(
-      requiredSlots: _assistantStringList(json['requiredSlots']),
-      optionalSlots: _assistantStringList(json['optionalSlots']),
-      carryOver: json['carryOver'] == true,
-      stateId: (json['stateId'] as String?)?.trim() ?? "",
-      nextStateId: (json['nextStateId'] as String?)?.trim() ?? "",
+    if (json.containsKey('scopeExpansionPolicy') && json['scopeExpansionPolicy'] != null && (json['scopeExpansionPolicy'] is! String)) {
+      throw const FormatException('AssistantSlotClarificationWire field scopeExpansionPolicy has an invalid wire value');
+    }
+    return AssistantSlotClarificationWire(
+      policy: (json['policy'] as String?)?.trim() ?? "",
+      targetSlot: parseContextTargetSlotStrict((json['targetSlot'] as String?)?.trim() ?? ""),
+      prompt: (json['prompt'] as String?)?.trim() ?? "",
+      suggestions: _assistantStringList(json['suggestions']),
+      retryPolicy: parseContextRetryPolicyStrict((json['retryPolicy'] as String?)?.trim() ?? ""),
+      scopeExpansionPolicy: parseContextScopeExpansionPolicyStrict((json['scopeExpansionPolicy'] as String?)?.trim() ?? ""),
     );
   }
 
@@ -71,9 +81,166 @@ class SlotSchemaDto {
   }
 }
 
+class AssistantSlotClarificationWireFields {
+  static const String policy = 'policy';
+  static const String targetSlot = 'targetSlot';
+  static const String prompt = 'prompt';
+  static const String suggestions = 'suggestions';
+  static const String retryPolicy = 'retryPolicy';
+  static const String scopeExpansionPolicy = 'scopeExpansionPolicy';
+}
+
+class AssistantSlotDefinitionWire {
+  const AssistantSlotDefinitionWire({
+    required this.slotId,
+    this.required = false,
+    required this.valueType,
+    required this.parserRefs,
+    this.aliases = const <String>[],
+    required this.sourcePriority,
+    required this.clarification,
+  });
+
+  final String slotId;
+  final bool required;
+  final String valueType;
+  final List<String> parserRefs;
+  final List<String> aliases;
+  final List<String> sourcePriority;
+  final AssistantSlotClarificationWire clarification;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'slotId': slotId,
+        'required': required,
+        'valueType': valueType,
+        'parserRefs': parserRefs,
+        'aliases': aliases,
+        'sourcePriority': sourcePriority,
+        'clarification': clarification.toJson(),
+      };
+
+  factory AssistantSlotDefinitionWire.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'slotId',
+      'required',
+      'valueType',
+      'parserRefs',
+      'aliases',
+      'sourcePriority',
+      'clarification',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantSlotDefinitionWire response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (!json.containsKey('slotId') || json['slotId'] == null || (json['slotId'] is! String)) {
+      throw const FormatException('AssistantSlotDefinitionWire field slotId has an invalid wire value');
+    }
+    if (json.containsKey('required') && json['required'] != null && (json['required'] is! bool)) {
+      throw const FormatException('AssistantSlotDefinitionWire field required has an invalid wire value');
+    }
+    if (!json.containsKey('valueType') || json['valueType'] == null || (json['valueType'] is! String)) {
+      throw const FormatException('AssistantSlotDefinitionWire field valueType has an invalid wire value');
+    }
+    if (!json.containsKey('parserRefs') || json['parserRefs'] == null || (json['parserRefs'] is! List || (json['parserRefs'] as List).any((item) => item is! String))) {
+      throw const FormatException('AssistantSlotDefinitionWire field parserRefs has an invalid wire value');
+    }
+    if (json.containsKey('aliases') && json['aliases'] != null && (json['aliases'] is! List || (json['aliases'] as List).any((item) => item is! String))) {
+      throw const FormatException('AssistantSlotDefinitionWire field aliases has an invalid wire value');
+    }
+    if (!json.containsKey('sourcePriority') || json['sourcePriority'] == null || (json['sourcePriority'] is! List || (json['sourcePriority'] as List).any((item) => item is! String))) {
+      throw const FormatException('AssistantSlotDefinitionWire field sourcePriority has an invalid wire value');
+    }
+    if (!json.containsKey('clarification') || json['clarification'] == null || (json['clarification'] is! Map)) {
+      throw const FormatException('AssistantSlotDefinitionWire field clarification has an invalid wire value');
+    }
+    return AssistantSlotDefinitionWire(
+      slotId: (json['slotId'] as String?)?.trim() ?? "",
+      required: json['required'] == true,
+      valueType: (json['valueType'] as String?)?.trim() ?? "",
+      parserRefs: _assistantStringList(json['parserRefs']),
+      aliases: _assistantStringList(json['aliases']),
+      sourcePriority: _assistantStringList(json['sourcePriority']),
+      clarification: json['clarification'] is Map ? AssistantSlotClarificationWire.fromJson((json['clarification'] as Map).cast<String, dynamic>()) : (throw FormatException('required object field clarification is missing')),
+    );
+  }
+
+  static List<String> _assistantStringList(Object? value) {
+    if (value is List) {
+      return value.map((item) => item.toString().trim()).where((item) => item.isNotEmpty).toList(growable: false);
+    }
+    return const <String>[];
+  }
+}
+
+class AssistantSlotDefinitionWireFields {
+  static const String slotId = 'slotId';
+  static const String required = 'required';
+  static const String valueType = 'valueType';
+  static const String parserRefs = 'parserRefs';
+  static const String aliases = 'aliases';
+  static const String sourcePriority = 'sourcePriority';
+  static const String clarification = 'clarification';
+}
+
+class SlotSchemaDto {
+  const SlotSchemaDto({
+    this.slots = const <AssistantSlotDefinitionWire>[],
+    this.carryOver = false,
+    this.stateId = "",
+    this.nextStateId = "",
+  });
+
+  final List<AssistantSlotDefinitionWire> slots;
+  final bool carryOver;
+  final String stateId;
+  final String nextStateId;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'slots': slots.map((item) => item.toJson()).toList(growable: false),
+        'carryOver': carryOver,
+        'stateId': stateId,
+        'nextStateId': nextStateId,
+      };
+
+  factory SlotSchemaDto.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'slots',
+      'carryOver',
+      'stateId',
+      'nextStateId',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('SlotSchemaDto response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('slots') && json['slots'] != null && (json['slots'] is! List || (json['slots'] as List).any((item) => item is! Map))) {
+      throw const FormatException('SlotSchemaDto field slots has an invalid wire value');
+    }
+    if (json.containsKey('carryOver') && json['carryOver'] != null && (json['carryOver'] is! bool)) {
+      throw const FormatException('SlotSchemaDto field carryOver has an invalid wire value');
+    }
+    if (json.containsKey('stateId') && json['stateId'] != null && (json['stateId'] is! String)) {
+      throw const FormatException('SlotSchemaDto field stateId has an invalid wire value');
+    }
+    if (json.containsKey('nextStateId') && json['nextStateId'] != null && (json['nextStateId'] is! String)) {
+      throw const FormatException('SlotSchemaDto field nextStateId has an invalid wire value');
+    }
+    return SlotSchemaDto(
+      slots: (json['slots'] as List?)?.whereType<Map>().map((item) => AssistantSlotDefinitionWire.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <AssistantSlotDefinitionWire>[],
+      carryOver: json['carryOver'] == true,
+      stateId: (json['stateId'] as String?)?.trim() ?? "",
+      nextStateId: (json['nextStateId'] as String?)?.trim() ?? "",
+    );
+  }
+}
+
 class SlotSchemaDtoFields {
-  static const String requiredSlots = 'requiredSlots';
-  static const String optionalSlots = 'optionalSlots';
+  static const String slots = 'slots';
   static const String carryOver = 'carryOver';
   static const String stateId = 'stateId';
   static const String nextStateId = 'nextStateId';

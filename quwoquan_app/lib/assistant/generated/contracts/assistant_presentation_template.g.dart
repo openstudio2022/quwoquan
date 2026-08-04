@@ -83,6 +83,7 @@ class AssistantPresentationTemplateWire {
     this.responsiveVariants = const <AssistantPresentationResponsiveVariantWire>[],
     this.allowedActionIntents = const <String>[],
     required this.fallbackMarkdown,
+    this.fallbackMarkdownBinding = "",
     this.accessibility = const <String, dynamic>{},
     required this.assetDigest,
   });
@@ -95,6 +96,7 @@ class AssistantPresentationTemplateWire {
   final List<AssistantPresentationResponsiveVariantWire> responsiveVariants;
   final List<String> allowedActionIntents;
   final String fallbackMarkdown;
+  final String fallbackMarkdownBinding;
   final Map<String, dynamic> accessibility;
   final String assetDigest;
 
@@ -107,6 +109,7 @@ class AssistantPresentationTemplateWire {
         'responsiveVariants': responsiveVariants.map((item) => item.toJson()).toList(growable: false),
         'allowedActionIntents': allowedActionIntents,
         'fallbackMarkdown': fallbackMarkdown,
+        'fallbackMarkdownBinding': fallbackMarkdownBinding,
         'accessibility': accessibility,
         'assetDigest': assetDigest,
       };
@@ -121,6 +124,7 @@ class AssistantPresentationTemplateWire {
       'responsiveVariants',
       'allowedActionIntents',
       'fallbackMarkdown',
+      'fallbackMarkdownBinding',
       'accessibility',
       'assetDigest',
     };
@@ -154,6 +158,9 @@ class AssistantPresentationTemplateWire {
     if (!json.containsKey('fallbackMarkdown') || json['fallbackMarkdown'] == null || (json['fallbackMarkdown'] is! String)) {
       throw const FormatException('AssistantPresentationTemplateWire field fallbackMarkdown has an invalid wire value');
     }
+    if (json.containsKey('fallbackMarkdownBinding') && json['fallbackMarkdownBinding'] != null && (json['fallbackMarkdownBinding'] is! String)) {
+      throw const FormatException('AssistantPresentationTemplateWire field fallbackMarkdownBinding has an invalid wire value');
+    }
     if (json.containsKey('accessibility') && json['accessibility'] != null && (json['accessibility'] is! Map)) {
       throw const FormatException('AssistantPresentationTemplateWire field accessibility has an invalid wire value');
     }
@@ -169,6 +176,7 @@ class AssistantPresentationTemplateWire {
       responsiveVariants: (json['responsiveVariants'] as List?)?.whereType<Map>().map((item) => AssistantPresentationResponsiveVariantWire.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <AssistantPresentationResponsiveVariantWire>[],
       allowedActionIntents: _assistantStringList(json['allowedActionIntents']),
       fallbackMarkdown: (json['fallbackMarkdown'] as String?)?.trim() ?? "",
+      fallbackMarkdownBinding: (json['fallbackMarkdownBinding'] as String?)?.trim() ?? "",
       accessibility: (json['accessibility'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{},
       assetDigest: (json['assetDigest'] as String?)?.trim() ?? "",
     );
@@ -191,6 +199,7 @@ class AssistantPresentationTemplateWireFields {
   static const String responsiveVariants = 'responsiveVariants';
   static const String allowedActionIntents = 'allowedActionIntents';
   static const String fallbackMarkdown = 'fallbackMarkdown';
+  static const String fallbackMarkdownBinding = 'fallbackMarkdownBinding';
   static const String accessibility = 'accessibility';
   static const String assetDigest = 'assetDigest';
 }

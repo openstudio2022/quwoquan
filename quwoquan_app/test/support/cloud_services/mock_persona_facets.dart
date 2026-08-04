@@ -1,7 +1,4 @@
 import 'package:quwoquan_app/application/user/persona/persona_query.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/active_persona_context_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/persona/persona_management_item_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/persona_profile_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     as contracts;
@@ -78,19 +75,11 @@ final class MockPersonaFacets
   @override
   Future<PersonaProfileViewData> getPersonaProfile(String personaId) async {
     final item = _item(personaId);
-    return PersonaProfileViewData.fromPersonaProfileWire(
-      PersonaProfileWireDto.fromMap(<String, dynamic>{
-        ...item,
-        'ownerUserId': 'owner-test',
-        'subjectType': 'persona',
-        'nickname': item['displayName'],
-        'status': item['status'] ?? 'active',
-      }),
-    );
+    return PersonaProfileViewData.fromWire(_profileContract(item));
   }
 
   @override
-  Future<contracts.PersonaManagementItem> createPersona(
+  Future<contracts.PersonaManagementItemView> createPersona(
     contracts.CreatePersonaCommand command,
   ) async {
     final id = 'persona-test-${++_version}';
@@ -115,7 +104,7 @@ final class MockPersonaFacets
   }
 
   @override
-  Future<contracts.PersonaManagementItem> updatePersona(
+  Future<contracts.PersonaManagementItemView> updatePersona(
     contracts.UpdatePersonaCommand command,
   ) async {
     final item = _item(command.personaId);
@@ -151,7 +140,7 @@ final class MockPersonaFacets
   }
 
   @override
-  Future<contracts.PersonaLifecycleGuard> retirePersona(
+  Future<contracts.PersonaLifecycleGuardView> retirePersona(
     contracts.RetirePersonaCommand command,
   ) async {
     final item = _item(command.personaId);
@@ -163,17 +152,17 @@ final class MockPersonaFacets
     item['isActive'] = false;
     item['retiredAt'] = _now();
     _version++;
-    return contracts.PersonaLifecycleGuard(
+    return contracts.PersonaLifecycleGuardView(
       personaId: command.personaId,
-      requestedAction: 'retire',
+      requestedAction: contracts.PersonaLifecycleAction.retire,
       allowed: true,
-      reason: 'allowed',
+      reason: contracts.PersonaLifecycleGuardReason.allowed,
       requiresSuccessor: false,
     );
   }
 
   @override
-  Future<contracts.ActivePersonaContext> activatePersona(
+  Future<contracts.ActivePersonaContextView> activatePersona(
     contracts.ActivatePersonaCommand command,
   ) async {
     final target = _item(command.personaId);
@@ -184,16 +173,7 @@ final class MockPersonaFacets
       item['isActive'] = identical(item, target);
     }
     _version++;
-    return contracts.ActivePersonaContext(
-      ownerUserId: 'owner-test',
-      personaId: command.personaId,
-      isolationLevel: target['isolationLevel']! as String,
-      profileVisibility: target['profileVisibility']! as String,
-      contextVersion: _version,
-      personaSnapshotVersion: _version,
-      explicitOverride: true,
-      switchedAt: _now(),
-    );
+    return _activeContextContract(target, explicitOverride: true);
   }
 
   Map<String, Object?> _item(String id) {
@@ -205,29 +185,113 @@ final class MockPersonaFacets
   }
 
   PersonaManagementItemViewData _view(Map<String, Object?> item) =>
-      PersonaManagementItemViewData.fromPersonaManagementItemWire(
-        PersonaManagementItemWireDto.fromMap(Map<String, dynamic>.from(item)),
+      PersonaManagementItemViewData.fromWire(_contract(item));
+
+  contracts.PersonaManagementItemView _contract(Map<String, Object?> item) =>
+      contracts.PersonaManagementItemView(
+        personaId: item['personaId']! as String,
+        displayName: item['displayName']! as String,
+        userHandle: item['userHandle']! as String,
+        avatarUrl: item['avatarUrl']! as String,
+        backgroundUrl: item['backgroundUrl']! as String,
+        bio: item['bio']! as String,
+        isolationLevel: contracts.IsolationLevel.fromWire(
+          item['isolationLevel'],
+          'PersonaManagementItemView.isolationLevel',
+        ),
+        isPrimary: item['isPrimary']! as bool,
+        isActive: item['isActive']! as bool,
+        status: contracts.PersonaStatus.fromWire(
+          item['status'],
+          'PersonaManagementItemView.status',
+        ),
+        retiredAt: _optionalDate(item['retiredAt']),
+        inheritsProfileFromOwner: item['inheritsProfileFromOwner']! as bool,
+        overriddenProfileFields:
+            (item['overriddenProfileFields']! as List<Object?>).cast<String>(),
+        lastProfileSyncAt: _optionalDate(item['lastProfileSyncAt']),
+        lastProfileSyncSource: item['lastProfileSyncSource'] as String?,
+        profileVisibility: contracts.ProfileVisibility.fromWire(
+          item['profileVisibility'],
+          'PersonaManagementItemView.profileVisibility',
+        ),
+        purposeHint: item['purposeHint'] as String?,
+        updatedAt: _requiredDate(item['updatedAt']),
+        lastActivatedAt: _optionalDate(item['lastActivatedAt']),
       );
 
-  contracts.PersonaManagementItem _contract(Map<String, Object?> item) =>
-      contracts.decodePersonaManagementItem(item);
+  contracts.PersonaProfileView _profileContract(Map<String, Object?> item) =>
+      contracts.PersonaProfileView(
+        personaId: item['personaId']! as String,
+        subjectType: contracts.ProfileOwnerKind.persona,
+        userHandle: item['userHandle']! as String,
+        displayName: item['displayName']! as String,
+        nicknameCustomized: item['inheritsProfileFromOwner'] != true,
+        avatarUrl: item['avatarUrl']! as String,
+        backgroundUrl: item['backgroundUrl']! as String,
+        bio: item['bio']! as String,
+        identityTags: const <String>[],
+        followerCount: 0,
+        followingCount: 0,
+        postCount: 0,
+        circleCount: 0,
+        likeCount: 0,
+        profileVisibility: contracts.ProfileVisibility.fromWire(
+          item['profileVisibility'],
+          'PersonaProfileView.profileVisibility',
+        ),
+        isolationLevel: contracts.IsolationLevel.fromWire(
+          item['isolationLevel'],
+          'PersonaProfileView.isolationLevel',
+        ),
+        inheritsFromOwner: item['inheritsProfileFromOwner']! as bool,
+        overriddenFields: (item['overriddenProfileFields']! as List<Object?>)
+            .cast<String>(),
+        updatedAt: _requiredDate(item['updatedAt']),
+      );
 
   ActivePersonaContextViewData _activeContextView(Map<String, Object?> item) =>
-      ActivePersonaContextViewData.fromActivePersonaContextWire(
-        ActivePersonaContextWireDto.fromMap(<String, dynamic>{
-          'ownerUserId': 'owner-test',
-          'personaId': item['personaId'],
-          'subjectType': 'persona',
-          'displayName': item['displayName'],
-          'avatarUrl': item['avatarUrl'],
-          'avatarVersion': 1,
-          'personaContextVersion': 'ctx-$_version',
-          'personaSnapshotVersion': _version,
-          'sourceSurfaceId': 'test.persona',
-          'explicitOverride': item['inheritsProfileFromOwner'] != true,
-          'isPrimary': item['isPrimary'],
-        }),
+      ActivePersonaContextViewData.fromWire(
+        _activeContextContract(
+          item,
+          explicitOverride: item['inheritsProfileFromOwner'] != true,
+        ),
       );
+
+  contracts.ActivePersonaContextView _activeContextContract(
+    Map<String, Object?> item, {
+    required bool explicitOverride,
+  }) => contracts.ActivePersonaContextView(
+    ownerUserId: 'owner-test',
+    personaId: item['personaId']! as String,
+    subjectType: contracts.ProfileOwnerKind.persona,
+    displayName: item['displayName']! as String,
+    avatarUrl: item['avatarUrl']! as String,
+    avatarVersion: 1,
+    isPrimary: item['isPrimary']! as bool,
+    isolationLevel: contracts.IsolationLevel.fromWire(
+      item['isolationLevel'],
+      'ActivePersonaContextView.isolationLevel',
+    ),
+    profileVisibility: contracts.ProfileVisibility.fromWire(
+      item['profileVisibility'],
+      'ActivePersonaContextView.profileVisibility',
+    ),
+    contextVersion: _version,
+    personaSnapshotVersion: _version,
+    sourceSurfaceId: 'test.persona',
+    explicitOverride: explicitOverride,
+    switchedAt: _requiredDate(item['updatedAt']),
+  );
+
+  static DateTime _requiredDate(Object? value) => switch (value) {
+    DateTime date => date,
+    String text => DateTime.parse(text),
+    _ => throw StateError('expected a canonical timestamp'),
+  };
+
+  static DateTime? _optionalDate(Object? value) =>
+      value == null ? null : _requiredDate(value);
 
   static List<Map<String, Object?>> _defaultSeed() => <Map<String, Object?>>[
     <String, Object?>{

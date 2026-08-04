@@ -20,6 +20,13 @@ type rtcEventYAML struct {
 	ClientPayloadDefaults      map[string]string `yaml:"client_payload_defaults"`
 }
 
+func rtcDartPublicFieldName(field fieldDef) string {
+	if name := strings.TrimSpace(field.ClientDartName); name != "" {
+		return name
+	}
+	return field.Name
+}
+
 func readRtcEvents(path string) (*rtcEventsYAML, error) {
 	var out rtcEventsYAML
 	if err := decodeMetadataDocument(path, &out); err != nil {
@@ -230,6 +237,14 @@ func emitRtcPayloadClass(b *strings.Builder, ev *rtcEventYAML, session []fieldDe
 	}
 
 	b.WriteString(fmt.Sprintf("\n  factory %s.fromWire(Map<String, dynamic> payload) {\n", class))
+	b.WriteString("    _rtcRequireExactFields(payload, const <String>{\n")
+	for _, key := range ev.PayloadFields {
+		b.WriteString(fmt.Sprintf("      '%s',\n", rtcPayloadWireKey(key)))
+	}
+	for _, key := range ev.OptionalClientStringFields {
+		b.WriteString(fmt.Sprintf("      '%s',\n", key))
+	}
+	b.WriteString(fmt.Sprintf("    }, '%s');\n", class))
 	b.WriteString(fmt.Sprintf("    return %s(\n", class))
 	for _, key := range ev.PayloadFields {
 		wireKey := rtcPayloadWireKey(key)
@@ -264,7 +279,37 @@ func emitRtcPayloadClass(b *strings.Builder, ev *rtcEventYAML, session []fieldDe
 		p := fmt.Sprintf("payload['%s']", key)
 		b.WriteString(fmt.Sprintf("      %s: %s as String?,\n", key, p))
 	}
-	b.WriteString("    );\n  }\n}\n\n")
+	b.WriteString("    );\n  }\n\n")
+	b.WriteString("  Map<String, Object?> toWire() => <String, Object?>{\n")
+	for _, key := range ev.PayloadFields {
+		wireKey := rtcPayloadWireKey(key)
+		field := rtcResolveSessionField(session, wireKey)
+		if field == nil {
+			field = rtcResolveSessionField(session, key)
+		}
+		dartID := rtcPayloadDartIdentifier(session, key)
+		def := ""
+		if ev.ClientPayloadDefaults != nil {
+			def = strings.TrimSpace(ev.ClientPayloadDefaults[key])
+			if def == "" {
+				def = strings.TrimSpace(ev.ClientPayloadDefaults[wireKey])
+			}
+		}
+		expression := dartID
+		if field != nil && field.Type == "enum" {
+			expression += ".wireName"
+		}
+		if def == "" {
+			nonNullExpression := strings.Replace(expression, dartID, dartID+"!", 1)
+			b.WriteString(fmt.Sprintf("    if (%s != null) '%s': %s,\n", dartID, wireKey, nonNullExpression))
+		} else {
+			b.WriteString(fmt.Sprintf("    '%s': %s,\n", wireKey, expression))
+		}
+	}
+	for _, key := range ev.OptionalClientStringFields {
+		b.WriteString(fmt.Sprintf("    if (%s != null) '%s': %s,\n", key, key, key))
+	}
+	b.WriteString("  };\n}\n\n")
 }
 
 func emitRtcPayloadManifest(b *strings.Builder, ev *rtcEventYAML) {
@@ -308,7 +353,16 @@ func writeRtcSignalPayloads(appDir, metadataDir string) error {
 		}
 	}
 	out := renderRtcSignalPayloadsDart(metadataSourceLabel(eventsPath), ff, ev)
-	outPath := filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "rtc", "rtc_signal_payloads.g.dart")
+	outPath := filepath.Join(
+		appDir,
+		"packages",
+		"quwoquan_cloud_contracts",
+		"lib",
+		"src",
+		"generated",
+		"realtime",
+		"rtc_signal_payloads.g.dart",
+	)
 	writeFile(outPath, out)
 	return nil
 }
@@ -334,7 +388,7 @@ func renderRtcSignalPayloadsDart(sourcePath string, ff *fieldsFile, ev *rtcEvent
 			refs = append(refs, ref)
 		}
 		sort.Strings(refs)
-		b.WriteString("import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart' show ")
+		b.WriteString("import '../../rtc/rtc_operation_contracts.g.dart' show ")
 		b.WriteString(strings.Join(refs, ", "))
 		b.WriteString(";\n\n")
 	}
@@ -353,6 +407,7 @@ func renderRtcSignalPayloadsDart(sourcePath string, ff *fieldsFile, ev *rtcEvent
 	b.WriteString("/// Sealed WS payload after parsing `payload` JSON object.\n")
 	b.WriteString("sealed class RtcWsPayload {\n")
 	b.WriteString("  const RtcWsPayload();\n")
+	b.WriteString("  Map<String, Object?> toWire();\n")
 	b.WriteString("}\n\n")
 
 	for i := range ev.Events {
@@ -362,15 +417,10 @@ func renderRtcSignalPayloadsDart(sourcePath string, ff *fieldsFile, ev *rtcEvent
 		b.WriteString(fmt.Sprintf("final class %s extends RtcWsPayload {\n", outer))
 		b.WriteString(fmt.Sprintf("  const %s(this.data);\n\n", outer))
 		b.WriteString(fmt.Sprintf("  final %s data;\n", inner))
+		b.WriteString("\n  @override\n")
+		b.WriteString("  Map<String, Object?> toWire() => data.toWire();\n")
 		b.WriteString("}\n\n")
 	}
-
-	b.WriteString("/// Unmodeled or future gateway `type` values; preserves raw map for logging and diagnostics.\n")
-	b.WriteString("final class RtcWsUnknownPayload extends RtcWsPayload {\n")
-	b.WriteString("  const RtcWsUnknownPayload(this.wireType, this.raw);\n\n")
-	b.WriteString("  final String wireType;\n")
-	b.WriteString("  final Map<String, dynamic> raw;\n")
-	b.WriteString("}\n\n")
 
 	b.WriteString("/// Parse WebSocket message body `payload` using top-level `type` (see events.yaml `client_ws_type`).\n")
 	b.WriteString("RtcWsPayload parseRtcWsPayload({\n")
@@ -387,7 +437,7 @@ func renderRtcSignalPayloadsDart(sourcePath string, ff *fieldsFile, ev *rtcEvent
 		b.WriteString(fmt.Sprintf("      return %s(%s.fromWire(payload));\n", outer, inner))
 	}
 	b.WriteString("    default:\n")
-	b.WriteString("      return RtcWsUnknownPayload(wireType, Map<String, dynamic>.from(payload));\n")
+	b.WriteString("      throw FormatException('Unsupported RTC realtime event type: $wireType');\n")
 	b.WriteString("  }\n}\n\n")
 
 	b.WriteString("/// All known `client_ws_type` values (codegen).\n")
@@ -396,6 +446,10 @@ func renderRtcSignalPayloadsDart(sourcePath string, ff *fieldsFile, ev *rtcEvent
 		b.WriteString(fmt.Sprintf("  %s,\n", rtcDartWsTypeConstName(ev.Events[i].Name)))
 	}
 	b.WriteString("];\n\n")
+	b.WriteString("void _rtcRequireExactFields(Map<String, dynamic> payload, Set<String> allowed, String path) {\n")
+	b.WriteString("  final unknown = payload.keys.where((key) => !allowed.contains(key)).toList(growable: false);\n")
+	b.WriteString("  if (unknown.isNotEmpty) { throw FormatException('$path contains unknown fields: ${unknown.join(',')}'); }\n")
+	b.WriteString("}\n\n")
 
 	for i := range ev.Events {
 		emitRtcPayloadManifest(&b, &ev.Events[i])

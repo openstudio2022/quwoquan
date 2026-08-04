@@ -42,7 +42,7 @@
 
 - 七源事件的 consumers 声明、payload 接收者字段与所属对象 `events.yaml` 的生产者/消费者契约一致。
 - messageType 只使用既有 NotificationType 五大类，细分经 source 字段；无第二触发矩阵真相源。
-- push 外送保持 deferred：notification_delivery_job 三条路由 blocked 且 block_reason 说明降级口径。
+- push 外送尚未完成：`NotificationDeliveryJob` 的受保护路由已生产装配，外部 Provider 终态与真机验收缺口由 `OPEN-001` 明确阻断。
 
 <a id="req-004"></a>
 ### REQ-004 事件 payload 必须自包含接收者：CommentCreated 补 postAuthorId、ContentReactionSet 补 targetAuthorId（metadata-first 扩 payload_fields）；消费者不得跨服务反查写模型
@@ -75,3 +75,14 @@
 - 前置要求：[`commercial-message-system`](../spec.md) 的范围、要求与 SIT。
 - 下游结果：本 Story 声明的 GWT 可观察结果。
 - 父级设计：[L1 DEC-001](../../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 Push 外送商用闭环
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：仍缺 APNs/FCM 非内存 Provider 投递与终态回执、失败重试/DLQ 运行证据、同一候选四环境 readback 及 Android/iPhone 真机验收。`NotificationDeliveryJob` 对象、Mongo store/outbox、受保护路由的 production composition 与真实 Mongo `api_integration` 已存在。外部投递无法确认时必须 fail-closed，不影响已落盘站内通知可读。
+- 完成判定：`GWT-001` 对应的站内与 push 行为均满足，且真实 `api_integration`、`user_acceptance` CaseResult 直接引用本节点。

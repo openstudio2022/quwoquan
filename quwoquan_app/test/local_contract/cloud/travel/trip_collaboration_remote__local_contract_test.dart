@@ -6,6 +6,38 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {
   test(
+    'surface placement query uses generated owner and typed surface path',
+    () async {
+      final executor = _CollaborationExecutor();
+      final facet = RemoteTripCollaborationFacet(
+        client: GeneratedCloudOperationClient(executor),
+        invocationContext: _context,
+      );
+
+      final result = await facet.listSurfacePlacements(
+        ListSurfaceTripPlacementsQuery(
+          surfaceKind: TripPlacementSurfaceKind.circle,
+          surfaceId: 'circle-1',
+        ),
+      );
+
+      expect(
+        executor.operation?.canonicalOperationId,
+        AppCloudOperationIds.travelTripPlanPlacementListSurfaceTripPlacements,
+      );
+      expect(executor.context?.surfaceId, AppUiSurfaces.travelTrips.id);
+      expect(executor.context?.idempotencyKey, isNull);
+      expect(executor.pathParameters, <String, String>{
+        'surfaceKind': 'circle',
+        'surfaceId': 'circle-1',
+      });
+      expect(result.surfaceKind, TripPlacementSurfaceKind.circle);
+      expect(result.surfaceId, 'circle-1');
+      expect(result.placements.single.tripId, 'trip-1');
+    },
+  );
+
+  test(
     'membership and placement mutations use typed travel paths and keys',
     () async {
       final executor = _CollaborationExecutor();
@@ -90,12 +122,17 @@ final class _CollaborationExecutor implements CloudOperationExecutor {
     this.operation = operation;
     this.context = context;
     pathParameters = requestEncoder().pathParameters;
-    return responseDecoder(
-      operation.canonicalOperationId ==
-              AppCloudOperationIds.travelTripMembershipPutTripMembership
-          ? _membershipWire()
-          : _placementWire(),
-    );
+    return responseDecoder(switch (operation.canonicalOperationId) {
+      AppCloudOperationIds.travelTripMembershipPutTripMembership =>
+        _membershipWire(),
+      AppCloudOperationIds.travelTripPlanPlacementListSurfaceTripPlacements =>
+        <String, Object?>{
+          'surfaceKind': 'circle',
+          'surfaceId': 'circle-1',
+          'placements': <Object?>[_placementWire()],
+        },
+      _ => _placementWire(),
+    });
   }
 }
 

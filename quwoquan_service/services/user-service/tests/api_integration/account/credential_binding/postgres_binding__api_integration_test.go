@@ -2,6 +2,8 @@ package api_integration
 
 import (
 	"context"
+	"crypto/sha256"
+	"fmt"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -18,9 +20,13 @@ func TestCredentialBindingPostgresNaturalIdempotencyAndOutbox(t *testing.T) {
 			t.Fatal(err)
 		}
 		facade := bindingapp.NewCredentialCommandFacade(store)
+		credentialKey := fmt.Sprintf(
+			"sha256:%x",
+			sha256.Sum256([]byte("verified-phone:+8613800000000")),
+		)
 		command := bindingapp.BindCredentialCommand{
 			CredentialType: bindingmodel.CredentialTypePhone,
-			CredentialKey:  "sha256:verified-phone-identity", DisplayLabel: "手机",
+			CredentialKey:  credentialKey, DisplayLabel: "手机",
 		}
 		first, err := facade.BindVerifiedCredential(ctx, "binding-owner", command)
 		if err != nil {

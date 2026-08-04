@@ -433,23 +433,9 @@ class CloudErrorMapper {
     if (body is! Map<String, dynamic>) {
       return null;
     }
-    final direct = _firstNonEmptyString(body, const <String>[
-      'userMessage',
-      'user_message',
-      'message',
-      'reasonMessage',
-    ]);
-    if (direct != null) {
-      return direct;
-    }
-    final error = body['error'];
-    if (error is Map<String, dynamic>) {
-      return _firstNonEmptyString(error, const <String>[
-        'userMessage',
-        'user_message',
-        'message',
-        'reasonMessage',
-      ]);
+    final canonical = body['userMessage'];
+    if (canonical is String && canonical.trim().isNotEmpty) {
+      return canonical.trim();
     }
     return null;
   }
@@ -503,16 +489,6 @@ Duration? _parseRetryAfter(String? value) {
   final delay = retryAt.difference(DateTime.now().toUtc());
   if (delay <= Duration.zero) return Duration.zero;
   return delay;
-}
-
-String? _firstNonEmptyString(Map<String, dynamic> map, List<String> keys) {
-  for (final key in keys) {
-    final value = map[key];
-    if (value is String && value.trim().isNotEmpty) {
-      return value.trim();
-    }
-  }
-  return null;
 }
 
 RuntimeFailure _localFailure({

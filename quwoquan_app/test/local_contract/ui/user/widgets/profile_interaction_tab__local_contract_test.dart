@@ -6,7 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_created_dto.g.dart';
+import 'package:quwoquan_app/cloud/services/chat/chat_view_data.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/link_templates.g.dart';
 import '../../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
@@ -18,7 +18,8 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/trackers/comment_observability.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
-import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
+import 'package:quwoquan_app/ui/user/models/profile_tab.dart'
+    hide InteractionDirection;
 import 'package:quwoquan_app/ui/user/providers/profile_state_provider.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_interaction_tab.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_shell.dart';
@@ -28,7 +29,8 @@ import '../../../../support/harness/profile_shell_scroll_utils.dart';
 import '../../../../support/cloud_services/content_facet_overrides.dart';
 import '../../../../support/cloud_services/test_content_comment_facet.dart';
 import '../../../../support/cloud_services/content/mock_content_repository.dart';
-import '../../../../support/cloud_services/repository_mock_reexports.dart';
+import '../../../../support/cloud_services/object_doubles/content/alpha_intersection_repository.dart';
+import '../../../../support/cloud_services/object_doubles/user/profile/alpha_user_profile_repository.dart';
 
 /// 互动 Tab：切换后渲染 ProfileInteractionTab，二级子页（赞/评论/分享）可见。
 class _NoNetworkHttpOverrides extends HttpOverrides {}
@@ -38,7 +40,7 @@ class _ThrowingCapabilityRepository extends RelationshipCapabilityRepository {
   bool get reconcilesCapabilityWithSharedRelationshipState => false;
 
   @override
-  Future<RelationshipCapabilityDto> getCapability(String targetUserId) {
+  Future<RelationshipCapabilityViewData> getCapability(String targetUserId) {
     return Future.error(StateError('capability unavailable in test'));
   }
 }
@@ -56,24 +58,22 @@ class _InteractionContractRepository
   final List<ProfileInteractionActivityViewData> sent;
 
   @override
-  Future<ContentProfileInteractionPage> listActivities(
+  Future<ProfileInteractionActivityPageSlice> listActivities(
     ContentProfileInteractionPageQuery query, {
-    required ContentProfileInteractionDirection direction,
+    required InteractionDirection direction,
   }) async {
     final filterKey = switch (query.type) {
-      ContentProfileInteractionType.like => 'likes',
-      ContentProfileInteractionType.comment => 'comments',
-      ContentProfileInteractionType.share => 'shares',
+      InteractionActivityType.like => 'likes',
+      InteractionActivityType.comment => 'comments',
+      InteractionActivityType.share => 'shares',
     };
-    final source = direction == ContentProfileInteractionDirection.received
-        ? received
-        : sent;
+    final source = direction == InteractionDirection.received ? received : sent;
     final items = source
         .where((item) => item.filterKeys.contains(filterKey))
         .take(query.limit)
         .map(_contentActivityFromView)
         .toList(growable: false);
-    return ContentProfileInteractionPage(items: items);
+    return ProfileInteractionActivityPageSlice(items: items, hasMore: false);
   }
 
   @override
@@ -81,9 +81,9 @@ class _InteractionContractRepository
     AppendContentProfileInteractionReadFactCommand command,
   ) async {
     return ProfileInteractionReadFactAck(
-      factId: 'fact-${command.activityId}-${command.state.wireValue}',
+      factId: 'fact-${command.activityId}-${command.state.wireName}',
       activityId: command.activityId,
-      state: command.state.wireValue,
+      state: command.state,
       occurredAt: DateTime.utc(2026, 7, 15),
       replayed: false,
     );
@@ -102,7 +102,7 @@ class _RecordingChatRepository extends MockChatRepository {
   String? get lastSentContent => writer.lastCommand?.content;
 
   @override
-  Future<ChatConversationCreatedDto> createConversation({
+  Future<ChatConversationCreatedViewData> createConversation({
     required String type,
     String? title,
     int? maxGroupSize,
@@ -378,7 +378,7 @@ ProfileInteractionActivityViewData _interaction({
   String displayPersonaId = 'u_display',
   String displayName = '林清越',
   String displayAvatarUrl = '',
-  String targetContentType = 'contract_target',
+  String targetContentType = 'micro',
   String previewMediaKind = 'text',
   String previewImageUrl = '',
   String previewText = '街角光影',
@@ -421,23 +421,36 @@ ProfileInteractionActivityViewData _interaction({
   );
 }
 
-ContentProfileInteractionActivity _contentActivityFromView(
+ProfileInteractionActivityView _contentActivityFromView(
   ProfileInteractionActivityViewData view,
 ) {
   final occurredAt =
       view.occurredAt ?? view.createdAt ?? DateTime.utc(2026, 6, 18);
-  return ContentProfileInteractionActivity(
+  return ProfileInteractionActivityView(
+    ownerPersonaId: view.targetPersonaId,
     activityId: view.activityId,
     activityType: view.filterKeys.contains('comments')
-        ? 'comment'
+        ? InteractionActivityType.comment
         : view.filterKeys.contains('shares')
-        ? 'share'
-        : 'like',
-    direction: view.direction,
+        ? InteractionActivityType.share
+        : InteractionActivityType.like,
+    direction: InteractionDirection.fromWire(
+      view.direction,
+      'ProfileInteractionActivityView.direction',
+    ),
+    sourceType: 'local_contract',
+    sourceEventId: 'event-${view.activityId}',
+    sourceVersion: 1,
+    viewerReactionVersion: 1,
+    targetVersion: 1,
+    active: true,
     commentKind: view.commentKind,
     commentId: view.commentId,
     parentCommentId: view.parentCommentId,
-    viewerReaction: view.viewerReaction,
+    viewerReaction: CommentReactionType.fromWire(
+      view.viewerReaction,
+      'ProfileInteractionActivityView.viewerReaction',
+    ),
     actorPersonaId: view.actorPersonaId,
     actorDisplayName: view.actorDisplayName,
     actorAvatarUrl: view.actorAvatarUrl,
@@ -447,7 +460,10 @@ ContentProfileInteractionActivity _contentActivityFromView(
     counterpartAvatarUrl: view.counterpartAvatarUrl,
     targetPersonaId: view.targetPersonaId,
     targetContentId: view.targetContentId,
-    targetContentType: view.targetContentType,
+    targetContentType: ContentType.fromWire(
+      view.targetContentType,
+      'ProfileInteractionActivityView.targetContentType',
+    ),
     targetContentSummary: view.targetContentSummary,
     targetKind: view.targetKind,
     targetAvailability: view.targetAvailability,
@@ -1140,7 +1156,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
 
     final comments = TestContentCommentFacet(
-      items: <ContentCommentListItem>[testCommentItem(id: 'comment_top_1')],
+      items: <CommentListItem>[testCommentItem(id: 'comment_top_1')],
     );
     await tester.pumpWidget(
       _interactionTabActionsApp(
@@ -1176,10 +1192,7 @@ void main() {
 
     expect(comments.reactionCalls, 1);
     expect(comments.lastReactionCommand?.commentId, 'comment_top_1');
-    expect(
-      comments.lastReactionCommand?.reaction,
-      ContentCommentReactionValue.like,
-    );
+    expect(comments.lastReactionCommand?.reaction, CommentReactionType.like);
     expect(
       find.text(ProfileText.profileInteractionCommentLiked),
       findsOneWidget,

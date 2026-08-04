@@ -1,14 +1,9 @@
 import 'dart:async';
-import 'dart:convert';
-
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/cloud/runtime/auth/cloud_auth_token_provider.dart';
 import 'package:quwoquan_app/cloud/runtime/auth/realtime_connection_credential.dart';
-import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/realtime/realtime_api_metadata.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/realtime/realtime_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_config.dart';
+import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_operation_gateway.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Callback for incoming realtime events from long-polling.
@@ -48,18 +43,16 @@ class LongPollTransport {
   LongPollTransport({
     required this.config,
     required this.authTokenProvider,
+    this.operations,
     required this.onEvents,
     this._cursorStore = const SharedPreferencesLongPollCursorStore(),
-    http.Client? client,
-  }) : _client = client ?? http.Client(),
-       _ownsClient = client == null;
+  });
 
   final RealtimeConfig config;
   final CloudAuthTokenProvider authTokenProvider;
+  final RealtimeConnectionOperationGateway? operations;
   final LongPollEventCallback onEvents;
   final LongPollCursorStore _cursorStore;
-  final http.Client _client;
-  final bool _ownsClient;
 
   bool _running = false;
   bool _disposed = false;
@@ -98,59 +91,39 @@ class LongPollTransport {
           break;
         }
         await _loadCursor(credential.cursorPartition);
-        final url =
-            Uri.parse(
-              '${config.gatewayBaseUrl}${RealtimeApiMetadata.longPollPath}',
-            ).replace(
-              queryParameters: <String, String>{
-                'timeout': '${config.longPollHoldSec}',
-                'cursor': ?_cursor,
-              },
-            );
-        final headers = credential.authorizeHttp(
-          CloudRequestHeaders.forPage(RealtimeRequestPageIds.longPoll),
-        );
-        final resp = await _client
-            .get(url, headers: headers)
+        final gateway = operations;
+        if (gateway == null) {
+          throw StateError(
+            'long poll requires generated realtime operation gateway',
+          );
+        }
+        final response = await gateway
+            .longPoll(timeout: config.longPollHoldSec, cursor: _cursor)
             .timeout(Duration(seconds: config.longPollHoldSec + 10));
 
         if (!_running || _disposed || generation != _pollGeneration) break;
 
-        if (resp.statusCode == 200) {
-          _consecutiveErrors = 0;
-          final body = jsonDecode(resp.body);
-          if (body is! Map || body['events'] is! List) {
-            throw const FormatException('invalid long poll response envelope');
-          }
-          final nextCursor = (body['nextCursor'] as String?)?.trim() ?? '';
-          if (!_isCanonicalCursor(nextCursor)) {
-            throw const FormatException('invalid long poll nextCursor');
-          }
-          final events = (body['events'] as List)
-              .whereType<Map<String, dynamic>>()
-              .toList();
-          final partition = _cursorPartition;
-          if (partition == null) {
-            throw StateError('long poll cursor partition is unavailable');
-          }
-          await _cursorStore.write(partition, nextCursor);
-          _cursor = nextCursor;
-          if (body['transportResumed'] == true && !_resumeRecoveryEmitted) {
-            _resumeRecoveryEmitted = true;
-            onEvents(const <Map<String, dynamic>>[
-              <String, dynamic>{'type': 'Reconnected'},
-            ]);
-          }
-          if (events.isNotEmpty) onEvents(events);
-        } else if (resp.statusCode == 204) {
-          _consecutiveErrors = 0;
-        } else if (resp.statusCode == 401 || resp.statusCode == 403) {
-          _running = false;
-          break;
-        } else {
-          _reportFirstFailure('http_${resp.statusCode}');
-          _consecutiveErrors++;
+        _consecutiveErrors = 0;
+        final nextCursor = response.nextCursor.trim();
+        if (!_isCanonicalCursor(nextCursor)) {
+          throw const FormatException('invalid long poll nextCursor');
         }
+        final events = response.events
+            .map((event) => Map<String, dynamic>.from(event.toWire()))
+            .toList(growable: false);
+        final partition = _cursorPartition;
+        if (partition == null) {
+          throw StateError('long poll cursor partition is unavailable');
+        }
+        await _cursorStore.write(partition, nextCursor);
+        _cursor = nextCursor;
+        if (response.transportResumed && !_resumeRecoveryEmitted) {
+          _resumeRecoveryEmitted = true;
+          onEvents(const <Map<String, dynamic>>[
+            <String, dynamic>{'type': 'Reconnected'},
+          ]);
+        }
+        if (events.isNotEmpty) onEvents(events);
       } catch (error) {
         if (!_running || _disposed || generation != _pollGeneration) break;
         _reportFirstFailure(error.runtimeType.toString());
@@ -221,8 +194,5 @@ class LongPollTransport {
     _running = false;
     _pollGeneration++;
     _cancelBackoff();
-    if (_ownsClient) {
-      _client.close();
-    }
   }
 }

@@ -38,6 +38,13 @@ def startup_attempt_path(target: str) -> Path:
     return target_process_dir(target) / "startup_attempt.json"
 
 
+def startup_attempt_path_for_workload(target: str, workload: str) -> Path:
+    normalized = str(workload or "").strip()
+    if normalized not in {"full", "content-release", "content-commercial"}:
+        raise ValueError(f"startup attempt workload is invalid: {normalized or '<empty>'}")
+    return startup_attempt_path(target).parent / "workloads" / normalized / "startup_attempt.json"
+
+
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
@@ -56,6 +63,13 @@ def _read(path: Path) -> dict[str, Any] | None:
 
 def load_startup_attempt(target: str) -> dict[str, Any] | None:
     return _read(startup_attempt_path(target))
+
+
+def load_workload_startup_attempt(
+    target: str,
+    workload: str,
+) -> dict[str, Any] | None:
+    return _read(startup_attempt_path_for_workload(target, workload))
 
 
 def _atomic_write(path: Path, payload: Mapping[str, Any]) -> None:
@@ -181,6 +195,12 @@ def transition_startup_attempt(
     if payload["env"] != env or payload["target"] != target:
         raise ValueError("startup attempt target identity mismatch")
     _atomic_write(path, payload)
+    normalized_workload = str(payload["workload"] or "").strip()
+    if normalized_workload:
+        _atomic_write(
+            startup_attempt_path_for_workload(target, normalized_workload),
+            payload,
+        )
     run_path_text = str(payload["runRoot"] or "").strip()
     if run_path_text:
         _atomic_write(Path(run_path_text) / "startup_attempt.json", payload)

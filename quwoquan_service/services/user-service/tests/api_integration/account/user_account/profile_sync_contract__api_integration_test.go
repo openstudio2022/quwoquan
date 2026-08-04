@@ -51,12 +51,45 @@ func TestUpdateProfile_AvatarVersionAndSyncPatch(t *testing.T) {
 		t.Fatalf("expected exactly 1 patch, got %v", result["patches"])
 	}
 	patch, _ := patches[0].(map[string]any)
-	if patch["type"] != "user.avatar.updated" {
-		t.Fatalf("expected user.avatar.updated patch, got %v", patch["type"])
+	if patch["kind"] != "user_avatar_updated" {
+		t.Fatalf("expected user_avatar_updated patch, got %v", patch["kind"])
 	}
-	payload, _ := patch["payload"].(map[string]any)
-	if payload["avatarAssetId"] != "ua_user_avatar_sync" {
-		t.Fatalf("expected avatarAssetId in patch payload, got %v", payload["avatarAssetId"])
+	payload, _ := patch["userAvatarUpdated"].(map[string]any)
+	if payload["userId"] != "user_avatar_sync" ||
+		payload["avatarUrl"] != "https://cdn.example.com/u1.png?v=1" ||
+		int(payload["avatarVersion"].(float64)) != 1 {
+		t.Fatalf("unexpected typed user avatar patch payload: %v", payload)
+	}
+	if _, found := patch["type"]; found {
+		t.Fatalf("retired patch type must not be exposed: %v", patch)
+	}
+	if _, found := patch["payload"]; found {
+		t.Fatalf("generic patch payload must not be exposed: %v", patch)
+	}
+}
+
+func TestPullUserSyncRejectsUnknownOrInvalidCursorBody(t *testing.T) {
+	t.Cleanup(func() { cleanAll(t) })
+	createProfileUpdateFixture(t, "user_sync_invalid", "sync_invalid")
+	for _, body := range []string{
+		`{"afterSeq":0,"limit":10,"retiredCursor":"1"}`,
+		`{"afterSeq":-1,"limit":10}`,
+		`{"afterSeq":0,"limit":501}`,
+	} {
+		rec := doRequest(
+			t,
+			http.MethodPost,
+			"/user/sync",
+			body,
+			authHeaders("user_sync_invalid"),
+		)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf(
+				"invalid sync request must return 400, got %d: %s",
+				rec.Code,
+				rec.Body.String(),
+			)
+		}
 	}
 }
 

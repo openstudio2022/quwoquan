@@ -171,29 +171,31 @@ const (
 
 // BehaviorSignal represents a user behavior event for hot path processing.
 type BehaviorSignal struct {
-	ClientEventID   string    `json:"clientEventId,omitempty"`
-	State           string    `json:"state,omitempty"`
-	UserID          string    `json:"userId"`
-	PersonaID       string    `json:"personaId,omitempty"`
-	DeviceActorID   string    `json:"deviceActorId,omitempty"`
-	SessionID       string    `json:"sessionId"`
-	FeedSessionID   string    `json:"feedSessionId,omitempty"`
-	ContentID       string    `json:"contentId"`
-	Action          string    `json:"action"`
-	ContentType     string    `json:"contentType,omitempty"`
-	Tags            []string  `json:"tags,omitempty"`
-	Duration        float64   `json:"duration,omitempty"`
-	Timestamp       time.Time `json:"timestamp"`
-	AuthorID        string    `json:"authorId,omitempty"`
-	ReferralSource  string    `json:"referralSource,omitempty"`
-	EngagementDepth int       `json:"engagementDepth,omitempty"`
-	ConsumedRatio   float64   `json:"consumedRatio,omitempty"`
-	TotalUnits      int       `json:"totalUnits,omitempty"`
-	EffectivePlayMS int       `json:"effectivePlayMs,omitempty"`
-	EntityRefs      []string  `json:"entityRefs,omitempty"`
-	FeedRequestID   string    `json:"feedRequestId,omitempty"`
-	Position        int       `json:"position,omitempty"`
-	CommentLength   int       `json:"commentLength,omitempty"`
+	ClientEventID     string    `json:"clientEventId,omitempty"`
+	State             string    `json:"state,omitempty"`
+	UserID            string    `json:"userId"`
+	PersonaID         string    `json:"personaId,omitempty"`
+	DeviceActorID     string    `json:"deviceActorId,omitempty"`
+	SessionID         string    `json:"sessionId"`
+	FeedSessionID     string    `json:"feedSessionId,omitempty"`
+	PlaybackSessionID string    `json:"playbackSessionId,omitempty"`
+	PageVisitID       string    `json:"pageVisitId,omitempty"`
+	ContentID         string    `json:"contentId"`
+	Action            string    `json:"action"`
+	ContentType       string    `json:"contentType,omitempty"`
+	Tags              []string  `json:"tags,omitempty"`
+	Duration          float64   `json:"duration,omitempty"`
+	Timestamp         time.Time `json:"timestamp"`
+	AuthorID          string    `json:"authorId,omitempty"`
+	ReferralSource    string    `json:"referralSource,omitempty"`
+	EngagementDepth   int       `json:"engagementDepth,omitempty"`
+	ConsumedRatio     float64   `json:"consumedRatio,omitempty"`
+	TotalUnits        int       `json:"totalUnits,omitempty"`
+	EffectivePlayMS   int       `json:"effectivePlayMs,omitempty"`
+	EntityRefs        []string  `json:"entityRefs,omitempty"`
+	FeedRequestID     string    `json:"feedRequestId,omitempty"`
+	Position          int       `json:"position,omitempty"`
+	CommentLength     int       `json:"commentLength,omitempty"`
 	// feed 下发频道与唯一策略摘要，全事件携带，使 HotPath / served-impressed
 	// 记账与特征投影可按同一不可变策略身份归因。
 	ChannelID       string `json:"channelId,omitempty"`
@@ -215,6 +217,11 @@ type BehaviorSignal struct {
 	IntersectionClass      string `json:"intersectionClass,omitempty"`
 	IntersectionSourceRef  string `json:"intersectionSourceRef,omitempty"`
 	IntersectionEvidenceID string `json:"intersectionEvidenceId,omitempty"`
+	MotionDirection        string `json:"direction,omitempty"`
+	MotionProfile          string `json:"motionProfile,omitempty"`
+	SettleMS               *int   `json:"settleMs,omitempty"`
+	ReducedMotion          *bool  `json:"reducedMotion,omitempty"`
+	Committed              *bool  `json:"committed,omitempty"`
 }
 
 // EffectiveSessionID returns the feed-scoped session ID for recommendation

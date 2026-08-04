@@ -307,11 +307,12 @@ func (s *ConversationService) projectCircleGroupArchived(
 				ConversationID: conv.ID,
 				ActorID:        event.OwnerID,
 				Payload: map[string]any{
-					"memberId":    member.ID,
-					"userId":      member.UserId,
-					"memberType":  member.MemberType,
-					"removedBy":   "circle_group_archived",
-					"memberCount": 0,
+					"conversationId": conv.ID,
+					"memberId":       member.ID,
+					"userId":         member.UserId,
+					"memberType":     member.MemberType,
+					"removedBy":      "circle_group_archived",
+					"memberCount":    0,
 				},
 			})
 		}
@@ -450,6 +451,19 @@ func (s *MemberService) projectCircleGroupMembership(
 		}
 		if err := s.roster.BumpMembersRosterRevision(txCtx, conv.ID, &count); err != nil {
 			return err
+		}
+		for index := range events {
+			eventType := events[index].EventType
+			if eventType != string(membershipevent.ConversationMemberAdded) &&
+				eventType != string(membershipevent.ConversationMemberRemoved) &&
+				eventType != string(membershipevent.ConversationMemberLeft) {
+				continue
+			}
+			if events[index].Payload == nil {
+				events[index].Payload = map[string]any{}
+			}
+			events[index].Payload["conversationId"] = conv.ID
+			events[index].Payload["memberCount"] = count
 		}
 		roster, err := s.rosterUpdatedEvent(
 			txCtx,
@@ -604,19 +618,25 @@ func (s *MemberService) applyCircleGroupMembershipFact(
 			memberID = member.ID
 			memberType = member.MemberType
 		}
+		payload := map[string]any{
+			"conversationId": conv.ID,
+			"memberId":       memberID,
+			"userId":         event.UserID,
+			"memberType":     memberType,
+			"memberCount":    0,
+		}
+		if eventType == membershipevent.ConversationMemberLeft {
+			payload["leftAt"] = sourceEventTime(event)
+		} else {
+			payload["removedBy"] = "circle_group_projector"
+		}
 		return true, []AggregateOutboxEvent{{
 			EventID:        chatAggregateEventID(event.EventID, string(eventType)+"\x00"+event.UserID),
 			EventType:      string(eventType),
 			AggregateID:    memberID,
 			ConversationID: conv.ID,
 			ActorID:        "circle_group_projector",
-			Payload: map[string]any{
-				"memberId":   memberID,
-				"userId":     event.UserID,
-				"memberType": memberType,
-				"removedBy":  "circle_group_projector",
-				"leftAt":     sourceEventTime(event),
-			},
+			Payload:        payload,
 		}}, nil
 	default:
 		return false, nil, fmt.Errorf("unsupported circle group membership event %q", event.EventType)

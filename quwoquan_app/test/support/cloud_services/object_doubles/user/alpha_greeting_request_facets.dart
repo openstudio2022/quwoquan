@@ -26,8 +26,11 @@ final class AlphaGreetingRequestFacet
       requesterPersonaId: requesterPersonaId,
       targetPersonaId: command.targetPersonaId,
       requestMessage: command.requestMessage,
-      status: 'pending',
-      source: command.source.trim().isEmpty ? 'profile' : command.source,
+      status: GreetingRequestStatus.pending,
+      source: GreetingRequestSource.fromWire(
+        command.source,
+        'SendGreetingCommand.source',
+      ),
       createdAt: now,
       updatedAt: now,
     );
@@ -52,7 +55,7 @@ final class AlphaGreetingRequestFacet
     return _transition(
       _inbox,
       command.requestId,
-      status: 'replied',
+      status: GreetingRequestStatus.replied,
       promotedConversationId: 'alpha-conversation-${command.requestId}',
     );
   }
@@ -61,14 +64,22 @@ final class AlphaGreetingRequestFacet
   Future<GreetingRequestRecord> ignoreGreeting(
     IgnoreGreetingCommand command,
   ) async {
-    return _transition(_inbox, command.requestId, status: 'ignored');
+    return _transition(
+      _inbox,
+      command.requestId,
+      status: GreetingRequestStatus.ignored,
+    );
   }
 
   @override
   Future<GreetingRequestRecord> cancelGreeting(
     CancelGreetingCommand command,
   ) async {
-    return _transition(_outbox, command.requestId, status: 'cancelled');
+    return _transition(
+      _outbox,
+      command.requestId,
+      status: GreetingRequestStatus.cancelled,
+    );
   }
 
   GreetingRequestSlice _slice(
@@ -77,7 +88,7 @@ final class AlphaGreetingRequestFacet
   ) {
     final status = query.status.trim();
     final filtered = source
-        .where((item) => status.isEmpty || item.status == status)
+        .where((item) => status.isEmpty || item.status.wireName == status)
         .toList(growable: false);
     final start = int.tryParse(query.cursor?.trim() ?? '') ?? 0;
     final safeStart = start.clamp(0, filtered.length);
@@ -94,7 +105,7 @@ final class AlphaGreetingRequestFacet
   GreetingRequestRecord _transition(
     List<GreetingRequestRecord> source,
     String requestId, {
-    required String status,
+    required GreetingRequestStatus status,
     String? promotedConversationId,
   }) {
     final index = source.indexWhere((item) => item.id == requestId);

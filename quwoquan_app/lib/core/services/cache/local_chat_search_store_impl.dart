@@ -121,7 +121,7 @@ class LocalChatSearchStore implements LocalChatSearchReader {
     final remark = contact.remark.trim();
     final conversationId = contact.conversationId.trim();
     final payload = <String, Object?>{
-      ...contact.toWireMap(),
+      ...contact.toStorageMap(),
       'displayName': displayName,
     };
     final searchableText = _searchableText(<Object?>[
@@ -191,7 +191,7 @@ class LocalChatSearchStore implements LocalChatSearchReader {
             'headline': _string(row['headline']),
             'remark': _string(row['remark']),
           });
-          final record = LocalChatSearchContactRecord.fromWireMap(payload);
+          final record = LocalChatSearchContactRecord.fromStorageMap(payload);
           return record.copyWith(
             matchedField: matchedField,
             highlightText: _highlightText(payload, matchedField),
@@ -275,7 +275,7 @@ class LocalChatSearchStore implements LocalChatSearchReader {
     final messages = rows
         .map((row) => _decodePayload(row['payload_json']))
         .map(LocalChatSearchMessageRecord.fromProjectionMap)
-        .map((record) => record.toMessageDto())
+        .map((record) => record.toMessageViewData())
         .toList(growable: false)
         .reversed
         .toList(growable: false);
@@ -529,9 +529,9 @@ class LocalChatSearchStore implements LocalChatSearchReader {
       return;
     }
     final payload = _decodePayload(rows.first['payload_json']);
-    final updatedPayload = LocalChatSearchContactRecord.fromWireMap(
+    final updatedPayload = LocalChatSearchContactRecord.fromStorageMap(
       payload,
-    ).copyWith(avatarUrl: resolvedAvatarUrl).toWireMap();
+    ).copyWith(avatarUrl: resolvedAvatarUrl).toStorageMap();
     await database.update(
       'chat_contacts',
       <String, Object?>{

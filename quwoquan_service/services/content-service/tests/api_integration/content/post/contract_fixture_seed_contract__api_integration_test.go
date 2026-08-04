@@ -63,7 +63,7 @@ func TestContractFixtureSeed_ContentAlphaReadsViaHandler(t *testing.T) {
 	if detail["postId"] != "fixture_photo_001" {
 		t.Fatalf("detail did not return fixture photo: %+v", detail)
 	}
-	if _, legacyID := detail["_id"]; legacyID {
+	if _, privateStorageID := detail["_id"]; privateStorageID {
 		t.Fatalf("detail must not expose storage _id: %+v", detail)
 	}
 

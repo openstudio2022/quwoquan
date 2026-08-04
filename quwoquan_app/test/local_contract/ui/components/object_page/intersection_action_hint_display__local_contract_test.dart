@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_action_hint.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
+import '../../../../support/fixtures/intersection_fixtures.dart';
 import 'package:quwoquan_app/components/object_page/intersection_statement_row.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// T2：`isDisplayableIntersectionActionHint` 诚实红线判据契约（§24.10 + M0.7 dispatch）。
 ///
@@ -18,12 +18,15 @@ IntersectionActionHint _hint({
   bool withTarget = true,
   String objectKind = 'place',
 }) {
-  return IntersectionActionHint(
+  return intersectionActionHintFixture(
     actionKey: '${dispatch}_key',
     label: label,
     dispatch: dispatch,
     target: withTarget
-        ? IntersectionTarget(objectId: 'p_west_lake', objectKind: objectKind)
+        ? intersectionTargetFixture(
+            objectId: 'p_west_lake',
+            objectKind: objectKind,
+          )
         : null,
   );
 }

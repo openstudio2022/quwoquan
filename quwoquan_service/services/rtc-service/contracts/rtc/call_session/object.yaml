@@ -80,8 +80,8 @@ business_rules:
 - ended 为终态；重复 answer、join、leave 与 hangup 按 actor-scoped command receipt 幂等，目标状态已满足时持久化 no-op receipt
   且不递增版本
 - 参与者展示信息（昵称/头像/信任标签）不是聚合状态；来电提示经 CallRinging 事件负载快照，通话中列表由端侧组合 user 域数据
-- 通话记录的商用主形态是 CallEnded 事实投影到关联 chat Conversation 的 system_call_log Message；独立 ListCalls 页面 deferred，operation
-  仅保留对象查询合同
+- 通话记录的商用主形态是 CallEnded 事实投影到关联 chat Conversation 的 system_call_log Message；ListCalls 只提供 CallSession
+  对象查询合同，不构成独立页面能力或第二个通话记录 owner
 lifecycle:
   state_field: status
   states:

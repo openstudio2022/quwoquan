@@ -39,6 +39,15 @@ types:
   AssistantRunVisibleReferenceView:
     description: AssistantRun 终态快照中的可点击引用；destination 必须先通过 canonical 引用校验。
     fields:
+    - name: sourceId
+      source: sourceId
+      type: string
+      constraints: [NULLABLE]
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+      description: 公网来源账本或领域 Evidence Reader 签发的不可伪造来源标识；无来源账本的引用为空。
     - name: title
       source: title
       type: string

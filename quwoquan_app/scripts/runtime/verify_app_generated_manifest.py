@@ -37,15 +37,16 @@ ALLOWED_PREFIXES = (
     "packages/quwoquan_cloud_contracts/lib/generated/",
 )
 GENERATOR_ROOT = SERVICE / "tools/codegen_app_metadata"
-DOMAIN_OWNER_PATTERN = re.compile(
+DOMAIN_TYPED_OWNER_PATTERN = re.compile(
     r"^packages/quwoquan_cloud_contracts/lib/src/"
-    r"(?P<domain>[a-z][a-z0-9_]*)/(?P=domain)_operation_contracts\.g\.dart$"
+    r"(?P<domain>[a-z][a-z0-9_]*)/"
+    r"(?P<artifact>[a-z][a-z0-9_]*)_contracts\.g\.dart$"
 )
 
 
 def is_allowed_generated_path(relative: str) -> bool:
     return relative.startswith(ALLOWED_PREFIXES) or bool(
-        DOMAIN_OWNER_PATTERN.fullmatch(relative)
+        DOMAIN_TYPED_OWNER_PATTERN.fullmatch(relative)
     )
 
 
@@ -119,9 +120,9 @@ def discover_generated_files() -> set[str]:
             if "generated" in normalized and "do not edit" in normalized:
                 discovered.add(path.relative_to(APP).as_posix())
     domain_root = APP / "packages/quwoquan_cloud_contracts/lib/src"
-    for path in domain_root.glob("*/*_operation_contracts.g.dart"):
+    for path in domain_root.glob("*/*_contracts.g.dart"):
         relative = path.relative_to(APP).as_posix()
-        if not DOMAIN_OWNER_PATTERN.fullmatch(relative):
+        if not DOMAIN_TYPED_OWNER_PATTERN.fullmatch(relative):
             continue
         header = path.read_text(encoding="utf-8", errors="replace")[:300]
         normalized = header.lower()

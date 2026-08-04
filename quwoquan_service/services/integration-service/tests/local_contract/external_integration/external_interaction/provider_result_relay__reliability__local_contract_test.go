@@ -11,6 +11,7 @@ import (
 	runtimemessaging "quwoquan_service/runtime/messaging"
 	"quwoquan_service/runtime/reliabletask"
 	"quwoquan_service/services/integration-service/internal/external_integration/external_interaction/infrastructure/resultrelay"
+	integrationsupport "quwoquan_service/services/integration-service/tests/support"
 )
 
 type resultOutboxStoreFixture struct {
@@ -82,6 +83,9 @@ func (transport *resultTransportFixture) SetDurableRetention(
 }
 
 func TestProviderResultRelayRetriesTransportWithoutProviderCredentials(t *testing.T) {
+	providerRequestDigest := integrationsupport.CanonicalTestSHA256(
+		"apns_voip:provider-request-1",
+	)
 	store := &resultOutboxStoreFixture{
 		available: true,
 		record: reliabletask.ExternalInteractionResultOutboxRecord{
@@ -90,7 +94,7 @@ func TestProviderResultRelayRetriesTransportWithoutProviderCredentials(t *testin
 			Operation:             reliabletask.ExternalInteractionOperationPush,
 			ResultStatus:          reliabletask.ExternalInteractionStatusSentUnconfirmed,
 			Provider:              "apns_voip",
-			ProviderRequestDigest: "sha256:provider-request",
+			ProviderRequestDigest: providerRequestDigest,
 			RecoveryAction:        "none",
 			OccurredAt:            time.Date(2026, 7, 26, 8, 0, 0, 0, time.UTC),
 		},
@@ -124,7 +128,7 @@ func TestProviderResultRelayRetriesTransportWithoutProviderCredentials(t *testin
 	if fields["eventId"] != "attempt-1" || fields["attemptId"] != "attempt-1" {
 		t.Fatalf("result event does not preserve deterministic attempt id: %#v", fields)
 	}
-	if fields["providerRequestDigest"] != "sha256:provider-request" {
+	if fields["providerRequestDigest"] != providerRequestDigest {
 		t.Fatalf("result event lacks provider request digest: %#v", fields)
 	}
 	for _, forbidden := range []string{"providerRequestId", "callbackUrl", "payload", "secret"} {

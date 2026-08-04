@@ -2,7 +2,7 @@ package local_contract
 
 import (
 	"context"
-	. "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/tool"
+	. "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/tool"
 	"strings"
 	"testing"
 )
@@ -100,13 +100,15 @@ func assistantSessionRegistryRetrieveContractRetrievalContractTestRegistry() Reg
 			"provenance": map[string]any{
 				"provider": "test_search_adapter",
 			},
+			"evidenceAssessment": acceptedEvidenceAssessment("test_app_search_stub"),
 		}}, nil
 	})
 	registry.Register(WebSearchMetadata(), func(_ context.Context, _ Request) (Result, error) {
 		return Result{Output: map[string]any{
-			"summary":    "web test result",
-			"references": []map[string]any{},
-			"reliable":   true,
+			"summary":            "web test result",
+			"references":         []map[string]any{},
+			"reliable":           true,
+			"evidenceAssessment": acceptedEvidenceAssessment("test_web_search_stub"),
 		}}, nil
 	})
 	return registry

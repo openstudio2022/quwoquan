@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -387,6 +388,13 @@ func hashInstallID(installID string) string {
 
 func normalizePhoneCredentialKey(phone string) string {
 	return credentialmodel.NormalizePhoneCredentialKey(phone)
+}
+
+var canonicalE164PhonePattern = regexp.MustCompile(`^\+[1-9][0-9]{7,14}$`)
+
+func canonicalE164Phone(phone string) (string, bool) {
+	normalized := normalizePhoneCredentialKey(phone)
+	return normalized, canonicalE164PhonePattern.MatchString(normalized)
 }
 
 func maskPhoneForDisplay(phone string) string {

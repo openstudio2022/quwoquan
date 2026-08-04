@@ -3,7 +3,7 @@ import 'package:quwoquan_app/cloud/services/user/relationship_capability_reposit
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-import 'repository_mock_reexports.dart';
+import 'object_doubles/user/alpha_greeting_request_facets.dart';
 
 /// Chat/User widget contracts use an explicit authenticated identity instead
 /// of relying on the production session store or an anonymous default.
@@ -62,14 +62,14 @@ final class TestRelationshipCapabilityQuery
   final _RelationshipCapabilityPreset _preset;
 
   @override
-  Future<RelationshipCapabilityResult> getRelationshipCapability(
+  Future<RelationshipCapabilityView> getRelationshipCapability(
     GetRelationshipCapabilityQuery query,
   ) async {
     return switch (_preset) {
-      _RelationshipCapabilityPreset.mutual => RelationshipCapabilityResult(
+      _RelationshipCapabilityPreset.mutual => RelationshipCapabilityView(
         viewerPersonaId: 'fixture_user_current',
         targetPersonaId: query.targetPersonaId,
-        relationState: 'mutual',
+        relationState: RelationshipState.mutual,
         canFollow: false,
         canUnfollow: true,
         canFollowBack: false,
@@ -84,25 +84,24 @@ final class TestRelationshipCapabilityQuery
         isBlocked: false,
         isBlockedBy: false,
       ),
-      _RelationshipCapabilityPreset.notFollowing =>
-        RelationshipCapabilityResult(
-          viewerPersonaId: 'fixture_user_current',
-          targetPersonaId: query.targetPersonaId,
-          relationState: 'not_following',
-          canFollow: true,
-          canUnfollow: false,
-          canFollowBack: false,
-          canGreet: true,
-          canOpenConversation: false,
-          canCreateDirectConversation: false,
-          canSendMessage: false,
-          hasPendingGreeting: false,
-          hasFormalConversation: false,
-          canStartVoiceCall: false,
-          canStartVideoCall: false,
-          isBlocked: false,
-          isBlockedBy: false,
-        ),
+      _RelationshipCapabilityPreset.notFollowing => RelationshipCapabilityView(
+        viewerPersonaId: 'fixture_user_current',
+        targetPersonaId: query.targetPersonaId,
+        relationState: RelationshipState.notFollowing,
+        canFollow: true,
+        canUnfollow: false,
+        canFollowBack: false,
+        canGreet: true,
+        canOpenConversation: false,
+        canCreateDirectConversation: false,
+        canSendMessage: false,
+        hasPendingGreeting: false,
+        hasFormalConversation: false,
+        canStartVoiceCall: false,
+        canStartVideoCall: false,
+        isBlocked: false,
+        isBlockedBy: false,
+      ),
     };
   }
 }
@@ -117,11 +116,13 @@ final class _ReconciledRelationshipCapabilityRepository
   bool get reconcilesCapabilityWithSharedRelationshipState => true;
 
   @override
-  Future<RelationshipCapabilityDto> getCapability(String targetUserId) async {
+  Future<RelationshipCapabilityViewData> getCapability(
+    String targetUserId,
+  ) async {
     final result = await query.getRelationshipCapability(
       GetRelationshipCapabilityQuery(targetPersonaId: targetUserId),
     );
-    return RelationshipCapabilityDto.fromContract(result);
+    return RelationshipCapabilityViewData.fromWire(result);
   }
 }
 

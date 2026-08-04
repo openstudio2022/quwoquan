@@ -12,17 +12,19 @@ extension ContentBehaviorTrackerEffectivePlayback on ContentBehaviorTracker {
     String? feedRequestId,
     ReferralSource? referralSource,
   }) {
-    final sessionId = playbackSessionId.trim();
-    if (sessionId.isEmpty || effectivePlayMs < 5000 || totalUnits <= 0) {
+    final normalizedPlaybackSessionId = playbackSessionId.trim();
+    if (normalizedPlaybackSessionId.isEmpty ||
+        effectivePlayMs < 5000 ||
+        totalUnits <= 0) {
       return;
     }
     _add(
       BehaviorEvent(
         contentId: contentId,
-        action: BehaviorAction.effectivePlay,
+        action: BehaviorEventType.effectivePlay,
         state: 'foreground_visible_playing',
-        clientEventId: 'effective-play:$contentId:$sessionId',
-        sessionId: sessionId,
+        clientEventId: 'effective-play:$contentId:$normalizedPlaybackSessionId',
+        playbackSessionId: normalizedPlaybackSessionId,
         contentType: contentType,
         effectivePlayMs: effectivePlayMs,
         consumedRatio: consumedRatio.clamp(0.0, 1.0),

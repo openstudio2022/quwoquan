@@ -4,16 +4,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/application/search/search_operation_ports.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
-import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import '../../../support/cloud_services/chat_repository_mock.dart';
 import '../../../support/cloud_services/homepage_alpha_test_adapter.dart';
 import 'package:quwoquan_app/components/navigation/secondary_capsule_tab_bar.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
-import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/ui/search/pages/global_search_page.dart';
 import 'package:quwoquan_app/ui/search/pages/search_network_results_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -70,7 +69,7 @@ GoRouter _buildRouter({
 Widget _buildApp({
   required SearchRepository searchRepository,
   AssistantSearchRunFacet? assistantXiaoquSearch,
-  BehaviorRepository? behaviorRepository,
+  SearchFeedbackCommandWriter? searchFeedbackWriter,
   SearchLaunchContext launchContext = const SearchLaunchContext(
     entrySurfaceId: '/search',
   ),
@@ -83,7 +82,7 @@ Widget _buildApp({
       recentSearchQueryProvider.overrideWithValue(recentSearches),
       recentSearchCommandWriterProvider.overrideWithValue(recentSearches),
       searchFeedbackCommandWriterProvider.overrideWithValue(
-        AlphaSearchFeedbackWriter(),
+        searchFeedbackWriter ?? AlphaSearchFeedbackWriter(),
       ),
       assistantSearchRunFacetProvider.overrideWithValue(
         assistantXiaoquSearch ?? _FakeAssistantRepository(),
@@ -91,8 +90,6 @@ Widget _buildApp({
       chatRepositoryCompositionProvider.overrideWithValue(MockChatRepository()),
       circlesListQueryProvider.overrideWithValue(AlphaCircleQueryReader()),
       homepageFacetSetProvider.overrideWithValue(MockHomepageRepository()),
-      if (behaviorRepository != null)
-        behaviorRepositoryProvider.overrideWithValue(behaviorRepository),
     ],
     child: MaterialApp.router(
       routerConfig: _buildRouter(launchContext: launchContext),
@@ -122,13 +119,6 @@ Widget _buildResultsPage({
       home: SearchNetworkResultsPage(launchContext: launchContext),
     ),
   );
-}
-
-ContentBehaviorTracker _trackerOf(WidgetTester tester, Type pageType) {
-  final element = tester.element(find.byType(pageType));
-  return ProviderScope.containerOf(
-    element,
-  ).read(contentBehaviorTrackerProvider);
 }
 
 void main() {
@@ -316,10 +306,11 @@ void main() {
     final errorState = tester.widget<AppPageErrorState>(
       find.byType(AppPageErrorState),
     );
-    expect(errorState.onAction, isNotNull);
-    await errorState.onAction!(
+    expect(errorState.onRecovery, isNotNull);
+    final recoveryOutcome = await errorState.onRecovery!(
       const UiErrorAction(type: UiErrorActionType.retry, label: '重试'),
     );
+    expect(recoveryOutcome, UiRecoveryOutcome.recovered);
     await _pumpUntil(
       tester,
       condition: () => find.byType(AppPageErrorState).evaluate().isEmpty,
@@ -328,31 +319,18 @@ void main() {
     expect(find.byType(AppPageErrorState), findsNothing);
   });
 
-  testWidgets('默认页与结果页埋点归因链：referralSource=search + feedRequestId', (
+  testWidgets('正式结果页只写 SearchFeedbackFact，不把搜索页伪装成 ContentBehaviorFact', (
     tester,
   ) async {
-    final behavior = MockBehaviorRepository();
+    final feedback = AlphaSearchFeedbackWriter();
     await sizeAndPump(
       tester,
       _buildApp(
         searchRepository: _JourneySearchRepository(),
-        behaviorRepository: behavior,
+        searchFeedbackWriter: feedback,
       ),
     );
     await tester.pumpAndSettle();
-
-    // 默认页曝光归因。
-    final homeTracker = _trackerOf(tester, GlobalSearchPage);
-    await homeTracker.flush();
-    final homeImpression = behavior.recorded.firstWhere(
-      (e) =>
-          e.action == BehaviorAction.impression &&
-          e.contentId == 'global_search',
-      orElse: () => throw TestFailure('missing global_search impression'),
-    );
-    expect(homeImpression.referralSource, ReferralSource.search);
-    expect(homeImpression.feedRequestId, isNotNull);
-    expect(homeImpression.feedRequestId, isNotEmpty);
 
     // 进入结果页。
     await tester.enterText(
@@ -370,26 +348,19 @@ void main() {
       condition: () =>
           find.byType(SearchNetworkResultsPage).evaluate().isNotEmpty,
     );
-    await tester.pump();
+    await _pumpUntil(
+      tester,
+      condition: () => feedback.recorded.any(
+        (event) => event.eventType == SearchFeedbackEventType.impression,
+      ),
+    );
 
-    final resultTracker = _trackerOf(tester, SearchNetworkResultsPage);
-    await resultTracker.flush();
-    final resultImpression = behavior.recorded.firstWhere(
-      (e) =>
-          e.action == BehaviorAction.impression &&
-          e.contentId == 'search_network_results',
-      orElse: () =>
-          throw TestFailure('missing search_network_results impression'),
+    final resultImpression = feedback.recorded.singleWhere(
+      (event) => event.eventType == SearchFeedbackEventType.impression,
     );
-    expect(resultImpression.referralSource, ReferralSource.search);
-    expect(resultImpression.feedRequestId, isNotNull);
-    expect(resultImpression.feedRequestId, isNotEmpty);
-    expect(resultImpression.channelId, 'all');
-    expect(
-      resultImpression.tags,
-      anyOf(isNull, isEmpty),
-      reason: '原始查询词与 surface/tab 不能伪装成 canonical tagRefs',
-    );
+    expect(resultImpression.searchRequestId, 'search_req_west_lake');
+    expect(resultImpression.referralSource, 'search');
+    expect(resultImpression.objectId, isNull);
   });
 }
 
@@ -432,7 +403,7 @@ class _JourneySearchRepository implements SearchRepository {
                 title: '西湖向导',
                 resolvedFrom: SearchResolvedFrom.local,
                 payload: SearchHitPayloadChatContact(
-                  ChatContactSearchItemDto(
+                  ChatContactSearchItemViewData(
                     contactId: 'contact_west_lake',
                     displayName: '西湖向导',
                     conversationId: 'conv_west_lake',
@@ -469,12 +440,14 @@ SearchResponse _cloudResult(
             subtitle: '杭州',
             snippet: '杭州热门地点',
             resolvedFrom: SearchResolvedFrom.remote,
-            payload: SearchHitPayloadWireMap(<String, dynamic>{
-              'id': 'homepage_west_lake',
-              'title': '西湖',
-              'followerCount': 1200,
-              'contentCount': 340,
-            }),
+            payload: SearchHitPayloadEntityHomepage(
+              SearchEntityHomepageHitView(
+                homepageId: 'homepage_west_lake',
+                name: '西湖',
+                followerCount: 1200,
+                contentCount: 340,
+              ),
+            ),
           ),
         ],
         resolvedFrom: SearchResolvedFrom.remote,
@@ -494,10 +467,13 @@ SearchResponse _cloudResult(
             title: '西湖旁断桥小巷',
             subtitle: '杭州',
             resolvedFrom: SearchResolvedFrom.remote,
-            payload: SearchHitPayloadWireMap(<String, dynamic>{
-              'objectId': 'place_west_lake_alley',
-              'connectionState': 'connected',
-            }),
+            payload: SearchHitPayloadLocationPlace(
+              SearchLocationPlaceHitView(
+                placeId: 'place_west_lake_alley',
+                name: '西湖旁断桥小巷',
+                address: '杭州',
+              ),
+            ),
           ),
         ],
         resolvedFrom: SearchResolvedFrom.remote,
@@ -548,6 +524,7 @@ SearchResponse _cloudResult(
     request: normalized,
     sections: sections,
     degradeSignals: degradeSignals,
+    searchRequestId: 'search_req_west_lake',
   );
 }
 

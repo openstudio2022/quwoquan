@@ -5,8 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
-import 'package:quwoquan_app/application/circle/membership/persona_circle_summary_mapper.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
@@ -536,9 +534,7 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
                 limit: _pageSize,
               ),
             );
-        final items = page.items
-            .map(circleDtoFromPersonaCircleSummary)
-            .toList(growable: false);
+        final items = page.items;
         return CursorPage<Object>(
           items: items.cast<Object>(),
           nextCursor: page.cursor,
@@ -589,7 +585,7 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
 
   String _itemKey(_ProfileStatsTab tab, Object item) {
     return switch (tab) {
-      _ProfileStatsTab.circles => (item as CircleDto).id,
+      _ProfileStatsTab.circles => (item as PersonaCircleSlice).circleId,
       _ProfileStatsTab.fans || _ProfileStatsTab.following =>
         (item as ProfileSocialRelationRowViewData).personaId,
     };
@@ -727,7 +723,7 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
         );
   }
 
-  RelationshipCapabilityDto? _resolvedCapability(
+  RelationshipCapabilityViewData? _resolvedCapability(
     ProfileSocialRelationRowViewData row,
   ) => row.relationshipCapability;
 
@@ -899,20 +895,20 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
     );
   }
 
-  void _openCircle(CircleDto circle) {
+  void _openCircle(PersonaCircleSlice circle) {
     _trackAction(
       'row_click',
       targetType: 'circle',
-      targetKey: circle.id,
+      targetKey: circle.circleId,
       entityType: 'circle',
-      entityId: circle.id,
+      entityId: circle.circleId,
       payload: <String, Object?>{
         'tab': _activeTab.routeValue,
         'surfaceId': 'profile_stats',
       },
     );
     context.push(
-      AppRoutePaths.circleDetail(id: circle.id),
+      AppRoutePaths.circleDetail(id: circle.circleId),
       extra: const CircleDetailPageRouteExtra(
         referralSource: ReferralSource.authorProfile,
       ),

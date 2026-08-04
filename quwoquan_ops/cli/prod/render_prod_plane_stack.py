@@ -92,6 +92,16 @@ def parse_args() -> argparse.Namespace:
         choices=["gray", "prod", "prevalidate"],
     )
     parser.add_argument(
+        "--replica-id",
+        default="r0",
+        help="Safe replica identity from the prod-hosted deployment plan.",
+    )
+    parser.add_argument(
+        "--host-id",
+        default="",
+        help="Logical host identity from access-isolation.yaml.",
+    )
+    parser.add_argument(
         "--rollout-stage",
         default="full",
         choices=["gray-initial", "carry-on", "full"],
@@ -244,8 +254,9 @@ def _resolve_render_output_dir(
     *,
     plane: str,
     instance: str,
+    replica_id: str = "r0",
 ) -> Path:
-    render_name = f"{plane}-{instance}"
+    render_name = f"{plane}-{instance}-{replica_id}"
     try:
         return resolve_deployment_target_path(
             configured_output,
@@ -403,6 +414,7 @@ def _rewrite_service(
     release_evidence_digest: str = "",
     versioned_image: bool,
     instance: str,
+    replica_id: str,
     config_root: str,
     media_root: str,
     legal_root: str,
@@ -511,7 +523,7 @@ def _rewrite_service(
             # 所有受管服务在成功读取、校验当前发布包配置后，以服务+环境绑定的
             # 短期凭据 ACK。固定实例身份来自渲染器，禁止使用容器随机 hostname
             # 使 rollout convergence 无法判断成员完整性。
-            cluster_name = f"prod-{instance}-control-a"
+            cluster_name = f"prod-{instance}-control-{replica_id}"
             environment["PLATFORM_OPS_BASE_URL"] = "http://platform-ops-service:18088"
             environment["CLUSTER_NAME"] = cluster_name
             environment["SERVICE_INSTANCE_ID"] = (
@@ -659,8 +671,6 @@ def _rewrite_service(
                 environment.pop("SEARCH_ES_ENDPOINTS", None)
         if name == "integration-service":
             environment["INTEGRATION_MONGO_URI"] = mongo_uri
-            environment["INTEGRATION_PUSH_ENABLED"] = "true"
-            environment["INTEGRATION_PUSH_MODE"] = "real"
             environment["INTEGRATION_PUSH_USER_SERVICE_BASE_URL"] = (
                 "http://user-service:18082"
             )
@@ -1519,32 +1529,31 @@ def _write_runtime_systemd_unit(
     plane: dict[str, Any],
     plane_name: str,
     instance: str,
+    replica_id: str,
+    remote_root: str,
     startup_services: list[str],
 ) -> str:
-    compose_root = str(plane.get("composeProjectRoot") or "").strip()
     credentials_root = str(plane.get("credentialsPath") or "").strip()
-    if not compose_root.startswith("/") or not credentials_root.startswith("/"):
+    if not remote_root.startswith("/") or not credentials_root.startswith("/"):
         raise SystemExit("FAIL: runtime systemd paths must be absolute")
-    if instance == "prevalidate":
-        compose_root = f"{compose_root.rstrip('/')}/prevalidate"
     layout = plane.get("rootlessRuntimeLayout") or {}
     compose_file = str(layout.get("composeFile") or "docker-compose.prod-hosted.yaml")
     env_file = str(layout.get("envFile") or "stack.env")
-    unit_name = f"quwoquan-{plane_name}-{instance}.service"
-    project = f"quwoquan-{plane_name}-{instance}"
+    unit_name = f"quwoquan-{plane_name}-{instance}-{replica_id}.service"
+    project = f"quwoquan-{plane_name}-{instance}-{replica_id}"
     services = " ".join(startup_services)
     unit_dir = output_root / "systemd"
     unit_dir.mkdir(parents=True, exist_ok=True)
     service_lines = [
         "[Unit]",
-        f"Description=Quwoquan {plane_name} {instance} rootless stack",
+        f"Description=Quwoquan {plane_name} {instance} {replica_id} rootless stack",
         "Wants=network-online.target",
         "After=network-online.target",
         "",
         "[Service]",
         "Type=oneshot",
         "RemainAfterExit=yes",
-        f"WorkingDirectory={compose_root}",
+        f"WorkingDirectory={remote_root}",
     ]
     if instance != "prevalidate":
         service_lines.append(
@@ -1578,6 +1587,7 @@ def _write_observability_tree(
     plane_name: str,
     *,
     render_name: str,
+    remote_root: str,
 ) -> dict[str, Any] | None:
     plane = _plane_spec(plane_name)
     runtime = plane.get("rootlessObservabilityRuntime")
@@ -1647,7 +1657,7 @@ def _write_observability_tree(
         f"PROD_SERVICE_NETWORK={service_network_name}\n",
         encoding="utf-8",
     )
-    compose_root = str(plane.get("composeProjectRoot") or "").strip()
+    compose_root = remote_root
     credentials_root = str(plane.get("credentialsPath") or "").strip()
     credentials_env = str(runtime.get("credentialsEnvFile") or "").strip()
     if not (
@@ -1709,6 +1719,10 @@ def _write_observability_tree(
 
 def main() -> int:
     args = parse_args()
+    if re.fullmatch(r"[a-z0-9][a-z0-9-]{0,31}", args.replica_id) is None:
+        raise SystemExit("FAIL: --replica-id must be a safe lowercase identifier")
+    if args.host_id and re.fullmatch(r"[a-z0-9][a-z0-9-]{0,31}", args.host_id) is None:
+        raise SystemExit("FAIL: --host-id must be a safe lowercase identifier")
     plane = _plane_spec(args.plane)
     compose_template = ROOT / str(plane.get("rootlessComposeTemplate") or "")
     if not compose_template.is_file():
@@ -1786,11 +1800,12 @@ def main() -> int:
     if Path(model_cache_root).is_absolute() or ".." in Path(model_cache_root).parts:
         raise SystemExit("FAIL: rootlessRuntimeLayout.modelCacheRoot must remain relative")
 
-    render_name = f"{args.plane}-{args.instance}"
+    render_name = f"{args.plane}-{args.instance}-{args.replica_id}"
     output_root = _resolve_render_output_dir(
         args.output_dir,
         plane=args.plane,
         instance=args.instance,
+        replica_id=args.replica_id,
     )
     if output_root.exists():
         remove_deployment_tree("prod-hosted", "rendered", render_name)
@@ -1922,6 +1937,7 @@ def main() -> int:
             release_evidence_digest=args.release_evidence_digest,
             versioned_image=service_name in governed_names,
             instance=args.instance,
+            replica_id=args.replica_id,
             config_root=config_root,
             media_root=media_root,
             legal_root=legal_root,
@@ -1977,6 +1993,10 @@ def main() -> int:
             output_root,
             args.plane,
             render_name=render_name,
+            remote_root=(
+                f"{str(plane.get('composeProjectRoot') or '').rstrip('/')}"
+                f"/instances/{args.instance}/{args.replica_id}"
+            ),
         )
     )
     _write_caddyfile(output_root, args.instance, args.rollout_stage)
@@ -1991,6 +2011,11 @@ def main() -> int:
         plane=plane,
         plane_name=args.plane,
         instance=args.instance,
+        replica_id=args.replica_id,
+        remote_root=(
+            f"{str(plane.get('composeProjectRoot') or '').rstrip('/')}"
+            f"/instances/{args.instance}/{args.replica_id}"
+        ),
         startup_services=startup_services,
     )
 
@@ -2000,6 +2025,13 @@ def main() -> int:
         "composeTemplate": str(compose_template.relative_to(ROOT)),
         "composeFile": str(compose_out.relative_to(ROOT) if compose_out.is_relative_to(ROOT) else compose_out),
         "instance": args.instance,
+        "replicaId": args.replica_id,
+        "hostId": args.host_id,
+        "remoteRoot": (
+            f"{str(plane.get('composeProjectRoot') or '').rstrip('/')}"
+            f"/instances/{args.instance}/{args.replica_id}"
+        ),
+        "project": f"quwoquan-{args.plane}-{args.instance}-{args.replica_id}",
         "governedComposeServices": governed,
         "supportComposeServices": support,
         "startupServices": startup_services,

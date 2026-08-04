@@ -1,66 +1,52 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/chat/models/conversation_dto.dart';
+import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
 
 void main() {
-  group('ConversationViewData — 常规契约', () {
-    test('fromMap 解析全字段', () {
-      final dto = ConversationViewData.fromMap(
-        _conversationWire(<String, dynamic>{
-          'id': 'conv_001',
-          'title': '周末登山群',
-          'avatarUrl': 'https://example.com/avatar.jpg',
-          'circleId': 'circle_001',
-          'maxSeq': 256,
-          'memberCount': 15,
-          'lastMessageId': 'msg_last',
-          'lastMessagePreview': '周六早上8点出发',
-          'lastMessageTime': '2026-03-07T09:15:00Z',
-          'messageCount': 256,
-          'updatedAt': '2026-03-07T09:15:00Z',
-        }),
-      );
+  group('ConversationViewData canonical mapping', () {
+    test(
+      'generated decoder owns Cloud JSON and mapper creates App ViewData',
+      () {
+        final wire = decodeChatConversation(
+          _conversationWire(<String, Object?>{
+            'id': 'conv_001',
+            'conversationId': 'conv_001',
+            'title': '周末登山群',
+            'avatarUrl': 'https://example.com/avatar.jpg',
+            'circleId': 'circle_001',
+            'maxSeq': 256,
+            'memberCount': 15,
+            'lastMessageId': 'msg_last',
+            'lastMessagePreview': '周六早上8点出发',
+            'lastMessageTime': '2026-03-07T09:15:00Z',
+            'messageCount': 256,
+            'updatedAt': '2026-03-07T09:15:00Z',
+          }),
+        );
+        final view = ConversationViewData.fromWire(wire);
 
-      expect(dto.id, equals('conv_001'));
-      expect(dto.type, equals('group'));
-      expect(dto.title, equals('周末登山群'));
-      expect(dto.avatarUrl, equals('https://example.com/avatar.jpg'));
-      expect(dto.creatorId, equals('user_001'));
-      expect(dto.circleId, equals('circle_001'));
-      expect(dto.maxSeq, equals(256));
-      expect(dto.memberCount, equals(15));
-      expect(dto.maxGroupSize, equals(1000));
-      expect(dto.receiptEnabled, isTrue);
-      expect(dto.lastMessageId, equals('msg_last'));
-      expect(dto.lastMessagePreview, equals('周六早上8点出发'));
-      expect(dto.lastMessageType.wireValue, equals('text'));
-      expect(dto.lastMessageTime, DateTime.parse('2026-03-07T09:15:00Z'));
-      expect(dto.messageCount, equals(256));
-      expect(dto.status, equals('active'));
-    });
+        expect(view.id, 'conv_001');
+        expect(view.type, 'group');
+        expect(view.title, '周末登山群');
+        expect(view.avatarUrl, 'https://example.com/avatar.jpg');
+        expect(view.creatorId, 'user_001');
+        expect(view.circleId, 'circle_001');
+        expect(view.maxSeq, 256);
+        expect(view.memberCount, 15);
+        expect(view.maxGroupSize, 1000);
+        expect(view.receiptEnabled, isTrue);
+        expect(view.lastMessageId, 'msg_last');
+        expect(view.lastMessagePreview, '周六早上8点出发');
+        expect(view.lastMessageType.wireName, 'text');
+        expect(view.lastMessageTime, DateTime.parse('2026-03-07T09:15:00Z'));
+        expect(view.messageCount, 256);
+        expect(view.status, 'active');
+      },
+    );
 
-    test('toMap round-trip 保持公开字段且不泄漏存储键', () {
-      final dto = ConversationViewData.fromMap(
-        _conversationWire(<String, dynamic>{
-          'id': 'conv_round_trip',
-          'receiptEnabled': false,
-        }),
-      );
-      final map = dto.toMap();
-      final decoded = ConversationViewData.fromMap(map);
-
-      expect(decoded.id, equals(dto.id));
-      expect(decoded.maxSeq, equals(dto.maxSeq));
-      expect(decoded.memberCount, equals(dto.memberCount));
-      expect(decoded.receiptEnabled, isFalse);
-      expect(map.containsKey('_id'), isFalse);
-      expect(map.containsKey('conversationId'), isFalse);
-      expect(map.containsKey('bindingType'), isFalse);
-      expect(map.containsKey('lifecyclePolicy'), isFalse);
-    });
-
-    test('Greeting 升级交集快照严格 round-trip', () {
-      final dto = ConversationViewData.fromMap(
-        _conversationWire(<String, dynamic>{
+    test('generated owner strictly maps greeting intersection snapshot', () {
+      final wire = decodeChatConversation(
+        _conversationWire(<String, Object?>{
           'originType': 'greeting_reply',
           'originIntersectionSnapshot': <String, Object?>{
             'intersectionId': 'intersection_1',
@@ -74,114 +60,94 @@ void main() {
           },
         }),
       );
+      final view = ConversationViewData.fromWire(wire);
 
-      expect(dto.originIntersectionSnapshot?.primaryText, '你们都去过老君山');
-      final decoded = ConversationViewData.fromMap(dto.toMap());
-      expect(decoded.originIntersectionSnapshot?.evidenceId, 'evidence_1');
+      expect(view.originIntersectionSnapshot?.primaryText, '你们都去过老君山');
+      expect(view.originIntersectionSnapshot?.evidenceId, 'evidence_1');
       expect(
-        decoded.originIntersectionSnapshot?.resolvedAt,
+        view.originIntersectionSnapshot?.resolvedAt,
         DateTime.utc(2026, 7, 31, 8),
       );
     });
   });
 
-  group('ConversationViewData — 单轨契约', () {
-    test('拒绝 _id 与 conversationId alias，只认 id', () {
-      final storageAlias = _conversationWire(<String, dynamic>{
-        '_id': 'conv_storage_alias',
-      })..remove('id');
-      final projectionAlias = _conversationWire(<String, dynamic>{
-        'conversationId': 'conv_projection_alias',
-      })..remove('id');
-
-      expect(
-        () => ConversationViewData.fromMap(storageAlias),
-        throwsFormatException,
-      );
-      expect(
-        () => ConversationViewData.fromMap(projectionAlias),
-        throwsFormatException,
-      );
-    });
-
-    test('metadata 默认字段缺失时只应用已声明默认值', () {
-      final wire = _conversationWire()
-        ..remove('maxSeq')
-        ..remove('memberCount')
-        ..remove('messageCount')
-        ..remove('originType');
-      final dto = ConversationViewData.fromMap(wire);
-
-      expect(dto.maxSeq, isZero);
-      expect(dto.memberCount, isZero);
-      expect(dto.messageCount, isZero);
-      expect(dto.originType, equals('direct_init'));
-    });
-  });
-
-  group('ConversationViewData — 异常/边界契约', () {
-    test('缺失必填字段立即失败', () {
-      for (final field in <String>{
-        'id',
-        'type',
-        'creatorId',
-        'maxGroupSize',
-        'receiptEnabled',
-        'lastMessageType',
-        'status',
-        'createdAt',
-        'updatedAt',
+  group('ChatConversation single-track decoder', () {
+    test('rejects storage alias, retired fields and unknown fields', () {
+      for (final retiredField in <String>{
+        '_id',
+        'bindingType',
+        'lifecyclePolicy',
+        'retiredField',
       }) {
-        final wire = _conversationWire()..remove(field);
         expect(
-          () => ConversationViewData.fromMap(wire),
+          () => decodeChatConversation(
+            _conversationWire(<String, Object?>{retiredField: 'retired'}),
+          ),
           throwsFormatException,
-          reason: field,
+          reason: retiredField,
         );
       }
     });
 
-    test('无效必填时间与可选时间立即失败', () {
+    test('rejects missing required fields and invalid timestamps', () {
+      for (final field in <String>{
+        'id',
+        'conversationId',
+        'type',
+        'creatorId',
+        'maxSeq',
+        'memberCount',
+        'maxGroupSize',
+        'receiptEnabled',
+        'lastMessageType',
+        'createdAt',
+        'updatedAt',
+      }) {
+        final payload = _conversationWire()..remove(field);
+        expect(
+          () => decodeChatConversation(payload),
+          throwsFormatException,
+          reason: field,
+        );
+      }
       expect(
-        () => ConversationViewData.fromMap(
-          _conversationWire(<String, dynamic>{'createdAt': 'not-a-time'}),
+        () => decodeChatConversation(
+          _conversationWire(<String, Object?>{'createdAt': 'not-a-time'}),
         ),
         throwsFormatException,
       );
-      expect(
-        () => ConversationViewData.fromMap(
-          _conversationWire(<String, dynamic>{'lastMessageTime': 'not-a-time'}),
-        ),
-        throwsFormatException,
-      );
-    });
-
-    test('可选字段缺失不影响完整必填契约', () {
-      final dto = ConversationViewData.fromMap(_conversationWire());
-
-      expect(dto.title, isNull);
-      expect(dto.avatarUrl, isNull);
-      expect(dto.circleId, isNull);
-      expect(dto.lastMessageId, isNull);
-      expect(dto.lastMessagePreview, isNull);
-      expect(dto.lastMessageTime, isNull);
     });
   });
 }
 
-Map<String, dynamic> _conversationWire([
-  Map<String, dynamic> overrides = const <String, dynamic>{},
+Map<String, Object?> _conversationWire([
+  Map<String, Object?> overrides = const <String, Object?>{},
 ]) {
-  return <String, dynamic>{
+  return <String, Object?>{
     'id': 'conv_default',
+    'conversationId': 'conv_default',
     'type': 'group',
+    'title': '',
+    'avatarUrl': '',
+    'groupAvatarVersion': 0,
     'creatorId': 'user_001',
+    'circleId': '',
+    'circleGroupId': '',
+    'entityId': '',
     'originType': 'direct_init',
     'maxSeq': 0,
     'memberCount': 0,
+    'membersRosterRevision': 0,
     'maxGroupSize': 1000,
     'receiptEnabled': true,
+    'announcement': '',
+    'announcementUpdatedBy': '',
+    'announcementUpdatedAt': '2026-02-01T10:00:00Z',
+    'nameEditableByAdminOnly': true,
+    'lastMessageId': '',
+    'lastMessagePreview': '',
     'lastMessageType': 'text',
+    'lastMessageTime': '2026-02-01T10:00:00Z',
     'messageCount': 0,
     'status': 'active',
     'createdAt': '2026-02-01T10:00:00Z',

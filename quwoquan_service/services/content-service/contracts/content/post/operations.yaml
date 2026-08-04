@@ -9,10 +9,44 @@ externalDependencies:
     port: EmbeddingGenerationPort
     operations: [embed]
     conformance: embedding_generation
+    adapterContracts:
+      ext.embed.protocol_fixture:
+        endpointEnvs: {endpoint: CONTENT_EMBEDDING_ENDPOINT}
+        secretRefs: []
+        defaultTimeoutMs: 10000
+      ext.embed.openai_compatible:
+        endpointEnvs: {endpoint: CONTENT_EMBEDDING_ENDPOINT}
+        secretRefs: [CONTENT_EMBEDDING_API_KEY]
+        defaultTimeoutMs: 10000
   - capability: runtime.object.storage
     port: ObjectStoragePort
     operations: [presignPut, presignGet]
     conformance: object_storage
+    adapterContracts:
+      infra.minio.object_storage:
+        endpointEnvs:
+          endpoint: CONTENT_OSS_ENDPOINT
+          bucket: CONTENT_OSS_BUCKET
+          region: CONTENT_OSS_REGION
+          media_delivery_base_url: CONTENT_MEDIA_DELIVERY_BASE_URL
+          media_upload: CONTENT_MEDIA_UPLOAD_BASE_URL
+        secretRefs:
+          - CONTENT_OSS_ACCESS_KEY_ID
+          - CONTENT_OSS_ACCESS_KEY_SECRET
+          - CONTENT_CDN_SIGN_KEY
+        defaultTimeoutMs: 5000
+      ext.oss.s3_compatible:
+        endpointEnvs:
+          endpoint: CONTENT_OSS_ENDPOINT
+          bucket: CONTENT_OSS_BUCKET
+          region: CONTENT_OSS_REGION
+          media_delivery_base_url: CONTENT_MEDIA_DELIVERY_BASE_URL
+          media_upload: CONTENT_MEDIA_UPLOAD_BASE_URL
+        secretRefs:
+          - CONTENT_OSS_ACCESS_KEY_ID
+          - CONTENT_OSS_ACCESS_KEY_SECRET
+          - CONTENT_CDN_SIGN_KEY
+        defaultTimeoutMs: 10000
   - role: use
     capability: runtime.message.transport
     port: MessageTransportPort
@@ -379,6 +413,11 @@ api_routes:
       latency_p95_ms: 800
       availability_percent: 99.9
     description: 删除内容（级联下架作者分发与用户转发并写入墓碑）
+    request_entity: DeletePostCommand
+    request_body_kind: none
+    response_entity: PostDeletionReceipt
+    response_body: PostDeletionReceipt
+    response_body_kind: object
     security:
       auth_mode: required
       principal: owner
@@ -671,6 +710,18 @@ api_routes:
       latency_p95_ms: 300
       availability_percent: 99.9
     description: 端侧业务规则配置（评论字数限制、折叠参数等），启动时拉取一次
+    request_entity: GetAppConfigQuery
+    request_body_kind: none
+    response_entity: AppConfigSlice
+    response_fields:
+      - schema
+      - fetchedAt
+      - maxAgeSec
+      - activationPolicy
+      - content
+      - configHash
+    response_body: AppConfigSlice
+    response_body_kind: object
     security:
       auth_mode: public
       principal: public
@@ -718,6 +769,11 @@ api_routes:
       latency_p95_ms: 300
       availability_percent: 99.9
     description: 聚合计数（likeCount/commentCount/shareCount 可重建投影读）
+    request_entity: GetPostCountersQuery
+    request_body_kind: none
+    response_entity: PostCounterSlice
+    response_body: PostCounterSlice
+    response_body_kind: object
     security:
       auth_mode: public
       principal: public

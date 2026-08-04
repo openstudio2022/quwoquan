@@ -13,6 +13,7 @@ const (
 	maxTemplateNodes = 128
 	maxTemplateDepth = 12
 	maxPayloadBytes  = 16 << 10
+	maxDataBytes     = 256 << 10
 )
 
 var (
@@ -37,14 +38,24 @@ func ValidateTemplate(template Template) error {
 	if template.InputSchema["type"] != "object" || template.InputSchema["additionalProperties"] != false {
 		return fmt.Errorf("%w: input schema must be a closed object", ErrInvalidTemplate)
 	}
+	if binding := strings.TrimSpace(template.FallbackMarkdownBinding); binding != "" {
+		if !bindingPattern.MatchString(binding) ||
+			!schemaBindingHasType(template.InputSchema, binding, "string") {
+			return fmt.Errorf(
+				"%w: fallback Markdown binding must select a declared string input",
+				ErrInvalidTemplate,
+			)
+		}
+	}
 	allowedActions := make(map[string]bool, len(template.AllowedActionIntents))
 	for _, operation := range template.AllowedActionIntents {
-		if !identifierPattern.MatchString(operation) {
+		if !identifierPattern.MatchString(operation) || allowedActions[operation] {
 			return ErrInvalidTemplate
 		}
 		allowedActions[operation] = true
 	}
 	nodes := make(map[string]Node, len(template.Nodes))
+	nodeKinds := make(map[generated.AssistantPresentationNodeKind]bool, len(template.Nodes))
 	for _, node := range template.Nodes {
 		if !identifierPattern.MatchString(node.NodeID) || node.Order < 0 {
 			return ErrInvalidTemplate
@@ -56,7 +67,9 @@ func ValidateTemplate(template Template) error {
 			return fmt.Errorf("%w: unknown node kind %s", ErrInvalidTemplate, node.Kind)
 		}
 		if len([]rune(node.Title)) > 512 || len([]rune(node.Body)) > 20_000 ||
-			len(node.Data) > 128 || len(node.Binding) > 32 || rawHTMLPattern.MatchString(node.Body) {
+			len(node.Data) > 128 || len(node.Binding) > 32 ||
+			rawHTMLPattern.MatchString(node.Title) || rawHTMLPattern.MatchString(node.Body) ||
+			unsafeURIPattern.MatchString(node.Title) || unsafeURIPattern.MatchString(node.Body) {
 			return fmt.Errorf("%w: node content budget", ErrInvalidTemplate)
 		}
 		if err := validateStyle(node.Style); err != nil {
@@ -66,8 +79,12 @@ func ValidateTemplate(template Template) error {
 			return err
 		}
 		if node.Media != nil {
-			if strings.TrimSpace(node.Media.MediaAssetID) == "" || strings.TrimSpace(node.Media.Alt) == "" ||
-				strings.TrimSpace(node.Media.ProvenanceRef) == "" || node.Media.Width < 0 || node.Media.Height < 0 {
+			if !identifierPattern.MatchString(strings.TrimSpace(node.Media.MediaAssetID)) ||
+				!identifierPattern.MatchString(strings.TrimSpace(node.Media.ProvenanceRef)) ||
+				strings.TrimSpace(node.Media.Alt) == "" || len([]rune(node.Media.Alt)) > 512 ||
+				rawHTMLPattern.MatchString(node.Media.Alt) ||
+				unsafeURIPattern.MatchString(node.Media.Alt) ||
+				node.Media.Width <= 0 || node.Media.Height <= 0 {
 				return ErrInvalidTemplate
 			}
 		}
@@ -82,14 +99,22 @@ func ValidateTemplate(template Template) error {
 				return fmt.Errorf("%w: unknown icon token", ErrInvalidTemplate)
 			}
 		}
-		if node.Kind == generated.AssistantPresentationNodeKindRouteMap {
-			if _, bound := node.Binding["data"]; !bound {
-				if err := validateRouteMapData(node.Data); err != nil {
-					return fmt.Errorf("%w: %v", ErrInvalidTemplate, err)
-				}
+		if strings.TrimSpace(node.DataPolicyRef) != "" &&
+			!identifierPattern.MatchString(strings.TrimSpace(node.DataPolicyRef)) {
+			return fmt.Errorf("%w: invalid node data policy ref", ErrInvalidTemplate)
+		}
+		if node.Kind == generated.AssistantPresentationNodeKindRouteMap &&
+			strings.TrimSpace(node.DataPolicyRef) == "" {
+			return fmt.Errorf("%w: route_map requires a data policy", ErrInvalidTemplate)
+		}
+		if strings.TrimSpace(node.DataPolicyRef) != "" {
+			_, bound := node.Binding["data"]
+			if !bound && len(node.Data) == 0 {
+				return fmt.Errorf("%w: data policy has no input", ErrInvalidTemplate)
 			}
 		}
 		nodes[node.NodeID] = node
+		nodeKinds[node.Kind] = true
 	}
 	root, ok := nodes[template.RootNodeID]
 	if !ok || strings.TrimSpace(root.ParentNodeID) != "" {
@@ -106,20 +131,44 @@ func ValidateTemplate(template Template) error {
 			return fmt.Errorf("%w: node depth or cycle", ErrInvalidTemplate)
 		}
 	}
+	variantIDs := make(map[string]bool, len(template.ResponsiveVariants))
 	for _, variant := range template.ResponsiveVariants {
-		if !identifierPattern.MatchString(variant.VariantID) || strings.TrimSpace(variant.ViewportClass) == "" {
+		if !identifierPattern.MatchString(variant.VariantID) ||
+			variantIDs[variant.VariantID] || strings.TrimSpace(variant.ViewportClass) == "" {
 			return ErrInvalidTemplate
 		}
+		variantIDs[variant.VariantID] = true
 		if _, err := generated.ParseAssistantPresentationDensity(variant.Density.WireName()); err != nil {
 			return ErrInvalidTemplate
 		}
+		requiredKinds := make(map[generated.AssistantPresentationNodeKind]bool, len(variant.RequiredNodeKinds))
 		for _, kind := range variant.RequiredNodeKinds {
-			if parsed, err := generated.ParseAssistantPresentationNodeKind(kind.WireName()); err != nil || parsed == generated.AssistantPresentationNodeKindUnknown {
+			if parsed, err := generated.ParseAssistantPresentationNodeKind(kind.WireName()); err != nil ||
+				parsed == generated.AssistantPresentationNodeKindUnknown ||
+				requiredKinds[kind] || !nodeKinds[kind] {
 				return ErrInvalidTemplate
 			}
+			requiredKinds[kind] = true
 		}
 	}
 	return nil
+}
+
+func schemaBindingHasType(schema map[string]any, path, expected string) bool {
+	parts := strings.Split(strings.TrimPrefix(path, "$."), ".")
+	current := schema
+	for _, part := range parts {
+		properties, ok := current["properties"].(map[string]any)
+		if !ok {
+			return false
+		}
+		next, ok := properties[part].(map[string]any)
+		if !ok {
+			return false
+		}
+		current = next
+	}
+	return current["type"] == expected
 }
 
 func validateStyle(style Style) error {
@@ -143,7 +192,7 @@ func validateStyle(style Style) error {
 func validateBinding(binding map[string]string) error {
 	for field, path := range binding {
 		switch field {
-		case "title", "body", "data", "visible", "action":
+		case "title", "body", "data", "visible", "action", "media":
 		default:
 			return ErrInvalidTemplate
 		}

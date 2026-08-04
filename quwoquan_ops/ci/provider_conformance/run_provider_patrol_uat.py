@@ -7,6 +7,7 @@ from pathlib import Path
 import subprocess
 import sys
 from typing import Any
+from urllib.parse import urlparse
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -16,6 +17,12 @@ if str(ROOT) not in sys.path:
 from quwoquan_ops.cli.lib.environment_topology import (  # noqa: E402
     get_target,
     load_environment_topology,
+)
+from quwoquan_ops.cli.lib.local_sms_provider_debug import (  # noqa: E402
+    read_latest_debug_otp,
+)
+from quwoquan_ops.ci.provider_conformance.protected_otp_broker import (  # noqa: E402
+    ProtectedOTPBroker,
 )
 
 
@@ -47,7 +54,38 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--platform", choices=("android", "ios"), default="android")
     parser.add_argument("--unauthenticated", action="store_true")
     parser.add_argument("--define-key", action="append", default=[])
+    parser.add_argument("--local-capture-otp-broker", action="store_true")
     return parser.parse_args()
+
+
+def _configure_android_broker_reverse(
+    *,
+    action: str,
+    device_id: str,
+    port: int,
+) -> None:
+    if not device_id:
+        raise ValueError(
+            "local-capture Android OTP UAT requires "
+            "QWQ_PROVIDER_CONFORMANCE_DEVICE_ID"
+        )
+    endpoint = f"tcp:{port}"
+    command = ["adb", "-s", device_id, "reverse"]
+    if action == "add":
+        command.extend((endpoint, endpoint))
+    elif action == "remove":
+        command.extend(("--remove", endpoint))
+    else:
+        raise ValueError("unsupported Android broker reverse action")
+    completed = subprocess.run(
+        command,
+        cwd=ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if completed.returncode != 0 and action == "add":
+        raise RuntimeError("failed to install protected OTP broker port reverse")
 
 
 def main() -> int:
@@ -109,6 +147,11 @@ def main() -> int:
     define_keys = tuple(
         str(key).strip() for key in args.define_key if str(key).strip()
     )
+    if args.local_capture_otp_broker:
+        define_keys += (
+            "QWQ_PROVIDER_UAT_OTP_BROKER_URL",
+            "QWQ_PROVIDER_UAT_OTP_BROKER_TOKEN",
+        )
     invalid_define_keys = [
         key
         for key in define_keys
@@ -116,10 +159,15 @@ def main() -> int:
     ]
     if invalid_define_keys:
         raise ValueError("Provider Patrol define keys must use QWQ_PROVIDER_UAT_*")
+    generated_define_keys = {
+        "QWQ_PROVIDER_UAT_OTP_BROKER_URL",
+        "QWQ_PROVIDER_UAT_OTP_BROKER_TOKEN",
+    } if args.local_capture_otp_broker else set()
     missing_define_keys = [
         key
         for key in define_keys
-        if not command_environment.get(key, "").strip()
+        if key not in generated_define_keys
+        and not command_environment.get(key, "").strip()
     ]
     if missing_define_keys:
         raise ValueError(
@@ -139,12 +187,56 @@ def main() -> int:
             "APP_CURRENT_PERSONA_ID",
         ):
             command_environment.pop(key, None)
-    return subprocess.run(
-        command,
-        cwd=ROOT,
-        env=command_environment,
-        check=False,
-    ).returncode
+    broker: ProtectedOTPBroker | None = None
+    broker_port = 0
+    broker_reverse_added = False
+    try:
+        if args.local_capture_otp_broker:
+            if environment not in {"alpha", "beta", "gamma"}:
+                raise ValueError(
+                    "local-capture OTP broker is forbidden for Prod evidence"
+                )
+            if command_environment.get("QWQ_PROVIDER_UAT_SMS_OTP", "").strip():
+                raise ValueError(
+                    "local-capture OTP UAT must not preload an OTP"
+                )
+            broker = ProtectedOTPBroker(
+                environment=environment,
+                target_name=target_name,
+                recipient=_required_environment("QWQ_PROVIDER_UAT_SMS_PHONE"),
+                reader=read_latest_debug_otp,
+            )
+            binding = broker.start()
+            command_environment["QWQ_PROVIDER_UAT_OTP_BROKER_URL"] = binding.url
+            command_environment[
+                "QWQ_PROVIDER_UAT_OTP_BROKER_TOKEN"
+            ] = binding.token
+            parsed_broker_url = urlparse(binding.url)
+            broker_port = int(parsed_broker_url.port or 0)
+            if broker_port <= 0:
+                raise RuntimeError("protected OTP broker did not bind a port")
+            if args.platform == "android":
+                _configure_android_broker_reverse(
+                    action="add",
+                    device_id=device_id,
+                    port=broker_port,
+                )
+                broker_reverse_added = True
+        return subprocess.run(
+            command,
+            cwd=ROOT,
+            env=command_environment,
+            check=False,
+        ).returncode
+    finally:
+        if broker_reverse_added:
+            _configure_android_broker_reverse(
+                action="remove",
+                device_id=device_id,
+                port=broker_port,
+            )
+        if broker is not None:
+            broker.close()
 
 
 if __name__ == "__main__":

@@ -44,6 +44,9 @@ business_rules:
 - session 创建后 owner persona 不可变
 - 同一 session 最多一个 active run
 - summary 只由完成 run 的事件按 source sequence 与服务端内部 version CAS 推进
+- 每个完成事件必须以 completion event receipt 与 summary/version/sequence 在同一事务提交；进程重启和重复投递只可重放同一结果
+- contextSummary 只含连续对话事实，不得摘要或缓存 permission、consent、对象归属、connector credential 与安全策略
+- 群聊和圈子 Run 不读取或推进个人 contextSummary；共享上下文始终从所属领域 Reader 重新取得
 - archived session 不接受新 run
 lifecycle:
   state_field: state

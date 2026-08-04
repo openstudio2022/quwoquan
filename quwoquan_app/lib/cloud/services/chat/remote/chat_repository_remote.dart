@@ -2,11 +2,9 @@ import "package:quwoquan_app/cloud/services/chat/chat_view_data.dart";
 // ignore_for_file: prefer_initializing_formals
 
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
-import 'package:quwoquan_app/cloud/chat/models/chat_conversation_timestamp_dto.dart';
-import 'package:quwoquan_app/cloud/chat/models/chat_message_receipt_dto.dart';
 import 'package:quwoquan_app/cloud/chat/models/conversation_dto.dart';
 import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
-import 'package:quwoquan_app/cloud/chat/models/sync_response.dart';
+import 'package:quwoquan_app/cloud/chat/models/message_sync_view_data.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository_api.dart';
 import 'package:quwoquan_app/cloud/services/chat/remote/chat_contract_projection_mapper.dart';
@@ -192,7 +190,7 @@ class RemoteChatRepository implements ChatRepository {
   }
 
   @override
-  Future<SyncResponse> syncMessages({
+  Future<ChatMessageSyncViewData> syncMessages({
     required String conversationId,
     required int lastSeq,
     int limit = CloudApiDefaults.syncMessagesLimit,
@@ -204,7 +202,7 @@ class RemoteChatRepository implements ChatRepository {
         limit: limit,
       ),
     );
-    return _mapper.toSyncResponse(slice);
+    return _mapper.toMessageSyncViewData(slice);
   }
 
   // ── 已读回执 ──────────────────────────────────────────────────────────────
@@ -224,7 +222,7 @@ class RemoteChatRepository implements ChatRepository {
   }
 
   @override
-  Future<List<ChatMessageReceiptDto>> getReceipts({
+  Future<List<ChatMessageReceipt>> getReceipts({
     required String conversationId,
     required String messageId,
   }) async {
@@ -234,7 +232,7 @@ class RemoteChatRepository implements ChatRepository {
         messageId: messageId,
       ),
     );
-    return page.items.map(_mapper.toReceipt).toList(growable: false);
+    return page.items;
   }
 
   // ── 成员管理 ──────────────────────────────────────────────────────────────
@@ -461,11 +459,11 @@ class RemoteChatRepository implements ChatRepository {
   // ── 会话时间戳索引 ──────────────────────────────────────────────────────────
 
   @override
-  Future<List<ChatConversationTimestampDto>> getConversationTimestamps() async {
+  Future<List<ChatConversationTimestamp>> getConversationTimestamps() async {
     final page = await _conversationQuery.listConversationTimestamps(
       ChatListConversationTimestampsQuery(),
     );
-    return page.items.map(_mapper.toTimestamp).toList(growable: false);
+    return page.items;
   }
 
   @override

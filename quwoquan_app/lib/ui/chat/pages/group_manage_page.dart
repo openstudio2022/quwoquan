@@ -129,11 +129,22 @@ class _GroupManagePageState extends ConsumerState<GroupManagePage> {
                 category: UiErrorCategory.pageLoad,
                 scope: UiErrorScope.page,
               ),
-              onAction: (action) async {
+              onRecovery: (action) async {
                 if (action.type == UiErrorActionType.retry ||
                     action.type == UiErrorActionType.resubmit) {
                   await notifier.load();
+                  return ref
+                              .read(
+                                conversationMembersProvider(
+                                  widget.conversationId,
+                                ),
+                              )
+                              .error ==
+                          null
+                      ? UiRecoveryOutcome.recovered
+                      : UiRecoveryOutcome.stillBlocked;
                 }
+                return UiRecoveryOutcome.cancelled;
               },
             )
           : circleGroupID.isNotEmpty

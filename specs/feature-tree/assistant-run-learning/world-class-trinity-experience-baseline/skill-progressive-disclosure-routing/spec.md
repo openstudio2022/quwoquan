@@ -65,7 +65,7 @@
 ## 4. 契约引用
 
 - canonical：`quwoquan_service/services/assistant-service/contracts/_shared/assistant_skill_manifest/schema.yaml`
-- object：`quwoquan_service/services/assistant-service/resources/skills/assistant/assistant_session/schema.yaml`
+- object：`quwoquan_service/services/assistant-service/resources/skill_packages/official/schema.yaml`
 - operation：`quwoquan_service/services/assistant-service/contracts/assistant/assistant_policy_release/operations.yaml`
 - catalog object：`quwoquan_service/services/assistant-service/contracts/assistant/skill_catalog/object.yaml`
 - catalog operation：`quwoquan_service/services/assistant-service/contracts/assistant/skill_catalog/operations.yaml`

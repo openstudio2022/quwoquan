@@ -55,9 +55,7 @@ List<_HomeFeedEntry> _weaveObjectCards(
     if (card.anchorIndex <= 0 || card.anchorIndex > posts.length) {
       continue;
     }
-    byAnchor
-        .putIfAbsent(card.anchorIndex, () => <FeedObjectCard>[])
-        .add(card);
+    byAnchor.putIfAbsent(card.anchorIndex, () => <FeedObjectCard>[]).add(card);
   }
   final entries = <_HomeFeedEntry>[];
   for (var i = 0; i < posts.length; i++) {

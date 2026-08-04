@@ -1,15 +1,12 @@
 package main
 
 import (
-	"errors"
 	"fmt"
-	"os"
 	"strings"
 
-	runtimeconfig "quwoquan_service/runtime/config"
-	usergenerated "quwoquan_service/services/user-service/generated/account/user_account"
 	credentialmodel "quwoquan_service/services/user-service/internal/account/credential_binding/domain/model"
 	"quwoquan_service/services/user-service/internal/account/user_account/application/account_orchestration"
+	userauthbinding "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/authbinding"
 	userintegration "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/integration"
 )
 
@@ -17,28 +14,14 @@ import (
 // ErrAuthRuntimeCapabilityUnavailable 表示可选能力缺少受保护的运行材料。
 // 两者都会在 composition root 保留 nil adapter，让应用层返回生成的 structured
 // unavailable error；未知 binding、错误 adapter 与非法 binding 元数据仍须 fail-fast。
-var ErrAuthRuntimeCapabilityBlocked = errors.New(
-	"user authentication external capability is blocked",
-)
+var ErrAuthRuntimeCapabilityBlocked = userauthbinding.ErrAuthRuntimeCapabilityBlocked
 
-var ErrAuthRuntimeCapabilityUnavailable = errors.New(
-	"user authentication external capability is unavailable",
-)
+var ErrAuthRuntimeCapabilityUnavailable = userauthbinding.ErrAuthRuntimeCapabilityUnavailable
 
-const nonPromotablePrevalidationEnv = "QWQ_NONPROMOTABLE_PREVALIDATION"
-
-func nonPromotableFirstPartyPrevalidation(appEnv string) bool {
-	return strings.EqualFold(strings.TrimSpace(appEnv), "prod") &&
-		strings.TrimSpace(os.Getenv(nonPromotablePrevalidationEnv)) == "first-party"
-}
+const nonPromotablePrevalidationEnv = userauthbinding.NonPromotablePrevalidationEnv
 
 func contentSliceExternalAuthDisabled() bool {
-	switch strings.ToLower(strings.TrimSpace(os.Getenv("QWQ_WORKLOAD"))) {
-	case "content-release", "content-commercial":
-		return true
-	default:
-		return false
-	}
+	return userauthbinding.ContentSliceExternalAuthDisabled()
 }
 
 // federatedLoginBindings is the explicit production composition for every
@@ -57,27 +40,52 @@ func newFederatedLoginBindings(
 	if err != nil {
 		return federatedLoginBindings{}, err
 	}
-	if binding.adapterID == "ext.auth.federated_identity_protocol_fixture" {
+	if binding.adapterID == userauthbinding.FederatedIdentityProtocolFixtureAdapterID {
+		endpoint := binding.endpoint("endpoint")
+		wechatVerifier, verifierErr :=
+			userintegration.NewProtocolSubstituteFederatedIdentityVerifier(
+				credentialmodel.CredentialTypeFederatedSlotA,
+				"wechat",
+				endpoint,
+				nil,
+			)
+		if verifierErr != nil {
+			return federatedLoginBindings{}, verifierErr
+		}
+		alipayVerifier, verifierErr :=
+			userintegration.NewProtocolSubstituteFederatedIdentityVerifier(
+				credentialmodel.CredentialTypeFederatedSlotB,
+				"alipay",
+				endpoint,
+				nil,
+			)
+		if verifierErr != nil {
+			return federatedLoginBindings{}, verifierErr
+		}
+		qqVerifier, verifierErr :=
+			userintegration.NewProtocolSubstituteFederatedIdentityVerifier(
+				credentialmodel.CredentialTypeFederatedSlotC,
+				"qq",
+				endpoint,
+				nil,
+			)
+		if verifierErr != nil {
+			return federatedLoginBindings{}, verifierErr
+		}
 		return federatedLoginBindings{
 			wechat: application.NewFederatedLoginFacade(
 				auth,
-				userintegration.NewProtocolFixtureFederatedIdentityVerifier(
-					credentialmodel.CredentialTypeFederatedSlotA,
-				),
+				wechatVerifier,
 				nil,
 			),
 			alipay: application.NewFederatedLoginFacade(
 				auth,
-				userintegration.NewProtocolFixtureFederatedIdentityVerifier(
-					credentialmodel.CredentialTypeFederatedSlotB,
-				),
+				alipayVerifier,
 				nil,
 			),
 			qq: application.NewFederatedLoginFacade(
 				auth,
-				userintegration.NewProtocolFixtureFederatedIdentityVerifier(
-					credentialmodel.CredentialTypeFederatedSlotC,
-				),
+				qqVerifier,
 				nil,
 			),
 		}, nil
@@ -155,8 +163,11 @@ func newCarrierPhoneResolver() (application.CarrierPhoneResolver, error) {
 	if err != nil {
 		return nil, err
 	}
-	if binding.adapterID == "ext.auth.carrier_one_tap_protocol_fixture" {
-		return userintegration.NewProtocolFixtureCarrierPhoneResolver(), nil
+	if binding.adapterID == userauthbinding.CarrierOneTapProtocolFixtureAdapterID {
+		return userintegration.NewProtocolSubstituteCarrierPhoneResolver(
+			binding.endpoint("endpoint"),
+			nil,
+		)
 	}
 	return userintegration.NewAliyunOneTapPhoneResolver(
 		binding.secret("ALIYUN_DYPNS_ACCESS_KEY_ID"),
@@ -167,124 +178,30 @@ func newCarrierPhoneResolver() (application.CarrierPhoneResolver, error) {
 
 type authRuntimeBinding struct {
 	adapterID string
-	endpoints map[string]string
-	secrets   map[string]string
+	runtime   userauthbinding.RuntimeBinding
 }
 
 func resolveCarrierOneTapBinding() (authRuntimeBinding, error) {
-	return resolveAuthRuntimeBinding(
-		"identity.carrier.one_tap",
-		[]string{
-			"ext.auth.carrier_one_tap",
-			"ext.auth.carrier_one_tap_protocol_fixture",
-		},
-	)
+	binding, err := userauthbinding.ResolveCarrierOneTapBinding()
+	return authRuntimeBindingFrom(binding), err
 }
 
 func resolveFederatedIdentityBinding() (authRuntimeBinding, error) {
-	return resolveAuthRuntimeBinding(
-		"identity.social.login",
-		[]string{
-			"ext.auth.federated_identity",
-			"ext.auth.federated_identity_protocol_fixture",
-		},
-	)
+	binding, err := userauthbinding.ResolveFederatedIdentityBinding()
+	return authRuntimeBindingFrom(binding), err
 }
 
-func resolveAuthRuntimeBinding(
-	capabilityID string,
-	allowedAdapterIDs []string,
-) (authRuntimeBinding, error) {
-	appEnv := strings.TrimSpace(os.Getenv("APP_ENV"))
-	if appEnv == "" {
-		appEnv = "alpha"
+func authRuntimeBindingFrom(binding userauthbinding.RuntimeBinding) authRuntimeBinding {
+	return authRuntimeBinding{
+		adapterID: binding.AdapterID(),
+		runtime:   binding,
 	}
-	if contentSliceExternalAuthDisabled() {
-		return authRuntimeBinding{}, fmt.Errorf(
-			"%w: %s is outside the bounded content workload",
-			ErrAuthRuntimeCapabilityBlocked,
-			capabilityID,
-		)
-	}
-	if nonPromotableFirstPartyPrevalidation(appEnv) {
-		// prod-hosted first-party prevalidation deliberately has no commercial
-		// login Provider. Returning the existing typed blocked condition keeps
-		// those routes unavailable without selecting a fixture or Mock adapter.
-		return authRuntimeBinding{}, fmt.Errorf(
-			"%w: %s for non-promotable first-party prevalidation",
-			ErrAuthRuntimeCapabilityBlocked,
-			capabilityID,
-		)
-	}
-	descriptor, found := usergenerated.ExternalProviderBindingFor(appEnv, capabilityID)
-	if !found {
-		return authRuntimeBinding{}, fmt.Errorf(
-			"%s binding is missing for environment=%s",
-			capabilityID,
-			appEnv,
-		)
-	}
-	if descriptor.State != "enabled" {
-		return authRuntimeBinding{}, fmt.Errorf(
-			"%w: %s for environment=%s",
-			ErrAuthRuntimeCapabilityBlocked,
-			capabilityID,
-			appEnv,
-		)
-	}
-	allowed := false
-	for _, adapterID := range allowedAdapterIDs {
-		if descriptor.AdapterID == adapterID {
-			allowed = true
-			break
-		}
-	}
-	if !allowed {
-		return authRuntimeBinding{}, fmt.Errorf(
-			"%s binding selects an unexpected adapter for environment=%s",
-			capabilityID,
-			appEnv,
-		)
-	}
-	configProvider := runtimeconfig.EnvRuntimeConfigProvider{}
-	binding := authRuntimeBinding{
-		adapterID: descriptor.AdapterID,
-		endpoints: make(map[string]string, len(descriptor.EndpointEnvironmentKeys)),
-		secrets:   make(map[string]string, len(descriptor.SecretEnvironmentKeys)),
-	}
-	for role, environmentKey := range descriptor.EndpointEnvironmentKeys {
-		value, ok := configProvider.GetString(environmentKey)
-		if !ok {
-			return authRuntimeBinding{}, fmt.Errorf(
-				"%w: %s endpoint material is unavailable for role=%s",
-				ErrAuthRuntimeCapabilityUnavailable,
-				capabilityID,
-				role,
-			)
-		}
-		binding.endpoints[role] = value
-	}
-	for _, environmentKey := range descriptor.SecretEnvironmentKeys {
-		value, ok := configProvider.GetString(environmentKey)
-		if !ok {
-			return authRuntimeBinding{}, fmt.Errorf(
-				"%w: %s secret material is unavailable",
-				ErrAuthRuntimeCapabilityUnavailable,
-				capabilityID,
-			)
-		}
-		binding.secrets[environmentKey] = value
-	}
-	if descriptor.TimeoutMilliseconds <= 0 {
-		return authRuntimeBinding{}, fmt.Errorf("%s binding timeout is invalid", capabilityID)
-	}
-	return binding, nil
 }
 
 func (binding authRuntimeBinding) endpoint(role string) string {
-	return strings.TrimSpace(binding.endpoints[role])
+	return binding.runtime.Endpoint(role)
 }
 
 func (binding authRuntimeBinding) secret(environmentKey string) string {
-	return strings.TrimSpace(binding.secrets[environmentKey])
+	return binding.runtime.Secret(environmentKey)
 }

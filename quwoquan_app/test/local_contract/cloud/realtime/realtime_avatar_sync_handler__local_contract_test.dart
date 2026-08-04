@@ -5,7 +5,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/chat/models/chat_conversation_timestamp_dto.dart';
 import 'package:quwoquan_app/cloud/chat/models/conversation_dto.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import '../../../support/cloud_services/chat_repository_mock.dart';
@@ -15,6 +14,12 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_record.dart';
 import 'package:quwoquan_app/core/services/cache/local_chat_search_store.dart';
 import 'package:quwoquan_app/core/services/cache/local_search_namespace.dart';
+import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show
+        ConversationAvatarSyncPatchPayload,
+        UserAvatarSyncPatchPayload,
+        UserSyncPatchKind;
 
 class _FakeUserSyncRepository implements UserSyncRepository {
   @override
@@ -30,17 +35,17 @@ class _FakeUserSyncRepository implements UserSyncRepository {
         requiresResync: false,
       );
     }
-    return const UserSyncPullResult(
+    return UserSyncPullResult(
       patches: <UserSyncPatch>[
         UserSyncPatch(
           syncSeq: 1,
-          type: 'conversation.avatar.updated',
-          userId: 'user_001',
-          payload: <String, dynamic>{
-            'conversationId': 'conv_001',
-            'avatarUrl': 'https://cdn.example.com/group.png?v=2',
-            'groupAvatarVersion': 2,
-          },
+          kind: UserSyncPatchKind.conversationAvatarUpdated,
+          conversationAvatarUpdated: ConversationAvatarSyncPatchPayload(
+            conversationId: 'conv_001',
+            avatarUrl: 'https://cdn.example.com/group.png?v=2',
+            groupAvatarVersion: 2,
+          ),
+          occurredAt: DateTime.utc(2026, 4, 23, 10),
         ),
       ],
       latestSyncSeq: 1,
@@ -56,7 +61,7 @@ class _GapUserSyncRepository implements UserSyncRepository {
     required int afterSeq,
     int limit = 200,
   }) async {
-    return const UserSyncPullResult(
+    return UserSyncPullResult(
       patches: <UserSyncPatch>[],
       latestSyncSeq: 3,
       hasMore: false,
@@ -71,17 +76,17 @@ class _InvalidAvatarPatchRepository implements UserSyncRepository {
     required int afterSeq,
     int limit = 200,
   }) async {
-    return const UserSyncPullResult(
+    return UserSyncPullResult(
       patches: <UserSyncPatch>[
         UserSyncPatch(
           syncSeq: 4,
-          type: 'conversation.avatar.updated',
-          userId: 'user_001',
-          payload: <String, dynamic>{
-            'conversationId': 'conv_001',
-            'avatarUrl': '',
-            'groupAvatarVersion': 4,
-          },
+          kind: UserSyncPatchKind.conversationAvatarUpdated,
+          conversationAvatarUpdated: ConversationAvatarSyncPatchPayload(
+            conversationId: 'conv_001',
+            avatarUrl: '',
+            groupAvatarVersion: 4,
+          ),
+          occurredAt: DateTime.utc(2026, 4, 23, 10),
         ),
       ],
       latestSyncSeq: 4,
@@ -105,18 +110,18 @@ class _UserAvatarPatchRepository implements UserSyncRepository {
         requiresResync: false,
       );
     }
-    return const UserSyncPullResult(
+    return UserSyncPullResult(
       patches: <UserSyncPatch>[
         UserSyncPatch(
           syncSeq: 2,
-          type: 'user.avatar.updated',
-          userId: 'user_002',
-          payload: <String, dynamic>{
-            'userId': 'user_002',
-            'avatarUrl':
+          kind: UserSyncPatchKind.userAvatarUpdated,
+          userAvatarUpdated: UserAvatarSyncPatchPayload(
+            userId: 'user_002',
+            avatarUrl:
                 'media/avatar/s/archived-avatar/user/user_002/v1/profile.png',
-            'avatarVersion': 14,
-          },
+            avatarVersion: 14,
+          ),
+          occurredAt: DateTime.utc(2026, 4, 23, 10),
         ),
       ],
       latestSyncSeq: 2,
@@ -146,35 +151,46 @@ class _CountingUserSyncRepository implements UserSyncRepository {
 
 class _ResyncChatRepository extends MockChatRepository {
   @override
-  Future<List<ChatConversationTimestampDto>> getConversationTimestamps() async {
-    return <ChatConversationTimestampDto>[
-      ChatConversationTimestampDto(
+  Future<List<ChatConversationTimestamp>> getConversationTimestamps() async {
+    final timestamp = DateTime.utc(2026, 4, 23, 10);
+    return <ChatConversationTimestamp>[
+      ChatConversationTimestamp(
         conversationId: 'conv_001',
-        updatedAt: '2026-04-23T10:00:00.000Z',
+        type: 'group',
+        updatedAt: timestamp,
+        settingsUpdatedAt: timestamp,
+        lastMessageAt: timestamp,
+        lastMessageTime: timestamp,
+        lastMessagePreview: '',
+        unreadCount: 0,
       ),
     ];
   }
 
   @override
-  Future<List<ConversationViewData>> batchGetConversations(List<String> ids) async {
+  Future<List<ConversationViewData>> batchGetConversations(
+    List<String> ids,
+  ) async {
+    final createdAt = DateTime.utc(2026, 4, 23, 9);
+    final updatedAt = DateTime.utc(2026, 4, 23, 10);
     return <ConversationViewData>[
-      ConversationViewData.fromMap(<String, dynamic>{
-        'id': 'conv_001',
-        'type': 'group',
-        'title': '群聊',
-        'avatarUrl': 'https://cdn.example.com/full-sync.png?v=3',
-        'groupAvatarVersion': 3,
-        'creatorId': 'user_001',
-        'maxSeq': 0,
-        'memberCount': 3,
-        'maxGroupSize': 500,
-        'receiptEnabled': true,
-        'lastMessageType': 'text',
-        'messageCount': 0,
-        'status': 'active',
-        'createdAt': '2026-04-23T09:00:00.000Z',
-        'updatedAt': '2026-04-23T10:00:00.000Z',
-      }),
+      ConversationViewData(
+        id: 'conv_001',
+        type: 'group',
+        title: '群聊',
+        avatarUrl: 'https://cdn.example.com/full-sync.png?v=3',
+        groupAvatarVersion: 3,
+        creatorId: 'user_001',
+        maxSeq: 0,
+        memberCount: 3,
+        maxGroupSize: 500,
+        receiptEnabled: true,
+        lastMessageType: MessageType.text,
+        messageCount: 0,
+        status: 'active',
+        createdAt: createdAt,
+        updatedAt: updatedAt,
+      ),
     ];
   }
 }

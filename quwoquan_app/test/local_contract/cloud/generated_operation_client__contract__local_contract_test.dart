@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
@@ -9,8 +12,8 @@ void main() {
     await client.contentReportCreateReport(
       CreateContentReportCommand(
         targetId: 'post-1',
-        targetType: ContentReportTargetType.post,
-        reason: ContentReportReason.spam,
+        targetType: ReportTargetType.post,
+        reason: ReportReason.spam,
       ),
       context: const CloudOperationInvocationContext(
         surfaceId: 'contentDetail',
@@ -62,7 +65,7 @@ void main() {
       AppCloudOperationIds.contentReportListMyReports,
     );
     expect(executor.queryParameters, <String, String>{'limit': '10'});
-    expect(page.items.single.status, ContentReportStatus.pending);
+    expect(page.items.single.status, ReportStatus.pending);
   });
 
   test(
@@ -166,6 +169,7 @@ void main() {
   );
 
   test('generated feed method preserves typed attribution context', () async {
+    final policyDigest = _fixtureSha256('content-feed-policy');
     final executor = _RecordingExecutor(
       response: <String, Object?>{
         'items': <Object?>[
@@ -173,18 +177,25 @@ void main() {
             'postId': 'post-1',
             'contentType': 'article',
             'title': '西湖行记',
+            'likeCount': 0,
+            'commentCount': 0,
+            'shareCount': 0,
           },
         ],
         'objectCards': <Object?>[
-          <String, Object?>{'objectId': 'west-lake'},
+          <String, Object?>{
+            'objectKind': 'entity',
+            'objectId': 'west-lake',
+            'title': '西湖',
+            'tagRefs': <String>[],
+            'anchorIndex': 0,
+          },
         ],
         'nextCursor': 'cursor-2',
         'previousCursor': 'cursor-0',
         'paginationExpiresAt': '2026-07-29T12:00:00Z',
         'feedRequestId': 'feed-request-1',
-        'policyDigest':
-            'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-        'hasMore': true,
+        'policyDigest': policyDigest,
         'outcome': 'content',
       },
     );
@@ -219,11 +230,8 @@ void main() {
     expect(result.previousCursor, 'cursor-0');
     expect(result.paginationExpiresAt, DateTime.utc(2026, 7, 29, 12));
     expect(result.feedRequestId, 'feed-request-1');
-    expect(
-      result.policyDigest,
-      'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-    );
-    expect(result.hasMore, isTrue);
+    expect(result.policyDigest, policyDigest);
+    expect(result.outcome, ContentFeedOutcome.content);
   });
 
   test('generated footprint method decodes typed private page', () async {
@@ -239,6 +247,9 @@ void main() {
               'contentType': 'image',
               'title': '足迹内容',
               'authorDisplayName': '作者',
+              'likeCount': 0,
+              'commentCount': 0,
+              'shareCount': 0,
             },
           },
         ],
@@ -278,11 +289,23 @@ void main() {
           'title': '西湖摄影',
           'body': '正文',
           'authorId': 'author-1',
-          'displayName': '作者',
+          'authorDisplayName': '作者',
           'status': 'published',
+          'visibility': 'public',
+          'likeCount': 0,
+          'commentCount': 0,
+          'shareCount': 0,
+          'viewCount': 0,
+          'createdAt': '2026-07-31T00:00:00Z',
+          'updatedAt': '2026-07-31T00:00:00Z',
           'articleMarkdown': '# 西湖摄影',
           'articleAssetManifest': <String, Object?>{
-            'assets': <Object?>['cover-1'],
+            'schema': 'article-asset-manifest',
+            'articleMarkdownDigest': _fixtureSha256('# 西湖摄影'),
+            'documentSha256': _fixtureSha256('article-document'),
+            'assetManifestSha256': _fixtureSha256('article-assets'),
+            'documentVersionSha256': _fixtureSha256('article-version'),
+            'assets': <Object?>[],
           },
         },
       );
@@ -302,9 +325,9 @@ void main() {
         AppCloudOperationIds.contentPostGetPost,
       );
       expect(executor.pathParameters, <String, String>{'postId': 'post-1'});
-      expect(result.post.postId, 'post-1');
+      expect(result.postId, 'post-1');
       expect(result.articleMarkdown, '# 西湖摄影');
-      expect(result.articleAssetManifest, isA<ContentPostStructuredObject>());
+      expect(result.articleAssetManifest, isA<PostArticleAssetManifest>());
     },
   );
 
@@ -316,11 +339,14 @@ void main() {
             'postId': 'post-1',
             'contentType': 'image',
             'authorId': 'author-1',
-            'imageUrls': <String>['https://example.test/p.jpg'],
+            'mediaUrls': <String>['https://example.test/p.jpg'],
+            'likeCount': 0,
+            'commentCount': 0,
+            'shareCount': 0,
           },
         ],
         'nextCursor': 'cursor-2',
-        'totalCount': 8,
+        'hasMore': true,
       },
     );
     final client = GeneratedCloudOperationClient(executor);
@@ -353,7 +379,7 @@ void main() {
     });
     expect(result.items.single.postId, 'post-1');
     expect(result.nextCursor, 'cursor-2');
-    expect(result.totalCount, 8);
+    expect(result.hasMore, isTrue);
   });
 
   test('generated SubmitPostPublication is one typed atomic command', () async {
@@ -373,8 +399,8 @@ void main() {
       SubmitContentPostPublicationCommand(
         publishIntentId: 'publish-draft-1',
         localDraftId: 'draft-1',
-        contentType: ContentPostType.article,
-        contentIdentity: ContentPostIdentity.work,
+        contentType: ContentType.article,
+        contentIdentity: ContentIdentity.work,
         title: '对象闭环',
         articleMarkdown: '# 对象闭环',
         articleAssetManifest: PostArticleAssetManifestInput(
@@ -382,7 +408,7 @@ void main() {
           assets: const <PostArticleAssetInput>[],
         ),
         mediaAssetIds: const <String>['asset-1'],
-        visibility: ContentPostVisibility.public,
+        visibility: Visibility.public,
       ),
       context: const CloudOperationInvocationContext(
         surfaceId: 'createWorkspace',
@@ -555,6 +581,9 @@ void main() {
     );
   });
 }
+
+String _fixtureSha256(String payload) =>
+    'sha256:${sha256.convert(utf8.encode(payload))}';
 
 Map<String, Object?> _appMessageResponse() {
   return <String, Object?>{

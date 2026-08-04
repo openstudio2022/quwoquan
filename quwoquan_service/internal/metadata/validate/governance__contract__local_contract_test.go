@@ -164,6 +164,37 @@ func TestAggregateRootBareObjectFieldsAreAlwaysRejected(t *testing.T) {
 	)
 }
 
+func TestCanonicalEnumCollectionRequiresAndResolvesExplicitEnumOwner(t *testing.T) {
+	contractGraph := &graph.ContractGraph{Governance: ast.MetadataGovernance{
+		Enums: []ast.EnumDefinition{{
+			Name: "ControlAction", Values: []string{"hide", "revoke"},
+			OwnerLevel: ast.EnumOwnerService, Domain: "assistant",
+			SourcePath: "assistant/_shared/enums.yaml",
+		}},
+		EnumReferences: []ast.EnumReference{{
+			Name: "ControlAction", Domain: "assistant", ObjectID: "assistant.control",
+			SourcePath: "assistant/assistant/control/fields.yaml",
+		}},
+		Fields: []ast.FieldDefinition{
+			{
+				ObjectID: "assistant.control", Domain: "assistant", Entity: "Control",
+				Name: "actions", Type: "[]enum", EnumRef: "ControlAction",
+				SourcePath: "assistant/assistant/control/fields.yaml",
+			},
+			{
+				ObjectID: "assistant.control", Domain: "assistant", Entity: "Control",
+				Name: "ownerlessActions", Type: "[]enum",
+				SourcePath: "assistant/assistant/control/fields.yaml",
+			},
+		},
+	}}
+	assertGovernanceIssueCodes(
+		t,
+		validateFieldTypes(contractGraph),
+		"CONTRACT.FIELD.ENUM_WITHOUT_OWNER",
+	)
+}
+
 // spec_ref: specs/feature-tree/runtime/runtime-governance/spec.md#sit-002
 func TestEnumOwnerHierarchyRejectsShadowDuplicateAndDeadDefinitions(t *testing.T) {
 	contractGraph := &graph.ContractGraph{Governance: ast.MetadataGovernance{

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import inspect
 import json
 import os
 import tempfile
@@ -200,162 +201,108 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
                 for service, ref in refs.items()
             },
         }
-        with tempfile.TemporaryDirectory() as temporary_dir:
-            process_dir = Path(temporary_dir)
-            (process_dir / "stack_status.json").write_text(
-                json.dumps(
-                    {
-                        "status": "passed",
-                        "runtimeEnv": "gamma",
-                        "composeProject": "quwoquan_gamma_release_old_1",
-                        "configurationDigest": configuration_digest,
-                        "imageTransportTag": version,
-                        "imageComposition": composition,
-                    }
-                ),
-                encoding="utf-8",
-            )
-            with (
-                mock.patch.object(
-                    stackctl,
-                    "startup_attempt_path",
-                    return_value=process_dir / "startup_attempt.json",
-                ),
-                mock.patch.object(
-                    stackctl,
-                    "target_process_dir",
-                    return_value=process_dir,
-                ),
-            ):
-                loaded = stackctl._load_gamma_runtime_image_composition(
-                    "gamma-local"
-                )
+        receipt = {
+            "schema": "stackctl-local-startup-attempt",
+            "status": "running",
+            "target": "gamma-local",
+            "env": "gamma",
+            "composeProject": "quwoquan_gamma_release_current_1",
+            "configurationDigest": configuration_digest,
+            "imageTransportTag": version,
+            "imageComposition": composition,
+        }
+        with mock.patch.object(
+            stackctl,
+            "load_startup_attempt",
+            return_value=receipt,
+        ):
+            loaded = stackctl._load_gamma_runtime_image_composition("gamma-local")
 
         expected_composition = dict(composition)
         expected_composition["configurationDigest"] = configuration_digest
         self.assertEqual(
             loaded,
-            (expected_composition, "quwoquan_gamma_release_old_1"),
+            (expected_composition, "quwoquan_gamma_release_current_1"),
         )
 
     def test_gamma_down_rejects_runtime_receipt_from_other_environment_project(
         self,
     ) -> None:
-        with tempfile.TemporaryDirectory() as temporary_dir:
-            process_dir = Path(temporary_dir)
-            (process_dir / "stack_status.json").write_text(
-                json.dumps(
-                    {
-                        "status": "passed",
-                        "runtimeEnv": "gamma",
-                        "composeProject": "quwoquan_beta_release_old_1",
-                        "configurationDigest": "sha256:" + "f" * 64,
-                        "imageTransportTag": "unused",
-                        "imageComposition": {"images": {}},
-                    }
-                ),
-                encoding="utf-8",
-            )
-            with (
-                mock.patch.object(
-                    stackctl,
-                    "startup_attempt_path",
-                    return_value=process_dir / "startup_attempt.json",
-                ),
-                mock.patch.object(
-                    stackctl,
-                    "target_process_dir",
-                    return_value=process_dir,
-                ),
-                self.assertRaisesRegex(ValueError, "Compose project mismatch"),
-            ):
-                stackctl._load_gamma_runtime_image_composition("gamma-local")
-
-    def test_stopped_attempt_falls_back_to_successful_runtime_receipt(self) -> None:
-        refs = {
-            service: (
-                f"localhost/quwoquan_service_{service.replace('-', '_')}:"
-                + f"{index:064x}"
-            )
-            for index, (service, _) in enumerate(
-                stackctl.GAMMA_PACKAGED_SERVICE_IMAGE_ENVIRONMENTS,
-                start=1,
-            )
+        receipt = {
+            "schema": "stackctl-local-startup-attempt",
+            "status": "running",
+            "target": "gamma-local",
+            "env": "gamma",
+            "composeProject": "quwoquan_beta_release_old_1",
+            "configurationDigest": "sha256:" + "f" * 64,
+            "imageTransportTag": "unused",
+            "imageComposition": {"images": {}},
         }
-        version = stackctl.immutable_image_digest(refs)
+        with (
+            mock.patch.object(
+                stackctl,
+                "load_startup_attempt",
+                return_value=receipt,
+            ),
+            self.assertRaisesRegex(ValueError, "Compose project mismatch"),
+        ):
+            stackctl._load_gamma_runtime_image_composition("gamma-local")
+
+    def test_stopped_attempt_does_not_fall_back_to_environment_receipt(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_dir:
             process_dir = Path(temporary_dir)
-            attempt = process_dir / "startup_attempt.json"
-            attempt.write_text(json.dumps({"status": "stopped"}), encoding="utf-8")
             (process_dir / "stack_status.json").write_text(
-                json.dumps(
-                    {
-                        "status": "passed",
-                        "runtimeEnv": "alpha",
-                        "composeProject": "quwoquan_alpha_release_old_1",
-                        "configurationDigest": "sha256:" + "f" * 64,
-                        "imageTransportTag": version,
-                        "imageComposition": {
-                            "imageVersion": version,
-                            "images": {
-                                service: {"ref": ref}
-                                for service, ref in refs.items()
-                            },
-                        },
-                    }
-                ),
+                '{"status":"passed","runtimeEnv":"alpha"}',
                 encoding="utf-8",
             )
-            with (
-                mock.patch.object(
-                    stackctl,
-                    "startup_attempt_path",
-                    return_value=attempt,
-                ),
-                mock.patch.object(
-                    stackctl,
-                    "target_process_dir",
-                    return_value=process_dir,
-                ),
+            with mock.patch.object(
+                stackctl,
+                "load_startup_attempt",
+                return_value={
+                    "schema": "stackctl-local-startup-attempt",
+                    "status": "stopped",
+                    "target": "alpha-local",
+                    "env": "alpha",
+                },
             ):
                 loaded = stackctl._load_gamma_runtime_image_composition(
                     "alpha-local"
                 )
 
-        self.assertEqual(loaded[1], "quwoquan_alpha_release_old_1")
+        self.assertIsNone(loaded)
+
+    def test_runtime_composition_loader_has_no_environment_receipt_fallback(
+        self,
+    ) -> None:
+        source = inspect.getsource(stackctl._load_gamma_runtime_image_composition)
+
+        self.assertNotIn("stack_status.json", source)
+        self.assertNotIn("runtimeEnv", source)
+        self.assertNotIn("startup_attempt_path", source)
 
     def test_gamma_down_rejects_drifted_runtime_receipt(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary_dir:
-            process_dir = Path(temporary_dir)
-            (process_dir / "stack_status.json").write_text(
-                json.dumps(
-                    {
-                        "status": "passed",
-                        "runtimeEnv": "gamma",
-                        "composeProject": "quwoquan_gamma_release_old_1",
-                        "imageTransportTag": "0.1.2",
-                        "imageComposition": {
-                            "imageVersion": "0.1.2",
-                            "images": {},
-                        },
-                    }
-                ),
-                encoding="utf-8",
-            )
-            with (
-                mock.patch.object(
-                    stackctl,
-                    "startup_attempt_path",
-                    return_value=process_dir / "startup_attempt.json",
-                ),
-                mock.patch.object(
-                    stackctl,
-                    "target_process_dir",
-                    return_value=process_dir,
-                ),
-                self.assertRaisesRegex(ValueError, "composition is missing"),
-            ):
-                stackctl._load_gamma_runtime_image_composition("gamma-local")
+        receipt = {
+            "schema": "stackctl-local-startup-attempt",
+            "status": "running",
+            "target": "gamma-local",
+            "env": "gamma",
+            "composeProject": "quwoquan_gamma_release_current_1",
+            "configurationDigest": "sha256:" + "f" * 64,
+            "imageTransportTag": "0.1.2",
+            "imageComposition": {
+                "imageVersion": "0.1.2",
+                "images": {},
+            },
+        }
+        with (
+            mock.patch.object(
+                stackctl,
+                "load_startup_attempt",
+                return_value=receipt,
+            ),
+            self.assertRaisesRegex(ValueError, "composition is missing"),
+        ):
+            stackctl._load_gamma_runtime_image_composition("gamma-local")
 
     def test_gamma_down_materializes_compose_bindings_before_interpolation(
         self,
@@ -1129,7 +1076,7 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
         environment: dict[str, str] = {}
         values = {
             "CONTENT_EMBEDDING_ENDPOINT": (
-                "http://integration-service:18089/v1/embeddings"
+                "https://provider-protocol-substitute:18089/v1/embeddings"
             ),
         }
         with mock.patch.object(
@@ -1293,6 +1240,7 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
             environment_name="beta",
             target_name="beta-local",
             workload="content-release",
+            debug_sms_substitute=True,
         )
         run.assert_not_called()
 
@@ -1593,6 +1541,7 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
             environment="gamma",
             target_name="gamma-local",
             source=environment,
+            debug_local=True,
         )
         self.assertEqual(
             environment["CONTENT_OSS_ENDPOINT"],
@@ -1739,6 +1688,7 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
             environment_name="gamma",
             target_name="gamma-local",
             workload="full",
+            debug_sms_substitute=True,
         )
 
     def test_gamma_build_only_is_retired_from_up(

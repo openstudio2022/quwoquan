@@ -84,6 +84,28 @@ fields:
     api_exposure: read
     ops_exposure: read
     role: authoritative_state
+  - name: completionSequence
+    source: completionSequence
+    type: int64
+    constraints:
+      - NOT_NULL
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: none
+    ops_exposure: read
+    description: 已原子吸收的 AssistantRun 完成事件序列；只由幂等 completion receipt 推进。
+    role: authoritative_state
+  - name: contextSummary
+    source: contextSummary
+    type: AssistantSessionContextSummary
+    constraints:
+      - NULLABLE
+    classification: SENSITIVE
+    log_policy: drop
+    api_exposure: none
+    ops_exposure: drop
+    description: 仅供下一次个人 AssistantRun 冻结的滚动上下文；不包含权限、授权、对象归属或安全策略。
+    role: authoritative_state
   - name: createdAt
     source: createdAt
     type: timestamp
@@ -105,6 +127,18 @@ fields:
     ops_exposure: read
     role: authoritative_state
 types:
+  AssistantSessionContextSummary:
+    description: 由已完成个人 Run 事件推进的结构化滚动摘要；不是 Run checkpoint 或权限快照。
+    fields:
+      - {name: summaryId, source: summaryId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
+      - {name: text, source: text, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: drop, api_exposure: none, ops_exposure: drop}
+      - {name: fromTurnId, source: fromTurnId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read, reference: true}
+      - {name: toTurnId, source: toTurnId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read, reference: true}
+      - {name: turnCount, source: turnCount, type: int, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
+      - {name: currentGoal, source: currentGoal, type: string, constraints: [NULLABLE], classification: SENSITIVE, log_policy: drop, api_exposure: none, ops_exposure: drop}
+      - {name: confirmedFacts, source: confirmedFacts, type: '[]string', constraints: [NULLABLE], classification: SENSITIVE, log_policy: drop, api_exposure: none, ops_exposure: drop}
+      - {name: pendingItems, source: pendingItems, type: '[]string', constraints: [NULLABLE], classification: SENSITIVE, log_policy: drop, api_exposure: none, ops_exposure: drop}
+      - {name: confirmedSlots, source: confirmedSlots, type: object, constraints: [NULLABLE], classification: SENSITIVE, log_policy: drop, api_exposure: none, ops_exposure: drop}
   AssistantSessionListView:
     description: ListAssistantSessions 响应体（owner Session keyset 分页切片）
     fields:

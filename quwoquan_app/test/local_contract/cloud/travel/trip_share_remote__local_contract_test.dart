@@ -18,7 +18,8 @@ void main() {
         CreateTripShareSnapshotRequest(
           tripId: 'trip-1',
           sourceRevisionId: 'revision-3',
-          sourceDigest: 'sha256:timeline',
+          sourceDigest:
+              'sha256:94d192b3a326be1f019b71ef13ea5a367ffe939c5e9a88f1b270e53753d9569a',
           scope: TripShareSnapshotScope.day,
           dayIndex: 1,
           momentIds: const <String>['moment-1'],
@@ -33,7 +34,13 @@ void main() {
       );
       expect(executor.context?.surfaceId, AppUiSurfaces.travelShare.id);
       expect(executor.context?.idempotencyKey, 'share-intent-1');
-      expect(executor.body, containsPair('sourceDigest', 'sha256:timeline'));
+      expect(
+        executor.body,
+        containsPair(
+          'sourceDigest',
+          'sha256:94d192b3a326be1f019b71ef13ea5a367ffe939c5e9a88f1b270e53753d9569a',
+        ),
+      );
       expect(result.visibility, TripShareSnapshotVisibility.public);
     },
   );
@@ -81,12 +88,14 @@ Map<String, Object?> _shareWire() => <String, Object?>{
   'tripId': 'trip-1',
   'sourceRevisionId': 'revision-3',
   'sourceRevisionNumber': 3,
-  'sourceDigest': 'sha256:timeline',
+  'sourceDigest':
+      'sha256:94d192b3a326be1f019b71ef13ea5a367ffe939c5e9a88f1b270e53753d9569a',
   'scope': 'day',
   'dayIndex': 1,
   'momentIds': <Object?>['moment-1'],
   'visibility': 'public',
-  'privacyPolicyDigest': 'sha256:privacy',
+  'privacyPolicyDigest':
+      'sha256:760672367557300130bdf88db43b01f07917475ae4f60ff0b9be95aa78d7e2f1',
   'items': <Object?>[],
   'moments': <Object?>[],
   'contentLinks': <Object?>[],

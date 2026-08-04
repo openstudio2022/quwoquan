@@ -74,7 +74,7 @@ func (s *MongoBehaviorEventStore) ensureIndexes() {
 }
 
 func (s *MongoBehaviorEventStore) ensureClientEventIdIndex(ctx context.Context) error {
-	const indexName = "uq_behavior_events_user_client_event"
+	const indexName = "uq_behavior_events_actor_client_event"
 	_, err := s.coll.Indexes().CreateOne(ctx, mongo.IndexModel{
 		Keys: bson.D{{Key: "userId", Value: 1}, {Key: "clientEventId", Value: 1}},
 		Options: options.Index().

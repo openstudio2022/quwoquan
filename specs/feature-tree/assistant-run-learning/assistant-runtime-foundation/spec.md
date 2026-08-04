@@ -111,8 +111,8 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：仍缺 metadata/codegen 类型化。公开 Run 已收敛为 metadata-owned `AssistantTurnEnvelope`，内部 request context 不再越过 HTTP，但终态只持久化文本/失败，`run artifacts`、stream payload、planner/observation、tool retrieval 与 orchestration 仍有匿名 Map/`dynamic`，无法在 journal TTL 后可靠恢复结构化过程或证明字段安全。
-- 完成判定：先定义并持久化 metadata-owned terminal snapshot（answer、可见 process/citation、failure、selected policy）。随后按 `run artifacts -> turn protocol -> planner/observation -> tool retrieval -> orchestration` 收敛为具名 DTO/sealed type。GetRun/历史恢复与 SSE 使用同一 projection，弱类型棘轮只减不增。
+- 影响或价值：仍缺的实现与验收证据是 `RunItem.payload`、trigger/context/surface/presentation 内部快照及 planner/observation/tool retrieval/orchestration 的匿名 Map/`dynamic` 收敛，以及这些类型在真实后台恢复、重放与压缩链路中的同结构证明；metadata-owned `AssistantRunTerminalSnapshotView` 已以无 TTL owner 存储持久化 answer、可见 process/citation、failure 与 selected policy，GetRun、历史恢复和 journal 过期后的 SSE 终态重放已共用该事实，但长任务中间过程仍无法获得与终态同等级的字段安全证明。
+- 完成判定：按 `run artifacts -> turn protocol -> planner/observation -> tool retrieval -> orchestration` 将剩余弱类型数据收敛为 metadata-owned 具名 DTO/sealed type，并由持久化/重放/压缩使用同一结构；弱类型棘轮只减不增，禁止另建兼容 decoder 或第二 projection。
 - 依赖：assistant metadata schema 与 app codegen。
 
 <a id="open-004"></a>

@@ -2,8 +2,10 @@ package local_contract
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -402,7 +404,13 @@ func TestEventsAreRoutedByTrustedIdentityOnly(t *testing.T) {
 
 	ctx := context.Background()
 	publish := func(channel string, eventType string) {
-		payload, _ := json.Marshal(map[string]any{"type": eventType})
+		event := map[string]any{"type": eventType}
+		if strings.HasPrefix(channel, "rt:rtc:persona:") {
+			event["callId"] = "call-identity"
+			event["payload"] = map[string]any{"callId": "call-identity"}
+			event["timestamp"] = time.Now().UTC().Format(time.RFC3339Nano)
+		}
+		payload, _ := json.Marshal(event)
 		if err := harness.client.Publish(ctx, channel, string(payload)); err != nil {
 			t.Fatalf("publish %s: %v", channel, err)
 		}
@@ -455,35 +463,61 @@ func TestRTCPersonaChannelFiltersDeviceTargetedFrames(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	publish := func(payload map[string]any) {
-		encoded, _ := json.Marshal(payload)
+	publish := func(payload []byte) {
 		if err := harness.client.Publish(
 			ctx,
 			"rt:rtc:persona:persona-shared",
-			string(encoded),
+			string(payload),
 		); err != nil {
 			t.Fatalf("publish persona RTC frame: %v", err)
 		}
 	}
-	publish(map[string]any{
+	const callID = "call-shared"
+	const targetPersonaID = "persona-shared"
+	deliveryIdentity := sha256.Sum256([]byte(callID + "\x00" + targetPersonaID))
+	ringing, _ := json.Marshal(map[string]any{
+		"type":   "call.ringing",
+		"callId": callID,
+		"payload": map[string]any{
+			"callId":          callID,
+			"targetPersonaId": targetPersonaID,
+			"deliveryKey":     fmt.Sprintf("sha256:%x", deliveryIdentity),
+		},
+		"timestamp": time.Now().UTC().Format(time.RFC3339Nano),
+	})
+	targetedRinging, err := runtimemessaging.WrapTargetedEphemeralPayload(
+		runtimemessaging.EphemeralRoutingTarget{
+			PersonaID: "persona-shared",
+			DeviceID:  "device-a",
+		},
+		ringing,
+	)
+	if err != nil {
+		t.Fatalf("wrap device-targeted RTC frame: %v", err)
+	}
+	publish(targetedRinging)
+	legacyFlatRinging, _ := json.Marshal(map[string]any{
 		"type":            "call.ringing",
+		"callId":          "call-legacy",
 		"targetPersonaId": "persona-shared",
 		"deviceId":        "device-a",
-		"deliveryKey":     "sha256:device-a",
 	})
-	publish(map[string]any{
-		"type":    "call.presentation_cancelled",
-		"callId":  "call-shared",
-		"eventId": "event-cancel",
+	publish(legacyFlatRinging)
+	cancellation, _ := json.Marshal(map[string]any{
+		"type":      "call.answered",
+		"callId":    "call-shared",
+		"payload":   map[string]any{"callId": "call-shared", "userId": "persona-shared"},
+		"timestamp": time.Now().UTC().Format(time.RFC3339Nano),
 	})
+	publish(cancellation)
 
-	if frame := readFrame(t, connA); frame["deviceId"] != "device-a" {
-		t.Fatalf("device A must receive its targeted frame, got %v", frame)
+	if frame := readFrame(t, connA); frame["type"] != "call.ringing" || frame["deviceId"] != nil {
+		t.Fatalf("device A must receive routing-free targeted frame, got %v", frame)
 	}
-	if frame := readFrame(t, connA); frame["type"] != "call.presentation_cancelled" {
+	if frame := readFrame(t, connA); frame["type"] != "call.answered" {
 		t.Fatalf("device A cancellation missing: %v", frame)
 	}
-	if frame := readFrame(t, connB); frame["type"] != "call.presentation_cancelled" {
+	if frame := readFrame(t, connB); frame["type"] != "call.answered" {
 		t.Fatalf("device B received another device's targeted frame: %v", frame)
 	}
 }

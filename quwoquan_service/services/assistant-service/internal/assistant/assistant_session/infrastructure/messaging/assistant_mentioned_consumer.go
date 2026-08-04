@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	runtimemessaging "quwoquan_service/runtime/messaging"
@@ -32,6 +33,11 @@ type AssistantMentionedConsumer struct {
 	handler   AssistantMentionHandler
 	consumer  string
 	logger    *slog.Logger
+	now       func() time.Time
+
+	healthMu           sync.RWMutex
+	lastSuccessfulPoll time.Time
+	lastFailure        error
 }
 
 // NewAssistantMentionedConsumerWithTransport consumes the object-owned stream
@@ -55,6 +61,7 @@ func NewAssistantMentionedConsumerWithTransport(
 		handler:   handler,
 		consumer:  consumer,
 		logger:    logger,
+		now:       time.Now,
 	}
 }
 
@@ -70,7 +77,12 @@ func (c *AssistantMentionedConsumer) EnsureGroup(ctx context.Context) error {
 	)
 }
 
-func (c *AssistantMentionedConsumer) ProcessOnce(ctx context.Context) (int, error) {
+func (c *AssistantMentionedConsumer) ProcessOnce(
+	ctx context.Context,
+) (processed int, resultErr error) {
+	defer func() {
+		c.recordPoll(resultErr)
+	}()
 	if c == nil || c.transport == nil || c.handler == nil {
 		return 0, fmt.Errorf("assistant mentioned consumer not configured")
 	}
@@ -90,7 +102,6 @@ func (c *AssistantMentionedConsumer) ProcessOnce(ctx context.Context) (int, erro
 	if err != nil {
 		return 0, err
 	}
-	processed := 0
 	for _, msg := range messages {
 		dedupKey := assistantMentionDedupKey(msg)
 		if dedupKey != "" {
@@ -171,11 +182,38 @@ func (c *AssistantMentionedConsumer) ProcessOnce(ctx context.Context) (int, erro
 	return processed, nil
 }
 
+func (c *AssistantMentionedConsumer) Healthy(
+	_ context.Context,
+	maxStaleness time.Duration,
+) error {
+	if c == nil {
+		return fmt.Errorf("assistant mentioned consumer is not configured")
+	}
+	if maxStaleness <= 0 {
+		maxStaleness = 10 * time.Second
+	}
+	c.healthMu.RLock()
+	lastSuccessfulPoll := c.lastSuccessfulPoll
+	lastFailure := c.lastFailure
+	c.healthMu.RUnlock()
+	if lastFailure != nil {
+		return lastFailure
+	}
+	if lastSuccessfulPoll.IsZero() {
+		return fmt.Errorf("assistant mentioned consumer has not completed a poll")
+	}
+	if c.now().UTC().Sub(lastSuccessfulPoll) > maxStaleness {
+		return fmt.Errorf("assistant mentioned consumer heartbeat is stale")
+	}
+	return nil
+}
+
 func (c *AssistantMentionedConsumer) Run(ctx context.Context, interval time.Duration) {
 	if interval <= 0 {
 		interval = 500 * time.Millisecond
 	}
 	if err := c.EnsureGroup(ctx); err != nil {
+		c.recordPoll(err)
 		c.logger.Error("assistant mentioned consumer ensure group failed", "err", err)
 		return
 	}
@@ -196,6 +234,20 @@ func (c *AssistantMentionedConsumer) Run(ctx context.Context, interval time.Dura
 		case <-ticker.C:
 		}
 	}
+}
+
+func (c *AssistantMentionedConsumer) recordPoll(err error) {
+	if c == nil {
+		return
+	}
+	c.healthMu.Lock()
+	defer c.healthMu.Unlock()
+	if err != nil {
+		c.lastFailure = err
+		return
+	}
+	c.lastSuccessfulPoll = c.now().UTC()
+	c.lastFailure = nil
 }
 
 func (c *AssistantMentionedConsumer) processMessage(

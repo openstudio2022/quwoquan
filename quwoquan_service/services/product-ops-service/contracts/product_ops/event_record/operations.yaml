@@ -8,6 +8,12 @@ externalDependencies:
   port: ObservabilityLogSinkPort
   operations: [appendEvents]
   conformance: observability_log_sink
+  adapterContracts:
+    ext.obs.elasticsearch:
+      endpointEnvs: {endpoint: PRODUCT_OPS_ELASTICSEARCH_ENDPOINT}
+      secretRefs: []
+      defaultTimeoutMs: 5000
+      allowEnvironmentOverrides: [secretRefs, timeoutMs]
 api_routes:
 - method: POST
   path: /ops/events
@@ -15,6 +21,7 @@ api_routes:
   actor: persona_or_device
   request_entity: EventRecordBatchRequest
   request_body_kind: object
+  response_entity: EventRecordBatchReceipt
   response_fields:
   - acceptedCount
   - duplicateBatch
@@ -201,6 +208,7 @@ api_routes:
   actor: persona_or_device
   request_entity: RuntimeLogBatchRequest
   request_body_kind: object
+  response_entity: EventRecordBatchReceipt
   response_fields:
   - acceptedCount
   - duplicateBatch
@@ -250,6 +258,12 @@ api_routes:
   path: /ops/startup-events
   operation: ReportStartupEventBatch
   actor: device
+  request_entity: ReportStartupEventBatchCommand
+  request_body_kind: object
+  request_bindings:
+    header:
+    - {name: X-Qwq-Startup-Proof, field: proof, required: true}
+  response_entity: StartupTelemetryBatchReceipt
   application:
     kind: command
     facet: StartupTelemetryCommandFacet
@@ -320,10 +334,7 @@ api_routes:
     - ops.telemetry.read
     ownership_policy: ops_telemetry_reader
   commercial:
-    status: blocked
-    block_reason: Alpha/Beta/Gamma/Prod Elasticsearch aggregate evidence is required before commercial readiness
-    gap_id: OPS_EVENT_RECORD_PROVIDER_EVIDENCE
-    target_story: app-cloud-business-object-commercial-closure
+    status: ready
   reliability:
     timeout_ms: 5000
     cancellation: supported

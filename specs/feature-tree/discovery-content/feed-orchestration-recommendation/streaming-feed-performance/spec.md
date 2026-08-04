@@ -109,7 +109,7 @@
 - canonical error：`quwoquan_service/services/content-service/contracts/content/post/errors.yaml`
 - canonical cache：[`runtime-client-foundation/local-cache-architecture`](../../../runtime/runtime-client-foundation/local-cache-architecture/spec.md)
 - ranked window Redis：`quwoquan_service/contracts/metadata/_shared/redis_keyspace.yaml`
-- 首页频道远端投影：`quwoquan_service/services/content-service/contracts/content/post/projections/content_app_config_client.yaml`
+- 首页频道远程配置：`quwoquan_service/services/content-service/contracts/content/post/fields.yaml` 的 `AppConfigSlice` / `ContentAppConfigHomeChannel`，由同对象 `operations.yaml` 的 `GetAppConfig` 唯一公开 query 交付
 - typed telemetry：`quwoquan_service/services/product-ops-service/contracts/product_ops/event_record/event_catalog.yaml`
 - SLO/alert：`quwoquan_service/services/content-service/observability/slo/recommendation_slo.yaml`
 - runtime resilience：[`runtime-governance/resilience-policy-engine`](../../../runtime/runtime-governance/resilience-policy-engine/spec.md)
@@ -197,7 +197,7 @@
 - 优先级：`P0`
 - 准出影响：`block`
 - 影响或价值：仍缺真机长滚动像素/QoE、trim 后跨 surface 互动/viewer 组合证据和同候选版本 product-ops readback，因此本 OPEN 继续阻断 READY。typed 首屏/翻页、清洁/卡顿帧批次、图片缓存、视频 controller/队列与 QoE、ANR/内存压力的生产 reporter 已接入；真实生产滚动容器已由 Provider 驱动 8 页并实际越过 6 页 retained 边界，相关 Provider/Widget local_contract 已通过。超出 retained 页后的稳定远端反向回补已落地。content-service 在返回 next cursor 前原子追加 `FeedDeliveryPage`，下一页返回 previous cursor 与 `paginationExpiresAt`。AEAD scope 已绑定 `pageSize`，回放不调用 recall/list，只原序 bulk hydrate 当前可见 Post，删除项不补位，对象卡使用已交付快照重基准。App 的 4 页 resident/6 页 retained deque 在 leading 耗尽后以独立 prepend generation 回取，远端页只与 retained identity 去重。QuerySnapshot 持久化 previous/next/expiry/session，过期或跨 session 仅回显内容。Contract decoder 强制 cursor 与 expiry 成对，append 也会在用户动作入口从 resident window 重读 live cursor，长时间空闲后不会发送状态快照里的过期 continuation。六页边界回退再前进、删除缩页、篡改/跨 actor/session/route/pageSize、原子 quota/payload/TTL 均有 local_contract。
-- 当前边界：首页 `GetFeed` operation 已声明 default/max=20 与 2 MiB live response admission，ContractGraph 已生成到服务 binder、App policy 与 transport；stream chunk 越界在完整缓冲/JSON decode 前取消。成功与非 2xx JSON 共用有界 decoder，logical active、不可取消 physical work、pending task 与 queued bytes 分别有硬限。legacy 非 generated JSON verbs 不属于本 Story 的首页主链，但其治理仍由 runtime-client-foundation 跟踪。
+- 当前边界：首页 `GetFeed` operation 已声明 default/max=20 与 2 MiB live response admission，ContractGraph 已生成到服务 binder、App policy 与 transport；stream chunk 越界在完整缓冲/JSON decode 前取消。成功与非 2xx JSON 共用有界 decoder，logical active、不可取消 physical work、pending task 与 queued bytes 分别有硬限。非 generated JSON verbs 不属于本 Story 的首页主链，但其治理仍由 runtime-client-foundation 跟踪。
 - 完成判定：`GWT-002`、`GWT-003` 与 `GWT-006` 的窗口/锚点 local_contract、长滚动 widget 及 product-ops readback 证据通过。
 
 <a id="open-003"></a>

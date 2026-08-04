@@ -8,10 +8,20 @@ externalDependencies:
   port: ConversationSurfaceAuthorityReaderPort
   operations: [listMembers]
   conformance: chat_conversation_surface_authority
+  adapterContracts:
+    ext.first_party.http_authority:
+      endpointEnvs: {base: ASSISTANT_CHAT_BASE_URL}
+      secretRefs: []
+      defaultTimeoutMs: 3000
 - capability: circle.membership.self.read
   port: CircleSurfaceAuthorityReaderPort
   operations: [getMyCircleMembership]
   conformance: circle_surface_authority
+  adapterContracts:
+    ext.first_party.http_authority:
+      endpointEnvs: {base: ASSISTANT_CIRCLE_BASE_URL}
+      secretRefs: []
+      defaultTimeoutMs: 3000
 api_routes:
 - method: GET
   path: /assistant/skill-placements/{surfaceKind}/{surfaceId}

@@ -11,6 +11,7 @@ import 'package:quwoquan_app/ui/circle/pages/home_circles_hub_page.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../typed_circle_query_test_double.dart';
+import '../../../../support/cloud_services/object_doubles/circle/circle_contract_test_builders.dart';
 
 const Duration _kCirclesPageSettleTimeout = Duration(seconds: 1);
 
@@ -25,8 +26,8 @@ Future<void> _circlesPumpSettled(WidgetTester tester) async {
 
 CircleDiscoveryFeedPageSlice _circlesPageFixture() {
   return CircleDiscoveryFeedPageSlice(
-    circles: <CircleProjection>[
-      CircleProjection(
+    circles: <Circle>[
+      buildCircleContract(
         circleId: 'fixture-circle-campus',
         name: '校园同行',
         ownerId: 'owner-campus',
@@ -35,7 +36,7 @@ CircleDiscoveryFeedPageSlice _circlesPageFixture() {
         memberCount: 12,
       ),
     ],
-    items: const <CircleFeedPostProjection>[],
+    items: const <CircleFeedItemView>[],
   );
 }
 
@@ -180,8 +181,8 @@ void main() {
         _scopedApp(
           discoveryFeedQuery: CircleDiscoveryFeedQueryTestDouble(
             (_) => CircleDiscoveryFeedPageSlice(
-              circles: const <CircleProjection>[],
-              items: const <CircleFeedPostProjection>[],
+              circles: const <Circle>[],
+              items: const <CircleFeedItemView>[],
             ),
           ),
         ),

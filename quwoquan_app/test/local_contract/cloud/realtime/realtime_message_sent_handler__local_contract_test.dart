@@ -5,6 +5,7 @@ import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import '../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_message_handler.dart';
+import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_record.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_message_provider.dart';
@@ -14,6 +15,14 @@ void main() {
     late ProviderContainer container;
     await tester.pumpWidget(
       ProviderScope(
+        overrides: [
+          chatRepositoryCompositionProvider.overrideWithValue(
+            MockChatRepository(),
+          ),
+          activePersonaContextLoaderProvider.overrideWithValue(
+            _activePersonaContext,
+          ),
+        ],
         child: Consumer(
           builder: (context, ref, _) {
             container = ProviderScope.containerOf(context);
@@ -50,7 +59,7 @@ void main() {
 
     final messages = container.read(chatMessageProvider('conv_card')).messages;
     final message = messages.singleWhere((item) => item.id == 'msg_card');
-    expect(message.card?.kind, 'content_post');
+    expect(message.card?.kind.wireName, 'content_post');
     expect(message.card?.attributes.single.value, 'post_001');
   });
 
@@ -61,6 +70,9 @@ void main() {
       ProviderScope(
         overrides: [
           chatRepositoryCompositionProvider.overrideWithValue(repository),
+          activePersonaContextLoaderProvider.overrideWithValue(
+            _activePersonaContext,
+          ),
         ],
         child: Consumer(
           builder: (context, ref, _) {
@@ -128,6 +140,14 @@ void main() {
     late ProviderContainer container;
     await tester.pumpWidget(
       ProviderScope(
+        overrides: [
+          chatRepositoryCompositionProvider.overrideWithValue(
+            MockChatRepository(),
+          ),
+          activePersonaContextLoaderProvider.overrideWithValue(
+            _activePersonaContext,
+          ),
+        ],
         child: Consumer(
           builder: (context, ref, _) {
             container = ProviderScope.containerOf(context);
@@ -158,16 +178,25 @@ void main() {
   });
 }
 
+Future<ActivePersonaContextViewData> _activePersonaContext() async =>
+    const ActivePersonaContextViewData(
+      personaId: 'persona_test',
+      ownerUserId: 'account_test',
+      subjectType: 'persona',
+      displayName: '测试分身',
+      avatarUrl: '',
+    );
+
 class _CountingMessageRepository extends MockChatRepository {
   int listMessagesCallCount = 0;
 
   @override
-  Future<List<ChatMessageDto>> listMessages({
+  Future<List<ChatMessageViewData>> listMessages({
     required String conversationId,
     String? before,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
     listMessagesCallCount += 1;
-    return const <ChatMessageDto>[];
+    return const <ChatMessageViewData>[];
   }
 }

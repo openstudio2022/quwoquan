@@ -9,10 +9,10 @@ import (
 	"time"
 
 	runapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/orchestration"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
 	rundomain "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
+	assistant "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/model"
 	pageapplication "quwoquan_service/services/assistant-service/internal/assistant/page_context/application"
 	pagemodel "quwoquan_service/services/assistant-service/internal/assistant/page_context/domain/model"
 	assistantruntest "quwoquan_service/services/assistant-service/tests/support/assistantrun"
@@ -55,12 +55,14 @@ func TestCanonicalPageContextEntersTheNextTurnPrompt(t *testing.T) {
 	runtime := assistantruntest.NewMemoryRuntime()
 	commands := runruntime.NewCommandService(
 		runtime,
-		runruntime.SessionAuthorizerFunc(func(context.Context, string, string) error { return nil }),
+		runruntime.SessionResolverFunc(func(context.Context, string, string) (runruntime.SessionContinuity, error) {
+			return runruntime.SessionContinuity{}, nil
+		}),
 		testSkillPackageIdentityResolver(),
 		runruntime.AllowAllStartAccessPolicy{},
 		func() time.Time { return now },
 		nil,
-		testRunPolicyResolver(),
+		runruntime.WithPolicyResolver(testRunPolicyResolver()),
 	)
 	resolver := runapplication.NewContextResolver(
 		runapplication.CurrentPageContextReaderFunc(func(
@@ -130,12 +132,14 @@ func TestMissingPageContextCannotEnterPrompt(t *testing.T) {
 	runtime := assistantruntest.NewMemoryRuntime()
 	commands := runruntime.NewCommandService(
 		runtime,
-		runruntime.SessionAuthorizerFunc(func(context.Context, string, string) error { return nil }),
+		runruntime.SessionResolverFunc(func(context.Context, string, string) (runruntime.SessionContinuity, error) {
+			return runruntime.SessionContinuity{}, nil
+		}),
 		testSkillPackageIdentityResolver(),
 		runruntime.AllowAllStartAccessPolicy{},
 		nil,
 		nil,
-		testRunPolicyResolver(),
+		runruntime.WithPolicyResolver(testRunPolicyResolver()),
 	)
 	requested := map[string]any{
 		"capturedAt":    "2026-08-02T00:00:00Z",

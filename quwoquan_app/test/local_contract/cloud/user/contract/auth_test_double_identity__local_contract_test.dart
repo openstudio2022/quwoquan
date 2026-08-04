@@ -120,7 +120,7 @@ void main() {
     final binding = await credentialWriter.bindPhoneCredential(
       BindPhoneCredentialCommand(phone: '18013813909', otpCode: '000000'),
     );
-    expect(binding.credentialType, 'phone');
+    expect(binding.credentialType, CredentialType.phone);
     expect(binding.isActive, isTrue);
 
     final completed = await credentialWriter.completeFederatedPhoneBinding(
@@ -141,7 +141,7 @@ void main() {
     final credentials = await credentialQuery.listCredentials(
       const ListCredentialsQuery(),
     );
-    expect(credentials.items.single.credentialType, 'phone');
-    expect(credentials.items.single.displayLabel, '180****3909');
+    expect(credentials.credentials.single.credentialType, CredentialType.phone);
+    expect(credentials.credentials.single.displayLabel, '180****3909');
   });
 }

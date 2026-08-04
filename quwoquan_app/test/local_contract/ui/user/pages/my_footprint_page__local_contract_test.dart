@@ -6,6 +6,7 @@ import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/footprint_repository.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/errors/ui_error_models.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
@@ -72,7 +73,7 @@ void main() {
     expect(behaviorRepo.recorded, hasLength(1));
     final event = behaviorRepo.recorded.single;
     expect(event.contentId, 'post_a');
-    expect(event.action, BehaviorAction.click);
+    expect(event.action, BehaviorEventType.click);
     expect(event.referralSource, ReferralSource.authorProfile);
   });
 
@@ -215,7 +216,10 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
 
     expect(find.byType(AppPageErrorState), findsOneWidget);
-    expect(find.text(SearchText.recoveryReloadLaterTitle), findsOneWidget);
+    final errorState = tester.widget<AppPageErrorState>(
+      find.byType(AppPageErrorState),
+    );
+    expect(errorState.semantic.primaryAction?.type, UiErrorActionType.retry);
   });
 
   testWidgets('我的足迹：空列表展示空态文案', (tester) async {

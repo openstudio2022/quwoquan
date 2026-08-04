@@ -1,10 +1,8 @@
 import "package:quwoquan_app/cloud/services/chat/chat_view_data.dart";
 import "package:quwoquan_cloud_contracts/generated/chat_contracts.dart";
-import 'package:quwoquan_app/cloud/chat/models/chat_conversation_timestamp_dto.dart';
-import 'package:quwoquan_app/cloud/chat/models/chat_message_receipt_dto.dart';
 import 'package:quwoquan_app/cloud/chat/models/conversation_dto.dart';
 import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
-import 'package:quwoquan_app/cloud/chat/models/sync_response.dart';
+import 'package:quwoquan_app/cloud/chat/models/message_sync_view_data.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 
@@ -81,7 +79,7 @@ abstract class ChatConversationRepository {
   });
 
   // ── 会话时间戳索引（端云同步） ─────────────────────────────────────────────
-  Future<List<ChatConversationTimestampDto>> getConversationTimestamps();
+  Future<List<ChatConversationTimestamp>> getConversationTimestamps();
 
   Future<List<ConversationViewData>> batchGetConversations(List<String> ids);
 }
@@ -102,7 +100,7 @@ abstract class ChatMessageRepository {
     required String messageId,
   });
 
-  Future<SyncResponse> syncMessages({
+  Future<ChatMessageSyncViewData> syncMessages({
     required String conversationId,
     required int lastSeq,
     int limit = CloudApiDefaults.syncMessagesLimit,
@@ -114,7 +112,7 @@ abstract class ChatMessageRepository {
     required String messageId,
   });
 
-  Future<List<ChatMessageReceiptDto>> getReceipts({
+  Future<List<ChatMessageReceipt>> getReceipts({
     required String conversationId,
     required String messageId,
   });

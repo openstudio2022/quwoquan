@@ -1,11 +1,4 @@
-import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_evidence_item.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_evidence_page.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_item.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_action_hint.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_representative_actor.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_visual.g.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// Constructs a complete server-authored impact fact for UI tests.
 ///
@@ -57,7 +50,7 @@ AuthorImpactItem authorImpactItemFixture({
     evidenceSnapshotId: evidenceSnapshotId,
     countObjectKind: countObjectKind,
     iconKey: iconKey,
-    freshAt: freshAt,
+    freshAt: DateTime.parse(freshAt),
     timeBucket: timeBucket,
     lifecycleState: lifecycleState,
     previousStrength: previousStrength,
@@ -84,7 +77,7 @@ AuthorImpactEvidenceItem authorImpactEvidenceItemFixture({
     helpType: helpType,
     action: action,
     intersectionDimension: intersectionDimension,
-    occurredAt: occurredAt,
+    occurredAt: DateTime.parse(occurredAt),
     summaryText: summaryText,
     sampleVisual: sampleVisual,
     representativeActor: representativeActor,

@@ -108,14 +108,6 @@ func buildExternalProviders(
 	map[string]reliabletask.ProviderPolicy,
 	error,
 ) {
-	var err error
-	cfg, err = materializeReleaseExternalInteractionBindings(
-		cfg,
-		runtimeconfig.EnvRuntimeConfigProvider{},
-	)
-	if err != nil {
-		return nil, nil, err
-	}
 	providers := map[string]reliabletask.ExternalProvider{}
 	policies := map[string]reliabletask.ProviderPolicy{}
 	smsCfg := cfg.Integration.ExternalInteraction.SMS
@@ -166,10 +158,24 @@ func buildExternalProviders(
 	}
 	pushTimeout := time.Duration(pushCfg.TimeoutMs) * time.Millisecond
 	const pushDispatchProviderName = "push_dispatch"
-	if mode := strings.TrimSpace(pushCfg.Mode); mode == "local_recorder" {
-		pushProvider, err := pushruntime.NewProvider(pushapp.LocalRecorderPushProvider{})
+	if mode := strings.TrimSpace(pushCfg.Mode); mode == "protocol_substitute" {
+		protocolProvider, err := pushprovider.NewProtocolSubstitutePushProvider(
+			pushCfg.Endpoint,
+			client,
+			pushTimeout,
+		)
 		if err != nil {
-			return nil, nil, fmt.Errorf("local push delivery adapter init failed: %w", err)
+			return nil, nil, fmt.Errorf(
+				"push protocol substitute adapter init failed: %w",
+				err,
+			)
+		}
+		pushProvider, err := pushruntime.NewProvider(protocolProvider)
+		if err != nil {
+			return nil, nil, fmt.Errorf(
+				"push protocol substitute runtime adapter init failed: %w",
+				err,
+			)
 		}
 		providers[pushDispatchProviderName] = pushProvider
 		policies[reliabletask.ExternalInteractionOperationPush] = reliabletask.ProviderPolicy{

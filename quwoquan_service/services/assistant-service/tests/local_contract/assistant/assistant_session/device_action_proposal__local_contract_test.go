@@ -8,17 +8,21 @@ import (
 
 	runerrors "quwoquan_service/services/assistant-service/generated/assistant/assistant_run"
 	generated "quwoquan_service/services/assistant-service/generated/assistant/assistant_session"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/orchestration"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
-	toolpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/tool"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/ports"
+	toolpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/tool"
+	assistant "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/model"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/ports"
 	assistantruntest "quwoquan_service/services/assistant-service/tests/support/assistantrun"
 	"quwoquan_service/services/assistant-service/tests/support/skillfixture"
 )
 
 type calendarDeviceActionModel struct {
 	calls int
+}
+
+func (*calendarDeviceActionModel) ModelExecutionCapabilities() orchestration.ModelExecutionCapabilities {
+	return durableTestModelCapabilities()
 }
 
 type calendarDeviceActionSkillRuntime struct{}
@@ -100,6 +104,7 @@ func TestToolBoundaryRechecksDynamicSkillAccessBeforeExecution(t *testing.T) {
 	model := &calendarDeviceActionModel{}
 	tools := &countingDeviceActionTools{}
 	revoked := errors.New("shared Skill placement was revoked")
+	checks := 0
 	runtime := orchestration.ReactRuntime{
 		Model: model,
 		Tools: tools,
@@ -110,6 +115,10 @@ func TestToolBoundaryRechecksDynamicSkillAccessBeforeExecution(t *testing.T) {
 			string,
 			toolpkg.Metadata,
 		) error {
+			checks++
+			if checks == 1 {
+				return nil
+			}
 			return revoked
 		},
 	}
@@ -125,8 +134,8 @@ func TestToolBoundaryRechecksDynamicSkillAccessBeforeExecution(t *testing.T) {
 			MaxToolCalls: 1,
 		},
 	)
-	if !errors.Is(err, revoked) || tools.executions != 0 {
-		t.Fatalf("error=%v tool executions=%d", err, tools.executions)
+	if !errors.Is(err, revoked) || tools.executions != 0 || checks != 2 {
+		t.Fatalf("error=%v tool executions=%d policy checks=%d", err, tools.executions, checks)
 	}
 }
 
@@ -138,6 +147,7 @@ func TestAgentLoopProjectsCanonicalConnectorCapabilityFailure(t *testing.T) {
 		nil,
 	)
 	loop.Catalog = skillfixture.Loader{}
+	checks := 0
 	loop.ToolAccess = orchestration.ToolExecutionAccessPolicyFunc(func(
 		context.Context,
 		assistant.AssistantTurn,
@@ -145,6 +155,12 @@ func TestAgentLoopProjectsCanonicalConnectorCapabilityFailure(t *testing.T) {
 		string,
 		toolpkg.Metadata,
 	) error {
+		checks++
+		// calendar_task exposes app_search and calendar_create_reminder. Both
+		// pass the planning boundary; revocation lands before execution.
+		if checks <= 2 {
+			return nil
+		}
 		return runerrors.AppErrorFromConnectorCapabilityRequired("calendar connection revoked")
 	})
 	frozen := testFrozenPolicySelection("assistant-default", "calendar_task", "calendar_task")
@@ -160,8 +176,8 @@ func TestAgentLoopProjectsCanonicalConnectorCapabilityFailure(t *testing.T) {
 	if failure == nil || failure.Code != runerrors.ErrConnectorCapabilityRequired.Error() {
 		t.Fatalf("failure=%+v", failure)
 	}
-	if tools.executions != 0 {
-		t.Fatalf("revoked capability executed tool %d time(s)", tools.executions)
+	if tools.executions != 0 || checks != 3 {
+		t.Fatalf("revoked capability executed tool %d time(s), checks=%d", tools.executions, checks)
 	}
 }
 
@@ -172,26 +188,13 @@ type countingDeviceActionTools struct {
 func (tools *countingDeviceActionTools) ToolMetadata(
 	toolName string,
 ) (toolpkg.Metadata, bool) {
-	if toolName != "calendar_create_reminder" {
-		return toolpkg.Metadata{}, false
-	}
-	return toolpkg.CalendarCreateReminderMetadata(), true
+	return toolpkg.LookupCanonicalMetadata(toolName)
 }
 
 func (tools *countingDeviceActionTools) ModelToolDeclarations(
 	allowed []string,
 ) []ports.ModelToolDefinition {
-	definitions := make([]ports.ModelToolDefinition, 0, len(allowed))
-	for _, name := range allowed {
-		definitions = append(definitions, ports.ModelToolDefinition{
-			Name: name,
-			Parameters: map[string]any{
-				"type":                 "object",
-				"additionalProperties": true,
-			},
-		})
-	}
-	return definitions
+	return canonicalTestModelToolDefinitions(allowed)
 }
 
 func (tools *countingDeviceActionTools) Execute(
@@ -231,18 +234,18 @@ func TestCalendarContinuationUsesRunIdentityAndRequiresNativeExecutionReceipt(
 	runtime := assistantruntest.NewMemoryRuntime()
 	commands := runruntime.NewCommandService(
 		runtime,
-		runruntime.SessionAuthorizerFunc(func(
+		runruntime.SessionResolverFunc(func(
 			context.Context,
 			string,
 			string,
-		) error {
-			return nil
+		) (runruntime.SessionContinuity, error) {
+			return runruntime.SessionContinuity{}, nil
 		}),
 		testSkillPackageIdentityResolver(),
 		runruntime.AllowAllStartAccessPolicy{},
 		time.Now,
 		nil,
-		runruntime.PolicyResolverFunc(func(
+		runruntime.WithPolicyResolver(runruntime.PolicyResolverFunc(func(
 			_ context.Context,
 			policyID string,
 			_ string,
@@ -258,10 +261,9 @@ func TestCalendarContinuationUsesRunIdentityAndRequiresNativeExecutionReceipt(
 			)
 			selection.Template.AllowedTools = []string{"calendar_create_reminder"}
 			return selection, err
-		}),
+		})),
 	)
-	registry := toolpkg.BaseRegistry()
-	registry.RegisterDeviceAction(toolpkg.CalendarCreateReminderMetadata())
+	registry := canonicalTestToolRegistry(nil)
 	model := &calendarDeviceActionModel{}
 	loop := orchestration.NewAgentLoop(
 		calendarDeviceActionSkillRuntime{},
@@ -294,7 +296,8 @@ func TestCalendarContinuationUsesRunIdentityAndRequiresNativeExecutionReceipt(
 		RequestedSkillID:  "calendar_task",
 		RequestedDomainID: "calendar_task",
 		SurfaceCapabilities: map[string]any{
-			"surfaceId": "assistant_personal",
+			"surfaceId":     "assistant_personal",
+			"viewportClass": "any",
 			"supportedNodeKinds": []string{
 				"confirmation_card",
 				"comparison_table",

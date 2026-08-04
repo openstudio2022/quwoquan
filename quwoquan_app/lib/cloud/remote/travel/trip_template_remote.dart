@@ -14,6 +14,17 @@ final class RemoteTripTemplateFacet implements TripTemplateFacet {
   final TripShareInvocationContextFactory invocationContext;
 
   @override
+  Future<TripPlanTemplate> getTemplate(GetTripPlanTemplateQuery query) {
+    return client.travelTripPlanTemplateGetTripPlanTemplate(
+      query,
+      context: invocationContext(
+        AppUiSurfaces.travelTemplates,
+        TravelRequestPageIds.getTripPlanTemplate,
+      ),
+    );
+  }
+
+  @override
   Future<TripPlanTemplate> createTemplate(
     CreateTripPlanTemplateRequest request, {
     required String idempotencyKey,

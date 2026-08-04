@@ -31,7 +31,7 @@ func TestBuildDerivesClientContractFromCanonicalResponseEntity(t *testing.T) {
 				LocalID:        "GetAssistantRun",
 				Domain:         "assistant",
 				ObjectID:       "assistant.assistant_run",
-				ResponseEntity: "AssistantRunEnvelope",
+				ResponseEntity: "AssistantRunEnvelopeWire",
 			},
 			{
 				ID:             "assistant.assistant_run.StreamAssistantRunEvents",
@@ -68,7 +68,7 @@ func TestBuildDerivesClientContractFromCanonicalResponseEntity(t *testing.T) {
 		},
 		Documents: []ast.SourceDocument{
 			{
-				Path: "assistant/assistant_run_envelope/schema.yaml",
+				Path: "assistant/assistant_run/schema.yaml",
 				Content: json.RawMessage(
 					`{"contract":"assistant_run_envelope","dart_class":"AssistantRunEnvelopeWire"}`,
 				),

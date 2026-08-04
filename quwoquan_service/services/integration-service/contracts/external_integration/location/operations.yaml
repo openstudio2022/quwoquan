@@ -9,6 +9,15 @@ externalDependencies:
     port: LocationLookupPort
     operations: [nearby, search]
     conformance: location_lookup
+    adapterContracts:
+      ext.map.protocol_fixture:
+        endpointEnvs: {base: INTEGRATION_LOCATION_FIXTURE_BASE_URL}
+        secretRefs: []
+        defaultTimeoutMs: 1200
+      ext.map.baidu:
+        endpointEnvs: {base: INTEGRATION_LOCATION_BAIDU_BASE_URL}
+        secretRefs: [INTEGRATION_LOCATION_BAIDU_AK]
+        defaultTimeoutMs: 1200
 response_list_key: items
 api_routes:
   - method: GET

@@ -112,14 +112,14 @@ func TestSnapshotActivationPreventsStagedAndOldLeaks(t *testing.T) {
 	}
 }
 
-func TestSnapshotIdentityMigrationDropsLegacyGlobalTagRefIndex(t *testing.T) {
+func TestSnapshotIdentityMigrationDropsRetiredGlobalTagRefIndex(t *testing.T) {
 	cleanCollections(t)
 	ctx := context.Background()
 	if _, err := mongoDB.Collection("tag_nodes").Indexes().CreateOne(ctx, mongo.IndexModel{
 		Keys:    bson.D{{Key: "tagRef", Value: 1}},
 		Options: options.Index().SetName("idx_tag_ref").SetUnique(true),
 	}); err != nil {
-		t.Fatalf("create legacy global index: %v", err)
+		t.Fatalf("create retired global index: %v", err)
 	}
 	if _, err := mongoDB.Collection("tag_nodes").InsertOne(ctx, bson.M{
 		"tagRef": "Topic/historical-only",
@@ -140,12 +140,12 @@ func TestSnapshotIdentityMigrationDropsLegacyGlobalTagRefIndex(t *testing.T) {
 	if err != nil || count != 2 {
 		t.Fatalf("migration must preserve both snapshots, count=%d err=%v", count, err)
 	}
-	legacyCount, err := mongoDB.Collection("tag_nodes").CountDocuments(ctx, bson.M{
+	retiredCount, err := mongoDB.Collection("tag_nodes").CountDocuments(ctx, bson.M{
 		"tagRef":    "Topic/historical-only",
 		"releaseId": bson.M{"$exists": false},
 	})
-	if err != nil || legacyCount != 1 {
-		t.Fatalf("migration must preserve unversioned history, count=%d err=%v", legacyCount, err)
+	if err != nil || retiredCount != 1 {
+		t.Fatalf("migration must preserve unversioned history, count=%d err=%v", retiredCount, err)
 	}
 }
 

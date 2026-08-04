@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show Circle;
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
@@ -24,8 +25,8 @@ double _myCirclesRailHeight(BuildContext context) {
 }
 
 class MyCirclesRail extends StatelessWidget {
-  final List<CircleDto> circles;
-  final Function(CircleDto) onCircleTap;
+  final List<Circle> circles;
+  final ValueChanged<Circle> onCircleTap;
 
   const MyCirclesRail({
     super.key,
@@ -55,7 +56,7 @@ class MyCirclesRail extends StatelessWidget {
     );
   }
 
-  Widget _buildCircleItem(CircleDto circle) {
+  Widget _buildCircleItem(Circle circle) {
     return GestureDetector(
       onTap: () => onCircleTap(circle),
       child: Column(

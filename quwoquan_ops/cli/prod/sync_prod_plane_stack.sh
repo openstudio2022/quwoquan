@@ -145,8 +145,8 @@ if [[ -z "$account" || -z "$compose_root" || -z "$secret_name" ]]; then
   exit 2
 fi
 if [[ -n "$root_suffix" ]]; then
-  if [[ ! "$root_suffix" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
-    echo "FAIL: --root-suffix must be a safe single directory name" >&2
+  if [[ ! "$root_suffix" =~ ^[a-z0-9][a-z0-9/-]*$ || "$root_suffix" == *"//"* || "$root_suffix" == *".."* || "$root_suffix" == */ ]]; then
+    echo "FAIL: --root-suffix must be a safe relative directory path" >&2
     exit 2
   fi
   compose_root="${compose_root%/}/${root_suffix}"

@@ -41,6 +41,9 @@
 - 不得以固定长度截断丢弃早期轮次的关键事实。
 - 压缩结果必须可追溯到被压缩的轮次范围。
 - 摘要必须以完成序列和版本 CAS 持久增量推进；重复完成、并发更新与服务重启不得重复压缩或遗失既有摘要。
+- 只有完成态 AssistantRun 的事务 outbox 能推进摘要；失败、取消、群聊和圈子共享 surface 不得写入个人会话连续性。
+- 摘要模型只处理被标记为不可信的会话文本并返回有界叙事；当前目标、已确认事实/槽位、待处理事项与轮次范围由服务端结构化合并和摘要预算校验保护，Hook 不得改写 canonical Run 完成条件或安全事实。
+- 新 Run 创建时从所属 active AssistantSession 冻结当时的摘要快照；Run 恢复继续使用该快照，不在执行中追读可变 Session。
 
 <a id="req-003"></a>
 ### REQ-003 记忆生效范围对用户可见
@@ -51,8 +54,10 @@
 ## 4. 契约引用
 
 - canonical：`quwoquan_service/services/assistant-service/contracts/assistant/assistant_preference/operations.yaml`
-- object：`quwoquan_service/services/assistant-service/contracts/_shared/preference_fact/schema.yaml`
+- object：`quwoquan_service/services/assistant-service/contracts/_shared/assistant_preference_snapshot/schema.yaml`
 - object：`quwoquan_service/services/assistant-service/contracts/_shared/context_continuity_policy/schema.yaml`
+- object：`quwoquan_service/services/assistant-service/contracts/assistant/assistant_session/fields.yaml`
+- object：`quwoquan_service/services/assistant-service/contracts/assistant/assistant_run/fields.yaml`
 
 ## 5. 验收场景
 
@@ -75,11 +80,12 @@
 - THEN 早期轮次的关键事实未被固定长度截断丢弃
 - THEN 压缩结果可追溯到被压缩的轮次范围
 - THEN 并发 CAS 仅一个写入者成功，重启后继续复用同一持久摘要
+- THEN 同一完成事件重放不再次调用摘要 Provider，群聊或圈子 Run 不产生个人摘要
+- THEN 后续个人 Run 冻结注入该摘要，既有 Run 不因 Session 后续变化而漂移
 
 ## 6. 依赖
 
 - 前置要求：[`world-class-trinity-experience-baseline`](../spec.md) 的范围、要求与 SIT。
-- 上游事实：用户确认的记忆写入授权与既有偏好事实的撤销语义。
+- 上游事实：用户确认的记忆写入授权与既有 AssistantPreference 的撤销语义。
 - 下游结果：本 Story 声明的 GWT 可观察结果，供上下文装配按渠道记忆范围消费。
 - 父级设计：[L2 DEC-001](../design.md#dec-001)
-

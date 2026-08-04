@@ -414,7 +414,47 @@ fields:
     ops_exposure: read
     recommend_feature: false
     role: authoritative_state
+enums:
+  UserSyncPatchKind:
+    values: [user_avatar_updated, conversation_avatar_updated]
 types:
+  UserSyncHintEventPayload:
+    description: durable UserSyncPatch 已提交后的最小实时提示；客户端只使用 latestSyncSeq 触发 typed PullUserSync，不解析业务补丁。
+    fields:
+      - {name: userId, source: userId, type: string, constraints: [NOT_BLANK], classification: PRIVATE, log_policy: hash, api_exposure: read, ops_exposure: none}
+      - {name: latestSyncSeq, source: latestSyncSeq, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: none, semantic_type: watermark_sequence}
+  UserAvatarSyncPatchPayload:
+    description: 用户头像同步补丁的最小强类型载荷；只包含联系人头像缓存重建所需的用户身份、URL 与版本。
+    fields:
+      - {name: userId, source: userId, type: string, constraints: [NOT_NULL], classification: PRIVATE, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: avatarUrl, source: avatarUrl, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: avatarVersion, source: avatarVersion, type: int, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, semantic_type: aggregate_version}
+  ConversationAvatarSyncPatchPayload:
+    description: 会话头像同步补丁的最小强类型载荷；会话事实仍由 Chat 拥有，UserAccount 只返回当前账号同步流中的脱敏投影。
+    fields:
+      - {name: conversationId, source: conversationId, type: string, constraints: [NOT_NULL], classification: PRIVATE, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: avatarUrl, source: avatarUrl, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: groupAvatarVersion, source: groupAvatarVersion, type: int, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, semantic_type: aggregate_version}
+      - {name: groupAvatarSourceHash, source: groupAvatarSourceHash, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+  UserSyncPatch:
+    description: 由 kind 判别的账号增量同步补丁；未知 kind、缺失对应载荷或同时携带多份载荷必须拒绝。
+    discriminator: kind
+    variants:
+      user_avatar_updated: UserAvatarSyncPatchPayload
+      conversation_avatar_updated: ConversationAvatarSyncPatchPayload
+    fields:
+      - {name: syncSeq, source: syncSeq, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read, semantic_type: sequence}
+      - {name: kind, source: kind, type: enum, enum_ref: UserSyncPatchKind, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: userAvatarUpdated, source: userAvatarUpdated, type: UserAvatarSyncPatchPayload, constraints: [NULLABLE], classification: PRIVATE, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+      - {name: conversationAvatarUpdated, source: conversationAvatarUpdated, type: ConversationAvatarSyncPatchPayload, constraints: [NULLABLE], classification: PRIVATE, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+      - {name: occurredAt, source: occurredAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read, semantic_type: instant}
+  PullUserSyncSlice:
+    description: 当前账号的有界同步补丁页；游标缺口时 requiresResync=true，调用方必须从 owner query 重建而非猜测补丁。
+    fields:
+      - {name: patches, source: patches, type: '[]UserSyncPatch', constraints: [NOT_NULL], classification: PRIVATE, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+      - {name: latestSyncSeq, source: latestSyncSeq, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read, semantic_type: watermark_sequence}
+      - {name: hasMore, source: hasMore, type: bool, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: requiresResync, source: requiresResync, type: bool, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
   ListPersonasResult:
     fields:
       - {name: items, type: '[]PersonaManagementItemView', constraints: [NOT_NULL]}

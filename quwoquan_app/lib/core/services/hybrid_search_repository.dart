@@ -143,7 +143,7 @@ final class HybridSearchRepository implements SearchRepository {
         );
         final hits = records
             .map((record) {
-              final item = record.toSearchItemDto();
+              final item = record.toSearchItemViewData();
               return SearchHit(
                 objectType: SearchObjectType.chatContact,
                 objectId: item.contactId,

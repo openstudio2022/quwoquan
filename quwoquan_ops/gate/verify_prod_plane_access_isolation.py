@@ -34,6 +34,10 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.cli.lib.environment_topology import load_environment_topology
+from quwoquan_ops.cli.prod.prod_hosted_topology import (
+    ProdHostedTopologyError,
+    validate_access_manifest,
+)
 
 ACCESS = ROOT / "quwoquan_ops/environments/prod/access-isolation.yaml"
 CONTROL_PLANE = (
@@ -75,6 +79,10 @@ def main() -> int:
         or not re.fullmatch(r"[A-Za-z0-9.-]+", management_host)
     ):
         errors.append("management 必须声明仅 SSH 使用的 bare sshHost")
+    try:
+        validate_access_manifest(access)
+    except ProdHostedTopologyError as error:
+        errors.append(f"host/deployment instance/replica 拓扑非法：{error}")
 
     relay = access.get("relayAccount") or {}
     if relay.get("name") != "prod-ops":
@@ -240,7 +248,7 @@ def main() -> int:
         )
     minimum = prevalidation.get("minimumHostResources") or {}
     if (
-        prevalidation.get("capacityStrategy") != "constrained-single-host"
+        prevalidation.get("capacityStrategy") != "constrained-per-replica-host"
         or int(minimum.get("cpuCores") or 0) < 2
         or int(minimum.get("memoryBytes") or 0) < 1792 * 1024**2
         or int(minimum.get("containerFreeBytes") or 0) < 2 * 1024**3
@@ -248,7 +256,7 @@ def main() -> int:
         or int(minimum.get("postReclaimContainerFreeBytes") or 0) < 6 * 1024**3
     ):
         errors.append(
-            "prevalidation 受限单机门不得低于 2C/1.75GiB/2GiB current/6GiB effective+post-reclaim"
+            "prevalidation 每 replica 主机门不得低于 2C/1.75GiB/2GiB current/6GiB effective+post-reclaim"
         )
     reclaim = prevalidation.get("staleRuntimeReclaimPolicy") or {}
     if not (

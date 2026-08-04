@@ -16,7 +16,7 @@ import '../../../../support/cloud_services/test_content_comment_facet.dart';
 void main() {
   testWidgets('删除评论必须二次确认，取消不执行命令', (tester) async {
     final comments = TestContentCommentFacet(
-      items: <ContentCommentListItem>[
+      items: <CommentListItem>[
         testCommentItem(
           id: 'comment-delete',
           postId: 'post-delete',
@@ -58,7 +58,7 @@ void main() {
 
   testWidgets('可见删除快捷入口与更多操作均可访问且共用二次确认', (tester) async {
     final comments = TestContentCommentFacet(
-      items: <ContentCommentListItem>[
+      items: <CommentListItem>[
         testCommentItem(
           id: 'comment-delete-shortcut',
           postId: 'post-delete-shortcut',
@@ -98,7 +98,7 @@ void main() {
     const pending = SubmitCommentReportContinuation(
       postId: 'post-report',
       commentId: 'comment-report',
-      reason: ContentReportReason.spam,
+      reason: ReportReason.spam,
     );
     final container = _container(
       comments: comments,
@@ -114,8 +114,8 @@ void main() {
 
     expect(reports.commands, hasLength(1));
     expect(reports.commands.single.targetId, 'comment-report');
-    expect(reports.commands.single.targetType, ContentReportTargetType.comment);
-    expect(reports.commands.single.reason, ContentReportReason.spam);
+    expect(reports.commands.single.targetType, ReportTargetType.comment);
+    expect(reports.commands.single.reason, ReportReason.spam);
     expect(container.read(authContinuationProvider), isNull);
     await tester.pump(const Duration(seconds: 3));
   });

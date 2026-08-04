@@ -21,6 +21,7 @@ from .public_domain_tls import root_certificate_path
 
 COLLECTION_PATH = "/control-plane/product/experiments"
 SEARCH_POLICY_ID = "search_ranking"
+RECOMMENDATION_POLICY_ID = "rec_model_vs_rule"
 SPEC_REFS = (
     "specs/feature-tree/product-ops-growth/experiment-bucketing-and-rollout/spec.md#sit-001",
     "specs/feature-tree/product-ops-growth/experiment-bucketing-and-rollout/bucketing-strategy-engine/spec.md#gwt-001",
@@ -30,16 +31,28 @@ _NONPROD_TARGETS = {
     "beta": "beta-local",
     "gamma": "gamma-local",
 }
-_POLICY_RECIPE: dict[str, Any] = {
-    "id": SEARCH_POLICY_ID,
-    "key": SEARCH_POLICY_ID,
-    "status": "running",
-    "variants": [
-        {"key": "control", "allocationBasisPoints": 5000},
-        {"key": "term_heat", "allocationBasisPoints": 5000},
-    ],
-    "audienceRule": {"kind": "all"},
-}
+_POLICY_RECIPES: tuple[dict[str, Any], ...] = (
+    {
+        "id": SEARCH_POLICY_ID,
+        "key": SEARCH_POLICY_ID,
+        "status": "running",
+        "variants": [
+            {"key": "control", "allocationBasisPoints": 5000},
+            {"key": "term_heat", "allocationBasisPoints": 5000},
+        ],
+        "audienceRule": {"kind": "all"},
+    },
+    {
+        "id": RECOMMENDATION_POLICY_ID,
+        "key": RECOMMENDATION_POLICY_ID,
+        "status": "running",
+        "variants": [
+            {"key": "rule", "allocationBasisPoints": 5000},
+            {"key": "model", "allocationBasisPoints": 5000},
+        ],
+        "audienceRule": {"kind": "all"},
+    },
+)
 
 
 class ExperimentPolicyActivationError(RuntimeError):
@@ -53,7 +66,7 @@ def activate_search_experiment_policy(
     product_ops_base_url: str,
     timeout_seconds: float = 45.0,
 ) -> dict[str, Any]:
-    """Create or precisely reuse the package-bound nonprod Search policy."""
+    """Create or precisely reuse package-bound nonprod Search/Recommendation policies."""
 
     if _NONPROD_TARGETS.get(environment) != target:
         raise ExperimentPolicyActivationError(
@@ -71,9 +84,74 @@ def activate_search_experiment_policy(
         baseline_id,
         require_full=True,
     )
+    token = mint_local_product_ops_operator_token(
+        environment,
+        target,
+    )
+    cafile = root_certificate_path(target)
+    deadline = time.monotonic() + max(1.0, timeout_seconds)
+    activated: list[dict[str, Any]] = []
+    for recipe in _POLICY_RECIPES:
+        activated.append(
+            _activate_one_policy(
+                recipe=recipe,
+                target=target,
+                baseline_id=baseline_id,
+                product_ops_base_url=product_ops_base_url,
+                token=token,
+                cafile=str(cafile),
+                deadline=deadline,
+            )
+        )
+    search_policy = next(
+        item["policy"] for item in activated if item["policy"]["id"] == SEARCH_POLICY_ID
+    )
+    return {
+        "schema": "qwq.experiment_policy_activation_receipt",
+        "status": "passed",
+        "target": target,
+        "environment": environment,
+        "baselineId": baseline_id,
+        "packageDigest": str(manifest.get("packageDigest") or ""),
+        "sourceRevision": str(manifest.get("sourceRevision") or ""),
+        "operation": (
+            "created"
+            if any(item["operation"] == "created" for item in activated)
+            else "reused"
+        ),
+        "policy": search_policy,
+        "policies": [item["policy"] for item in activated],
+        "policyOperations": {
+            item["policy"]["id"]: item["operation"] for item in activated
+        },
+        "recipeDigests": {
+            item["policy"]["id"]: item["recipeDigest"] for item in activated
+        },
+        "specRefs": list(SPEC_REFS),
+        "caseResult": {
+            "schema": "qwq.case_result",
+            "caseId": f"{target}-search-experiment-policy-activation",
+            "status": "passed",
+            "executed": len(activated),
+            "skipped": 0,
+            "specRefs": list(SPEC_REFS),
+        },
+    }
+
+
+def _activate_one_policy(
+    *,
+    recipe: dict[str, Any],
+    target: str,
+    baseline_id: str,
+    product_ops_base_url: str,
+    token: str,
+    cafile: str,
+    deadline: float,
+) -> dict[str, Any]:
     recipe_bytes = (
         json.dumps(
-            _POLICY_RECIPE,
+            recipe,
             ensure_ascii=False,
             sort_keys=True,
             separators=(",", ":"),
@@ -81,20 +159,17 @@ def activate_search_experiment_policy(
         + "\n"
     ).encode("utf-8")
     recipe_digest = "sha256:" + hashlib.sha256(recipe_bytes).hexdigest()
+    policy_id = str(recipe["id"])
     idempotency_key = (
         "runtime-policy/"
         + target
         + "/"
         + baseline_id.removeprefix("sha256:")[:16]
         + "/"
+        + policy_id
+        + "/"
         + recipe_digest.removeprefix("sha256:")[:24]
     )
-    token = mint_local_product_ops_operator_token(
-        environment,
-        target,
-    )
-    cafile = root_certificate_path(target)
-    deadline = time.monotonic() + max(1.0, timeout_seconds)
     create_status = 0
     create_payload: dict[str, Any] = {}
     while True:
@@ -103,8 +178,8 @@ def activate_search_experiment_policy(
                 method="POST",
                 url=product_ops_base_url.rstrip("/") + COLLECTION_PATH,
                 token=token,
-                cafile=str(cafile),
-                body=_POLICY_RECIPE,
+                cafile=cafile,
+                body=recipe,
                 headers={"Idempotency-Key": idempotency_key},
                 timeout_seconds=min(5.0, max(1.0, deadline - time.monotonic())),
             )
@@ -115,85 +190,73 @@ def activate_search_experiment_policy(
             time.sleep(0.5)
     if create_status not in {201, 409}:
         raise ExperimentPolicyActivationError(
-            f"experiment policy create returned HTTP {create_status}"
+            f"experiment policy create returned HTTP {create_status} for {policy_id}"
         )
     list_status, catalog = _request_json(
         method="GET",
         url=product_ops_base_url.rstrip("/") + COLLECTION_PATH,
         token=token,
-        cafile=str(cafile),
+        cafile=cafile,
         body=None,
         headers={},
         timeout_seconds=min(10.0, max(1.0, deadline - time.monotonic())),
     )
     if list_status != 200:
         raise ExperimentPolicyActivationError(
-            f"experiment policy readback returned HTTP {list_status}"
+            f"experiment policy readback returned HTTP {list_status} for {policy_id}"
         )
-    policy = _select_and_validate_policy(catalog)
+    policy = _select_and_validate_policy(catalog, recipe)
     operation = "created" if create_status == 201 else "reused"
     if create_status == 201:
         if (
-            create_payload.get("id") != SEARCH_POLICY_ID
-            or create_payload.get("key") != SEARCH_POLICY_ID
+            create_payload.get("id") != policy_id
+            or create_payload.get("key") != policy_id
             or create_payload.get("status") != "running"
             or create_payload.get("experimentRevision") != policy["experimentRevision"]
         ):
             raise ExperimentPolicyActivationError(
-                "experiment policy create response differs from catalog readback"
+                f"experiment policy create response differs from catalog readback for {policy_id}"
             )
     return {
-        "schema": "qwq.experiment_policy_activation_receipt",
-        "status": "passed",
-        "target": target,
-        "environment": environment,
-        "baselineId": baseline_id,
-        "packageDigest": str(manifest.get("packageDigest") or ""),
-        "sourceRevision": str(manifest.get("sourceRevision") or ""),
-        "recipeDigest": recipe_digest,
         "operation": operation,
+        "recipeDigest": recipe_digest,
         "policy": policy,
-        "specRefs": list(SPEC_REFS),
-        "caseResult": {
-            "schema": "qwq.case_result",
-            "caseId": f"{target}-search-experiment-policy-activation",
-            "status": "passed",
-            "executed": 1,
-            "skipped": 0,
-            "specRefs": list(SPEC_REFS),
-        },
     }
 
 
-def _select_and_validate_policy(catalog: dict[str, Any]) -> dict[str, Any]:
+def _select_and_validate_policy(
+    catalog: dict[str, Any],
+    recipe: dict[str, Any],
+) -> dict[str, Any]:
     items = catalog.get("items")
     if not isinstance(items, list):
         raise ExperimentPolicyActivationError(
             "experiment policy catalog has no typed items"
         )
+    policy_id = str(recipe["id"])
     matches = [
         item
         for item in items
-        if isinstance(item, dict) and item.get("id") == SEARCH_POLICY_ID
+        if isinstance(item, dict) and item.get("id") == policy_id
     ]
     if len(matches) != 1:
         raise ExperimentPolicyActivationError(
-            "experiment policy catalog does not contain one search_ranking policy"
+            f"experiment policy catalog does not contain one {policy_id} policy"
         )
     item = matches[0]
     if (
-        item.get("key") != SEARCH_POLICY_ID
+        item.get("key") != policy_id
         or item.get("status") != "running"
         or not isinstance(item.get("experimentRevision"), int)
         or int(item["experimentRevision"]) <= 0
-        or item.get("variants") != _POLICY_RECIPE["variants"]
+        or item.get("variants") != recipe["variants"]
     ):
         raise ExperimentPolicyActivationError(
-            "existing search_ranking policy differs from the canonical recipe"
+            f"existing {policy_id} policy differs from the canonical recipe"
         )
     return {
-        "id": SEARCH_POLICY_ID,
-        "key": SEARCH_POLICY_ID,
+        "id": policy_id,
+        "key": policy_id,
         "status": "running",
         "experimentRevision": int(item["experimentRevision"]),
         "variants": item["variants"],

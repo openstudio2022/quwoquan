@@ -71,11 +71,66 @@ CREATE TABLE IF NOT EXISTS skill_consent_events (
 );
 CREATE INDEX IF NOT EXISTS idx_skill_consent_events_aggregate
   ON skill_consent_events(aggregate_id, occurred_at);
+CREATE INDEX IF NOT EXISTS idx_skill_consent_events_account_skill
+  ON skill_consent_events(account_id, skill_id, occurred_at DESC, event_id DESC);
 `)
 	if err != nil {
 		return fmt.Errorf("%w: ensure canonical skill consent schema: %v", model.ErrStorageUnavailable, err)
 	}
 	return nil
+}
+
+func (store *PgStore) ListSkillConsentEvents(
+	ctx context.Context,
+	accountID string,
+	skillID string,
+	limit int,
+) ([]model.Event, error) {
+	if store == nil || store.pool == nil {
+		return nil, model.ErrStorageUnavailable
+	}
+	accountID = strings.TrimSpace(accountID)
+	skillID = strings.TrimSpace(skillID)
+	if accountID == "" || skillID == "" {
+		return nil, model.ErrInvalidArgument
+	}
+	if limit <= 0 || limit > 100 {
+		limit = 100
+	}
+	rows, err := store.pool.Query(ctx, `
+SELECT payload_json
+FROM skill_consent_events
+WHERE account_id = $1 AND skill_id = $2
+ORDER BY occurred_at DESC, event_id DESC
+LIMIT $3`, accountID, skillID, limit)
+	if err != nil {
+		return nil, unavailable("list consent activity", err)
+	}
+	defer rows.Close()
+	events := make([]model.Event, 0, limit)
+	for rows.Next() {
+		var payload []byte
+		if err := rows.Scan(&payload); err != nil {
+			return nil, unavailable("scan consent activity", err)
+		}
+		var event model.Event
+		if err := json.Unmarshal(payload, &event); err != nil {
+			return nil, unavailable("decode consent activity", err)
+		}
+		if event.AccountID != accountID || event.SkillID != skillID ||
+			strings.TrimSpace(event.EventID) == "" || event.OccurredAt.IsZero() {
+			return nil, unavailable(
+				"validate consent activity",
+				errors.New("stored consent event violates owner boundary"),
+			)
+		}
+		event.GrantedScopes = nil
+		events = append(events, event)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, unavailable("iterate consent activity", err)
+	}
+	return events, nil
 }
 
 func (store *PgStore) ListActiveConsents(

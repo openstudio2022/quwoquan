@@ -61,6 +61,17 @@ func (p *RealtimePublisher) PublishToPersonas(
 	wireType string,
 	evt application.CallOutboxEvent,
 ) error {
+	var clientSignalPayload []byte
+	if evt.EventType != event.CallRinging {
+		var err error
+		clientSignalPayload, err = application.MarshalRealtimeSignalEnvelope(
+			evt,
+			wireType,
+		)
+		if err != nil {
+			return err
+		}
+	}
 	if stream := durableStream(evt.EventType); stream != "" {
 		if _, err := p.transport.AppendDurable(ctx, runtimemessaging.DurableMessage{
 			Stream: stream,
@@ -104,7 +115,7 @@ func (p *RealtimePublisher) PublishToPersonas(
 			ctx,
 			runtimemessaging.EphemeralMessage{
 				Channel: "rt:rtc:persona:" + personaID,
-				Payload: evt.Payload,
+				Payload: clientSignalPayload,
 			},
 		); err != nil {
 			rtcCallRelayTotal.WithLabelValues(

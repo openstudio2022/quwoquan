@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	toolpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/tool"
+	toolpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/tool"
 )
 
 type retryableToolError struct{}

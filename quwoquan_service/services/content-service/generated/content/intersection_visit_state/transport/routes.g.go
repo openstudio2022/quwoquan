@@ -123,7 +123,11 @@ func generatedSplitPath(raw string) []string {
 	return strings.Split(trimmed, "/")
 }
 
-var generatedRequestBodyFieldSetByOperation = map[string]map[string]struct{}{}
+var generatedRequestBodyFieldSetByOperation = map[string]map[string]struct{}{
+	"MarkIntersectionsVisited": {
+		"dimension": {},
+	},
+}
 
 func BindGeneratedRequestBodyFromRequest(r *http.Request, operation string) (map[string]any, error) {
 	allowed, ok := generatedRequestBodyFieldSetByOperation[operation]

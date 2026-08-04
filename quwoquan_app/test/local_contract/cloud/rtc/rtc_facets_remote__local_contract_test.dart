@@ -68,7 +68,7 @@ void main() {
         'inviteeIds': const <String>['user-2'],
         'maxParticipants': 8,
       });
-      expect(result.session.callId, 'call-init');
+      expect(result.session.id, 'call-init');
       expect(result.mediaAccess.accessToken, 'token-init');
       expect(executor.context?.idempotencyKey, 'rtc-test-intent');
     });
@@ -88,7 +88,7 @@ void main() {
       );
 
       final call = await query.getCall(RtcGetCallQuery(callId: 'call-get'));
-      expect(call.callId, 'call-get');
+      expect(call.id, 'call-get');
       expect(executor.payload?.pathParameters, <String, String>{
         'callId': 'call-get',
       });
@@ -100,7 +100,7 @@ void main() {
         'limit': '10',
         'missed': 'true',
       });
-      expect(page.items.single.callId, 'call-history');
+      expect(page.items.single.id, 'call-history');
       expect(page.nextCursor, 'cursor-next');
     });
 

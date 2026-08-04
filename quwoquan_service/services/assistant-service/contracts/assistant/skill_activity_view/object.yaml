@@ -1,0 +1,31 @@
+kind: projection
+description: >-
+  当前账号按 Skill 查看 Run、授权、主动订阅和数据控制结果的脱敏联邦活动视图。
+  视图只引用 owner 事实与审计事件，不复制 Run 正文、授权 scope、订阅条件、Connector 凭证或外部响应。
+identity:
+  fields: [activityId]
+  version_source: checkpoint
+access:
+  commands: none
+  queries: named_reader
+  cross_context: public_contract_only
+relationships:
+- {name: accountOwner, target_object: user.UserAccount, reference_fields: [accountId], kind: reference, cardinality: 'N:1', consistency: eventual, access: named_reader, on_delete: tombstone}
+- {name: runSource, target_object: assistant.AssistantRun, reference_fields: [runId], kind: projection_source, cardinality: 'N:1', consistency: runtime, access: named_reader, on_delete: detach}
+- {name: consentSource, target_object: assistant.SkillConsent, reference_fields: [consentId], kind: projection_source, cardinality: 'N:1', consistency: runtime, access: event, on_delete: retain}
+- {name: subscriptionSource, target_object: assistant.SkillSubscription, reference_fields: [subscriptionId], kind: projection_source, cardinality: 'N:1', consistency: runtime, access: event, on_delete: retain}
+- {name: dataControlSource, target_object: assistant.SkillDataControlRequest, reference_fields: [dataControlRequestId], kind: projection_source, cardinality: 'N:1', consistency: runtime, access: named_reader, on_delete: retain}
+local_identity_reasons:
+  skillId: stable active Skill package key used only as a query partition and never as projection identity
+business_rules:
+- 活动项只保存/返回 source object reference、状态、时间、失败码与恢复动作，不得包含用户问题、回答、scope、trigger 条件、Connector payload 或 Provider 正文。
+- accountId 只来自可信主体；skillId 为必填查询分区，非 owner 事实不得进入 Slice。
+- 同一 sourceKind + sourceObjectRef + sourceRevision 只产生一个 activityId；重复读取不得重复展示。
+- hide_activity_history 只推进 owner+skill 的 visibility watermark；canonical owner 审计按各自保留策略继续存在且不得被本视图伪装删除。
+- Connector 活动仍由 integration.ConnectorInvocation/ConnectorConnection 拥有；本视图只返回 generated operation reference 供 App 联邦展示。
+- activityKind、displayKey 与 recoveryAction 只由 canonical 闭集状态投影产生；source owner 的未知状态必须 fail-closed，不得拼接新 key 或降级为任意字符串。
+lifecycle:
+  source_events: [AssistantRunStarted, AssistantRunCompleted, SkillConsentGranted, SkillConsentRevoked, SkillSubscriptionCreated, SkillSubscriptionStatusChanged, SkillSubscriptionTriggered, SkillDataControlRequested, SkillDataControlCompleted, SkillDataControlFailed]
+  checkpoint: source_owner_sequence_or_revision
+  rebuild: reread_bounded_owner_journals_and_apply_visibility_watermark
+  tombstone: hide_owner_skill_history_keep_source_owner_audit

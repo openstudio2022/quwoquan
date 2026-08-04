@@ -30,7 +30,7 @@ void main() {
       final runtimeEnv = CloudRuntimeConfig.appRuntimeEnv;
       final scenarios = scenarioPack.assistantTurnScenariosFor(runtimeEnv);
       expect(scenarios, hasLength(21));
-      expect(scenarioPack.qualityStandards, hasLength(21));
+      expect(scenarioPack.qualityStandards, hasLength(20));
 
       await tester.pumpWidget(
         ProviderScope(

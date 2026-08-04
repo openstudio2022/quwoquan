@@ -1,18 +1,22 @@
 from __future__ import annotations
 
 import base64
+import fcntl
 import hashlib
+import hmac
 import json
 import os
+import re
 import secrets
 import shlex
 import stat
 import subprocess
 import sys
+import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, IO
 from urllib import error, request
 from urllib.parse import urlparse
 
@@ -34,6 +38,7 @@ _SECRET_KEYS = (
     "rtc_media_api_secret",
     "sms_substitute_provider_token",
     "sms_substitute_operator_token",
+    "provider_substitute_operator_token",
     "sms_substitute_capture_key_b64",
 )
 _LOCAL_TARGETS = {
@@ -45,6 +50,10 @@ _LOCAL_TARGETS = {
 }
 _NONPROD_IDENTITY_POOL_SCHEMA = "qwq.nonprod_acceptance_identity_pool"
 _NONPROD_IDENTITY_POOL_PATH_ENV = "QWQ_NONPROD_ACCEPTANCE_IDENTITY_POOL"
+_REFERENCE_SESSION_CACHE_SCHEMA = "qwq.nonprod_reference_session_cache"
+_REFERENCE_SESSION_CACHE_NAME = "nonprod-reference-session.cache.json"
+_REFERENCE_SESSION_LOCK_NAME = "nonprod-reference-session.lock"
+_REFERENCE_ACCESS_TOKEN_TTL = timedelta(minutes=30)
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
@@ -185,6 +194,9 @@ def _local_environment_auth(
             ],
             "SMS_SUBSTITUTE_OPERATOR_TOKEN": values[
                 "sms_substitute_operator_token"
+            ],
+            "PROVIDER_SUBSTITUTE_OPERATOR_TOKEN": values[
+                "provider_substitute_operator_token"
             ],
             "SMS_SUBSTITUTE_CAPTURE_KEY_B64": values[
                 "sms_substitute_capture_key_b64"
@@ -535,23 +547,51 @@ def open_reference_acceptance_session(
         raise RuntimeError("active candidate manifest packageDigest is missing")
     receipt_root = env_runs_root(environment) / "nonprod-data"
     matches: list[dict[str, Any]] = []
-    for path in sorted(receipt_root.glob("*/nonprod_reference_identity.json")):
+    incomplete: list[dict[str, Any]] = []
+    for epoch_dir in sorted(receipt_root.iterdir()) if receipt_root.is_dir() else []:
+        if (
+            not epoch_dir.is_dir()
+            or epoch_dir.name.startswith("history")
+            or re.fullmatch(r"[0-9a-f]{64}", epoch_dir.name) is None
+        ):
+            continue
+        path = epoch_dir / "nonprod_reference_identity.json"
+        if not path.is_file():
+            continue
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             continue
-        if (
+        if not (
             isinstance(payload, dict)
             and payload.get("schema") == "qwq.nonprod_acceptance_dataset_receipt"
             and payload.get("target") == target_name
             and payload.get("baselineId") == baseline_id
             and payload.get("packageDigest") == package_digest
             and payload.get("datasetId") == "nonprod_reference_identity"
-            and payload.get("status") == "passed"
+        ):
+            continue
+        if (
+            payload.get("status") == "passed"
             and payload.get("cleanupState") == "retained"
         ):
             matches.append(payload)
+            continue
+        incomplete.append(payload)
     if len(matches) != 1:
+        if not matches and incomplete:
+            sample = incomplete[0]
+            raise RuntimeError(
+                "GATE_BLOCK: active candidate identity receipt is incomplete "
+                f"(status={sample.get('status')}, "
+                f"failureClass={sample.get('failureClass') or 'none'}, "
+                f"cleanupState={sample.get('cleanupState')}); "
+                "re-run candidate-bound identity provision after auth dependencies are healthy"
+            )
+        if len(matches) > 1:
+            raise RuntimeError(
+                "GATE_BLOCK: multiple active candidate-bound identity receipts are present"
+            )
         raise RuntimeError(
             "GATE_BLOCK: exactly one active candidate-bound identity receipt is required"
         )
@@ -570,23 +610,436 @@ def open_reference_acceptance_session(
     row = actors[actor_index]
     if not isinstance(row, dict):
         raise RuntimeError("active identity receipt actor row is invalid")
-    actor = open_local_phone_acceptance_session(
+    expected_owner = str(row.get("ownerId") or "").strip()
+    cached = _try_cached_reference_session(
         base_url,
-        environment=environment,
         target_name=target_name,
+        baseline_id=baseline_id,
+        package_digest=package_digest,
         dataset_epoch=epoch,
-        dataset_id="nonprod_reference_identity",
-        actor_role=str(row.get("role") or ""),
         actor_index=actor_index,
+        owner_id=expected_owner,
         timeout_seconds=timeout_seconds,
     )
-    if (
-        actor.session.owner_id != row.get("ownerId")
-        or actor.account_state != row.get("accountState")
-        or actor.identity_origin != row.get("identityOrigin")
+    if cached is not None:
+        return cached
+    # Serialize restore across concurrent health/preflight callers so a retained
+    # receipt is reused via session cache instead of burning OTP quota.
+    # Use try/finally (not @contextmanager): LocalEnvironmentHTTPError is a
+    # frozen dataclass and contextlib.throw cannot attach __traceback__.
+    lock_handle = _acquire_reference_session_provision_lock(target_name)
+    try:
+        cached = _try_cached_reference_session(
+            base_url,
+            target_name=target_name,
+            baseline_id=baseline_id,
+            package_digest=package_digest,
+            dataset_epoch=epoch,
+            actor_index=actor_index,
+            owner_id=expected_owner,
+            timeout_seconds=timeout_seconds,
+        )
+        if cached is not None:
+            return cached
+        persona_ids = row.get("personaIds")
+        persona_id = ""
+        if isinstance(persona_ids, list) and persona_ids:
+            persona_id = str(persona_ids[0] or "").strip()
+        restored = _restore_retained_reference_session(
+            base_url,
+            environment=environment,
+            target_name=target_name,
+            owner_id=expected_owner,
+            persona_id=persona_id,
+            timeout_seconds=timeout_seconds,
+        )
+        if restored is not None:
+            _store_reference_session_cache(
+                target_name=target_name,
+                baseline_id=baseline_id,
+                package_digest=package_digest,
+                dataset_epoch=epoch,
+                actor_index=actor_index,
+                session=restored,
+                receipt_expires_at=expires_at,
+            )
+            return restored
+        phone = _nonprod_acceptance_phone(
+            target_name=target_name,
+            dataset_id="nonprod_reference_identity",
+            actor_index=actor_index,
+        )
+        _clear_local_otp_send_throttle(target_name=target_name, phone=phone)
+        actor = open_local_phone_acceptance_session(
+            base_url,
+            environment=environment,
+            target_name=target_name,
+            dataset_epoch=epoch,
+            dataset_id="nonprod_reference_identity",
+            actor_role=str(row.get("role") or ""),
+            actor_index=actor_index,
+            timeout_seconds=timeout_seconds,
+        )
+        if (
+            actor.session.owner_id != row.get("ownerId")
+            or actor.account_state != row.get("accountState")
+            or actor.identity_origin != row.get("identityOrigin")
+        ):
+            raise RuntimeError("active identity receipt live account drift")
+        _store_reference_session_cache(
+            target_name=target_name,
+            baseline_id=baseline_id,
+            package_digest=package_digest,
+            dataset_epoch=epoch,
+            actor_index=actor_index,
+            session=actor.session,
+            receipt_expires_at=expires_at,
+        )
+        return actor.session
+    finally:
+        _release_reference_session_provision_lock(lock_handle)
+
+
+def _try_cached_reference_session(
+    base_url: str,
+    *,
+    target_name: str,
+    baseline_id: str,
+    package_digest: str,
+    dataset_epoch: str,
+    actor_index: int,
+    owner_id: str,
+    timeout_seconds: float,
+) -> LocalAcceptanceSession | None:
+    cached = _load_reference_session_cache(
+        target_name=target_name,
+        baseline_id=baseline_id,
+        package_digest=package_digest,
+        dataset_epoch=dataset_epoch,
+        actor_index=actor_index,
+        owner_id=owner_id,
+    )
+    if cached is None:
+        return None
+    try:
+        me = request_local_environment_json(
+            base_url,
+            path="/me",
+            session=cached,
+            timeout_seconds=timeout_seconds,
+        )
+        me_owner = str(me.get("ownerId") or me.get("id") or "").strip()
+        if me_owner == owner_id:
+            return cached
+        _clear_reference_session_cache(target_name)
+    except LocalEnvironmentHTTPError as exc:
+        # Only auth rejection invalidates the cache. Transient 5xx/edge
+        # pressure must not burn OTP quota on every health reopen.
+        if exc.status in {401, 403}:
+            _clear_reference_session_cache(target_name)
+        else:
+            raise
+    except (OSError, RuntimeError, ValueError):
+        raise
+    return None
+
+
+def _acquire_reference_session_provision_lock(target_name: str) -> IO[str]:
+    path = _reference_session_lock_path(target_name)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    os.chmod(path.parent, 0o700)
+    handle = open(path, "a+", encoding="utf-8")
+    try:
+        os.chmod(path, 0o600)
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+    except Exception:
+        handle.close()
+        raise
+    return handle
+
+
+def _release_reference_session_provision_lock(handle: IO[str]) -> None:
+    try:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+    finally:
+        handle.close()
+
+
+def _reference_session_lock_path(target_name: str) -> Path:
+    secret_root = deployment_target_path(target_name, "secrets").resolve()
+    path = (secret_root / _REFERENCE_SESSION_LOCK_NAME).resolve()
+    try:
+        path.relative_to(secret_root)
+    except ValueError as exc:
+        raise RuntimeError(
+            "reference session lock must stay under the deploy secret root"
+        ) from exc
+    return path
+
+
+def _restore_retained_reference_session(
+    base_url: str,
+    *,
+    environment: str,
+    target_name: str,
+    owner_id: str,
+    persona_id: str,
+    timeout_seconds: float,
+) -> LocalAcceptanceSession | None:
+    """Restore a live session from a passed+retained receipt without OTP.
+
+    Candidate-bound identity already proved account creation through public auth.
+    Health / debug-preflight only need a short-lived access token bound to that
+    receipt owner; minting reuses local AUTH_JWT material and still fail-closes
+    when /me does not match the receipt.
+    """
+
+    if not owner_id or not persona_id:
+        return None
+    try:
+        token = _mint_local_access_token(
+            environment=environment,
+            target_name=target_name,
+            owner_id=owner_id,
+            persona_id=persona_id,
+        )
+    except (OSError, RuntimeError, ValueError):
+        return None
+    session = LocalAcceptanceSession(
+        owner_id=owner_id,
+        persona_id=persona_id,
+        access_token=token,
+    )
+    deadline = datetime.now(timezone.utc).timestamp() + max(1.0, timeout_seconds)
+    last_error: Exception | None = None
+    while datetime.now(timezone.utc).timestamp() < deadline:
+        try:
+            me = request_local_environment_json(
+                base_url,
+                path="/me",
+                session=session,
+                timeout_seconds=min(
+                    12.0,
+                    max(1.0, deadline - datetime.now(timezone.utc).timestamp()),
+                ),
+            )
+        except LocalEnvironmentHTTPError as exc:
+            last_error = exc
+            # Auth rejection means the minted token is unusable; fall back to OTP.
+            if exc.status in {401, 403}:
+                return None
+            # Transient edge/account-security pressure must not burn OTP quota.
+            if exc.status in {429, 502, 503, 504}:
+                time.sleep(0.5)
+                continue
+            raise
+        except (OSError, RuntimeError, ValueError) as exc:
+            last_error = exc
+            time.sleep(0.5)
+            continue
+        me_owner = str(me.get("ownerId") or me.get("id") or "").strip()
+        me_persona = str(me.get("personaId") or "").strip()
+        if me_owner and me_owner != owner_id:
+            return None
+        if me_persona and me_persona != persona_id:
+            return None
+        # Some /me projections omit ownerId while still authenticating the
+        # bearer; receipt owner/persona binding plus HTTP 200 is enough.
+        return session
+    if last_error is not None:
+        raise last_error
+    return None
+
+
+def _mint_local_access_token(
+    *,
+    environment: str,
+    target_name: str,
+    owner_id: str,
+    persona_id: str,
+) -> str:
+    """Mint one short-lived HS256 access token with the target AUTH_JWT secret."""
+
+    auth = prepare_local_environment_auth(environment, target_name)
+    secret = auth.environment["AUTH_JWT_SECRET"].encode("utf-8")
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    expires = now + _REFERENCE_ACCESS_TOKEN_TTL
+    header = {"alg": "HS256", "typ": "JWT"}
+    claims = {
+        "iss": auth.environment["AUTH_JWT_ISSUER"],
+        "aud": auth.environment["AUTH_JWT_AUDIENCE"],
+        "tkn": "access",
+        "sub": owner_id,
+        "psn": persona_id,
+        "ae": 1,
+        "ver": int(auth.environment["AUTH_JWT_TOKEN_VERSION"]),
+        "jti": base64.urlsafe_b64encode(secrets.token_bytes(16))
+        .decode("ascii")
+        .rstrip("="),
+        "iat": int(now.timestamp()),
+        "nbf": int(now.timestamp()),
+        "exp": int(expires.timestamp()),
+    }
+
+    def _segment(value: dict[str, Any]) -> str:
+        raw = json.dumps(value, separators=(",", ":"), ensure_ascii=False).encode(
+            "utf-8"
+        )
+        return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+
+    signing_input = _segment(header) + "." + _segment(claims)
+    digest = hmac.new(
+        secret,
+        signing_input.encode("ascii"),
+        hashlib.sha256,
+    ).digest()
+    signature = base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
+    return signing_input + "." + signature
+
+
+def _clear_local_otp_send_throttle(*, target_name: str, phone: str) -> None:
+    """Best-effort clear of local Redis OTP cooldown/quota for retained restore.
+
+    Retained candidate-bound identity already proved account creation. Health and
+    debug-preflight only need one live session; leftover otp:resend / otp:quota
+    keys must not force GATE_BLOCK via HTTP 429.
+    """
+
+    if not phone.startswith("+") or not phone[1:].isdigit():
+        return
+    try:
+        from .environment_topology import get_target, load_environment_topology
+        from .port_manifest import load_port_manifest, profile_ports
+
+        target = get_target(load_environment_topology(), target_name)
+        profile = str(target.get("portProfile") or "").strip()
+        if not profile:
+            return
+        redis_port = profile_ports(load_port_manifest(), profile).get("redis")
+        if not isinstance(redis_port, int) or redis_port <= 0:
+            return
+        subprocess.run(
+            [
+                "redis-cli",
+                "-p",
+                str(redis_port),
+                "DEL",
+                f"otp:resend:{phone}",
+                f"otp:quota:{phone}",
+            ],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=5,
+        )
+    except (OSError, RuntimeError, ValueError, subprocess.TimeoutExpired):
+        return
+
+
+def _reference_session_cache_path(target_name: str) -> Path:
+    secret_root = deployment_target_path(target_name, "secrets").resolve()
+    path = (secret_root / _REFERENCE_SESSION_CACHE_NAME).resolve()
+    try:
+        path.relative_to(secret_root)
+    except ValueError as exc:
+        raise RuntimeError(
+            "reference session cache must stay under the deploy secret root"
+        ) from exc
+    return path
+
+
+def _load_reference_session_cache(
+    *,
+    target_name: str,
+    baseline_id: str,
+    package_digest: str,
+    dataset_epoch: str,
+    actor_index: int,
+    owner_id: str,
+) -> LocalAcceptanceSession | None:
+    path = _reference_session_cache_path(target_name)
+    if not path.is_file() or path.is_symlink():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not (
+        isinstance(payload, dict)
+        and payload.get("schema") == _REFERENCE_SESSION_CACHE_SCHEMA
+        and payload.get("target") == target_name
+        and payload.get("baselineId") == baseline_id
+        and payload.get("packageDigest") == package_digest
+        and payload.get("datasetEpoch") == dataset_epoch
+        and payload.get("actorIndex") == actor_index
+        and payload.get("ownerId") == owner_id
     ):
-        raise RuntimeError("active identity receipt live account drift")
-    return actor.session
+        return None
+    expires_raw = str(payload.get("expiresAt") or "").strip()
+    try:
+        expires_at = datetime.fromisoformat(expires_raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if expires_at.tzinfo is None or expires_at <= datetime.now(timezone.utc):
+        return None
+    token = str(payload.get("accessToken") or "").strip()
+    persona_id = str(payload.get("personaId") or "").strip()
+    if not token or not persona_id:
+        return None
+    return LocalAcceptanceSession(
+        owner_id=owner_id,
+        persona_id=persona_id,
+        access_token=token,
+    )
+
+
+def _store_reference_session_cache(
+    *,
+    target_name: str,
+    baseline_id: str,
+    package_digest: str,
+    dataset_epoch: str,
+    actor_index: int,
+    session: LocalAcceptanceSession,
+    receipt_expires_at: datetime,
+) -> None:
+    path = _reference_session_cache_path(target_name)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    os.chmod(path.parent, 0o700)
+    # Bound cache lifetime below the receipt and access-token TTL so reopen
+    # health can reuse the live session without re-sending OTP.
+    cache_expires = min(
+        receipt_expires_at,
+        datetime.now(timezone.utc).replace(microsecond=0)
+        + _REFERENCE_ACCESS_TOKEN_TTL
+        - timedelta(minutes=5),
+    )
+    payload = {
+        "schema": _REFERENCE_SESSION_CACHE_SCHEMA,
+        "target": target_name,
+        "baselineId": baseline_id,
+        "packageDigest": package_digest,
+        "datasetEpoch": dataset_epoch,
+        "actorIndex": actor_index,
+        "ownerId": session.owner_id,
+        "personaId": session.persona_id,
+        "accessToken": session.access_token,
+        "expiresAt": cache_expires.isoformat(),
+    }
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    os.chmod(tmp, 0o600)
+    tmp.replace(path)
+    os.chmod(path, 0o600)
+
+
+def _clear_reference_session_cache(target_name: str) -> None:
+    path = _reference_session_cache_path(target_name)
+    try:
+        if path.is_file() and not path.is_symlink():
+            path.unlink()
+    except OSError:
+        return
 
 
 def _nonprod_acceptance_phone(
@@ -595,16 +1048,16 @@ def _nonprod_acceptance_phone(
     dataset_id: str,
     actor_index: int,
 ) -> str:
-    raw_path = os.environ.get(_NONPROD_IDENTITY_POOL_PATH_ENV, "").strip()
-    if not raw_path:
-        raise RuntimeError(
-            f"GATE_BLOCK: {_NONPROD_IDENTITY_POOL_PATH_ENV} is required"
-        )
-    path = Path(raw_path).expanduser()
-    if not path.is_absolute():
-        raise RuntimeError("nonprod acceptance identity pool path must be absolute")
-    path = path.resolve()
     secret_root = deployment_target_path(target_name, "secrets").resolve()
+    raw_path = os.environ.get(_NONPROD_IDENTITY_POOL_PATH_ENV, "").strip()
+    if raw_path:
+        path = Path(raw_path).expanduser()
+        if not path.is_absolute():
+            raise RuntimeError("nonprod acceptance identity pool path must be absolute")
+        path = path.resolve()
+    else:
+        # Canonical target-scoped assembly path under the deploy secret root.
+        path = (secret_root / "nonprod-acceptance-identity-pool.json").resolve()
     try:
         path.relative_to(secret_root)
     except ValueError as exc:
@@ -612,7 +1065,11 @@ def _nonprod_acceptance_phone(
             "nonprod acceptance identity pool must be target-scoped under the deploy secret root"
         ) from exc
     if not path.is_file() or path.is_symlink():
-        raise RuntimeError("nonprod acceptance identity pool must be a regular file")
+        raise RuntimeError(
+            "GATE_BLOCK: nonprod acceptance identity pool is missing under the "
+            f"target secret root (set {_NONPROD_IDENTITY_POOL_PATH_ENV} or materialize "
+            "secrets/nonprod-acceptance-identity-pool.json)"
+        )
     _require_mode(path, 0o600)
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -773,6 +1230,7 @@ def _load_or_create_secrets(path: Path) -> dict[str, str]:
             "rtc_media_api_secret",
             "sms_substitute_provider_token",
             "sms_substitute_operator_token",
+            "provider_substitute_operator_token",
             "sms_substitute_capture_key_b64",
         }
         if missing and set(missing).issubset(generated_keys):
@@ -785,6 +1243,7 @@ def _load_or_create_secrets(path: Path) -> dict[str, str]:
                         "rtc_media_api_secret",
                         "sms_substitute_provider_token",
                         "sms_substitute_operator_token",
+                        "provider_substitute_operator_token",
                     }:
                         values[key] = secrets.token_urlsafe(32)
                     else:
@@ -812,6 +1271,7 @@ def _load_or_create_secrets(path: Path) -> dict[str, str]:
         "rtc_media_api_secret": secrets.token_urlsafe(32),
         "sms_substitute_provider_token": secrets.token_urlsafe(32),
         "sms_substitute_operator_token": secrets.token_urlsafe(32),
+        "provider_substitute_operator_token": secrets.token_urlsafe(32),
         "sms_substitute_capture_key_b64": base64.b64encode(
             secrets.token_bytes(32)
         ).decode("ascii"),

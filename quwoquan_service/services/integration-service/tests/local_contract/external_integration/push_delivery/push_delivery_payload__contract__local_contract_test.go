@@ -10,7 +10,6 @@ import (
 	"quwoquan_service/runtime/reliabletask"
 	externalgenerated "quwoquan_service/services/integration-service/generated/external_integration/external_interaction"
 	externalapp "quwoquan_service/services/integration-service/internal/external_integration/external_interaction/application"
-	pushapp "quwoquan_service/services/integration-service/internal/external_integration/push_delivery/application"
 	integrationsupport "quwoquan_service/services/integration-service/tests/support"
 )
 
@@ -18,7 +17,7 @@ func TestPushDeliverySubmitRejectsInvalidTypedPayload(t *testing.T) {
 	service, err := externalapp.NewExternalInteractionService(
 		integrationsupport.NewMemoryExternalStore(reliabletask.NewMemoryStore()),
 		map[string]reliabletask.ExternalProvider{
-			"push_dispatch": pushapp.LocalRecorderPushProvider{},
+			"push_dispatch": payloadContractTestProvider{},
 		},
 		map[string]reliabletask.ProviderPolicy{
 			reliabletask.ExternalInteractionOperationPush: {
@@ -103,4 +102,18 @@ func TestPushDeliverySubmitRejectsInvalidTypedPayload(t *testing.T) {
 			}
 		})
 	}
+}
+
+type payloadContractTestProvider struct{}
+
+func (payloadContractTestProvider) Send(
+	_ context.Context,
+	request reliabletask.ExternalInteractionRequest,
+	_ reliabletask.ReliableAsyncTask,
+) (reliabletask.ExternalInteractionResult, error) {
+	return reliabletask.ExternalInteractionResult{
+		RequestID: request.RequestID,
+		Operation: request.Operation,
+		Status:    reliabletask.ExternalInteractionStatusSentUnconfirmed,
+	}, nil
 }

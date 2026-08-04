@@ -13,7 +13,7 @@ final class _FakeFollowingSubjectFacet
     implements FollowingSubjectQuery, FollowedSubjectVisitCommandWriter {
   _FakeFollowingSubjectFacet(this.items);
 
-  final List<FollowingSubjectResult> items;
+  final List<FollowingSubjectItemView> items;
   final List<MarkFollowedSubjectVisitedCommand> marked =
       <MarkFollowedSubjectVisitedCommand>[];
 
@@ -64,12 +64,12 @@ final class _FailingFollowingSubjectFacet
   }
 }
 
-FollowingSubjectResult _subject({
+FollowingSubjectItemView _subject({
   required String id,
   required FollowSubjectKind type,
   required bool unread,
 }) {
-  return FollowingSubjectResult(
+  return FollowingSubjectItemView(
     subjectId: id,
     subjectType: type,
     displayName: switch (type) {
@@ -95,7 +95,7 @@ List<Override> _overrides(_FakeFollowingSubjectFacet facet) {
 
 void main() {
   testWidgets('FollowingSubjectStrip shows unread red dots', (tester) async {
-    final facet = _FakeFollowingSubjectFacet(<FollowingSubjectResult>[
+    final facet = _FakeFollowingSubjectFacet(<FollowingSubjectItemView>[
       _subject(id: 'user_a', type: FollowSubjectKind.persona, unread: true),
       _subject(id: 'circle_a', type: FollowSubjectKind.circle, unread: false),
       _subject(id: 'home_a', type: FollowSubjectKind.homepage, unread: true),
@@ -137,10 +137,10 @@ void main() {
   testWidgets('tap subject writes one nonempty client request id', (
     tester,
   ) async {
-    final facet = _FakeFollowingSubjectFacet(<FollowingSubjectResult>[
+    final facet = _FakeFollowingSubjectFacet(<FollowingSubjectItemView>[
       _subject(id: 'user_a', type: FollowSubjectKind.persona, unread: true),
     ]);
-    FollowingSubjectResult? opened;
+    FollowingSubjectItemView? opened;
 
     await tester.pumpWidget(
       ProviderScope(
@@ -164,7 +164,7 @@ void main() {
   });
 
   testWidgets('empty list shows following subject empty copy', (tester) async {
-    final facet = _FakeFollowingSubjectFacet(<FollowingSubjectResult>[]);
+    final facet = _FakeFollowingSubjectFacet(<FollowingSubjectItemView>[]);
 
     await tester.pumpWidget(
       ProviderScope(

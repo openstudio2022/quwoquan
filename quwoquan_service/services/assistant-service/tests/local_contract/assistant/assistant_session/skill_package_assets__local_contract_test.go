@@ -9,13 +9,13 @@ import (
 	"strings"
 	"testing"
 
-	skillpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/skill"
 	resourcebuilder "quwoquan_service/services/assistant-service/internal/assistant/skill_catalog/infrastructure/resource"
+	skillpkg "quwoquan_service/services/assistant-service/internal/assistant/skill_package_release/application/packageasset"
 	"quwoquan_service/services/assistant-service/tests/support/skillfixture"
 )
 
 func TestSkillManifestsUseOnlyImmutableProfileRefs(t *testing.T) {
-	root := assistantSkillAssetRoot(t)
+	root := officialSkillPackageSourceRoot(t)
 	paths, err := filepath.Glob(filepath.Join(root, "*", "manifest.json"))
 	if err != nil || len(paths) == 0 {
 		t.Fatalf("skill manifests unavailable: paths=%v err=%v", paths, err)
@@ -49,7 +49,14 @@ func TestSkillManifestsUseOnlyImmutableProfileRefs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	routingFallbacks := 0
 	for _, manifest := range catalog {
+		if manifest.RoutingFallback {
+			routingFallbacks++
+			if !manifest.IsReactive() {
+				t.Fatalf("routing fallback %s is not reactive", manifest.SkillID)
+			}
+		}
 		if len(manifest.ResolvedAssetRefs) != 11 {
 			t.Fatalf("skill %s resolved assets=%v", manifest.SkillID, manifest.ResolvedAssetRefs)
 		}
@@ -59,10 +66,13 @@ func TestSkillManifestsUseOnlyImmutableProfileRefs(t *testing.T) {
 			}
 		}
 	}
+	if routingFallbacks != 1 {
+		t.Fatalf("resolved package routing fallbacks=%d, want 1", routingFallbacks)
+	}
 }
 
 func TestSkillProfileDigestTamperingFailsClosed(t *testing.T) {
-	bundle, err := resourcebuilder.NewSourceBuilderAt(assistantSkillAssetRoot(t)).
+	bundle, err := resourcebuilder.NewSourceBuilderAt(officialSkillPackageSourceRoot(t)).
 		Compile(t.Context())
 	if err != nil {
 		t.Fatal(err)
@@ -86,13 +96,13 @@ func TestSkillProfileDigestTamperingFailsClosed(t *testing.T) {
 	}
 }
 
-func assistantSkillAssetRoot(t *testing.T) string {
+func officialSkillPackageSourceRoot(t *testing.T) string {
 	t.Helper()
 	_, file, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("resolve test source path")
 	}
 	return filepath.Clean(filepath.Join(
-		filepath.Dir(file), "..", "..", "..", "..", "resources", "skills", "assistant", "assistant_session",
+		filepath.Dir(file), "..", "..", "..", "..", "resources", "skill_packages", "official",
 	))
 }

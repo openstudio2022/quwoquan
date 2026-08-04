@@ -64,9 +64,9 @@ func TestPost_RequestEntity_UnknownFieldRejected(t *testing.T) {
 	}
 }
 
-// TestPost_MinimalCurrentRecordRemainsReadable verifies that a minimal payload
+// TestPost_MinimalCanonicalRecordRemainsReadable verifies that a minimal payload
 // still receives every server-owned default during SubmitPostPublication.
-func TestPost_MinimalCurrentRecordRemainsReadable(t *testing.T) {
+func TestPost_MinimalCanonicalRecordRemainsReadable(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 	created := submitPublishedPost(t, `{"contentType":"micro","body":"minimal post"}`)
 	postID, _ := created["postId"].(string)
@@ -79,7 +79,7 @@ func TestPost_MinimalCurrentRecordRemainsReadable(t *testing.T) {
 	testHandler.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
-		t.Fatalf("minimal current record should be readable, got %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("minimal canonical record should be readable, got %d: %s", rec.Code, rec.Body.String())
 	}
 	var result map[string]any
 	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {

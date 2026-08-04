@@ -355,6 +355,30 @@ def _selected_adapter_id(
     return adapter_id if isinstance(adapter_id, str) else None
 
 
+def provider_conformance_capability_ids(
+    compiled: Mapping[str, Any],
+) -> frozenset[str]:
+    """Return only capabilities backed by external/infra Provider adapters."""
+    declared = compiled.get("providerConformanceCapabilityIds")
+    if (
+        isinstance(declared, list)
+        and len(declared) == len(set(declared))
+        and all(isinstance(capability_id, str) for capability_id in declared)
+    ):
+        return frozenset(declared)
+    selected_bindings = compiled.get("selectedBindings")
+    if not isinstance(selected_bindings, Mapping):
+        return frozenset()
+    return frozenset(
+        str(capability_id)
+        for environment_bindings in selected_bindings.values()
+        if isinstance(environment_bindings, Mapping)
+        for capability_id, binding in environment_bindings.items()
+        if isinstance(binding, Mapping)
+        and governance.requires_provider_conformance(binding)
+    )
+
+
 def _binding_preflight_ready(
     compiled: Mapping[str, Any],
     *,
@@ -802,6 +826,8 @@ def source_coverage_issues(
         for capability_id, binding in environment_bindings.items():
             if not isinstance(capability_id, str) or not isinstance(binding, Mapping):
                 continue
+            if not governance.requires_provider_conformance(binding):
+                continue
             adapter_id = binding.get("adapter_id")
             if not isinstance(adapter_id, str):
                 issues.append(
@@ -823,6 +849,8 @@ def source_coverage_issues(
     else:
         for capability_id, binding in release_bindings.items():
             if not isinstance(capability_id, str) or not isinstance(binding, Mapping):
+                continue
+            if not governance.requires_provider_conformance(binding):
                 continue
             adapter_id = binding.get("adapter_id")
             if not isinstance(adapter_id, str):
@@ -1416,6 +1444,13 @@ def validate_evidence(
                         "capability has no selected Binding adapter in this evidence environment",
                     )
                 )
+            elif not governance.requires_provider_conformance(selected_binding):
+                issues.append(
+                    _issue(
+                        location,
+                        "first-party authority Bindings are not Provider Conformance cells",
+                    )
+                )
             elif adapter_id != selected_adapter_id:
                 issues.append(
                     _issue(
@@ -1816,6 +1851,7 @@ def derive_readiness(
     evidence: Iterable[Mapping[str, Any]],
 ) -> dict[str, dict[str, dict[str, Any]]]:
     by_cell: dict[tuple[str, str, str], Mapping[str, Any]] = {}
+    conformance_capability_ids = provider_conformance_capability_ids(compiled)
     for item in evidence:
         adapter_id = item.get("adapterId")
         capability_id = item.get("capabilityId")
@@ -1845,6 +1881,8 @@ def derive_readiness(
             continue
         for capability_id, binding in environment_bindings.items():
             if not isinstance(capability_id, str) or not isinstance(binding, Mapping):
+                continue
+            if capability_id not in conformance_capability_ids:
                 continue
             adapter_id = binding.get("adapter_id")
             if isinstance(adapter_id, str):
@@ -1880,6 +1918,22 @@ def derive_readiness(
         for capability_id, baseline in capabilities.items():
             item = dict(baseline)
             adapter_id = item.get("adapter_id")
+            provider_conformance_required = (
+                capability_id in conformance_capability_ids
+            )
+            item["provider_conformance_required"] = provider_conformance_required
+            if not provider_conformance_required:
+                preflight_ready = bool(item.get("adapter_preflight_ready"))
+                item["evidence_ready"] = False
+                item["adapter_ready"] = preflight_ready
+                item["matrix_selected_adapters_ready"] = True
+                if environment == RELEASE_ENVIRONMENT:
+                    item["prod_remote_release_ready"] = False
+                item["capability_ready"] = (
+                    item.get("state") == "enabled" and preflight_ready
+                )
+                environment_result[capability_id] = item
+                continue
             expected_cells = [
                 by_cell.get((capability_id, evidence_environment, layer))
                 for evidence_environment in ENVIRONMENTS
@@ -1978,6 +2032,7 @@ def load_validate_and_derive(
             *evidence_load_issues,
             *current_commit_issues,
             *source_discovery_issues,
+            *coverage_issues,
             *evidence_issues,
         ],
     }

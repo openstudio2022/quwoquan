@@ -44,6 +44,16 @@ func TestWriteHTTPErrorPropagatesIDs(t *testing.T) {
 	if body.Origin == "" || body.Nature == "" || body.Location.BusinessObject == "" {
 		t.Fatalf("runtime fields should be present: %+v", body)
 	}
+	var rawBody map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &rawBody); err != nil {
+		t.Fatalf("decode raw response: %v", err)
+	}
+	if _, exists := rawBody["message"]; exists {
+		t.Fatalf("retired message alias must not be emitted: %s", rec.Body.String())
+	}
+	if rawBody["debugMessage"] != RedactedDebugMessage {
+		t.Fatalf("canonical debugMessage missing: %s", rec.Body.String())
+	}
 }
 
 func TestRecoveryFromAppErrorDownlinked(t *testing.T) {

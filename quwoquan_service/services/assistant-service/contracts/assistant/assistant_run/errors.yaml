@@ -244,6 +244,19 @@ errors:
   user_message:
     zh: 助手模型服务暂不可用，请稍后重试
     en: Assistant model service is temporarily unavailable
+- code: ASSISTANT.MIDDLEWARE.tool_unavailable
+  kind: MIDDLEWARE
+  reason: unavailable
+  emitted_by:
+  - surface: terminal_snapshot
+  recovery_action: retry
+  recovery_after_seconds: 3
+  dart_const: toolUnavailable
+  go_const: ErrToolUnavailable
+  l10n_key: assistant.error.tool_unavailable
+  user_message:
+    zh: 所需能力暂不可用，请稍后重试
+    en: The required capability is temporarily unavailable
 - code: ASSISTANT.SYSTEM.run_execution_failed
   kind: SYSTEM
   reason: run_execution_failed
@@ -261,7 +274,7 @@ errors:
   kind: MIDDLEWARE
   reason: unavailable
   emitted_by:
-  - surface: app
+  - surface: terminal_snapshot
   recovery_action: retry
   recovery_after_seconds: 3
   dart_const: publicSearchProviderUnavailable
@@ -337,7 +350,7 @@ errors:
   kind: MIDDLEWARE
   reason: unavailable
   emitted_by:
-  - surface: app
+  - surface: terminal_snapshot
   recovery_action: retry
   recovery_after_seconds: 3
   dart_const: weatherProviderUnavailable
@@ -350,7 +363,7 @@ errors:
   kind: MIDDLEWARE
   reason: unavailable
   emitted_by:
-  - surface: app
+  - surface: terminal_snapshot
   recovery_action: retry
   recovery_after_seconds: 3
   dart_const: financeProviderUnavailable

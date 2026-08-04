@@ -26,8 +26,8 @@ Widget _scopedApp({CircleQueryReader? circleQuery}) {
       ? query as CircleDiscoveryFeedQueryReader
       : CircleDiscoveryFeedQueryTestDouble(
           (CircleDiscoveryFeedQuery query) => CircleDiscoveryFeedPageSlice(
-            circles: const <CircleProjection>[],
-            items: const <CircleFeedPostProjection>[],
+            circles: const <Circle>[],
+            items: const <CircleFeedItemView>[],
           ),
         );
   return ProviderScope(
@@ -274,15 +274,15 @@ void main() {
 class _ErrorCircleQuery extends CircleQueryReaderTestDouble {
   @override
   Future<CirclePageSlice> list(CircleListQuery query) async =>
-      CirclePageSlice(items: const <CircleProjection>[]);
+      CirclePageSlice(items: const <Circle>[]);
 
   @override
-  Future<CircleProjection> get(CircleDetailQuery query) async {
+  Future<Circle> get(CircleDetailQuery query) async {
     throw Exception('Network error');
   }
 
   @override
-  Future<CircleStatsSlice> stats(CircleStatsQuery query) async {
+  Future<CircleStatsWire> stats(CircleStatsQuery query) async {
     throw Exception('Network error');
   }
 }

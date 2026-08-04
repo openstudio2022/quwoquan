@@ -4,6 +4,7 @@ package recommendation
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -371,7 +372,12 @@ func TestRedisRankedFeedWindowAtomicWinnerRejectsProvenanceMismatch(t *testing.T
 		name   string
 		mutate func(*rankedFeedWindow)
 	}{
-		{name: "candidate", mutate: func(v *rankedFeedWindow) { v.Provenance.CandidateWatermark = "sha256:other" }},
+		{name: "candidate", mutate: func(v *rankedFeedWindow) {
+			v.Provenance.CandidateWatermark = fmt.Sprintf(
+				"sha256:%x",
+				sha256.Sum256([]byte("candidate-watermark:different")),
+			)
+		}},
 		{name: "policy", mutate: func(v *rankedFeedWindow) {
 			policyDigest := "sha256:" + strings.Repeat("e", 64)
 			v.Provenance.PolicyDigest = policyDigest

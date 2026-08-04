@@ -293,14 +293,43 @@ func (s *PersonaCommandPostgresStore) appendPacket(
 	if err != nil {
 		return err
 	}
+	eventID := stablePersonaPacketID("event", meta.IdempotencyKey)
 	if _, err := tx.Exec(ctx, `
 INSERT INTO personas_outbox(
   event_id, aggregate_id, aggregate_version, event_type, payload_json, occurred_at
 ) VALUES ($1,$2,$3,$4,$5,NOW())`,
-		stablePersonaPacketID("event", meta.IdempotencyKey),
+		eventID,
 		personaID, version, eventType, payload,
 	); err != nil {
-		return err
+		var pgErr *pgconn.PgError
+		if !errors.As(err, &pgErr) || pgErr.Code != "23505" {
+			return err
+		}
+		// Self-heal orphan outbox left after account-close receipt deletion.
+		var ignored string
+		receiptErr := tx.QueryRow(ctx, `
+SELECT idempotency_key
+FROM personas_command_receipts
+WHERE idempotency_key=$1`, meta.IdempotencyKey).Scan(&ignored)
+		if receiptErr == nil {
+			return personaports.ErrPersonaIdempotencyConflict
+		}
+		if !errors.Is(receiptErr, pgx.ErrNoRows) {
+			return receiptErr
+		}
+		if _, delErr := tx.Exec(ctx, `
+DELETE FROM personas_outbox WHERE event_id=$1`, eventID); delErr != nil {
+			return delErr
+		}
+		if _, err = tx.Exec(ctx, `
+INSERT INTO personas_outbox(
+  event_id, aggregate_id, aggregate_version, event_type, payload_json, occurred_at
+) VALUES ($1,$2,$3,$4,$5,NOW())`,
+			eventID,
+			personaID, version, eventType, payload,
+		); err != nil {
+			return err
+		}
 	}
 	resultJSON, err := json.Marshal(personaports.PersonaCommandResult{
 		PersonaID: personaID,

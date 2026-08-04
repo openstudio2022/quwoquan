@@ -170,6 +170,14 @@ func decodeObservation(fields []runtimemessaging.DurableField) (assignmentapp.As
 	if values["experimentId"] == "" || values["subjectKey"] == "" || values["variant"] == "" {
 		return assignmentapp.AssignmentObservation{}, fmt.Errorf("%w: payload fields are missing", ErrInvalidContract)
 	}
+	// Postgres text columns and UTF-8 wire contracts cannot store NUL. Internal
+	// RankedWindowSubjectID namespaces use '\x00'; those must be wire-encoded
+	// before ExperimentAssignmentObserved leaves Recommendation/Search.
+	if strings.ContainsRune(values["experimentId"], 0) ||
+		strings.ContainsRune(values["subjectKey"], 0) ||
+		strings.ContainsRune(values["variant"], 0) {
+		return assignmentapp.AssignmentObservation{}, fmt.Errorf("%w: payload fields contain NUL", ErrInvalidContract)
+	}
 	return assignmentapp.AssignmentObservation{
 		ExperimentID: values["experimentId"], ExperimentRevision: revision,
 		SubjectKey: values["subjectKey"], Variant: values["variant"], ObservedAt: assignedAt,

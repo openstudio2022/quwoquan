@@ -16,7 +16,7 @@ abstract class _ChatConversationPageActionsState
   ConversationViewData? _conversationDto;
   String? _resolvedTitle;
   String? _otherParticipantId;
-  RelationshipCapabilityDto? _relationshipCapability;
+  RelationshipCapabilityViewData? _relationshipCapability;
   bool _isSelectionMode = false;
   final Set<String> _selectedIds = <String>{};
   ChatMessageDisplayItem? _actionMenuMessage;

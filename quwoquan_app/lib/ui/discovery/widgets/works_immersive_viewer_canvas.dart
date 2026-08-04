@@ -91,7 +91,7 @@ class _WorksPrimaryTopBar extends StatelessWidget {
   }
 }
 
-/// 视频作品画布（V1.0）：全屏沉浸视频；作品内分集横滑切换（mediaItems 契约序列）；
+/// 视频作品画布：全屏沉浸视频；作品内分集横滑切换（mediaItems 契约序列）；
 /// 默认控件被禁用，播放控制由 caption header 的极简控制条承载；
 /// 点击视频区域切换播放/暂停。
 class _WorksVideoCanvas extends StatefulWidget {

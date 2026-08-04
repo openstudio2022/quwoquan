@@ -1,0 +1,19 @@
+{
+  "schema": "assistant.policy_rollout",
+  "commandId": "policy-rollout:assistant-default:revision-4",
+  "policyId": "assistant-default",
+  "expectedRevision": 3,
+  "activatedBy": "service:assistant-policy-publisher",
+  "bucketDefinitions": [
+    {
+      "cohort": "stable",
+      "weightBasisPoints": 10000
+    }
+  ],
+  "assignments": [
+    {
+      "cohort": "stable",
+      "releaseDigest": "6579402860644c0273747b33c23962cff013caec0839407afbe7dffdcc50f8e7"
+    }
+  ]
+}

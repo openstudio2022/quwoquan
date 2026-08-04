@@ -561,6 +561,7 @@ types:
         type: int64
         constraints:
           - NOT_NULL
+          - MIN_1
         classification: PUBLIC
         log_policy: allow
         api_exposure: read

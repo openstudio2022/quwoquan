@@ -21,7 +21,9 @@ func TestAssistantRunAppliesExplicitSkillSettingBeforeFreezingPackage(t *testing
 	policyCalls := 0
 	service := runruntime.NewCommandService(
 		repository,
-		runruntime.SessionAuthorizerFunc(func(context.Context, string, string) error { return nil }),
+		runruntime.SessionResolverFunc(func(context.Context, string, string) (runruntime.SessionContinuity, error) {
+			return runruntime.SessionContinuity{}, nil
+		}),
 		packages,
 		runruntime.StartAccessPolicyFunc(func(
 			_ context.Context,
@@ -38,7 +40,7 @@ func TestAssistantRunAppliesExplicitSkillSettingBeforeFreezingPackage(t *testing
 		}),
 		func() time.Time { return time.Date(2026, 8, 2, 13, 0, 0, 0, time.UTC) },
 		nil,
-		testPolicyResolver(),
+		runruntime.WithPolicyResolver(testPolicyResolver()),
 	)
 	command := runruntime.StartCommand{
 		UserID:           "user-1",

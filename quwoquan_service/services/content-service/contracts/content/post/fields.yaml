@@ -319,7 +319,7 @@ fields:
     log_policy: allow
     api_exposure: read_write
     ops_exposure: read
-    description: 服务端从已绑定封面 MediaAsset 或视频首帧投影的 canonical public slice key；禁止 App 写入 cdnUrl、签名 URL 或内部 object key。视频时与 thumbnailUrl 同源，供旧卡片和作品浏览器回退。
+    description: 跨内容类型的通用封面公开交付引用；服务端从已绑定封面 MediaAsset 或视频首帧投影，禁止 App 写入 cdnUrl、签名 URL 或内部 object key。视频未提供 thumbnailUrl 时，只允许使用同一 Post/MediaAsset 的 coverUrl 作为第二展示优先级。
     role: projection
   - name: thumbnailUrl
     source: thumbnailUrl
@@ -330,7 +330,7 @@ fields:
     log_policy: allow
     api_exposure: read_write
     ops_exposure: read
-    description: 服务端从已绑定封面 MediaAsset 或视频首帧投影的公开交付引用；默认首帧，手工选帧时覆盖。UI mapper 须转为 typed MediaDeliveryReference。
+    description: 视频未播放态专属主封面公开交付引用；服务端从已绑定封面 MediaAsset 或视频首帧投影，默认首帧，手工选帧时覆盖。存在时展示优先级高于通用 coverUrl；UI mapper 须转为 typed MediaDeliveryReference。
     role: projection
   - name: articleMarkdown
     source: articleMarkdown
@@ -1502,6 +1502,36 @@ types:
         type: int
         client_dart_type: int
         client_default: "20"
+  DeletePostCommand:
+    description: Post 聚合删除命令；postId 只来自 canonical path，主体与幂等键由可信请求上下文注入。
+    fields:
+      - name: postId
+        type: string
+        constraints: [NOT_BLANK]
+        client_dart_type: String
+        client_normalization: trim
+  PostDeletionReceipt:
+    description: Post 删除聚合、墓碑、幂等 receipt 与 outbox 同一事务提交后的唯一结果。
+    fields:
+      - {name: postId, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: status, type: enum, enum_ref: PostStatus, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: replayed, type: bool, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+  GetPostCountersQuery:
+    fields:
+      - name: postId
+        type: string
+        constraints: [NOT_BLANK]
+        client_dart_type: String
+        client_normalization: trim
+  GetAppConfigQuery:
+    description: 无调用方输入；环境与主体上下文由 canonical Gateway 注入。
+    fields: []
+  PostCounterSlice:
+    description: Post 当前可重建互动计数投影；字段名与详情、评论读模型保持一致。
+    fields:
+      - {name: likeCount, type: int, constraints: [NOT_NULL, MIN_0], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: commentCount, type: int, constraints: [NOT_NULL, MIN_0], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: shareCount, type: int, constraints: [NOT_NULL, MIN_0], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
   UpdatePostSettingsRequest:
     fields:
       - name: postId
@@ -1813,3 +1843,96 @@ types:
       - name: objectKind
         type: string
         client_dart_type: String
+  AppConfigSlice:
+    description: GetAppConfig 的唯一可缓存快照；configHash 是去除 fetchedAt/configHash 后 canonical JSON 的 SHA-256 身份。
+    fields:
+      - {name: schema, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: fetchedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: maxAgeSec, type: int, constraints: [NOT_NULL, MIN_1], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: activationPolicy, type: AppConfigActivationPolicy, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+      - {name: content, type: ContentAppConfig, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+      - {name: configHash, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+  AppConfigActivationPolicy:
+    description: 快照的当前会话激活策略；不允许根级副本或客户端推断。
+    fields:
+      - {name: defaultActivation, client_wire_name: default, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: killSwitches, client_wire_name: kill_switches, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+  ContentAppConfig:
+    description: Content 领域对 App 开放的当前运行时配置子树。
+    fields:
+      - {name: featureFlags, client_wire_name: feature_flags, type: ContentAppConfigFeatureFlags, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+      - {name: grayRelease, client_wire_name: gray_release, type: ContentAppConfigGrayRelease, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+      - {name: clientStateSync, client_wire_name: client_state_sync, type: ContentAppConfigClientStateSync, constraints: [NULLABLE], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+      - {name: homeChannels, client_wire_name: home_channels, type: '[]ContentAppConfigHomeChannel', constraints: [NULLABLE, MAX_ITEMS_8], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+      - {name: comment, type: ContentAppConfigComment, constraints: [NULLABLE], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+      - {name: intersection, type: ContentAppConfigIntersection, constraints: [NULLABLE], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+  ContentAppConfigFeatureFlags:
+    description: ui_config.yaml 中可运行时覆盖的闭集 flag；未下发字段由 App 使用 codegen default。
+    fields:
+      - {name: enableCreateActionEntry, client_wire_name: enable_create_action_entry, type: bool, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: enableUnifiedCreateEditor, client_wire_name: enable_unified_create_editor, type: bool, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: enableIdentityBasedSurfaces, client_wire_name: enable_identity_based_surfaces, type: bool, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: enableIdentityShareTemplate, client_wire_name: enable_identity_share_template, type: bool, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: enableArticleDistributionProfiles, client_wire_name: enable_article_distribution_profiles, type: bool, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: enableArticleBookReader, client_wire_name: enable_article_book_reader, type: bool, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: enableArticlePageCurl, client_wire_name: enable_article_page_curl, type: bool, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: enableSharedVideoTimeline, client_wire_name: enable_shared_video_timeline, type: bool, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: enableVideoTimelinePreview, client_wire_name: enable_video_timeline_preview, type: bool, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: enableHlsCmafAbr, client_wire_name: enable_hls_cmaf_abr, type: bool, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: enableAssistantContentIdentityIndex, client_wire_name: enable_assistant_content_identity_index, type: bool, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: enableHelperRead, client_wire_name: enable_helper_read, type: bool, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: enableShareToCircle, client_wire_name: enable_share_to_circle, type: bool, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: showViewCount, client_wire_name: show_view_count, type: bool, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+  ContentAppConfigGrayRelease:
+    description: 当前实验桶与候选阶段；不是 API 或模型版本信封。
+    fields:
+      - {name: experimentBucket, client_wire_name: experiment_bucket, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: currentStage, client_wire_name: current_stage, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: canaryMatrix, client_wire_name: canary_matrix, type: '[]ContentAppConfigCanaryStage', constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+  ContentAppConfigCanaryStage:
+    description: 灰度候选阶段的确定性流量百分比。
+    fields:
+      - {name: stage, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: rolloutPercent, type: int, constraints: [NOT_NULL, NON_NEGATIVE, MAX_100], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+  ContentAppConfigClientStateSync:
+    description: 端侧状态同步 outbox 的当前运行时参数。
+    fields:
+      - {name: flushDelaySec, client_wire_name: flush_delay_sec, type: int, constraints: [NULLABLE, MIN_1], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: retryDelaySec, client_wire_name: retry_delay_sec, type: int, constraints: [NULLABLE, MIN_1], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: maxBatchSize, client_wire_name: max_batch_size, type: int, constraints: [NULLABLE, MIN_1], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: maxPendingAgeSec, client_wire_name: max_pending_age_sec, type: int, constraints: [NULLABLE, MIN_1], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: flushOnForegroundResume, client_wire_name: flush_on_foreground_resume, type: bool, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: flushOnNetworkRecovered, client_wire_name: flush_on_network_recovered, type: bool, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+  ContentAppConfigHomeChannel:
+    description: 首页频道的远程整体覆盖行；整份列表必须通过容量、唯一性与字段校验。
+    fields:
+      - {name: id, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: labelKey, client_wire_name: label_key, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: template, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: layoutTemplate, client_wire_name: layout_template, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: phoneColumns, client_wire_name: phone_columns, type: int, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: supportsFullSpanModules, client_wire_name: supports_full_span_modules, type: bool, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: intersectionModulePolicy, client_wire_name: intersection_module_policy, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: contentCardPolicy, client_wire_name: content_card_policy, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: feedQuery, client_wire_name: feed_query, type: json, constraints: [NULLABLE], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+      - {name: moodCopyKey, client_wire_name: mood_copy_key, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: order, type: int, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+  ContentAppConfigComment:
+    description: 评论创建与列表展示的当前运行时参数。
+    fields:
+      - {name: maxLength, client_wire_name: max_length, type: int, constraints: [NULLABLE, MIN_1], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: replyPreviewCount, client_wire_name: reply_preview_count, type: int, constraints: [NULLABLE, MIN_1], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: replyFirstExpandPageSize, client_wire_name: reply_first_expand_page_size, type: int, constraints: [NULLABLE, MIN_1], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: replyExpandPageSize, client_wire_name: reply_expand_page_size, type: int, constraints: [NULLABLE, MIN_1], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: foldLineCount, client_wire_name: fold_line_count, type: int, constraints: [NULLABLE, MIN_1], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: attachment, type: ContentAppConfigCommentAttachment, constraints: [NULLABLE], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+      - {name: enabled, type: bool, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+  ContentAppConfigCommentAttachment:
+    description: 评论附件的当前运行时上限。
+    fields:
+      - {name: maxImages, client_wire_name: max_images, type: int, constraints: [NULLABLE, MIN_1], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+  ContentAppConfigIntersection:
+    description: 交集卡与推荐候选窗口的展示参数。
+    fields:
+      - {name: inlineExpandCount, client_wire_name: inline_expand_count, type: int, constraints: [NULLABLE, MIN_1], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: maxCandidateWindow, client_wire_name: max_candidate_window, type: int, constraints: [NULLABLE, MIN_1], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}

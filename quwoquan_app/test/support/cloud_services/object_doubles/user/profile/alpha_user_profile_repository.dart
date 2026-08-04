@@ -1,43 +1,535 @@
-import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/application/content/post/author_impact_query.dart';
 import 'package:quwoquan_app/application/user/persona_relationship/persona_relationship_facets.dart';
 import 'package:quwoquan_app/application/user/profile/profile_edit_query.dart';
 import 'package:quwoquan_app/application/user/profile/profile_query.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_evidence_item.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_evidence_page.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_item.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_summary.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_action_hint.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/owner_credential_row_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/persona/persona_create_request_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/persona/persona_management_item_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/persona/persona_update_request_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/profile_edit_snapshot_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/profile_qr_resolve_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/profile_social_relation_row_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/relationship_view_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/social_relation_search_item_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/relationship_capability_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/persona_profile_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_edit_models.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/core/models/search_models.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
+import '../../../../fixtures/author_impact_fixtures.dart';
 import '../alpha_fixture_user_resolver.dart';
 import '../../object_scenario_seed_reader.dart';
-
-part 'src/alpha_user_profile_contract_seed_helpers.dart';
-part 'src/alpha_user_profile_repository_helpers.dart';
-part 'src/alpha_user_profile_relationship_normalization.dart';
-part 'src/alpha_user_profile_repository_impl.dart';
-
-typedef _ProfileEditSnapshotOverrideMap =
-    Map<String, ProfileEditSnapshotWireDto>;
 
 String get kMockCurrentOwnerId =>
     AlphaFixtureUserResolver.currentUserVariantUserId;
 
 String get kMockCurrentPersonaId =>
     AlphaFixtureUserResolver.currentUserVariantPersonaId;
+
+/// 当前 Profile/AuthorImpact/PersonaRelationship Facet 的 local-contract
+/// object double。生产 composition 与环境 App 不可达本文件。
+///
+/// 旧实现曾同时维护多套已退出 wire DTO、Persona 管理与凭据接口；本实现只保留
+/// 类声明实际承诺的五个领域 Facet，并直接返回当前 ViewData/generated 类型。
+class MockUserProfileRepository
+    implements
+        ProfileQuery,
+        ProfileEditQuery,
+        AuthorImpactQuery,
+        PersonaRelationshipQuery,
+        PersonaRelationshipCommandWriter {
+  const MockUserProfileRepository();
+
+  static final Set<String> _followingPersonaIds = <String>{};
+
+  static Set<String> get _ownerLikePersonaIds => <String>{
+    'me',
+    'fixture_user_current',
+    'user_001',
+    kMockCurrentPersonaId,
+    kMockCurrentOwnerId,
+  };
+
+  @override
+  Future<PersonaProfileViewData> getUserProfile(String userId) async {
+    final requested = userId.trim().isEmpty ? kMockCurrentPersonaId : userId;
+    final resolved = AlphaFixtureUserResolver.resolvePersonaId(requested);
+    final seed = AlphaFixtureUserResolver.profileWireFor(resolved);
+    return _profileFromScenarioSeed(
+      seed,
+      fallbackPersonaId: resolved.isEmpty ? requested : resolved,
+    );
+  }
+
+  @override
+  Future<UserProfileStatsViewData> getUserStats(String userId) async {
+    return UserProfileStatsViewData.fromProfile(await getUserProfile(userId));
+  }
+
+  @override
+  Future<UserHomepageBundleViewData> getUserHomepageBundle(
+    String personaId,
+  ) async {
+    final resolved = AlphaFixtureUserResolver.resolvePersonaId(personaId);
+    final profile = await getUserProfile(resolved);
+    final stats = UserProfileStatsViewData.fromProfile(profile);
+    final isOwner =
+        _ownerLikePersonaIds.contains(personaId) ||
+        _ownerLikePersonaIds.contains(resolved);
+    final capability = isOwner
+        ? null
+        : _relationshipCapability(
+            targetPersonaId: profile.personaId,
+            following: _followingPersonaIds.contains(profile.personaId),
+          );
+    return UserHomepageBundleViewData(
+      profile: profile,
+      stats: stats,
+      relationshipCapability: capability,
+      tabCounts: UserHomepageTabCountsViewData.fromStats(stats),
+      viewerContext: UserHomepageViewerContextViewData(
+        viewerPersonaId: isOwner ? profile.personaId : kMockCurrentPersonaId,
+        isOwner: isOwner,
+        isGuest: false,
+        relationToTarget: isOwner
+            ? 'self'
+            : capability?.relationState ?? 'not_following',
+        canViewFullProfile: true,
+      ),
+      cacheVersion: 'alpha-${profile.personaId}',
+    );
+  }
+
+  @override
+  Future<ProfileEditSnapshotData> getProfileEditSnapshot() async {
+    final profile = await getUserProfile(kMockCurrentPersonaId);
+    return ProfileEditSnapshotData.fromProfile(profile: profile);
+  }
+
+  @override
+  Future<ProfileQrCardData> getProfileQrCard() async {
+    return ProfileQrCardData.mockFromSnapshot(await getProfileEditSnapshot());
+  }
+
+  @override
+  Future<ProfileQrResolveWire> resolveProfileQrToken({
+    required String token,
+    String handle = '',
+  }) async {
+    if (token.trim().isEmpty) {
+      throw ArgumentError.value(token, 'token', 'must not be empty');
+    }
+    final personaId = handle.trim().isEmpty
+        ? kMockCurrentPersonaId
+        : AlphaFixtureUserResolver.resolvePersonaId(handle);
+    return ProfileQrResolveWire(
+      personaId: personaId,
+      userHandle: personaId,
+      publicProfileUrl: 'https://quwoquan.com/u/$personaId',
+      scanStatus: 'accepted',
+    );
+  }
+
+  @override
+  Future<List<SocialRelationSearchItemViewData>> searchSocialRelations({
+    required String query,
+    int limit = CloudApiDefaults.pageLimit,
+  }) async {
+    final normalized = query.trim().toLowerCase();
+    final profiles = _scenarioProfiles()
+        .map(_profileFromAccountScenarioSeed)
+        .where(
+          (profile) =>
+              normalized.isEmpty ||
+              profile.personaId.toLowerCase().contains(normalized) ||
+              profile.userHandle.toLowerCase().contains(normalized) ||
+              profile.displayName.toLowerCase().contains(normalized),
+        )
+        .map(
+          (profile) => SocialRelationSearchItemViewData(
+            personaId: profile.personaId,
+            userHandle: profile.userHandle,
+            displayName: profile.displayName,
+            avatarUrl: profile.avatarUrl,
+            headline: profile.bio,
+            chatAvailable: true,
+            relationshipCapability: _relationshipCapability(
+              targetPersonaId: profile.personaId,
+              following: _followingPersonaIds.contains(profile.personaId),
+            ),
+          ),
+        )
+        .toList(growable: false);
+    final safeLimit = limit <= 0 ? CloudApiDefaults.pageLimit : limit;
+    return profiles.length <= safeLimit
+        ? profiles
+        : profiles.sublist(0, safeLimit);
+  }
+
+  @override
+  Future<AuthorImpactSummary> getAuthorImpact(String personaId) async {
+    final seed = objectScenarioSeedReader.contentSeedSet('intersection_core');
+    final byAuthor = seed?['authorImpact'];
+    if (byAuthor is! Map<Object?, Object?>) {
+      return AuthorImpactSummary(
+        authorId: personaId,
+        total: 0,
+        items: const <AuthorImpactItem>[],
+      );
+    }
+    final resolved = _ownerLikePersonaIds.contains(personaId)
+        ? 'fixture_user_current'
+        : personaId;
+    final entry = byAuthor[resolved];
+    if (entry is! Map<Object?, Object?>) {
+      return AuthorImpactSummary(
+        authorId: personaId,
+        total: 0,
+        items: const <AuthorImpactItem>[],
+      );
+    }
+    final map = _stringObjectMap(entry);
+    final items = (map['items'] as List<Object?>? ?? const <Object?>[])
+        .whereType<Map<Object?, Object?>>()
+        .map(
+          (item) => _authorImpactItemFromScenarioSeed(_stringObjectMap(item)),
+        )
+        .toList(growable: false);
+    return AuthorImpactSummary(
+      authorId: (map['authorId'] ?? personaId).toString(),
+      total: _intValue(map['total']),
+      items: items,
+    );
+  }
+
+  @override
+  Future<AuthorImpactEvidencePage> listAuthorImpactEvidence({
+    required String personaId,
+    required String impactId,
+    String evidenceSnapshotId = '',
+    String cursor = '',
+    int limit = CloudApiDefaults.pageLimit,
+  }) async {
+    final summary = await getAuthorImpact(personaId);
+    final item = summary.items.where((candidate) {
+      return candidate.impactId == impactId ||
+          (evidenceSnapshotId.isNotEmpty &&
+              candidate.evidenceSnapshotId == evidenceSnapshotId);
+    }).firstOrNull;
+    if (item == null) {
+      return AuthorImpactEvidencePage(
+        impactId: impactId,
+        evidenceSnapshotId: evidenceSnapshotId,
+        totalCount: 0,
+        items: const <AuthorImpactEvidenceItem>[],
+        nextCursor: '',
+        hasMore: false,
+      );
+    }
+    final rows = _evidenceRows(item);
+    final start = int.tryParse(cursor) ?? 0;
+    final safeStart = start.clamp(0, rows.length);
+    final safeLimit = limit <= 0
+        ? CloudApiDefaults.pageLimit
+        : limit.clamp(1, 50);
+    final end = (safeStart + safeLimit).clamp(safeStart, rows.length);
+    return AuthorImpactEvidencePage(
+      impactId: item.impactId,
+      evidenceSnapshotId: item.evidenceSnapshotId,
+      totalCount: rows.length,
+      items: rows.sublist(safeStart, end),
+      nextCursor: end < rows.length ? '$end' : '',
+      hasMore: end < rows.length,
+    );
+  }
+
+  @override
+  Future<void> follow(
+    String targetPersonaId, {
+    required String sourceSurfaceId,
+  }) async {
+    final normalized = targetPersonaId.trim();
+    if (normalized.isEmpty) {
+      throw ArgumentError.value(targetPersonaId, 'targetPersonaId');
+    }
+    _followingPersonaIds.add(normalized);
+  }
+
+  @override
+  Future<void> unfollow(String targetPersonaId) async {
+    _followingPersonaIds.remove(targetPersonaId.trim());
+  }
+
+  @override
+  Future<CursorPage<ProfileSocialRelationRowViewData>> listFollowing({
+    required String personaId,
+    String? query,
+    String? cursor,
+    int limit = CloudApiDefaults.pageLimit,
+  }) async {
+    final rows = await Future.wait(_followingPersonaIds.map(_relationRow));
+    return _page(rows, query: query, cursor: cursor, limit: limit);
+  }
+
+  @override
+  Future<CursorPage<ProfileSocialRelationRowViewData>> listFollowers({
+    required String personaId,
+    String? query,
+    String? cursor,
+    int limit = CloudApiDefaults.pageLimit,
+  }) async {
+    final row = await _relationRow(kMockCurrentPersonaId);
+    return _page(
+      <ProfileSocialRelationRowViewData>[row],
+      query: query,
+      cursor: cursor,
+      limit: limit,
+    );
+  }
+
+  Future<ProfileSocialRelationRowViewData> _relationRow(
+    String personaId,
+  ) async {
+    final profile = await getUserProfile(personaId);
+    return ProfileSocialRelationRowViewData(
+      personaId: profile.personaId,
+      userHandle: profile.userHandle,
+      displayName: profile.displayName,
+      avatarUrl: profile.avatarUrl,
+      avatarVersion: profile.avatarVersion,
+      profileVisibility: profile.profileVisibility,
+      relationState: _followingPersonaIds.contains(profile.personaId)
+          ? 'following'
+          : 'followed_by',
+      followedAt: DateTime.utc(2026, 7, 1),
+      relationshipCapability: _relationshipCapability(
+        targetPersonaId: profile.personaId,
+        following: _followingPersonaIds.contains(profile.personaId),
+      ),
+    );
+  }
+}
+
+PersonaProfileViewData _profileFromAccountScenarioSeed(
+  Map<String, dynamic> seed,
+) {
+  final ownerUserId = seed['userId']?.toString().trim() ?? '';
+  if (ownerUserId.isEmpty) {
+    throw const FormatException(
+      'user_profile_core profile requires canonical userId',
+    );
+  }
+  return _profileFromScenarioSeed(
+    seed,
+    fallbackPersonaId: AlphaFixtureUserResolver.resolvePersonaId(ownerUserId),
+  );
+}
+
+PersonaProfileViewData _profileFromScenarioSeed(
+  Map<String, dynamic>? seed, {
+  required String fallbackPersonaId,
+}) {
+  final map = seed ?? const <String, dynamic>{};
+  final personaId = (map['personaId'] ?? fallbackPersonaId).toString();
+  final displayName = (map['displayName'] ?? personaId).toString();
+  return PersonaProfileViewData(
+    personaId: personaId,
+    ownerUserId: (map['ownerUserId'] ?? personaId).toString(),
+    subjectType: (map['subjectType'] ?? 'account').toString(),
+    userHandle: (map['userHandle'] ?? personaId).toString(),
+    displayName: displayName.isEmpty ? personaId : displayName,
+    avatarUrl: (map['avatarUrl'] ?? '').toString(),
+    avatarVersion: _intValue(map['avatarVersion']),
+    backgroundUrl: (map['backgroundUrl'] ?? '').toString(),
+    bio: (map['bio'] ?? '').toString(),
+    identityTags: (map['identityTags'] as List<Object?>? ?? const <Object?>[])
+        .map((item) => item.toString())
+        .toList(growable: false),
+    followerCount: _intValue(map['followerCount']),
+    followingCount: _intValue(map['followingCount']),
+    postCount: _intValue(map['postCount']),
+    circleCount: _intValue(map['circleCount']),
+    likeCount: _intValue(map['likeCount']),
+    isolationLevel: (map['isolationLevel'] ?? 'open').toString(),
+    profileVisibility: (map['profileVisibility'] ?? 'public').toString(),
+    inheritsFromOwner: map['inheritsFromOwner'] == true,
+    overriddenFields:
+        (map['overriddenFields'] as List<Object?>? ?? const <Object?>[])
+            .map((item) => item.toString())
+            .toList(growable: false),
+    updatedAt: DateTime.utc(2026, 7, 1),
+  );
+}
+
+RelationshipCapabilityViewData _relationshipCapability({
+  required String targetPersonaId,
+  required bool following,
+}) {
+  return RelationshipCapabilityViewData(
+    viewerPersonaId: kMockCurrentPersonaId,
+    targetPersonaId: targetPersonaId,
+    relationState: following ? 'following' : 'not_following',
+    canFollow: !following,
+    canUnfollow: following,
+    canFollowBack: false,
+    canGreet: true,
+    canCreateDirectConversation: true,
+    canSendMessage: following,
+    canOpenConversation: following,
+    hasPendingGreeting: false,
+    hasFormalConversation: following,
+    canStartVoiceCall: following,
+    canStartVideoCall: following,
+    isBlocked: false,
+    isBlockedBy: false,
+  );
+}
+
+List<Map<String, dynamic>> _scenarioProfiles() {
+  final raw = objectScenarioSeedReader.requireSeedSet(
+    'user',
+    'user_profile_core',
+  )['profiles'];
+  if (raw is! List<Object?>) return const <Map<String, dynamic>>[];
+  return raw
+      .whereType<Map<Object?, Object?>>()
+      .map((item) => _stringObjectMap(item).cast<String, dynamic>())
+      .toList(growable: false);
+}
+
+AuthorImpactItem _authorImpactItemFromScenarioSeed(Map<String, Object?> map) {
+  return authorImpactItemFixture(
+    impactId: (map['impactId'] ?? '').toString(),
+    helpType: (map['helpType'] ?? '').toString(),
+    action: (map['action'] ?? '').toString(),
+    intersectionDimension: (map['intersectionDimension'] ?? '').toString(),
+    tagRef: (map['tagRef'] ?? '').toString(),
+    source: (map['source'] ?? '').toString(),
+    count: _intValue(map['count']),
+    primaryText: (map['primaryText'] ?? '').toString(),
+    subtitleText: (map['subtitleText'] ?? '').toString(),
+    primarySpans: _intersectionSpans(map['primarySpans']),
+    sampleVisuals: _intersectionVisuals(map['sampleVisuals']),
+    representativeActor: _representativeActor(map['representativeActor']),
+    countTarget: _intersectionTarget(map['countTarget']),
+    evidenceSnapshotId: (map['evidenceSnapshotId'] ?? '').toString(),
+    countObjectKind: (map['countObjectKind'] ?? '').toString(),
+    iconKey: (map['iconKey'] ?? '').toString(),
+    freshAt: (map['freshAt'] ?? '2026-07-01T00:00:00Z').toString(),
+    timeBucket: (map['timeBucket'] ?? '').toString(),
+    lifecycleState: (map['lifecycleState'] ?? 'active').toString(),
+    previousStrength: _doubleValue(map['previousStrength']),
+    strengthDelta: _doubleValue(map['strengthDelta']),
+  );
+}
+
+List<AuthorImpactEvidenceItem> _evidenceRows(AuthorImpactItem item) {
+  final count = item.count.clamp(0, 12);
+  return List<AuthorImpactEvidenceItem>.generate(count, (index) {
+    final visual = index < item.sampleVisuals.length
+        ? item.sampleVisuals[index]
+        : null;
+    return authorImpactEvidenceItemFixture(
+      evidenceId: '${item.impactId}_$index',
+      impactId: item.impactId,
+      helpType: item.helpType,
+      action: item.action,
+      intersectionDimension: item.intersectionDimension,
+      occurredAt: item.freshAt
+          .subtract(Duration(hours: index))
+          .toUtc()
+          .toIso8601String(),
+      summaryText: item.primaryText,
+      sampleVisual: visual,
+      representativeActor: item.representativeActor,
+      actionHints: item.actionHints,
+      contentTarget: item.countTarget,
+    );
+  });
+}
+
+List<IntersectionTextSpan> _intersectionSpans(Object? raw) {
+  if (raw is! List<Object?>) return const <IntersectionTextSpan>[];
+  return raw
+      .whereType<Map<Object?, Object?>>()
+      .map((item) {
+        final map = _stringObjectMap(item);
+        return IntersectionTextSpan(
+          text: (map['text'] ?? '').toString(),
+          role: (map['role'] ?? 'plain').toString(),
+          target: _intersectionTarget(map['target']),
+        );
+      })
+      .toList(growable: false);
+}
+
+List<IntersectionVisual> _intersectionVisuals(Object? raw) {
+  if (raw is! List<Object?>) return const <IntersectionVisual>[];
+  return raw
+      .whereType<Map<Object?, Object?>>()
+      .map((item) {
+        final map = _stringObjectMap(item);
+        return IntersectionVisual(
+          assetKind: (map['assetKind'] ?? '').toString(),
+          imageUrl: (map['imageUrl'] ?? '').toString(),
+          displayName: (map['displayName'] ?? '').toString(),
+          target: _intersectionTarget(map['target']),
+        );
+      })
+      .toList(growable: false);
+}
+
+IntersectionRepresentativeActor? _representativeActor(Object? raw) {
+  if (raw is! Map<Object?, Object?>) return null;
+  final map = _stringObjectMap(raw);
+  return IntersectionRepresentativeActor(
+    actorId: (map['actorId'] ?? '').toString(),
+    displayName: (map['displayName'] ?? '').toString(),
+    avatarUrl: (map['avatarUrl'] ?? '').toString(),
+    relationLabel: (map['relationLabel'] ?? '').toString(),
+    privacyState: (map['privacyState'] ?? 'visible').toString(),
+    target: _intersectionTarget(map['target']),
+    evidenceRank: _intValue(map['evidenceRank']),
+    snapshotVersion: (map['snapshotVersion'] ?? '').toString(),
+  );
+}
+
+IntersectionTarget? _intersectionTarget(Object? raw) {
+  if (raw is! Map<Object?, Object?>) return null;
+  final map = _stringObjectMap(raw);
+  return IntersectionTarget(
+    objectType: (map['objectType'] ?? '').toString(),
+    objectId: (map['objectId'] ?? '').toString(),
+    objectKind: (map['objectKind'] ?? '').toString(),
+    routeId: (map['routeId'] ?? '').toString(),
+  );
+}
+
+CursorPage<ProfileSocialRelationRowViewData> _page(
+  List<ProfileSocialRelationRowViewData> source, {
+  required String? query,
+  required String? cursor,
+  required int limit,
+}) {
+  final normalized = query?.trim().toLowerCase() ?? '';
+  final filtered = normalized.isEmpty
+      ? source
+      : source
+            .where(
+              (item) =>
+                  item.displayName.toLowerCase().contains(normalized) ||
+                  item.userHandle.toLowerCase().contains(normalized),
+            )
+            .toList(growable: false);
+  final parsedStart = int.tryParse(cursor ?? '') ?? 0;
+  final start = parsedStart.clamp(0, filtered.length);
+  final safeLimit = limit <= 0 ? CloudApiDefaults.pageLimit : limit;
+  final end = (start + safeLimit).clamp(start, filtered.length);
+  return CursorPage<ProfileSocialRelationRowViewData>(
+    items: filtered.sublist(start, end),
+    nextCursor: end < filtered.length ? '$end' : null,
+    totalCount: filtered.length,
+  );
+}
+
+Map<String, Object?> _stringObjectMap(Map<Object?, Object?> raw) {
+  return raw.map((key, value) => MapEntry(key.toString(), value));
+}
+
+int _intValue(Object? value) => value is num ? value.toInt() : 0;
+
+double _doubleValue(Object? value) => value is num ? value.toDouble() : 0;

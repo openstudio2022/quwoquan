@@ -376,6 +376,7 @@ class UserApiMetadata {
     'LoginWithWechat': 'object',
     'Logout': 'object',
     'MarkFollowedSubjectVisited': 'object',
+    'PullUserSync': 'page',
     'RefreshToken': 'object',
     'RejectProposal': 'object',
     'RemoveDevicePushEndpoint': 'object',

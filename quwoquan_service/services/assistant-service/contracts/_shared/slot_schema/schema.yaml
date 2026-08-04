@@ -4,8 +4,27 @@ output_path: assistant/generated/contracts/slot_schema.g.dart
 contract: slot_schema
 kind: runtime_policy_contract
 fields:
-  - { name: requiredSlots, type: list<string>, default: [] }
-  - { name: optionalSlots, type: list<string>, default: [] }
+  - { name: slots, type: list<object>, ref: slot_definition, default: [] }
   - { name: carryOver, type: bool, default: false }
   - { name: stateId, type: string, default: '' }
   - { name: nextStateId, type: string, default: '' }
+subcontracts:
+  slot_definition:
+    class_name: AssistantSlotDefinitionWire
+    fields:
+      - { name: slotId, type: string, required: true }
+      - { name: required, type: bool, default: false }
+      - { name: valueType, type: string, required: true }
+      - { name: parserRefs, type: list<string>, required: true }
+      - { name: aliases, type: list<string>, default: [] }
+      - { name: sourcePriority, type: list<string>, required: true }
+      - { name: clarification, type: object, ref: slot_clarification, required: true }
+  slot_clarification:
+    class_name: AssistantSlotClarificationWire
+    fields:
+      - { name: policy, type: string, required: true }
+      - { name: targetSlot, type: enum, enum_ref: ContextTargetSlot, default: '' }
+      - { name: prompt, type: string, default: '' }
+      - { name: suggestions, type: list<string>, default: [] }
+      - { name: retryPolicy, type: enum, enum_ref: ContextRetryPolicy, default: '' }
+      - { name: scopeExpansionPolicy, type: enum, enum_ref: ContextScopeExpansionPolicy, default: '' }

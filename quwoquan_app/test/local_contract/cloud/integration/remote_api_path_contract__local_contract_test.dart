@@ -595,7 +595,6 @@ RemoteContentRepository _contentRepository(
       blockedKeywordsLoader:
           blockedKeywordsLoader ?? () async => const <String>[],
     ),
-    httpClient: httpClient,
   );
 }
 
@@ -878,18 +877,6 @@ void main() {
       } catch (_) {}
       expect(log.last.method, 'DELETE');
       expect(log.last.path, ContentApiMetadata.unlikePostPath(postId: 'p1'));
-    });
-
-    test('reportBehaviors → POST /content/behaviors', () async {
-      await repo.reportBehaviors(events: []);
-      expect(log.last.method, 'POST');
-      expect(log.last.path, ContentApiMetadata.reportBehaviorsPath);
-    });
-
-    test('getCounters → GET /content/posts/{postId}/counters', () async {
-      await repo.getCounters(postId: 'p1');
-      expect(log.last.method, 'GET');
-      expect(log.last.path, ContentApiMetadata.getCountersPath(postId: 'p1'));
     });
   });
 

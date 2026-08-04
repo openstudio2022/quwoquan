@@ -68,7 +68,7 @@ void main() {
           'matchedTags': <String>[],
           'evidence': <Object?>[],
           'rankReasons': <Object?>[],
-          'payload': <String, Object?>{'coverUrl': 'https://legacy.invalid'},
+          'payload': <String, Object?>{'coverUrl': 'https://retired.invalid'},
           if (withRetiredField) 'coverWidth': 1200,
         };
 

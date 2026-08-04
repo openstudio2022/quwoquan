@@ -242,11 +242,11 @@ func TestPromotePostKeepsCountersAndCommentThread(t *testing.T) {
 	if err := json.Unmarshal(countersRec.Body.Bytes(), &counters); err != nil {
 		t.Fatalf("decode counters: %v", err)
 	}
-	if counters["like"] != float64(1) {
-		t.Fatalf("expected like counter preserved, got %v", counters["like"])
+	if counters["likeCount"] != float64(1) {
+		t.Fatalf("expected like counter preserved, got %v", counters["likeCount"])
 	}
-	if counters["comment"] != float64(1) {
-		t.Fatalf("expected comment counter preserved, got %v", counters["comment"])
+	if counters["commentCount"] != float64(1) {
+		t.Fatalf("expected comment counter preserved, got %v", counters["commentCount"])
 	}
 
 	commentsReq := httptest.NewRequest(http.MethodGet, "/content/posts/"+postID+"/comments?limit=20", nil)

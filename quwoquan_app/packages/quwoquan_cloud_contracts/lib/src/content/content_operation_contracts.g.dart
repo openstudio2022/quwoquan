@@ -1,11 +1,13 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: 9816b2b7d9fedea34ad78dd719fc16fdf3e982073304d7f50f7a8ea4064f6b7f
+// ContractGraph SHA256: 93359367b8614f01bb5e1c51e37af383332b01f117cc1c6cf39e4fdf838e49d2
 
 library;
 
 import '../operation_request_payload.dart';
+import "../generated/shared_operation_enums.g.dart";
 import "../recommendation/recommendation_operation_contracts.g.dart";
 
+export "../generated/shared_operation_enums.g.dart";
 export "../recommendation/recommendation_operation_contracts.g.dart";
 
 part '../generated/requests/content/content_operation_contracts.g.requests.g.dart';
@@ -255,6 +257,29 @@ enum InteractionDirection {
   }
 }
 
+enum IntersectionDimension {
+  identity("identity"),
+  location("location"),
+  content("content"),
+  interest("interest"),
+  relationship("relationship");
+
+  const IntersectionDimension(this.wireName);
+
+  final String wireName;
+
+  static IntersectionDimension fromWire(Object? value, String path) {
+    return switch (value) {
+      "identity" => IntersectionDimension.identity,
+      "location" => IntersectionDimension.location,
+      "content" => IntersectionDimension.content,
+      "interest" => IntersectionDimension.interest,
+      "relationship" => IntersectionDimension.relationship,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
 enum MediaAssetAccessPolicy {
   ownerOnly("owner_only"),
   referencedPost("referenced_post"),
@@ -269,6 +294,21 @@ enum MediaAssetAccessPolicy {
       "owner_only" => MediaAssetAccessPolicy.ownerOnly,
       "referenced_post" => MediaAssetAccessPolicy.referencedPost,
       "public" => MediaAssetAccessPolicy.public,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum MediaAssetDiscardStatus {
+  deleted("deleted");
+
+  const MediaAssetDiscardStatus(this.wireName);
+
+  final String wireName;
+
+  static MediaAssetDiscardStatus fromWire(Object? value, String path) {
+    return switch (value) {
+      "deleted" => MediaAssetDiscardStatus.deleted,
       _ => throw FormatException('$path has an invalid enum value'),
     };
   }
@@ -422,6 +462,27 @@ enum PostSourceType {
   }
 }
 
+enum PostStatus {
+  pendingReview("pending_review"),
+  published("published"),
+  rejected("rejected"),
+  deleted("deleted");
+
+  const PostStatus(this.wireName);
+
+  final String wireName;
+
+  static PostStatus fromWire(Object? value, String path) {
+    return switch (value) {
+      "pending_review" => PostStatus.pendingReview,
+      "published" => PostStatus.published,
+      "rejected" => PostStatus.rejected,
+      "deleted" => PostStatus.deleted,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
 enum ProfileInteractionReadState {
   seen("seen"),
   read("read");
@@ -523,6 +584,68 @@ enum Visibility {
       _ => throw FormatException('$path has an invalid enum value'),
     };
   }
+}
+
+final class AppConfigActivationPolicy {
+  const AppConfigActivationPolicy({
+    required this.defaultActivation,
+    required this.killSwitches,
+  });
+
+  final String defaultActivation;
+  final String killSwitches;
+
+  factory AppConfigActivationPolicy.fromWire(Map<String, Object?> map, [String path = "AppConfigActivationPolicy"]) {
+    _rejectUnknownFields(map, const <String>{"default", "kill_switches"}, path);
+    return AppConfigActivationPolicy(
+      defaultActivation: _requiredString(map["default"], '$path.default'),
+      killSwitches: _requiredString(map["kill_switches"], '$path.kill_switches'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "default": defaultActivation,
+    "kill_switches": killSwitches,
+  };
+}
+
+final class AppConfigSlice {
+  const AppConfigSlice({
+    required this.schema,
+    required this.fetchedAt,
+    required this.maxAgeSec,
+    required this.activationPolicy,
+    required this.content,
+    required this.configHash,
+  });
+
+  final String schema;
+  final DateTime fetchedAt;
+  final int maxAgeSec;
+  final AppConfigActivationPolicy activationPolicy;
+  final ContentAppConfig content;
+  final String configHash;
+
+  factory AppConfigSlice.fromWire(Map<String, Object?> map, [String path = "AppConfigSlice"]) {
+    _rejectUnknownFields(map, const <String>{"schema", "fetchedAt", "maxAgeSec", "activationPolicy", "content", "configHash"}, path);
+    return AppConfigSlice(
+      schema: _requiredString(map["schema"], '$path.schema'),
+      fetchedAt: _requiredTimestamp(map["fetchedAt"], '$path.fetchedAt'),
+      maxAgeSec: _requiredPositiveInt(map["maxAgeSec"], '$path.maxAgeSec'),
+      activationPolicy: AppConfigActivationPolicy.fromWire(_requiredObject(map["activationPolicy"], '$path.activationPolicy'), '$path.activationPolicy'),
+      content: ContentAppConfig.fromWire(_requiredObject(map["content"], '$path.content'), '$path.content'),
+      configHash: _requiredString(map["configHash"], '$path.configHash'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "schema": schema,
+    "fetchedAt": fetchedAt.toUtc().toIso8601String(),
+    "maxAgeSec": maxAgeSec,
+    "activationPolicy": activationPolicy.toWire(),
+    "content": content.toWire(),
+    "configHash": configHash,
+  };
 }
 
 final class AuthorCommentPageSlice {
@@ -1095,6 +1218,372 @@ final class CommentPageSlice {
     "items": items.map((value) => value.toWire()).toList(growable: false),
     if (nextCursor != null) "nextCursor": nextCursor!,
     "total": total,
+  };
+}
+
+final class ContentAppConfig {
+  const ContentAppConfig({
+    required this.featureFlags,
+    required this.grayRelease,
+    this.clientStateSync,
+    this.homeChannels,
+    this.comment,
+    this.intersection,
+  });
+
+  final ContentAppConfigFeatureFlags featureFlags;
+  final ContentAppConfigGrayRelease grayRelease;
+  final ContentAppConfigClientStateSync? clientStateSync;
+  final List<ContentAppConfigHomeChannel>? homeChannels;
+  final ContentAppConfigComment? comment;
+  final ContentAppConfigIntersection? intersection;
+
+  factory ContentAppConfig.fromWire(Map<String, Object?> map, [String path = "ContentAppConfig"]) {
+    _rejectUnknownFields(map, const <String>{"feature_flags", "gray_release", "client_state_sync", "home_channels", "comment", "intersection"}, path);
+    return ContentAppConfig(
+      featureFlags: ContentAppConfigFeatureFlags.fromWire(_requiredObject(map["feature_flags"], '$path.feature_flags'), '$path.feature_flags'),
+      grayRelease: ContentAppConfigGrayRelease.fromWire(_requiredObject(map["gray_release"], '$path.gray_release'), '$path.gray_release'),
+      clientStateSync: map["client_state_sync"] == null ? null : ContentAppConfigClientStateSync.fromWire(_requiredObject(map["client_state_sync"], '$path.client_state_sync'), '$path.client_state_sync'),
+      homeChannels: map["home_channels"] == null ? null : List<ContentAppConfigHomeChannel>.unmodifiable(_requiredList(map["home_channels"], '$path.home_channels').asMap().entries.map((entry) => ContentAppConfigHomeChannel.fromWire(_requiredObject(entry.value, '$path.home_channels' + '[${entry.key}]'), '$path.home_channels' + '[${entry.key}]'))),
+      comment: map["comment"] == null ? null : ContentAppConfigComment.fromWire(_requiredObject(map["comment"], '$path.comment'), '$path.comment'),
+      intersection: map["intersection"] == null ? null : ContentAppConfigIntersection.fromWire(_requiredObject(map["intersection"], '$path.intersection'), '$path.intersection'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "feature_flags": featureFlags.toWire(),
+    "gray_release": grayRelease.toWire(),
+    if (clientStateSync != null) "client_state_sync": clientStateSync!.toWire(),
+    if (homeChannels != null) "home_channels": homeChannels!.map((value) => value.toWire()).toList(growable: false),
+    if (comment != null) "comment": comment!.toWire(),
+    if (intersection != null) "intersection": intersection!.toWire(),
+  };
+}
+
+final class ContentAppConfigCanaryStage {
+  const ContentAppConfigCanaryStage({
+    required this.stage,
+    required this.rolloutPercent,
+  });
+
+  final String stage;
+  final int rolloutPercent;
+
+  factory ContentAppConfigCanaryStage.fromWire(Map<String, Object?> map, [String path = "ContentAppConfigCanaryStage"]) {
+    _rejectUnknownFields(map, const <String>{"stage", "rolloutPercent"}, path);
+    return ContentAppConfigCanaryStage(
+      stage: _requiredString(map["stage"], '$path.stage'),
+      rolloutPercent: _requiredBoundedInt(map["rolloutPercent"], '$path.rolloutPercent', min: 0, max: 100),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "stage": stage,
+    "rolloutPercent": rolloutPercent,
+  };
+}
+
+final class ContentAppConfigClientStateSync {
+  const ContentAppConfigClientStateSync({
+    this.flushDelaySec,
+    this.retryDelaySec,
+    this.maxBatchSize,
+    this.maxPendingAgeSec,
+    this.flushOnForegroundResume,
+    this.flushOnNetworkRecovered,
+  });
+
+  final int? flushDelaySec;
+  final int? retryDelaySec;
+  final int? maxBatchSize;
+  final int? maxPendingAgeSec;
+  final bool? flushOnForegroundResume;
+  final bool? flushOnNetworkRecovered;
+
+  factory ContentAppConfigClientStateSync.fromWire(Map<String, Object?> map, [String path = "ContentAppConfigClientStateSync"]) {
+    _rejectUnknownFields(map, const <String>{"flush_delay_sec", "retry_delay_sec", "max_batch_size", "max_pending_age_sec", "flush_on_foreground_resume", "flush_on_network_recovered"}, path);
+    return ContentAppConfigClientStateSync(
+      flushDelaySec: map["flush_delay_sec"] == null ? null : _requiredPositiveInt(map["flush_delay_sec"], '$path.flush_delay_sec'),
+      retryDelaySec: map["retry_delay_sec"] == null ? null : _requiredPositiveInt(map["retry_delay_sec"], '$path.retry_delay_sec'),
+      maxBatchSize: map["max_batch_size"] == null ? null : _requiredPositiveInt(map["max_batch_size"], '$path.max_batch_size'),
+      maxPendingAgeSec: map["max_pending_age_sec"] == null ? null : _requiredPositiveInt(map["max_pending_age_sec"], '$path.max_pending_age_sec'),
+      flushOnForegroundResume: map["flush_on_foreground_resume"] == null ? null : _requiredBool(map["flush_on_foreground_resume"], '$path.flush_on_foreground_resume'),
+      flushOnNetworkRecovered: map["flush_on_network_recovered"] == null ? null : _requiredBool(map["flush_on_network_recovered"], '$path.flush_on_network_recovered'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    if (flushDelaySec != null) "flush_delay_sec": flushDelaySec!,
+    if (retryDelaySec != null) "retry_delay_sec": retryDelaySec!,
+    if (maxBatchSize != null) "max_batch_size": maxBatchSize!,
+    if (maxPendingAgeSec != null) "max_pending_age_sec": maxPendingAgeSec!,
+    if (flushOnForegroundResume != null) "flush_on_foreground_resume": flushOnForegroundResume!,
+    if (flushOnNetworkRecovered != null) "flush_on_network_recovered": flushOnNetworkRecovered!,
+  };
+}
+
+final class ContentAppConfigComment {
+  const ContentAppConfigComment({
+    this.maxLength,
+    this.replyPreviewCount,
+    this.replyFirstExpandPageSize,
+    this.replyExpandPageSize,
+    this.foldLineCount,
+    this.attachment,
+    this.enabled,
+  });
+
+  final int? maxLength;
+  final int? replyPreviewCount;
+  final int? replyFirstExpandPageSize;
+  final int? replyExpandPageSize;
+  final int? foldLineCount;
+  final ContentAppConfigCommentAttachment? attachment;
+  final bool? enabled;
+
+  factory ContentAppConfigComment.fromWire(Map<String, Object?> map, [String path = "ContentAppConfigComment"]) {
+    _rejectUnknownFields(map, const <String>{"max_length", "reply_preview_count", "reply_first_expand_page_size", "reply_expand_page_size", "fold_line_count", "attachment", "enabled"}, path);
+    return ContentAppConfigComment(
+      maxLength: map["max_length"] == null ? null : _requiredPositiveInt(map["max_length"], '$path.max_length'),
+      replyPreviewCount: map["reply_preview_count"] == null ? null : _requiredPositiveInt(map["reply_preview_count"], '$path.reply_preview_count'),
+      replyFirstExpandPageSize: map["reply_first_expand_page_size"] == null ? null : _requiredPositiveInt(map["reply_first_expand_page_size"], '$path.reply_first_expand_page_size'),
+      replyExpandPageSize: map["reply_expand_page_size"] == null ? null : _requiredPositiveInt(map["reply_expand_page_size"], '$path.reply_expand_page_size'),
+      foldLineCount: map["fold_line_count"] == null ? null : _requiredPositiveInt(map["fold_line_count"], '$path.fold_line_count'),
+      attachment: map["attachment"] == null ? null : ContentAppConfigCommentAttachment.fromWire(_requiredObject(map["attachment"], '$path.attachment'), '$path.attachment'),
+      enabled: map["enabled"] == null ? null : _requiredBool(map["enabled"], '$path.enabled'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    if (maxLength != null) "max_length": maxLength!,
+    if (replyPreviewCount != null) "reply_preview_count": replyPreviewCount!,
+    if (replyFirstExpandPageSize != null) "reply_first_expand_page_size": replyFirstExpandPageSize!,
+    if (replyExpandPageSize != null) "reply_expand_page_size": replyExpandPageSize!,
+    if (foldLineCount != null) "fold_line_count": foldLineCount!,
+    if (attachment != null) "attachment": attachment!.toWire(),
+    if (enabled != null) "enabled": enabled!,
+  };
+}
+
+final class ContentAppConfigCommentAttachment {
+  const ContentAppConfigCommentAttachment({
+    this.maxImages,
+  });
+
+  final int? maxImages;
+
+  factory ContentAppConfigCommentAttachment.fromWire(Map<String, Object?> map, [String path = "ContentAppConfigCommentAttachment"]) {
+    _rejectUnknownFields(map, const <String>{"max_images"}, path);
+    return ContentAppConfigCommentAttachment(
+      maxImages: map["max_images"] == null ? null : _requiredPositiveInt(map["max_images"], '$path.max_images'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    if (maxImages != null) "max_images": maxImages!,
+  };
+}
+
+final class ContentAppConfigFeatureFlags {
+  const ContentAppConfigFeatureFlags({
+    this.enableCreateActionEntry,
+    this.enableUnifiedCreateEditor,
+    this.enableIdentityBasedSurfaces,
+    this.enableIdentityShareTemplate,
+    this.enableArticleDistributionProfiles,
+    this.enableArticleBookReader,
+    this.enableArticlePageCurl,
+    this.enableSharedVideoTimeline,
+    this.enableVideoTimelinePreview,
+    this.enableHlsCmafAbr,
+    this.enableAssistantContentIdentityIndex,
+    this.enableHelperRead,
+    this.enableShareToCircle,
+    this.showViewCount,
+  });
+
+  final bool? enableCreateActionEntry;
+  final bool? enableUnifiedCreateEditor;
+  final bool? enableIdentityBasedSurfaces;
+  final bool? enableIdentityShareTemplate;
+  final bool? enableArticleDistributionProfiles;
+  final bool? enableArticleBookReader;
+  final bool? enableArticlePageCurl;
+  final bool? enableSharedVideoTimeline;
+  final bool? enableVideoTimelinePreview;
+  final bool? enableHlsCmafAbr;
+  final bool? enableAssistantContentIdentityIndex;
+  final bool? enableHelperRead;
+  final bool? enableShareToCircle;
+  final bool? showViewCount;
+
+  factory ContentAppConfigFeatureFlags.fromWire(Map<String, Object?> map, [String path = "ContentAppConfigFeatureFlags"]) {
+    _rejectUnknownFields(map, const <String>{"enable_create_action_entry", "enable_unified_create_editor", "enable_identity_based_surfaces", "enable_identity_share_template", "enable_article_distribution_profiles", "enable_article_book_reader", "enable_article_page_curl", "enable_shared_video_timeline", "enable_video_timeline_preview", "enable_hls_cmaf_abr", "enable_assistant_content_identity_index", "enable_helper_read", "enable_share_to_circle", "show_view_count"}, path);
+    return ContentAppConfigFeatureFlags(
+      enableCreateActionEntry: map["enable_create_action_entry"] == null ? null : _requiredBool(map["enable_create_action_entry"], '$path.enable_create_action_entry'),
+      enableUnifiedCreateEditor: map["enable_unified_create_editor"] == null ? null : _requiredBool(map["enable_unified_create_editor"], '$path.enable_unified_create_editor'),
+      enableIdentityBasedSurfaces: map["enable_identity_based_surfaces"] == null ? null : _requiredBool(map["enable_identity_based_surfaces"], '$path.enable_identity_based_surfaces'),
+      enableIdentityShareTemplate: map["enable_identity_share_template"] == null ? null : _requiredBool(map["enable_identity_share_template"], '$path.enable_identity_share_template'),
+      enableArticleDistributionProfiles: map["enable_article_distribution_profiles"] == null ? null : _requiredBool(map["enable_article_distribution_profiles"], '$path.enable_article_distribution_profiles'),
+      enableArticleBookReader: map["enable_article_book_reader"] == null ? null : _requiredBool(map["enable_article_book_reader"], '$path.enable_article_book_reader'),
+      enableArticlePageCurl: map["enable_article_page_curl"] == null ? null : _requiredBool(map["enable_article_page_curl"], '$path.enable_article_page_curl'),
+      enableSharedVideoTimeline: map["enable_shared_video_timeline"] == null ? null : _requiredBool(map["enable_shared_video_timeline"], '$path.enable_shared_video_timeline'),
+      enableVideoTimelinePreview: map["enable_video_timeline_preview"] == null ? null : _requiredBool(map["enable_video_timeline_preview"], '$path.enable_video_timeline_preview'),
+      enableHlsCmafAbr: map["enable_hls_cmaf_abr"] == null ? null : _requiredBool(map["enable_hls_cmaf_abr"], '$path.enable_hls_cmaf_abr'),
+      enableAssistantContentIdentityIndex: map["enable_assistant_content_identity_index"] == null ? null : _requiredBool(map["enable_assistant_content_identity_index"], '$path.enable_assistant_content_identity_index'),
+      enableHelperRead: map["enable_helper_read"] == null ? null : _requiredBool(map["enable_helper_read"], '$path.enable_helper_read'),
+      enableShareToCircle: map["enable_share_to_circle"] == null ? null : _requiredBool(map["enable_share_to_circle"], '$path.enable_share_to_circle'),
+      showViewCount: map["show_view_count"] == null ? null : _requiredBool(map["show_view_count"], '$path.show_view_count'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    if (enableCreateActionEntry != null) "enable_create_action_entry": enableCreateActionEntry!,
+    if (enableUnifiedCreateEditor != null) "enable_unified_create_editor": enableUnifiedCreateEditor!,
+    if (enableIdentityBasedSurfaces != null) "enable_identity_based_surfaces": enableIdentityBasedSurfaces!,
+    if (enableIdentityShareTemplate != null) "enable_identity_share_template": enableIdentityShareTemplate!,
+    if (enableArticleDistributionProfiles != null) "enable_article_distribution_profiles": enableArticleDistributionProfiles!,
+    if (enableArticleBookReader != null) "enable_article_book_reader": enableArticleBookReader!,
+    if (enableArticlePageCurl != null) "enable_article_page_curl": enableArticlePageCurl!,
+    if (enableSharedVideoTimeline != null) "enable_shared_video_timeline": enableSharedVideoTimeline!,
+    if (enableVideoTimelinePreview != null) "enable_video_timeline_preview": enableVideoTimelinePreview!,
+    if (enableHlsCmafAbr != null) "enable_hls_cmaf_abr": enableHlsCmafAbr!,
+    if (enableAssistantContentIdentityIndex != null) "enable_assistant_content_identity_index": enableAssistantContentIdentityIndex!,
+    if (enableHelperRead != null) "enable_helper_read": enableHelperRead!,
+    if (enableShareToCircle != null) "enable_share_to_circle": enableShareToCircle!,
+    if (showViewCount != null) "show_view_count": showViewCount!,
+  };
+}
+
+final class ContentAppConfigGrayRelease {
+  const ContentAppConfigGrayRelease({
+    required this.experimentBucket,
+    required this.currentStage,
+    required this.canaryMatrix,
+  });
+
+  final String experimentBucket;
+  final String currentStage;
+  final List<ContentAppConfigCanaryStage> canaryMatrix;
+
+  factory ContentAppConfigGrayRelease.fromWire(Map<String, Object?> map, [String path = "ContentAppConfigGrayRelease"]) {
+    _rejectUnknownFields(map, const <String>{"experiment_bucket", "current_stage", "canary_matrix"}, path);
+    return ContentAppConfigGrayRelease(
+      experimentBucket: _requiredString(map["experiment_bucket"], '$path.experiment_bucket'),
+      currentStage: _requiredString(map["current_stage"], '$path.current_stage'),
+      canaryMatrix: List<ContentAppConfigCanaryStage>.unmodifiable(_requiredList(map["canary_matrix"], '$path.canary_matrix').asMap().entries.map((entry) => ContentAppConfigCanaryStage.fromWire(_requiredObject(entry.value, '$path.canary_matrix' + '[${entry.key}]'), '$path.canary_matrix' + '[${entry.key}]'))),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "experiment_bucket": experimentBucket,
+    "current_stage": currentStage,
+    "canary_matrix": canaryMatrix.map((value) => value.toWire()).toList(growable: false),
+  };
+}
+
+final class ContentAppConfigHomeChannel {
+  const ContentAppConfigHomeChannel({
+    required this.id,
+    this.labelKey,
+    this.template,
+    this.layoutTemplate,
+    this.phoneColumns,
+    this.supportsFullSpanModules,
+    this.intersectionModulePolicy,
+    this.contentCardPolicy,
+    this.feedQuery,
+    this.moodCopyKey,
+    this.order,
+  });
+
+  final String id;
+  final String? labelKey;
+  final String? template;
+  final String? layoutTemplate;
+  final int? phoneColumns;
+  final bool? supportsFullSpanModules;
+  final String? intersectionModulePolicy;
+  final String? contentCardPolicy;
+  final Map<String, Object?>? feedQuery;
+  final String? moodCopyKey;
+  final int? order;
+
+  factory ContentAppConfigHomeChannel.fromWire(Map<String, Object?> map, [String path = "ContentAppConfigHomeChannel"]) {
+    _rejectUnknownFields(map, const <String>{"id", "label_key", "template", "layout_template", "phone_columns", "supports_full_span_modules", "intersection_module_policy", "content_card_policy", "feed_query", "mood_copy_key", "order"}, path);
+    return ContentAppConfigHomeChannel(
+      id: _requiredString(map["id"], '$path.id'),
+      labelKey: map["label_key"] == null ? null : _requiredString(map["label_key"], '$path.label_key'),
+      template: map["template"] == null ? null : _requiredString(map["template"], '$path.template'),
+      layoutTemplate: map["layout_template"] == null ? null : _requiredString(map["layout_template"], '$path.layout_template'),
+      phoneColumns: map["phone_columns"] == null ? null : _requiredInt(map["phone_columns"], '$path.phone_columns'),
+      supportsFullSpanModules: map["supports_full_span_modules"] == null ? null : _requiredBool(map["supports_full_span_modules"], '$path.supports_full_span_modules'),
+      intersectionModulePolicy: map["intersection_module_policy"] == null ? null : _requiredString(map["intersection_module_policy"], '$path.intersection_module_policy'),
+      contentCardPolicy: map["content_card_policy"] == null ? null : _requiredString(map["content_card_policy"], '$path.content_card_policy'),
+      feedQuery: map["feed_query"] == null ? null : _requiredObject(map["feed_query"], '$path.feed_query'),
+      moodCopyKey: map["mood_copy_key"] == null ? null : _requiredString(map["mood_copy_key"], '$path.mood_copy_key'),
+      order: map["order"] == null ? null : _requiredInt(map["order"], '$path.order'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "id": id,
+    if (labelKey != null) "label_key": labelKey!,
+    if (template != null) "template": template!,
+    if (layoutTemplate != null) "layout_template": layoutTemplate!,
+    if (phoneColumns != null) "phone_columns": phoneColumns!,
+    if (supportsFullSpanModules != null) "supports_full_span_modules": supportsFullSpanModules!,
+    if (intersectionModulePolicy != null) "intersection_module_policy": intersectionModulePolicy!,
+    if (contentCardPolicy != null) "content_card_policy": contentCardPolicy!,
+    if (feedQuery != null) "feed_query": feedQuery!,
+    if (moodCopyKey != null) "mood_copy_key": moodCopyKey!,
+    if (order != null) "order": order!,
+  };
+}
+
+final class ContentAppConfigIntersection {
+  const ContentAppConfigIntersection({
+    this.inlineExpandCount,
+    this.maxCandidateWindow,
+  });
+
+  final int? inlineExpandCount;
+  final int? maxCandidateWindow;
+
+  factory ContentAppConfigIntersection.fromWire(Map<String, Object?> map, [String path = "ContentAppConfigIntersection"]) {
+    _rejectUnknownFields(map, const <String>{"inline_expand_count", "max_candidate_window"}, path);
+    return ContentAppConfigIntersection(
+      inlineExpandCount: map["inline_expand_count"] == null ? null : _requiredPositiveInt(map["inline_expand_count"], '$path.inline_expand_count'),
+      maxCandidateWindow: map["max_candidate_window"] == null ? null : _requiredPositiveInt(map["max_candidate_window"], '$path.max_candidate_window'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    if (inlineExpandCount != null) "inline_expand_count": inlineExpandCount!,
+    if (maxCandidateWindow != null) "max_candidate_window": maxCandidateWindow!,
+  };
+}
+
+final class ContentBehaviorReportReceipt {
+  const ContentBehaviorReportReceipt({
+    required this.acceptedCount,
+    required this.replayedCount,
+  });
+
+  final int acceptedCount;
+  final int replayedCount;
+
+  factory ContentBehaviorReportReceipt.fromWire(Map<String, Object?> map, [String path = "ContentBehaviorReportReceipt"]) {
+    _rejectUnknownFields(map, const <String>{"acceptedCount", "replayedCount"}, path);
+    return ContentBehaviorReportReceipt(
+      acceptedCount: _requiredInt(map["acceptedCount"], '$path.acceptedCount'),
+      replayedCount: _requiredInt(map["replayedCount"], '$path.replayedCount'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "acceptedCount": acceptedCount,
+    "replayedCount": replayedCount,
   };
 }
 
@@ -2046,6 +2535,29 @@ final class IntersectionReasonPageSlice {
   };
 }
 
+final class MarkIntersectionsVisitedAck {
+  const MarkIntersectionsVisitedAck({
+    required this.dimensions,
+    required this.status,
+  });
+
+  final List<String> dimensions;
+  final String status;
+
+  factory MarkIntersectionsVisitedAck.fromWire(Map<String, Object?> map, [String path = "MarkIntersectionsVisitedAck"]) {
+    _rejectUnknownFields(map, const <String>{"dimensions", "status"}, path);
+    return MarkIntersectionsVisitedAck(
+      dimensions: List<String>.unmodifiable(_requiredList(map["dimensions"], '$path.dimensions').asMap().entries.map((entry) => _requiredString(entry.value, '$path.dimensions' + '[${entry.key}]'))),
+      status: _requiredString(map["status"], '$path.status'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "dimensions": dimensions.map((value) => value).toList(growable: false),
+    "status": status,
+  };
+}
+
 final class MediaAssetDiscardResult {
   const MediaAssetDiscardResult({
     required this.mediaId,
@@ -2054,14 +2566,14 @@ final class MediaAssetDiscardResult {
   });
 
   final String mediaId;
-  final MediaAssetStatus status;
+  final MediaAssetDiscardStatus status;
   final bool replayed;
 
   factory MediaAssetDiscardResult.fromWire(Map<String, Object?> map, [String path = "MediaAssetDiscardResult"]) {
     _rejectUnknownFields(map, const <String>{"mediaId", "status", "replayed"}, path);
     return MediaAssetDiscardResult(
       mediaId: _requiredString(map["mediaId"], '$path.mediaId'),
-      status: MediaAssetStatus.fromWire(map["status"], '$path.status'),
+      status: MediaAssetDiscardStatus.fromWire(map["status"], '$path.status'),
       replayed: _requiredBool(map["replayed"], '$path.replayed'),
     );
   }
@@ -2676,6 +3188,33 @@ final class PostArticleRenderProfile {
   };
 }
 
+final class PostDeletionReceipt {
+  const PostDeletionReceipt({
+    required this.postId,
+    required this.status,
+    required this.replayed,
+  });
+
+  final String postId;
+  final PostStatus status;
+  final bool replayed;
+
+  factory PostDeletionReceipt.fromWire(Map<String, Object?> map, [String path = "PostDeletionReceipt"]) {
+    _rejectUnknownFields(map, const <String>{"postId", "status", "replayed"}, path);
+    return PostDeletionReceipt(
+      postId: _requiredNonBlankString(map["postId"], '$path.postId'),
+      status: PostStatus.fromWire(map["status"], '$path.status'),
+      replayed: _requiredBool(map["replayed"], '$path.replayed'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "postId": postId,
+    "status": status.wireName,
+    "replayed": replayed,
+  };
+}
+
 final class PostEntityMention {
   const PostEntityMention({
     required this.subjectType,
@@ -3258,6 +3797,37 @@ final class ReplyPageSlice {
   };
 }
 
+final class ReportCommandResult {
+  const ReportCommandResult({
+    required this.id,
+    required this.version,
+    required this.status,
+    required this.replayed,
+  });
+
+  final String id;
+  final int version;
+  final ReportStatus status;
+  final bool replayed;
+
+  factory ReportCommandResult.fromWire(Map<String, Object?> map, [String path = "ReportCommandResult"]) {
+    _rejectUnknownFields(map, const <String>{"id", "version", "status", "replayed"}, path);
+    return ReportCommandResult(
+      id: _requiredString(map["id"], '$path.id'),
+      version: _requiredPositiveInt(map["version"], '$path.version'),
+      status: ReportStatus.fromWire(map["status"], '$path.status'),
+      replayed: _requiredBool(map["replayed"], '$path.replayed'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "id": id,
+    "version": version,
+    "status": status.wireName,
+    "replayed": replayed,
+  };
+}
+
 final class SourceAttribution {
   const SourceAttribution({
     required this.isOriginal,
@@ -3353,6 +3923,9 @@ final class SourceAttribution {
   };
 }
 
+AppConfigSlice decodeAppConfigSlice(Object? response) =>
+    AppConfigSlice.fromWire(_requiredObject(response, "AppConfigSlice"), "AppConfigSlice");
+
 AuthorCommentPageSlice decodeAuthorCommentPageSlice(Object? response) =>
     AuthorCommentPageSlice.fromWire(_requiredObject(response, "AuthorCommentPageSlice"), "AuthorCommentPageSlice");
 
@@ -3370,6 +3943,9 @@ CommentCommandResult decodeCommentCommandResult(Object? response) =>
 
 CommentPageSlice decodeCommentPageSlice(Object? response) =>
     CommentPageSlice.fromWire(_requiredObject(response, "CommentPageSlice"), "CommentPageSlice");
+
+ContentBehaviorReportReceipt decodeContentBehaviorReportReceipt(Object? response) =>
+    ContentBehaviorReportReceipt.fromWire(_requiredObject(response, "ContentBehaviorReportReceipt"), "ContentBehaviorReportReceipt");
 
 ContentCommentReactionCommandResult decodeContentCommentReactionCommandResult(Object? response) =>
     ContentCommentReactionCommandResult.fromWire(_requiredObject(response, "ContentCommentReactionCommandResult"), "ContentCommentReactionCommandResult");
@@ -3401,6 +3977,9 @@ IntersectionInboxSummary decodeIntersectionInboxSummary(Object? response) =>
 IntersectionReasonPageSlice decodeIntersectionReasonPageSlice(Object? response) =>
     IntersectionReasonPageSlice.fromWire(_requiredObject(response, "IntersectionReasonPageSlice"), "IntersectionReasonPageSlice");
 
+MarkIntersectionsVisitedAck decodeMarkIntersectionsVisitedAck(Object? response) =>
+    MarkIntersectionsVisitedAck.fromWire(_requiredObject(response, "MarkIntersectionsVisitedAck"), "MarkIntersectionsVisitedAck");
+
 MediaAssetDiscardResult decodeMediaAssetDiscardResult(Object? response) =>
     MediaAssetDiscardResult.fromWire(_requiredObject(response, "MediaAssetDiscardResult"), "MediaAssetDiscardResult");
 
@@ -3428,6 +4007,9 @@ ObjectIntersectionReasonSlice decodeObjectIntersectionReasonSlice(Object? respon
 OutboundShareFactResult decodeOutboundShareFactResult(Object? response) =>
     OutboundShareFactResult.fromWire(_requiredObject(response, "OutboundShareFactResult"), "OutboundShareFactResult");
 
+PostDeletionReceipt decodePostDeletionReceipt(Object? response) =>
+    PostDeletionReceipt.fromWire(_requiredObject(response, "PostDeletionReceipt"), "PostDeletionReceipt");
+
 PostPublicationReceipt decodePostPublicationReceipt(Object? response) =>
     PostPublicationReceipt.fromWire(_requiredObject(response, "PostPublicationReceipt"), "PostPublicationReceipt");
 
@@ -3443,11 +4025,8 @@ ReceivedCommentPageSlice decodeReceivedCommentPageSlice(Object? response) =>
 ReplyPageSlice decodeReplyPageSlice(Object? response) =>
     ReplyPageSlice.fromWire(_requiredObject(response, "ReplyPageSlice"), "ReplyPageSlice");
 
-void decodeEmptyResponse(Object? response) {
-  if (response != null) {
-    throw const FormatException('empty response must not contain a body');
-  }
-}
+ReportCommandResult decodeReportCommandResult(Object? response) =>
+    ReportCommandResult.fromWire(_requiredObject(response, "ReportCommandResult"), "ReportCommandResult");
 
 Map<String, Object?> _requiredObject(Object? value, String path) {
   if (value is! Map<Object?, Object?>) {
@@ -3516,6 +4095,22 @@ int _requiredPositiveInt(Object? value, String path) {
   final result = _requiredInt(value, path);
   if (result < 1) {
     throw FormatException('$path must be positive');
+  }
+  return result;
+}
+
+int _requiredBoundedInt(
+  Object? value,
+  String path, {
+  int? min,
+  int? max,
+}) {
+  final result = _requiredInt(value, path);
+  if (min != null && result < min) {
+    throw FormatException('$path must be at least $min');
+  }
+  if (max != null && result > max) {
+    throw FormatException('$path must not exceed $max');
   }
   return result;
 }

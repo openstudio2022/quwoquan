@@ -306,6 +306,9 @@ extension AlphaChatConversationState on AlphaChatStateEngine {
     }
     return <ChatFixtureObject>[
       <String, Object?>{
+        'id': 'receipt_${messageId}_$currentUserId',
+        'messageId': messageId,
+        'conversationId': conversationId,
         'userId': currentUserId,
         'readAt': _now().toIso8601String(),
       },
@@ -322,16 +325,18 @@ extension AlphaChatConversationState on AlphaChatStateEngine {
           final id = _text(conversation['id']);
           final state = _stateFor(id);
           final messageTime = _text(conversation['lastMessageTime']);
+          final updatedAt = _text(conversation['updatedAt']);
+          final lastMessageAt = _firstText(<Object?>[messageTime, updatedAt]);
           return <String, Object?>{
             'conversationId': id,
-            'updatedAt': _text(conversation['updatedAt']),
+            'updatedAt': updatedAt,
             'settingsUpdatedAt': _firstText(<Object?>[
               conversation['settingsUpdatedAt'],
               state['updatedAt'],
-              conversation['updatedAt'],
+              updatedAt,
             ]),
-            'lastMessageAt': messageTime,
-            'lastMessageTime': messageTime,
+            'lastMessageAt': lastMessageAt,
+            'lastMessageTime': lastMessageAt,
             'lastMessagePreview': _text(conversation['lastMessagePreview']),
             'unreadCount': _int(state['unreadCount']),
             'type': _text(conversation['type']),

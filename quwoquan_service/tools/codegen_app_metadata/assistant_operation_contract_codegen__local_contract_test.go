@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -24,21 +25,38 @@ func TestAssistantOperationResponsesAreDerivedFromCanonicalEntities(t *testing.T
 		t.Fatal(err)
 	}
 	responseFields := assistantFieldsWithSchemaTypes(fields, schemaTypes)
-	direct := assistantDirectResponseEntities(responseFields, service)
+	direct := assistantDirectResponseEntities(
+		responseFields,
+		service,
+		schemaTypes,
+	)
 	models := collectAssistantWireEntityClosure(
 		responseFields,
-		append(
+		append(append(
 			append([]string(nil), direct...),
 			"AssistantDeviceActionExecutionReceipt",
-		),
+		), assistantObjectSchemaResponseRoots(
+			responseFields,
+			objectSchemas,
+		)...),
 	)
 	models = assistantExcludeSchemaModels(models, schemaTypes)
+	requestSchemaImports := assistantRequestSchemaImports(
+		fields,
+		service,
+		objectSchemas,
+	)
+	requestSchemaOutputs := make(map[string]struct{}, len(requestSchemaImports))
+	for _, output := range requestSchemaImports {
+		requestSchemaOutputs[output] = struct{}{}
+	}
 	rendered := renderAssistantOperationResponsesDart(
 		responseFields,
 		models,
 		direct,
 		enumCatalog,
 		assistantResponseSchemaImports(responseFields, models, objectSchemas),
+		assistantSchemaTypesForOutputs(objectSchemas, requestSchemaOutputs),
 	)
 	for _, expected := range []string{
 		"class AssistantEntryResponse",
@@ -51,6 +69,7 @@ func TestAssistantOperationResponsesAreDerivedFromCanonicalEntities(t *testing.T
 		"class AssistantPreferenceListView",
 		"class AssistantTaskSlice",
 		"class AssistantTurnListView",
+		"class AssistantRunTerminalSnapshotView",
 		"class SkillPackageRelease",
 		"class SkillSurfacePlacement",
 		"class SkillUserSetting",
@@ -67,9 +86,49 @@ func TestAssistantOperationResponsesAreDerivedFromCanonicalEntities(t *testing.T
 		"AssistantSkillSubscriptionProjection",
 		"class AssistantSession {",
 		"class SkillSubscription {",
+		"decodeAssistantRunEnvelopeWire(Object? response)",
+		"decodeAssistantSessionWire(Object? response)",
+		"decodeSkillSubscriptionWire(Object? response)",
 	} {
 		if strings.Contains(rendered, forbidden) {
 			t.Fatalf("generated Assistant response retained legacy alias %q", forbidden)
+		}
+	}
+	activityClass := assistantGeneratedClassBlock(
+		t,
+		rendered,
+		"SkillActivityView",
+	)
+	for _, forbidden := range []string{
+		"accountId",
+		"runId",
+		"consentId",
+		"subscriptionId",
+	} {
+		if strings.Contains(activityClass, forbidden) {
+			t.Fatalf("SkillActivityView exposed private field %q", forbidden)
+		}
+	}
+	if !strings.Contains(
+		activityClass,
+		"final String? dataControlRequestId;",
+	) {
+		t.Fatal("SkillActivityView omitted typed data-control recovery target")
+	}
+	dataControlClass := assistantGeneratedClassBlock(
+		t,
+		rendered,
+		"SkillDataControlRequest",
+	)
+	for _, forbidden := range []string{
+		"accountId",
+		"leaseOwner",
+		"leaseToken",
+		"leaseExpiresAt",
+		"leaseHeartbeatAt",
+	} {
+		if strings.Contains(dataControlClass, forbidden) {
+			t.Fatalf("SkillDataControlRequest exposed private field %q", forbidden)
 		}
 	}
 	for _, expected := range []string{
@@ -82,6 +141,23 @@ func TestAssistantOperationResponsesAreDerivedFromCanonicalEntities(t *testing.T
 			t.Fatalf("generated Assistant response is missing schema mapping %q", expected)
 		}
 	}
+}
+
+func assistantGeneratedClassBlock(
+	t *testing.T,
+	generated string,
+	className string,
+) string {
+	t.Helper()
+	start := strings.Index(generated, "class "+className+" {")
+	if start < 0 {
+		t.Fatalf("generated Assistant response is missing class %s", className)
+	}
+	remainder := generated[start:]
+	if next := strings.Index(remainder[1:], "\nclass "); next >= 0 {
+		return remainder[:next+1]
+	}
+	return remainder
 }
 
 func TestAssistantOperationDiscoveryUsesContractGraphDocuments(t *testing.T) {
@@ -115,6 +191,7 @@ func TestAssistantOperationDiscoveryUsesContractGraphDocuments(t *testing.T) {
 
 func TestAssistantOperationOwnerIsTheOnlyRequestAndResponseLibrary(t *testing.T) {
 	rendered := renderAssistantOperationOwnerLibrary([]string{
+		"assistant_run.g.dart",
 		"assistant_session.g.dart",
 		"skill_subscription.g.dart",
 	}, []string{"skill_subscription.g.dart"})
@@ -122,7 +199,7 @@ func TestAssistantOperationOwnerIsTheOnlyRequestAndResponseLibrary(t *testing.T)
 		"import '../generated/assistant/assistant_runtime_enums.g.dart';",
 		"assistant_api_responses.g.dart",
 		"assistant_runtime_failure.g.dart",
-		"assistant_run_envelope.g.dart",
+		"assistant_run.g.dart",
 		"assistant_stream_event.g.dart",
 		"assistant_session.g.dart",
 		"skill_subscription.g.dart",
@@ -134,6 +211,28 @@ func TestAssistantOperationOwnerIsTheOnlyRequestAndResponseLibrary(t *testing.T)
 	}
 	if strings.Contains(rendered, "assistant_contracts.dart") {
 		t.Fatal("Assistant operation owner retained the handwritten wire library")
+	}
+	if strings.Contains(rendered, "assistant_run_envelope.g.dart") {
+		t.Fatal("Assistant operation owner retained the duplicate run envelope output")
+	}
+}
+
+func TestAssistantObjectSchemaDependenciesRejectUnownedWireReferences(
+	t *testing.T,
+) {
+	_, _, err := assistantObjectSchemaDependencies(
+		&assistantContractSchema{
+			DartClass:   "ExampleWire",
+			LibraryPath: "example.g.dart",
+			Fields: []assistantContractField{
+				{Name: "unknown", Ref: "UnownedWire"},
+			},
+		},
+		&fieldsFile{Entities: map[string]entityDef{}},
+		nil,
+	)
+	if err == nil || !strings.Contains(err.Error(), "UnownedWire") {
+		t.Fatalf("unowned Assistant schema ref was not rejected: %v", err)
 	}
 }
 
@@ -164,6 +263,12 @@ func TestAssistantOperationPackageOutputsDoNotDependOnAppLocalWireTypes(
 	if len(paths) == 0 {
 		t.Fatal("Assistant operation package generator emitted no Dart files")
 	}
+	if _, err := os.Stat(filepath.Join(
+		generatedDir,
+		"assistant_run_envelope.g.dart",
+	)); !os.IsNotExist(err) {
+		t.Fatal("Assistant generator retained duplicate assistant_run_envelope.g.dart")
+	}
 	var generated strings.Builder
 	for _, path := range paths {
 		payload, readErr := os.ReadFile(path)
@@ -183,6 +288,69 @@ func TestAssistantOperationPackageOutputsDoNotDependOnAppLocalWireTypes(
 		if !strings.Contains(generated.String(), expected) {
 			t.Fatalf("generated Assistant package is missing strict decoder guard %q", expected)
 		}
+	}
+	for _, decoder := range []string{
+		"decodeAssistantRunEnvelopeWire(Object? response)",
+		"decodeAssistantSessionWire(Object? response)",
+		"decodeSkillSubscriptionWire(Object? response)",
+	} {
+		if count := strings.Count(generated.String(), decoder); count != 1 {
+			t.Fatalf("generated Assistant package owns %s %d times, want 1", decoder, count)
+		}
+	}
+	runPayload, err := os.ReadFile(filepath.Join(generatedDir, "assistant_run.g.dart"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{
+		"import 'assistant_api_responses.g.dart';",
+		"final AssistantRunTerminalSnapshotView? terminalSnapshot;",
+	} {
+		if !strings.Contains(string(runPayload), expected) {
+			t.Fatalf("generated Assistant run owner is missing %q", expected)
+		}
+	}
+	skillSubscriptionPayload, err := os.ReadFile(filepath.Join(
+		generatedDir,
+		"skill_subscription.g.dart",
+	))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{
+		"factory SkillSubscriptionSearchQueryPlanWire.fromWire(",
+		"factory SkillSubscriptionTriggerWire.fromWire(",
+		"factory SkillSubscriptionDestinationWire.fromWire(",
+		"factory SkillSubscriptionWire.fromWire(",
+		"Map<String, Object?> toWire()",
+		"return SkillSubscriptionWire.fromWire(response.cast<String, Object?>())",
+	} {
+		if !strings.Contains(string(skillSubscriptionPayload), expected) {
+			t.Fatalf("generated SkillSubscription wire owner is missing %q", expected)
+		}
+	}
+	for _, forbidden := range []string{"toJson()", ".fromJson("} {
+		if strings.Contains(string(skillSubscriptionPayload), forbidden) {
+			t.Fatalf("generated SkillSubscription wire owner retained JSON codec %q", forbidden)
+		}
+	}
+	responsePayload, err := os.ReadFile(filepath.Join(
+		generatedDir,
+		"assistant_api_responses.g.dart",
+	))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{
+		"SkillSubscriptionWire.fromWire(item.cast<String, dynamic>())",
+		"items.map((item) => item.toWire()).toList(growable: false)",
+	} {
+		if !strings.Contains(string(responsePayload), expected) {
+			t.Fatalf("Assistant response wrapper is missing wire-owned nested codec %q", expected)
+		}
+	}
+	if strings.Contains(string(responsePayload), "SkillSubscriptionWire.fromJson(") {
+		t.Fatal("Assistant response wrapper retained SkillSubscriptionWire.fromJson")
 	}
 	clientCount := 0
 	var surfaces struct {
@@ -236,5 +404,100 @@ func TestAssistantOperationPackageOutputsDoNotDependOnAppLocalWireTypes(
 	}
 	if clientCount == 0 {
 		t.Fatal("Assistant source graph has no generated client contracts")
+	}
+}
+
+func TestAssistantSkillSubscriptionRequestUsesOnlyPackageOwnedWireTypes(
+	t *testing.T,
+) {
+	initializeTestContractGraph(t)
+	graphOperations := activeMetadataSource.Graph().Operations
+	payload, err := json.Marshal(graphOperations)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var operations []appExposedOperation
+	if err := json.Unmarshal(payload, &operations); err != nil {
+		t.Fatal(err)
+	}
+	const operationID = "assistant.skill_subscription.CreateSkillSubscription"
+	var operation appExposedOperation
+	found := false
+	for index := range operations {
+		operations[index].CanonicalOperationID = graphOperations[index].ID
+		operations[index].LocalOperationID = graphOperations[index].LocalID
+		if operations[index].CanonicalOperationID == operationID {
+			operation = operations[index]
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("fresh ContractGraph is missing %s", operationID)
+	}
+	model, dependencies, err := loadOperationRequestModel(
+		operation,
+		operation.RequestEntity,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	models := make(map[string]requestModelSpec, len(dependencies)+1)
+	models[model.Name] = model
+	for name, dependency := range dependencies {
+		models[name] = dependency
+	}
+	bindings := appRequestBindings{}
+	if operation.RequestBindings != nil {
+		bindings = *operation.RequestBindings
+	}
+	constants := appRequestConstants{}
+	if operation.RequestConstants != nil {
+		constants = *operation.RequestConstants
+	}
+	rendered, err := renderOperationRequestPart(
+		requestLibrarySpec{
+			OwnerImport: assistantOperationOwnerImport,
+			Models:      models,
+			Operations: []requestOperationSpec{
+				{
+					CanonicalOperationID: operationID,
+					RequestType:          model.Name,
+					RequestBodyKind:      operation.RequestBodyKind,
+					RequestBindings:      bindings,
+					RequestConstants:     constants,
+				},
+			},
+		},
+		"../../../assistant/assistant_operation_contracts.g.dart",
+		nil,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{
+		"factory CreateAssistantSkillSubscriptionCommand.fromWire(",
+		"final SkillSubscriptionSearchQueryPlanWire searchQueryPlan;",
+		"final SkillSubscriptionTriggerWire trigger;",
+		"final SkillSubscriptionDestinationWire destination;",
+		`"searchQueryPlan": request.searchQueryPlan.toWire()`,
+		`"trigger": request.trigger.toWire()`,
+		`"destination": request.destination.toWire()`,
+		"SkillSubscriptionSearchQueryPlanWire.fromWire(",
+		"SkillSubscriptionTriggerWire.fromWire(",
+		"SkillSubscriptionDestinationWire.fromWire(",
+	} {
+		if !strings.Contains(rendered, expected) {
+			t.Fatalf("generated SkillSubscription request misses %q:\n%s", expected, rendered)
+		}
+	}
+	for _, ghost := range []string{
+		"final class SkillSubscriptionSearchQueryPlan {",
+		"final class SkillSubscriptionTrigger {",
+		"final class SkillSubscriptionDestination {",
+	} {
+		if strings.Contains(rendered, ghost) {
+			t.Fatalf("generated SkillSubscription request retained ghost model %q", ghost)
+		}
 	}
 }

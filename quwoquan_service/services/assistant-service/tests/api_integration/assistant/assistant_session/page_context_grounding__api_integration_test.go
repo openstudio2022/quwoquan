@@ -10,7 +10,7 @@ import (
 
 	runapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application"
 	assistanthttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/adapters/inbound/http"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
+	assistant "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/model"
 	pagehttp "quwoquan_service/services/assistant-service/internal/assistant/page_context/adapters/inbound/http"
 	pageapplication "quwoquan_service/services/assistant-service/internal/assistant/page_context/application"
 	pagemodel "quwoquan_service/services/assistant-service/internal/assistant/page_context/domain/model"

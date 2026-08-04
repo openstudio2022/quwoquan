@@ -1,37 +1,25 @@
-import 'dart:convert';
-
 import 'package:quwoquan_app/app/startup/startup_telemetry.dart';
-import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
-import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
-import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/ops/ops_api_metadata.g.dart';
+import 'package:quwoquan_cloud_contracts/generated/ops_contracts.dart'
+    as ops_contracts;
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-/// 匿名启动遥测的受限 Remote adapter。
+typedef StartupTelemetryInvocationContextFactory =
+    CloudOperationInvocationContext Function();
+
+/// 匿名启动遥测的 generated-client Remote adapter。
 ///
-/// 这个请求刻意使用无凭证的 [CloudHttpClient]：启动日志不能绑定当前登录账号，也不应
-/// 触发 token 刷新。路径与 operation 仍完全来自 metadata codegen。
+/// proof 的 header 位置、body、path、重试和 response decoder 全部由
+/// ReportStartupEventBatch canonical operation 生成；此处只映射 App 本地 journal
+/// 模型与业务 ACK。
 final class RemoteStartupTelemetryTransport
     implements StartupTelemetryTransport {
-  factory RemoteStartupTelemetryTransport({
-    required CloudHttpClient httpClient,
-    required String baseUrl,
-  }) {
-    return RemoteStartupTelemetryTransport._(httpClient, baseUrl.trim());
-  }
+  const RemoteStartupTelemetryTransport({
+    required this.client,
+    required this.invocationContext,
+  });
 
-  RemoteStartupTelemetryTransport._(this._httpClient, this._baseUrl);
-
-  final CloudHttpClient _httpClient;
-  final String _baseUrl;
-
-  factory RemoteStartupTelemetryTransport.fromRuntimeConfig({
-    required CloudHttpClient httpClient,
-  }) {
-    return RemoteStartupTelemetryTransport(
-      httpClient: httpClient,
-      baseUrl: CloudRuntimeConfig.gatewayBaseUrl,
-    );
-  }
+  final GeneratedCloudOperationClient client;
+  final StartupTelemetryInvocationContextFactory invocationContext;
 
   @override
   Future<StartupTelemetryBatchAck> report(
@@ -44,33 +32,41 @@ final class RemoteStartupTelemetryTransport
         duplicateCount: 0,
       );
     }
-    final decoded = await _httpClient.postJson(
-      Uri.parse('$_baseUrl${OpsApiMetadata.reportStartupEventBatchPath}'),
-      headers: <String, String>{'X-Qwq-Startup-Proof': proof},
-      body: <String, Object?>{
-        'events': events.map((event) => event.toJson()).toList(growable: false),
-      }.cast<String, dynamic>(),
-      requireAuth: false,
+    final receipt = await client.opsEventRecordReportStartupEventBatch(
+      ops_contracts.ReportStartupEventBatchCommand(
+        proof: proof.trim(),
+        events: events.map(_eventWire).toList(growable: false),
+      ),
+      context: invocationContext(),
     );
-    final object = CloudResponseDecoder.asObject(
-      decoded is String ? jsonDecode(decoded) : decoded,
-      context: OpsApiMetadata.reportStartupEventBatchOperation,
-    );
-    final serverAcceptedCount = _asInt(object['acceptedCount']);
-    final duplicateBatch = object['duplicateBatch'] == true;
     return StartupTelemetryBatchAck(
-      acceptedCount: duplicateBatch ? 0 : serverAcceptedCount,
-      duplicateCount: duplicateBatch ? serverAcceptedCount : 0,
+      acceptedCount: receipt.duplicateBatch ? 0 : receipt.acceptedCount,
+      duplicateCount: receipt.duplicateBatch ? receipt.acceptedCount : 0,
     );
   }
 }
 
-int _asInt(Object? value) {
-  if (value is int) {
-    return value;
-  }
-  if (value is num) {
-    return value.round();
-  }
-  return int.tryParse(value?.toString() ?? '') ?? 0;
+ops_contracts.StartupTelemetryEventWire _eventWire(
+  StartupTelemetryEvent event,
+) {
+  return ops_contracts.StartupTelemetryEventWire(
+    eventId: event.eventId,
+    attemptId: event.attemptId,
+    sequence: event.sequence,
+    phase: event.phase.wireName,
+    phaseDurationMs: event.phaseDurationMs,
+    elapsedMs: event.elapsedMs,
+    outcome: event.outcome,
+    occurredAt: event.occurredAt,
+    platform: event.platform,
+    runtimeEnv: event.runtimeEnv,
+    appVersion: event.appVersion.isEmpty ? null : event.appVersion,
+    networkClass: event.networkClass.isEmpty ? null : event.networkClass,
+    recoverySurface: event.recoverySurface.isEmpty
+        ? null
+        : event.recoverySurface,
+    failureCode: event.failureCode.isEmpty ? null : event.failureCode,
+    failureSource: event.failureSource.isEmpty ? null : event.failureSource,
+    deadlineOrigin: event.deadlineOrigin.isEmpty ? null : event.deadlineOrigin,
+  );
 }

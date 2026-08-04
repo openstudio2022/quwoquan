@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	rtsearch "quwoquan_service/runtime/search"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/orchestration"
 )
 
 func TestCanonicalToolReferenceBuildsSingleTrackInternalDestination(t *testing.T) {
@@ -82,8 +82,9 @@ func TestMergeReferencesKeepsOnlyToolAuthorizedDestinations(t *testing.T) {
 
 func TestUserProcessReferencePreservesCanonicalDestination(t *testing.T) {
 	references := orchestration.UserProcessReferences([]map[string]any{{
-		"title":  "站内文章",
-		"source": "content",
+		"sourceId": "source-ledger-1",
+		"title":    "站内文章",
+		"source":   "content",
 		"destination": map[string]any{
 			"kind":          "internal",
 			"objectTypeRef": rtsearch.ObjectTypeContentPost,
@@ -96,7 +97,8 @@ func TestUserProcessReferencePreservesCanonicalDestination(t *testing.T) {
 	}
 	if references[0].Destination.Kind != "internal" ||
 		references[0].Destination.ObjectTypeRef != rtsearch.ObjectTypeContentPost ||
-		references[0].Destination.ObjectID != "post-1" {
+		references[0].Destination.ObjectID != "post-1" ||
+		references[0].SourceID != "source-ledger-1" {
 		t.Fatalf("process destination = %#v", references[0].Destination)
 	}
 }

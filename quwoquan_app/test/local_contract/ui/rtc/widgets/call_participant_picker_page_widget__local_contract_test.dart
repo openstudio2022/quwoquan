@@ -1,10 +1,8 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
+import 'package:quwoquan_app/cloud/services/chat/chat_view_data.dart';
 import '../../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_participant_picker_route_extra.dart';
@@ -14,7 +12,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import '../../../../support/fixtures/chat/chat_inbox_fixture_builder.dart';
 
 class _PickerChatRepository extends MockChatRepository {
-  static final ChatInboxDto _inbox002 = chatInboxFixture(
+  static final ChatInboxViewData _inbox002 = chatInboxFixture(
     id: 'conv_002',
     type: 'group',
     title: '当前群聊',
@@ -28,7 +26,7 @@ class _PickerChatRepository extends MockChatRepository {
     pinned: false,
     circleId: '',
   );
-  static final ChatInboxDto _inbox003 = chatInboxFixture(
+  static final ChatInboxViewData _inbox003 = chatInboxFixture(
     id: 'conv_003',
     type: 'group',
     title: '摄影群',
@@ -44,20 +42,23 @@ class _PickerChatRepository extends MockChatRepository {
   );
 
   @override
-  Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
-    return <ChatInboxDto>[_inbox002, _inbox003];
-  }
-
-  @override
-  Future<List<ChatInboxDto>> listConversations({
+  Future<List<ChatInboxViewData>> listInbox({
     String? cursor,
     int limit = 20,
   }) async {
-    return <ChatInboxDto>[_inbox002, _inbox003];
+    return <ChatInboxViewData>[_inbox002, _inbox003];
   }
 
   @override
-  Future<List<ChatConversationMemberDto>> listMembers({
+  Future<List<ChatInboxViewData>> listConversations({
+    String? cursor,
+    int limit = 20,
+  }) async {
+    return <ChatInboxViewData>[_inbox002, _inbox003];
+  }
+
+  @override
+  Future<List<ConversationMemberListRow>> listMembers({
     required String conversationId,
     String? cursor,
     int limit = 20,
@@ -65,10 +66,11 @@ class _PickerChatRepository extends MockChatRepository {
     String? sort,
   }) async {
     if (conversationId == 'conv_initial_large') {
-      return List<ChatConversationMemberDto>.generate(
+      return List<ConversationMemberListRow>.generate(
         35,
-        (index) => ChatConversationMemberDto(
+        (index) => ConversationMemberListRow(
           userId: 'initial-user-$index',
+          userHandle: 'initial-user-$index',
           displayName: '初始成员 $index',
           avatarUrl: '',
           role: 'member',
@@ -80,8 +82,9 @@ class _PickerChatRepository extends MockChatRepository {
     }
     if (conversationId == 'conv_002') {
       return [
-        ChatConversationMemberDto(
+        ConversationMemberListRow(
           userId: 'user_002',
+          userHandle: 'user_002',
           displayName: '当前群成员 A',
           avatarUrl: '',
           role: 'member',
@@ -89,8 +92,9 @@ class _PickerChatRepository extends MockChatRepository {
           joinedAt: null,
           isCurrentUser: false,
         ),
-        ChatConversationMemberDto(
+        ConversationMemberListRow(
           userId: 'user_003',
+          userHandle: 'user_003',
           displayName: '当前群成员 B',
           avatarUrl: '',
           role: 'member',
@@ -98,8 +102,9 @@ class _PickerChatRepository extends MockChatRepository {
           joinedAt: null,
           isCurrentUser: false,
         ),
-        ChatConversationMemberDto(
+        ConversationMemberListRow(
           userId: 'user_008',
+          userHandle: 'user_008',
           displayName: '当前群成员 C',
           avatarUrl: '',
           role: 'member',
@@ -111,8 +116,9 @@ class _PickerChatRepository extends MockChatRepository {
     }
     if (conversationId == 'conv_003') {
       return [
-        ChatConversationMemberDto(
+        ConversationMemberListRow(
           userId: 'user_004',
+          userHandle: 'user_004',
           displayName: '跨群成员 A',
           avatarUrl: '',
           role: 'member',
@@ -120,8 +126,9 @@ class _PickerChatRepository extends MockChatRepository {
           joinedAt: null,
           isCurrentUser: false,
         ),
-        ChatConversationMemberDto(
+        ConversationMemberListRow(
           userId: 'user_005',
+          userHandle: 'user_005',
           displayName: '跨群成员 B',
           avatarUrl: '',
           role: 'member',
@@ -131,18 +138,19 @@ class _PickerChatRepository extends MockChatRepository {
         ),
       ];
     }
-    return <ChatConversationMemberDto>[];
+    return <ConversationMemberListRow>[];
   }
 
   @override
-  Future<CursorPage<ChatContactRowDto>> listContacts({
+  Future<CursorPage<ChatContactRowViewData>> listContacts({
     String? cursor,
     int limit = 20,
   }) async {
-    return CursorPage<ChatContactRowDto>(
+    return CursorPage<ChatContactRowViewData>(
       items: [
-        ChatContactRowDto(
+        ChatContactRowViewData(
           userId: 'user_006',
+          userHandle: 'user_006',
           displayName: '联系人小雨',
           avatarUrl: '',
           bio: '',
@@ -151,8 +159,9 @@ class _PickerChatRepository extends MockChatRepository {
           relationState: 'mutual',
           isStarred: false,
         ),
-        ChatContactRowDto(
+        ChatContactRowViewData(
           userId: 'user_007',
+          userHandle: 'user_007',
           displayName: '联系人阿青',
           avatarUrl: '',
           bio: '',
@@ -168,12 +177,15 @@ class _PickerChatRepository extends MockChatRepository {
 
 class _FailingPickerChatRepository extends MockChatRepository {
   @override
-  Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
+  Future<List<ChatInboxViewData>> listInbox({
+    String? cursor,
+    int limit = 20,
+  }) async {
     throw StateError('inbox unavailable');
   }
 
   @override
-  Future<CursorPage<ChatContactRowDto>> listContacts({
+  Future<CursorPage<ChatContactRowViewData>> listContacts({
     String? cursor,
     int limit = 20,
   }) async {
@@ -181,7 +193,7 @@ class _FailingPickerChatRepository extends MockChatRepository {
   }
 
   @override
-  Future<List<ChatConversationMemberDto>> listMembers({
+  Future<List<ConversationMemberListRow>> listMembers({
     required String conversationId,
     String? cursor,
     int limit = 20,

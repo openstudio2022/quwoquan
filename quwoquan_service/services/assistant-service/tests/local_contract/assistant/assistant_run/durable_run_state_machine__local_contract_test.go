@@ -47,6 +47,54 @@ func TestAssistantRunTaskGraphEnforcesDAGAndDependencyReadiness(t *testing.T) {
 	}
 }
 
+func TestAssistantRunTaskGraphAcceptsValidatedLivePlanPatches(t *testing.T) {
+	graph, err := runruntime.NewTaskGraph([]runruntime.TaskNode{{
+		TaskID: "task_root",
+		Goal:   "完成用户目标",
+	}})
+	if err != nil {
+		t.Fatalf("NewTaskGraph() error = %v", err)
+	}
+	if err := graph.Start("task_root"); err != nil {
+		t.Fatalf("start root task: %v", err)
+	}
+	if err := graph.Add(runruntime.TaskNode{
+		TaskID:     "task_research",
+		Goal:       "检索公开证据",
+		OwnerAgent: "manager",
+	}); err != nil {
+		t.Fatalf("add research task: %v", err)
+	}
+	if err := graph.Start("task_research"); err != nil {
+		t.Fatalf("start research task: %v", err)
+	}
+	if err := graph.Complete(
+		"task_research",
+		[]string{"artifact:web:1"},
+		runruntime.TaskVerification{Passed: true},
+	); err != nil {
+		t.Fatalf("complete research task: %v", err)
+	}
+	if err := graph.Add(runruntime.TaskNode{
+		TaskID:       "task_synthesis",
+		Goal:         "综合证据",
+		Dependencies: []string{"task_research"},
+		OwnerAgent:   "manager",
+	}); err != nil {
+		t.Fatalf("add synthesis task: %v", err)
+	}
+	if graph.Tasks[len(graph.Tasks)-1].Status != generated.AssistantTaskStatusReady {
+		t.Fatalf("dependent live task was not made ready: %#v", graph.Tasks)
+	}
+	if err := graph.Add(runruntime.TaskNode{
+		TaskID:       "task_invalid",
+		Goal:         "非法依赖",
+		Dependencies: []string{"task_missing"},
+	}); !errors.Is(err, runruntime.ErrInvalidTaskGraph) {
+		t.Fatalf("missing dependency error=%v", err)
+	}
+}
+
 func TestAssistantRunAppliesSteerAndPauseOnlyAtSafeBoundary(t *testing.T) {
 	now := time.Date(2026, 7, 31, 3, 0, 0, 0, time.UTC)
 	run := newDurableRun(t, now)
@@ -171,6 +219,7 @@ func TestAssistantRunVerifierBlocksDishonestCompletion(t *testing.T) {
 	rejected := runruntime.VerifyDefinitionOfDone(
 		run.DefinitionOfDone,
 		[]runruntime.VerificationEvidence{{Requirement: "citations verified", Passed: true}},
+		[]string{"artifact:report"},
 	)
 	if rejected.Accepted || len(rejected.Failed) != 1 {
 		t.Fatalf("artifact-free verdict = %#v", rejected)
@@ -183,8 +232,9 @@ func TestAssistantRunVerifierBlocksDishonestCompletion(t *testing.T) {
 		[]runruntime.VerificationEvidence{{
 			Requirement:  "citations verified",
 			Passed:       true,
-			EvidenceRefs: []string{"artifact:report"},
+			ArtifactRefs: []string{"artifact:report"},
 		}},
+		[]string{"artifact:report"},
 	)
 	if err := run.AcceptVerification(accepted, now.Add(time.Second)); err != nil {
 		t.Fatalf("AcceptVerification(accepted) error = %v", err)

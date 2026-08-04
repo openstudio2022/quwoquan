@@ -73,6 +73,16 @@ on:
         required: false
         type: string
         default: ''
+      provider_candidate_image_digest:
+        description: Candidate image-set digest executed by Provider release evidence
+        required: false
+        type: string
+        default: ''
+      provider_component_evidence_ref:
+        description: Exact component-ready OCI ref bound by Provider execution
+        required: false
+        type: string
+        default: ''
       user_acceptance_evidence_ref:
         description: Exact immutable GHCR OCI ref containing real Remote user_acceptance evidence for this source tree
         required: false
@@ -257,7 +267,7 @@ jobs:
           cache: false
       - name: Verify canonical /search response contract
         working-directory: quwoquan_service
-        run: go test ./services/search-service/tests/api_integration/search/search_query -count=1
+        run: go test ./services/search-service/tests/api_integration/search/search_index_view -count=1
       - name: Verify four-environment search probe contract
         run: |
           PYTHONDONTWRITEBYTECODE=1 python3 -m unittest \
@@ -520,11 +530,46 @@ jobs:
           python3 quwoquan_ops/ci/materialize_evidence_oci.py \
             --ref "$PROVIDER_EVIDENCE_REF" \
             --expected-digest "$PROVIDER_EVIDENCE_DIGEST" \
-            --output-dir "$QWQ_OUTPUT_ROOT"
+            --output-dir "$QWQ_OUTPUT_ROOT" \
+            --require-file provider-candidate.json
+      - name: Verify executed Provider evidence candidate binding
+        env:
+          EXPECTED_SOURCE_SHA: ${{ inputs.head_sha }}
+          EXPECTED_IMAGE_DIGEST: ${{ inputs.provider_candidate_image_digest }}
+          EXPECTED_COMPONENT_REF: ${{ inputs.provider_component_evidence_ref }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          metadata = json.loads(
+              (Path(os.environ["QWQ_OUTPUT_ROOT"]) / "provider-candidate.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          expected = {
+              "schema": "provider-release-evidence-binding",
+              "sourceGitSha": os.environ["EXPECTED_SOURCE_SHA"],
+              "componentEvidenceRef": os.environ["EXPECTED_COMPONENT_REF"],
+              "expectedImageDigest": os.environ["EXPECTED_IMAGE_DIGEST"],
+              "readinessEnvironment": "prod",
+          }
+          if any(metadata.get(key) != value for key, value in expected.items()):
+              raise SystemExit(
+                  "GATE_BLOCK: executed Provider evidence is bound to another candidate"
+              )
+          if re.fullmatch(r"sha256:[0-9a-f]{64}", expected["expectedImageDigest"]) is None:
+              raise SystemExit("GATE_BLOCK: Provider candidate image digest is not immutable")
+          if int(metadata.get("evidenceCount") or 0) <= 0:
+              raise SystemExit("GATE_BLOCK: executed Provider evidence set is empty")
+          PY
       - name: Produce canonical Provider conformance source or GATE_BLOCK
         env:
           PROVIDER_EVIDENCE_REF: ${{ inputs.provider_evidence_ref }}
           PROVIDER_EVIDENCE_DIGEST: ${{ inputs.provider_evidence_digest }}
+          QWQ_PROVIDER_CONFORMANCE_EXPECTED_IMAGE_DIGEST: ${{ inputs.provider_candidate_image_digest }}
         run: |
           set -euo pipefail
           ROOT="$QWQ_OUTPUT_ROOT/env/repo/runs/mainline-delivery-evidence"

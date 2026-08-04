@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 9816b2b7d9fedea34ad78dd719fc16fdf3e982073304d7f50f7a8ea4064f6b7f
+// ContractGraph SHA256: 93359367b8614f01bb5e1c51e37af383332b01f117cc1c6cf39e4fdf838e49d2
 
 part of '../../../user/user_operation_contracts.g.dart';
 
@@ -2219,6 +2219,30 @@ final class UserSettingsQuery {
   const UserSettingsQuery();
 }
 
+final class UserSyncPullRequestWire {
+  const UserSyncPullRequestWire({
+    int? afterSeq,
+    int? limit,
+  }) : afterSeq = afterSeq,
+       limit = limit;
+
+  final int? afterSeq;
+  final int? limit;
+
+  factory UserSyncPullRequestWire.fromWire(Map<String, Object?> map, [String path = "UserSyncPullRequestWire"]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{"afterSeq", "limit"}, path);
+    return UserSyncPullRequestWire(
+      afterSeq: map["afterSeq"] == null ? null : _generatedRequestInt(map["afterSeq"], '$path.afterSeq'),
+      limit: map["limit"] == null ? null : _generatedRequestInt(map["limit"], '$path.limit'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    if (this.afterSeq != null) "afterSeq": this.afterSeq!,
+    if (this.limit != null) "limit": this.limit!,
+  };
+}
+
 CloudOperationRequestPayload encodeUserAccountSessionLoginAnonymousGeneratedRequest(LoginAnonymousCommand request) {
   return CloudOperationRequestPayload(
     body: <String, Object?>{
@@ -2839,6 +2863,15 @@ CloudOperationRequestPayload encodeUserUserAccountGetUserHomepageBundleGenerated
 
 CloudOperationRequestPayload encodeUserUserAccountListPersonasGeneratedRequest(ListPersonasQuery request) {
   return CloudOperationRequestPayload(
+  );
+}
+
+CloudOperationRequestPayload encodeUserUserAccountPullUserSyncGeneratedRequest(UserSyncPullRequestWire request) {
+  return CloudOperationRequestPayload(
+    body: <String, Object?>{
+      if (request.afterSeq != null) "afterSeq": request.afterSeq!,
+      if (request.limit != null) "limit": request.limit!,
+    },
   );
 }
 

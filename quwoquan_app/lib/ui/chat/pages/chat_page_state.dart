@@ -345,11 +345,13 @@ class _ChatPageState extends ConsumerState<ChatPage>
     if (rowError != null && items.isEmpty) {
       return AppPageErrorState(
         semantic: _chatListBlockingErrorSemantic(context, rowError),
-        onAction: (action) async {
+        onRecovery: (action) async {
           if (action.type == UiErrorActionType.retry ||
               action.type == UiErrorActionType.resubmit) {
             ref.invalidate(messageHomeRowsStateProvider(messageFilter));
+            return UiRecoveryOutcome.superseded;
           }
+          return UiRecoveryOutcome.cancelled;
         },
       );
     }
@@ -423,11 +425,13 @@ class _ChatPageState extends ConsumerState<ChatPage>
       loading: AppRequestFeedback.page,
       error: (error, _) => AppPageErrorState(
         semantic: _chatListBlockingErrorSemantic(context, error),
-        onAction: (action) async {
+        onRecovery: (action) async {
           if (action.type == UiErrorActionType.retry ||
               action.type == UiErrorActionType.resubmit) {
             ref.invalidate(notificationInboxProvider);
+            return UiRecoveryOutcome.superseded;
           }
+          return UiRecoveryOutcome.cancelled;
         },
       ),
       data: (messages) {
@@ -769,11 +773,13 @@ class _ChatPageState extends ConsumerState<ChatPage>
           category: UiErrorCategory.pageLoad,
           scope: UiErrorScope.page,
         ),
-        onAction: (action) async {
+        onRecovery: (action) async {
           if (action.type == UiErrorActionType.retry ||
               action.type == UiErrorActionType.resubmit) {
             ref.invalidate(chatContactsRowsForSubTabProvider(sub));
+            return UiRecoveryOutcome.superseded;
           }
+          return UiRecoveryOutcome.cancelled;
         },
       ),
     );

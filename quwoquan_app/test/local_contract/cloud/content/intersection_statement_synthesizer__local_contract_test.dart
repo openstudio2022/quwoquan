@@ -1,17 +1,15 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_representative_actor.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_statement_synthesizer.dart';
 
-/// SVO displayBinding 展示合同（CR-20260715-105）+ V1 host_plain 投影收口。
+import '../../../support/fixtures/intersection_fixtures.dart';
+
+/// SVO displayBinding 展示合同与 canonical host projection 边界。
 ///
 /// 覆盖：
 /// - explicit_link reason 在宿主上下文直出会被 self-link 校验淘汰（既有红线）；
-/// - `applyHostPlainDisplayContext` 与云侧 `plainHostObjectSpan` 同构转换后，
-///   同一 reason 在宿主上下文变为可展示（四主页卡 alpha 恒空的 V1 修复）；
-/// - 非宿主 reason 不受转换影响；join(spans)==primaryText 不变量保持。
+/// - host_plain 必须由 Recommendation projection 下发；App 只校验、不改写 wire；
+/// - 非宿主 reason 不受 host context 影响；join(spans)==primaryText 不变量保持。
 void main() {
   IntersectionTarget hostTarget() => IntersectionTarget(
     objectType: 'homepage',
@@ -20,7 +18,7 @@ void main() {
     routeId: 'homepageDetail',
   );
 
-  IntersectionReason seedReason() => IntersectionReason(
+  IntersectionReason seedReason() => intersectionReasonFixture(
     intersectionId: 'ix_erhai_visit',
     intersectionClass: 'fact',
     dimension: 'location',
@@ -33,6 +31,7 @@ void main() {
     representativeActor: IntersectionRepresentativeActor(
       actorId: 'fixture_user_lin',
       displayName: '林清越',
+      avatarUrl: '',
       relationLabel: '联系人',
       privacyState: 'visible',
       target: IntersectionTarget(
@@ -41,6 +40,8 @@ void main() {
         objectKind: 'person',
         routeId: 'userProfile',
       ),
+      evidenceRank: 1,
+      snapshotVersion: 'intersection_fixture',
     ),
     primarySpans: <IntersectionTextSpan>[
       IntersectionTextSpan(text: '联系人', role: 'plain'),
@@ -82,43 +83,33 @@ void main() {
     );
   });
 
-  test('applyHostPlainDisplayContext 与云侧 plainHostObjectSpan 同构：宿主页转换后可展示', () {
+  test('App 不把 explicit_link 改写成 host_plain', () {
     final projected = applyHostPlainDisplayContext(seedReason(), hostTarget());
 
-    expect(projected.displayBinding, 'host_plain');
-    expect(projected.primaryText, seedReason().primaryText, reason: 'G2 主句不变');
-    expect(
-      projected.primarySpans.map((s) => s.text).join(),
-      projected.primaryText,
-      reason: 'join(spans)==primaryText 不变量',
-    );
+    expect(projected.toWire(), seedReason().toWire());
+    expect(projected.displayBinding, 'explicit_link');
     final hostSpan = projected.primarySpans.firstWhere(
       (s) => s.text == '「洱海环线」',
     );
-    expect(hostSpan.role, 'plain', reason: '宿主 span 降级为 plain');
-    expect(hostSpan.target, isNull, reason: '宿主 span 去链接');
-    final actorSpan = projected.primarySpans.firstWhere((s) => s.text == '林清越');
-    expect(actorSpan.role, 'object', reason: '代表人 span 保持可点击');
+    expect(hostSpan.role, 'object');
+    expect(hostSpan.target, isNotNull);
 
     expect(
       displayReadyIntersectionReason(
         projected,
         contextObjectTarget: hostTarget(),
       ),
-      isNotNull,
-      reason: 'host_plain 转换后在宿主上下文必须可展示（V1 修复验收）',
+      isNull,
+      reason: '服务未投影 host_plain 时 App 必须 fail-closed，不能本地修补',
     );
   });
 
-  test('非宿主 reason 不受 host_plain 转换影响', () {
-    final other = seedReason().copyWith(
+  test('非宿主 reason 同样保持 canonical wire 不变', () {
+    final other = copyIntersectionReasonFixture(
+      seedReason(),
       actionTargetId: 'fixture_homepage_other',
     );
     final projected = applyHostPlainDisplayContext(other, hostTarget());
-    expect(projected.displayBinding, other.displayBinding);
-    expect(
-      projected.primarySpans.map((s) => s.role),
-      other.primarySpans.map((s) => s.role),
-    );
+    expect(projected.toWire(), other.toWire());
   });
 }

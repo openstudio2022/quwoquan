@@ -38,6 +38,18 @@ on:
         required: false
         default: true
         type: boolean
+      provider_evidence_ref:
+        description: 'Exact executed Provider evidence OCI ref; defaults to controlled repository variable'
+        required: false
+        default: ''
+      provider_evidence_digest:
+        description: 'Executed Provider evidence OCI transport digest'
+        required: false
+        default: ''
+      provider_candidate_image_digest:
+        description: 'Candidate image-set digest executed by Provider evidence'
+        required: false
+        default: ''
 
 concurrency:
   group: prod-hosted-release
@@ -528,7 +540,7 @@ jobs:
 
   delivery_gate:
     name: Delivery Gate (mainline)
-    needs: [source_context]
+    needs: [source_context, service_pipeline]
     permissions:
       contents: read
       actions: read
@@ -539,8 +551,10 @@ jobs:
       base_sha: ${{ needs.source_context.outputs.base_sha }}
       head_sha: ${{ needs.source_context.outputs.source_git_sha }}
       produce_release_evidence: true
-      provider_evidence_ref: ${{ vars.PROD_PROVIDER_EVIDENCE_REF }}
-      provider_evidence_digest: ${{ vars.PROD_PROVIDER_EVIDENCE_DIGEST }}
+      provider_evidence_ref: ${{ inputs.provider_evidence_ref || vars.PROD_PROVIDER_EVIDENCE_REF }}
+      provider_evidence_digest: ${{ inputs.provider_evidence_digest || vars.PROD_PROVIDER_EVIDENCE_DIGEST }}
+      provider_candidate_image_digest: ${{ inputs.provider_candidate_image_digest || vars.PROD_PROVIDER_CANDIDATE_IMAGE_DIGEST }}
+      provider_component_evidence_ref: ${{ needs.service_pipeline.outputs.component_evidence_ref }}
       user_acceptance_evidence_ref: ${{ vars.RELEASE_USER_ACCEPTANCE_EVIDENCE_REF }}
       user_acceptance_evidence_digest: ${{ vars.RELEASE_USER_ACCEPTANCE_EVIDENCE_DIGEST }}
     secrets: inherit

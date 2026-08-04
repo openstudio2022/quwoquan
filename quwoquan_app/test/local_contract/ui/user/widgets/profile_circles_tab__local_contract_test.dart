@@ -18,7 +18,7 @@ class _ThrowingCapabilityRepository extends RelationshipCapabilityRepository {
   bool get reconcilesCapabilityWithSharedRelationshipState => false;
 
   @override
-  Future<RelationshipCapabilityDto> getCapability(String targetUserId) {
+  Future<RelationshipCapabilityViewData> getCapability(String targetUserId) {
     return Future.error(StateError('capability unavailable in test'));
   }
 }

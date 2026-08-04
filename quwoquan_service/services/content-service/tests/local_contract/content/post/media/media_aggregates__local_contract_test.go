@@ -7,12 +7,12 @@ import (
 	"testing"
 	"time"
 
-	mediaerrors "quwoquan_service/services/content-service/generated/media/media_asset"
 	"quwoquan_service/runtime/commandmeta"
+	mediaerrors "quwoquan_service/services/content-service/generated/media/media_asset"
+	mediacontract "quwoquan_service/services/content-service/internal/content/post/infrastructure/testsupport/media_contract"
 	mediaapp "quwoquan_service/services/content-service/internal/media/media_asset/application"
 	mediamodel "quwoquan_service/services/content-service/internal/media/media_asset/domain/model"
 	mediaports "quwoquan_service/services/content-service/internal/media/media_asset/domain/ports"
-	mediacontract "quwoquan_service/services/content-service/internal/content/post/infrastructure/testsupport/media_contract"
 )
 
 const digestAtomic = "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
@@ -43,7 +43,7 @@ func TestDiscardMediaAssetCommitsDeletedFactAndReplaysReceipt(t *testing.T) {
 		t.Fatalf("discard media asset: %v", err)
 	}
 	if first.MediaID != assetID ||
-		first.Status != mediamodel.ProcessingStatusDeleted ||
+		first.Status != mediaapp.MediaAssetDiscardStatusDeleted ||
 		first.Replayed {
 		t.Fatalf("unexpected discard result: %+v", first)
 	}

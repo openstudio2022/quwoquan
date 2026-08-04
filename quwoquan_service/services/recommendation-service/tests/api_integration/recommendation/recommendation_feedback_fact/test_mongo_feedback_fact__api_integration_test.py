@@ -1,7 +1,12 @@
 from datetime import datetime, timezone
 
-from internal.recommendation.recommendation_feedback_fact.application.appender import Appender, FeedbackFact
-from internal.recommendation.recommendation_feedback_fact.infrastructure.mongo_store import MongoFeedbackFactStore
+from internal.recommendation.recommendation_feedback_fact.application.appender import Appender
+from internal.recommendation.recommendation_feedback_fact.domain.fact import (
+    RecommendationFeedbackFact,
+)
+from internal.recommendation.recommendation_feedback_fact.infrastructure.mongo_store import (
+    MongoRecommendationFeedbackFactStore,
+)
 from tests.support.recommendation_mongo import mongo_client, mongo_database
 
 
@@ -16,11 +21,11 @@ class _OpenSubjects:
 
 
 def test_feedback_fact_has_one_source_event_identity_in_mongo(mongo_database) -> None:
-    store = MongoFeedbackFactStore(mongo_database)
+    store = MongoRecommendationFeedbackFactStore(mongo_database)
     store.ensure_indexes()
     appender = Appender(store, _ExposureReader(), _OpenSubjects())
     now = datetime.now(timezone.utc)
-    fact = FeedbackFact(
+    fact = RecommendationFeedbackFact(
         feedback_id="feedback-001",
         source_event_id="behavior-001",
         exposure_id="exposure-001",

@@ -467,8 +467,8 @@ void main() {
       );
       expect(pushSwitchAfter.value, isTrue);
       expect(find.byType(CupertinoAlertDialog), findsOneWidget);
-      expect(find.text(SearchText.recoveryReloadLaterTitle), findsOneWidget);
-      expect(find.text(SearchText.recoveryReloadLaterMessage), findsOneWidget);
+      expect(find.text(CreationText.operationFailed), findsOneWidget);
+      expect(find.text(ContentText.operationFailedRetry), findsOneWidget);
       await tester.tap(find.text(ContentText.gotIt));
       await tester.pumpAndSettle();
       expect(find.byType(CupertinoAlertDialog), findsNothing);
@@ -691,8 +691,9 @@ class _SettingsQueryReader implements contracts.UserSettingsQueryReader {
       contracts.PrivacySettingsView(
         userId: 'owner-id',
         allowStrangerMsg: true,
-        profileVisibility: contracts.ProfileVisibility.public,
+        profileVisibility: contracts.ProfileVisibility.public.wireName,
         assistantEnabled: true,
+        blockedKeywords: const <String>[],
         version: 1,
         updatedAt: DateTime.utc(2026, 7, 19),
       );
@@ -701,9 +702,7 @@ class _SettingsQueryReader implements contracts.UserSettingsQueryReader {
   Future<contracts.CallSettingsView> getCallSettings() async =>
       contracts.CallSettingsView(
         userId: 'owner-id',
-        defaultIncomingCallRingtoneId: contracts.OfficialRingtoneId(
-          'official.default',
-        ),
+        defaultIncomingCallRingtoneId: 'official.default',
         allowCallerRingtoneOverride: true,
         enableCallVibration: true,
         enableGroupCallRing: true,
@@ -714,11 +713,11 @@ class _SettingsQueryReader implements contracts.UserSettingsQueryReader {
   @override
   Future<contracts.AppearanceSettingsView> getAppearanceSettings() async =>
       contracts.AppearanceSettingsView(
-        themeMode: contracts.ThemeModeSetting.system,
-        fontSizePreset: contracts.FontSizePreset.md,
-        source: contracts.AppearanceSource.ownerDefault,
-        ownerDefaultThemeMode: contracts.ThemeModeSetting.system,
-        ownerDefaultFontSizePreset: contracts.FontSizePreset.md,
+        themeMode: contracts.ThemeModeSetting.system.wireName,
+        fontSizePreset: contracts.FontSizePreset.md.wireName,
+        source: 'owner_default',
+        ownerDefaultThemeMode: contracts.ThemeModeSetting.system.wireName,
+        ownerDefaultFontSizePreset: contracts.FontSizePreset.md.wireName,
         hasPersonaOverride: false,
         version: 1,
         updatedAt: DateTime.utc(2026, 7, 19),
@@ -939,11 +938,11 @@ final class _RecordingUserSettingsCommandWriter
     contracts.UpdateAppearanceSettingsCommand command,
   ) async {
     return contracts.AppearanceSettingsView(
-      themeMode: command.themeMode,
-      fontSizePreset: command.fontSizePreset,
-      source: contracts.AppearanceSource.ownerDefault,
-      ownerDefaultThemeMode: command.themeMode,
-      ownerDefaultFontSizePreset: command.fontSizePreset,
+      themeMode: command.themeMode.wireName,
+      fontSizePreset: command.fontSizePreset.wireName,
+      source: 'owner_default',
+      ownerDefaultThemeMode: command.themeMode.wireName,
+      ownerDefaultFontSizePreset: command.fontSizePreset.wireName,
       hasPersonaOverride: false,
       version: ++version,
       updatedAt: DateTime.utc(2026, 7, 19),

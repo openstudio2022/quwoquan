@@ -4,15 +4,12 @@
 // doubles and blocks network, so it verifies the presentation shell rather
 // than claiming Gamma Remote user acceptance evidence.
 import 'dart:io';
+import '../../../../support/fixtures/intersection_fixtures.dart';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_item.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_summary.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_inbox_summary.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -25,6 +22,7 @@ import '../../../../support/cloud_services/content/mock_content_repository.dart'
 import '../../../../support/cloud_services/content_facet_overrides.dart';
 import '../../../../support/cloud_services/repository_mock_reexports.dart';
 import '../../../../support/fixtures/author_impact_fixtures.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// 他人主页（other 模式）头部操作（返回/更多）可达，更多面板提供
 /// 分享/拉黑/举报；交集区不崩溃（无交集不占位）。
@@ -35,7 +33,7 @@ class _EmptyIntersectionRepository implements IntersectionRepository {
 
   @override
   Future<IntersectionInboxSummary> getMyIntersectionSummary() async {
-    return IntersectionInboxSummary(totalCount: 0, totalNewCount: 0);
+    return intersectionInboxSummaryFixture(totalCount: 0, totalNewCount: 0);
   }
 
   @override
@@ -65,8 +63,10 @@ class _StaticCapabilityRepository extends RelationshipCapabilityRepository {
   bool get reconcilesCapabilityWithSharedRelationshipState => true;
 
   @override
-  Future<RelationshipCapabilityDto> getCapability(String targetUserId) async {
-    return RelationshipCapabilityDto(
+  Future<RelationshipCapabilityViewData> getCapability(
+    String targetUserId,
+  ) async {
+    return RelationshipCapabilityViewData(
       viewerPersonaId: 'viewer-profile',
       targetPersonaId: targetUserId,
       relationState: 'not_following',

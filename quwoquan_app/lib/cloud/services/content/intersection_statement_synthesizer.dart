@@ -130,7 +130,7 @@ bool _displayObjectTargetAllowed(IntersectionTarget? target) =>
 /// 归一 displayBinding；只有云侧**显式** hidden 才隐藏。
 ///
 /// 未知取值按 explicit_link 处理：新增 binding 语义时端侧最多绑错链接样式，
-/// 不会让整条交集在旧版本上凭空消失。
+/// 不会让整条交集在既有客户端上凭空消失。
 String _normalizedDisplayBinding(String raw) {
   final binding = raw.trim();
   if (binding == intersectionDisplayBindingHidden) {

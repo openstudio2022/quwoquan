@@ -50,7 +50,7 @@ void main() {
 
       expect(
         media.initCommands.map((command) => command.mediaType),
-        <ContentMediaType>[ContentMediaType.image, ContentMediaType.image],
+        <MediaType>[MediaType.image, MediaType.image],
       );
       expect(media.initCommands.map((command) => command.fileSize), <int>[
         3,
@@ -74,7 +74,7 @@ void main() {
       ]);
       expect(
         media.completeCommands.map((command) => command.accessPolicy),
-        everyElement(ContentMediaAccessPolicy.referencedPost),
+        everyElement(MediaAssetAccessPolicy.referencedPost),
       );
       expect(prepared.payload, isNot(contains('mediaUrls')));
       expect(prepared.payload, isNot(contains('coverUrl')));

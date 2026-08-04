@@ -100,3 +100,21 @@ func TestSearchRankingExperimentPolicyFailsClosed(t *testing.T) {
 		t.Fatalf("paused Assign() = (%q, %v), want fail-closed", bucket, assignErr)
 	}
 }
+
+
+func TestSearchRankingExperimentAssignmentDegradesToControl(t *testing.T) {
+	disabled, err := application.NewExperiments(&assignmentPublisherSpy{})
+	if err != nil {
+		t.Fatalf("NewExperiments() error = %v", err)
+	}
+	decorator := application.NewRankingDecorator(nil, disabled, 1, nil)
+	result, err := decorator.Decorate(context.Background(), rtsearch.RetrieveResponse{
+		Hits: []rtsearch.RetrieveHit{{Target: rtsearch.TargetArticle, ObjectID: "a", Title: "x", Score: 1}},
+	}, "成都", "persona-1")
+	if err != nil {
+		t.Fatalf("Decorate() error = %v, want degrade without hard failure", err)
+	}
+	if result.ExperimentBucket != application.BucketControl {
+		t.Fatalf("bucket = %q, want control", result.ExperimentBucket)
+	}
+}

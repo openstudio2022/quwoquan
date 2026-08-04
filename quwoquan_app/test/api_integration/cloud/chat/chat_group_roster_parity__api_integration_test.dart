@@ -12,7 +12,6 @@ import 'package:quwoquan_app/cloud/runtime/auth/cloud_auth_token_provider.dart';
 import 'package:quwoquan_app/cloud/runtime/config/cloud_runtime_environment.dart';
 import 'package:quwoquan_app/cloud/runtime/context/cloud_client_context.dart';
 import 'package:quwoquan_app/cloud/runtime/executor/cloud_operation_client_factory.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/group_home_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/services/chat/remote/chat_repository_remote.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
@@ -42,8 +41,7 @@ final class _AcceptanceTokenProvider implements CloudAuthTokenProvider {
   final String token;
 
   @override
-  Future<String?> getAccessToken() async =>
-      token.trim().isEmpty ? null : token;
+  Future<String?> getAccessToken() async => token.trim().isEmpty ? null : token;
 }
 
 Future<void> _ensureChatFixtureSeeded() async {
@@ -68,7 +66,7 @@ Future<void> _ensureChatFixtureSeeded() async {
   expect(result.exitCode, 0, reason: '${result.stdout}\n${result.stderr}');
 }
 
-Future<GroupHomeDto> _loadGroupHome(RemoteChatRepository repo) async {
+Future<GroupHome> _loadGroupHome(RemoteChatRepository repo) async {
   try {
     return await repo.getGroupHome(_photoGroupId);
   } on Object {

@@ -24,11 +24,11 @@ func TestMessageCardKindIsClosedSnakeCaseWireSet(t *testing.T) {
 		}
 	}
 
-	for _, legacy := range []messagemodel.MessageCardKind{
+	for _, retired := range []messagemodel.MessageCardKind{
 		"profileQr", "post", "userProfile", "entityProfile",
 	} {
-		if legacy.Valid() {
-			t.Fatalf("legacy MessageCardKind %q must be rejected", legacy)
+		if retired.Valid() {
+			t.Fatalf("retired MessageCardKind %q must be rejected", retired)
 		}
 	}
 }

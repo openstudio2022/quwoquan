@@ -12,11 +12,15 @@ extension _ProfileStatsPageWidgets on _ProfileStatsPageState {
             scope: UiErrorScope.page,
           ),
         ),
-        onAction: (action) async {
+        onRecovery: (action) async {
           if (action.type == UiErrorActionType.retry ||
               action.type == UiErrorActionType.resubmit) {
             await _loadBundleAndActiveTab();
+            return _bundleError == null
+                ? UiRecoveryOutcome.recovered
+                : UiRecoveryOutcome.stillBlocked;
           }
+          return UiRecoveryOutcome.cancelled;
         },
       );
     }
@@ -152,7 +156,7 @@ extension _ProfileStatsPageWidgets on _ProfileStatsPageState {
             return switch (_activeTab) {
               _ProfileStatsTab.circles => _buildCircleRow(
                 context,
-                item as CircleDto,
+                item as PersonaCircleSlice,
                 isDark,
               ),
               _ProfileStatsTab.fans ||
@@ -202,7 +206,11 @@ extension _ProfileStatsPageWidgets on _ProfileStatsPageState {
     ];
   }
 
-  Widget _buildCircleRow(BuildContext context, CircleDto circle, bool isDark) {
+  Widget _buildCircleRow(
+    BuildContext context,
+    PersonaCircleSlice circle,
+    bool isDark,
+  ) {
     final titleColor = SettingsSemanticConstants.labelColor(isDark);
     final subtitleColor = SettingsSemanticConstants.secondaryColor(isDark);
     final visibilityText = _circleVisibilityText(circle.visibility);
@@ -404,7 +412,7 @@ extension _ProfileStatsPageWidgets on _ProfileStatsPageState {
   Widget? _buildFollowButton(
     BuildContext context,
     ProfileSocialRelationRowViewData row,
-    RelationshipCapabilityDto? capability,
+    RelationshipCapabilityViewData? capability,
     bool isDark,
   ) {
     if (capability == null) {
@@ -477,7 +485,7 @@ extension _ProfileStatsPageWidgets on _ProfileStatsPageState {
 
   String _relationSecondaryText(
     ProfileSocialRelationRowViewData row,
-    RelationshipCapabilityDto? capability,
+    RelationshipCapabilityViewData? capability,
   ) {
     final segments = <String>[];
     if (capability?.relationState == 'mutual') {

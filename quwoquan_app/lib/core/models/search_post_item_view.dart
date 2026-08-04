@@ -53,8 +53,8 @@ final class PostSearchItemView {
     final reason = intersectionReason;
     return PostSearchItemView(
       postId: hit.postId,
-      contentType: hit.contentType.wireValue,
-      contentIdentity: hit.contentIdentity?.wireValue,
+      contentType: hit.contentType.wireName,
+      contentIdentity: hit.contentIdentity?.wireName,
       title: hit.title,
       summary: hit.summary,
       coverUrl: hit.coverUrl,

@@ -7,6 +7,7 @@ import (
 )
 
 var (
+	ErrInvalidArgument     = errors.New("invalid skill subscription argument")
 	ErrInvalidStatus       = errors.New("invalid skill subscription status")
 	ErrInvalidTransition   = errors.New("invalid skill subscription transition")
 	ErrIdempotencyConflict = errors.New("skill subscription command identity already has different intent")

@@ -19,7 +19,7 @@ import (
 	rtstreaming "quwoquan_service/runtime/streaming"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
 	assistanthttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/adapters/inbound/http"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
+	assistant "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/model"
 )
 
 func TestAssistantRunHTTPUsesOneMongoAggregateAndJournal(t *testing.T) {
@@ -34,19 +34,19 @@ func TestAssistantRunHTTPUsesOneMongoAggregateAndJournal(t *testing.T) {
 	}
 	commands := runruntime.NewCommandService(
 		integrationRunRepository,
-		runruntime.SessionAuthorizerFunc(func(
+		runruntime.SessionResolverFunc(func(
 			ctx context.Context,
 			userID string,
 			sessionID string,
-		) error {
+		) (runruntime.SessionContinuity, error) {
 			_, err := service.GetSession(ctx, userID, sessionID)
-			return err
+			return runruntime.SessionContinuity{}, err
 		}),
 		testSkillPackageIdentityResolver(),
 		runruntime.AllowAllStartAccessPolicy{},
 		time.Now,
 		nil,
-		integrationRunPolicyResolver(),
+		runruntime.WithPolicyResolver(integrationRunPolicyResolver()),
 	)
 	handler := assistanthttp.NewHandler(
 		service,

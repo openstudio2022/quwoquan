@@ -18,7 +18,7 @@ void main() {
 
       final result = await client.contentMediaUploadSessionInitMediaUpload(
         InitContentMediaUploadCommand(
-          mediaType: ContentMediaType.image,
+          mediaType: MediaType.image,
           mimeType: 'image/jpeg',
           fileSize: 256,
           expectedSha256:
@@ -66,7 +66,7 @@ void main() {
         .contentMediaOriginalAccessFactRequestOriginalImageAccess(
           RequestContentMediaOriginalAccessCommand(
             mediaId: 'mas-1',
-            purpose: ContentMediaOriginalAccessPurpose.save,
+            purpose: MediaOriginalAccessPurpose.save,
           ),
           context: _context(
             surfaceId: 'workBrowser',
@@ -112,9 +112,9 @@ void main() {
       expect(executor.operation?.method, 'DELETE');
       expect(executor.pathParameters, <String, String>{'mediaId': 'mas-1'});
       expect(executor.body, isNull);
-      expect(result.status, ContentMediaProcessingStatus.deleted);
+      expect(result.status, MediaAssetDiscardStatus.deleted);
       expect(
-        () => decodeContentMediaAssetDiscardResult(<String, Object?>{
+        () => decodeMediaAssetDiscardResult(<String, Object?>{
           'mediaId': 'mas-1',
           'status': 'ready',
           'replayed': false,
@@ -126,7 +126,7 @@ void main() {
 
   test('media decoder rejects dynamic or malformed business response', () {
     expect(
-      () => decodeContentMediaAssetSlice(<String, Object?>{
+      () => decodeMediaAssetSlice(<String, Object?>{
         'assetId': 'mas-1',
         'version': 1,
         'mediaType': 'image',
@@ -141,7 +141,7 @@ void main() {
   });
 
   test('ready image slice preserves processor-owned delivery descriptor', () {
-    final media = decodeContentMediaAssetSlice(<String, Object?>{
+    final media = decodeMediaAssetSlice(<String, Object?>{
       'assetId': 'mas-1',
       'version': 2,
       'mediaType': 'image',
@@ -152,7 +152,7 @@ void main() {
       'cdnUrl': 'https://cdn.example.test/media/mas-1',
       'imageWidth': 960,
       'imageHeight': 640,
-      'imageDeliveryContentType': 'image/jpeg',
+      'imageDeliveryMimeType': 'image/jpeg',
       'imageDominantColor': '#1A2B3C',
       'imageLqip': 'data:image/jpeg;base64,/9j/2Q==',
       'imageContentProfile': 'photographic',
@@ -170,7 +170,7 @@ void main() {
   test(
     'completed upload-session decoder preserves recovery asset identity',
     () {
-      final session = decodeContentMediaUploadSessionSlice(<String, Object?>{
+      final session = decodeMediaUploadSessionSlice(<String, Object?>{
         'sessionId': 'mus-1',
         'version': 2,
         'assetId': 'mas-1',
@@ -184,7 +184,7 @@ void main() {
       });
 
       expect(session.sessionId, 'mus-1');
-      expect(session.status, ContentMediaUploadStatus.completed);
+      expect(session.status, MediaUploadSessionStatus.completed);
       expect(session.assetId, 'mas-1');
     },
   );

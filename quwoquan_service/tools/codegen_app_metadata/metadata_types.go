@@ -31,6 +31,7 @@ type fieldDef struct {
 	Source              string            `yaml:"source"`
 	Type                string            `yaml:"type"`
 	Constraints         []string          `yaml:"constraints"`
+	APIExposure         string            `yaml:"api_exposure"`
 	EnumRef             string            `yaml:"enum_ref"`
 	ClientDartName      string            `yaml:"client_dart_name"`
 	ClientDartType      string            `yaml:"client_dart_type"`
@@ -158,6 +159,12 @@ type projectionFieldDef struct {
 	ListElementDartClass string `yaml:"list_element_dart_class"`
 	// When dart_type is a class with SomeDto.fromMap(Map<String,dynamic>) and wire is a JSON object.
 	MapFromStringKeyClass string `yaml:"map_from_string_key_class"`
+	// The following two properties are derived by generators when a projection
+	// reuses an enum owned by a generated domain operation contract. They are
+	// intentionally unavailable to YAML so contracts cannot restate the Dart
+	// codec ABI as a second truth source.
+	DartEnumDecoderWithPath bool   `yaml:"-"`
+	DartEnumWireGetter      string `yaml:"-"`
 }
 
 func (field *projectionFieldDef) UnmarshalYAML(node *yaml.Node) error {

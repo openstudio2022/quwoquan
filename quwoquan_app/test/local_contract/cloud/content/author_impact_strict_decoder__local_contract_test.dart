@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_item.g.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {
   final valid = <String, dynamic>{
@@ -27,18 +27,20 @@ void main() {
   };
 
   test('accepts integral JSON numbers for required doubles', () {
-    final item = AuthorImpactItem.fromMap(valid);
+    final item = AuthorImpactItem.fromWire(valid);
     expect(item.previousStrength, 0.0);
     expect(item.strengthDelta, 0.0);
   });
 
-  test('rejects a broken successful response instead of creating an empty row', () {
-    final malformed = Map<String, dynamic>.from(valid)
-      ..remove('primaryText');
+  test(
+    'rejects a broken successful response instead of creating an empty row',
+    () {
+      final malformed = Map<String, dynamic>.from(valid)..remove('primaryText');
 
-    expect(
-      () => AuthorImpactItem.fromMap(malformed),
-      throwsA(isA<FormatException>()),
-    );
-  });
+      expect(
+        () => AuthorImpactItem.fromWire(malformed),
+        throwsA(isA<FormatException>()),
+      );
+    },
+  );
 }

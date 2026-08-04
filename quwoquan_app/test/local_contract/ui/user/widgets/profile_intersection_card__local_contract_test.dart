@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_card.dart';
 import 'package:quwoquan_app/components/object_page/intersection_statement_row.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
+import '../../../../support/fixtures/intersection_fixtures.dart';
 
 /// 交集卡真闭环（V5/S5）契约：
 /// - 无交集（reasons 空 / displayText 全空）→ fromReasons 返回 null，不占位。
@@ -15,7 +15,7 @@ void main() {
     required List<String> tagRefs,
     required String primaryText,
   }) {
-    return IntersectionReason(
+    return intersectionReasonFixture(
       dimension: dimension,
       tagRefs: tagRefs,
       primaryText: primaryText,

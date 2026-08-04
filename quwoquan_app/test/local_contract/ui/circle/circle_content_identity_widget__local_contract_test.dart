@@ -8,6 +8,7 @@ import 'package:quwoquan_app/ui/circle/widgets/section_creations.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import 'typed_circle_query_test_double.dart';
+import '../../../support/cloud_services/object_doubles/circle/circle_contract_test_builders.dart';
 
 Widget _buildApp(
   Widget child, {
@@ -26,7 +27,7 @@ Widget _buildApp(
         feedQuery ??
             CircleFeedQueryTestDouble(
               (query) => CircleFeedPageSlice(
-                items: const <CircleFeedPostProjection>[],
+                items: const <CircleFeedItemView>[],
               ),
             ),
       ),
@@ -121,48 +122,40 @@ void main() {
 
 CircleFeedPageSlice _articleFeedFixture(CircleFeedQuery query) {
   return CircleFeedPageSlice(
-    items: <CircleFeedPostProjection>[
-      CircleFeedPostProjection(
+    items: <CircleFeedItemView>[
+      buildCircleFeedItemContract(
         circleId: query.circleId,
         placementId: 'fixture-placement-article-cover',
-        post: ContentPostProjection(
-          postId: 'fixture_article_with_cover',
-          contentType: 'article',
-          contentIdentity: 'work',
-          authorId: 'fixture_user_photo',
-          authorDisplayName: '契约摄影师',
-          authorAvatarUrl: 'media/avatar/fixture_user_photo.png',
-          title: '山路晨雾手账',
-          summary: '把徒步笔记做成可翻页的旅途册。',
-          body: '把徒步笔记做成可翻页的旅途册。',
-          coverUrl: 'media/image/fixture_article_with_cover.jpg',
-          articleTemplate: 'journal',
-          articleFontPreset: 'handwritten',
-          likeCount: 164,
-          commentCount: 12,
-          shareCount: 11,
-          createdAt: DateTime.utc(2026, 5, 13),
-        ),
+        postId: 'fixture_article_with_cover',
+        contentType: 'article',
+        contentIdentity: 'work',
+        authorId: 'fixture_user_photo',
+        authorDisplayName: '契约摄影师',
+        authorAvatarUrl: 'media/avatar/fixture_user_photo.png',
+        title: '山路晨雾手账',
+        summary: '把徒步笔记做成可翻页的旅途册。',
+        body: '把徒步笔记做成可翻页的旅途册。',
+        coverUrl: 'media/image/fixture_article_with_cover.jpg',
+        likeCount: 164,
+        commentCount: 12,
+        shareCount: 11,
+        createdAt: DateTime.utc(2026, 5, 13),
       ),
-      CircleFeedPostProjection(
+      buildCircleFeedItemContract(
         circleId: query.circleId,
         placementId: 'fixture-placement-article-text',
-        post: ContentPostProjection(
-          postId: 'fixture_article_text_only',
-          contentType: 'article',
-          contentIdentity: 'work',
-          authorId: 'fixture_user_owner',
-          authorDisplayName: '纸上居',
-          authorAvatarUrl: 'media/avatar/fixture_user_owner.png',
-          summary: '没有标题也没封面，只保留真正想被圈友读到的正文。',
-          body: '没有标题也没封面，只保留真正想被圈友读到的正文。',
-          articleTemplate: 'gentle',
-          articleFontPreset: 'clean',
-          likeCount: 88,
-          commentCount: 6,
-          shareCount: 4,
-          createdAt: DateTime.utc(2026, 5, 13, 1),
-        ),
+        postId: 'fixture_article_text_only',
+        contentType: 'article',
+        contentIdentity: 'work',
+        authorId: 'fixture_user_owner',
+        authorDisplayName: '纸上居',
+        authorAvatarUrl: 'media/avatar/fixture_user_owner.png',
+        summary: '没有标题也没封面，只保留真正想被圈友读到的正文。',
+        body: '没有标题也没封面，只保留真正想被圈友读到的正文。',
+        likeCount: 88,
+        commentCount: 6,
+        shareCount: 4,
+        createdAt: DateTime.utc(2026, 5, 13, 1),
       ),
     ],
   );
@@ -170,8 +163,8 @@ CircleFeedPageSlice _articleFeedFixture(CircleFeedQuery query) {
 
 class _ArticleFixtureCircleQuery extends CircleQueryReaderTestDouble {
   @override
-  Future<CircleProjection> get(CircleDetailQuery query) async =>
-      CircleProjection(
+  Future<Circle> get(CircleDetailQuery query) async =>
+      buildCircleContract(
         circleId: query.circleId,
         name: '契约摄影社',
         ownerId: 'fixture_user_owner',

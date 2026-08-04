@@ -20,7 +20,7 @@ class MockBehaviorRepository extends BehaviorRepository {
     recorded.add(
       BehaviorEvent(
         contentId: '',
-        action: BehaviorAction.onboardingInterest,
+        action: BehaviorEventType.onboardingInterest,
         clientEventId: clientEventId,
         taxonomyReleaseId: taxonomyReleaseId,
         sourceSurface: 'interest_onboarding',

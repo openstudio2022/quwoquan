@@ -96,14 +96,14 @@ func TestLoadCreatorsResolvesAvatarFromReleaseMediaAuthority(t *testing.T) {
 	}
 }
 
-func TestLoadCreatorsRejectsLegacyAndInconsistentAvatarBindings(t *testing.T) {
+func TestLoadCreatorsRejectsRetiredAndInconsistentAvatarBindings(t *testing.T) {
 	tests := []struct {
 		name        string
 		mutate      func(profile map[string]any, manifest map[string]any)
 		errorMarker string
 	}{
 		{
-			name: "legacy-avatar-object-key",
+			name: "retired-avatar-object-key",
 			mutate: func(profile map[string]any, _ map[string]any) {
 				profile["avatarObjectKey"] = "media/objects/sha256/aa/bb/private.jpg"
 			},

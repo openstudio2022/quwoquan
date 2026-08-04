@@ -1,4 +1,6 @@
 realtime_contract: RecommendationFeedPatch
+client_ws_type: feed.patch
+payload_entity: FeedRealtimePatch
 description: "低风险首页推荐实时 patch 契约（商用化阶段 7 · §G）。\n\n语义边界（与领域事件区分，禁止混入 events.yaml）：\n  - 这是「推荐 → 端」的瞬时提示通道，不是领域事件：不进\
   \ event_store、不跨服务消费、\n    不做 30 天持久化重放（避免用户重开 App 时重放一堆过期 refresh/hint）。\n  - 服务端只在安全边界发射，绝不主动重排用户正在看的内容；端侧只在不打断阅读位置的\n\
   \    前提下消费（合并到 discovery_feed_provider 的安全边界，不跳动当前位置）。\n\n三类 P1 patch：\n  - new_candidate_hint     \
@@ -8,7 +10,6 @@ description: "低风险首页推荐实时 patch 契约（商用化阶段 7 · §
   \ 生成（DO NOT EDIT 产物），供下一波端侧消费对齐。\n"
 realtime_channel_template: rt:rec:feed:user:{userId}
 client_codegen:
-  output_path: cloud/runtime/generated/recommendation/feed_realtime_patch.g.dart
   patch_type_enum: FeedRealtimePatchType
   reason_code_enum: FeedPatchReasonCode
   removal_dimension_enum: FeedPatchRemovalDimension

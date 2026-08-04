@@ -6,7 +6,7 @@ import math
 
 
 @dataclass(frozen=True, slots=True)
-class FeedbackFact:
+class RecommendationFeedbackFact:
     feedback_id: str
     source_event_id: str
     exposure_id: str

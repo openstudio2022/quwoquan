@@ -42,7 +42,7 @@ class _FlakyBehaviorRepository extends BehaviorRepository {
     recorded.add(
       BehaviorEvent(
         contentId: '',
-        action: BehaviorAction.onboardingInterest,
+        action: BehaviorEventType.onboardingInterest,
         clientEventId: clientEventId,
         taxonomyReleaseId: taxonomyReleaseId,
         tags: tagRefs,
@@ -104,7 +104,7 @@ void main() {
       await tracker.flush();
 
       final impressions = repo.recorded
-          .where((e) => e.action == BehaviorAction.impression)
+          .where((e) => e.action == BehaviorEventType.impression)
           .map((e) => e.contentId)
           .toList();
       expect(impressions, equals(['post_1', 'post_2']));
@@ -171,9 +171,9 @@ void main() {
       await tracker.flush();
 
       final event = repo.recorded.single;
-      expect(event.action, BehaviorAction.impression);
+      expect(event.action, BehaviorEventType.impression);
       expect(event.state, equals('visible'));
-      expect(event.toJson()['state'], equals('visible'));
+      expect(event.toStorageJson()['state'], equals('visible'));
       expect(event.clientEventId, isNotEmpty);
     });
 
@@ -188,7 +188,7 @@ void main() {
       await tracker.flush();
 
       expect(repo.recorded.length, equals(1));
-      expect(repo.recorded.first.action, BehaviorAction.dwell);
+      expect(repo.recorded.first.action, BehaviorEventType.dwell);
       expect(repo.recorded.first.state, equals('dwell'));
       expect(repo.recorded.first.duration, equals(3.5));
     });
@@ -205,12 +205,12 @@ void main() {
       await tracker.flush();
 
       final event = repo.recorded.single;
-      expect(event.action, BehaviorAction.effectivePlay);
+      expect(event.action, BehaviorEventType.effectivePlay);
       expect(event.state, 'foreground_visible_playing');
-      expect(event.sessionId, 'video-session-1');
+      expect(event.playbackSessionId, 'video-session-1');
       expect(event.effectivePlayMs, 8000);
-      expect(event.toJson()['effectivePlayMs'], 8000);
-      expect(event.toJson()['sessionId'], 'video-session-1');
+      expect(event.toStorageJson()['effectivePlayMs'], 8000);
+      expect(event.toStorageJson()['playbackSessionId'], 'video-session-1');
     });
 
     test('works_image_pageflip_motion 上报舒适度 motion 字段', () async {
@@ -227,7 +227,7 @@ void main() {
       await tracker.flush();
 
       final event = repo.recorded.single;
-      expect(event.action, BehaviorAction.contentDepth);
+      expect(event.action, BehaviorEventType.contentDepth);
       expect(event.state, 'works_image_pageflip_motion');
       expect(event.motionDirection, 'forward');
       expect(event.motionProfile, 'comfort_curl');
@@ -235,7 +235,7 @@ void main() {
       expect(event.reducedMotion, isFalse);
       expect(event.committed, isTrue);
       expect(event.duration, 0.384);
-      final json = event.toJson();
+      final json = event.toStorageJson();
       expect(json['state'], 'works_image_pageflip_motion');
       expect(json['direction'], 'forward');
       expect(json['motionProfile'], 'comfort_curl');
@@ -269,7 +269,7 @@ void main() {
         authorId: 'author_1',
       );
       await tracker.flush();
-      expect(repo.recorded.first.action, BehaviorAction.dislike);
+      expect(repo.recorded.first.action, BehaviorEventType.dislike);
       expect(repo.recorded.first.state, equals('negative'));
       expect(repo.recorded.first.contentId, equals('post_1'));
       expect(repo.recorded.first.contentType, equals('photo'));
@@ -283,7 +283,7 @@ void main() {
         authorId: 'author_1',
       );
       await tracker.flush();
-      expect(repo.recorded.first.action, BehaviorAction.undoDislike);
+      expect(repo.recorded.first.action, BehaviorEventType.undoDislike);
       expect(repo.recorded.first.state, 'interaction');
       expect(repo.recorded.first.contentId, 'post_1');
     });
@@ -297,12 +297,12 @@ void main() {
       await tracker.flush();
 
       final event = repo.recorded.single;
-      expect(event.action, BehaviorAction.hideAuthor);
+      expect(event.action, BehaviorEventType.hideAuthor);
       expect(event.state, equals('negative'));
       expect(event.contentId, equals('post_1'));
       expect(event.authorId, equals('author_1'));
       expect(event.contentType, equals('photo'));
-      expect(event.toJson()['action'], equals('hide_author'));
+      expect(event.toStorageJson()['action'], equals('hide_author'));
     });
 
     test('hide_content_type 事件上报 contentType，可带 authorId', () async {
@@ -314,21 +314,21 @@ void main() {
       await tracker.flush();
 
       final event = repo.recorded.single;
-      expect(event.action, BehaviorAction.hideContentType);
+      expect(event.action, BehaviorEventType.hideContentType);
       expect(event.state, equals('negative'));
       expect(event.contentId, equals('post_2'));
       expect(event.contentType, equals('video'));
       expect(event.authorId, equals('author_2'));
-      expect(event.toJson()['action'], equals('hide_content_type'));
+      expect(event.toStorageJson()['action'], equals('hide_content_type'));
     });
 
     test('share 事件正确上报', () async {
       tracker.trackShare('post_1');
       await tracker.flush();
-      expect(repo.recorded.first.action, BehaviorAction.share);
+      expect(repo.recorded.first.action, BehaviorEventType.share);
     });
 
-    // ── V1-F/V1-H T3：feed 归因字段回流（feedRequestId/position/referralSource）──
+    // feed 归因字段回流（feedRequestId/position/referralSource）。
     test('impression 透传 feedRequestId/position/referralSource 回流', () async {
       tracker.trackImpression(
         'post_1',
@@ -354,7 +354,7 @@ void main() {
       await tracker.flush();
 
       final event = repo.recorded.single;
-      expect(event.action, BehaviorAction.click);
+      expect(event.action, BehaviorEventType.click);
       expect(event.position, equals(3));
       expect(event.referralSource, equals(ReferralSource.organicFeed));
     });
@@ -406,7 +406,7 @@ void main() {
       await tracker.flush();
 
       final event = repo.recorded.single;
-      expect(event.action, BehaviorAction.click);
+      expect(event.action, BehaviorEventType.click);
       expect(event.state, equals('click'));
       expect(event.channelId, equals('video'));
       expect(
@@ -424,7 +424,6 @@ void main() {
     test('tag_click 交集证据组点击：独立动作（禁降级为 click）+ 完整交集归因回流', () async {
       tracker.trackTagClick(
         'u_lin',
-        contentType: 'user',
         authorId: 'u_lin',
         referralSource: ReferralSource.authorProfile,
         tags: const <String>['relationship/sharedFollowees'],
@@ -443,8 +442,8 @@ void main() {
 
       final event = repo.recorded.single;
       // 关键不变量：保留 tag_click 语义，未降级为 click（否则丢推荐 1.8 权重）。
-      expect(event.action, BehaviorAction.tagClick);
-      expect(event.toJson()['action'], equals('tag_click'));
+      expect(event.action, BehaviorEventType.tagClick);
+      expect(event.toStorageJson()['action'], equals('tag_click'));
       expect(event.state, equals('interaction'));
       expect(event.contentId, equals('u_lin'));
       expect(event.authorId, equals('u_lin'));
@@ -524,7 +523,7 @@ void main() {
       await tracker.flush();
 
       final event = repo.recorded.single;
-      expect(event.action, BehaviorAction.follow);
+      expect(event.action, BehaviorEventType.follow);
       expect(event.authorId, equals('author_1'));
       expect(event.intersectionDimension, equals('identity'));
       expect(event.intersectionTagRefs, contains('identity/campus/xdf'));
@@ -540,7 +539,7 @@ void main() {
       await tracker.flush();
 
       final event = repo.recorded.single;
-      expect(event.action, BehaviorAction.joinCircle);
+      expect(event.action, BehaviorEventType.joinCircle);
       expect(event.contentId, equals('circle_1'));
       expect(event.intersectionDimension, equals('interest'));
       expect(event.intersectionTagRefs, contains('Topic/旅行'));
@@ -555,36 +554,36 @@ void main() {
       await tracker.flush();
 
       final event = repo.recorded.single;
-      expect(event.action, BehaviorAction.addContact);
+      expect(event.action, BehaviorEventType.addContact);
       expect(event.contentId, equals('author_2'));
       expect(event.authorId, equals('author_2'));
       expect(event.intersectionDimension, equals('location'));
       expect(event.intersectionTagRefs, contains('Entity/地点/北京'));
     });
 
-    test('三类交集行动 wireValue 互不相同，漏斗可区分', () {
-      expect(BehaviorAction.follow.wireValue, equals('follow'));
-      expect(BehaviorAction.joinCircle.wireValue, equals('join_circle'));
-      expect(BehaviorAction.addContact.wireValue, equals('add_contact'));
+    test('三类交集行动 wireName 互不相同，漏斗可区分', () {
+      expect(BehaviorEventType.follow.wireName, equals('follow'));
+      expect(BehaviorEventType.joinCircle.wireName, equals('join_circle'));
+      expect(BehaviorEventType.addContact.wireName, equals('add_contact'));
       expect(
-        BehaviorAction.fromWireValue('join_circle'),
-        equals(BehaviorAction.joinCircle),
+        BehaviorEventType.fromWire('join_circle', 'action'),
+        equals(BehaviorEventType.joinCircle),
       );
       expect(
-        BehaviorAction.fromWireValue('add_contact'),
-        equals(BehaviorAction.addContact),
+        BehaviorEventType.fromWire('add_contact', 'action'),
+        equals(BehaviorEventType.addContact),
       );
     });
 
     // ── S6 修复：BehaviorEvent JSON roundtrip 不得丢失交集归因（入队重试场景）──
-    test('BehaviorEvent toJson 携带交集字段', () {
+    test('BehaviorEvent storage codec 携带交集字段', () {
       final event = BehaviorEvent(
         contentId: 'circle_9',
-        action: BehaviorAction.joinCircle,
+        action: BehaviorEventType.joinCircle,
         intersectionDimension: 'identity',
         intersectionTagRefs: <String>['Entity/机构/学校/西电'],
       );
-      final json = event.toJson();
+      final json = event.toStorageJson();
       expect(json['action'], equals('join_circle'));
       expect(json['intersectionDimension'], equals('identity'));
       expect(json['intersectionTagRefs'], contains('Entity/机构/学校/西电'));
@@ -602,11 +601,11 @@ void main() {
       await tracker.flush();
 
       final event = repo.recorded.single;
-      expect(event.action, BehaviorAction.assistantInterest);
+      expect(event.action, BehaviorEventType.assistantInterest);
       expect(event.contentId, isEmpty);
       expect(event.tags, equals(<String>['Topic/旅行', 'Topic/景区']));
 
-      final json = event.toJson();
+      final json = event.toStorageJson();
       expect(json['action'], equals('assistant_interest'));
       expect(json['tagRefs'], equals(<String>['Topic/旅行', 'Topic/景区']));
     });
@@ -633,15 +632,16 @@ void main() {
       await tracker.flush();
 
       final event = repo.recorded.single;
-      expect(event.action, BehaviorAction.wishlistAdd);
+      expect(event.action, BehaviorEventType.wishlistAdd);
       expect(event.state, 'interaction');
       expect(event.contentId, 'homepage_west_lake');
       expect(event.objectId, 'homepage_west_lake');
       expect(event.objectKind, 'homepage');
+      expect(event.contentType, isNull);
       expect(event.displayName, '西湖日落机位');
       expect(event.sourceSurface, 'object_homepage');
       expect(event.entityRefs, <String>['homepage_west_lake']);
-      final json = event.toJson();
+      final json = event.toStorageJson();
       expect(json['action'], 'wishlist_add');
       expect(json['objectId'], 'homepage_west_lake');
       expect(json['objectKind'], 'homepage');
@@ -657,12 +657,12 @@ void main() {
       await tracker.flush();
 
       final event = repo.recorded.single;
-      expect(event.action, BehaviorAction.wishlistRemove);
+      expect(event.action, BehaviorEventType.wishlistRemove);
       expect(event.state, 'negative');
       expect(event.contentId, 'homepage_west_lake');
       expect(event.objectId, 'homepage_west_lake');
       expect(event.objectKind, 'homepage');
-      expect(event.toJson()['action'], 'wishlist_remove');
+      expect(event.toStorageJson()['action'], 'wishlist_remove');
     });
   });
 }

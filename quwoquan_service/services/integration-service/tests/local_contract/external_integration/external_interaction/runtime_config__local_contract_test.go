@@ -3,19 +3,24 @@ package local_contract
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	integrationconfig "quwoquan_service/services/integration-service/internal/external_integration/external_interaction/infrastructure/runtimeconfig"
+	integrationsupport "quwoquan_service/services/integration-service/tests/support"
 )
 
 func TestLoadRuntimeConfigReadsCanonicalSnapshot(t *testing.T) {
 	configRoot := t.TempDir()
+	configDigest := integrationsupport.CanonicalTestSHA256(
+		"integration-service:gamma-config",
+	)
 	writeRuntimeConfigFile(t, filepath.Join(configRoot, "integration-service.yaml"),
-		"config:\n  version: sha256:canonical\nservice:\n  http:\n    addr: :18086\nmongodb:\n  uri: mongodb://mongodb:27017\n  database: quwoquan_integration\nintegration:\n  location:\n    nearby_default_limit: 25\n")
+		"config:\n  version: "+configDigest+"\nservice:\n  http:\n    addr: :18086\nmongodb:\n  uri: mongodb://mongodb:27017\n  database: quwoquan_integration\nintegration:\n  location:\n    nearby_default_limit: 25\n")
 	t.Setenv("SERVICE_NAME", "integration-service")
 	t.Setenv("APP_ENV", "gamma")
 	t.Setenv("CONFIG_ROOT", configRoot)
-	t.Setenv("CONFIG_VERSION", "sha256:canonical")
+	t.Setenv("CONFIG_VERSION", configDigest)
 
 	cfg, err := integrationconfig.Load()
 	if err != nil {
@@ -31,14 +36,43 @@ func TestMergeConfigFileRejectsRetiredLocationProviderSelection(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
 	writeRuntimeConfigFile(t, path, "integration:\n  location:\n    primary_provider: baidu\n")
 	if err := integrationconfig.MergeFile(&integrationconfig.Config{}, path); err == nil {
-		t.Fatal("legacy runtime provider selection must fail closed")
+		t.Fatal("retired runtime provider selection must fail closed")
 	}
 }
 
 func TestApplyEnvOverridesRejectsRetiredLocationProviderSelection(t *testing.T) {
 	t.Setenv("INTEGRATION_LOCATION_PROVIDER", "baidu")
 	if err := integrationconfig.ApplyEnvOverrides(&integrationconfig.Config{}); err == nil {
-		t.Fatal("legacy location provider environment selection must fail closed")
+		t.Fatal("retired location provider environment selection must fail closed")
+	}
+}
+
+func TestMergeConfigFileRejectsRetiredExternalProviderSelection(t *testing.T) {
+	for _, key := range []string{"sms", "push"} {
+		t.Run(key, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "config.yaml")
+			writeRuntimeConfigFile(
+				t,
+				path,
+				"integration:\n  external_interaction:\n    "+key+":\n      enabled: true\n",
+			)
+			err := integrationconfig.MergeFile(&integrationconfig.Config{}, path)
+			if err == nil || !strings.Contains(err.Error(), "generated external provider binding") {
+				t.Fatalf("retired %s config must fail closed: %v", key, err)
+			}
+		})
+	}
+}
+
+func TestApplyEnvOverridesRejectsRetiredExternalProviderSelection(t *testing.T) {
+	for _, key := range []string{"INTEGRATION_SMS_PROVIDER", "INTEGRATION_PUSH_MODE"} {
+		t.Run(key, func(t *testing.T) {
+			t.Setenv(key, "retired")
+			err := integrationconfig.ApplyEnvOverrides(&integrationconfig.Config{})
+			if err == nil || !strings.Contains(err.Error(), "generated external provider binding") {
+				t.Fatalf("retired %s override must fail closed: %v", key, err)
+			}
+		})
 	}
 }
 

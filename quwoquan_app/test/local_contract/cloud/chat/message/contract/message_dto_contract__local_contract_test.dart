@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
+import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
 
 Map<String, dynamic> validMessageWire({
   String type = 'text',
@@ -33,9 +33,9 @@ Map<String, dynamic> validMessageWire({
 }
 
 void main() {
-  group('ChatMessageDto strict projection', () {
+  group('ChatMessageView strict projection', () {
     test('解析服务端返回的强类型 MediaAsset delivery projection', () {
-      final dto = MessageDto.fromMap(
+      final dto = ChatMessageView.fromWire(
         validMessageWire(
           type: 'audio',
           mediaAssetId: 'asset_audio_001',
@@ -49,7 +49,7 @@ void main() {
       expect(dto.id, 'msg_001');
       expect(dto.senderId, 'persona_001');
       expect(dto.senderName, '契约发送者');
-      expect(dto.type, 'audio');
+      expect(dto.type, MessageType.audio);
       expect(dto.mediaAssetId, 'asset_audio_001');
       expect(dto.mediaDeliveryUrl, 'https://cdn.example.com/voice.m4a');
       expect(dto.mediaType, 'audio');
@@ -58,8 +58,8 @@ void main() {
     });
 
     test('toMap 使用 canonical wire key 并可严格 round-trip', () {
-      final original = MessageDto.fromMap(validMessageWire());
-      final wire = original.toMap();
+      final original = ChatMessageView.fromWire(validMessageWire());
+      final wire = original.toWire();
 
       expect(wire['id'], 'msg_001');
       expect(wire['senderName'], '契约发送者');
@@ -67,7 +67,7 @@ void main() {
       expect(wire.containsKey('_id'), isFalse);
       expect(wire.containsKey('senderDisplayNameSnapshot'), isFalse);
 
-      final decoded = MessageDto.fromMap(wire);
+      final decoded = ChatMessageView.fromWire(wire);
       expect(decoded.id, original.id);
       expect(decoded.timestamp, original.timestamp);
     });
@@ -82,14 +82,14 @@ void main() {
             <String, String>{'name': 'postId', 'value': 'post_001'},
           ],
         };
-      final dto = MessageDto.fromMap(wire);
-      expect(dto.card?.kind, 'content_post');
+      final dto = ChatMessageView.fromWire(wire);
+      expect(dto.card?.kind.wireName, 'content_post');
       expect(dto.card?.attributes.single.name, 'postId');
-      final roundTripCard = dto.toMap()['card']! as Map<String, dynamic>;
+      final roundTripCard = dto.toWire()['card']! as Map<String, Object?>;
       expect(roundTripCard['kind'], 'content_post');
       expect(roundTripCard['title'], '城市漫步');
       expect(roundTripCard['attributes'], wire['card']['attributes']);
-      expect(MessageDto.fromMap(dto.toMap()).card?.title, '城市漫步');
+      expect(ChatMessageView.fromWire(dto.toWire()).card?.title, '城市漫步');
     });
 
     test('拒绝已移除的 mediaUrl/media 与 alias key', () {
@@ -108,7 +108,7 @@ void main() {
       ]) {
         final wire = validMessageWire()..[removedField] = 'removed';
         expect(
-          () => MessageDto.fromMap(wire),
+          () => ChatMessageView.fromWire(wire),
           throwsFormatException,
           reason: 'removed field $removedField must not be accepted',
         );
@@ -117,20 +117,23 @@ void main() {
 
     test('拒绝缺失必填字段、错误类型和非法时间', () {
       expect(
-        () => MessageDto.fromMap(validMessageWire()..remove('id')),
+        () => ChatMessageView.fromWire(validMessageWire()..remove('id')),
         throwsFormatException,
       );
       expect(
-        () => MessageDto.fromMap(validMessageWire()..['seq'] = 1.5),
+        () => ChatMessageView.fromWire(validMessageWire()..['seq'] = 1.5),
         throwsFormatException,
       );
       expect(
-        () =>
-            MessageDto.fromMap(validMessageWire()..['mentions'] = <Object>[1]),
+        () => ChatMessageView.fromWire(
+          validMessageWire()..['mentions'] = <Object>[1],
+        ),
         throwsFormatException,
       );
       expect(
-        () => MessageDto.fromMap(validMessageWire()..['timestamp'] = 'invalid'),
+        () => ChatMessageView.fromWire(
+          validMessageWire()..['timestamp'] = 'invalid',
+        ),
         throwsFormatException,
       );
     });

@@ -18,16 +18,12 @@ import (
 	embeddinginfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/embedding"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/placeindex"
 	recinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation"
+	postruntimeconfig "quwoquan_service/services/content-service/internal/content/post/infrastructure/runtimeconfig"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/searchindex"
 )
 
 func contentSliceWorkload() bool {
-	switch strings.ToLower(strings.TrimSpace(os.Getenv("QWQ_WORKLOAD"))) {
-	case "content-release", "content-commercial":
-		return true
-	default:
-		return false
-	}
+	return postruntimeconfig.ContentSliceWorkload()
 }
 
 func resolveRuntimeIdentity() (serviceName, appEnv, configRoot, configVersion, imageVersion string, err error) {
@@ -385,20 +381,7 @@ func applyEnvOverrides(cfg *config) {
 		cfg.IPLocation.DataVersion = v
 	}
 
-	// RecModelService
-	if v := os.Getenv("REC_MODEL_SERVICE_URL"); v != "" {
-		cfg.RecModelService.URL = v
-	}
-	if v := os.Getenv("REC_MODEL_SERVICE_ENABLED"); v != "" {
-		if enabled, err := strconv.ParseBool(v); err == nil {
-			cfg.RecModelService.Enabled = enabled
-		}
-	}
-	if v := os.Getenv("REC_MODEL_SERVICE_TIMEOUT_MS"); v != "" {
-		if ms, err := strconv.Atoi(v); err == nil && ms > 0 {
-			cfg.RecModelService.TimeoutMs = ms
-		}
-	}
+	postruntimeconfig.ApplyRecommendationModelEnvOverrides(&cfg.RecModelService)
 	if v := os.Getenv("TAG_SERVICE_URL"); v != "" {
 		cfg.TagService.URL = v
 	}

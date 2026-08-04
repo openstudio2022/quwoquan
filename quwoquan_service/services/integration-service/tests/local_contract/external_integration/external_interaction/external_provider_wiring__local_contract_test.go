@@ -56,9 +56,10 @@ func TestLocalCaptureSMSBindingIsSelectedByEachNonprodEnvironment(t *testing.T) 
 		resolved, err := integrationconfig.MaterializeReleaseExternalInteractionBindings(
 			integrationconfig.Config{Environment: environment},
 			platformconfig.MapRuntimeConfigProvider{Values: map[string]string{
-				"INTEGRATION_SMS_ENDPOINT":           "https://sms-provider-substitute:9443/v1/provider/sms/send",
-				"INTEGRATION_SMS_TOKEN":              "target-token",
-				"INTEGRATION_SMS_SUBSTITUTE_CA_FILE": "/run/secrets/sms-provider-substitute/ca.crt",
+				"INTEGRATION_SMS_ENDPOINT":             "https://sms-provider-substitute:9443/v1/provider/sms/send",
+				"INTEGRATION_SMS_TOKEN":                "target-token",
+				"INTEGRATION_SMS_SUBSTITUTE_CA_FILE":   "/run/secrets/sms-provider-substitute/ca.crt",
+				"INTEGRATION_PUSH_SUBSTITUTE_ENDPOINT": "https://provider-protocol-substitute:18089/push/send",
 			}},
 		)
 		if err != nil {
@@ -68,6 +69,11 @@ func TestLocalCaptureSMSBindingIsSelectedByEachNonprodEnvironment(t *testing.T) 
 		if sms.Provider != "ext.sms.local_capture" ||
 			!sms.Enabled || sms.CAFile == "" {
 			t.Fatalf("unexpected %s local-capture SMS binding: %#v", environment, sms)
+		}
+		push := resolved.Integration.ExternalInteraction.Push
+		if !push.Enabled || push.Mode != "protocol_substitute" ||
+			push.Endpoint == "" {
+			t.Fatalf("unexpected %s Push binding: %#v", environment, push)
 		}
 	}
 }

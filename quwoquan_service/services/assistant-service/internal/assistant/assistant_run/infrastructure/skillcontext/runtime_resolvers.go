@@ -8,9 +8,12 @@ import (
 
 	generated "quwoquan_service/services/assistant-service/generated/assistant/assistant_session"
 	preferencemodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_preference/domain/model"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/feedbackcontext"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
 	application "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/skillcontext"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/ports"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/ports"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/infrastructure/domainreader"
+	readerports "quwoquan_service/services/assistant-service/internal/assistant/domain_reader_descriptor/domain/ports"
 	subscriptionports "quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/domain/ports"
 )
 
@@ -19,41 +22,26 @@ type RunReader interface {
 }
 
 type RuntimeResolver struct {
-	ResolverRef   string
-	Runs          RunReader
-	Subscriptions subscriptionports.Store
-	Interests     ports.ProactiveInterestReader
-	Now           func() time.Time
+	Runs    RunReader
+	Project func(context.Context, runruntime.Run) (application.ResolvedContext, error)
 }
 
 func (r RuntimeResolver) Resolve(
 	ctx context.Context,
 	request application.ResolveRequest,
 ) (application.ResolvedContext, error) {
-	if r.Runs == nil {
+	if r.Runs == nil || r.Project == nil {
 		return application.ResolvedContext{}, fmt.Errorf("assistant run reader is unavailable")
 	}
 	run, err := r.Runs.Load(ctx, strings.TrimSpace(request.RunID))
 	if err != nil {
 		return application.ResolvedContext{}, err
 	}
-	switch strings.TrimSpace(r.ResolverRef) {
-	case "trigger.envelope":
-		return r.resolveTrigger(run)
-	case "turn.slot":
-		return resolveRunInput(run), nil
-	case "turn.preferences":
-		return resolveRunPreferences(run), nil
-	case "subscription.plan":
-		return r.resolveSubscription(ctx, run)
-	case "user.interest_profile":
-		return r.resolveInterests(ctx, run)
-	default:
-		return application.ResolvedContext{}, fmt.Errorf("unknown assistant context resolver")
-	}
+	return r.Project(ctx, run)
 }
 
-func (r RuntimeResolver) resolveTrigger(
+func resolveTrigger(
+	_ context.Context,
 	run runruntime.Run,
 ) (application.ResolvedContext, error) {
 	triggerID := stringValue(run.Trigger, "triggerId")
@@ -84,7 +72,10 @@ func (r RuntimeResolver) resolveTrigger(
 	}, nil
 }
 
-func resolveRunInput(run runruntime.Run) application.ResolvedContext {
+func resolveRunInput(
+	_ context.Context,
+	run runruntime.Run,
+) (application.ResolvedContext, error) {
 	return application.ResolvedContext{
 		Kind:        "conversation",
 		SourceRef:   "run:" + run.RunID + ":input",
@@ -93,21 +84,24 @@ func resolveRunInput(run runruntime.Run) application.ResolvedContext {
 		CapturedAt:  run.CreatedAt.UTC(),
 		TokenCost:   approximateTokens(run.InputText),
 		Value:       map[string]any{"text": strings.TrimSpace(run.InputText)},
-	}
+	}, nil
 }
 
-func resolveRunPreferences(run runruntime.Run) application.ResolvedContext {
-	values := make([]map[string]any, 0, len(run.SessionPreferenceFacts)+len(run.LongTermPreferenceFacts))
-	appendFacts := func(facts []preferencemodel.Snapshot) {
-		for _, fact := range facts {
+func resolveRunPreferences(
+	_ context.Context,
+	run runruntime.Run,
+) (application.ResolvedContext, error) {
+	values := make([]map[string]any, 0, len(run.SessionPreferences)+len(run.LongTermPreferences))
+	appendPreferences := func(preferences []preferencemodel.AssistantPreferenceSnapshot) {
+		for _, preference := range preferences {
 			values = append(values, map[string]any{
-				"preferenceKey": string(fact.Kind),
-				"value":         fact.Value,
+				"preferenceKey": string(preference.Kind),
+				"value":         preference.Value,
 			})
 		}
 	}
-	appendFacts(run.SessionPreferenceFacts)
-	appendFacts(run.LongTermPreferenceFacts)
+	appendPreferences(run.SessionPreferences)
+	appendPreferences(run.LongTermPreferences)
 	return application.ResolvedContext{
 		Kind:        "memory",
 		SourceRef:   "run:" + run.RunID + ":preferences",
@@ -116,18 +110,19 @@ func resolveRunPreferences(run runruntime.Run) application.ResolvedContext {
 		CapturedAt:  run.CreatedAt.UTC(),
 		TokenCost:   len(values) * 24,
 		Value:       map[string]any{"preferences": values},
-	}
+	}, nil
 }
 
-func (r RuntimeResolver) resolveSubscription(
+func resolveSubscription(
 	ctx context.Context,
 	run runruntime.Run,
+	subscriptions subscriptionports.Store,
 ) (application.ResolvedContext, error) {
 	subscriptionRef := stringValue(run.Trigger, "subscriptionRef")
-	if r.Subscriptions == nil || subscriptionRef == "" {
+	if subscriptions == nil || subscriptionRef == "" {
 		return application.ResolvedContext{}, fmt.Errorf("assistant subscription context is unavailable")
 	}
-	subscription, err := r.Subscriptions.GetSkillSubscription(
+	subscription, err := subscriptions.GetSkillSubscription(
 		ctx,
 		run.UserID,
 		subscriptionRef,
@@ -153,14 +148,16 @@ func (r RuntimeResolver) resolveSubscription(
 	}, nil
 }
 
-func (r RuntimeResolver) resolveInterests(
+func resolveInterests(
 	ctx context.Context,
 	run runruntime.Run,
+	interests ports.ProactiveInterestReader,
+	now func() time.Time,
 ) (application.ResolvedContext, error) {
-	if r.Interests == nil {
+	if interests == nil {
 		return application.ResolvedContext{}, fmt.Errorf("assistant interest context is unavailable")
 	}
-	profile, err := r.Interests.GetInterestProfile(ctx, run.UserID)
+	profile, err := interests.GetInterestProfile(ctx, run.UserID)
 	if err != nil {
 		return application.ResolvedContext{}, err
 	}
@@ -173,9 +170,8 @@ func (r RuntimeResolver) resolveInterests(
 			tags = append(tags, tag)
 		}
 	}
-	now := time.Now
-	if r.Now != nil {
-		now = r.Now
+	if now == nil {
+		now = time.Now
 	}
 	return application.ResolvedContext{
 		Kind:        "memory",
@@ -224,27 +220,40 @@ func approximateTokens(value string) int {
 }
 
 func NewRuntimeRegistry(
+	descriptors readerports.Catalog,
 	runs RunReader,
 	subscriptions subscriptionports.Store,
 	interests ports.ProactiveInterestReader,
 	extra ...application.RegisteredResolver,
 ) (*application.ResolverRegistry, error) {
-	refs := []string{
-		"trigger.envelope",
-		"turn.slot",
-		"turn.preferences",
-		"subscription.plan",
-		"user.interest_profile",
+	projections := []struct {
+		ResolverRef string
+		Project     func(context.Context, runruntime.Run) (application.ResolvedContext, error)
+	}{
+		{ResolverRef: "trigger.envelope", Project: resolveTrigger},
+		{ResolverRef: "turn.slot", Project: resolveRunInput},
+		{ResolverRef: "turn.preferences", Project: resolveRunPreferences},
+		{ResolverRef: feedbackcontext.ResolverRef, Project: resolveFeedbackContext},
+		{
+			ResolverRef: "subscription.plan",
+			Project: func(ctx context.Context, run runruntime.Run) (application.ResolvedContext, error) {
+				return resolveSubscription(ctx, run, subscriptions)
+			},
+		},
+		{
+			ResolverRef: "user.interest_profile",
+			Project: func(ctx context.Context, run runruntime.Run) (application.ResolvedContext, error) {
+				return resolveInterests(ctx, run, interests, nil)
+			},
+		},
 	}
-	registered := make([]application.RegisteredResolver, 0, len(refs))
-	for _, ref := range refs {
+	registered := make([]application.RegisteredResolver, 0, len(projections)+1+len(extra))
+	for _, projection := range projections {
 		registered = append(registered, application.RegisteredResolver{
-			ResolverRef: ref,
+			ResolverRef: projection.ResolverRef,
 			Resolver: RuntimeResolver{
-				ResolverRef:   ref,
-				Runs:          runs,
-				Subscriptions: subscriptions,
-				Interests:     interests,
+				Runs:    runs,
+				Project: projection.Project,
 			},
 		})
 	}
@@ -255,5 +264,32 @@ func NewRuntimeRegistry(
 		},
 	})
 	registered = append(registered, extra...)
-	return application.NewResolverRegistry(registered...)
+	return application.NewResolverRegistry(descriptors, registered...)
+}
+
+// NewRuntimeRegistryWithCanonicalReaders is the production assembly boundary:
+// every canonical object Reader is registered into the same immutable runtime
+// registry as the built-in and additional (for example Trip) resolvers.
+func NewRuntimeRegistryWithCanonicalReaders(
+	descriptors readerports.Catalog,
+	runs RunReader,
+	subscriptions subscriptionports.Store,
+	interests ports.ProactiveInterestReader,
+	readers domainreader.CanonicalReaders,
+	extra ...application.RegisteredResolver,
+) (*application.ResolverRegistry, error) {
+	canonical, err := NewCanonicalDomainResolverRegistrations(runs, readers)
+	if err != nil {
+		return nil, err
+	}
+	registered := make([]application.RegisteredResolver, 0, len(canonical)+len(extra))
+	registered = append(registered, canonical...)
+	registered = append(registered, extra...)
+	return NewRuntimeRegistry(
+		descriptors,
+		runs,
+		subscriptions,
+		interests,
+		registered...,
+	)
 }

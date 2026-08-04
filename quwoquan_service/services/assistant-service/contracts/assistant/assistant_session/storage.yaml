@@ -15,4 +15,14 @@ collections:
         clientRequestId: 1
       unique: true
       sparse: true
+  assistant_session_summary_receipts:
+    entity: AssistantSession
+    role: authoritative
+    description: AssistantSession 滚动摘要提交的事务幂等回执；completionEventId 是稳定回执身份，sessionId+sourceSequence 防止同一完成序列重复压缩。
+    indexes:
+    - name: uq_session_summary_source_sequence
+      keys:
+        sessionId: 1
+        sourceSequence: 1
+      unique: true
 role: authoritative

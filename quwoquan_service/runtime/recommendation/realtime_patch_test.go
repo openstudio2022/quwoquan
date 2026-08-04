@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"quwoquan_service/runtime/clientrealtime"
 )
 
 // recPatchContractYAML mirrors the metadata single source of truth so the test
@@ -117,11 +119,11 @@ func TestFeedPatchContractConstantsMatchMetadata(t *testing.T) {
 
 	// envelope json tags must match metadata envelope_fields exactly, in order,
 	// so the wire contract has a single source of truth (no second definition).
-	if FeedRealtimePatchSchema != "feed_realtime_patch" {
-		t.Fatalf("FeedRealtimePatchSchema=%q", FeedRealtimePatchSchema)
+	if feedRealtimePatchWireType != "feed.patch" {
+		t.Fatalf("feedRealtimePatchWireType=%q", feedRealtimePatchWireType)
 	}
 
-	wantFields := []string{"schema"}
+	wantFields := []string{}
 	for _, f := range c.EnvelopeFields {
 		wantFields = append(wantFields, f.Name)
 	}
@@ -175,7 +177,14 @@ func (p *capturePublisher) Publish(_ context.Context, channel, message string) e
 		return p.err
 	}
 	var patch FeedRealtimePatch
-	if err := json.Unmarshal([]byte(message), &patch); err != nil {
+	var envelope clientrealtime.ClientRealtimeEventEnvelope
+	if err := json.Unmarshal([]byte(message), &envelope); err != nil {
+		return err
+	}
+	if envelope.Type != feedRealtimePatchWireType || envelope.EventID == "" || envelope.OccurredAt == "" {
+		return errors.New("invalid feed realtime envelope")
+	}
+	if err := json.Unmarshal(envelope.Payload, &patch); err != nil {
 		return err
 	}
 	p.mu.Lock()
@@ -397,13 +406,20 @@ func TestPatchWireKeysStable(t *testing.T) {
 	if len(msgs) != 1 {
 		t.Fatalf("want 1 patch, got %d", len(msgs))
 	}
+	var envelope clientrealtime.ClientRealtimeEventEnvelope
+	if err := json.Unmarshal([]byte(msgs[0].raw), &envelope); err != nil {
+		t.Fatalf("unmarshal envelope: %v", err)
+	}
+	if envelope.Type != feedRealtimePatchWireType {
+		t.Fatalf("envelope type=%q want %q", envelope.Type, feedRealtimePatchWireType)
+	}
 	var wire map[string]json.RawMessage
-	if err := json.Unmarshal([]byte(msgs[0].raw), &wire); err != nil {
-		t.Fatalf("unmarshal wire: %v", err)
+	if err := json.Unmarshal(envelope.Payload, &wire); err != nil {
+		t.Fatalf("unmarshal payload wire: %v", err)
 	}
 	for _, key := range []string{"patchId", "patchType", "userId", "targetPostIds", "reasonCode", "affectedCount", "safeToApplyWhileViewing", "emittedAt"} {
 		if _, ok := wire[key]; !ok {
-			t.Fatalf("wire missing required key %q (got %v)", key, wireKeys(wire))
+			t.Fatalf("payload missing required key %q (got %v)", key, wireKeys(wire))
 		}
 	}
 }

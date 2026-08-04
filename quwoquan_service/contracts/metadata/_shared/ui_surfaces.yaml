@@ -11,6 +11,7 @@ surfaces:
       - ListConversations
       - ListConversationTimestamps
       - BatchGetConversations
+      - PullUserSync
       - ListContacts
       - ListContactHome
       - ListAppMessages
@@ -167,6 +168,7 @@ surfaces:
       - SteerAssistantRun
       - ContinueAssistantToolUse
       - StreamAssistantRunEvents
+      - GetMediaAsset
       - ListAppMessages
       - GetAppMessage
       - AckAppMessage
@@ -515,6 +517,12 @@ surfaces:
       - GetActivePersonaContext
       - UpsertDevicePushEndpoint
       - RemoveDevicePushEndpoint
+      - RecordVisit
+      - ReportStartupEventBatch
+      - IssueConnectionTicket
+      - LongPoll
+      - ReportEventBatch
+      - ReportRuntimeLogBatch
 
   - id: homeFeed
     owner: content
@@ -523,6 +531,7 @@ surfaces:
     description: 首页推荐与关注内容流
     operation_ids:
       - GetFeed
+      - GetAppConfig
       - CreateReport
       - LikePost
       - UnlikePost
@@ -672,6 +681,7 @@ surfaces:
     operation_ids:
       - CreateReport
       - GetPost
+      - DeletePost
       - LikePost
       - UnlikePost
       - GetContentReactionState
@@ -738,6 +748,10 @@ surfaces:
       - ListConsents
       - GrantSkillConsent
       - RevokeSkillConsent
+      - ListSkillActivities
+      - CreateSkillDataControlRequest
+      - ConfirmSkillDataControlRequest
+      - GetSkillDataControlRequest
       - ListConnectorDefinitions
       - GetConnectorDefinition
       - ListConnectorConnections
@@ -912,6 +926,7 @@ surfaces:
       - ListAuthorImpactEvidence
       - GetMyIntersectionSummary
       - ListMyIntersections
+      - MarkIntersectionsVisited
 
   - id: objectIntersections
     owner: recommendation

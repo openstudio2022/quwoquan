@@ -4,10 +4,42 @@ externalDependencies:
     port: CarrierOneTapPort
     operations: [resolvePhone]
     conformance: carrier_one_tap
+    adapterContracts:
+      ext.auth.carrier_one_tap_protocol_fixture:
+        endpointEnvs: {endpoint: USER_CARRIER_ONE_TAP_SUBSTITUTE_ENDPOINT}
+        secretRefs: []
+        defaultTimeoutMs: 10000
+      ext.auth.carrier_one_tap:
+        endpointEnvs: {endpoint: ALIYUN_DYPNS_ENDPOINT}
+        secretRefs:
+        - ALIYUN_DYPNS_ACCESS_KEY_ID
+        - ALIYUN_DYPNS_ACCESS_KEY_SECRET
+        defaultTimeoutMs: 10000
   - capability: identity.social.login
     port: FederatedIdentityPort
     operations: [authorize, resolveIdentity]
     conformance: social_identity
+    adapterContracts:
+      ext.auth.federated_identity_protocol_fixture:
+        endpointEnvs: {endpoint: USER_FEDERATED_IDENTITY_SUBSTITUTE_ENDPOINT}
+        secretRefs: []
+        defaultTimeoutMs: 10000
+      ext.auth.federated_identity:
+        endpointEnvs:
+          wechat_token: WECHAT_OAUTH_TOKEN_URL
+          wechat_user_info: WECHAT_OAUTH_USER_INFO_URL
+          alipay_token: ALIPAY_OAUTH_TOKEN_URL
+          alipay_user_info: ALIPAY_OAUTH_USER_INFO_URL
+          qq_user_info: QQ_OAUTH_USER_INFO_URL
+        secretRefs:
+        - WECHAT_OAUTH_APP_ID
+        - WECHAT_OAUTH_APP_SECRET
+        - ALIPAY_OAUTH_APP_ID
+        - ALIPAY_OAUTH_APP_PRIVATE_KEY_PEM
+        - ALIPAY_OAUTH_PLATFORM_PUBLIC_KEY_PEM
+        - ALIPAY_OAUTH_MERCHANT_PID
+        - QQ_OAUTH_APP_ID
+        defaultTimeoutMs: 10000
   - role: use
     capability: runtime.message.transport
     port: MessageTransportPort
@@ -592,6 +624,9 @@ api_routes:
     path: /user/sync
     request_entity: UserSyncPullRequestWire
     request_body_kind: object
+    response_entity: PullUserSyncSlice
+    response_body: PullUserSyncSlice
+    response_body_kind: page
     privacy:
       log_policy: metadata_only
       request_classification: PII
@@ -1141,7 +1176,7 @@ api_routes:
       method: readAccountSecurity
       reader: AccountSecurityReader
       slice: AccountSecuritySnapshot
-    description: 仅供已登记的 api-edge/assistant/chat/circle/content/entity/integration/notification/product-ops/realtime/rtc/search/tag 资源服务在验签后同步读取终端用户的权威账号状态和安全代次；其他 service principal 即使持有同 scope 也必须拒绝。 响应绝不含 Persona、资料、设备、凭证、审核 case 或其他可识别信息；调用失败或响应无效时调用方必须 fail-closed， 禁止缓存、降级或沿用旧快照。
+    description: 仅供已登记的 api-edge/assistant/chat/circle/content/entity/integration/notification/product-ops/realtime/rtc/search/tag/travel 资源服务在验签后同步读取终端用户的权威账号状态和安全代次；其他 service principal 即使持有同 scope 也必须拒绝。 响应绝不含 Persona、资料、设备、凭证、审核 case 或其他可识别信息；调用失败或响应无效时调用方必须 fail-closed， 禁止缓存、降级或沿用旧快照。
     method: GET
     operation: ReadAccountSecurity
     commercial:
@@ -1197,7 +1232,7 @@ api_routes:
       method: checkAccountSecurityAuthority
       reader: AccountSecurityReader
       slice: AccountSecurityAuthorityHealth
-    description: 仅供已登记的 api-edge/assistant/chat/circle/content/entity/integration/notification/product-ops/realtime/rtc/search/tag 资源服务 readiness 验证账号安全权威的服务身份、scope、路由与 PostgreSQL 读取链路；其他 service principal 即使持有同 scope 也必须拒绝。使用保留的不可解析 probe subject，不返回或持久化任意账号资料。
+    description: 仅供已登记的 api-edge/assistant/chat/circle/content/entity/integration/notification/product-ops/realtime/rtc/search/tag/travel 资源服务 readiness 验证账号安全权威的服务身份、scope、路由与 PostgreSQL 读取链路；其他 service principal 即使持有同 scope 也必须拒绝。使用保留的不可解析 probe subject，不返回或持久化任意账号资料。
     method: GET
     operation: CheckAccountSecurityAuthority
     commercial:

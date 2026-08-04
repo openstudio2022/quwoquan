@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_message_dto.g.dart';
+import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import '../../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_delegate.dart';
@@ -15,10 +15,12 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_conversation_page.dart';
+import '../../../../support/cloud_services/object_doubles/chat/alpha_message_writer.dart';
 
 Widget _scopedApp({
   ChatRepository? mock,
   RelationshipCapabilityRepository? capabilityRepository,
+  VoidCallback? onBack,
 }) {
   final repo = mock ?? MockChatRepository();
   return ProviderScope(
@@ -26,6 +28,9 @@ Widget _scopedApp({
       chatRepositoryCompositionProvider.overrideWithValue(repo),
       relationshipCapabilityRepositoryProvider.overrideWithValue(
         capabilityRepository ?? _MutualCapabilityRepository(),
+      ),
+      chatMessageCommandWriterProvider.overrideWithValue(
+        AlphaChatMessageCommandWriter(),
       ),
       realtimeConnectionManagerProvider.overrideWith(
         _NoopRealtimeConnectionNotifier.new,
@@ -36,7 +41,7 @@ Widget _scopedApp({
       home: Scaffold(
         body: ChatConversationPage(
           conversationId: 'fixture_conv_direct',
-          onBack: () {},
+          onBack: onBack ?? () {},
         ),
       ),
     ),
@@ -123,24 +128,7 @@ void main() {
     testWidgets('返回按钮回调正确触发', (tester) async {
       addTearDown(() => _disposeChatConversationWidget(tester));
       var backCalled = false;
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            chatRepositoryCompositionProvider.overrideWithValue(
-              MockChatRepository(),
-            ),
-          ],
-          child: MaterialApp(
-            navigatorObservers: <NavigatorObserver>[chatRouteObserver],
-            home: Scaffold(
-              body: ChatConversationPage(
-                conversationId: 'fixture_conv_direct',
-                onBack: () => backCalled = true,
-              ),
-            ),
-          ),
-        ),
-      );
+      await tester.pumpWidget(_scopedApp(onBack: () => backCalled = true));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
@@ -201,7 +189,7 @@ void main() {
 
 class _ErrorChatRepository extends MockChatRepository {
   @override
-  Future<List<ChatMessageDto>> listMessages({
+  Future<List<ChatMessageViewData>> listMessages({
     required String conversationId,
     String? before,
     int limit = 20,
@@ -212,12 +200,12 @@ class _ErrorChatRepository extends MockChatRepository {
 
 class _EmptyMessagesChatRepository extends MockChatRepository {
   @override
-  Future<List<ChatMessageDto>> listMessages({
+  Future<List<ChatMessageViewData>> listMessages({
     required String conversationId,
     String? before,
     int limit = 20,
   }) async {
-    return const <ChatMessageDto>[];
+    return const <ChatMessageViewData>[];
   }
 }
 
@@ -243,25 +231,27 @@ class _MutualCapabilityRepository extends RelationshipCapabilityRepository {
   bool get reconcilesCapabilityWithSharedRelationshipState => false;
 
   @override
-  Future<RelationshipCapabilityDto> getCapability(String targetUserId) async {
-    return RelationshipCapabilityDto.fromMap(<String, dynamic>{
-      'viewerPersonaId': 'fixture_user_current',
-      'targetPersonaId': targetUserId,
-      'relationState': 'mutual',
-      'canFollow': false,
-      'canUnfollow': true,
-      'canFollowBack': false,
-      'canGreet': false,
-      'canCreateDirectConversation': true,
-      'canSendMessage': true,
-      'canOpenConversation': true,
-      'hasPendingGreeting': false,
-      'hasFormalConversation': false,
-      'canStartVoiceCall': true,
-      'canStartVideoCall': true,
-      'isBlocked': false,
-      'isBlockedBy': false,
-    });
+  Future<RelationshipCapabilityViewData> getCapability(
+    String targetUserId,
+  ) async {
+    return RelationshipCapabilityViewData(
+      viewerPersonaId: 'fixture_user_current',
+      targetPersonaId: targetUserId,
+      relationState: 'mutual',
+      canFollow: false,
+      canUnfollow: true,
+      canFollowBack: false,
+      canGreet: false,
+      canCreateDirectConversation: true,
+      canSendMessage: true,
+      canOpenConversation: true,
+      hasPendingGreeting: false,
+      hasFormalConversation: false,
+      canStartVoiceCall: true,
+      canStartVideoCall: true,
+      isBlocked: false,
+      isBlockedBy: false,
+    );
   }
 }
 
@@ -271,24 +261,26 @@ class _FollowingOnlyCapabilityRepository
   bool get reconcilesCapabilityWithSharedRelationshipState => false;
 
   @override
-  Future<RelationshipCapabilityDto> getCapability(String targetUserId) async {
-    return RelationshipCapabilityDto.fromMap(<String, dynamic>{
-      'viewerPersonaId': 'fixture_user_current',
-      'targetPersonaId': targetUserId,
-      'relationState': 'following',
-      'canFollow': false,
-      'canUnfollow': true,
-      'canFollowBack': false,
-      'canGreet': true,
-      'canCreateDirectConversation': false,
-      'canSendMessage': false,
-      'canOpenConversation': false,
-      'hasPendingGreeting': false,
-      'hasFormalConversation': false,
-      'canStartVoiceCall': false,
-      'canStartVideoCall': false,
-      'isBlocked': false,
-      'isBlockedBy': false,
-    });
+  Future<RelationshipCapabilityViewData> getCapability(
+    String targetUserId,
+  ) async {
+    return RelationshipCapabilityViewData(
+      viewerPersonaId: 'fixture_user_current',
+      targetPersonaId: targetUserId,
+      relationState: 'following',
+      canFollow: false,
+      canUnfollow: true,
+      canFollowBack: false,
+      canGreet: true,
+      canCreateDirectConversation: false,
+      canSendMessage: false,
+      canOpenConversation: false,
+      hasPendingGreeting: false,
+      hasFormalConversation: false,
+      canStartVoiceCall: false,
+      canStartVideoCall: false,
+      isBlocked: false,
+      isBlockedBy: false,
+    );
   }
 }

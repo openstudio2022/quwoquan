@@ -91,10 +91,6 @@ final circleDetailPostPlacementCommandWriterProvider =
       );
     });
 
-final circleProjectionMapperProvider = Provider<CircleProjectionMapper>(
-  (ref) => const CircleProjectionMapper(),
-);
-
 /// 建圈动作归属圈子列表 surface（circlesList）。
 final circlesListCircleLifecycleCommandWriterProvider =
     Provider<CircleLifecycleCommandWriter>(

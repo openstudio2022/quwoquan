@@ -1,0 +1,61 @@
+{
+  "templateId": "assistant.answer.default",
+  "skillId": "quwoquan.official",
+  "inputSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "answer": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 20000
+      }
+    },
+    "required": ["answer"]
+  },
+  "rootNodeId": "root",
+  "nodes": [
+    {
+      "nodeId": "root",
+      "parentNodeId": "",
+      "order": 0,
+      "kind": "markdown",
+      "title": "",
+      "body": "",
+      "data": {},
+      "binding": {
+        "body": "$.answer"
+      },
+      "style": {
+        "tone": "neutral",
+        "density": "standard",
+        "emphasis": "normal",
+        "variant": "standard",
+        "alignment": "start",
+        "spacingRole": "related",
+        "aspectRatio": 0,
+        "responsiveSpan": 12
+      },
+      "accessibility": {
+        "semanticLabel": "小趣回答",
+        "semanticHint": "",
+        "excludeFromSemantics": false
+      }
+    }
+  ],
+  "responsiveVariants": [
+    {
+      "variantId": "standard",
+      "requiredNodeKinds": ["markdown"],
+      "viewportClass": "any",
+      "density": "standard"
+    }
+  ],
+  "allowedActionIntents": [],
+  "fallbackMarkdown": "回答暂时无法以结构化方式展示。",
+  "fallbackMarkdownBinding": "$.answer",
+  "accessibility": {
+    "summary": "小趣回答"
+  },
+  "assetDigest": "sha256:8ba37b1bf40d65a4ae6b571ed3bd1130204020fdcdfde035ede4fe36817c312d"
+}

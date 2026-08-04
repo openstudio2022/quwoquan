@@ -135,7 +135,7 @@ final class AlphaCircleGroupFacet
           .where(
             (group) =>
                 group.name.toLowerCase().contains(term) ||
-                group.description.toLowerCase().contains(term),
+                (group.description ?? '').toLowerCase().contains(term),
           )
           .toList(growable: false),
     );

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -48,12 +49,105 @@ class ApiPathUnversionedContractTest(unittest.TestCase):
 
     def test_external_provider_versioned_paths_are_excluded(self) -> None:
         mod = _load_module()
+        authorities = mod.load_external_provider_path_authorities()
+        contract_paths = frozenset(authorities)
+        self.assertIn("/v1/chat/completions", contract_paths)
+        self.assertIn("/v1/provider/sms/send", contract_paths)
+        self.assertIn("/v1/debug/sms/otp/latest", contract_paths)
         self.assertTrue(
-            mod.line_is_excluded('CompletionURL: server.URL + "/v1/chat/completions",')
+            mod.line_is_excluded(
+                'CompletionURL: server.URL + "/v1/chat/completions",',
+                relative_path=(
+                    "quwoquan_service/services/assistant-service/tests/"
+                    "local_contract/assistant/assistant_session/"
+                    "infrastructure_modelprovider_client__local_contract_test.go"
+                ),
+                external_provider_authorities=authorities,
+            )
         )
         self.assertTrue(
-            mod.line_is_excluded('endpoint := apiBaseURL + "/v1/projects/" + projectID')
+            mod.line_is_excluded(
+                'endpoint := apiBaseURL + "/v1/projects/" + projectID',
+                relative_path=(
+                    "quwoquan_service/services/integration-service/internal/"
+                    "external_integration/push_delivery/infrastructure/provider/"
+                    "fcm_provider.go"
+                ),
+            )
         )
+        self.assertTrue(
+            mod.line_is_excluded(
+                'POST /v1/debug/sms/otp/latest 只存在于替代 Provider 内部控制面',
+                relative_path=(
+                    "specs/feature-tree/user-identity-profile-relationship/"
+                    "onboarding-and-identity-entry/"
+                    "four-environment-commercial-login-maturity/spec.md"
+                ),
+                external_provider_authorities=authorities,
+            )
+        )
+        self.assertFalse(
+            mod.line_is_excluded(
+                'path: "/v1/content/feed"',
+                relative_path=(
+                    "quwoquan_service/services/content-service/contracts/"
+                    "content/post/operations.yaml"
+                ),
+                external_provider_authorities=authorities,
+            )
+        )
+        self.assertFalse(
+            mod.line_is_excluded(
+                'path: "/v1/debug/sms/otp/latest/compat"',
+                relative_path="quwoquan_ops/cli/lib/local_sms_provider_debug.py",
+                external_provider_authorities=authorities,
+            )
+        )
+
+    def test_first_party_operation_cannot_reuse_registered_provider_path(self) -> None:
+        mod = _load_module()
+        authorities = mod.load_external_provider_path_authorities()
+        line = 'path: "/v1/provider/sms/send"'
+        self.assertFalse(
+            mod.line_is_excluded(
+                line,
+                relative_path=(
+                    "quwoquan_service/services/user-service/contracts/"
+                    "account/user_account/operations.yaml"
+                ),
+                external_provider_authorities=authorities,
+            )
+        )
+        self.assertIsNotNone(mod.VERSIONED_API.search(line))
+
+        fcm_line = 'path: "/v1/projects/{projectId}/messages:send"'
+        self.assertFalse(
+            mod.line_is_excluded(
+                fcm_line,
+                relative_path=(
+                    "quwoquan_service/services/integration-service/contracts/"
+                    "external_integration/push_delivery/operations.yaml"
+                ),
+                external_provider_authorities=authorities,
+            )
+        )
+        self.assertIsNotNone(mod.VERSIONED_API.search(fcm_line))
+
+    def test_provider_path_exception_requires_valid_endpoint_contract(self) -> None:
+        mod = _load_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            contract = Path(tmp) / "sms/contract/endpoints.yaml"
+            contract.parent.mkdir(parents=True)
+            contract.write_text(
+                "schema: unsupported\n"
+                "role: sms-provider-substitute\n"
+                "endpoints:\n"
+                "  INTEGRATION_SMS_ENDPOINT:\n"
+                "    path: /v1/provider/sms/send\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(RuntimeError, "unsupported endpoint"):
+                mod.load_external_provider_versioned_paths(Path(tmp))
 
     def test_negative_route_guard_is_excluded(self) -> None:
         mod = _load_module()

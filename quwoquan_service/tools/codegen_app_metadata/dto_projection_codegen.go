@@ -55,7 +55,7 @@ func renderStandaloneDtoDart(proj clientProjection, sourcePath string) string {
 	for _, f := range proj.Fields {
 		resolver := buildAliasResolver(f)
 		if proj.Strict {
-			resolver = buildStrictProjectionResolver(f)
+			resolver = buildStrictProjectionResolver(f, className)
 		}
 		b.WriteString(fmt.Sprintf("      %s: %s,\n", f.Name, resolver))
 	}
@@ -209,14 +209,24 @@ func projectionUsesTypedEnum(f projectionFieldDef) bool {
 	return enumRef != "" && dartType == enumRef
 }
 
-func buildStrictProjectionResolver(f projectionFieldDef) string {
+func buildStrictProjectionResolver(f projectionFieldDef, className string) string {
 	key := projectionWireKey(f)
 	dartType := normalizeDartType(f.DartType)
 	if enumRef := strings.TrimSpace(f.EnumRef); projectionUsesTypedEnum(f) {
-		if f.Nullable {
-			return fmt.Sprintf("m['%s'] == null ? null : %s.fromWire(m['%s'])", key, enumRef, key)
+		decode := fmt.Sprintf("%s.fromWire(m['%s'])", enumRef, key)
+		if f.DartEnumDecoderWithPath {
+			decode = fmt.Sprintf(
+				"%s.fromWire(m['%s'], '%s.%s')",
+				enumRef,
+				key,
+				className,
+				key,
+			)
 		}
-		return fmt.Sprintf("%s.fromWire(m['%s'])", enumRef, key)
+		if f.Nullable {
+			return fmt.Sprintf("m['%s'] == null ? null : %s", key, decode)
+		}
+		return decode
 	}
 	nullableSuffix := ""
 	if f.Nullable {
@@ -252,10 +262,14 @@ func buildStrictProjectionResolver(f projectionFieldDef) string {
 
 func strictProjectionToWireValue(f projectionFieldDef) string {
 	if projectionUsesTypedEnum(f) {
-		if f.Nullable {
-			return fmt.Sprintf("%s?.wireValue", f.Name)
+		getter := strings.TrimSpace(f.DartEnumWireGetter)
+		if getter == "" {
+			getter = "wireValue"
 		}
-		return fmt.Sprintf("%s.wireValue", f.Name)
+		if f.Nullable {
+			return fmt.Sprintf("%s?.%s", f.Name, getter)
+		}
+		return fmt.Sprintf("%s.%s", f.Name, getter)
 	}
 	if f.MapFromStringKeyClass != "" {
 		if f.Nullable {

@@ -218,6 +218,7 @@ class ContentSurfaceView {
   ContentSurfaceView copyWith({
     ContentSurfaceReferral? referral,
     List<IntersectionReason>? intersectionReasons,
+    List<String>? tags,
     ContentArticleRender? article,
   }) {
     return ContentSurfaceView(
@@ -236,7 +237,7 @@ class ContentSurfaceView {
       images: images,
       video: video,
       intersectionReasons: intersectionReasons ?? this.intersectionReasons,
-      tags: tags,
+      tags: tags ?? this.tags,
       articleTemplate: articleTemplate,
       articleFontPreset: articleFontPreset,
       article: article ?? this.article,

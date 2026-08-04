@@ -7,8 +7,8 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_created_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
+import 'package:quwoquan_app/cloud/services/chat/chat_view_data.dart';
+import 'package:quwoquan_app/application/entity/homepage_view_data.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import '../../../../support/cloud_services/homepage_alpha_test_adapter.dart';
@@ -17,7 +17,7 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_detail_page.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
-import '../../../../support/cloud_services/repository_mock_reexports.dart';
+import '../../../../support/cloud_services/object_doubles/entity/alpha_homepage_review_facets.dart';
 
 const String _homepageId = 'homepage_sight_west_lake';
 
@@ -143,7 +143,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(reporter.events, hasLength(1));
-    expect(reporter.events.single.action, BehaviorAction.wishlistAdd);
+    expect(reporter.events.single.action, BehaviorEventType.wishlistAdd);
     expect(reporter.events.single.objectId, _homepageId);
     expect(container.read(authContinuationProvider), isNull);
     await tester.pump();
@@ -396,8 +396,9 @@ final class _RecordingSubjectFollowWriter
       personaId: 'homepage-viewer-persona',
       subjectType: command.subjectType,
       subjectId: command.subjectId,
-      state: 'following',
+      state: SubjectFollowState.following,
       idempotentReplay: false,
+      updatedAt: DateTime.utc(2026, 7, 15),
     );
   }
 
@@ -409,8 +410,9 @@ final class _RecordingSubjectFollowWriter
       personaId: 'homepage-viewer-persona',
       subjectType: command.subjectType,
       subjectId: command.subjectId,
-      state: 'unfollowed',
+      state: SubjectFollowState.unfollowed,
       idempotentReplay: false,
+      updatedAt: DateTime.utc(2026, 7, 15),
     );
   }
 }
@@ -456,7 +458,7 @@ final class _RecordingConversationRepository extends Fake
   List<String>? lastInitialMemberIds;
 
   @override
-  Future<ChatConversationCreatedDto> createConversation({
+  Future<ChatConversationCreatedViewData> createConversation({
     required String type,
     String? title,
     int? maxGroupSize,
@@ -465,7 +467,7 @@ final class _RecordingConversationRepository extends Fake
   }) async {
     createCalls += 1;
     lastInitialMemberIds = initialMemberIds;
-    return ChatConversationCreatedDto(
+    return ChatConversationCreatedViewData(
       conversationId: 'conversation-homepage-1',
     );
   }

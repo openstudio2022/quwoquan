@@ -1,1 +1,189 @@
-{"assetRefsRef":"asset.refs.json","assets":[{"alignmentEvidence":"图片说明与正文关联：Hai Rui Temple at Qiandao Lake","assetId":"千岛湖_cover_Hai_Rui_Temple_a_67_4eea7166","authorizationBasis":"","authorizationProof":"https://commons.wikimedia.org/wiki/File:Hai_Rui_Temple_at_Qiandao_Lake.JPG","caption":"Hai Rui Temple at Qiandao Lake","collectedAt":"","collectionPageUrl":"https://commons.wikimedia.org/wiki/File:Hai_Rui_Temple_at_Qiandao_Lake.JPG","creator":"JesseW900","discoveryUrl":"","fileName":"千岛湖_cover_Hai_Rui_Temple_a_67_4eea7166.jpg","imageLayout":"gallery","kind":"image","license":"CC BY-SA 4.0","licenseSnapshot":"","mimeType":"image/jpeg","objectKey":"media/objects/sha256/c9/3f/c93f1de1a20de530e054273ed2f508466cc1ab9eeb6a5e6481a5f2b5f421e76a.jpg","ocrScan":"","originalAssetUrl":"","perceptualHash":"8582c2ed83edb595","pinUrl":"","repostAttribution":"","rightsAuditIssues":[],"rightsAuditStatus":"verified","sha256":"sha256:c93f1de1a20de530e054273ed2f508466cc1ab9eeb6a5e6481a5f2b5f421e76a","sourceAssetRef":"sources/千岛湖__image_collection__b5851853/assets/001_千岛湖_1.jpg","sourceAuthor":"","sourceCollectionId":"open_license_file:千岛湖:httpscommonswikimediaorgwikifilehairuitempleatqiandaolakejpg:b585185363","sourceRef":"sources/千岛湖__image_collection__b5851853/source.md","termsUrl":"https://creativecommons.org/licenses/by-sa/4.0","usageScope":"","watermarkScan":""}],"authorId":"builtin_travel_self_drive_guide","authorQualitySignals":{"fatigueScore":0.2,"qualityScore":0.88,"riskTier":"low"},"authorizationProof":"https://commons.wikimedia.org/wiki/File:Hai_Rui_Temple_at_Qiandao_Lake.JPG","caption":"Hai Rui Temple at Qiandao Lake","carrier":"image","citedSourceRefs":["sources/千岛湖__image_collection__b5851853/source.md"],"collectionPageUrl":"https://commons.wikimedia.org/wiki/File:Hai_Rui_Temple_at_Qiandao_Lake.JPG","contentIdentity":"work","contentType":"image","createdAt":"2026-07-31T02:01:53.780487+00:00","creator":"JesseW900","creatorArchetype":"self_drive_expert","creatorDisclosure":{"displayText":"平台虚拟创作者，内容由资料整理与 AI 辅助生成，经平台审核发布。","type":"platform_virtual_creator","visible":true},"creatorProfileDigest":"sha256:f1915aba43f7f33d645424d3706ebf294d9088164f95f036f031e8553f1c4206","creatorProfileId":"qwq_creator_self_drive_guide_001","creatorRefsRef":"creator.refs.json","entityRefs":["/entity/地点/景区/千岛湖"],"executionId":"20260731--travel-image-copy-ready--zhejiang-six--scale-017","experienceClaimMode":"editorial_synthesis","finalContentRef":"assets/千岛湖_cover_Hai_Rui_Temple_a_67_4eea7166.jpg","generator":"image_evidence_pack","generatorModel":null,"intersectionHints":[{"actionTargetId":"entity:景区:千岛湖","actionType":"view_object","dimension":"content","source":"entityRef","tagRefs":[]},{"actionTargetId":"Topic/旅行/玩法/摄影旅拍","actionType":"join","dimension":"interest","source":"tagRef","tagRefs":["Topic/旅行/玩法/摄影旅拍"]},{"actionTargetId":"Format/内容载体/图文/图集","actionType":"join","dimension":"interest","source":"tagRef","tagRefs":["Format/内容载体/图文/图集"]}],"license":"CC BY-SA 4.0","normalizedEntityRefs":["entity:景区:千岛湖"],"publishAngle":"画报","publishLayout":"image","publishMediaMode":null,"publishSeq":1,"publishTitle":"","publishedAt":"2026-07-31T02:22:36.091234+00:00","reviewDecision":"approved","rightsRef":"rights.json","schema":"quwoquan_data.post_object","semanticMentions":[{"kind":"entity","location":"manifest","mentionId":"mention_78a6370bdf3be9e86df74fbc","occurrence":0,"sourceRef":"千岛湖_image","status":"published","surface":"千岛湖","targetRef":"/entity/地点/景区/千岛湖"},{"kind":"tag","location":"manifest","mentionId":"mention_cc9d78a3db8e552d9b99efb0","occurrence":0,"sourceRef":"千岛湖_image","status":"published","surface":"摄影旅拍","targetRef":"Topic/旅行/玩法/摄影旅拍"},{"kind":"tag","location":"manifest","mentionId":"mention_aa5350a7bbac3f51bc244211","occurrence":0,"sourceRef":"千岛湖_image","status":"published","surface":"图集","targetRef":"Format/内容载体/图文/图集"}],"sourceCatalogRef":"source_catalog.json","sourceCollectionId":"open_license_file:千岛湖:httpscommonswikimediaorgwikifilehairuitempleatqiandaolakejpg:b585185363","sourceDigest":{"algorithm":"sha256","digest":"sha256:f991fa9b0934d1e9772a0c1fafc1ec805f20b7a8e8b761cef90a9ad52026c2a8","inputs":["quwoquan_data/scripts","quwoquan_data/schema","quwoquan_data/control_plane","quwoquan_data/prompts","quwoquan_data/templates","quwoquan_data/verticals/travel","quwoquan_data/reference","quwoquan_data/requirements.txt","quwoquan_service/services/content-service/contracts/media/media_asset"]},"sourceTaskId":"20260731--travel-image-copy-ready--zhejiang-six--scale-017","sourceUrls":["https://commons.wikimedia.org/wiki/File:Hai_Rui_Temple_at_Qiandao_Lake.JPG"],"storySpine":{"beats":["Hai Rui Temple at Qiandao Lake"],"mustIncludeFacts":["千岛湖 开放许可图片作品","图片来自同一授权来源集合（单一 source unit），禁止跨作者/页面/底稿混图"],"primaryEntity":"千岛湖","routeEntities":["千岛湖"]},"tagRefs":["Topic/旅行/玩法/摄影旅拍","Format/内容载体/图文/图集"],"tagRefsRef":"tag.refs.json","template":"journal","termsUrl":"https://creativecommons.org/licenses/by-sa/4.0","title":"","topicId":"千岛湖_image","updatedAt":"2026-07-31T02:04:20.201811+00:00","vertical":"travel"}
+{
+  "assetRefsRef": "asset.refs.json",
+  "assets": [
+    {
+      "alignmentEvidence": "图片说明与正文关联：Hai Rui Temple at Qiandao Lake",
+      "assetId": "千岛湖_cover_Hai_Rui_Temple_a_67_4eea7166",
+      "authorizationBasis": "",
+      "authorizationProof": "https://commons.wikimedia.org/wiki/File:Hai_Rui_Temple_at_Qiandao_Lake.JPG",
+      "caption": "Hai Rui Temple at Qiandao Lake",
+      "collectedAt": "",
+      "collectionPageUrl": "https://commons.wikimedia.org/wiki/File:Hai_Rui_Temple_at_Qiandao_Lake.JPG",
+      "creator": "JesseW900",
+      "discoveryUrl": "",
+      "fileName": "千岛湖_cover_Hai_Rui_Temple_a_67_4eea7166.jpg",
+      "imageLayout": "gallery",
+      "kind": "image",
+      "license": "CC BY-SA 4.0",
+      "licenseSnapshot": "",
+      "mimeType": "image/jpeg",
+      "objectKey": "media/objects/sha256/c9/3f/c93f1de1a20de530e054273ed2f508466cc1ab9eeb6a5e6481a5f2b5f421e76a.jpg",
+      "ocrScan": "",
+      "originalAssetUrl": "",
+      "perceptualHash": "8582c2ed83edb595",
+      "pinUrl": "",
+      "repostAttribution": "",
+      "rightsAuditIssues": [],
+      "rightsAuditStatus": "verified",
+      "sha256": "sha256:c93f1de1a20de530e054273ed2f508466cc1ab9eeb6a5e6481a5f2b5f421e76a",
+      "sourceAssetRef": "sources/千岛湖__image_collection__b5851853/assets/001_千岛湖_1.jpg",
+      "sourceAuthor": "",
+      "sourceCollectionId": "open_license_file:千岛湖:httpscommonswikimediaorgwikifilehairuitempleatqiandaolakejpg:b585185363",
+      "sourceRef": "sources/千岛湖__image_collection__b5851853/source.md",
+      "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+      "usageScope": "",
+      "watermarkScan": ""
+    }
+  ],
+  "authorId": "builtin_travel_self_drive_guide",
+  "authorQualitySignals": {
+    "fatigueScore": 0.2,
+    "qualityScore": 0.88,
+    "riskTier": "low"
+  },
+  "authorizationProof": "https://commons.wikimedia.org/wiki/File:Hai_Rui_Temple_at_Qiandao_Lake.JPG",
+  "caption": "Hai Rui Temple at Qiandao Lake",
+  "carrier": "image",
+  "citedSourceRefs": [
+    "sources/千岛湖__image_collection__b5851853/source.md"
+  ],
+  "collectionPageUrl": "https://commons.wikimedia.org/wiki/File:Hai_Rui_Temple_at_Qiandao_Lake.JPG",
+  "contentIdentity": "work",
+  "contentType": "image",
+  "createdAt": "2026-07-31T02:01:53.780487+00:00",
+  "creator": "JesseW900",
+  "creatorArchetype": "self_drive_expert",
+  "creatorDisclosure": {
+    "displayText": "平台虚拟创作者，内容由资料整理与 AI 辅助生成，经平台审核发布。",
+    "type": "platform_virtual_creator",
+    "visible": true
+  },
+  "creatorProfileDigest": "sha256:f1915aba43f7f33d645424d3706ebf294d9088164f95f036f031e8553f1c4206",
+  "creatorProfileId": "qwq_creator_self_drive_guide_001",
+  "creatorRefsRef": "creator.refs.json",
+  "entityRefs": [
+    "/entity/地点/景区/千岛湖"
+  ],
+  "executionId": "20260731--travel-image-copy-ready--zhejiang-six--scale-017",
+  "experienceClaimMode": "editorial_synthesis",
+  "finalContentRef": "assets/千岛湖_cover_Hai_Rui_Temple_a_67_4eea7166.jpg",
+  "generator": "image_evidence_pack",
+  "generatorModel": null,
+  "intersectionHints": [
+    {
+      "actionTargetId": "entity:景区:千岛湖",
+      "actionType": "view_object",
+      "dimension": "content",
+      "source": "entityRef",
+      "tagRefs": []
+    },
+    {
+      "actionTargetId": "Topic/旅行/玩法/摄影旅拍",
+      "actionType": "join",
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Topic/旅行/玩法/摄影旅拍"
+      ]
+    },
+    {
+      "actionTargetId": "Format/内容载体/图文/图集",
+      "actionType": "join",
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Format/内容载体/图文/图集"
+      ]
+    }
+  ],
+  "license": "CC BY-SA 4.0",
+  "normalizedEntityRefs": [
+    "entity:景区:千岛湖"
+  ],
+  "publishAngle": "画报",
+  "publishLayout": "image",
+  "publishMediaMode": null,
+  "publishSeq": 1,
+  "publishTitle": "Hai Rui Temple at Qiandao Lake",
+  "publishedAt": "2026-07-31T02:22:36.091234+00:00",
+  "reviewDecision": "approved",
+  "rightsRef": "rights.json",
+  "schema": "quwoquan_data.post_object",
+  "semanticMentions": [
+    {
+      "kind": "entity",
+      "location": "manifest",
+      "mentionId": "mention_78a6370bdf3be9e86df74fbc",
+      "occurrence": 0,
+      "sourceRef": "千岛湖_image",
+      "status": "published",
+      "surface": "千岛湖",
+      "targetRef": "/entity/地点/景区/千岛湖"
+    },
+    {
+      "kind": "tag",
+      "location": "manifest",
+      "mentionId": "mention_cc9d78a3db8e552d9b99efb0",
+      "occurrence": 0,
+      "sourceRef": "千岛湖_image",
+      "status": "published",
+      "surface": "摄影旅拍",
+      "targetRef": "Topic/旅行/玩法/摄影旅拍"
+    },
+    {
+      "kind": "tag",
+      "location": "manifest",
+      "mentionId": "mention_aa5350a7bbac3f51bc244211",
+      "occurrence": 0,
+      "sourceRef": "千岛湖_image",
+      "status": "published",
+      "surface": "图集",
+      "targetRef": "Format/内容载体/图文/图集"
+    }
+  ],
+  "sourceCatalogRef": "source_catalog.json",
+  "sourceCollectionId": "open_license_file:千岛湖:httpscommonswikimediaorgwikifilehairuitempleatqiandaolakejpg:b585185363",
+  "sourceDigest": {
+    "algorithm": "sha256",
+    "digest": "sha256:f991fa9b0934d1e9772a0c1fafc1ec805f20b7a8e8b761cef90a9ad52026c2a8",
+    "inputs": [
+      "quwoquan_data/scripts",
+      "quwoquan_data/schema",
+      "quwoquan_data/control_plane",
+      "quwoquan_data/prompts",
+      "quwoquan_data/templates",
+      "quwoquan_data/verticals/travel",
+      "quwoquan_data/reference",
+      "quwoquan_data/requirements.txt",
+      "quwoquan_service/services/content-service/contracts/media/media_asset"
+    ]
+  },
+  "sourceTaskId": "20260731--travel-image-copy-ready--zhejiang-six--scale-017",
+  "sourceUrls": [
+    "https://commons.wikimedia.org/wiki/File:Hai_Rui_Temple_at_Qiandao_Lake.JPG"
+  ],
+  "storySpine": {
+    "beats": [
+      "Hai Rui Temple at Qiandao Lake"
+    ],
+    "mustIncludeFacts": [
+      "千岛湖 开放许可图片作品",
+      "图片来自同一授权来源集合（单一 source unit），禁止跨作者/页面/底稿混图"
+    ],
+    "primaryEntity": "千岛湖",
+    "routeEntities": [
+      "千岛湖"
+    ]
+  },
+  "tagRefs": [
+    "Topic/旅行/玩法/摄影旅拍",
+    "Format/内容载体/图文/图集"
+  ],
+  "tagRefsRef": "tag.refs.json",
+  "template": "journal",
+  "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+  "title": "Hai Rui Temple at Qiandao Lake",
+  "topicId": "千岛湖_image",
+  "updatedAt": "2026-07-31T02:04:20.201811+00:00",
+  "vertical": "travel"
+}

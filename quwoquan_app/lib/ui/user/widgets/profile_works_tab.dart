@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
@@ -387,7 +387,10 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
     }
   }
 
-  Future<void> _onPostTap(BuildContext context, ContentPostViewData post) async {
+  Future<void> _onPostTap(
+    BuildContext context,
+    ContentPostViewData post,
+  ) async {
     final state = ref.read(profileNotifierProvider(widget.userId));
     final filtered = state.creations
         .where((p) => _matchesCreationFilter(p, state.activeSubTab))
@@ -396,9 +399,7 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
     final initialIndex = filtered
         .indexWhere((p) => p.id == post.id)
         .clamp(0, filtered.length - 1);
-    final postViews = filtered
-        .map((dto) => ContentSurfaceViewMapper.fromDto(dto, wire: dto.toPresentationMap()))
-        .toList();
+    final postViews = filtered.map(ContentSurfaceViewMapper.fromDto).toList();
     final isMoment = post.identity == 'moment';
     final interactionSnapshot = buildMediaViewerInteractionSnapshot(
       posts: filtered,

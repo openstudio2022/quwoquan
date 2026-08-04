@@ -213,17 +213,23 @@ func (s *PostService) PromotePostToWork(ctx context.Context, postID, userID stri
 	return post, nil
 }
 
-func (s *PostService) DeletePost(ctx context.Context, postID, userID string) error {
+type PostDeletionReceipt struct {
+	PostID   string `json:"postId"`
+	Status   string `json:"status"`
+	Replayed bool   `json:"replayed"`
+}
+
+func (s *PostService) DeletePost(ctx context.Context, postID, userID string) (PostDeletionReceipt, error) {
 	post, ok := s.store.FindByID(ctx, strings.TrimSpace(postID))
 	if !ok {
-		return rterr.NewAppError(
+		return PostDeletionReceipt{}, rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
 			"内容不存在",
 			"post not found",
 		)
 	}
 	if err := requirePostOwner(post, userID, "删除内容"); err != nil {
-		return err
+		return PostDeletionReceipt{}, err
 	}
 	statusBeforeDelete := post.Status
 	expectedVersion := post.Version
@@ -239,7 +245,7 @@ func (s *PostService) DeletePost(ctx context.Context, postID, userID string) err
 		"status":          statusBeforeDelete,
 		"deletedAt":       post.DeletedAt.Format(time.RFC3339),
 	}
-	post, err := s.commitPostCommand(
+	post, replayed, err := s.commitPostCommandWithResult(
 		ctx,
 		post,
 		expectedVersion,
@@ -261,14 +267,17 @@ func (s *PostService) DeletePost(ctx context.Context, postID, userID string) err
 		},
 	)
 	if err != nil {
-		return rterr.NewAppError(
+		return PostDeletionReceipt{}, rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleContent, rterr.KindSystem, "delete_failed"),
 			"删除内容失败",
 			err.Error(),
 		)
 	}
-	_ = post
-	return nil
+	return PostDeletionReceipt{
+		PostID:   post.ID,
+		Status:   post.Status,
+		Replayed: replayed,
+	}, nil
 }
 
 // deletedPostTombstoneRetention 是删除保留期（410 语义窗口）。到期后 TTL 清理，

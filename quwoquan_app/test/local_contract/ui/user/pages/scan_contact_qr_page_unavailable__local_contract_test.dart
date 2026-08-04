@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:quwoquan_app/application/user/profile/profile_edit_query.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/profile_qr_resolve_wire_dto.g.dart';
 import 'package:quwoquan_app/components/media/picker/image_pick_gateway.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -12,7 +11,8 @@ import 'package:quwoquan_app/core/platform/platform_capabilities.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/ui/user/pages/scan_contact_qr_page.dart';
 import 'package:quwoquan_app/ui/user/services/contact_qr_image_analyzer.dart';
-import '../../../../support/cloud_services/repository_mock_reexports.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import '../../../../support/cloud_services/object_doubles/user/profile/alpha_user_profile_repository.dart';
 
 Future<void> _pumpScanPage(
   WidgetTester tester, {
@@ -161,13 +161,13 @@ class _ResolvingUserProfileRepository extends MockUserProfileRepository {
   String? lastHandle;
 
   @override
-  Future<ProfileQrResolveWireDto> resolveProfileQrToken({
+  Future<ProfileQrResolveWire> resolveProfileQrToken({
     required String token,
     String handle = '',
   }) async {
     lastToken = token;
     lastHandle = handle;
-    return ProfileQrResolveWireDto(
+    return ProfileQrResolveWire(
       personaId: 'user_alice',
       userHandle: 'alice',
       publicProfileUrl: 'https://quwoquan.com/u/alice',

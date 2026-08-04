@@ -720,11 +720,12 @@ func (s *MemberService) RemoveMember(ctx context.Context, req RemoveMemberReques
 			ConversationID: req.ConversationId,
 			ActorID:        operatorID,
 			Payload: map[string]any{
-				"memberId":    member.ID,
-				"userId":      targetID,
-				"memberType":  member.MemberType,
-				"removedBy":   operatorID,
-				"memberCount": newCount,
+				"conversationId": req.ConversationId,
+				"memberId":       member.ID,
+				"userId":         targetID,
+				"memberType":     member.MemberType,
+				"removedBy":      operatorID,
+				"memberCount":    newCount,
 			},
 		}}
 		rosterEvent, rosterErr := s.rosterUpdatedEvent(
@@ -834,11 +835,12 @@ func (s *MemberService) LeaveConversation(ctx context.Context, req LeaveConversa
 			ConversationID: req.ConversationId,
 			ActorID:        userID,
 			Payload: map[string]any{
-				"memberId":    member.ID,
-				"userId":      userID,
-				"memberType":  member.MemberType,
-				"memberCount": newCount,
-				"leftAt":      now,
+				"conversationId": req.ConversationId,
+				"memberId":       member.ID,
+				"userId":         userID,
+				"memberType":     member.MemberType,
+				"memberCount":    newCount,
+				"leftAt":         now,
 			},
 		}}
 		rosterEvent, rosterErr := s.rosterUpdatedEvent(

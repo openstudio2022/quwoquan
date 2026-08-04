@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../../support/cloud_services/test_content_comment_facet.dart';
 
@@ -7,7 +8,7 @@ void main() {
   group('ContentCommentFacet', () {
     test('列表按 hot/latest 服务端同构顺序且始终 pinned-first', () async {
       final facet = TestContentCommentFacet(
-        items: <ContentCommentListItem>[
+        items: <CommentListItem>[
           testCommentItem(
             id: 'latest',
             createdAt: DateTime.utc(2026, 7, 14, 10),
@@ -30,7 +31,7 @@ void main() {
       final hot = await facet.listComments(postId: 'post_1');
       final latest = await facet.listComments(
         postId: 'post_1',
-        sort: ContentCommentSort.latest,
+        sort: CommentSort.latest,
       );
 
       expect(hot.items.map((item) => item.id), <String>[
@@ -66,7 +67,7 @@ void main() {
       final deleted = await facet.deleteComment(
         DeleteContentCommentCommand(postId: 'post_1', commentId: created.id),
       );
-      expect(deleted.status, ContentCommentStatus.deleted);
+      expect(deleted.status, CommentStatus.deleted);
       expect((await facet.listComments(postId: 'post_1')).items, isEmpty);
     });
 
@@ -83,7 +84,7 @@ void main() {
         createdAt: DateTime.utc(2026, 7, 14, 7),
       );
       final facet = TestContentCommentFacet(
-        items: <ContentCommentListItem>[root, earlierReply],
+        items: <CommentListItem>[root, earlierReply],
       );
       final replyResult = await facet.createComment(
         CreateContentCommentCommand(
@@ -105,10 +106,10 @@ void main() {
       final reaction = await facet.reactToComment(
         ReactToContentCommentCommand(
           commentId: 'root',
-          reaction: ContentCommentReactionValue.like,
+          reaction: CommentReactionType.like,
         ),
       );
-      expect(reaction.reaction, ContentCommentReactionValue.like);
+      expect(reaction.reaction, CommentReactionType.like);
       expect(reaction.likeCount, 1);
     });
   });

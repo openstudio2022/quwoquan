@@ -2,7 +2,7 @@ part of 'search_coordinator.dart';
 
 extension SearchCoordinatorSuggestionBuilders on SearchCoordinator {
   List<ContactSearchSuggestion> _buildContactSuggestions({
-    required List<ChatContactSearchItemDto> contacts,
+    required List<ChatContactSearchItemViewData> contacts,
     required List<ConversationSearchItemView> allConversations,
   }) {
     final suggestions = <ContactSearchSuggestion>[];

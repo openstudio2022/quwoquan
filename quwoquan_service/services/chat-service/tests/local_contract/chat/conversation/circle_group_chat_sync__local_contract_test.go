@@ -109,6 +109,16 @@ func TestCircleGroupChatSyncProjectsLifecycleAndRejectsLateMembership(t *testing
 	if !containsAggregateEvent(commands.events, "ConversationMemberLeft") {
 		t.Fatalf("left member must enqueue terminal realtime event: %#v", commands.eventTypes())
 	}
+	leftEvent := requireAggregateEvent(t, commands.events, "ConversationMemberLeft")
+	if leftEvent.Payload["conversationId"] != conv.ID ||
+		leftEvent.Payload["userId"] != "p2" ||
+		leftEvent.Payload["memberCount"] != 1 ||
+		leftEvent.Payload["leftAt"] != now.Add(2*time.Second) {
+		t.Fatalf("left event must match its canonical payload: %#v", leftEvent.Payload)
+	}
+	if _, exists := leftEvent.Payload["removedBy"]; exists {
+		t.Fatalf("left event must not carry removed semantics: %#v", leftEvent.Payload)
+	}
 
 	if err := syncService.Apply(context.Background(), CircleGroupChatSourceEvent{
 		EventID: "membership-p2:active:1", EventType: "CircleGroupMembershipActivated",
@@ -296,6 +306,21 @@ func containsAggregateEvent(events []AggregateOutboxEvent, eventType string) boo
 		}
 	}
 	return false
+}
+
+func requireAggregateEvent(
+	t *testing.T,
+	events []AggregateOutboxEvent,
+	eventType string,
+) AggregateOutboxEvent {
+	t.Helper()
+	for index := len(events) - 1; index >= 0; index-- {
+		if events[index].EventType == eventType {
+			return events[index]
+		}
+	}
+	t.Fatalf("aggregate event %s is absent", eventType)
+	return AggregateOutboxEvent{}
 }
 
 type syncNoopEventPublisher struct{}

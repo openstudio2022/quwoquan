@@ -1,11 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
-import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
+import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_shell.dart';
@@ -26,32 +27,7 @@ class MyProfilePage extends ConsumerStatefulWidget {
 
 class _MyProfilePageState extends ConsumerState<MyProfilePage> {
   String _scheduledUserLoadId = '';
-  bool _didTrackImpression = false;
-  final Stopwatch _dwell = Stopwatch();
-  String _trackedUserId = '';
-  // 在 build（ref 可用）时缓存 tracker，dispose 不得再触碰 ref。
-  ContentBehaviorTracker? _behaviorTracker;
-
-  @override
-  void initState() {
-    super.initState();
-    _dwell.start();
-  }
-
-  @override
-  void dispose() {
-    _dwell.stop();
-    final seconds = _dwell.elapsedMilliseconds / 1000.0;
-    if (_trackedUserId.isNotEmpty && seconds >= 1) {
-      _behaviorTracker?.trackDwell(
-        _trackedUserId,
-        durationSeconds: seconds,
-        contentType: 'user',
-        referralSource: ReferralSource.authorProfile,
-      );
-    }
-    super.dispose();
-  }
+  String _recordedAuthorVisitId = '';
 
   void _scheduleUserLoad(String userId) {
     final normalizedUserId = userId.trim();
@@ -86,15 +62,14 @@ class _MyProfilePageState extends ConsumerState<MyProfilePage> {
     _scheduleUserLoad(currentUserId);
     final userData = ref.watch(userDataProvider);
     final userId = userData?.id ?? currentUserId;
-    _trackedUserId = userId;
-    final tracker = ref.read(contentBehaviorTrackerProvider);
-    _behaviorTracker = tracker;
-    if (!_didTrackImpression && userId.isNotEmpty) {
-      _didTrackImpression = true;
-      tracker.trackImpression(
-        userId,
-        contentType: 'user',
-        referralSource: ReferralSource.authorProfile,
+    if (userId.isNotEmpty && _recordedAuthorVisitId != userId) {
+      _recordedAuthorVisitId = userId;
+      unawaited(
+        ref
+            .read(visitRecorderServiceProvider)
+            .recordVisit(
+              VisitTarget.entity(kind: VisitEntityKind.author, id: userId),
+            ),
       );
     }
 

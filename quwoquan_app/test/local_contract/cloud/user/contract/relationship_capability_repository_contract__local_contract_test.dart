@@ -1,41 +1,42 @@
 // spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/conversation-entry-matrix/spec.md#gwt-001
 // spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/spec.md#sit-005
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
-import '../../../../support/cloud_services/repository_mock_reexports.dart';
+import '../../../../support/cloud_services/object_doubles/user/alpha_persona_relationship_facets.dart';
 import 'package:test/test.dart';
 
 void main() {
   group('RelationshipCapability typed contract', () {
     test('decoder 严格解析 canonical capability', () {
-      final result = decodeRelationshipCapabilityResult(const <String, Object?>{
-        'viewerPersonaId': 'viewer_1',
-        'targetPersonaId': 'target_1',
-        'relationState': 'mutual',
-        'canFollow': false,
-        'canUnfollow': true,
-        'canFollowBack': false,
-        'canGreet': false,
-        'canOpenConversation': true,
-        'canCreateDirectConversation': true,
-        'canSendMessage': true,
-        'hasPendingGreeting': false,
-        'hasFormalConversation': true,
-        'canStartVoiceCall': true,
-        'canStartVideoCall': true,
-        'isBlocked': false,
-        'isBlockedBy': false,
-      });
+      final result =
+          RelationshipCapabilityView.fromWire(const <String, Object?>{
+            'viewerPersonaId': 'viewer_1',
+            'targetPersonaId': 'target_1',
+            'relationState': 'mutual',
+            'canFollow': false,
+            'canUnfollow': true,
+            'canFollowBack': false,
+            'canGreet': false,
+            'canOpenConversation': true,
+            'canCreateDirectConversation': true,
+            'canSendMessage': true,
+            'hasPendingGreeting': false,
+            'hasFormalConversation': true,
+            'canStartVoiceCall': true,
+            'canStartVideoCall': true,
+            'isBlocked': false,
+            'isBlockedBy': false,
+          });
 
       expect(result.viewerPersonaId, 'viewer_1');
       expect(result.targetPersonaId, 'target_1');
-      expect(result.relationState, 'mutual');
+      expect(result.relationState, RelationshipState.mutual);
       expect(result.canSendMessage, isTrue);
       expect(result.canStartVoiceCall, isTrue);
     });
 
     test('decoder 不为缺失能力位合成默认值', () {
       expect(
-        () => decodeRelationshipCapabilityResult(const <String, Object?>{
+        () => RelationshipCapabilityView.fromWire(const <String, Object?>{
           'viewerPersonaId': 'viewer_1',
           'targetPersonaId': 'target_1',
           'relationState': 'mutual',
@@ -60,7 +61,7 @@ void main() {
         GetRelationshipCapabilityQuery(targetPersonaId: 'fixture_user_photo'),
       );
 
-      expect(result.relationState, 'mutual');
+      expect(result.relationState, RelationshipState.mutual);
       expect(result.canSendMessage, isTrue);
       expect(result.canCreateDirectConversation, isTrue);
       expect(result.canStartVoiceCall, isTrue);
@@ -73,7 +74,7 @@ void main() {
         GetRelationshipCapabilityQuery(targetPersonaId: 'fixture_user_new'),
       );
 
-      expect(result.relationState, 'not_following');
+      expect(result.relationState, RelationshipState.notFollowing);
       expect(result.canFollow, isTrue);
       expect(result.canGreet, isTrue);
       expect(result.canSendMessage, isFalse);

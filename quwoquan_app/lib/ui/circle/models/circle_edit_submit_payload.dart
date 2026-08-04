@@ -1,5 +1,39 @@
-import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_section_config_dto.dart';
-import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_cloud_contracts/generated/circle_contracts.dart';
+
+/// 圈子板块编辑值；只承载页面编辑状态，不承担 wire 解码。
+final class CircleSectionEditValue {
+  const CircleSectionEditValue({
+    required this.sectionType,
+    required this.visible,
+    required this.order,
+    this.customTitle,
+  });
+
+  factory CircleSectionEditValue.fromWire(CircleSectionConfig wire) =>
+      CircleSectionEditValue(
+        sectionType: wire.sectionType,
+        visible: wire.visible,
+        order: wire.order,
+        customTitle: wire.customTitle,
+      );
+
+  final CircleSectionType sectionType;
+  final bool visible;
+  final int order;
+  final String? customTitle;
+
+  CircleSectionEditValue copyWith({
+    CircleSectionType? sectionType,
+    bool? visible,
+    int? order,
+    String? customTitle,
+  }) => CircleSectionEditValue(
+    sectionType: sectionType ?? this.sectionType,
+    visible: visible ?? this.visible,
+    order: order ?? this.order,
+    customTitle: customTitle ?? this.customTitle,
+  );
+}
 
 /// 圈子编辑页强类型提交体；页面不接触动态 wire map。
 class CircleEditSubmitPayload {
@@ -29,7 +63,7 @@ class CircleEditSubmitPayload {
   final String coverUrl;
   final String avatarUrl;
   final String? categoryId;
-  final List<CircleSectionConfigDto> sectionConfig;
+  final List<CircleSectionEditValue> sectionConfig;
 
   CreateCircleCommand toCreateCommand() => CreateCircleCommand(
     name: name,
@@ -66,10 +100,7 @@ class CircleEditSubmitPayload {
         sections: sectionConfig
             .map(
               (section) => CircleSectionConfig(
-                sectionType: CircleSectionType.fromWire(
-                  section.sectionType,
-                  'sectionConfig.sectionType',
-                ),
+                sectionType: section.sectionType,
                 visible: section.visible,
                 order: section.order,
                 customTitle: section.customTitle,

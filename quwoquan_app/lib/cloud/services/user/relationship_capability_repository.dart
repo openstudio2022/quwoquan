@@ -1,10 +1,10 @@
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-/// 关系能力位投影 DTO
+/// 关系能力位 App 展示数据。
 /// 对应 GET /user/{userId}/relationship/capability
 /// 端侧消费方：用户主页动作矩阵、RTC 门禁、私信/打招呼入口
-class RelationshipCapabilityDto {
-  const RelationshipCapabilityDto({
+class RelationshipCapabilityViewData {
+  const RelationshipCapabilityViewData({
     required this.viewerPersonaId,
     required this.targetPersonaId,
     required this.relationState,
@@ -51,10 +51,10 @@ class RelationshipCapabilityDto {
   bool get viewerFollowsTarget => isFollowing || isMutual;
   bool get targetFollowsViewer => isFollowedBy || isMutual;
 
-  factory RelationshipCapabilityDto.fromWire(
+  factory RelationshipCapabilityViewData.fromWire(
     RelationshipCapabilityView result,
   ) {
-    return RelationshipCapabilityDto(
+    return RelationshipCapabilityViewData(
       viewerPersonaId: result.viewerPersonaId,
       targetPersonaId: result.targetPersonaId,
       relationState: result.relationState.wireName,
@@ -74,7 +74,8 @@ class RelationshipCapabilityDto {
     );
   }
 
-  Map<String, Object?> toWireMap() => <String, Object?>{
+  /// 只供端侧搜索缓存使用，不构成第二套 Cloud wire。
+  Map<String, Object?> toLocalSearchRecord() => <String, Object?>{
     'viewerPersonaId': viewerPersonaId,
     'targetPersonaId': targetPersonaId,
     'relationState': relationState,
@@ -96,7 +97,7 @@ class RelationshipCapabilityDto {
 
 /// 关系能力位 Repository（三层模式）
 abstract class RelationshipCapabilityRepository {
-  Future<RelationshipCapabilityDto> getCapability(String targetUserId);
+  Future<RelationshipCapabilityViewData> getCapability(String targetUserId);
 
   bool get reconcilesCapabilityWithSharedRelationshipState;
 }
@@ -111,10 +112,12 @@ class RemoteRelationshipCapabilityRepository
   bool get reconcilesCapabilityWithSharedRelationshipState => false;
 
   @override
-  Future<RelationshipCapabilityDto> getCapability(String targetUserId) async {
+  Future<RelationshipCapabilityViewData> getCapability(
+    String targetUserId,
+  ) async {
     final result = await query.getRelationshipCapability(
       GetRelationshipCapabilityQuery(targetPersonaId: targetUserId),
     );
-    return RelationshipCapabilityDto.fromWire(result);
+    return RelationshipCapabilityViewData.fromWire(result);
   }
 }

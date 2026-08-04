@@ -1,5 +1,5 @@
 kind: aggregate_root
-description: '小趣助手显式偏好事实。session scope 仅作用于指定 AssistantSession，
+description: '小趣助手显式偏好。session scope 仅作用于指定 AssistantSession，
 
   long_term scope 作用于 owner 后续 AssistantSession；用户可遗忘并在受控窗口内恢复。
 

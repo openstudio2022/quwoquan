@@ -1,6 +1,6 @@
 import 'package:flutter/widgets.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 
 /// 首页频道展示策略。

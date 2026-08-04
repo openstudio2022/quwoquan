@@ -17,13 +17,13 @@ void main() {
         overrides: [
           profileQueryProvider.overrideWith(
             (ref, surface) => ContactProfileQueryFake(
-              searchItems: <SocialRelationSearchItemView>[
-                SocialRelationSearchItemView(
+              searchItems: <SocialRelationSearchItemViewData>[
+                SocialRelationSearchItemViewData(
                   personaId: 'persona-alice',
                   userHandle: 'alice',
                   displayName: 'Alice',
                   chatAvailable: false,
-                  relationshipCapability: RelationshipCapabilityDto(
+                  relationshipCapability: RelationshipCapabilityViewData(
                     viewerPersonaId: 'persona-viewer',
                     targetPersonaId: 'persona-alice',
                     relationState: 'not_following',

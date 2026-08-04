@@ -165,7 +165,9 @@ def main() -> int:
         return 1
     print(
         "[verify_external_provider_governance] OK "
-        f"({compiled['capabilityCount']} capabilities, {compiled['adapterCount']} adapters)"
+        f"({compiled['capabilityCount']} bindings, "
+        f"{compiled['providerConformanceCapabilityCount']} provider capabilities, "
+        f"{compiled['adapterCount']} adapters)"
     )
     return 0
 

@@ -79,7 +79,7 @@ func TestContract_InitiateCall_RejectsIncompleteOrUnknownBody(t *testing.T) {
 	code, body = doPostAny(
 		t,
 		"/rtc/calls",
-		`{"callType":"audio","inviteeIds":["unknown_field"],"maxParticipants":2,"legacyLimit":2}`,
+		`{"callType":"audio","inviteeIds":["unknown_field"],"maxParticipants":2,"retiredLimit":2}`,
 		"invalid_initiator",
 	)
 	if code != http.StatusBadRequest ||

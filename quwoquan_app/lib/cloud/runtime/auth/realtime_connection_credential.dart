@@ -1,9 +1,7 @@
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
-import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/cloud/runtime/auth/cloud_auth_token_provider.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/realtime/realtime_api_metadata.g.dart';
 
 /// 由可信 AuthSession 提供的实时连接凭据。
 ///
@@ -42,35 +40,18 @@ final class RealtimeConnectionCredential {
   /// 由传输层按断线重连语义处理。
   static Future<RealtimeConnectionCredential?> resolveWebSocket(
     CloudAuthTokenProvider provider, {
-    required String gatewayBaseUrl,
-    required http.Client client,
+    required Future<String> Function() issueTicket,
   }) async {
     final token = (await provider.getAccessToken())?.trim() ?? '';
     if (token.isEmpty) {
       return null;
     }
-    final uri = Uri.parse(
-      '$gatewayBaseUrl${RealtimeApiMetadata.issueConnectionTicketPath}',
-    );
-    final http.Response response;
+    final String ticket;
     try {
-      response = await client
-          .post(
-            uri,
-            headers: <String, String>{'Authorization': 'Bearer $token'},
-          )
-          .timeout(const Duration(seconds: 5));
+      ticket = (await issueTicket()).trim();
     } catch (_) {
       return null;
     }
-    if (response.statusCode != 200) {
-      return null;
-    }
-    final body = jsonDecode(response.body);
-    if (body is! Map<String, dynamic>) {
-      return null;
-    }
-    final ticket = (body['ticket'] as String?)?.trim() ?? '';
     if (ticket.isEmpty) {
       return null;
     }
@@ -88,13 +69,5 @@ final class RealtimeConnectionCredential {
         'ticket': ticket,
       },
     );
-  }
-
-  Map<String, String> authorizeHttp(Map<String, String> headers) {
-    final accessToken = _accessToken;
-    if (accessToken == null) {
-      throw StateError('http credential requires a bearer access token');
-    }
-    return <String, String>{...headers, 'Authorization': 'Bearer $accessToken'};
   }
 }

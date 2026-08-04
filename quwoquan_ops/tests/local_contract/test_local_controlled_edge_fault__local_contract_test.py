@@ -1,6 +1,7 @@
 # spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-002
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 import unittest
@@ -9,8 +10,13 @@ from unittest.mock import patch
 from quwoquan_ops.cli.lib import local_controlled_edge_fault as edge_fault
 
 
+def _sha256_digest(payload: str) -> str:
+    return "sha256:" + hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
 class _FakeRunner:
-    def __init__(self, *, api_image: str = "sha256:api") -> None:
+    def __init__(self, *, api_image: str | None = None) -> None:
+        api_image = api_image or _sha256_digest("image:api-edge")
         self.api_image = api_image
         self.commands: list[list[str]] = []
 
@@ -37,7 +43,7 @@ class _FakeRunner:
                             "com.docker.compose.service": service,
                         },
                     },
-                    "Image": f"sha256:{service}",
+                    "Image": _sha256_digest(f"container:{service}"),
                     "State": {"Status": "running"},
                 }
             ]
@@ -59,7 +65,7 @@ class ControlledEdgeFaultTest(unittest.TestCase):
             "composeProject": "quwoquan_alpha_release_uat",
             "configurationDigest": "sha256:" + "1" * 64,
             "imageComposition": {
-                "images": {"api-edge": {"ref": "sha256:api"}}
+                "images": {"api-edge": {"ref": _sha256_digest("image:api-edge")}}
             },
         }
 
@@ -102,7 +108,7 @@ class ControlledEdgeFaultTest(unittest.TestCase):
         )
 
     def test_fault_rejects_api_edge_image_outside_runtime_receipt(self) -> None:
-        runner = _FakeRunner(api_image="sha256:drift")
+        runner = _FakeRunner(api_image=_sha256_digest("image:drifted-api-edge"))
         with (
             patch.object(edge_fault, "load_startup_attempt", return_value=self._runtime_receipt()),
             patch.object(edge_fault, "load_environment_topology", return_value=self._topology()),

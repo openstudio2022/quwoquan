@@ -1,12 +1,12 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: assistant-policy-publish-202607291
+  name: assistant-policy-publish-202608041
   labels:
     app.kubernetes.io/name: assistant-service
     app.kubernetes.io/component: policy-publication
   annotations:
-    quwoquan.io/policy-artifact: assistant-default/95f06f8e01d2023c814eb50e1f394642ac563905b68ae0fff5a010e322c5c7bc
+    quwoquan.io/policy-artifact: assistant-default/6579402860644c0273747b33c23962cff013caec0839407afbe7dffdcc50f8e7
 spec:
   backoffLimit: 2
   ttlSecondsAfterFinished: 86400

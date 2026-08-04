@@ -85,6 +85,11 @@ func (c *ExternalInteractionClient) SubmitSMSOTP(ctx context.Context, req applic
 		return application.ExternalInteractionAccepted{}, err
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
+	idempotencyKey := strings.TrimSpace(req.IdempotencyKey)
+	if idempotencyKey == "" {
+		return application.ExternalInteractionAccepted{}, fmt.Errorf("idempotency key is required for sms_otp.send")
+	}
+	httpReq.Header.Set("Idempotency-Key", idempotencyKey)
 	serviceToken, err := c.signer.Sign(rtauth.TokenSubject{
 		AccountID: "service:user-service",
 		Roles:     []string{"service"},

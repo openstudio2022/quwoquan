@@ -343,18 +343,18 @@ Future<void> testCommentComposerMentionsAndAttachment(
                   postId: 'comment-compose-post',
                   sourceSurface: AppUiSurfaces.homeFeed,
                   config: const CommentConfig(maxImageAttachments: 1),
-                  mentionCandidates: <ContentCommentMention>[
-                    ContentCommentMention(
+                  mentionCandidates: <CommentMention>[
+                    CommentMention(
                       subjectType: 'assistant',
                       subjectId: 'assistant_xiaoqu',
                       displayName: AssistantText.assistantEntryXiaoqu,
                     ),
-                    ContentCommentMention(
+                    CommentMention(
                       subjectType: 'user',
                       subjectId: 'mutual_user_1',
                       displayName: '互相关注小雨',
                     ),
-                    ContentCommentMention(
+                    CommentMention(
                       subjectType: 'user',
                       subjectId: 'following_user_1',
                       displayName: '关注阿青',

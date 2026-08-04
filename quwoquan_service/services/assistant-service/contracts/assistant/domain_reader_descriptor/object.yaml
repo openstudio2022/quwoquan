@@ -1,0 +1,29 @@
+kind: external_reference
+description: >-
+  DomainReaderDescriptor 是 Assistant 运行时可调用领域 Reader 的 canonical 只读目录。
+  它只描述 owner service 的公开 operation、schema、权威性、敏感度、surface、
+  freshness、artifact 与 citation 边界；不保存领域数据、运行 Context 值或凭证。
+identity:
+  fields: [descriptorId]
+  version_source: external
+access:
+  commands: none
+  cross_context: public_contract_only
+  queries: external_port
+relationships: []
+capabilities: [queryable]
+taggable: false
+vector_enabled: false
+business_rules:
+- descriptorId、resolverRef 与 descriptorDigest 全局唯一且非空；同一 resolverRef 不得绑定多个 adapter
+- ownerOperationRefs 必须是 ownerService 的 canonical typed query 集合，Reader 禁止直读其它服务数据库或派生投影存储
+- Resolver 输出的 source kind、authority 与 sensitivity 必须与 Descriptor 及选中 Skill 的 ContextProfile 同时一致
+- shared/public surface 不得通过 Descriptor 放宽平台 privacy ceiling；private/restricted Context 只能在 personal surface 使用
+- 大结果必须按 artifactPolicy 进入 Artifact Store；citationPolicy 决定可回查 source/entity reference，不得复制领域真相
+- 新增 Skill 只引用既有 resolverRef；只有新增领域事实能力时才增加 Descriptor 与 owner-local adapter，不得修改 AgentLoop
+lifecycle:
+  refresh_semantics: regenerate_and_rebind_from_canonical_contract_graph
+  tombstone: descriptor_removal_disables_resolver_before_next_safe_boundary
+external_authority:
+  owner: canonical_contract_graph
+  identity_contract: descriptor_id_and_descriptor_digest

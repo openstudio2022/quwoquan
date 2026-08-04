@@ -77,8 +77,12 @@ type idempotencyRecord struct {
 type providerRequest struct {
 	RequestID      string            `json:"requestId"`
 	Operation      string            `json:"operation"`
+	Tenant         string            `json:"tenant"`
 	Environment    string            `json:"env"`
 	IdempotencyKey string            `json:"idempotencyKey"`
+	PayloadRef     string            `json:"payloadRef"`
+	PayloadDigest  string            `json:"payloadDigest"`
+	Sensitivity    string            `json:"sensitivity"`
 	ExpiresAt      string            `json:"expiresAt"`
 	Payload        map[string]string `json:"payload"`
 }

@@ -9,6 +9,8 @@ import subprocess
 import time
 from typing import Sequence
 
+from quwoquan_ops.cli.lib.provider_conformance import required_metric_refs
+
 
 _NETWORK_BOUNDARIES = {
     "local_contract": "offline_harness",
@@ -113,17 +115,35 @@ def run_native_harness(*, command: Sequence[str], target: str) -> int:
         sort_keys=True,
     ).encode("utf-8")
     execution_digest = _digest_bytes(execution_raw)
-    if completed.returncode != 0:
-        raise ValueError(
-            f"native Provider harness failed for {target}; "
-            f"execution={execution_digest}"
-        )
-
     result_path.parent.mkdir(parents=True, exist_ok=True)
     telemetry_path = result_path.with_name(
         f"{result_path.stem}.native-execution.json"
     )
     telemetry_path.write_bytes(execution_raw + b"\n")
+    if completed.returncode != 0:
+        stderr_tail = completed.stderr.decode("utf-8", errors="replace")[-4000:]
+        stdout_tail = completed.stdout.decode("utf-8", errors="replace")[-2000:]
+        detail_path = result_path.with_name(
+            f"{result_path.stem}.native-execution.stderr.txt"
+        )
+        detail_path.write_text(
+            "\n".join(
+                [
+                    f"target={target}",
+                    f"exitCode={completed.returncode}",
+                    f"execution={execution_digest}",
+                    "--- stdout tail ---",
+                    stdout_tail,
+                    "--- stderr tail ---",
+                    stderr_tail,
+                ]
+            ),
+            encoding="utf-8",
+        )
+        raise ValueError(
+            f"native Provider harness failed for {target}; "
+            f"execution={execution_digest}; detail={detail_path}"
+        )
     log_ref = f"log:native-{execution_digest.removeprefix('sha256:')[:32]}"
     trace_ref = f"trace:native-{execution_digest.removeprefix('sha256:')[:32]}"
     metric_ref = (
@@ -132,10 +152,19 @@ def run_native_harness(*, command: Sequence[str], target: str) -> int:
         + "-"
         + layer.replace("_", "-")
     )
+    metric_refs = [metric_ref, *required_metric_refs(capability_id)]
+    # Keep order stable and unique for evidence digest / subset checks.
+    seen_metrics: set[str] = set()
+    unique_metric_refs: list[str] = []
+    for ref in metric_refs:
+        if ref in seen_metrics:
+            continue
+        seen_metrics.add(ref)
+        unique_metric_refs.append(ref)
     observability_refs = {
         "logs": [log_ref],
         "traces": [trace_ref],
-        "metrics": [metric_ref],
+        "metrics": unique_metric_refs,
     }
     case_result = {
         "schema": "provider-conformance-case-results",
@@ -156,7 +185,7 @@ def run_native_harness(*, command: Sequence[str], target: str) -> int:
                 "status": "passed",
                 "logRef": log_ref,
                 "traceRef": trace_ref,
-                "metricRefs": [metric_ref],
+                "metricRefs": list(unique_metric_refs),
             }
             for assertion_id in assertion_ids
         ],

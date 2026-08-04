@@ -1,4 +1,3 @@
-import 'package:quwoquan_app/cloud/runtime/generated/rtc/rtc_signal_payloads.g.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// Rebuilds the canonical immutable wire for local realtime projections.

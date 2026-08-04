@@ -214,13 +214,22 @@ func TestRTCIncomingCallCoordinationWithRealMongoAndRedis(t *testing.T) {
 	}
 	select {
 	case message := <-subscription.Channel():
-		var payload map[string]string
-		if err := json.Unmarshal([]byte(message.Payload), &payload); err != nil {
+		target, eventWire, targeted, err :=
+			runtimemessaging.UnwrapTargetedEphemeralPayload([]byte(message.Payload))
+		if err != nil || !targeted {
+			t.Fatalf("unwrap targeted realtime payload: targeted=%v err=%v", targeted, err)
+		}
+		if target.PersonaID != personaID || target.DeviceID != "device-online" {
+			t.Fatalf("realtime routing target=%+v", target)
+		}
+		var envelope map[string]any
+		if err := json.Unmarshal(eventWire, &envelope); err != nil {
 			t.Fatal(err)
 		}
-		if payload["deliveryKey"] != deliveryKey ||
-			payload["deviceId"] != "device-online" {
-			t.Fatalf("realtime payload=%v", payload)
+		payload, _ := envelope["payload"].(map[string]any)
+		if envelope["type"] != "call.ringing" ||
+			payload["deliveryKey"] != deliveryKey {
+			t.Fatalf("realtime event=%v", envelope)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("online endpoint did not receive realtime dispatch")
@@ -316,14 +325,17 @@ func TestRTCIncomingCallCoordinationWithRealMongoAndRedis(t *testing.T) {
 		t.Fatalf("initial integration action=%v", requestPayload["action"])
 	}
 	providerResult := notification.ExternalInteractionResultEvent{
-		AttemptID:             "attempt-incoming-ring-1",
-		RequestID:             externalRequestID,
-		Operation:             reliabletask.ExternalInteractionOperationPush,
-		Status:                reliabletask.ExternalInteractionStatusSentUnconfirmed,
-		Provider:              "apns_voip",
-		ProviderRequestDigest: "sha256:provider-request",
-		RecoveryAction:        "none",
-		OccurredAt:            now.Add(500 * time.Millisecond),
+		AttemptID: "attempt-incoming-ring-1",
+		RequestID: externalRequestID,
+		Operation: reliabletask.ExternalInteractionOperationPush,
+		Status:    reliabletask.ExternalInteractionStatusSentUnconfirmed,
+		Provider:  "apns_voip",
+		ProviderRequestDigest: canonicalProviderRequestDigest(
+			externalRequestID,
+			"apns_voip",
+		),
+		RecoveryAction: "none",
+		OccurredAt:     now.Add(500 * time.Millisecond),
 	}
 	for replay := 0; replay < 2; replay++ {
 		if err := notificationReliableStore.ApplyExternalInteractionResult(
@@ -460,11 +472,15 @@ func TestRTCIncomingCallCoordinationWithRealMongoAndRedis(t *testing.T) {
 	}
 	select {
 	case message := <-subscription.Channel():
-		var payload map[string]string
+		var payload map[string]any
 		if err := json.Unmarshal([]byte(message.Payload), &payload); err != nil {
 			t.Fatal(err)
 		}
-		if payload["type"] != "call.presentation_cancelled" {
+		cancellationPayload, ok := payload["payload"].(map[string]any)
+		if payload["type"] != "call.answered" ||
+			!ok ||
+			cancellationPayload["callId"] != callID ||
+			len(cancellationPayload) != 2 {
 			t.Fatalf("unexpected cancellation payload=%v", payload)
 		}
 	case <-time.After(time.Second):
@@ -630,6 +646,13 @@ func canonicalDeliveryKey(callID string, personaID string) string {
 	sum := sha256.Sum256([]byte(
 		strings.TrimSpace(callID) + "\x00" +
 			strings.TrimSpace(personaID),
+	))
+	return "sha256:" + hex.EncodeToString(sum[:])
+}
+
+func canonicalProviderRequestDigest(requestID string, provider string) string {
+	sum := sha256.Sum256([]byte(
+		strings.TrimSpace(requestID) + "\x00" + strings.TrimSpace(provider),
 	))
 	return "sha256:" + hex.EncodeToString(sum[:])
 }

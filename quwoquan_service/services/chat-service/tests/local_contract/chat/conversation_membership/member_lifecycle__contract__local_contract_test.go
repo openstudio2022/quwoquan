@@ -28,7 +28,7 @@ func TestConversationMembershipOwnsClosedRoleAndMemberTypeInvariants(t *testing.
 	if err := assistant.Validate(); err == nil {
 		t.Fatal("assistant membership must never become an admin")
 	}
-	persona.MemberType = "legacy_user"
+	persona.MemberType = "unsupported_user"
 	if err := persona.Validate(); err == nil {
 		t.Fatal("non-canonical memberType must fail")
 	}
@@ -42,7 +42,7 @@ func TestConversationMembershipCursorIsSingleOpaqueEncoding(t *testing.T) {
 	if cursor := membershipmodel.EncodeDisplayNameCursor("Alice", "persona-1"); cursor == "" {
 		t.Fatal("display-name cursor must be opaque and non-empty")
 	}
-	if got := membershipmodel.NormalizeListSort("V2"); got != membershipmodel.ListSortJoinedAsc {
+	if got := membershipmodel.NormalizeListSort("unknown_sort"); got != membershipmodel.ListSortJoinedAsc {
 		t.Fatalf("versioned alternate sort must not create a second track: %q", got)
 	}
 }

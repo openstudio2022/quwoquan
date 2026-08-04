@@ -6,6 +6,7 @@ import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import '../../../support/cloud_services/content_facet_overrides.dart';
 import '../../../support/cloud_services/content/mock_content_repository.dart';
+import '../../../support/cloud_services/test_content_comment_facet.dart';
 
 void main() {
   group('Content facets 装配契约 (D2a/D2b)', () {
@@ -15,21 +16,24 @@ void main() {
       expect(repo, isA<ContentReadRepository>());
       expect(repo, isA<ContentPostDetailReader>());
       expect(repo, isA<ContentAuthorPostsReader>());
-      expect(repo, isA<ContentWriteRepository>());
-      expect(repo, isA<ContentEngagementRepository>());
+      expect(repo, isA<ContentPostDeleteCommandWriter>());
       expect(repo, isNot(isA<ContentCommentFacet>()));
       expect(repo, isA<ContentConfigRepository>());
     });
 
     test('组合根按 facet 装配缓存与直连 adapter', () {
       final container = ProviderContainer(
-        overrides: [...mockContentFacetOverrides(MockContentRepository())],
+        overrides: [
+          ...mockContentFacetOverrides(
+            MockContentRepository(),
+            commentFacet: TestContentCommentFacet(),
+          ),
+        ],
       );
       addTearDown(container.dispose);
 
       final feed = container.read(contentDiscoveryFeedQueryProvider);
-      final write = container.read(contentWriteRepositoryProvider);
-      final engagement = container.read(contentEngagementRepositoryProvider);
+      final write = container.read(contentPostDeleteCommandWriterProvider);
       final config = container.read(contentConfigRepositoryProvider);
       final workBrowserDetail = container.read(
         workBrowserContentPostDetailReaderProvider,
@@ -39,8 +43,7 @@ void main() {
       );
 
       expect(feed, isA<ContentDiscoveryFeedQuery>());
-      expect(write, isA<ContentWriteRepository>());
-      expect(engagement, isA<ContentEngagementRepository>());
+      expect(write, isA<ContentPostDeleteCommandWriter>());
       expect(config, isA<ContentConfigRepository>());
       expect(workBrowserDetail, isA<ContentPostDetailReader>());
       expect(userProfilePosts, isA<ContentAuthorPostsReader>());
@@ -67,40 +70,6 @@ void main() {
       expect(composition, isNot(contains('AppDataSourceMode')));
       expect(discovery, contains('contentDiscoveryFeedQueryProvider'));
       expect(discovery, isNot(contains('contentReadRepositoryProvider')));
-    });
-  });
-
-  group('DiscoveryPresentationWire 强类型封装 (R04 de-Map)', () {
-    test('typed getter: tags / visibility', () {
-      const wire = DiscoveryPresentationWire(<String, dynamic>{
-        'tagRefs': <dynamic>[' 校园 ', '', '摄影'],
-        'visibility': 'private',
-      });
-      expect(wire.tagRefs, <String>['校园', '摄影']);
-      expect(wire.visibility, 'private');
-    });
-
-    test('缺省值: 空 row → 空标签/public', () {
-      const wire = DiscoveryPresentationWire(<String, dynamic>{});
-      expect(wire.tagRefs, isEmpty);
-      expect(wire.visibility, 'public');
-    });
-
-    test('fromRow(null) 返回 null', () {
-      expect(DiscoveryPresentationWire.fromRow(null), isNull);
-      expect(
-        DiscoveryPresentationWire.fromRow(<String, dynamic>{
-          'tagRefs': <String>[],
-        }),
-        isNotNull,
-      );
-    });
-
-    test('toWireMap 透传底层 canonical wire row 给统一映射器', () {
-      final row = <String, dynamic>{'shareCount': 9};
-      final wire = DiscoveryPresentationWire(row);
-      expect(wire.toWireMap()['shareCount'], 9);
-      expect(identical(wire.toWireMap(), row), isTrue);
     });
   });
 }

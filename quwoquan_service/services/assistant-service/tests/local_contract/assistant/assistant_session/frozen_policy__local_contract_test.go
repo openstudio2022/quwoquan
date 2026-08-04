@@ -41,12 +41,14 @@ func TestStartRunFreezesPolicyBeforeInsertAndReplayNeverRebuckets(t *testing.T) 
 	resolver := &countingFrozenPolicyResolver{}
 	commands := runruntime.NewCommandService(
 		runtime,
-		runruntime.SessionAuthorizerFunc(func(context.Context, string, string) error { return nil }),
+		runruntime.SessionResolverFunc(func(context.Context, string, string) (runruntime.SessionContinuity, error) {
+			return runruntime.SessionContinuity{}, nil
+		}),
 		testSkillPackageIdentityResolver(),
 		runruntime.AllowAllStartAccessPolicy{},
 		time.Now,
 		nil,
-		resolver,
+		runruntime.WithPolicyResolver(resolver),
 	)
 	command := runruntime.StartCommand{
 		UserID:            "account-1",
@@ -79,12 +81,16 @@ func TestPolicyResolverFailureDoesNotWriteRun(t *testing.T) {
 	runtime := assistantruntest.NewMemoryRuntime()
 	commands := runruntime.NewCommandService(
 		runtime,
-		runruntime.SessionAuthorizerFunc(func(context.Context, string, string) error { return nil }),
+		runruntime.SessionResolverFunc(func(context.Context, string, string) (runruntime.SessionContinuity, error) {
+			return runruntime.SessionContinuity{}, nil
+		}),
 		testSkillPackageIdentityResolver(),
 		runruntime.AllowAllStartAccessPolicy{},
 		time.Now,
 		nil,
-		&countingFrozenPolicyResolver{err: errors.New("rollout storage unavailable")},
+		runruntime.WithPolicyResolver(
+			&countingFrozenPolicyResolver{err: errors.New("rollout storage unavailable")},
+		),
 	)
 	_, err := commands.Start(t.Context(), runruntime.StartCommand{
 		UserID:          "account-2",

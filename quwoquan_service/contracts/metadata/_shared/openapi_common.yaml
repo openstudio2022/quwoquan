@@ -280,9 +280,6 @@ components:
           type: string
           description: 稳定原因码（如 invalid_argument/timeout/connection_refused）
           pattern: '^[a-z0-9_]+$'
-        message:
-          type: string
-          description: 兼容字段（记录），建议等同 debugMessage
         requestId:
           type: string
         traceId:

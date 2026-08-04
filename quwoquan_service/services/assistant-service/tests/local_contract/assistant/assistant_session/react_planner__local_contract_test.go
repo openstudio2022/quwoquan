@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	assistantgenerated "quwoquan_service/services/assistant-service/generated/assistant/assistant_session"
-	. "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/reasoning"
+	. "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/reasoning"
 )
 
 func TestReactPlannerUsesStructuredToolDelta(t *testing.T) {
@@ -28,13 +28,37 @@ func TestReactPlannerUsesStructuredToolDelta(t *testing.T) {
 	}
 }
 
-func TestReactPlannerFallsBackToToolPolicy(t *testing.T) {
+func TestReactPlannerRejectsMissingToolNameWithoutChoosingPolicyFallback(t *testing.T) {
 	decision := ReactPlanner{}.Decide(PlanInput{
-		ToolPolicy: []string{"web_search"},
-		Budget:     DefaultBudget(),
+		StructuredDelta: map[string]any{"nextAction": "tool_call"},
+		ToolPolicy:      []string{"web_search"},
+		Budget:          DefaultBudget(),
 	})
-	if decision.ToolName != "web_search" {
-		t.Fatalf("toolName=%q", decision.ToolName)
+	if decision.CallsTool() || !decision.Rejected() {
+		t.Fatalf("decision=%#v want a non-executable rejection", decision)
+	}
+	if decision.ToolName != "" || decision.ReasonCode != "tool_name_required" {
+		t.Fatalf("decision=%#v", decision)
+	}
+	if !decision.Rejection.Retryable ||
+		len(decision.Rejection.AllowedTools) != 1 ||
+		decision.Rejection.AllowedTools[0] != "web_search" {
+		t.Fatalf("rejection=%#v", decision.Rejection)
+	}
+}
+
+func TestReactPlannerAnswersWithoutStructuredToolDecision(t *testing.T) {
+	decision := ReactPlanner{}.Decide(PlanInput{
+		ReasoningText: "模型已直接给出无需检索的回答",
+		ToolPolicy:    []string{"web_search"},
+		Budget:        DefaultBudget(),
+	})
+	if decision.Rejected() || decision.CallsTool() ||
+		decision.NextAction != assistantgenerated.AssistantNextActionAnswer {
+		t.Fatalf("decision=%#v want direct answer", decision)
+	}
+	if decision.ReasonCode != "no_structured_tool_decision" {
+		t.Fatalf("reasonCode=%q", decision.ReasonCode)
 	}
 }
 
@@ -99,17 +123,21 @@ func TestReactPlannerRejectsClarificationWithoutPrompt(t *testing.T) {
 
 func TestReactPlannerMapsReplanAndRetryToActionCodes(t *testing.T) {
 	replan := ReactPlanner{}.Decide(PlanInput{
-		StructuredDelta: map[string]any{"nextAction": "replan"},
-		ToolPolicy:      []string{"web_search"},
-		Budget:          DefaultBudget(),
+		StructuredDelta: map[string]any{
+			"nextAction": "replan", "toolName": "web_search",
+		},
+		ToolPolicy: []string{"web_search"},
+		Budget:     DefaultBudget(),
 	})
 	if replan.ActionCode != assistantgenerated.PlannerActionCodeExpandSearch {
 		t.Fatalf("replan actionCode=%q want expand_search", replan.ActionCode)
 	}
 	retry := ReactPlanner{}.Decide(PlanInput{
-		StructuredDelta: map[string]any{"nextAction": "retry"},
-		ToolPolicy:      []string{"web_search"},
-		Budget:          DefaultBudget(),
+		StructuredDelta: map[string]any{
+			"nextAction": "retry", "toolName": "web_search",
+		},
+		ToolPolicy: []string{"web_search"},
+		Budget:     DefaultBudget(),
 	})
 	if retry.ActionCode != assistantgenerated.PlannerActionCodeRecoverRetrieval {
 		t.Fatalf("retry actionCode=%q want recover_retrieval", retry.ActionCode)
@@ -118,9 +146,11 @@ func TestReactPlannerMapsReplanAndRetryToActionCodes(t *testing.T) {
 
 func TestReactPlannerTreatsUnparsableActionAsToolCall(t *testing.T) {
 	decision := ReactPlanner{}.Decide(PlanInput{
-		StructuredDelta: map[string]any{"nextAction": "final_answer"},
-		ToolPolicy:      []string{"web_search"},
-		Budget:          DefaultBudget(),
+		StructuredDelta: map[string]any{
+			"nextAction": "final_answer", "toolName": "web_search",
+		},
+		ToolPolicy: []string{"web_search"},
+		Budget:     DefaultBudget(),
 	})
 	if !decision.CallsTool() {
 		t.Fatalf("decision=%#v want the deterministic tool path", decision)

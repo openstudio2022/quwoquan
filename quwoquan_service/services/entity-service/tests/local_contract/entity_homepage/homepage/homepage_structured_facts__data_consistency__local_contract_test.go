@@ -210,11 +210,11 @@ func TestStructuredFactsSurviveAggregateRoundTrip(t *testing.T) {
 	}
 }
 
-func TestRestoreReSanitizesLegacyDocumentsWithoutProvenance(t *testing.T) {
+func TestRestoreReSanitizesPreProvenanceDocuments(t *testing.T) {
 	now := time.Date(2026, 7, 20, 1, 0, 0, 0, time.UTC)
 	// 存量文档可能早于留证要求写入，或被旁路直改过；读回时必须重新收敛。
 	snapshot := homepagemodel.Snapshot{
-		ID:                 "hp_legacy",
+		ID:                 "hp_pre_provenance",
 		Version:            3,
 		Title:              "九寨沟",
 		HomepageType:       "sight",
@@ -233,7 +233,7 @@ func TestRestoreReSanitizesLegacyDocumentsWithoutProvenance(t *testing.T) {
 		t.Fatalf("restore failed: %v", err)
 	}
 	if restored.StructuredFactsView() != nil {
-		t.Fatalf("unevidenced legacy facts must not become visible on read, got %+v", restored.StructuredFactsView())
+		t.Fatalf("unevidenced retired facts must not become visible on read, got %+v", restored.StructuredFactsView())
 	}
 	if len(restored.DroppedStructuredFactFields()) != 2 {
 		t.Fatalf("both dropped fields must be diagnosable, got %+v", restored.DroppedStructuredFactFields())

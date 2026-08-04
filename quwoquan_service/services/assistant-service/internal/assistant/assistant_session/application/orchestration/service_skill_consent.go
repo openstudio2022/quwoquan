@@ -6,21 +6,27 @@ import (
 
 	runerrors "quwoquan_service/services/assistant-service/generated/assistant/assistant_run"
 	consenterrors "quwoquan_service/services/assistant-service/generated/assistant/skill_consent"
-	consentapplication "quwoquan_service/services/assistant-service/internal/assistant/skill_consent/application"
+	runruntime "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
+	catalogapplication "quwoquan_service/services/assistant-service/internal/assistant/skill_catalog/application"
 	consentmodel "quwoquan_service/services/assistant-service/internal/assistant/skill_consent/domain/model"
 )
-
-const SkillPersonalContentAccess = consentapplication.SkillPersonalContentAccess
-
-func skillRequiresConsent(skillID string) bool {
-	return skillID == SkillPersonalContentAccess
-}
 
 func (service *AssistantService) requireSkillConsent(
 	ctx context.Context,
 	accountID, skillID string,
 ) error {
-	err := service.consentQueries.Require(ctx, accountID, skillID)
+	manifest, found, err := service.resolveSkillManifest(ctx, skillID)
+	if err != nil || !found {
+		return runruntime.ErrSkillPackageUnavailable
+	}
+	err = service.consentQueries.Require(
+		ctx,
+		accountID,
+		skillID,
+		catalogapplication.RequiredContextConsentScopes(
+			manifest.ContextProfile,
+		),
+	)
 	switch {
 	case errors.Is(err, consentmodel.ErrConsentRequired):
 		return runerrors.AppErrorFromSkillConsentRequired(

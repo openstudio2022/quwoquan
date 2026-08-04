@@ -9,16 +9,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/application/content/post/author_impact_query.dart';
 import 'package:quwoquan_app/application/rtc/call_session/rtc_call_entry_coordinator.dart';
 import 'package:quwoquan_app/application/user/profile/profile_query.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_item.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_summary.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_inbox_summary.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_point.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/persona_profile_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
@@ -50,9 +42,10 @@ import 'package:quwoquan_app/ui/user/widgets/profile_interaction_tab.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_secondary_tab_bar.dart';
 import '../../../../support/cloud_services/content_facet_overrides.dart';
 import '../../../../support/cloud_services/content/mock_content_repository.dart';
-import '../../../../support/cloud_services/repository_mock_reexports.dart';
+import '../../../../support/cloud_services/object_doubles/user/profile/alpha_user_profile_repository.dart';
 import '../../../../support/fakes/test_profile_interaction_facets.dart';
 import '../../../../support/fixtures/author_impact_fixtures.dart';
+import '../../../../support/fixtures/intersection_fixtures.dart';
 
 /// 在 UI 测试中使 capability 保持 null（current 关注/私信 布局）
 class _ThrowingCapabilityRepository extends RelationshipCapabilityRepository {
@@ -60,7 +53,7 @@ class _ThrowingCapabilityRepository extends RelationshipCapabilityRepository {
   bool get reconcilesCapabilityWithSharedRelationshipState => false;
 
   @override
-  Future<RelationshipCapabilityDto> getCapability(String targetUserId) {
+  Future<RelationshipCapabilityViewData> getCapability(String targetUserId) {
     return Future.error(StateError('capability unavailable in test'));
   }
 }
@@ -70,8 +63,10 @@ class _StaticCapabilityRepository extends RelationshipCapabilityRepository {
   bool get reconcilesCapabilityWithSharedRelationshipState => true;
 
   @override
-  Future<RelationshipCapabilityDto> getCapability(String targetUserId) async {
-    return RelationshipCapabilityDto(
+  Future<RelationshipCapabilityViewData> getCapability(
+    String targetUserId,
+  ) async {
+    return RelationshipCapabilityViewData(
       viewerPersonaId: 'viewer-profile',
       targetPersonaId: targetUserId,
       relationState: 'not_following',
@@ -97,8 +92,10 @@ class _MutualCallCapabilityRepository extends RelationshipCapabilityRepository {
   bool get reconcilesCapabilityWithSharedRelationshipState => false;
 
   @override
-  Future<RelationshipCapabilityDto> getCapability(String targetUserId) async {
-    return RelationshipCapabilityDto(
+  Future<RelationshipCapabilityViewData> getCapability(
+    String targetUserId,
+  ) async {
+    return RelationshipCapabilityViewData(
       viewerPersonaId: 'viewer-profile',
       targetPersonaId: targetUserId,
       relationState: 'mutual',
@@ -182,7 +179,14 @@ class _EmptyIntersectionRepository implements IntersectionRepository {
 
   @override
   Future<IntersectionInboxSummary> getMyIntersectionSummary() async {
-    return IntersectionInboxSummary(totalCount: 0, totalNewCount: 0);
+    return const IntersectionInboxSummary(
+      totalCount: 0,
+      totalNewCount: 0,
+      dimensions: <IntersectionDimensionTally>[],
+      generatedAt: '',
+      totalStrengthenedCount: 0,
+      totalReactivatedCount: 0,
+    );
   }
 
   @override
@@ -255,19 +259,10 @@ class _DefaultNicknameProfileRepository
 
   @override
   Future<PersonaProfileViewData> profileFor(String userId) async {
-    return PersonaProfileViewData.fromPersonaProfileWire(
-      PersonaProfileWireDto(
-        personaId: userId,
-        ownerUserId: userId,
-        userHandle: userId,
-        displayName: defaultNickname,
-        nickname: defaultNickname,
-        nicknameCustomized: false,
-        avatarUrl: '',
-        backgroundUrl: '',
-        bio: '',
-        identityTags: const <String>[],
-      ),
+    return _profileView(
+      personaId: userId,
+      displayName: defaultNickname,
+      nicknameCustomized: false,
     );
   }
 }
@@ -279,19 +274,10 @@ class _CustomizedNicknameProfileRepository
 
   @override
   Future<PersonaProfileViewData> profileFor(String userId) async {
-    return PersonaProfileViewData.fromPersonaProfileWire(
-      PersonaProfileWireDto(
-        personaId: userId,
-        ownerUserId: userId,
-        userHandle: userId,
-        displayName: '我的专属昵称',
-        nickname: '我的专属昵称',
-        nicknameCustomized: true,
-        avatarUrl: '',
-        backgroundUrl: '',
-        bio: '',
-        identityTags: const <String>[],
-      ),
+    return _profileView(
+      personaId: userId,
+      displayName: '我的专属昵称',
+      nicknameCustomized: true,
     );
   }
 }
@@ -307,25 +293,53 @@ class _ResolvedAvatarProfileRepository
 
   @override
   Future<PersonaProfileViewData> profileFor(String userId) async {
-    return PersonaProfileViewData.fromPersonaProfileWire(
-      PersonaProfileWireDto(
-        personaId: userId,
-        ownerUserId: userId,
-        userHandle: userId,
-        displayName: '头像同源用户',
-        nickname: '头像同源用户',
-        nicknameCustomized: true,
-        avatarUrl: resolvedAvatar,
-        backgroundUrl: '',
-        bio: '头像同源回归',
-        identityTags: const <String>['摄影'],
-      ),
+    return _profileView(
+      personaId: userId,
+      displayName: '头像同源用户',
+      nicknameCustomized: true,
+      avatarUrl: resolvedAvatar,
+      bio: '头像同源回归',
+      identityTags: const <String>['摄影'],
     );
   }
 }
 
+PersonaProfileViewData _profileView({
+  required String personaId,
+  required String displayName,
+  required bool nicknameCustomized,
+  String avatarUrl = '',
+  String bio = '',
+  List<String> identityTags = const <String>[],
+}) {
+  return PersonaProfileViewData.fromWire(
+    PersonaProfileView(
+      personaId: personaId,
+      subjectType: ProfileOwnerKind.persona,
+      userHandle: personaId,
+      displayName: displayName,
+      nicknameCustomized: nicknameCustomized,
+      avatarUrl: avatarUrl,
+      backgroundUrl: '',
+      bio: bio,
+      identityTags: identityTags,
+      followerCount: 0,
+      followingCount: 0,
+      postCount: 0,
+      circleCount: 0,
+      likeCount: 0,
+      profileVisibility: ProfileVisibility.public,
+      isolationLevel: IsolationLevel.open,
+      inheritsFromOwner: false,
+      overriddenFields: const <String>[],
+      updatedAt: DateTime.utc(2026, 7, 20),
+    ),
+  );
+}
+
 class _NoUserPostsContentRepository extends MockContentRepository {
-  _NoUserPostsContentRepository() : super(seedPosts: const <ContentPostViewData>[]);
+  _NoUserPostsContentRepository()
+    : super(seedPosts: const <ContentPostViewData>[]);
 
   @override
   Future<CursorPage<ContentPostViewData>> listUserPosts({
@@ -343,33 +357,49 @@ class _NoUserPostsContentRepository extends MockContentRepository {
   }
 }
 
-PhotoPostDto _profileBackgroundPost(String authorId) {
-  return PhotoPostDto(
-    id: '${authorId}_cover_source',
-    type: 'photo',
-    identity: 'work',
-    assistantUsePolicy: 'inherit',
-    authorId: authorId,
-    displayName: '封面来源用户',
-    avatarUrl:
-        'media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png',
-    authorBackgroundUrl:
+ContentPostViewData _profileBackgroundPost(String authorId) {
+  return ContentPostViewData.fromWire(
+    ContentPostProjection(
+      postId: '${authorId}_cover_source',
+      contentType: 'image',
+      contentIdentity: 'work',
+      assistantUsePolicy: 'inherit',
+      authorId: authorId,
+      authorDisplayName: '封面来源用户',
+      authorAvatarUrl:
+          'media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png',
+      authorBackgroundUrl:
+          'media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png',
+      authorRoleLabel: '摄影',
+      authorIdentityTags: const <String>['摄影'],
+      authorVerified: false,
+      body: '封面回退来源',
+      coverUrl:
+          'media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png',
+      mediaUrls: const <String>[
         'media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png',
-    authorRoleLabel: '摄影',
-    authorIdentityTags: const <String>['摄影'],
-    authorVerified: false,
-    body: '封面回退来源',
-    coverUrl:
-        'media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png',
-    imageUrls: const <String>[
-      'media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png',
-    ],
-    likeCount: 1,
-    commentCount: 0,
-    shareCount: 0,
-    createdAt: DateTime.utc(2026, 6, 24),
+      ],
+      likeCount: 1,
+      commentCount: 0,
+      shareCount: 0,
+      createdAt: DateTime.utc(2026, 6, 24),
+    ),
   );
 }
+
+const IntersectionPoint _sharedFolloweesPoint = IntersectionPoint(
+  pointId: 'shared-followees',
+  pointClass: 'fact',
+  dimension: 'relationship',
+  sourceRef: 'sharedFollowees',
+  label: '共同关注的人',
+  displayText: '共同关注的人',
+  visibility: 'visible',
+  count: 2,
+  sampleText: '',
+  sampleAvatarUrls: <String>[],
+  sampleVisuals: <IntersectionVisual>[],
+);
 
 Widget _scopedApp({
   required ProfileMode mode,
@@ -702,18 +732,10 @@ void main() {
             currentUserIdProvider.overrideWithValue('viewer-profile'),
             objectSharedReasonsProvider.overrideWith((ref, query) async {
               return <IntersectionReason>[
-                IntersectionReason(
+                intersectionReasonFixture(
                   dimension: 'relationship',
-                  intersectionPoints: <IntersectionPoint>[
-                    IntersectionPoint(
-                      pointId: 'shared-followees',
-                      pointClass: 'fact',
-                      dimension: 'relationship',
-                      sourceRef: 'sharedFollowees',
-                      label: '共同关注的人',
-                      displayText: '共同关注的人',
-                      count: 2,
-                    ),
+                  intersectionPoints: const <IntersectionPoint>[
+                    _sharedFolloweesPoint,
                   ],
                 ),
               ];
@@ -851,7 +873,7 @@ void main() {
       );
       await _pumpFrames(tester);
 
-      expect(find.text(SearchText.recoveryReloadLaterTitle), findsOneWidget);
+      expect(attempts, 1);
       expect(find.text(SearchText.reload), findsOneWidget);
 
       final retryAction = find.text(SearchText.reload);
@@ -866,7 +888,7 @@ void main() {
       );
       await tester.pump();
       expect(find.byKey(AuthorImpactCard.cardKey), findsOneWidget);
-      expect(find.text(SearchText.recoveryReloadLaterTitle), findsNothing);
+      expect(find.text(SearchText.reload), findsNothing);
     });
 
     testWidgets('other 模式四段式文案不串入 mine 口径', (tester) async {
@@ -883,7 +905,7 @@ void main() {
             currentUserIdProvider.overrideWithValue('viewer-profile'),
             objectSharedReasonsProvider.overrideWith((ref, query) async {
               return <IntersectionReason>[
-                IntersectionReason(
+                intersectionReasonFixture(
                   dimension: 'relationship',
                   primaryText: '你和林清越都关注胶片摄影',
                   objectKind: 'entity',
@@ -903,16 +925,8 @@ void main() {
                       ),
                     ),
                   ],
-                  intersectionPoints: <IntersectionPoint>[
-                    IntersectionPoint(
-                      pointId: 'shared-followees',
-                      pointClass: 'fact',
-                      dimension: 'relationship',
-                      sourceRef: 'sharedFollowees',
-                      label: '共同关注的人',
-                      displayText: '共同关注的人',
-                      count: 2,
-                    ),
+                  intersectionPoints: const <IntersectionPoint>[
+                    _sharedFolloweesPoint,
                   ],
                 ),
               ];

@@ -183,7 +183,7 @@ class _PublishLocationSelectorPageState
             : _errorSemantic != null
             ? AppPageErrorState(
                 semantic: ensureRetryUiErrorSemantic(_errorSemantic!),
-                onAction: _handleErrorAction,
+                onRecovery: _handleErrorAction,
               )
             : ListView(
                 children: [
@@ -199,7 +199,7 @@ class _PublishLocationSelectorPageState
     );
   }
 
-  Future<void> _handleErrorAction(UiErrorAction action) async {
+  Future<UiRecoveryOutcome> _handleErrorAction(UiErrorAction action) async {
     switch (action.type) {
       case UiErrorActionType.openSettings:
         await AppPermissionCoordinator.instance.openSettings(
@@ -210,15 +210,17 @@ class _PublishLocationSelectorPageState
             }
           },
         );
-        return;
+        return UiRecoveryOutcome.handedOff;
       case UiErrorActionType.retry:
       case UiErrorActionType.resubmit:
         await _loadNearby();
-        return;
+        return _errorSemantic == null
+            ? UiRecoveryOutcome.recovered
+            : UiRecoveryOutcome.stillBlocked;
       case UiErrorActionType.login:
       case UiErrorActionType.openUpdate:
       case UiErrorActionType.dismiss:
-        return;
+        return UiRecoveryOutcome.cancelled;
     }
   }
 
@@ -360,7 +362,7 @@ class _PublishLocationSearchPageState extends State<PublishLocationSearchPage> {
                   : _errorSemantic != null
                   ? AppPageErrorState(
                       semantic: ensureRetryUiErrorSemantic(_errorSemantic!),
-                      onAction: _handleSearchErrorAction,
+                      onRecovery: _handleSearchErrorAction,
                     )
                   : _items.isEmpty
                   ? Center(
@@ -392,17 +394,21 @@ class _PublishLocationSearchPageState extends State<PublishLocationSearchPage> {
     );
   }
 
-  Future<void> _handleSearchErrorAction(UiErrorAction action) async {
+  Future<UiRecoveryOutcome> _handleSearchErrorAction(
+    UiErrorAction action,
+  ) async {
     switch (action.type) {
       case UiErrorActionType.retry:
       case UiErrorActionType.resubmit:
         await _performSearch(_controller.text.trim());
-        return;
+        return _errorSemantic == null
+            ? UiRecoveryOutcome.recovered
+            : UiRecoveryOutcome.stillBlocked;
       case UiErrorActionType.dismiss:
       case UiErrorActionType.login:
       case UiErrorActionType.openSettings:
       case UiErrorActionType.openUpdate:
-        return;
+        return UiRecoveryOutcome.cancelled;
     }
   }
 }

@@ -3,5 +3,3 @@ overrides:
   sys.tag-service.redis.general.addr: redis:6379
 secretRefs: {}
 externalBindings:
-  runtime.message.transport:
-    state: enabled

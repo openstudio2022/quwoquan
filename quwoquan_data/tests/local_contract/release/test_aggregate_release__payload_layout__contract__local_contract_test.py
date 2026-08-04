@@ -269,6 +269,20 @@ def test_aggregate_release__payload_layout__contract__local_contract(tmp_path: P
     assert rerun["idempotent"] is True
 
 
+def test_copy_tag_snapshot__excludes_nested_child_tags__local_contract(tmp_path: Path) -> None:
+    from content.release.canonical.aggregate_release import _copy_tag_snapshot
+
+    source = tmp_path / "Topic" / "旅行"
+    nested = source / "玩法" / "观光游览"
+    nested.mkdir(parents=True)
+    (source / "_definition.json").write_text('{"label":"旅行"}\n', encoding="utf-8")
+    (nested / "_definition.json").write_text('{"label":"观光游览"}\n', encoding="utf-8")
+    target = tmp_path / "out" / "Topic" / "旅行"
+    _copy_tag_snapshot(source, target)
+    assert (target / "_definition.json").is_file()
+    assert not (target / "玩法" / "观光游览" / "_definition.json").is_file()
+
+
 def test_release_aggregate_handler__execution_ids__contract__local_contract(
     tmp_path: Path, monkeypatch, capsys
 ) -> None:

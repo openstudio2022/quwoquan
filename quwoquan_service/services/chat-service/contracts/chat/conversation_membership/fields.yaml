@@ -145,6 +145,25 @@ fields:
     ops_exposure: read
     role: authoritative_state
 types:
+  ConversationMemberRemovedEventPayload:
+    description: 成员被移出后投递给剩余成员与当事人的 canonical 实时事件载荷；当事人依 userId 立即清除本地私有会话副本。
+    fields:
+      - {name: conversationId, type: string, constraints: [NOT_BLANK]}
+      - {name: memberId, type: string, constraints: [NOT_BLANK]}
+      - {name: userId, type: string, constraints: [NOT_BLANK]}
+      - {name: memberType, type: enum, enum_ref: MemberType, constraints: [NOT_NULL]}
+      - {name: removedBy, type: string, constraints: [NOT_BLANK]}
+      - {name: removedByAccountId, type: string, constraints: [NULLABLE]}
+      - {name: memberCount, type: int, constraints: [NOT_NULL]}
+  ConversationMemberLeftEventPayload:
+    description: 成员主动退出后投递给剩余成员与当事人的 canonical 实时事件载荷；与治理移出保持不同事件语义。
+    fields:
+      - {name: conversationId, type: string, constraints: [NOT_BLANK]}
+      - {name: memberId, type: string, constraints: [NOT_BLANK]}
+      - {name: userId, type: string, constraints: [NOT_BLANK]}
+      - {name: memberType, type: enum, enum_ref: MemberType, constraints: [NOT_NULL]}
+      - {name: memberCount, type: int, constraints: [NOT_NULL]}
+      - {name: leftAt, type: timestamp, constraints: [NOT_NULL]}
   GatheringConversationMembershipProjectionCommand:
     description: circle-service 提交的 Gathering participant source fact；sourceVersion 单调且 operation 幂等。
     fields:

@@ -1,15 +1,12 @@
-import 'dart:convert';
-
 import 'package:flutter_test/flutter_test.dart';
-import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
-import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
+import 'package:quwoquan_app/cloud/services/ops/event_record_batch_writer.dart';
 import 'package:quwoquan_app/core/observability/runtime_api_latency_dispatcher.dart';
 import 'package:quwoquan_app/core/observability/runtime_log_ports.dart';
 import 'package:quwoquan_app/core/observability/runtime_log_record.dart';
 import 'package:quwoquan_app/core/observability/runtime_log_transport.dart';
 import 'package:quwoquan_app/core/observability/runtime_logger.dart';
 import 'package:quwoquan_app/core/observability/secure_runtime_log_buffer.dart';
+import 'package:quwoquan_cloud_contracts/generated/ops_contracts.dart' as ops;
 
 void main() {
   RuntimeLogResource resource() => const RuntimeLogResource(
@@ -244,32 +241,17 @@ void main() {
   test(
     'cloud transport uses the generated runtime diagnostic operation',
     () async {
-      late http.Request sent;
-      final transport = CloudRuntimeLogTransport(
-        baseUrl: 'https://gateway.example',
-        httpClient: CloudHttpClient(
-          client: MockClient((request) async {
-            sent = request;
-            return http.Response(
-              jsonEncode(<String, Object?>{
-                'acceptedCount': 1,
-                'duplicateBatch': false,
-              }),
-              200,
-            );
-          }),
-        ),
-      );
+      final writer = _RecordingEventRecordBatchWriter();
+      final transport = CloudRuntimeLogTransport(writer: writer);
 
       final accepted = await transport.send(<RuntimeLogRecord>[
         _event(resource(), 'r-transport'),
       ]);
 
       expect(accepted, 1);
-      expect(sent.url.path, '/ops/runtime-logs');
-      expect(sent.headers['idempotency-key'], hasLength(64));
-      final body = jsonDecode(sent.body) as Map<String, Object?>;
-      expect((body['records']! as List<Object?>).single, isA<Map>());
+      expect(writer.runtimeLogRequest!.records, hasLength(1));
+      expect(writer.runtimeLogIdempotencyKey, hasLength(64));
+      expect(writer.runtimeLogRequest!.records.single.toWire(), isA<Map>());
     },
   );
 
@@ -295,6 +277,33 @@ void main() {
       expect(record.message, 'cloud HTTP request completed');
     },
   );
+}
+
+final class _RecordingEventRecordBatchWriter
+    implements OpsEventRecordBatchWriter {
+  ops.RuntimeLogBatchRequest? runtimeLogRequest;
+  String? runtimeLogIdempotencyKey;
+
+  @override
+  Future<ops.EventRecordBatchReceipt> reportEventBatch(
+    ops.EventRecordBatchRequest request, {
+    required String idempotencyKey,
+  }) {
+    throw UnimplementedError('event batch is outside this local contract');
+  }
+
+  @override
+  Future<ops.EventRecordBatchReceipt> reportRuntimeLogBatch(
+    ops.RuntimeLogBatchRequest request, {
+    required String idempotencyKey,
+  }) async {
+    runtimeLogRequest = request;
+    runtimeLogIdempotencyKey = idempotencyKey;
+    return ops.EventRecordBatchReceipt(
+      acceptedCount: request.records.length,
+      duplicateBatch: false,
+    );
+  }
 }
 
 RuntimeLogRecord _event(

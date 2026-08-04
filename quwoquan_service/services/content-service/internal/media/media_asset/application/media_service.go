@@ -325,9 +325,16 @@ func (s *MediaService) DiscardMediaAsset(
 	); err != nil {
 		return DiscardMediaAssetResult{}, err
 	} else if found {
+		if replayed.ProcessingStatus != mediamodel.ProcessingStatusDeleted {
+			return DiscardMediaAssetResult{}, unavailable(fmt.Errorf(
+				"discard receipt %q has invalid processing status %q",
+				replayed.AssetID,
+				replayed.ProcessingStatus,
+			))
+		}
 		return DiscardMediaAssetResult{
 			MediaID:  replayed.AssetID,
-			Status:   replayed.ProcessingStatus,
+			Status:   MediaAssetDiscardStatusDeleted,
 			Replayed: true,
 		}, nil
 	}
@@ -344,7 +351,7 @@ func (s *MediaService) DiscardMediaAsset(
 		}
 		return DiscardMediaAssetResult{
 			MediaID:  asset.ID(),
-			Status:   mediamodel.ProcessingStatusDeleted,
+			Status:   MediaAssetDiscardStatusDeleted,
 			Replayed: true,
 		}, nil
 	}
@@ -377,9 +384,16 @@ func (s *MediaService) DiscardMediaAsset(
 	if err != nil {
 		return DiscardMediaAssetResult{}, err
 	}
+	if committed.ProcessingStatus != mediamodel.ProcessingStatusDeleted {
+		return DiscardMediaAssetResult{}, unavailable(fmt.Errorf(
+			"discard commit %q has invalid processing status %q",
+			committed.AssetID,
+			committed.ProcessingStatus,
+		))
+	}
 	return DiscardMediaAssetResult{
 		MediaID:  committed.AssetID,
-		Status:   committed.ProcessingStatus,
+		Status:   MediaAssetDiscardStatusDeleted,
 		Replayed: committed.Replayed,
 	}, nil
 }

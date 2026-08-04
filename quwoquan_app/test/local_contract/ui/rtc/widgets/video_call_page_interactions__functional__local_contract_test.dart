@@ -8,6 +8,7 @@ import 'package:quwoquan_app/ui/rtc/providers/call_participants_provider.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_timer_provider.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import '../../../../support/cloud_services/object_doubles/rtc/rtc_contract_test_builders.dart';
 
 void main() {
   testWidgets('视频页锁定隐藏危险控制并提供明确解锁', (tester) async {
@@ -95,8 +96,8 @@ final class _VideoPageSessionNotifier extends CallSessionNotifier {
   CallSessionState build() {
     final now = DateTime.utc(2026, 7, 20);
     return CallSessionState(
-      session: CallSession(
-        callId: 'call-video-page',
+      session: buildCallSessionContract(
+        id: 'call-video-page',
         callType: CallType.video,
         status: CallStatus.inCall,
         initiatorId: 'user-0',

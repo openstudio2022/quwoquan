@@ -28,7 +28,7 @@ type PostPublicationCommandFacade interface {
 type PostLifecycleCommandFacade interface {
 	UpdatePostSettings(context.Context, string, string, map[string]any) (*postmodel.Post, error)
 	PromotePostToWork(context.Context, string, string, map[string]any) (*postmodel.Post, error)
-	DeletePost(context.Context, string, string) error
+	DeletePost(context.Context, string, string) (PostDeletionReceipt, error)
 }
 
 type PostReadFacade interface {
@@ -37,8 +37,8 @@ type PostReadFacade interface {
 
 type ContentUtilityQueryFacade interface {
 	GenerateArticleSummary(string, string) string
-	GetAppConfig() map[string]any
-	GetCounters(context.Context, string) (map[string]any, error)
+	GetAppConfig() AppConfigSlice
+	GetCounters(context.Context, string) (PostCounterSlice, error)
 }
 
 type SemanticGovernanceCommandFacade interface {

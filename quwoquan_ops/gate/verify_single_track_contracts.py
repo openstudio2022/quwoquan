@@ -153,6 +153,30 @@ RETIRED_SEARCH_RECOMMENDATION_IDENTITY = re.compile(
     r"ReasonVersion|reasonVersion)\b|"
     r"\b(?:retrieve|runtime-search|search)-v[0-9]+\b",
 )
+# Persona migration consumes one semantic source snapshot. ``LegacyPersona``
+# and the later ``CurrentPersona`` rename both encode migration phase as a
+# model identity and must never return.
+RETIRED_PERSONA_MIGRATION_TYPE = re.compile(
+    r"\b(?:LegacyPersona|CurrentPersona)\b"
+)
+RETIRED_RUNTIME_ERROR_MESSAGE_ALIAS = re.compile(
+    r"(?:"
+    r"^[ \t]{8}message[ \t]*:[ \t]*$"
+    r"|json:\\?\"message(?:,omitempty)?\\?\""
+    r"|\bMessage[ \t]*:[ \t]*debugMessage\b"
+    r"|\b(?:body|error|json|map)\s*\??\s*\[\s*['\"]"
+    r"(?:message|user_message|reasonMessage)['\"]\s*\]"
+    r"|['\"](?:user_message|reasonMessage)['\"]"
+    r")",
+    re.M,
+)
+RUNTIME_ERROR_SINGLE_TRACK_PATHS = frozenset(
+    {
+        "quwoquan_service/contracts/metadata/_shared/openapi_common.yaml",
+        "quwoquan_service/runtime/errors/errors.go",
+        "quwoquan_app/lib/cloud/runtime/errors/cloud_error_mapper.dart",
+    }
+)
 # 已完成字段切换的领域身份。字段名本身在外部 Provider、聚合并发修订、
 # 通用可观测禁止清单等上下文仍可能合法，因此必须同时匹配领域路径或对象上下文。
 RETIRED_DOMAIN_IDENTITY_FIELDS = (
@@ -187,6 +211,27 @@ POLICY_DIGEST_LITERAL_ASSIGNMENT = re.compile(
     r"(?P<value>[^\"'\n]*)(?P=quote)",
 )
 CANONICAL_SHA256_DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
+SHA256_LITERAL = re.compile(r"sha256:[A-Za-z0-9._:-]+")
+EXPLICIT_INVALID_SHA256_FIXTURE = re.compile(
+    r"\binvalid_?sha256_?fixture\s*\(|\binvalidSha256Fixture\s*\(",
+    re.I,
+)
+SHA256_ALGORITHM_IDENTITY_CONTEXT = re.compile(
+    r"\b(?:algorithm|digestAlgorithm|DigestAlgorithm|implements?)\b|"
+    r"\u7b97\u6cd5\u6807\u8bc6|\u5b9e\u73b0\s*sha256:",
+    re.I,
+)
+SHA256_NEGATIVE_FIXTURE_CONTEXT = re.compile(
+    r"(?:tamper(?:ed|ing)?|malformed|invalid|corrupt(?:ed|ion)?)"
+    r".{0,40}(?:sha256|digest)|(?:sha256|digest)"
+    r".{0,40}(?:tamper(?:ed|ing)?|malformed|invalid|corrupt(?:ed|ion)?)",
+    re.I | re.S,
+)
+SHA256_REJECTION_ASSERTION = re.compile(
+    r"require(?:Rejected|\.Error)|throws|assertRaises|assert .*error|"
+    r"err\s*==\s*nil|expect\s*\([^\n]*(?:fail|reject|invalid|error)",
+    re.I,
+)
 RETIRED_MOCK_EXPERIMENT_RUNTIME = re.compile(
     r"\b(?:ops_policy_version|ops_experiment_assignments|"
     r"_resolve_experiment_assignment|_build_experiment_stats)\b"
@@ -215,7 +260,9 @@ APP_REMOTE_CONFIG_SINGLE_IDENTITY_PATHS = frozenset(
 )
 # schema 身份禁止纯数字 / 语义化数字版本
 NUMERIC_SCHEMA_LITERAL = re.compile(
-    r"""["']schema["']\s*:\s*(?:[0-9]+(?:\.[0-9]+)?|["'][0-9]+(?:\.[0-9]+)?["'])"""
+    r"""(?:^[ \t]*schema[ \t]*:|["']schema["']\s*:)\s*"""
+    r"""(?:[0-9]+(?:\.[0-9]+)?|["'][0-9]+(?:\.[0-9]+)?["'])""",
+    re.M,
 )
 TOP_LEVEL_VERSION = re.compile(r"^version:\s*", re.MULTILINE)
 CUSTOM_CONTROL_VERSION_FIELDS = frozenset(
@@ -262,7 +309,9 @@ DOC_DUAL_TRACK_TEACHING = re.compile(
     r"(?:短期双读|允许短期双读|短期并行读取|DTO 解析保留旧字段|feature flag 双读|"
     r"读接口双读|兼容旧字段|兼容存量版本|同时存在三个及以上版本|"
     r"schemaVersion\s*=\s*1|"
-    r"支持兼容窗口)",
+    r"支持兼容窗口|"
+    r"(?:建议|允许)[^。\n]{0,80}(?:双写|可互相导出)|"
+    r"双写或可互相导出)",
     re.I,
 )
 # 客户端 wire 禁止使用 _id 作为 JSON 键（storage/bson 除外）
@@ -571,6 +620,77 @@ def _is_rejection_context(lines: list[str], line_number: int) -> bool:
     )
 
 
+def _is_sha256_algorithm_identity(lines: list[str], line_number: int) -> bool:
+    """Allow named hash algorithms, never an ordinary digest-valued field."""
+    start = max(0, line_number - 2)
+    end = min(len(lines), line_number + 2)
+    context = "\n".join(lines[start:end])
+    return bool(SHA256_ALGORITHM_IDENTITY_CONTEXT.search(context))
+
+
+def _is_sha256_documentation_placeholder(
+    rel: str,
+    lines: list[str],
+    line_number: int,
+    value: str,
+) -> bool:
+    """Allow the exact ellipsis syntax only when it documents a value shape."""
+    if value != "sha256:...":
+        return False
+    line = lines[line_number - 1]
+    suffix = Path(rel).suffix.lower()
+    if suffix in {".md", ".mdx"}:
+        return "`" in line or "@sha256:..." in line
+    return bool(
+        re.search(
+            r"\b(?:help|usage|example|format)\b|\u9884\u671f|\u683c\u5f0f|\u4f8b\u5982|\u5f62\u5982|@sha256:\.\.\.",
+            line,
+            re.I,
+        )
+    )
+
+
+def _is_explicit_sha256_negative_fixture(
+    rel: str,
+    lines: list[str],
+    line_number: int,
+) -> bool:
+    if not _is_test_path(rel):
+        return False
+    line = lines[line_number - 1]
+    if EXPLICIT_INVALID_SHA256_FIXTURE.search(line):
+        return _is_rejection_context(lines, line_number)
+    start = max(0, line_number - 10)
+    end = min(len(lines), line_number + 20)
+    context = "\n".join(lines[start:end])
+    return bool(
+        SHA256_NEGATIVE_FIXTURE_CONTEXT.search(context)
+        and SHA256_REJECTION_ASSERTION.search(context)
+    )
+
+
+def _is_canonical_concatenated_sha256(
+    lines: list[str],
+    line_number: int,
+) -> bool:
+    """Recognize a canonical digest split across adjacent source literals."""
+    context = "\n".join(lines[line_number - 1 : line_number + 4])
+    string_parts = re.findall(r"[\"']([^\"']*)[\"']", context)
+    for index, part in enumerate(string_parts):
+        if "sha256:" not in part:
+            continue
+        candidate = part[part.index("sha256:") :]
+        for continuation in string_parts[index + 1 :]:
+            if not re.fullmatch(r"[0-9a-f]+", continuation):
+                break
+            candidate += continuation
+            if CANONICAL_SHA256_DIGEST.fullmatch(candidate):
+                return True
+            if len(candidate) > len("sha256:") + 64:
+                break
+    return False
+
+
 def _is_external_provider_path(rel: str) -> bool:
     """External wire revisions belong to the provider anticorruption boundary."""
     parts = set(Path(rel).parts)
@@ -734,6 +854,28 @@ def scan_file(path: Path, inv: Inventory) -> None:
             f"L{line_number}: {match.group(0)}",
         )
 
+    if rel.startswith("quwoquan_service/runtime/persona/"):
+        for match in RETIRED_PERSONA_MIGRATION_TYPE.finditer(text):
+            line_number = text.count("\n", 0, match.start()) + 1
+            if _is_rejection_context(lines, line_number):
+                continue
+            inv.add(
+                "T1_retired_persona_migration_type",
+                path,
+                f"L{line_number}: {match.group(0)}",
+            )
+
+    if rel in RUNTIME_ERROR_SINGLE_TRACK_PATHS:
+        for match in RETIRED_RUNTIME_ERROR_MESSAGE_ALIAS.finditer(text):
+            line_number = text.count("\n", 0, match.start()) + 1
+            if _is_rejection_context(lines, line_number):
+                continue
+            inv.add(
+                "T3_runtime_error_message_alias",
+                path,
+                f"L{line_number}: {match.group(0).strip()}",
+            )
+
     retired_domain_lines: set[tuple[str, int]] = set()
     for scope, pattern in RETIRED_DOMAIN_IDENTITY_FIELDS:
         for match in pattern.finditer(text):
@@ -772,6 +914,25 @@ def scan_file(path: Path, inv: Inventory) -> None:
                 path,
                 f"L{line_number}: {value}",
             )
+
+    for match in SHA256_LITERAL.finditer(text):
+        value = match.group(0)
+        if CANONICAL_SHA256_DIGEST.fullmatch(value):
+            continue
+        line_number = text.count("\n", 0, match.start()) + 1
+        if _is_sha256_algorithm_identity(lines, line_number):
+            continue
+        if _is_sha256_documentation_placeholder(rel, lines, line_number, value):
+            continue
+        if _is_explicit_sha256_negative_fixture(rel, lines, line_number):
+            continue
+        if _is_canonical_concatenated_sha256(lines, line_number):
+            continue
+        inv.add(
+            "T1_noncanonical_sha256_literal",
+            path,
+            f"L{line_number}: {value}",
+        )
 
     if rel == "quwoquan_ops/cli/lib/mock_public_plane.py":
         for match in RETIRED_MOCK_EXPERIMENT_RUNTIME.finditer(text):
@@ -1056,7 +1217,9 @@ def scan_file(path: Path, inv: Inventory) -> None:
 
     # specs / 军规：禁止再教短期双读或协议版本身份（同行含「禁止」则放过）
     if suffix in {".md", ".mdc"} and (
-        rel.startswith("specs/") or rel.startswith(".cursor/rules/")
+        rel.startswith("specs/")
+        or rel.startswith(".cursor/rules/")
+        or rel.startswith("quwoquan_service/contracts/")
     ):
         for lineno, line in enumerate(text.splitlines(), start=1):
             if not DOC_DUAL_TRACK_TEACHING.search(line):

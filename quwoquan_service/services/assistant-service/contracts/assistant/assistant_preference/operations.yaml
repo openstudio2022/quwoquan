@@ -66,7 +66,7 @@ api_routes:
   method: GET
   operation: ListAssistantPreferences
   path: /assistant/preferences
-  description: 列出当前 owner 的偏好事实，可按 scope、sessionId 和 status 筛选。
+  description: 列出当前 owner 的助手偏好，可按 scope、sessionId 和 status 筛选。
   request_entity: ListAssistantPreferencesQuery
   request_body_kind: none
   request_bindings:
@@ -126,7 +126,7 @@ api_routes:
   request_bindings:
     path:
     - {name: preferenceId, field: preferenceId}
-  description: owner 遗忘偏好事实；重复调用保持 revoked，非 owner 返回 not_found。
+  description: owner 遗忘助手偏好；重复调用保持 revoked，非 owner 返回 not_found。
   response_entity: AssistantPreference
   reliability:
     timeout_ms: 1500
@@ -177,7 +177,7 @@ api_routes:
   request_bindings:
     path:
     - {name: preferenceId, field: preferenceId}
-  description: owner 在撤销窗口内恢复偏好事实；重复调用保持 active，非 owner 返回 not_found。
+  description: owner 在撤销窗口内恢复助手偏好；重复调用保持 active，非 owner 返回 not_found。
   response_entity: AssistantPreference
   reliability:
     timeout_ms: 1500

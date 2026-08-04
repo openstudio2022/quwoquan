@@ -25,6 +25,39 @@ func TestLoadReleaseBindingRequiresCanonicalHeaderAndAttestation(t *testing.T) {
 	}
 }
 
+func TestLoadReleaseBindingAcceptsEmptyBaselineKind(t *testing.T) {
+	root := writeReleaseBindingFixture(
+		t,
+		"content-empty-baseline-20260731",
+		"content-empty-baseline-20260731",
+		testManifestDigest,
+		"empty_baseline",
+	)
+
+	binding, err := releaseimport.LoadReleaseBinding(root)
+	if err != nil {
+		t.Fatalf("LoadReleaseBinding empty_baseline: %v", err)
+	}
+	if binding.ReleaseKind != "empty_baseline" ||
+		binding.ReleaseID != "content-empty-baseline-20260731" {
+		t.Fatalf("empty baseline binding mismatch: %+v", binding)
+	}
+}
+
+func TestLoadReleaseBindingRejectsUnknownReleaseKind(t *testing.T) {
+	root := writeReleaseBindingFixture(
+		t,
+		"rel_pilot_002",
+		"rel_pilot_002",
+		testManifestDigest,
+		"research_bundle",
+	)
+	_, err := releaseimport.LoadReleaseBinding(root)
+	if err == nil || !strings.Contains(err.Error(), "releaseKind must be") {
+		t.Fatalf("expected unknown releaseKind failure, got %v", err)
+	}
+}
+
 func TestLoadReleaseBindingRejectsIdentityDriftAndNonCanonicalDigest(t *testing.T) {
 	t.Run("release id drift", func(t *testing.T) {
 		root := writeReleaseBindingFixture(t, "rel_header", "rel_attestation", testManifestDigest)
@@ -48,6 +81,7 @@ func writeReleaseBindingFixture(
 	headerReleaseID string,
 	attestedReleaseID string,
 	digest string,
+	releaseKind ...string,
 ) string {
 	t.Helper()
 	root := t.TempDir()
@@ -56,10 +90,14 @@ func writeReleaseBindingFixture(
 			t.Fatalf("create %s: %v", directory, err)
 		}
 	}
+	kind := "content"
+	if len(releaseKind) > 0 && strings.TrimSpace(releaseKind[0]) != "" {
+		kind = strings.TrimSpace(releaseKind[0])
+	}
 	header := `{"schema":"quwoquan_data.release","releaseId":"` + headerReleaseID +
-		`","sourceOwner":"qwq_data","releaseKind":"content"}`
+		`","sourceOwner":"qwq_data","releaseKind":"` + kind + `"}`
 	attestation := `{"schema":"quwoquan_data.release_attestation","releaseId":"` + attestedReleaseID +
-		`","sourceOwner":"qwq_data","releaseKind":"content","payloadSha256":"` + digest + `"}`
+		`","sourceOwner":"qwq_data","releaseKind":"` + kind + `","payloadSha256":"` + digest + `"}`
 	if err := os.WriteFile(filepath.Join(root, "payload", "release.json"), []byte(header), 0o644); err != nil {
 		t.Fatalf("write release header: %v", err)
 	}

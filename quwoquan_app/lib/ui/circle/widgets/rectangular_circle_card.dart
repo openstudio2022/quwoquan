@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show Circle;
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/components/media/app_media_image.dart';
 
 class RectangularCircleCard extends StatelessWidget {
-  final CircleDto circle;
+  final Circle circle;
   final VoidCallback? onTap;
   final double width;
   final double aspectRatio;

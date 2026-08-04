@@ -112,8 +112,12 @@ func (client *TravelClient) ReadTripContext(
 	if err != nil {
 		return TravelContext{}, err
 	}
+	canonicalRouteMap, err := projectTravelTripMap(tripMap)
+	if err != nil {
+		return TravelContext{}, fmt.Errorf("project travel route map: %w", err)
+	}
 	result.Timeline = timeline
-	result.Map = tripMap
+	result.Map = canonicalRouteMap
 	result.GuideAssignments = guideAssignments
 	return result, nil
 }

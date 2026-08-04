@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/core/media/content_media_url.dart';
 import 'package:quwoquan_app/core/links/app_public_content_links.dart';
@@ -12,16 +13,7 @@ void main() {
     String resolvedMedia(String raw) => resolveContentMediaUrl(raw);
 
     test('renders safe HTML and SEO metadata from QWQ markdown', () {
-      final doc = renderer.render(
-        const MarkdownSeoRenderInput(
-          postId: 'post_seo_1',
-          title: '川西自驾笔记',
-          summary: '从雪山到藏寨的三天路线。',
-          authorName: '阿宁',
-          createdAtIso: '2026-06-02T00:00:00.000Z',
-          articleMarkdownDigest: 'sha256:abc',
-          coverUrl: 'https://cdn.example.com/ignored-cover.jpg',
-          articleMarkdown: '''
+      const article = '''
 ---
 title: 川西自驾笔记
 summary: 从雪山到藏寨的三天路线。
@@ -43,7 +35,18 @@ asset://cover
 :::callout type="tip" title="提示"
 清晨出发更稳。
 :::
-''',
+''';
+      final articleDigest = _sha256Digest(article);
+      final doc = renderer.render(
+        MarkdownSeoRenderInput(
+          postId: 'post_seo_1',
+          title: '川西自驾笔记',
+          summary: '从雪山到藏寨的三天路线。',
+          authorName: '阿宁',
+          createdAtIso: '2026-06-02T00:00:00.000Z',
+          articleMarkdownDigest: articleDigest,
+          coverUrl: 'https://cdn.example.com/ignored-cover.jpg',
+          articleMarkdown: article,
           articleAssetManifest: <String, Object?>{
             'assets': <Object?>[
               <String, Object?>{
@@ -79,7 +82,7 @@ asset://cover
       expect(doc.openGraph['og:title'], '川西自驾笔记');
       expect(doc.openGraph['og:url'], doc.canonicalUrl);
       expect(doc.jsonLd['@type'], 'Article');
-      expect(doc.jsonLd['identifier'], 'sha256:abc');
+      expect(doc.jsonLd['identifier'], articleDigest);
       expect(
         doc.referencedAssetUrls,
         contains(resolvedMedia('media/image/s/seo/post_seo_1/v1/bridge.jpg')),
@@ -214,11 +217,12 @@ coverImage: asset://cover
           },
         ],
       };
+      final articleDigest = _sha256Digest(article);
       File('${postDir.path}/manifest.json').writeAsStringSync(
         jsonEncode(<String, Object?>{
           'topicId': 'topic_pilot_daocheng',
           'publishTitle': '稻城亚丁·亚丁三神山徒步体验',
-          'articleMarkdownDigest': 'sha256:pilot-daocheng',
+          'articleMarkdownDigest': articleDigest,
           'articleAssetManifest': renderManifest,
         }),
         encoding: utf8,
@@ -228,7 +232,7 @@ coverImage: asset://cover
         MarkdownSeoRenderInput(
           postId: 'topic_pilot_daocheng',
           title: '稻城亚丁·亚丁三神山徒步体验',
-          articleMarkdownDigest: 'sha256:pilot-daocheng',
+          articleMarkdownDigest: articleDigest,
           articleMarkdown: article,
           articleAssetManifest: renderManifest,
         ),
@@ -241,7 +245,7 @@ coverImage: asset://cover
         contains(resolvedMedia('media/image/s/runtime-preview/v1/cover.jpg')),
       );
       expect(doc.referencedAssetUrls, isNotEmpty);
-      expect(doc.jsonLd['identifier'], 'sha256:pilot-daocheng');
+      expect(doc.jsonLd['identifier'], articleDigest);
     });
 
     test('renders object-first layout sample with sourceAssetRef closure', () {
@@ -294,11 +298,12 @@ coverImage: asset://海螺沟_cover_01
         sourceFile.writeAsStringSync('fake-source-image', encoding: utf8);
       }
       final renderManifest = <String, Object?>{'assets': declaredAssets};
+      final articleDigest = _sha256Digest(article);
       File('${postDir.path}/manifest.json').writeAsStringSync(
         jsonEncode(<String, Object?>{
           'topicId': 'topic_layout_sample',
           'publishTitle': '在海螺沟看冰川泡温泉',
-          'articleMarkdownDigest': 'sha256:layout-sample',
+          'articleMarkdownDigest': articleDigest,
           'articleAssetManifest': renderManifest,
           'assets': declaredAssets,
         }),
@@ -309,7 +314,7 @@ coverImage: asset://海螺沟_cover_01
         MarkdownSeoRenderInput(
           postId: 'topic_layout_sample',
           title: '在海螺沟看冰川泡温泉',
-          articleMarkdownDigest: 'sha256:layout-sample',
+          articleMarkdownDigest: articleDigest,
           articleMarkdown: article,
           articleAssetManifest: renderManifest,
         ),
@@ -371,3 +376,6 @@ coverImage: asset://海螺沟_cover_01
     });
   });
 }
+
+String _sha256Digest(String payload) =>
+    'sha256:${sha256.convert(utf8.encode(payload))}';

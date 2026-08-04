@@ -185,9 +185,9 @@ func sendFederatedBindingOtp(
 	if err != nil {
 		t.Fatalf("send bind-phone otp: %v", err)
 	}
-	code := externalInteractionRuntime.client.OTPCode(phone)
-	if code == "" {
-		t.Fatal("bind-phone otp was not observed by provider contract probe")
+	code, err := externalInteractionRuntime.captureBridge.readOTP(phone)
+	if err != nil {
+		t.Fatalf("bind-phone otp protected readback failed: %v", err)
 	}
 	return result, code
 }
@@ -471,9 +471,13 @@ func TestBindPhoneCredential_ExistingAccountDoesNotRequireFederatedTicket(t *tes
 	}
 	sendBody := parseJSON(t, send)
 	challengeID, _ := sendBody["challengeId"].(string)
-	code := externalInteractionRuntime.client.OTPCode(phone)
-	if challengeID == "" || code == "" {
-		t.Fatalf("settings bind-phone challenge/code missing: %#v", sendBody)
+	code, err := externalInteractionRuntime.captureBridge.readOTP(phone)
+	if challengeID == "" || err != nil || code == "" {
+		t.Fatalf(
+			"settings bind-phone challenge/code missing: %#v err=%v",
+			sendBody,
+			err,
+		)
 	}
 
 	bind := doRequest(

@@ -60,7 +60,7 @@ func TestRelationshipCapabilityContractHasSinglePersonaRelationshipOwner(t *test
 			return readErr
 		}
 		if strings.Contains(string(raw), "RelationshipCapabilityWire") {
-			t.Fatalf("legacy relationship capability wire remains in %s", path)
+			t.Fatalf("retired relationship capability wire remains in %s", path)
 		}
 		return nil
 	}); err != nil {

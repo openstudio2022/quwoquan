@@ -85,13 +85,10 @@ type OTPCodeSealer interface {
 	Seal(secret otpseal.Secret, binding otpseal.Binding) (string, error)
 }
 
-// OtpCodeStore 抽象手机号验证码的存储与限频，实现位于 infrastructure/cache。
-// 它只负责发码冷却/配额与读写验证码；是否过期/匹配由 AuthService 判定。
+// OtpCodeStore 仅拥有发码冷却/配额。OTP 本身只以 AuthenticationChallenge
+// 不可逆 SecretRef 与发往 Integration 的密封 CodeRef 存在，禁止写入 Redis。
 type OtpCodeStore interface {
 	AllowSend(ctx context.Context, phone string) (allowed bool, retryAfterSeconds int, err error)
-	SaveCode(ctx context.Context, phone, code string) error
-	ReadCode(ctx context.Context, phone string) (code string, found bool, err error)
-	ClearCode(ctx context.Context, phone string) error
 }
 
 func NewAuthService(

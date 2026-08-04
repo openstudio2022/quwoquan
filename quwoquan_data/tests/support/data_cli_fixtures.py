@@ -55,6 +55,11 @@ from core.command_packet import build_packet, write_packet
 
 from core.article_package import compute_document_sha256, sha256_text
 
+_PROVENANCE_PROMPT_SHA256 = sha256_text("data cli fixture prompt")
+_PROVENANCE_WRITING_PACK_SHA256 = sha256_text("data cli fixture writing pack")
+_PROVENANCE_SOURCE_BUNDLE_SHA256 = sha256_text("data cli fixture source bundle")
+_PROVENANCE_DRAFT_SHA256 = sha256_text("data cli fixture draft")
+
 from content.execution.runtime_state import write_execution_runtime_state
 
 from core.io import read_json, read_ndjson, write_json
@@ -494,10 +499,10 @@ def _seed_verified_post_for_audit(execution_id: str, *, ref: str, title: str, na
                 "prompt": "4.draft/prompt.md",
                 "title": title,
                 "styleFamily": "route-guide",
-                "promptSha256": "sha256:a",
-                "writingPackSha256": "sha256:b",
-                "sourceBundleSha256": "sha256:c",
-                "draftSha256": "sha256:d",
+                "promptSha256": _PROVENANCE_PROMPT_SHA256,
+                "writingPackSha256": _PROVENANCE_WRITING_PACK_SHA256,
+                "sourceBundleSha256": _PROVENANCE_SOURCE_BUNDLE_SHA256,
+                "draftSha256": _PROVENANCE_DRAFT_SHA256,
             },
             "originalSources": [{"path": source_ref, "url": f"https://example.com/{name}"}],
             "gateResults": {"decision": "approved", "checks": {"generatorProvenance": True, "factTraceability": True}},

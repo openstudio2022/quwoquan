@@ -5,11 +5,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_inbox_summary.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_representative_actor.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_fact_items.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_repository.dart';
 import 'package:quwoquan_app/components/object_page/intersection_icon_resolver.dart';
@@ -17,6 +12,14 @@ import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/user/pages/my_intersection_inbox_page.dart';
+import 'package:quwoquan_cloud_contracts/generated/content_contracts.dart'
+    show
+        IntersectionInboxSummary,
+        IntersectionReason,
+        IntersectionTarget,
+        IntersectionTextSpan;
+
+import '../../../../support/fixtures/intersection_fixtures.dart';
 
 /// 林墨「旅行摄影」交集/影响力实例化验收（WS-ACC，§22 覆盖矩阵）。
 ///
@@ -311,7 +314,7 @@ Map<String, dynamic> _loadIntersectionCoreSeed() {
 }
 
 IntersectionReason _reason(String id, {required String lifecycleState}) {
-  return IntersectionReason(
+  return intersectionReasonFixture(
     intersectionId: id,
     dimension: 'location',
     intersectionClass: 'fact',
@@ -330,7 +333,8 @@ GoRouter _router() {
       GoRoute(path: '/', builder: (_, _) => const MyIntersectionInboxPage()),
       GoRoute(
         path: '/user/:userHandle',
-        builder: (_, state) => Text('USER:${state.pathParameters['userHandle']}'),
+        builder: (_, state) =>
+            Text('USER:${state.pathParameters['userHandle']}'),
       ),
     ],
   );
@@ -356,7 +360,7 @@ class _AuthedSession extends AuthSessionController {
 class _LinMoTravelRepository implements IntersectionRepository {
   @override
   Future<IntersectionInboxSummary> getMyIntersectionSummary() async {
-    return IntersectionInboxSummary(totalCount: 3, totalNewCount: 1);
+    return intersectionInboxSummaryFixture(totalCount: 3, totalNewCount: 1);
   }
 
   @override
@@ -484,7 +488,7 @@ IntersectionReason _travelReason({
       ),
     ),
   ];
-  return IntersectionReason(
+  return intersectionReasonFixture(
     intersectionId: id,
     vertical: 'travel_photography',
     dimension: objectKind == 'gear' ? 'interest' : 'location',
@@ -504,7 +508,7 @@ IntersectionReason _travelReason({
     actorEvidenceCompleteness: 'complete',
     representativeActor: repName.isEmpty
         ? null
-        : IntersectionRepresentativeActor(
+        : intersectionRepresentativeActorFixture(
             actorId: repId,
             displayName: repName,
             relationLabel: '联系人',

@@ -246,6 +246,101 @@ class AssistantToolRecoveryPolicyWireFields {
   static const String userVisibleSummary = 'userVisibleSummary';
 }
 
+class AssistantToolResearchPolicyWire {
+  const AssistantToolResearchPolicyWire({
+    this.operation = "none",
+    this.parallelInputField = "",
+    this.targetInputField = "",
+    this.targetKindField = "",
+    this.targetValueField = "",
+    this.reusableSourceTargetKinds = const <String>[],
+    this.childTargetKinds = const <String>[],
+  });
+
+  final String operation;
+  final String parallelInputField;
+  final String targetInputField;
+  final String targetKindField;
+  final String targetValueField;
+  final List<String> reusableSourceTargetKinds;
+  final List<String> childTargetKinds;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'operation': operation,
+        'parallelInputField': parallelInputField,
+        'targetInputField': targetInputField,
+        'targetKindField': targetKindField,
+        'targetValueField': targetValueField,
+        'reusableSourceTargetKinds': reusableSourceTargetKinds,
+        'childTargetKinds': childTargetKinds,
+      };
+
+  factory AssistantToolResearchPolicyWire.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'operation',
+      'parallelInputField',
+      'targetInputField',
+      'targetKindField',
+      'targetValueField',
+      'reusableSourceTargetKinds',
+      'childTargetKinds',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantToolResearchPolicyWire response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('operation') && json['operation'] != null && (json['operation'] is! String)) {
+      throw const FormatException('AssistantToolResearchPolicyWire field operation has an invalid wire value');
+    }
+    if (json.containsKey('parallelInputField') && json['parallelInputField'] != null && (json['parallelInputField'] is! String)) {
+      throw const FormatException('AssistantToolResearchPolicyWire field parallelInputField has an invalid wire value');
+    }
+    if (json.containsKey('targetInputField') && json['targetInputField'] != null && (json['targetInputField'] is! String)) {
+      throw const FormatException('AssistantToolResearchPolicyWire field targetInputField has an invalid wire value');
+    }
+    if (json.containsKey('targetKindField') && json['targetKindField'] != null && (json['targetKindField'] is! String)) {
+      throw const FormatException('AssistantToolResearchPolicyWire field targetKindField has an invalid wire value');
+    }
+    if (json.containsKey('targetValueField') && json['targetValueField'] != null && (json['targetValueField'] is! String)) {
+      throw const FormatException('AssistantToolResearchPolicyWire field targetValueField has an invalid wire value');
+    }
+    if (json.containsKey('reusableSourceTargetKinds') && json['reusableSourceTargetKinds'] != null && (json['reusableSourceTargetKinds'] is! List || (json['reusableSourceTargetKinds'] as List).any((item) => item is! String))) {
+      throw const FormatException('AssistantToolResearchPolicyWire field reusableSourceTargetKinds has an invalid wire value');
+    }
+    if (json.containsKey('childTargetKinds') && json['childTargetKinds'] != null && (json['childTargetKinds'] is! List || (json['childTargetKinds'] as List).any((item) => item is! String))) {
+      throw const FormatException('AssistantToolResearchPolicyWire field childTargetKinds has an invalid wire value');
+    }
+    return AssistantToolResearchPolicyWire(
+      operation: (json['operation'] as String?)?.trim() ?? "none",
+      parallelInputField: (json['parallelInputField'] as String?)?.trim() ?? "",
+      targetInputField: (json['targetInputField'] as String?)?.trim() ?? "",
+      targetKindField: (json['targetKindField'] as String?)?.trim() ?? "",
+      targetValueField: (json['targetValueField'] as String?)?.trim() ?? "",
+      reusableSourceTargetKinds: _assistantStringList(json['reusableSourceTargetKinds']),
+      childTargetKinds: _assistantStringList(json['childTargetKinds']),
+    );
+  }
+
+  static List<String> _assistantStringList(Object? value) {
+    if (value is List) {
+      return value.map((item) => item.toString().trim()).where((item) => item.isNotEmpty).toList(growable: false);
+    }
+    return const <String>[];
+  }
+}
+
+class AssistantToolResearchPolicyWireFields {
+  static const String operation = 'operation';
+  static const String parallelInputField = 'parallelInputField';
+  static const String targetInputField = 'targetInputField';
+  static const String targetKindField = 'targetKindField';
+  static const String targetValueField = 'targetValueField';
+  static const String reusableSourceTargetKinds = 'reusableSourceTargetKinds';
+  static const String childTargetKinds = 'childTargetKinds';
+}
+
 class AssistantToolResiliencePolicyWire {
   const AssistantToolResiliencePolicyWire({
     this.timeoutMs = 5000,
@@ -323,6 +418,7 @@ class AssistantToolMetadataWire {
     this.serverInjectedInputs = const <String>[],
     this.readOnly = true,
     this.capability = const AssistantToolCapabilityPolicyWire(),
+    this.research = const AssistantToolResearchPolicyWire(),
     this.confirmation = const AssistantToolConfirmationPolicyWire(),
     this.resilience = const AssistantToolResiliencePolicyWire(),
     this.recovery = const AssistantToolRecoveryPolicyWire(),
@@ -342,6 +438,7 @@ class AssistantToolMetadataWire {
   final List<String> serverInjectedInputs;
   final bool readOnly;
   final AssistantToolCapabilityPolicyWire capability;
+  final AssistantToolResearchPolicyWire research;
   final AssistantToolConfirmationPolicyWire confirmation;
   final AssistantToolResiliencePolicyWire resilience;
   final AssistantToolRecoveryPolicyWire recovery;
@@ -361,6 +458,7 @@ class AssistantToolMetadataWire {
         'serverInjectedInputs': serverInjectedInputs,
         'readOnly': readOnly,
         'capability': capability.toJson(),
+        'research': research.toJson(),
         'confirmation': confirmation.toJson(),
         'resilience': resilience.toJson(),
         'recovery': recovery.toJson(),
@@ -382,6 +480,7 @@ class AssistantToolMetadataWire {
       'serverInjectedInputs',
       'readOnly',
       'capability',
+      'research',
       'confirmation',
       'resilience',
       'recovery',
@@ -434,6 +533,9 @@ class AssistantToolMetadataWire {
     if (json.containsKey('capability') && json['capability'] != null && (json['capability'] is! Map)) {
       throw const FormatException('AssistantToolMetadataWire field capability has an invalid wire value');
     }
+    if (json.containsKey('research') && json['research'] != null && (json['research'] is! Map)) {
+      throw const FormatException('AssistantToolMetadataWire field research has an invalid wire value');
+    }
     if (json.containsKey('confirmation') && json['confirmation'] != null && (json['confirmation'] is! Map)) {
       throw const FormatException('AssistantToolMetadataWire field confirmation has an invalid wire value');
     }
@@ -458,6 +560,7 @@ class AssistantToolMetadataWire {
       serverInjectedInputs: _assistantStringList(json['serverInjectedInputs']),
       readOnly: json['readOnly'] != false,
       capability: json['capability'] is Map ? AssistantToolCapabilityPolicyWire.fromJson((json['capability'] as Map).cast<String, dynamic>()) : const AssistantToolCapabilityPolicyWire(),
+      research: json['research'] is Map ? AssistantToolResearchPolicyWire.fromJson((json['research'] as Map).cast<String, dynamic>()) : const AssistantToolResearchPolicyWire(),
       confirmation: json['confirmation'] is Map ? AssistantToolConfirmationPolicyWire.fromJson((json['confirmation'] as Map).cast<String, dynamic>()) : const AssistantToolConfirmationPolicyWire(),
       resilience: json['resilience'] is Map ? AssistantToolResiliencePolicyWire.fromJson((json['resilience'] as Map).cast<String, dynamic>()) : const AssistantToolResiliencePolicyWire(),
       recovery: json['recovery'] is Map ? AssistantToolRecoveryPolicyWire.fromJson((json['recovery'] as Map).cast<String, dynamic>()) : const AssistantToolRecoveryPolicyWire(),
@@ -487,6 +590,7 @@ class AssistantToolMetadataWireFields {
   static const String serverInjectedInputs = 'serverInjectedInputs';
   static const String readOnly = 'readOnly';
   static const String capability = 'capability';
+  static const String research = 'research';
   static const String confirmation = 'confirmation';
   static const String resilience = 'resilience';
   static const String recovery = 'recovery';

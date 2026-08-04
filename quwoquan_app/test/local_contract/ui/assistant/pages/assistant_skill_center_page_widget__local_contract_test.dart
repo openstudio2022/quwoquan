@@ -18,6 +18,13 @@ import 'package:quwoquan_app/ui/assistant/pages/assistant_skill_center_page.dart
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../../support/cloud_services/assistant_facet_overrides.dart';
+import '../../../../support/canonical_digest_fixture.dart';
+
+final _calendarReleaseDigest = canonicalFixtureSha256(const <String, Object?>{
+  'connectorId': 'system_calendar',
+  'capabilities': <String>['calendar.event.create'],
+  'authorizationMode': 'device_native',
+});
 
 class _CapturingVisitRecorder extends VisitRecorderService {
   final List<VisitTarget> recorded = <VisitTarget>[];
@@ -169,6 +176,9 @@ Future<void> _scrollTo(WidgetTester tester, Finder finder) async {
 void main() {
   testWidgets('技能启用状态与主动订阅分别展示且任务只保留进行中', (tester) async {
     final repository = AlphaAssistantFacets();
+    final stockCatalog = (await repository.listSkillCatalog()).singleWhere(
+      (item) => item.skillId == 'stock_sentinel',
+    );
     final recorder = _CapturingVisitRecorder();
     await repository.createSkillSubscription(
       skillId: 'stock_sentinel',
@@ -207,7 +217,7 @@ void main() {
     expect(find.text('股票哨兵'), findsOneWidget);
     expect(
       find.text(
-        '${AssistantText.assistantSkillCategoryKnowledge} · '
+        '${stockCatalog.catalogGroup.displayText} · '
         '${AssistantText.assistantSkillEnabled}',
       ),
       findsWidgets,
@@ -229,6 +239,12 @@ void main() {
     );
     expect(
       find.text(AssistantText.assistantSkillDataControlAction),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(
+        const ValueKey<String>('assistant_skill_lifecycle_stock_sentinel'),
+      ),
       findsOneWidget,
     );
     expect(
@@ -254,7 +270,7 @@ void main() {
           dataClassification: ConnectorDataClassification.private,
           supportedSurfaceKinds: const <String>['personal'],
           status: ConnectorDefinitionStatus.active,
-          releaseDigest: 'sha256:calendar-release',
+          releaseDigest: _calendarReleaseDigest,
           publishedAt: DateTime.utc(2026, 8, 2, 8),
         ),
       ],
@@ -323,7 +339,7 @@ void main() {
           dataClassification: ConnectorDataClassification.private,
           supportedSurfaceKinds: const <String>['personal'],
           status: ConnectorDefinitionStatus.active,
-          releaseDigest: 'sha256:calendar-release',
+          releaseDigest: _calendarReleaseDigest,
           publishedAt: DateTime.utc(2026, 8, 2, 8),
         ),
       ],
@@ -456,27 +472,47 @@ void main() {
 
   testWidgets('主动提醒开关只更新既有 Subscription', (tester) async {
     final repository = AlphaAssistantFacets();
-    await repository.createSkillSubscription(
+    final first = await repository.createSkillSubscription(
       skillId: 'stock_sentinel',
       domainId: 'finance',
-      rawText: '用户提交的订阅条件',
-      clientRequestId: 'create-stock-proactive',
+      rawText: '关注公司公告',
+      clientRequestId: 'create-stock-proactive-first',
+    );
+    final second = await repository.createSkillSubscription(
+      skillId: 'stock_sentinel',
+      domainId: 'finance',
+      rawText: '关注价格变化',
+      clientRequestId: 'create-stock-proactive-second',
     );
     await tester.pumpWidget(
       _buildApp(repository, visitRecorder: _CapturingVisitRecorder()),
     );
     await tester.pumpAndSettle();
 
-    final proactiveToggle = find.byKey(
-      const ValueKey<String>('assistant_skill_proactive_stock_sentinel'),
+    final firstToggle = find.byKey(
+      ValueKey<String>('assistant_skill_subscription_${first.subscriptionId}'),
     );
-    await _scrollTo(tester, proactiveToggle);
-    await tester.tap(proactiveToggle);
+    final secondToggle = find.byKey(
+      ValueKey<String>('assistant_skill_subscription_${second.subscriptionId}'),
+    );
+    await _scrollTo(tester, firstToggle);
+    expect(tester.widget<CupertinoSwitch>(firstToggle).value, isTrue);
+    expect(tester.widget<CupertinoSwitch>(secondToggle).value, isTrue);
+    await tester.tap(firstToggle);
     await tester.pumpAndSettle();
 
+    final subscriptions = await repository.listSkillSubscriptions();
     expect(
-      (await repository.listSkillSubscriptions()).single.status,
+      subscriptions
+          .singleWhere((item) => item.subscriptionId == first.subscriptionId)
+          .status,
       SkillSubscriptionStatus.paused,
+    );
+    expect(
+      subscriptions
+          .singleWhere((item) => item.subscriptionId == second.subscriptionId)
+          .status,
+      SkillSubscriptionStatus.active,
     );
     expect(await repository.listSkillUserSettings(), isEmpty);
   });
@@ -488,13 +524,13 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final proactiveToggle = find.byKey(
+    final addReminder = find.byKey(
       const ValueKey<String>(
-        'assistant_skill_proactive_travel_journey_manager',
+        'assistant_skill_subscription_add_travel_journey_manager',
       ),
     );
-    await _scrollTo(tester, proactiveToggle);
-    await tester.tap(proactiveToggle);
+    await _scrollTo(tester, addReminder);
+    await tester.tap(addReminder);
     await tester.pumpAndSettle();
 
     expect(
@@ -549,6 +585,9 @@ void main() {
 
   testWidgets('点开 Skill 后按需读取 package schema 并保存设置', (tester) async {
     final repository = AlphaAssistantFacets();
+    final travelCatalog = (await repository.listSkillCatalog()).singleWhere(
+      (item) => item.skillId == 'travel_journey_manager',
+    );
     await tester.pumpWidget(
       _buildApp(repository, visitRecorder: _CapturingVisitRecorder()),
     );
@@ -565,6 +604,26 @@ void main() {
       find.byKey(const ValueKey<String>('assistant_skill_detail_sheet')),
       findsOneWidget,
     );
+    expect(
+      find.text(AssistantText.assistantSkillRequiredConsentScopes),
+      findsOneWidget,
+    );
+    for (final label in travelCatalog.consentScopeLabels) {
+      expect(find.textContaining(label.displayText), findsWidgets);
+    }
+    if (travelCatalog.consentScopeLabels.any(
+      (label) => !travelCatalog.requiredConsentScopes.contains(label.id),
+    )) {
+      expect(
+        find.text(AssistantText.assistantSkillOptionalConsentScopes),
+        findsOneWidget,
+      );
+    }
+    expect(
+      find.textContaining('assistant.memory.preferences.read'),
+      findsNothing,
+    );
+    expect(find.textContaining('travel.trip.read'), findsNothing);
     expect(find.text('旅行偏好'), findsOneWidget);
     await tester.tap(
       find.byKey(

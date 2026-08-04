@@ -99,8 +99,8 @@ abstract final class AssistantDisplayTextResolver {
       retrievalProcessing: turn.retrievalProcessing,
       answerProcessing: turn.answerProcessing,
       historicalThinkingSnapshot: turn.historicalThinkingSnapshot,
-      sessionPreferenceFacts: turn.sessionPreferenceFacts,
-      longTermPreferenceFacts: turn.longTermPreferenceFacts,
+      sessionPreferences: turn.sessionPreferences,
+      longTermPreferences: turn.longTermPreferences,
     );
   }
 

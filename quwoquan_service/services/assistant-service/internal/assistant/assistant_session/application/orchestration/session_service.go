@@ -9,7 +9,7 @@ import (
 	rterr "quwoquan_service/runtime/errors"
 	rtid "quwoquan_service/runtime/id"
 	rtobs "quwoquan_service/runtime/observability"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
+	assistant "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/model"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/ports"
 )
 

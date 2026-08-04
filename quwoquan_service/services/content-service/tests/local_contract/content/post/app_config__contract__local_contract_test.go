@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/discovery-content/content-service-contract-foundation/privacy-ui-config-contract/spec.md#gwt-001
+// spec_ref: specs/feature-tree/runtime/runtime-client-foundation/app-remote-config/spec.md#gwt-004
 package local_contract
 
 import (
@@ -37,6 +39,10 @@ func TestGetAppConfigUsesGenericCanaryMatrixPayload(t *testing.T) {
 	service := postapp.NewPostService(
 		postapp.BindDataPorts(testsupport.NewPostStore(nil)),
 		postapp.WithStoryRuntimeConfig(postapp.StoryRuntimeConfig{
+			FeatureFlags: map[string]bool{
+				"enable_article_book_reader": true,
+				"unknown_parallel_flag":      true,
+			},
 			ExperimentBucket: "rollout_20",
 			CurrentStage:     "20%",
 			CanaryMatrix: []postapp.StoryCanaryStage{
@@ -47,35 +53,38 @@ func TestGetAppConfigUsesGenericCanaryMatrixPayload(t *testing.T) {
 	)
 
 	response := service.GetAppConfig()
-	if _, exists := response["packageVersion"]; exists {
-		t.Fatal("app config must expose configHash as its only snapshot identity")
-	}
-	configHash, _ := response["configHash"].(string)
-	canonical := make(map[string]any, len(response)-2)
-	for key, value := range response {
-		if key != "configHash" && key != "fetchedAt" {
-			canonical[key] = value
-		}
-	}
-	encoded, err := json.Marshal(canonical)
+	encoded, err := json.Marshal(response)
 	if err != nil {
 		t.Fatalf("marshal canonical app config: %v", err)
 	}
+	canonical := map[string]any{}
+	if err := json.Unmarshal(encoded, &canonical); err != nil {
+		t.Fatalf("decode canonical app config: %v", err)
+	}
+	if _, exists := canonical["packageVersion"]; exists {
+		t.Fatal("app config must expose configHash as its only snapshot identity")
+	}
+	delete(canonical, "configHash")
+	delete(canonical, "fetchedAt")
+	encoded, err = json.Marshal(canonical)
+	if err != nil {
+		t.Fatalf("marshal app config hash input: %v", err)
+	}
 	digest := sha256.Sum256(encoded)
 	wantHash := "sha256:" + hex.EncodeToString(digest[:])
-	if configHash != wantHash {
-		t.Fatalf("configHash=%q want canonical digest %q", configHash, wantHash)
+	if response.ConfigHash != wantHash {
+		t.Fatalf("configHash=%q want canonical digest %q", response.ConfigHash, wantHash)
 	}
-	content, _ := response["content"].(map[string]any)
-	if content == nil {
-		t.Fatalf("missing content config: %+v", response)
+	if response.Content.FeatureFlags.EnableArticleBookReader == nil ||
+		!*response.Content.FeatureFlags.EnableArticleBookReader {
+		t.Fatal("known runtime feature flag must be present in the typed contract")
 	}
-	grayRelease, _ := content["gray_release"].(map[string]any)
-	if grayRelease == nil {
-		t.Fatalf("missing gray release config: %+v", content)
+	contentMap, _ := canonical["content"].(map[string]any)
+	featureFlags, _ := contentMap["feature_flags"].(map[string]any)
+	if _, exists := featureFlags["unknown_parallel_flag"]; exists {
+		t.Fatal("unknown feature flag must not escape the canonical closed contract")
 	}
-	canaryMatrix, ok := grayRelease["canary_matrix"].([]any)
-	if !ok || len(canaryMatrix) != 2 {
-		t.Fatalf("unexpected generic canary matrix: %#v", grayRelease["canary_matrix"])
+	if len(response.Content.GrayRelease.CanaryMatrix) != 2 {
+		t.Fatalf("unexpected typed canary matrix: %#v", response.Content.GrayRelease.CanaryMatrix)
 	}
 }

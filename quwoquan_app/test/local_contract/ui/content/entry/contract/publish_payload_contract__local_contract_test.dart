@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
+import 'package:quwoquan_app/application/entity/homepage_view_data.dart';
 import 'package:quwoquan_app/ui/content/entry/services/create_page_remote_helpers.dart';
 import 'package:quwoquan_app/ui/content/models/publish_settings_models.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
@@ -106,7 +106,7 @@ void main() {
       final command = SubmitContentPostPublicationCommand(
         publishIntentId: 'intent-contract',
         localDraftId: 'draft-contract',
-        contentType: ContentPostType.article,
+        contentType: ContentType.article,
         summary: '摘要',
         semanticMentions: const <PostSemanticMention>[
           PostSemanticMention(
@@ -126,7 +126,7 @@ void main() {
             targetRef: 'entity:sight:west_lake',
           ),
         ],
-        assistantUsePolicy: ContentPostAssistantUsePolicy.inherit,
+        assistantUsePolicy: AssistantUsePolicy.inherit,
       );
       final body = Map<String, Object?>.from(
         encodeContentPostSubmitPostPublicationGeneratedRequest(command).body!
@@ -160,18 +160,18 @@ void main() {
       final canonical = SubmitContentPostPublicationCommand(
         publishIntentId: 'intent-single-track',
         localDraftId: 'draft-single-track',
-        contentType: ContentPostType.image,
-      ).toJson();
+        contentType: ContentType.image,
+      ).toWire();
 
       expect(
-        () => decodeSubmitContentPostPublicationCommand(<String, Object?>{
+        () => SubmitContentPostPublicationCommand.fromWire(<String, Object?>{
           ...canonical,
           'mediaItems': const <Object?>[],
         }),
         throwsFormatException,
       );
       expect(
-        () => decodeSubmitContentPostPublicationCommand(<String, Object?>{
+        () => SubmitContentPostPublicationCommand.fromWire(<String, Object?>{
           ...canonical,
           'articleAssetManifest': <String, Object?>{
             'schema': 'article-asset-manifest',
@@ -301,7 +301,7 @@ void main() {
       expect(command.visitedAt, DateTime.utc(2026, 4, 5, 6, 30));
       expect(body['visitedAt'], '2026-04-05T06:30:00.000Z');
       expect(
-        decodeSubmitContentPostPublicationCommand(body).visitedAt,
+        SubmitContentPostPublicationCommand.fromWire(body).visitedAt,
         command.visitedAt,
       );
     });
@@ -374,8 +374,8 @@ Set<String> _submitPostPublicationRequestBodyFields() {
   final command = SubmitContentPostPublicationCommand(
     publishIntentId: 'intent-contract-fields',
     localDraftId: 'draft-contract-fields',
-    contentType: ContentPostType.article,
-    contentIdentity: ContentPostIdentity.work,
+    contentType: ContentType.article,
+    contentIdentity: ContentIdentity.work,
     title: '标题',
     body: '正文',
     summary: '摘要',
@@ -417,10 +417,10 @@ Set<String> _submitPostPublicationRequestBodyFields() {
       canonicalEntityId: 'entity:sight:contract',
       title: '契约主页',
     ),
-    visibility: ContentPostVisibility.public,
-    assistantUsePolicy: ContentPostAssistantUsePolicy.inherit,
+    visibility: Visibility.public,
+    assistantUsePolicy: AssistantUsePolicy.inherit,
     sourcePostId: 'source-contract',
-    sourceType: ContentPostSourceType.original,
+    sourceType: PostSourceType.original,
     deviceInfo: const PostDeviceInfo(manufacturer: 'contract', os: 'test'),
     publishLocation: const PostPublishLocation(
       country: '中国',

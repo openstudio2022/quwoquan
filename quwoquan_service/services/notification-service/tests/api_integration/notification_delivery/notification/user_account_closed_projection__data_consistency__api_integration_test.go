@@ -50,7 +50,7 @@ func TestUserAccountClosedConsumerAtomicallyCleansOwnedNotificationData(
 	); !errors.Is(err, application.ErrUserAccountRestrictionProjectionConflict) {
 		t.Fatalf("same-version Notification restriction conflict err=%v", err)
 	}
-	// Closure also erases legacy rows from the superseded generic adapter.
+	// Closure also erases retired rows from the superseded generic adapter.
 	if _, err := notificationMongoDB.Collection(
 		"notification_user_account_restrictions",
 	).InsertOne(context.Background(), bson.M{
@@ -62,7 +62,7 @@ func TestUserAccountClosedConsumerAtomicallyCleansOwnedNotificationData(
 	if _, err := notificationMongoDB.Collection(
 		"notification_user_account_restriction_inbox",
 	).InsertOne(context.Background(), bson.M{
-		"_id": "evt-account-owner-legacy-suspended", "accountId": "account-owner",
+		"_id": "evt-account-owner-retired-suspended", "accountId": "account-owner",
 		"accountVersion": int64(9),
 	}); err != nil {
 		t.Fatal(err)

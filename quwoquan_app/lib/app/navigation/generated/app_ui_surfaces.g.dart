@@ -34,6 +34,7 @@ class AppUiSurfaces {
       'ListConversations',
       'ListConversationTimestamps',
       'BatchGetConversations',
+      'PullUserSync',
       'ListContacts',
       'ListContactHome',
       'ListAppMessages',
@@ -226,6 +227,7 @@ class AppUiSurfaces {
       'SteerAssistantRun',
       'ContinueAssistantToolUse',
       'StreamAssistantRunEvents',
+      'GetMediaAsset',
       'ListAppMessages',
       'GetAppMessage',
       'AckAppMessage',
@@ -653,6 +655,12 @@ class AppUiSurfaces {
       'GetActivePersonaContext',
       'UpsertDevicePushEndpoint',
       'RemoveDevicePushEndpoint',
+      'RecordVisit',
+      'ReportStartupEventBatch',
+      'IssueConnectionTicket',
+      'LongPoll',
+      'ReportEventBatch',
+      'ReportRuntimeLogBatch',
     ],
   );
 
@@ -664,6 +672,7 @@ class AppUiSurfaces {
     description: '首页推荐与关注内容流',
     operationIds: <String>[
       'GetFeed',
+      'GetAppConfig',
       'CreateReport',
       'LikePost',
       'UnlikePost',
@@ -849,6 +858,7 @@ class AppUiSurfaces {
     operationIds: <String>[
       'CreateReport',
       'GetPost',
+      'DeletePost',
       'LikePost',
       'UnlikePost',
       'GetContentReactionState',
@@ -924,6 +934,10 @@ class AppUiSurfaces {
       'ListConsents',
       'GrantSkillConsent',
       'RevokeSkillConsent',
+      'ListSkillActivities',
+      'CreateSkillDataControlRequest',
+      'ConfirmSkillDataControlRequest',
+      'GetSkillDataControlRequest',
       'ListConnectorDefinitions',
       'GetConnectorDefinition',
       'ListConnectorConnections',
@@ -1143,6 +1157,7 @@ class AppUiSurfaces {
       'ListAuthorImpactEvidence',
       'GetMyIntersectionSummary',
       'ListMyIntersections',
+      'MarkIntersectionsVisited',
     ],
   );
 

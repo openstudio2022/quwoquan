@@ -277,11 +277,15 @@ class _GroupPickerSheetState extends ConsumerState<_GroupPickerSheet> {
     if (_errorSemantic != null && _groups.isEmpty) {
       return AppPageErrorState(
         semantic: _errorSemantic!,
-        onAction: (action) async {
+        onRecovery: (action) async {
           if (action.type == UiErrorActionType.retry ||
               action.type == UiErrorActionType.resubmit) {
             await _reloadGroups();
+            return _errorSemantic == null
+                ? UiRecoveryOutcome.recovered
+                : UiRecoveryOutcome.stillBlocked;
           }
+          return UiRecoveryOutcome.cancelled;
         },
       );
     }

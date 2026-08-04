@@ -10,7 +10,7 @@ final class AlphaContentCommentFacet implements ContentCommentFacet {
   }) : _items = _readItems(fixtures ?? objectScenarioSeedReader, actorId);
 
   final String actorId;
-  List<ContentCommentListItem> _items;
+  List<CommentListItem> _items;
   int _sequence = 0;
 
   @override
@@ -18,19 +18,19 @@ final class AlphaContentCommentFacet implements ContentCommentFacet {
     required String postId,
     String? cursor,
     int limit = 20,
-    ContentCommentSort sort = ContentCommentSort.hot,
+    CommentSort sort = CommentSort.hot,
   }) async {
     final roots = _items
         .where(
           (item) =>
               item.postId == postId &&
-              item.status == ContentCommentStatus.active &&
+              item.status == CommentStatus.active &&
               item.parentCommentId == null,
         )
         .toList();
     // 与服务端排序契约同源：置顶段在前；hot 档按确定性热度分
     // (like - dislike + 2*reply) 降序，latest 档按时间降序。
-    int hotScore(ContentCommentListItem item) =>
+    int hotScore(CommentListItem item) =>
         (item.likeCount - item.dislikeCount) + 2 * item.replyCount;
     roots.sort((a, b) {
       if (a.isPinned != b.isPinned) return a.isPinned ? -1 : 1;
@@ -39,7 +39,7 @@ final class AlphaContentCommentFacet implements ContentCommentFacet {
           a.pinnedAt ?? DateTime(0),
         );
         if (pinCompare != 0) return pinCompare;
-      } else if (sort == ContentCommentSort.hot) {
+      } else if (sort == CommentSort.hot) {
         final scoreCompare = hotScore(b).compareTo(hotScore(a));
         if (scoreCompare != 0) return scoreCompare;
       }
@@ -47,11 +47,7 @@ final class AlphaContentCommentFacet implements ContentCommentFacet {
       if (createdCompare != 0) return createdCompare;
       return b.id.compareTo(a.id);
     });
-    return _page(
-      List<ContentCommentListItem>.unmodifiable(roots),
-      cursor,
-      limit,
-    );
+    return _page(List<CommentListItem>.unmodifiable(roots), cursor, limit);
   }
 
   @override
@@ -67,7 +63,7 @@ final class AlphaContentCommentFacet implements ContentCommentFacet {
               (item) =>
                   item.postId == postId &&
                   item.parentCommentId == commentId &&
-                  item.status == ContentCommentStatus.active,
+                  item.status == CommentStatus.active,
             )
             .toList(growable: false)
           ..sort((left, right) {
@@ -93,8 +89,8 @@ final class AlphaContentCommentFacet implements ContentCommentFacet {
             .where(
               (item) =>
                   item.authorId == actorId &&
-                  (item.status == ContentCommentStatus.active ||
-                      item.status == ContentCommentStatus.hidden),
+                  (item.status == CommentStatus.active ||
+                      item.status == CommentStatus.hidden),
             )
             .toList(growable: false)
           ..sort(_compareLatest);
@@ -116,7 +112,7 @@ final class AlphaContentCommentFacet implements ContentCommentFacet {
             .where(
               (item) =>
                   item.authorId != actorId &&
-                  item.status == ContentCommentStatus.active,
+                  item.status == CommentStatus.active,
             )
             .toList(growable: false)
           ..sort(_compareLatest);
@@ -129,7 +125,7 @@ final class AlphaContentCommentFacet implements ContentCommentFacet {
   }
 
   @override
-  Future<ContentCommentCommandResult> createComment(
+  Future<CommentCommandResult> createComment(
     CreateContentCommentCommand command,
   ) async {
     final now = DateTime.now().toUtc();
@@ -137,13 +133,13 @@ final class AlphaContentCommentFacet implements ContentCommentFacet {
         ? null
         : _find(command.replyToCommentId!);
     final id = 'alpha_comment_${++_sequence}';
-    final item = ContentCommentListItem(
+    final item = CommentListItem(
       id: id,
       version: 1,
       postId: command.postId,
       authorId: actorId,
       authorDisplayNameSnapshot: command.authorDisplayNameSnapshot,
-      authorAvatarUrlSnapshot: command.authorAvatarUrlSnapshot,
+      authorAvatarUrlSnapshot: _optionalUri(command.authorAvatarUrlSnapshot),
       personaContextVersion: command.personaContextVersion,
       content: command.content,
       replyToCommentId: command.replyToCommentId,
@@ -168,40 +164,42 @@ final class AlphaContentCommentFacet implements ContentCommentFacet {
       assistantMentioned: false,
       assistantReplySource: null,
       assistantCorrectionStatus: null,
-      status: ContentCommentStatus.active,
+      status: CommentStatus.active,
       isPinned: false,
       pinnedAt: null,
       createdAt: now,
       updatedAt: now,
       deletedAt: null,
       replyCount: 0,
-      replyPreview: const <ContentCommentListItem>[],
+      replyPreview: const <CommentListItem>[],
       replyNextCursor: null,
       likeCount: 0,
       dislikeCount: 0,
-      viewerReaction: ContentCommentReactionValue.none,
+      viewerReaction: CommentReactionType.none,
+      authorLiked: false,
+      viewerRelation: CommentViewerRelation.none,
       isAuthor: true,
       canDelete: true,
       canReply: true,
       canReport: false,
       canPin: false,
     );
-    _items = <ContentCommentListItem>[item, ..._items];
-    return ContentCommentCommandResult(
+    _items = <CommentListItem>[item, ..._items];
+    return CommentCommandResult(
       id: id,
       version: 1,
-      status: ContentCommentStatus.active,
+      status: CommentStatus.active,
       replayed: false,
     );
   }
 
   @override
-  Future<ContentCommentCommandResult> deleteComment(
+  Future<CommentCommandResult> deleteComment(
     DeleteContentCommentCommand command,
   ) async {
     final current = _required(command.commentId);
-    if (current.status == ContentCommentStatus.deleted) {
-      return ContentCommentCommandResult(
+    if (current.status == CommentStatus.deleted) {
+      return CommentCommandResult(
         id: current.id,
         version: current.version,
         status: current.status,
@@ -209,13 +207,14 @@ final class AlphaContentCommentFacet implements ContentCommentFacet {
       );
     }
     final now = DateTime.now().toUtc();
-    final updated = current.copyWith(
+    final updated = _copyComment(
+      current,
       version: current.version + 1,
-      status: ContentCommentStatus.deleted,
+      status: CommentStatus.deleted,
       deletedAt: () => now,
     );
     _replace(updated);
-    return ContentCommentCommandResult(
+    return CommentCommandResult(
       id: updated.id,
       version: updated.version,
       status: updated.status,
@@ -224,29 +223,30 @@ final class AlphaContentCommentFacet implements ContentCommentFacet {
   }
 
   @override
-  Future<ContentCommentCommandResult> pinComment(
+  Future<CommentCommandResult> pinComment(
     ChangeContentCommentPinCommand command,
   ) => _changePin(command, true);
 
   @override
-  Future<ContentCommentCommandResult> unpinComment(
+  Future<CommentCommandResult> unpinComment(
     ChangeContentCommentPinCommand command,
   ) => _changePin(command, false);
 
   @override
-  Future<ContentCommentCommandResult> bindAttachments(
+  Future<CommentCommandResult> bindAttachments(
     BindContentCommentAttachmentsCommand command,
   ) async {
     final current = _required(command.commentId);
     if (_sameStrings(current.attachmentMediaIds, command.attachmentMediaIds)) {
-      return ContentCommentCommandResult(
+      return CommentCommandResult(
         id: current.id,
         version: current.version,
         status: current.status,
         replayed: true,
       );
     }
-    final updated = current.copyWith(
+    final updated = _copyComment(
+      current,
       version: current.version + 1,
       attachmentMediaIds: command.attachmentMediaIds,
       attachments: command.attachmentMediaIds
@@ -263,7 +263,7 @@ final class AlphaContentCommentFacet implements ContentCommentFacet {
           .toList(growable: false),
     );
     _replace(updated);
-    return ContentCommentCommandResult(
+    return CommentCommandResult(
       id: updated.id,
       version: updated.version,
       status: updated.status,
@@ -271,26 +271,27 @@ final class AlphaContentCommentFacet implements ContentCommentFacet {
     );
   }
 
-  Future<ContentCommentCommandResult> _changePin(
+  Future<CommentCommandResult> _changePin(
     ChangeContentCommentPinCommand command,
     bool pinned,
   ) async {
     final current = _required(command.commentId);
     if (current.isPinned == pinned) {
-      return ContentCommentCommandResult(
+      return CommentCommandResult(
         id: current.id,
         version: current.version,
         status: current.status,
         replayed: true,
       );
     }
-    final updated = current.copyWith(
+    final updated = _copyComment(
+      current,
       version: current.version + 1,
       isPinned: pinned,
       pinnedAt: () => pinned ? DateTime.now().toUtc() : null,
     );
     _replace(updated);
-    return ContentCommentCommandResult(
+    return CommentCommandResult(
       id: updated.id,
       version: updated.version,
       status: updated.status,
@@ -306,13 +307,14 @@ final class AlphaContentCommentFacet implements ContentCommentFacet {
     if (current == null) throw StateError('Comment not found');
     var likeCount = current.likeCount;
     var dislikeCount = current.dislikeCount;
-    if (current.viewerReaction == ContentCommentReactionValue.like) likeCount--;
-    if (current.viewerReaction == ContentCommentReactionValue.dislike) {
+    if (current.viewerReaction == CommentReactionType.like) likeCount--;
+    if (current.viewerReaction == CommentReactionType.dislike) {
       dislikeCount--;
     }
-    if (command.reaction == ContentCommentReactionValue.like) likeCount++;
-    if (command.reaction == ContentCommentReactionValue.dislike) dislikeCount++;
-    final updated = current.copyWith(
+    if (command.reaction == CommentReactionType.like) likeCount++;
+    if (command.reaction == CommentReactionType.dislike) dislikeCount++;
+    final updated = _copyComment(
+      current,
       likeCount: likeCount < 0 ? 0 : likeCount,
       dislikeCount: dislikeCount < 0 ? 0 : dislikeCount,
       viewerReaction: command.reaction,
@@ -330,7 +332,7 @@ final class AlphaContentCommentFacet implements ContentCommentFacet {
   }
 
   CommentPageSlice _page(
-    List<ContentCommentListItem> values,
+    List<CommentListItem> values,
     String? cursor,
     int limit,
   ) {
@@ -345,23 +347,20 @@ final class AlphaContentCommentFacet implements ContentCommentFacet {
     );
   }
 
-  static int _compareLatest(
-    ContentCommentListItem left,
-    ContentCommentListItem right,
-  ) {
+  static int _compareLatest(CommentListItem left, CommentListItem right) {
     final createdOrder = right.createdAt.compareTo(left.createdAt);
     if (createdOrder != 0) return createdOrder;
     return right.id.compareTo(left.id);
   }
 
-  ContentCommentListItem? _find(String id) {
+  CommentListItem? _find(String id) {
     for (final item in _items) {
       if (item.id == id) return item;
     }
     return null;
   }
 
-  ContentCommentListItem _required(String id) {
+  CommentListItem _required(String id) {
     final item = _find(id);
     if (item == null) throw StateError('Comment not found');
     return item;
@@ -375,13 +374,13 @@ final class AlphaContentCommentFacet implements ContentCommentFacet {
     return true;
   }
 
-  void _replace(ContentCommentListItem updated) {
+  void _replace(CommentListItem updated) {
     _items = _items
         .map((item) => item.id == updated.id ? updated : item)
         .toList(growable: false);
   }
 
-  static List<ContentCommentListItem> _readItems(
+  static List<CommentListItem> _readItems(
     ObjectScenarioSeedReader fixtures,
     String actorId,
   ) {
@@ -404,7 +403,8 @@ final class AlphaContentCommentFacet implements ContentCommentFacet {
           final replies = base
               .where((candidate) => candidate.parentCommentId == item.id)
               .toList(growable: false);
-          return item.copyWith(
+          return _copyComment(
+            item,
             replyCount: replies.length,
             replyPreview: replies.take(1).toList(growable: false),
             replyNextCursor: () => replies.length > 1 ? '1' : null,
@@ -413,20 +413,22 @@ final class AlphaContentCommentFacet implements ContentCommentFacet {
         .toList(growable: false);
   }
 
-  static ContentCommentListItem _fromFixture(
+  static CommentListItem _fromFixture(
     Map<String, dynamic> raw,
     String actorId,
   ) {
     final id = raw['commentId'].toString();
     final authorId = raw['authorId'].toString();
     final createdAt = DateTime.parse(raw['createdAt'].toString()).toUtc();
-    return ContentCommentListItem(
+    return CommentListItem(
       id: id,
       version: (raw['version'] as num?)?.toInt() ?? 1,
       postId: raw['postId'].toString(),
       authorId: authorId,
       authorDisplayNameSnapshot: raw['authorDisplayNameSnapshot']?.toString(),
-      authorAvatarUrlSnapshot: raw['authorAvatarUrlSnapshot']?.toString(),
+      authorAvatarUrlSnapshot: _optionalUri(
+        raw['authorAvatarUrlSnapshot']?.toString(),
+      ),
       personaContextVersion: (raw['personaContextVersion'] as num?)?.toInt(),
       content: raw['content'].toString(),
       replyToCommentId: raw['replyToCommentId']?.toString(),
@@ -434,11 +436,11 @@ final class AlphaContentCommentFacet implements ContentCommentFacet {
       parentCommentId: raw['parentCommentId']?.toString(),
       attachmentMediaIds: const <String>[],
       attachments: const <CommentAttachmentSlice>[],
-      mentions: const <ContentCommentMention>[],
+      mentions: const <CommentMention>[],
       assistantMentioned: raw['assistantMentioned'] == true,
       assistantReplySource: raw['assistantReplySource']?.toString(),
       assistantCorrectionStatus: raw['assistantCorrectionStatus']?.toString(),
-      status: ContentCommentStatus.active,
+      status: CommentStatus.active,
       isPinned: raw['isPinned'] == true,
       pinnedAt: raw['pinnedAt'] == null
           ? null
@@ -447,11 +449,13 @@ final class AlphaContentCommentFacet implements ContentCommentFacet {
       updatedAt: createdAt,
       deletedAt: null,
       replyCount: (raw['replyCount'] as num?)?.toInt() ?? 0,
-      replyPreview: const <ContentCommentListItem>[],
+      replyPreview: const <CommentListItem>[],
       replyNextCursor: null,
       likeCount: (raw['likeCount'] as num?)?.toInt() ?? 0,
       dislikeCount: (raw['dislikeCount'] as num?)?.toInt() ?? 0,
-      viewerReaction: ContentCommentReactionValue.none,
+      viewerReaction: CommentReactionType.none,
+      authorLiked: false,
+      viewerRelation: CommentViewerRelation.none,
       isAuthor: authorId == actorId,
       canDelete: authorId == actorId,
       canReply: true,
@@ -459,4 +463,68 @@ final class AlphaContentCommentFacet implements ContentCommentFacet {
       canPin: false,
     );
   }
+}
+
+CommentListItem _copyComment(
+  CommentListItem current, {
+  int? version,
+  CommentStatus? status,
+  DateTime? Function()? deletedAt,
+  List<String>? attachmentMediaIds,
+  List<CommentAttachmentSlice>? attachments,
+  bool? isPinned,
+  DateTime? Function()? pinnedAt,
+  int? likeCount,
+  int? dislikeCount,
+  CommentReactionType? viewerReaction,
+  int? replyCount,
+  List<CommentListItem>? replyPreview,
+  String? Function()? replyNextCursor,
+}) {
+  return CommentListItem(
+    id: current.id,
+    version: version ?? current.version,
+    postId: current.postId,
+    authorId: current.authorId,
+    authorDisplayNameSnapshot: current.authorDisplayNameSnapshot,
+    authorAvatarUrlSnapshot: current.authorAvatarUrlSnapshot,
+    personaContextVersion: current.personaContextVersion,
+    content: current.content,
+    replyToCommentId: current.replyToCommentId,
+    replyToUserId: current.replyToUserId,
+    parentCommentId: current.parentCommentId,
+    attachmentMediaIds: attachmentMediaIds ?? current.attachmentMediaIds,
+    attachments: attachments ?? current.attachments,
+    mentions: current.mentions,
+    assistantMentioned: current.assistantMentioned,
+    assistantReplySource: current.assistantReplySource,
+    assistantCorrectionStatus: current.assistantCorrectionStatus,
+    authorIpLocation: current.authorIpLocation,
+    status: status ?? current.status,
+    isPinned: isPinned ?? current.isPinned,
+    pinnedAt: pinnedAt == null ? current.pinnedAt : pinnedAt(),
+    createdAt: current.createdAt,
+    updatedAt: current.updatedAt,
+    deletedAt: deletedAt == null ? current.deletedAt : deletedAt(),
+    replyCount: replyCount ?? current.replyCount,
+    replyPreview: replyPreview ?? current.replyPreview,
+    replyNextCursor: replyNextCursor == null
+        ? current.replyNextCursor
+        : replyNextCursor(),
+    likeCount: likeCount ?? current.likeCount,
+    dislikeCount: dislikeCount ?? current.dislikeCount,
+    viewerReaction: viewerReaction ?? current.viewerReaction,
+    authorLiked: current.authorLiked,
+    viewerRelation: current.viewerRelation,
+    isAuthor: current.isAuthor,
+    canDelete: current.canDelete,
+    canReply: current.canReply,
+    canReport: current.canReport,
+    canPin: current.canPin,
+  );
+}
+
+Uri? _optionalUri(String? raw) {
+  final value = raw?.trim() ?? '';
+  return value.isEmpty ? null : Uri.parse(value);
 }

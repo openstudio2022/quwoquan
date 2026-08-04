@@ -256,6 +256,13 @@ def _python_is_redis_receiver(node: ast.AST) -> bool:
     return any(token in path for token in ("redis", "cache"))
 
 
+def _python_is_mongo_database_receiver(node: ast.AST) -> bool:
+    path = _python_attribute_path(node)
+    if not path:
+        return False
+    return path.rsplit(".", 1)[-1] in {"db", "_db", "database", "mongo_db"}
+
+
 def _python_lookup_collections(
     tree: ast.AST,
     constants: dict[str, str],
@@ -297,11 +304,7 @@ def _scan_python_storage_references(
     for node in ast.walk(tree):
         if isinstance(node, ast.Subscript):
             owner = node.value
-            if isinstance(owner, ast.Name) and owner.id in {
-                "db",
-                "database",
-                "mongo_db",
-            }:
+            if _python_is_mongo_database_receiver(owner):
                 name = _python_static_string(node.slice, constants)
                 if name:
                     result.add(StorageReference("collection", name, service, relative))

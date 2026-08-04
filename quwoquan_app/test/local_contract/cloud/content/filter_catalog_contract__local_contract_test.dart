@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/application/content/filter_catalog/filter_catalog_coordinator.dart';
 import 'package:quwoquan_app/infrastructure/local/content/filter_catalog/verified_filter_catalog_store.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
-import '../../../support/cloud_services/repository_mock_reexports.dart';
+import '../../../support/cloud_services/object_doubles/content/alpha_filter_catalog_query.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -158,9 +158,9 @@ final class _MemoryVerifiedStore implements VerifiedFilterCatalogStore {
   VerifiedFilterCatalogCacheEntry? _entry;
   int clearCount = 0;
 
-  FilterCatalogSnapshot? get value => _entry?.snapshot;
+  FilterCatalogSlice? get value => _entry?.snapshot;
 
-  set value(FilterCatalogSnapshot? snapshot) {
+  set value(FilterCatalogSlice? snapshot) {
     _entry = snapshot == null
         ? null
         : VerifiedFilterCatalogCacheEntry(
@@ -179,7 +179,7 @@ final class _MemoryVerifiedStore implements VerifiedFilterCatalogStore {
   Future<VerifiedFilterCatalogCacheEntry?> read() async => _entry;
 
   @override
-  Future<void> write(FilterCatalogSnapshot snapshot) async {
+  Future<void> write(FilterCatalogSlice snapshot) async {
     _entry = VerifiedFilterCatalogCacheEntry(
       snapshot: snapshot,
       verifiedAt: DateTime.now().toUtc(),
@@ -190,17 +190,17 @@ final class _MemoryVerifiedStore implements VerifiedFilterCatalogStore {
 final class _SnapshotBootstrap implements FilterCatalogBootstrapReader {
   const _SnapshotBootstrap(this.snapshot);
 
-  final FilterCatalogSnapshot snapshot;
+  final FilterCatalogSlice snapshot;
 
   @override
-  Future<FilterCatalogSnapshot> read() async => snapshot;
+  Future<FilterCatalogSlice> read() async => snapshot;
 }
 
 final class _ThrowingBootstrap implements FilterCatalogBootstrapReader {
   const _ThrowingBootstrap();
 
   @override
-  Future<FilterCatalogSnapshot> read() {
+  Future<FilterCatalogSlice> read() {
     throw StateError('bootstrap unavailable');
   }
 }
@@ -209,7 +209,7 @@ final class _ThrowingFilterCatalogQuery implements ContentFilterCatalogQuery {
   const _ThrowingFilterCatalogQuery();
 
   @override
-  Future<FilterCatalogSnapshot> getActiveFilterCatalog() {
+  Future<FilterCatalogSlice> getActiveFilterCatalog() {
     throw StateError('remote unavailable');
   }
 }
@@ -229,11 +229,11 @@ final class _RecordingObserver implements FilterCatalogResolutionObserver {
   }
 }
 
-FilterCatalogSnapshot _withDigest(
-  FilterCatalogSnapshot source,
+FilterCatalogSlice _withDigest(
+  FilterCatalogSlice source,
   String canonicalDigest,
 ) {
-  return FilterCatalogSnapshot(
+  return FilterCatalogSlice(
     releaseId: source.releaseId,
     canonicalDigest: canonicalDigest,
     status: source.status,

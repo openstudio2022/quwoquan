@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/components/avatar/conversation_avatar.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
 import '../../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 
@@ -41,17 +41,9 @@ void main() {
     testWidgets('群聊使用会话 avatarUrl 单图，不触发成员九宫格', (tester) async {
       _suppressImageErrors();
       final repo = _ConversationAvatarRepository(
-        members: <ChatConversationMemberDto>[
-          ChatConversationMemberDto(
-            userId: 'user_002',
-            displayName: '李明',
-            avatarUrl: 'https://example.com/user_002.jpg',
-          ),
-          ChatConversationMemberDto(
-            userId: 'user_003',
-            displayName: '张华',
-            avatarUrl: 'https://example.com/user_003.jpg',
-          ),
+        members: <ConversationMemberListRow>[
+          _member('user_002', '李明', 'https://example.com/user_002.jpg'),
+          _member('user_003', '张华', 'https://example.com/user_003.jpg'),
         ],
       );
       await tester.pumpWidget(
@@ -84,22 +76,10 @@ void main() {
     testWidgets('群聊 version 为 0 时仍使用云侧 avatarUrl 单图', (tester) async {
       _suppressImageErrors();
       final repo = _ConversationAvatarRepository(
-        members: <ChatConversationMemberDto>[
-          ChatConversationMemberDto(
-            userId: 'user_002',
-            displayName: '李明',
-            avatarUrl: 'https://example.com/wrong-single.jpg',
-          ),
-          ChatConversationMemberDto(
-            userId: 'user_003',
-            displayName: '张华',
-            avatarUrl: 'https://example.com/user_003.jpg',
-          ),
-          ChatConversationMemberDto(
-            userId: 'user_004',
-            displayName: '王芳',
-            avatarUrl: 'https://example.com/user_004.jpg',
-          ),
+        members: <ConversationMemberListRow>[
+          _member('user_002', '李明', 'https://example.com/wrong-single.jpg'),
+          _member('user_003', '张华', 'https://example.com/user_003.jpg'),
+          _member('user_004', '王芳', 'https://example.com/user_004.jpg'),
         ],
       );
       await tester.pumpWidget(
@@ -133,22 +113,10 @@ void main() {
     testWidgets('群聊缺失 avatarUrl 时显示稳定群占位且不拉成员', (tester) async {
       _suppressImageErrors();
       final repo = _ConversationAvatarRepository(
-        members: <ChatConversationMemberDto>[
-          ChatConversationMemberDto(
-            userId: 'user_002',
-            displayName: '李明',
-            avatarUrl: 'https://example.com/shared.jpg',
-          ),
-          ChatConversationMemberDto(
-            userId: 'user_003',
-            displayName: '张华',
-            avatarUrl: '',
-          ),
-          ChatConversationMemberDto(
-            userId: 'user_004',
-            displayName: '王芳',
-            avatarUrl: 'https://example.com/shared.jpg',
-          ),
+        members: <ConversationMemberListRow>[
+          _member('user_002', '李明', 'https://example.com/shared.jpg'),
+          _member('user_003', '张华', ''),
+          _member('user_004', '王芳', 'https://example.com/shared.jpg'),
         ],
       );
       await tester.pumpWidget(
@@ -175,12 +143,8 @@ void main() {
     testWidgets('单人群聊不使用成员头像回退', (tester) async {
       _suppressImageErrors();
       final repo = _ConversationAvatarRepository(
-        members: <ChatConversationMemberDto>[
-          ChatConversationMemberDto(
-            userId: 'user_002',
-            displayName: '李明',
-            avatarUrl: 'https://example.com/user_002.jpg',
-          ),
+        members: <ConversationMemberListRow>[
+          _member('user_002', '李明', 'https://example.com/user_002.jpg'),
         ],
       );
       await tester.pumpWidget(
@@ -209,11 +173,11 @@ void main() {
 class _ConversationAvatarRepository extends MockChatRepository {
   _ConversationAvatarRepository({required this.members});
 
-  final List<ChatConversationMemberDto> members;
+  final List<ConversationMemberListRow> members;
   int memberRequestCount = 0;
 
   @override
-  Future<List<ChatConversationMemberDto>> listMembers({
+  Future<List<ConversationMemberListRow>> listMembers({
     required String conversationId,
     String? cursor,
     int limit = 20,
@@ -224,3 +188,17 @@ class _ConversationAvatarRepository extends MockChatRepository {
     return members;
   }
 }
+
+ConversationMemberListRow _member(
+  String userId,
+  String displayName,
+  String avatarUrl,
+) => ConversationMemberListRow(
+  userId: userId,
+  userHandle: userId,
+  displayName: displayName,
+  avatarUrl: avatarUrl,
+  role: 'member',
+  memberType: 'user',
+  isCurrentUser: false,
+);

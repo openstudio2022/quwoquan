@@ -27,7 +27,7 @@ void main() {
                 label: SearchText.reload,
               ),
             ),
-            onAction: (_) async {},
+            onRecovery: (_) async => UiRecoveryOutcome.stillBlocked,
           ),
         ),
       ),

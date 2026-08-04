@@ -13,7 +13,7 @@ class _CirclesGlobalHeader extends StatelessWidget {
 
   final bool isDark;
   final _HomeCirclesModuleTab activeModuleTab;
-  final List<CircleDto> circles;
+  final List<Circle> circles;
   final List<_HomeCircleStoryItem> stories;
   final void Function(
     _HomeCircleStoryItem item,
@@ -322,7 +322,7 @@ class _HomeCircleRailCard extends StatelessWidget {
     required this.onTap,
   });
 
-  final CircleDto circle;
+  final Circle circle;
   final double width;
   final bool isDark;
   final VoidCallback onTap;

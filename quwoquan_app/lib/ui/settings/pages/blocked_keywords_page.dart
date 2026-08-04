@@ -279,8 +279,14 @@ class _BlockedKeywordsPageState extends ConsumerState<BlockedKeywordsPage> {
           category: UiErrorCategory.pageLoad,
           scope: UiErrorScope.page,
         ),
-        onAction: (action) async {
-          if (action.type == UiErrorActionType.retry) await _load();
+        onRecovery: (action) async {
+          if (action.type == UiErrorActionType.retry) {
+            await _load();
+            return _rawError == null
+                ? UiRecoveryOutcome.recovered
+                : UiRecoveryOutcome.stillBlocked;
+          }
+          return UiRecoveryOutcome.cancelled;
         },
       );
     }

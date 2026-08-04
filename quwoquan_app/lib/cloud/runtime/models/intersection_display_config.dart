@@ -1,3 +1,5 @@
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
 /// 交集展示控制配置（应用级，来自 `GET /config/app`）。
 ///
 /// 设计约束（必读要求 1 / 接口剖离）：
@@ -21,26 +23,14 @@ class IntersectionDisplayConfig {
 
   static const IntersectionDisplayConfig fallback = IntersectionDisplayConfig();
 
-  /// 从 `/config/app` 响应根（wireRoot）解析 `intersection` 子节点；
-  /// 仅消费 metadata 声明的 canonical snake_case wire key；缺失字段回落默认值。
-  factory IntersectionDisplayConfig.fromAppConfigRoot(
-    Map<String, Object?> root,
-  ) {
-    final content = (root['content'] as Map?)?.cast<String, Object?>();
-    final raw = (content?['intersection'] as Map?)?.cast<String, Object?>();
+  /// 从 generated `ContentAppConfig` 读取 `intersection` 子节点；
+  /// 缺失字段回落默认值。
+  factory IntersectionDisplayConfig.fromAppConfig(ContentAppConfig config) {
+    final raw = config.intersection;
     if (raw == null) return fallback;
     return IntersectionDisplayConfig(
-      inlineExpandCount:
-          _asPositiveInt(raw['inline_expand_count']) ??
-          defaultInlineExpandCount,
-      maxCandidateWindow:
-          _asPositiveInt(raw['max_candidate_window']) ??
-          defaultMaxCandidateWindow,
+      inlineExpandCount: raw.inlineExpandCount ?? defaultInlineExpandCount,
+      maxCandidateWindow: raw.maxCandidateWindow ?? defaultMaxCandidateWindow,
     );
-  }
-
-  static int? _asPositiveInt(Object? value) {
-    if (value is! int || value <= 0) return null;
-    return value;
   }
 }

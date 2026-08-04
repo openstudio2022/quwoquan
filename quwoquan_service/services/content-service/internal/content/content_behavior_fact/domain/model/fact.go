@@ -12,8 +12,12 @@ type Fact struct {
 	ClientEventID     string   `bson:"clientEventId,omitempty"`
 	State             string   `bson:"state,omitempty"`
 	UserID            string   `bson:"userId"`
+	PersonaID         string   `bson:"personaId,omitempty"`
 	DeviceActorID     string   `bson:"deviceActorId,omitempty"`
 	SessionID         string   `bson:"sessionId"`
+	FeedSessionID     string   `bson:"feedSessionId,omitempty"`
+	PlaybackSessionID string   `bson:"playbackSessionId,omitempty"`
+	PageVisitID       string   `bson:"pageVisitId,omitempty"`
 	ContentID         string   `bson:"contentId"`
 	Action            string   `bson:"action"`
 	ContentType       string   `bson:"contentType,omitempty"`
@@ -48,6 +52,13 @@ type Fact struct {
 	IntersectionClass      string    `bson:"intersectionClass,omitempty"`
 	IntersectionSourceRef  string    `bson:"intersectionSourceRef,omitempty"`
 	IntersectionEvidenceID string    `bson:"intersectionEvidenceId,omitempty"`
+	SubjectID              string    `bson:"subjectId,omitempty"`
+	FeedbackKind           string    `bson:"feedbackKind,omitempty"`
+	MotionDirection        string    `bson:"direction,omitempty"`
+	MotionProfile          string    `bson:"motionProfile,omitempty"`
+	SettleMS               *int      `bson:"settleMs,omitempty"`
+	ReducedMotion          *bool     `bson:"reducedMotion,omitempty"`
+	Committed              *bool     `bson:"committed,omitempty"`
 	OccurredAt             string    `bson:"occurredAt"`
 	CreatedAt              time.Time `bson:"createdAt"`
 }

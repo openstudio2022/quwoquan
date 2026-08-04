@@ -72,7 +72,11 @@ func (d *RankingDecorator) Decorate(ctx context.Context, resp rtsearch.RetrieveR
 	}
 	bucket, err := d.experiments.Assign(ctx, subjectKey)
 	if err != nil {
-		return RankedResult{}, err
+		// Request path degrades to control when ExperimentPolicy is missing or
+		// assignment transport is unhealthy (e.g. Redis DNS thrash).
+		d.logger.WarnContext(ctx, "search experiment assignment degraded to control",
+			slog.String("subjectKey", subjectKey), slog.String("err", err.Error()))
+		bucket = BucketControl
 	}
 	out := RankedResult{
 		Hits:             resp.Hits,

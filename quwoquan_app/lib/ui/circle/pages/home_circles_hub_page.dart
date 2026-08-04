@@ -6,11 +6,11 @@ import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
 import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
-    show CircleDiscoveryFeedQuery, CircleDiscoveryFeedScope;
+    show Circle, CircleDiscoveryFeedQuery, CircleDiscoveryFeedScope;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/secondary_capsule_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
@@ -18,11 +18,9 @@ import 'package:quwoquan_app/components/navigation/tab_swipe_switch_region.dart'
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_category_tab_config_dto.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_category_tab_defaults.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_category_tab_order.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
-import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/ui/circle/services/home_circles_hub_media_viewer_wiring.dart';
 import 'package:quwoquan_app/ui/circle/services/home_circles_hub_wire.dart';
 import 'package:quwoquan_app/components/media/app_media_image.dart';
@@ -79,7 +77,7 @@ final class _CirclesHubFeedPage {
     this.nextCursor,
   });
 
-  final List<CircleDto> circles;
+  final List<Circle> circles;
   final List<CircleHubFeedPostEntry> items;
   final DateTime loadedAt;
   final String? nextCursor;
@@ -99,34 +97,17 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
   // 分类配置的唯一真相源是 metadata 投影的 generated 常量。
   final Map<String, CircleCategoryTabConfigDto> _categoryConfig =
       CircleCategoryTabDefaults.remoteStyleFallback;
-  List<CircleDto> _hubCircleDtos = [];
+  List<Circle> _hubCircles = [];
   bool _isBootstrapping = true;
   UiErrorSemantic? _pageErrorSemantic;
   int _bootstrapGeneration = 0;
 
-  // R20 页面曝光/停留：hub 属列表页，以稳定页面 id 走行为通道（同全局搜索页模式）。
-  static const String _hubPageContentId = 'home_circles_hub';
-  late final DateTime _pageEnteredAt;
-  ContentBehaviorTracker? _behaviorTracker;
-
   @override
   void initState() {
     super.initState();
-    _pageEnteredAt = DateTime.now();
     _circleFeedItems = [];
     _scrollController.addListener(_loadMoreWhenNeeded);
     unawaited(_loadActiveFeed());
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
-      }
-      _behaviorTracker = ref.read(contentBehaviorTrackerProvider);
-      _behaviorTracker!.trackImpression(
-        _hubPageContentId,
-        contentType: 'circle_hub_page',
-        referralSource: ReferralSource.organicFeed,
-      );
-    });
   }
 
   @override
@@ -134,16 +115,6 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
     _scrollController
       ..removeListener(_loadMoreWhenNeeded)
       ..dispose();
-    final tracker = _behaviorTracker;
-    if (tracker != null) {
-      tracker.trackDwell(
-        _hubPageContentId,
-        durationSeconds:
-            DateTime.now().difference(_pageEnteredAt).inMilliseconds / 1000.0,
-        contentType: 'circle_hub_page',
-        referralSource: ReferralSource.organicFeed,
-      );
-    }
     super.dispose();
   }
 
@@ -193,7 +164,7 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
       if (mounted) {
         setState(() {
           _circleFeedItems = previous.items;
-          _hubCircleDtos = previous.circles;
+          _hubCircles = previous.circles;
           _isBootstrapping = false;
           _pageErrorSemantic = null;
         });
@@ -227,22 +198,20 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
               limit: 20,
             ),
           );
-      final circleMapper = ref.read(circleProjectionMapperProvider);
       final currentCircles = loadMore
-          ? <CircleDto>[...?previous?.circles]
-          : <CircleDto>[];
+          ? <Circle>[...?previous?.circles]
+          : <Circle>[];
       final currentItems = loadMore
           ? <CircleHubFeedPostEntry>[...?previous?.items]
           : <CircleHubFeedPostEntry>[];
-      final circlesById = <String, CircleDto>{
+      final circlesById = <String, Circle>{
         for (final circle in currentCircles) circle.id: circle,
       };
       final itemsByPlacementId = <String, CircleHubFeedPostEntry>{
         for (final entry in currentItems) entry.placementId: entry,
       };
       for (final circle in page.circles) {
-        final dto = circleMapper.toDto(circle);
-        circlesById[dto.id] = dto;
+        circlesById[circle.id] = circle;
       }
       for (final projection in page.items) {
         final entry = CircleHubFeedPostEntry.fromProjection(
@@ -260,7 +229,7 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
       if (mounted && requestGeneration == _bootstrapGeneration) {
         setState(() {
           _circleFeedItems = resolved.items;
-          _hubCircleDtos = resolved.circles;
+          _hubCircles = resolved.circles;
           _isBootstrapping = false;
           _pageErrorSemantic = null;
         });
@@ -270,7 +239,7 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
         setState(() {
           if (!loadMore) {
             _circleFeedItems = <CircleHubFeedPostEntry>[];
-            _hubCircleDtos = <CircleDto>[];
+            _hubCircles = <Circle>[];
           }
           _isBootstrapping = false;
           _pageErrorSemantic = runtimeErrorSemantic(
@@ -402,9 +371,9 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
     return bottom > 0 && top < MediaQuery.sizeOf(context).height;
   }
 
-  List<CircleDto> _moduleCirclesFor(_HomeCirclesModuleTab _, String _) {
+  List<Circle> _moduleCirclesFor(_HomeCirclesModuleTab _, String _) {
     // scope/category/sort 已由聚合读模型冻结；客户端只截断首屏 rail，不重排或重过滤。
-    return _hubCircleDtos
+    return _hubCircles
         .take(_maxHomeCircleRailItems - 1)
         .toList(growable: false);
   }
@@ -413,8 +382,8 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
     _HomeCirclesModuleTab tab,
     String categoryId,
   ) {
-    final circleById = <String, CircleDto>{
-      for (final circle in _hubCircleDtos) circle.id: circle,
+    final circleById = <String, Circle>{
+      for (final circle in _hubCircles) circle.id: circle,
     };
     final pool = _filteredLevelOnePosts(tab, categoryId)
         .map((entry) {
@@ -536,11 +505,15 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
           bottom: false,
           child: AppPageErrorState(
             semantic: ensureRetryUiErrorSemantic(_pageErrorSemantic!),
-            onAction: (action) async {
+            onRecovery: (action) async {
               if (action.type == UiErrorActionType.retry ||
                   action.type == UiErrorActionType.resubmit) {
                 await _loadActiveFeed();
+                return _pageErrorSemantic == null
+                    ? UiRecoveryOutcome.recovered
+                    : UiRecoveryOutcome.stillBlocked;
               }
+              return UiRecoveryOutcome.cancelled;
             },
           ),
         ),

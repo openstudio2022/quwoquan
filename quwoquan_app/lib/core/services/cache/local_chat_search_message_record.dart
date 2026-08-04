@@ -48,31 +48,31 @@ class LocalChatSearchMessageRecord {
   final String? highlightText;
   final String? matchedField;
 
-  factory LocalChatSearchMessageRecord.fromMessageDto(
-    ChatMessageViewData dto, {
+  factory LocalChatSearchMessageRecord.fromMessageViewData(
+    ChatMessageViewData message, {
     ConversationCacheRecord? conversation,
   }) {
-    final conversationId = dto.conversationId.trim();
+    final conversationId = message.conversationId.trim();
     return LocalChatSearchMessageRecord(
-      messageId: dto.id.trim(),
+      messageId: message.id.trim(),
       conversationId: conversationId,
       conversationType: conversation?.type ?? '',
       conversationTitle: conversation?.title ?? '',
       conversationAvatarUrl: conversation?.avatarUrl ?? '',
-      senderPersonaId: dto.senderId.trim(),
-      senderDisplayName: dto.senderName?.trim() ?? '',
-      senderAvatarUrl: dto.senderAvatar?.trim() ?? '',
-      messageType: dto.type.trim().isEmpty ? 'text' : dto.type.trim(),
-      contentPreview: dto.content?.trim() ?? '',
-      seq: dto.seq,
-      timestamp: dto.timestamp?.toIso8601String() ?? '',
-      status: dto.status.trim().isEmpty ? 'sent' : dto.status.trim(),
-      recalledAt: dto.recalledAt?.toIso8601String() ?? '',
+      senderPersonaId: message.senderId.trim(),
+      senderDisplayName: message.senderName?.trim() ?? '',
+      senderAvatarUrl: message.senderAvatar?.trim() ?? '',
+      messageType: message.type.trim().isEmpty ? 'text' : message.type.trim(),
+      contentPreview: message.content?.trim() ?? '',
+      seq: message.seq,
+      timestamp: message.timestamp?.toIso8601String() ?? '',
+      status: message.status.trim().isEmpty ? 'sent' : message.status.trim(),
+      recalledAt: message.recalledAt?.toIso8601String() ?? '',
       deleted:
-          dto.recalledAt != null ||
-          dto.status == 'recalled' ||
-          dto.status == 'deleted',
-      messagePayload: _messageViewDataToStorageMap(dto),
+          message.recalledAt != null ||
+          message.status == 'recalled' ||
+          message.status == 'deleted',
+      messagePayload: _messageViewDataToStorageMap(message),
     );
   }
 
@@ -229,7 +229,7 @@ class LocalChatSearchMessageRecord {
     };
   }
 
-  ChatMessageViewData toMessageDto() {
+  ChatMessageViewData toMessageViewData() {
     if (messagePayload.isNotEmpty) {
       return _messageViewDataFromStorageMap(messagePayload);
     }

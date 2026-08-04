@@ -10,6 +10,8 @@ env:
   QWQ_OUTPUT_ROOT: ${{ github.workspace }}/.qwq_output
 
 on:
+  schedule:
+    - cron: '0 18 * * *'
   pull_request:
     branches:
       - main
@@ -37,6 +39,14 @@ on:
         type: string
       matrix_kind:
         description: assistant / chat-avatar / environment-smoke / app-core-readback / media-publication / user-profile / account-closure / JSON 数组
+        required: false
+        default: ''
+      release_attestation:
+        description: 'Nightly/manual Gamma commercial release attestation path'
+        required: false
+        default: ''
+      rollback_release_attestation:
+        description: 'Nightly/manual Gamma rollback release attestation path'
         required: false
         default: ''
       account_closure_disposable_ack:
@@ -78,6 +88,16 @@ on:
         default: ''
       matrix_kind:
         description: 'Matrix kind or JSON array (overrides profile default)'
+        required: false
+        type: string
+        default: ''
+      release_attestation:
+        description: 'Commercial release attestation consumed by stackctl dev-session'
+        required: false
+        type: string
+        default: ''
+      rollback_release_attestation:
+        description: 'Rollback release attestation consumed by stackctl dev-session'
         required: false
         type: string
         default: ''
@@ -165,7 +185,7 @@ jobs:
     name: Prepare one Beta stack prerequisite
     if: ${{ github.event_name != 'pull_request' || vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true' }}
     runs-on: [self-hosted, macOS, ARM64, mobile-stack]
-    timeout-minutes: 2
+    timeout-minutes: ${{ (github.event_name == 'schedule' || inputs.validation_profile == 'manual_full' || inputs.validation_profile == 'nightly_full' || inputs.validation_profile == 'release_candidate') && 20 || 2 }}
     permissions:
       contents: read
       packages: read
@@ -182,6 +202,7 @@ jobs:
       stack_ref: ${{ steps.stack_ref.outputs.ref }}
       stack_digest: ${{ steps.stack_bundle.outputs.digest }}
       formal_runtime_started: ${{ steps.formal_runtime.outputs.started }}
+      managed_runtime_started: ${{ steps.managed_runtime.outputs.started }}
     env:
       STACK_REPO_DIR: ${{ github.workspace }}/.qwq_output/env/repo/local/device-matrix/cache/checkouts/${{ github.run_id }}/${{ github.run_attempt }}/stack
       STACKCTL_AUTO_WIPE_MIGRATION_DRIFT: "0"
@@ -208,6 +229,7 @@ jobs:
           set -euo pipefail
           PROFILE="${INPUT_PROFILE:-pr_light}"
           if [ "$EVENT_NAME" = "pull_request" ]; then PROFILE="pr_light"; fi
+          if [ "$EVENT_NAME" = "schedule" ]; then PROFILE="nightly_full"; fi
           PROFILE_JSON="$RUNNER_TEMP/mobile-profile-${{ github.run_id }}-${{ github.run_attempt }}.json"
           python3 quwoquan_ops/ci/resolve_gamma_validation_profile.py \
             --profile "$PROFILE" \
@@ -298,6 +320,46 @@ jobs:
             --reuse-package \
             --report-dir "$ROOT/verify"
           cp "$ROOT/verify/report.json" "$ROOT/verify.json"
+      - id: managed_runtime
+        name: Start stackctl-managed Gamma full runtime
+        if: ${{ steps.defaults.outputs.profile == 'manual_full' || steps.defaults.outputs.profile == 'nightly_full' || steps.defaults.outputs.profile == 'release_candidate' }}
+        working-directory: ${{ env.STACK_REPO_DIR }}
+        env:
+          RELEASE_ATTESTATION: ${{ inputs.release_attestation || vars.NIGHTLY_COMMERCIAL_RELEASE_ATTESTATION }}
+          ROLLBACK_RELEASE_ATTESTATION: ${{ inputs.rollback_release_attestation || vars.NIGHTLY_ROLLBACK_RELEASE_ATTESTATION }}
+        run: |
+          set -euo pipefail
+          for attestation in "$RELEASE_ATTESTATION" "$ROLLBACK_RELEASE_ATTESTATION"; do
+            if [[ -z "$attestation" || ! -s "$attestation" ]]; then
+              echo "::error::GATE_BLOCK: scheduled/manual full runtime requires repository-backed release attestation paths"
+              exit 2
+            fi
+          done
+          ROOT="$QWQ_OUTPUT_ROOT/env/gamma/runs/device-matrix-runtime"
+          python3 quwoquan_ops/cli/stackctl.py dev-session \
+            --env gamma \
+            --release-attestation "$RELEASE_ATTESTATION" \
+            --rollback-release-attestation "$ROLLBACK_RELEASE_ATTESTATION" \
+            --report-dir "$ROOT/dev-session"
+          SESSION_KIND="$(python3 -c 'import json,sys; payload=json.load(open(sys.argv[1])); sessions=payload.get("sessions") or []; print((sessions[0] if sessions else {}).get("sessionKind") or "")' "$ROOT/dev-session/report.json")"
+          case "$SESSION_KIND" in
+            cold) echo "started=true" >> "$GITHUB_OUTPUT" ;;
+            hot) echo "started=false" >> "$GITHUB_OUTPUT" ;;
+            *) echo "::error::GATE_BLOCK: dev-session did not record cold/hot runtime ownership"; exit 2 ;;
+          esac
+      - name: Inspect and doctor the managed Gamma runtime before soak
+        if: ${{ steps.defaults.outputs.profile == 'manual_full' || steps.defaults.outputs.profile == 'nightly_full' || steps.defaults.outputs.profile == 'release_candidate' }}
+        working-directory: ${{ env.STACK_REPO_DIR }}
+        run: |
+          set -euo pipefail
+          ROOT="$QWQ_OUTPUT_ROOT/env/gamma/runs/device-matrix-runtime"
+          python3 quwoquan_ops/cli/stackctl.py inspect \
+            --target gamma-local \
+            --scope all \
+            --report-dir "$ROOT/startup-inspect"
+          python3 quwoquan_ops/cli/stackctl.py doctor \
+            --target gamma-local \
+            --report-dir "$ROOT/startup-doctor"
       - name: Seal immutable Beta stack evidence
         if: ${{ steps.defaults.outputs.profile == 'mainline_auto_prod' }}
         working-directory: ${{ env.STACK_REPO_DIR }}
@@ -564,11 +626,11 @@ jobs:
         run: echo "duration_seconds=$(( $(date +%s) - ${{ steps.start.outputs.started_at }} ))" >> "$GITHUB_OUTPUT"
 
   beta_teardown:
-    name: Teardown the one Beta stack after aggregation
+    name: Teardown the stack owned by this matrix run
     needs: [beta_stack, android_device_matrix, ios_device_matrix, mobile_matrix]
-    if: ${{ always() && needs.beta_stack.outputs.formal_runtime_started == 'true' }}
+    if: ${{ always() && (needs.beta_stack.outputs.formal_runtime_started == 'true' || needs.beta_stack.outputs.managed_runtime_started == 'true') }}
     runs-on: [self-hosted, macOS, ARM64, mobile-stack]
-    timeout-minutes: 1
+    timeout-minutes: ${{ needs.beta_stack.outputs.managed_runtime_started == 'true' && 10 || 1 }}
     permissions:
       contents: read
     steps:
@@ -585,6 +647,7 @@ jobs:
           python3 quwoquan_ops/ci/device_runner_lease.py host --github-output "$GITHUB_OUTPUT"
           test "$(tail -n 1 "$GITHUB_OUTPUT" | cut -d= -f2-)" = "${{ needs.beta_stack.outputs.host_digest }}"
       - name: Teardown only the recorded formal Beta runtime
+        if: ${{ needs.beta_stack.outputs.formal_runtime_started == 'true' }}
         working-directory: ${{ github.workspace }}/.qwq_output/env/repo/local/device-matrix/cache/checkouts/${{ github.run_id }}/${{ github.run_attempt }}/teardown
         run: |
           python3 quwoquan_ops/cli/stackctl.py down \
@@ -592,6 +655,34 @@ jobs:
             --formal-release \
             --release-manifest "$QWQ_OUTPUT_ROOT/env/repo/runs/beta-stack/release-evidence-manifest/manifest.json" \
             --report-dir "$QWQ_OUTPUT_ROOT/env/beta/runs/formal-runtime/down"
+      - name: Inspect and doctor the managed Gamma runtime after soak
+        if: ${{ needs.beta_stack.outputs.managed_runtime_started == 'true' }}
+        working-directory: ${{ github.workspace }}/.qwq_output/env/repo/local/device-matrix/cache/checkouts/${{ github.run_id }}/${{ github.run_attempt }}/teardown
+        run: |
+          set -euo pipefail
+          ROOT="$QWQ_OUTPUT_ROOT/env/gamma/runs/device-matrix-runtime"
+          python3 quwoquan_ops/cli/stackctl.py inspect \
+            --target gamma-local \
+            --scope all \
+            --report-dir "$ROOT/final-inspect"
+          python3 quwoquan_ops/cli/stackctl.py doctor \
+            --target gamma-local \
+            --report-dir "$ROOT/final-doctor"
+      - name: Verify and teardown only the Gamma runtime started here
+        if: ${{ always() && needs.beta_stack.outputs.managed_runtime_started == 'true' }}
+        working-directory: ${{ github.workspace }}/.qwq_output/env/repo/local/device-matrix/cache/checkouts/${{ github.run_id }}/${{ github.run_attempt }}/teardown
+        run: |
+          set -uo pipefail
+          STATUS=0
+          python3 quwoquan_ops/cli/stackctl.py health \
+            --target gamma-local \
+            --scope full \
+            --report-dir "$QWQ_OUTPUT_ROOT/env/gamma/runs/device-matrix-runtime/final-health" || STATUS=$?
+          python3 quwoquan_ops/cli/stackctl.py down \
+            --target gamma-local \
+            --workload full \
+            --report-dir "$QWQ_OUTPUT_ROOT/env/gamma/runs/device-matrix-runtime/down" || STATUS=$?
+          exit "$STATUS"
 
   app_env_device_matrix_summary:
     name: 05. App Env Device Matrix
@@ -619,6 +710,7 @@ jobs:
         working-directory: ${{ env.SUMMARY_REPO_DIR }}
         env:
           SELF_HOSTED_ENABLED: ${{ github.event_name != 'pull_request' || vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true' }}
+          VALIDATION_PROFILE: ${{ needs.beta_stack.outputs.profile }}
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           if [ "$SELF_HOSTED_ENABLED" != true ]; then
@@ -665,8 +757,14 @@ jobs:
             --note "GitHub Jobs API proves explicit Android/iOS jobs share one host-bound stack and execute before one aggregator." \
             --write-json "$QWQ_OUTPUT_ROOT/env/repo/runs/ci-timing/app-env-device-matrix-summary.json" \
             --write-step-summary
-          if [ "$calendar_lead_time_seconds" -gt 480 ]; then
-            echo "::error::GATE_BLOCK: Beta stack/device/aggregation calendar path exceeded the 480 second hard budget"
+          if [ "$VALIDATION_PROFILE" = mainline_auto_prod ]; then
+            if [ "$calendar_lead_time_seconds" -gt 480 ]; then
+              echo "::error::GATE_BLOCK: Beta stack/device/aggregation calendar path exceeded the 480 second hard budget"
+              exit 2
+            fi
+          fi
+          if [ "$VALIDATION_PROFILE" = nightly_full ] && [ "$calendar_lead_time_seconds" -gt 7200 ]; then
+            echo "::error::GATE_BLOCK: nightly full device matrix exceeded the 7200 second soak budget"
             exit 2
           fi
           if [[ -n "${missing_evidence:-}" ]]; then
@@ -683,6 +781,7 @@ jobs:
           AGGREGATE: ${{ needs.mobile_matrix.result }}
           TEARDOWN: ${{ needs.beta_teardown.result }}
           FORMAL_RUNTIME_STARTED: ${{ needs.beta_stack.outputs.formal_runtime_started }}
+          MANAGED_RUNTIME_STARTED: ${{ needs.beta_stack.outputs.managed_runtime_started }}
           ALLOW_MISSING: ${{ needs.beta_stack.outputs.allow_missing_platforms }}
         run: |
           set -euo pipefail
@@ -701,4 +800,5 @@ jobs:
             "${args[@]}"
           test "$AGGREGATE" = success
           if [ "$FORMAL_RUNTIME_STARTED" = true ]; then test "$TEARDOWN" = success; fi
+          if [ "$MANAGED_RUNTIME_STARTED" = true ]; then test "$TEARDOWN" = success; fi
           echo "result=success" >> "$GITHUB_OUTPUT"

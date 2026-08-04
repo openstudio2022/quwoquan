@@ -6,7 +6,7 @@ import (
 	"sort"
 	"testing"
 
-	toolpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/tool"
+	toolpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/tool"
 )
 
 // spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/autonomous-web-exploration/spec.md#gwt-001
@@ -44,6 +44,8 @@ func TestAssistantToolCatalogIsGeneratedClosedAndRequiresExplicitMutationConfirm
 		[]string{
 			"app_search",
 			"calendar_create_reminder",
+			"finance_quote",
+			"weather_lookup",
 			"web_find",
 			"web_open",
 			"web_search",
@@ -64,6 +66,12 @@ func TestAssistantToolCatalogIsGeneratedClosedAndRequiresExplicitMutationConfirm
 	open.InputSchema["additionalProperties"] = true
 	if toolpkg.WebOpenMetadata().InputSchema["additionalProperties"] != false {
 		t.Fatal("canonical metadata must return an immutable fresh projection")
+	}
+	if toolpkg.WeatherLookupMetadata().Research.ResolvedOperation() !=
+		toolpkg.ResearchOperationDiscover ||
+		toolpkg.FinanceQuoteMetadata().Research.ResolvedOperation() !=
+			toolpkg.ResearchOperationDiscover {
+		t.Fatal("typed external fact tools must participate in evidence discovery")
 	}
 }
 

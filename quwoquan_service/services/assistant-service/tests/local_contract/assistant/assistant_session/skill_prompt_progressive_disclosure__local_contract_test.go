@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/orchestration"
+	assistant "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/model"
 	"quwoquan_service/services/assistant-service/tests/support/promptassets"
 	"quwoquan_service/services/assistant-service/tests/support/skillfixture"
 )
@@ -43,7 +43,10 @@ func (m *promptRecordingModel) joined() string {
 // 被选中技能的领域话术必须以正文进入提示词；资产 ID 不得出现在提示词里。
 func TestSelectedSkillPromptAssetsResolveToProse(t *testing.T) {
 	model := &promptRecordingModel{}
-	loop := orchestration.NewAgentLoop(nil, orchestration.ReactRuntime{Model: model}, nil)
+	loop := orchestration.NewAgentLoop(nil, orchestration.ReactRuntime{
+		Model: model,
+		Tools: canonicalTestToolCoordinator(nil),
+	}, nil)
 	loop.Catalog = skillfixture.Loader{}
 	loop.PromptAssets = promptassets.MustResolver(t)
 
@@ -76,7 +79,10 @@ func TestSelectedSkillPromptAssetsResolveToProse(t *testing.T) {
 // 渐进披露：未被选中的技能话术不得进入提示词。
 func TestUnselectedSkillPromptAssetsStayOutOfPrompt(t *testing.T) {
 	model := &promptRecordingModel{}
-	loop := orchestration.NewAgentLoop(nil, orchestration.ReactRuntime{Model: model}, nil)
+	loop := orchestration.NewAgentLoop(nil, orchestration.ReactRuntime{
+		Model: model,
+		Tools: canonicalTestToolCoordinator(nil),
+	}, nil)
 	loop.Catalog = skillfixture.Loader{}
 	loop.PromptAssets = promptassets.MustResolver(t)
 
@@ -100,7 +106,10 @@ func TestUnselectedSkillPromptAssetsStayOutOfPrompt(t *testing.T) {
 // 因此主动技能也必须在选中后才把清单声明的正文装入模型请求。
 func TestProactiveSkillPromptAssetsResolveToProse(t *testing.T) {
 	model := &promptRecordingModel{}
-	loop := orchestration.NewAgentLoop(nil, orchestration.ReactRuntime{Model: model}, nil)
+	loop := orchestration.NewAgentLoop(nil, orchestration.ReactRuntime{
+		Model: model,
+		Tools: canonicalTestToolCoordinator(nil),
+	}, nil)
 	loop.Catalog = skillfixture.Loader{}
 	loop.PromptAssets = promptassets.MustResolver(t)
 
@@ -137,7 +146,10 @@ func TestProactiveSkillPromptAssetsResolveToProse(t *testing.T) {
 // 资产无法解析时必须让该轮失败，而不是把 ID 或空话术送进模型。
 func TestMissingPromptAssetResolverFailsTurn(t *testing.T) {
 	model := &promptRecordingModel{}
-	loop := orchestration.NewAgentLoop(nil, orchestration.ReactRuntime{Model: model}, nil)
+	loop := orchestration.NewAgentLoop(nil, orchestration.ReactRuntime{
+		Model: model,
+		Tools: canonicalTestToolCoordinator(nil),
+	}, nil)
 	loop.Catalog = skillfixture.Loader{}
 
 	turn := promptAssetTurn("travel_companion", "travel", "帮我安排杭州三天行程")

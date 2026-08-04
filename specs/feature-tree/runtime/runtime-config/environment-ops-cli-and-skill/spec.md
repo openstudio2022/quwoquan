@@ -35,6 +35,8 @@
 - Cursor、CLI、CI、workflow 与 project skill 必须共享同一套 `stackctl` 子命令，不得复制第二套检查/部署逻辑。
 - `stackctl` 必须输出稳定 JSON 报告，并在 `.qwq_output/env/<env>/runs/<run-id>/` 归档 Markdown 摘要。
 - `stackctl` 必须支持 `local / ssh-hosted / workflow` 三类执行后端。
+- 日常开发冷/热启动只允许由 `stackctl dev-session` 编排；单 target 与 `--all-nonprod` 都必须返回稳定的 phase、session kind、target identity、首个 blocker 与报告引用。
+- `stackctl up` 继续只消费 active candidate，App launcher 继续只读预检；Cursor、Make、CI 与 Skill 不得复制 package→up→health 编排。
 - `inspect` 统一覆盖 `logs / network / data / metrics / config / security`。
 - gamma / prod 发布必须通过 `stackctl deploy` 暴露统一入口，底层可复用既有 workflow 与 `config_release_*` 脚本。
 - skill 遇到登录、审批、密钥、生产破坏性动作时必须显式停下并请求人工确认。
@@ -51,6 +53,7 @@
 - GIVEN 开发、测试或运维角色具备有效身份，且父能力声明的输入与上游事实成立。
 - WHEN 参与者执行“环境运营 CLI 与 Skill”对应的公开行为。
 - THEN `stackctl` 必须输出稳定 JSON 报告，并在 `.qwq_output/env/<env>/runs/<run-id>/` 归档 Markdown 摘要。
+- AND `dev-session` 的 package、up、health 与 handoff 具有可独立定位的 phase 结果；热复用不重复改变 runtime，三环境入口严格串行且失败即停。
 - AND 失败时返回 canonical failure，且不产生伪成功事实。
 
 ## 6. 依赖

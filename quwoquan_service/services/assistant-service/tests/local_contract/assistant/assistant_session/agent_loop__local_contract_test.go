@@ -2,16 +2,20 @@ package local_contract
 
 import (
 	"context"
-	assistantstreaming "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/streaming"
+	"errors"
 	"testing"
 	"time"
 
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
-	skillpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/skill"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/orchestration"
+	assistantstreaming "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/streaming"
+	assistant "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/model"
+	skillpkg "quwoquan_service/services/assistant-service/internal/assistant/skill_package_release/application/packageasset"
+	"quwoquan_service/services/assistant-service/tests/support/skillfixture"
 )
 
 type assistantSessionAgentLoopFinalModel struct{}
+
+type assistantSessionAgentLoopCountingModel struct{ calls int }
 
 type assistantSessionAgentLoopSkillRuntime struct{}
 
@@ -34,13 +38,24 @@ func (assistantSessionAgentLoopFinalModel) Complete(_ context.Context, request o
 	}, nil
 }
 
+func (model *assistantSessionAgentLoopCountingModel) Complete(
+	context.Context,
+	orchestration.ModelRequest,
+) (orchestration.ModelResponse, error) {
+	model.calls++
+	return orchestration.ModelResponse{
+		Text:            "must not run",
+		StructuredDelta: map[string]any{"nextAction": "answer"},
+	}, nil
+}
+
 func TestAgentLoopRunTurnPublishesACompletedAnswer(t *testing.T) {
 	loop := orchestration.NewAgentLoop(
 		assistantSessionAgentLoopSkillRuntime{},
 		orchestration.ReactRuntime{Model: assistantSessionAgentLoopFinalModel{}},
 		func() time.Time { return time.Date(2026, 7, 22, 0, 0, 0, 0, time.UTC) },
 	)
-	loop.Catalog = skillpkg.StaticLoader{Manifests: []skillpkg.Manifest{{
+	loop.Catalog = skillfixture.StaticLoader{Manifests: []skillpkg.Manifest{{
 		SkillID:      "general_qa",
 		DisplayName:  "通用问答",
 		DomainID:     "assistant",
@@ -64,5 +79,50 @@ func TestAgentLoopRunTurnPublishesACompletedAnswer(t *testing.T) {
 	}
 	if len(events) == 0 || events[len(events)-1].EventType != string(assistantstreaming.AssistantStreamEventCompleted) {
 		t.Fatalf("expected completed stream event, got %#v", events)
+	}
+}
+
+func TestAgentLoopRechecksZeroToolSkillAccessAtPlanningBoundary(t *testing.T) {
+	model := &assistantSessionAgentLoopCountingModel{}
+	loop := orchestration.NewAgentLoop(
+		assistantSessionAgentLoopSkillRuntime{},
+		orchestration.ReactRuntime{Model: model},
+		nil,
+	)
+	loop.Catalog = skillfixture.StaticLoader{Manifests: []skillpkg.Manifest{{
+		SkillID: "general_qa", DisplayName: "通用问答", DomainID: "assistant",
+		ProblemClass: "general",
+	}}}
+	revoked := errors.New("shared Skill placement revoked")
+	accessChecks := 0
+	loop.SkillAccess = orchestration.SkillExecutionAccessPolicyFunc(func(
+		context.Context,
+		assistant.AssistantTurn,
+		string,
+	) error {
+		accessChecks++
+		if accessChecks == 1 {
+			return nil
+		}
+		return revoked
+	})
+	_, failure, err := loop.RunTurn(t.Context(), assistant.AssistantTurn{
+		TurnID: "turn-zero-tool-revoked", SessionID: "session-zero-tool-revoked",
+		UserID: "user-zero-tool-revoked", Input: assistant.AssistantTurnInput{Text: "继续"},
+		TraceID: "trace-zero-tool-revoked",
+		FrozenPolicySelection: testFrozenPolicySelection(
+			"assistant-default",
+			"general_qa",
+			"assistant",
+		),
+	})
+	if err != nil || failure == nil || model.calls != 0 || accessChecks != 2 {
+		t.Fatalf(
+			"err=%v failure=%+v modelCalls=%d accessChecks=%d",
+			err,
+			failure,
+			model.calls,
+			accessChecks,
+		)
 	}
 }

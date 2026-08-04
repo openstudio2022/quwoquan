@@ -16,6 +16,7 @@ class AssistantApiMetadata {
     '/assistant/preferences',
     '/assistant/runs',
     '/assistant/sessions',
+    '/assistant/skill-data-control-requests',
     '/assistant/skill-placements',
     '/assistant/skill-settings',
     '/assistant/skill-subscriptions',
@@ -30,14 +31,18 @@ class AssistantApiMetadata {
     'AppendAssistantLearningFact': '/assistant/learning/facts',
     'AppendAssistantServiceLearningFact': '/internal/assistant/learning/facts',
     'CancelAssistantRun': '/assistant/runs/{runId}/cancel',
+    'ConfirmSkillDataControlRequest': '/assistant/skill-data-control-requests/{requestId}/confirm',
     'ContinueAssistantToolUse': '/assistant/runs/{runId}/tool-uses/{toolUseId}/continue',
     'CreateAssistantSession': '/assistant/sessions',
+    'CreateSkillDataControlRequest': '/assistant/skills/{skillId}/data-control-requests',
     'CreateSkillSubscription': '/assistant/skill-subscriptions',
     'GetAssistantEntry': '/assistant/entry',
     'GetAssistantRun': '/assistant/runs/{runId}',
     'GetAssistantSession': '/assistant/sessions/{sessionId}',
+    'GetDomainReaderDescriptor': '/internal/assistant/domain-readers/{descriptorId}',
     'GetLearningOpsSummary': '/assistant/ops/learning-summary',
     'GetSkillCatalogItem': '/assistant/skills/{skillId}',
+    'GetSkillDataControlRequest': '/assistant/skill-data-control-requests/{requestId}',
     'GetSkillSubscription': '/assistant/skill-subscriptions/{subscriptionId}',
     'GetSkillSurfacePlacement': '/assistant/skill-placements/{surfaceKind}/{surfaceId}',
     'GetSkillUserSetting': '/assistant/skills/{skillId}/setting',
@@ -46,7 +51,9 @@ class AssistantApiMetadata {
     'ListAssistantSessions': '/assistant/sessions',
     'ListAssistantTasks': '/assistant/tasks',
     'ListConsents': '/assistant/consents',
+    'ListDomainReaderDescriptors': '/internal/assistant/domain-readers',
     'ListSessionTurns': '/assistant/sessions/{sessionId}/turns',
+    'ListSkillActivities': '/assistant/skills/{skillId}/activities',
     'ListSkillSubscriptions': '/assistant/skill-subscriptions',
     'ListSkillUserSettings': '/assistant/skill-settings',
     'ListSkills': '/assistant/skills',
@@ -76,14 +83,18 @@ class AssistantApiMetadata {
     'AppendAssistantLearningFact': 'POST',
     'AppendAssistantServiceLearningFact': 'POST',
     'CancelAssistantRun': 'POST',
+    'ConfirmSkillDataControlRequest': 'POST',
     'ContinueAssistantToolUse': 'POST',
     'CreateAssistantSession': 'POST',
+    'CreateSkillDataControlRequest': 'POST',
     'CreateSkillSubscription': 'POST',
     'GetAssistantEntry': 'GET',
     'GetAssistantRun': 'GET',
     'GetAssistantSession': 'GET',
+    'GetDomainReaderDescriptor': 'GET',
     'GetLearningOpsSummary': 'GET',
     'GetSkillCatalogItem': 'GET',
+    'GetSkillDataControlRequest': 'GET',
     'GetSkillSubscription': 'GET',
     'GetSkillSurfacePlacement': 'GET',
     'GetSkillUserSetting': 'GET',
@@ -92,7 +103,9 @@ class AssistantApiMetadata {
     'ListAssistantSessions': 'GET',
     'ListAssistantTasks': 'GET',
     'ListConsents': 'GET',
+    'ListDomainReaderDescriptors': 'GET',
     'ListSessionTurns': 'GET',
+    'ListSkillActivities': 'GET',
     'ListSkillSubscriptions': 'GET',
     'ListSkillUserSettings': 'GET',
     'ListSkills': 'GET',
@@ -123,14 +136,18 @@ class AssistantApiMetadata {
     'AppendAssistantLearningFact': 'required',
     'AppendAssistantServiceLearningFact': 'required',
     'CancelAssistantRun': 'required',
+    'ConfirmSkillDataControlRequest': 'required',
     'ContinueAssistantToolUse': 'required',
     'CreateAssistantSession': 'required',
+    'CreateSkillDataControlRequest': 'required',
     'CreateSkillSubscription': 'required',
     'GetAssistantEntry': 'required',
     'GetAssistantRun': 'required',
     'GetAssistantSession': 'required',
+    'GetDomainReaderDescriptor': 'required',
     'GetLearningOpsSummary': 'required',
     'GetSkillCatalogItem': 'required',
+    'GetSkillDataControlRequest': 'required',
     'GetSkillSubscription': 'required',
     'GetSkillSurfacePlacement': 'required',
     'GetSkillUserSetting': 'required',
@@ -139,7 +156,9 @@ class AssistantApiMetadata {
     'ListAssistantSessions': 'required',
     'ListAssistantTasks': 'required',
     'ListConsents': 'required',
+    'ListDomainReaderDescriptors': 'required',
     'ListSessionTurns': 'required',
+    'ListSkillActivities': 'required',
     'ListSkillSubscriptions': 'required',
     'ListSkillUserSettings': 'required',
     'ListSkills': 'required',
@@ -176,14 +195,18 @@ class AssistantApiMetadata {
   static const String appendAssistantLearningFactOperation = 'AppendAssistantLearningFact';
   static const String appendAssistantServiceLearningFactOperation = 'AppendAssistantServiceLearningFact';
   static const String cancelAssistantRunOperation = 'CancelAssistantRun';
+  static const String confirmSkillDataControlRequestOperation = 'ConfirmSkillDataControlRequest';
   static const String continueAssistantToolUseOperation = 'ContinueAssistantToolUse';
   static const String createAssistantSessionOperation = 'CreateAssistantSession';
+  static const String createSkillDataControlRequestOperation = 'CreateSkillDataControlRequest';
   static const String createSkillSubscriptionOperation = 'CreateSkillSubscription';
   static const String getAssistantEntryOperation = 'GetAssistantEntry';
   static const String getAssistantRunOperation = 'GetAssistantRun';
   static const String getAssistantSessionOperation = 'GetAssistantSession';
+  static const String getDomainReaderDescriptorOperation = 'GetDomainReaderDescriptor';
   static const String getLearningOpsSummaryOperation = 'GetLearningOpsSummary';
   static const String getSkillCatalogItemOperation = 'GetSkillCatalogItem';
+  static const String getSkillDataControlRequestOperation = 'GetSkillDataControlRequest';
   static const String getSkillSubscriptionOperation = 'GetSkillSubscription';
   static const String getSkillSurfacePlacementOperation = 'GetSkillSurfacePlacement';
   static const String getSkillUserSettingOperation = 'GetSkillUserSetting';
@@ -192,7 +215,9 @@ class AssistantApiMetadata {
   static const String listAssistantSessionsOperation = 'ListAssistantSessions';
   static const String listAssistantTasksOperation = 'ListAssistantTasks';
   static const String listConsentsOperation = 'ListConsents';
+  static const String listDomainReaderDescriptorsOperation = 'ListDomainReaderDescriptors';
   static const String listSessionTurnsOperation = 'ListSessionTurns';
+  static const String listSkillActivitiesOperation = 'ListSkillActivities';
   static const String listSkillSubscriptionsOperation = 'ListSkillSubscriptions';
   static const String listSkillUserSettingsOperation = 'ListSkillUserSettings';
   static const String listSkillsOperation = 'ListSkills';
@@ -230,6 +255,12 @@ class AssistantApiMetadata {
       'runId': runId,
     });
   }
+  static const String confirmSkillDataControlRequestPathTemplate = '/assistant/skill-data-control-requests/{requestId}/confirm';
+  static String confirmSkillDataControlRequestPath({required String requestId}) {
+    return _fillPath(confirmSkillDataControlRequestPathTemplate, <String, String>{
+      'requestId': requestId,
+    });
+  }
   static const String continueAssistantToolUsePathTemplate = '/assistant/runs/{runId}/tool-uses/{toolUseId}/continue';
   static String continueAssistantToolUsePath({required String runId, required String toolUseId}) {
     return _fillPath(continueAssistantToolUsePathTemplate, <String, String>{
@@ -238,6 +269,12 @@ class AssistantApiMetadata {
     });
   }
   static const String createAssistantSessionPath = '/assistant/sessions';
+  static const String createSkillDataControlRequestPathTemplate = '/assistant/skills/{skillId}/data-control-requests';
+  static String createSkillDataControlRequestPath({required String skillId}) {
+    return _fillPath(createSkillDataControlRequestPathTemplate, <String, String>{
+      'skillId': skillId,
+    });
+  }
   static const String createSkillSubscriptionPath = '/assistant/skill-subscriptions';
   static const String getAssistantEntryPath = '/assistant/entry';
   static const String getAssistantRunPathTemplate = '/assistant/runs/{runId}';
@@ -252,11 +289,23 @@ class AssistantApiMetadata {
       'sessionId': sessionId,
     });
   }
+  static const String getDomainReaderDescriptorPathTemplate = '/internal/assistant/domain-readers/{descriptorId}';
+  static String getDomainReaderDescriptorPath({required String descriptorId}) {
+    return _fillPath(getDomainReaderDescriptorPathTemplate, <String, String>{
+      'descriptorId': descriptorId,
+    });
+  }
   static const String getLearningOpsSummaryPath = '/assistant/ops/learning-summary';
   static const String getSkillCatalogItemPathTemplate = '/assistant/skills/{skillId}';
   static String getSkillCatalogItemPath({required String skillId}) {
     return _fillPath(getSkillCatalogItemPathTemplate, <String, String>{
       'skillId': skillId,
+    });
+  }
+  static const String getSkillDataControlRequestPathTemplate = '/assistant/skill-data-control-requests/{requestId}';
+  static String getSkillDataControlRequestPath({required String requestId}) {
+    return _fillPath(getSkillDataControlRequestPathTemplate, <String, String>{
+      'requestId': requestId,
     });
   }
   static const String getSkillSubscriptionPathTemplate = '/assistant/skill-subscriptions/{subscriptionId}';
@@ -288,10 +337,17 @@ class AssistantApiMetadata {
   static const String listAssistantSessionsPath = '/assistant/sessions';
   static const String listAssistantTasksPath = '/assistant/tasks';
   static const String listConsentsPath = '/assistant/consents';
+  static const String listDomainReaderDescriptorsPath = '/internal/assistant/domain-readers';
   static const String listSessionTurnsPathTemplate = '/assistant/sessions/{sessionId}/turns';
   static String listSessionTurnsPath({required String sessionId}) {
     return _fillPath(listSessionTurnsPathTemplate, <String, String>{
       'sessionId': sessionId,
+    });
+  }
+  static const String listSkillActivitiesPathTemplate = '/assistant/skills/{skillId}/activities';
+  static String listSkillActivitiesPath({required String skillId}) {
+    return _fillPath(listSkillActivitiesPathTemplate, <String, String>{
+      'skillId': skillId,
     });
   }
   static const String listSkillSubscriptionsPath = '/assistant/skill-subscriptions';

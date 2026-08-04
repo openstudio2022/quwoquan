@@ -194,7 +194,7 @@ class CircleApiMetadata {
 
   /// 响应体形态：object 单对象 | page 分页列表（items） | ack 仅状态确认（无读模型）。
   static const Map<String, String> operationToResponseKind = <String, String>{
-    'ReportCircleBehavior': 'ack',
+    'ReportCircleBehavior': 'object',
   };
 
   static const String applyJoinCircleGroupOperation = 'ApplyJoinCircleGroup';
