@@ -10,7 +10,7 @@ import 'package:quwoquan_app/cloud/entity/generated/entity_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_api_metadata.g.dart';
-import 'package:quwoquan_app/application/entity/homepage_view_data.dart';
+import 'package:quwoquan_app/entity/entity_homepage/homepage/domain/homepage_view_data.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show HomepageIntroduction, HomepageObjectPageBundleQuery;

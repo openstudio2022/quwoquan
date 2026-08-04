@@ -3,7 +3,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/ui/discovery/models/works_viewer_state_budget.dart';
+import 'package:quwoquan_app/content/media/media_asset/domain/works_viewer_state_budget.dart';
 
 void main() {
   test('生产默认预算固定为 16 个作品、current±2 与 48 条派生投影', () {

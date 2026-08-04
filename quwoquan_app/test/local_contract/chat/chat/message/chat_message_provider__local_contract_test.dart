@@ -10,7 +10,7 @@ import 'package:quwoquan_app/chat/chat/message/domain/chat_message_media_view_da
 import 'package:quwoquan_app/ui/chat/providers/chat_message_provider.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import '../../../../support/cloud_services/content_facet_overrides.dart';
-import '../../../../support/cloud_services/content/mock_content_repository.dart';
+import '../../../../support/content/content/post/mock_content_repository.dart';
 
 final RegExp _defaultNicknamePattern = RegExp(r'^新同学_\d{6}_\d{7}$');
 

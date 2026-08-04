@@ -8,16 +8,16 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 import 'package:quwoquan_app/cloud/user/generated/user_profile_ui_config.g.dart';
-import 'package:quwoquan_app/components/post/post_preview_card.dart';
+import 'package:quwoquan_app/content/content/post/presentation/post_preview_card.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/user/account/user_account/domain/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
 import 'package:quwoquan_app/ui/user/providers/profile_state_provider.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_secondary_tab_bar.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
-import 'package:quwoquan_app/ui/discovery/services/media_viewer_interaction_bridge.dart';
-import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
-import 'package:quwoquan_app/components/content/intersection_reason_chip.dart';
+import 'package:quwoquan_app/content/media/media_asset/application/media_viewer_interaction_bridge.dart';
+import 'package:quwoquan_app/content/content/post/domain/content_surface_view_mapper.dart';
+import 'package:quwoquan_app/recommendation/recommendation/recommendation_feature_profile_view/presentation/intersection_reason_chip.dart';
 
 /// 记录 Tab：统一承载 `全部 / 图片 / 视频 / 长文` 的内容筛选。
 class ProfileWorksTab extends ConsumerStatefulWidget {

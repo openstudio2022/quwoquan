@@ -1,7 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import '../../../../support/fixtures/intersection_fixtures.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/components/object_page/intersection_visual_cluster.dart';
+import 'package:quwoquan_app/recommendation/recommendation/recommendation_feature_profile_view/presentation/intersection_visual_cluster.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 Widget _host(Widget child) => CupertinoApp(

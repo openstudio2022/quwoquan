@@ -4,8 +4,8 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
     show ReferralSource;
 import 'package:quwoquan_app/recommendation/recommendation/recommendation_feature_profile_view/presentation/intersection_entity.dart';
-import 'package:quwoquan_app/components/object_page/intersection_target_navigator.dart';
-import 'package:quwoquan_app/components/object_page/object_insight_primitives.dart'
+import 'package:quwoquan_app/recommendation/recommendation/recommendation_feature_profile_view/presentation/intersection_target_navigator.dart';
+import 'package:quwoquan_app/recommendation/recommendation/recommendation_feature_profile_view/presentation/object_insight_primitives.dart'
     show profileIntersectionSourceRef;
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';

@@ -47,7 +47,7 @@ export 'design_system/providers/theme_provider.dart';
 export 'providers/app_providers.dart';
 export 'package:quwoquan_app/app/providers/app_state_provider.dart';
 export 'package:quwoquan_app/app/providers/accessibility_provider.dart';
-export 'package:quwoquan_app/ui/discovery/providers/video_force_dark_provider.dart'
+export 'package:quwoquan_app/content/media/media_asset/application/video_force_dark_provider.dart'
     show
         VideoForceDarkState,
         VideoForceDarkNotifier,
@@ -55,7 +55,7 @@ export 'package:quwoquan_app/ui/discovery/providers/video_force_dark_provider.da
         BottomNavHiddenState,
         BottomNavHiddenNotifier,
         bottomNavHiddenProvider;
-export 'package:quwoquan_app/ui/discovery/providers/discovery_state.dart';
+export 'package:quwoquan_app/content/content/post/application/discovery_state.dart';
 
 // Services
 export 'auth/auth_session.dart';
@@ -69,7 +69,6 @@ export 'package:quwoquan_app/core/errors/runtime_error_display.dart'
         ensureRetryUiErrorSemantic,
         runtimeErrorDisplayMessage,
         runtimeErrorSemantic;
-export 'services/search_recent_history_store.dart';
 export 'services/app_page_load_arbiter.dart';
 
 // Utils

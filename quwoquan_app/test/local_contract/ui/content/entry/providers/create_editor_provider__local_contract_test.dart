@@ -1,10 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/ui/content/models/article_document_models.dart';
-import 'package:quwoquan_app/ui/content/models/article_presentation_models.dart';
-import 'package:quwoquan_app/ui/content/models/article_editor_projection.dart';
-import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
-import 'package:quwoquan_app/ui/content/entry/providers/create_editor_provider.dart';
+import 'package:quwoquan_app/content/content/post/domain/article_document_models.dart';
+import 'package:quwoquan_app/content/content/post/domain/article_presentation_models.dart';
+import 'package:quwoquan_app/content/content/post/domain/article_editor_projection.dart';
+import 'package:quwoquan_app/content/content/post/domain/create_editor_models.dart';
+import 'package:quwoquan_app/content/content/post/application/create_editor_provider.dart';
 
 void main() {
   test('重排图片后保持新的顺序结果', () {

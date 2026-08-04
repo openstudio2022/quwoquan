@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/ui/content/entry/providers/create_editor_provider.dart';
+import 'package:quwoquan_app/content/content/post/application/create_editor_provider.dart';
 
 void main() {
   test('四图链路里第二张图片之后仍可插入正文 node', () {

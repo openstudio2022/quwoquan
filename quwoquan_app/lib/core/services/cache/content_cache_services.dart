@@ -8,8 +8,8 @@ import 'package:quwoquan_app/cloud/runtime/generated/content/content_metadata.g.
 import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
-import 'package:quwoquan_app/cloud/runtime/models/discovery_feed_page.dart';
-import 'package:quwoquan_app/cloud/services/content/content_read_model_projection.dart';
+import 'package:quwoquan_app/content/content/feed_delivery_page/domain/discovery_feed_page.dart';
+import 'package:quwoquan_app/content/content/post/adapters/content_read_model_projection.dart';
 import 'package:quwoquan_app/core/services/cache/cache_read_result.dart';
 import 'package:quwoquan_app/core/services/cache/cache_telemetry_sink.dart';
 import 'package:quwoquan_app/core/services/cache/object_cache_store.dart';

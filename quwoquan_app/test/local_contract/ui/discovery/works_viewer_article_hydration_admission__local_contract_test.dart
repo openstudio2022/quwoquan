@@ -3,7 +3,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/ui/discovery/widgets/works_viewer_article_hydration_admission.dart';
+import 'package:quwoquan_app/content/media/media_asset/presentation/works_viewer_article_hydration_admission.dart';
 
 void main() {
   test('快速切换严格串行并只保留最新 pending hydration', () async {

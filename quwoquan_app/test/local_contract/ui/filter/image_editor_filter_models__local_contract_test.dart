@@ -3,7 +3,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:quwoquan_app/components/media/image/editor/filter/image_editor_filter_models.dart';
+import 'package:quwoquan_app/content/media/filter_catalog_release/adapters/image_editor_filter_models.dart';
 import 'package:test/test.dart';
 
 void main() {

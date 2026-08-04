@@ -14,7 +14,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/content/content_request_pag
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/runtime/observability/cloud_operation_telemetry.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_repository.dart';
-import 'package:quwoquan_app/cloud/services/content/intersection_statement_synthesizer.dart';
+import 'package:quwoquan_app/recommendation/recommendation/recommendation_feature_profile_view/domain/intersection_statement_synthesizer.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_visit_writer.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';

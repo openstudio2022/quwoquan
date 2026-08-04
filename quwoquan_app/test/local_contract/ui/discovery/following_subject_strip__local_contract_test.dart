@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
-import 'package:quwoquan_app/ui/discovery/widgets/following_subject_strip.dart';
+import 'package:quwoquan_app/content/content/post/presentation/following_subject_strip.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 final class _FakeFollowingSubjectFacet

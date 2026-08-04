@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
-import 'package:quwoquan_app/ui/content/entry/widgets/create_entry_sheet.dart';
+import 'package:quwoquan_app/content/content/post/presentation/create_entry_sheet.dart';
 
 void main() {
   testWidgets('关闭旧 flag 时仍保留统一三项创作入口', (tester) async {

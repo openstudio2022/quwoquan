@@ -1,7 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/core/platform/app_font_families.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/ui/content/models/article_presentation_models.dart';
+import 'package:quwoquan_app/content/content/post/domain/article_presentation_models.dart';
 
 @immutable
 class ArticleTemplatePalette {

@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/ui/discovery/models/home_feed_video_autoplay_policy.dart';
+import 'package:quwoquan_app/content/media/media_asset/domain/home_feed_video_autoplay_policy.dart';
 
 void main() {
   group('shouldAutoPlayHomeFeedVideo', () {

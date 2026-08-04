@@ -4,7 +4,7 @@ import '../../../../support/fixtures/intersection_fixtures.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/components/object_page/intersection_target_navigator.dart';
+import 'package:quwoquan_app/recommendation/recommendation/recommendation_feature_profile_view/presentation/intersection_target_navigator.dart';
 import 'package:quwoquan_app/assistant/assistant/page_context/domain/assistant_open_context.dart';
 import 'package:quwoquan_app/core/models/start_group_chat_route_extra.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';

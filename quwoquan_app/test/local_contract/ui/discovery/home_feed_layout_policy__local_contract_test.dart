@@ -1,7 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
-import 'package:quwoquan_app/ui/discovery/models/home_feed_layout_policy.dart';
+import 'package:quwoquan_app/content/content/post/domain/home_feed_layout_policy.dart';
 
 const _recommend = HomeChannelConfig(
   id: 'recommend',

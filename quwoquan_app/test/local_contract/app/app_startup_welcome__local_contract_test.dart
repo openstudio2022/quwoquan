@@ -24,7 +24,7 @@ import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 import '../../support/runtime_failure_fixtures.dart';
 import '../../support/recording_app_telemetry_recorder.dart';
 import '../../support/cloud_services/content_facet_overrides.dart';
-import '../../support/cloud_services/content/mock_content_repository.dart';
+import '../../support/content/content/post/mock_content_repository.dart';
 
 /// 以固定行为代理 refresh 的会话生命周期写面（logout 不参与启动链路断言）。
 final class _StubSessionLifecycleWriter

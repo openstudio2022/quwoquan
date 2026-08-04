@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import '../../../support/cloud_services/content_facet_overrides.dart';
-import '../../../support/cloud_services/content/mock_content_repository.dart';
+import '../../../support/content/content/post/mock_content_repository.dart';
 import '../../../support/cloud_services/test_content_comment_facet.dart';
 
 void main() {

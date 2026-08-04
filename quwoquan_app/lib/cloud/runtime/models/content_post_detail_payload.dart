@@ -1,6 +1,6 @@
 import 'package:quwoquan_app/cloud/runtime/generated/content/post_read_presentation.g.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
-import 'package:quwoquan_app/cloud/runtime/models/post_read_presentation_mapper.dart';
+import 'package:quwoquan_app/content/content/post/adapters/post_read_presentation_mapper.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// Typed App projection of the canonical `GetPost` response.

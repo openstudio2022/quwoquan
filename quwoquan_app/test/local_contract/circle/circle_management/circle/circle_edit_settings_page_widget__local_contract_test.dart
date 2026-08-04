@@ -3,9 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
-import 'package:quwoquan_app/components/media/picker/image_pick_gateway.dart';
+import 'package:quwoquan_app/content/media/media_upload_session/adapters/image_pick_gateway.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
-import 'package:quwoquan_app/ui/circle/pages/circle_edit_settings_page.dart';
+import 'package:quwoquan_app/circle/circle_management/circle/presentation/circle_edit_settings_page.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 Widget _app({

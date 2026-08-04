@@ -4,7 +4,7 @@ import 'pageflip_diagnostics_shared.dart';
 import '../widget/pageflip_widget.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
-import 'package:quwoquan_app/ui/content/models/article_presentation_models.dart';
+import 'package:quwoquan_app/content/content/post/domain/article_presentation_models.dart';
 import 'package:quwoquan_app/ui/content/models/article_theme.dart';
 
 class PageflipWidgetDiagnosticsApp extends StatefulWidget {

@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:quwoquan_app/application/content/onboarding/interest_onboarding.dart';
+import 'package:quwoquan_app/content/content/post/application/interest_onboarding.dart';
 
 /// 安装级加密草稿；只存路径制偏好，不存账号凭据。
 final class SecureInterestOnboardingDraftStore

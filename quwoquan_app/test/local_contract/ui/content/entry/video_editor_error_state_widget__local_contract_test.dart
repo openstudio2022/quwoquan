@@ -2,7 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
-import 'package:quwoquan_app/ui/content/entry/pages/video_editor_page.dart';
+import 'package:quwoquan_app/content/media/media_upload_session/presentation/video_editor_page.dart';
 
 void main() {
   testWidgets('视频编辑页在本地视频不可读时由宿主导航返回', (tester) async {

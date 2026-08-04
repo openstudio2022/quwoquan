@@ -1,6 +1,6 @@
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
-import 'package:quwoquan_app/cloud/services/content/content_read_model_projection.dart';
-import 'package:quwoquan_app/ui/content/models/content_surface_view.dart';
+import 'package:quwoquan_app/content/content/post/adapters/content_read_model_projection.dart';
+import 'package:quwoquan_app/content/content/post/domain/content_surface_view.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
 
 /// 媒体浏览器按帖子 id 携带的发现区/沉浸扩展数据。

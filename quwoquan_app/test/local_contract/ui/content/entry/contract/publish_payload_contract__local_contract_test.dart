@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/application/entity/homepage_view_data.dart';
-import 'package:quwoquan_app/ui/content/entry/services/create_page_remote_helpers.dart';
-import 'package:quwoquan_app/ui/content/models/publish_settings_models.dart';
+import 'package:quwoquan_app/entity/entity_homepage/homepage/domain/homepage_view_data.dart';
+import 'package:quwoquan_app/content/content/post/adapters/create_page_remote_helpers.dart';
+import 'package:quwoquan_app/content/content/post/domain/publish_settings_models.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// L1a 契约测试：创作入口发布 payload 与 content/content/post metadata 对齐

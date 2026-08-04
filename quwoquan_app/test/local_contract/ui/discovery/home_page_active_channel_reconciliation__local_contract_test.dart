@@ -9,7 +9,7 @@ import 'package:quwoquan_app/components/navigation/home_primary_tab_strip.dart';
 import 'package:quwoquan_app/components/navigation/tab_swipe_switch_region.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/discovery/pages/home_page.dart';
-import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
+import 'package:quwoquan_app/content/content/post/application/discovery_feed_provider.dart';
 
 final _testHomeChannelsProvider =
     NotifierProvider<_TestHomeChannelsNotifier, List<HomeChannelConfig>>(

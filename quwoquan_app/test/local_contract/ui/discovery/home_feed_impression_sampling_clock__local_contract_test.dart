@@ -1,7 +1,7 @@
 // spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/streaming-feed-performance/spec.md#gwt-002
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/ui/discovery/models/home_feed_impression_sampling_clock.dart';
+import 'package:quwoquan_app/content/content/post/domain/home_feed_impression_sampling_clock.dart';
 
 void main() {
   test('所有已挂载 feed 卡片共用一个采样 Timer，最后一个退出后停止', () {

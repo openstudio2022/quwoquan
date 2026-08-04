@@ -14,7 +14,7 @@ import '../../../../support/cloud_services/homepage_alpha_test_adapter.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
-import 'package:quwoquan_app/ui/entity/pages/homepage_detail_page.dart';
+import 'package:quwoquan_app/entity/entity_homepage/homepage/presentation/homepage_detail_page.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show CloudOperationCancellationSignal, HomepageIntroduction;
 

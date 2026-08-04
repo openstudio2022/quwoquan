@@ -1,7 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/ui/content/models/article_presentation_models.dart';
-import 'package:quwoquan_app/ui/content/entry/widgets/article_wrap_paragraph_editor.dart';
+import 'package:quwoquan_app/content/content/post/domain/article_presentation_models.dart';
+import 'package:quwoquan_app/content/content/post/presentation/article_wrap_paragraph_editor.dart';
 
 class _WrapEditorHarness extends StatefulWidget {
   const _WrapEditorHarness({

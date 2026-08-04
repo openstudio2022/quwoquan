@@ -1,6 +1,6 @@
 import 'package:quwoquan_app/content/media/media_upload_session/adapters/create_page_article_media_projection.dart';
-import 'package:quwoquan_app/ui/content/entry/services/prepared_post_publication_payload.dart';
-import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
+import 'package:quwoquan_app/content/content/post/adapters/prepared_post_publication_payload.dart';
+import 'package:quwoquan_app/content/content/post/domain/create_editor_models.dart';
 
 typedef ResolveArticleMediaAsset =
     Future<String> Function({

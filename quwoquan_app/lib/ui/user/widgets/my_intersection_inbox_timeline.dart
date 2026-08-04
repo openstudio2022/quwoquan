@@ -1,7 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
-import 'package:quwoquan_app/components/object_page/interactive_intersection_text.dart';
-import 'package:quwoquan_app/components/object_page/intersection_icon_resolver.dart';
+import 'package:quwoquan_app/recommendation/recommendation/recommendation_feature_profile_view/presentation/interactive_intersection_text.dart';
+import 'package:quwoquan_app/recommendation/recommendation/recommendation_feature_profile_view/presentation/intersection_icon_resolver.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 

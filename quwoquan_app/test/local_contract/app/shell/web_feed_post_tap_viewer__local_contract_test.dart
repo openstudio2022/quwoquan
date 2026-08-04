@@ -1,6 +1,6 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/ui/discovery/widgets/home_multi_form_feed.dart';
+import 'package:quwoquan_app/content/content/post/presentation/home_multi_form_feed.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../support/app/web_shell_test_harness.dart';

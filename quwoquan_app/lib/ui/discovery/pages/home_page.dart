@@ -19,10 +19,10 @@ import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
 import 'package:quwoquan_app/assistant/assistant/assistant_entry_view/presentation/assistant_half_sheet.dart';
-import 'package:quwoquan_app/ui/discovery/services/home_feed_post_open_action.dart';
-import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
-import 'package:quwoquan_app/ui/discovery/widgets/home_multi_form_feed.dart';
-import 'package:quwoquan_app/ui/discovery/widgets/works_immersive_viewer.dart';
+import 'package:quwoquan_app/content/content/post/application/home_feed_post_open_action.dart';
+import 'package:quwoquan_app/content/content/post/application/discovery_feed_provider.dart';
+import 'package:quwoquan_app/content/content/post/presentation/home_multi_form_feed.dart';
+import 'package:quwoquan_app/content/media/media_asset/presentation/works_immersive_viewer.dart';
 
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({

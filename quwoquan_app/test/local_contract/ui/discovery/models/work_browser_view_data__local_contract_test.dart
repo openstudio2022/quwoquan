@@ -2,7 +2,7 @@
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.dart';
-import 'package:quwoquan_app/ui/discovery/models/work_browser_view_data.dart';
+import 'package:quwoquan_app/content/media/media_asset/domain/work_browser_view_data.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {

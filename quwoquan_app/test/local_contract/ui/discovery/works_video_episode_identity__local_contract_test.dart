@@ -1,7 +1,7 @@
 // spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/streaming-feed-performance/spec.md#gwt-005
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/ui/discovery/widgets/works_video_episode_identity.dart';
+import 'package:quwoquan_app/content/media/media_asset/presentation/works_video_episode_identity.dart';
 
 void main() {
   test('同一公开交付引用的重复分集不会覆盖 session registry', () {

@@ -8,7 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../../../support/pageflip/pageflip.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/content/article_reader/content/article_reader_page_surfaces.dart';
-import 'package:quwoquan_app/ui/content/models/article_presentation_models.dart';
+import 'package:quwoquan_app/content/content/post/domain/article_presentation_models.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/host/article_read_only_book_deck.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/host/article_reader_stage_widgets.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/layers/backward_leaf_verso_pixel_probe.dart';

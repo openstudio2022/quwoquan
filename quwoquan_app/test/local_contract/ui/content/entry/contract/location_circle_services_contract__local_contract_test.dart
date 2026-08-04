@@ -1,13 +1,13 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/services/integration/location_query_contracts.dart';
+import 'package:quwoquan_app/integration/external_integration/location/application/location_query_contracts.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/core/application/content/create_location_coordinator.dart';
-import 'package:quwoquan_app/ui/content/entry/services/publish_circle_services.dart';
+import 'package:quwoquan_app/content/content/post/adapters/publish_circle_services.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 import '../../../../../support/fake_location_gateway.dart';
 import '../../../../../support/runtime_failure_fixtures.dart';
-import '../../../../../support/cloud_services/object_doubles/circle/circle_contract_test_builders.dart';
+import '../../../../../support/circle/circle_management/circle/circle_contract_test_builders.dart';
 
 final class _SequencedLocationQuery
     implements NearbyLocationReader, LocationSearchReader {

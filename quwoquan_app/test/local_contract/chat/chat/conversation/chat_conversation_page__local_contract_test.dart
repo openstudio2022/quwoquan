@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import '../../../../support/cloud_services/chat_repository_mock.dart';
-import '../../../../support/cloud_services/content/mock_content_repository.dart';
+import '../../../../support/content/content/post/mock_content_repository.dart';
 import 'package:quwoquan_app/realtime/realtime/connection/domain/realtime_connection_delegate.dart';
 import 'package:quwoquan_app/realtime/realtime/connection/presentation/realtime_connection_notifier.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';

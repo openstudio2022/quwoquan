@@ -7,7 +7,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/components/navigation/home_primary_tab_strip.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
-import 'package:quwoquan_app/cloud/services/content/content_read_model_projection.dart';
+import 'package:quwoquan_app/content/content/post/adapters/content_read_model_projection.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
@@ -16,15 +16,15 @@ import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
 import 'package:quwoquan_app/l10n/app_localizations_zh.dart';
 import 'package:quwoquan_app/ui/circle/pages/home_circles_hub_page.dart';
 import 'package:quwoquan_app/ui/discovery/pages/home_page.dart';
-import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
-import 'package:quwoquan_app/ui/discovery/widgets/home_multi_form_feed.dart';
-import 'package:quwoquan_app/ui/discovery/widgets/following_subject_strip.dart';
-import 'package:quwoquan_app/ui/discovery/widgets/works_immersive_viewer.dart';
-import 'package:quwoquan_app/ui/search/pages/global_search_page.dart';
+import 'package:quwoquan_app/content/content/post/application/discovery_feed_provider.dart';
+import 'package:quwoquan_app/content/content/post/presentation/home_multi_form_feed.dart';
+import 'package:quwoquan_app/content/content/post/presentation/following_subject_strip.dart';
+import 'package:quwoquan_app/content/media/media_asset/presentation/works_immersive_viewer.dart';
+import 'package:quwoquan_app/search/search/search_index_view/presentation/global_search_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 import '../../../support/cloud_services/content_facet_overrides.dart';
-import '../../../support/cloud_services/content/mock_content_repository.dart';
+import '../../../support/content/content/post/mock_content_repository.dart';
 
 Widget _buildApp() {
   return ProviderScope(

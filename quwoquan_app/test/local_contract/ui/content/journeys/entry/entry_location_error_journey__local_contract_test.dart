@@ -16,7 +16,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/integration/integration_loc
 import 'package:quwoquan_app/core/application/content/create_location_coordinator.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/platform/location/location_gateway.dart';
-import 'package:quwoquan_app/ui/content/entry/pages/publish_location_selector_page.dart';
+import 'package:quwoquan_app/content/content/post/presentation/publish_location_selector_page.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 import '../../../../../support/fake_location_gateway.dart';

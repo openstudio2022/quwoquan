@@ -5,7 +5,7 @@ import 'dart:developer' as developer;
 import 'package:crypto/crypto.dart';
 import 'package:flutter/widgets.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:quwoquan_app/application/content/onboarding/interest_onboarding.dart';
+import 'package:quwoquan_app/content/content/post/application/interest_onboarding.dart';
 import 'package:quwoquan_app/cloud/runtime/context/actor_queue_partition.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/infrastructure/local/actor_queue/actor_queue_storage.dart';

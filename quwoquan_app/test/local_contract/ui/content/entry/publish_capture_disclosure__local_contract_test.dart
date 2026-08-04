@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/content/media/media_upload_session/domain/media_capture_metadata.dart';
-import 'package:quwoquan_app/ui/content/models/publish_settings_models.dart';
+import 'package:quwoquan_app/content/content/post/domain/publish_settings_models.dart';
 
 void main() {
   group('PublishSettings 拍摄元数据披露', () {

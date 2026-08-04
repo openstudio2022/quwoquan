@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/application/content/post/post_publication_status_reader.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/content/entry/providers/post_publication_intent_queue_provider.dart';
-import 'package:quwoquan_app/ui/content/entry/widgets/post_publication_task_section.dart';
+import 'package:quwoquan_app/content/content/post/presentation/post_publication_task_section.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {

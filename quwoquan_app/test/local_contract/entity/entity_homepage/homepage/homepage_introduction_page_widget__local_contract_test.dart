@@ -3,10 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/components/media/app_media_image.dart';
+import 'package:quwoquan_app/content/media/media_asset/presentation/app_media_image.dart';
 import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/ui/entity/models/homepage_route_models.dart';
+import 'package:quwoquan_app/entity/entity_homepage/homepage/domain/homepage_route_models.dart';
 import 'package:quwoquan_app/entity/entity_homepage/homepage/domain/homepage_tab.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_introduction_page.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'

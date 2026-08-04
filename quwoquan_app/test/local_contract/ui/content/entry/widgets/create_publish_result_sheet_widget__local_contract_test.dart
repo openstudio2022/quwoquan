@@ -2,7 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
-import 'package:quwoquan_app/ui/content/entry/widgets/create_publish_result_sheet.dart';
+import 'package:quwoquan_app/content/content/post/presentation/create_publish_result_sheet.dart';
 
 void main() {
   testWidgets('发布成功页提供查看作品和完成两个明确出口', (tester) async {

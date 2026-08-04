@@ -17,11 +17,11 @@ import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/testing/patrol_test_support.dart';
-import 'package:quwoquan_app/cloud/services/content/content_repository_contract.dart'
+import 'package:quwoquan_app/content/content/post/application/content_repository_contract.dart'
     show contentPostDeleteIdempotencyKey;
-import 'package:quwoquan_app/ui/content/entry/providers/create_draft_store_provider.dart';
+import 'package:quwoquan_app/content/content/post/application/create_draft_store_provider.dart';
 import 'package:quwoquan_app/ui/content/entry/providers/post_publication_intent_queue_provider.dart';
-import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
+import 'package:quwoquan_app/content/content/post/domain/create_editor_models.dart';
 
 const _pngBase64 =
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==';

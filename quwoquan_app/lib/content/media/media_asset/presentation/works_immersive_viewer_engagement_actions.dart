@@ -1,0 +1,798 @@
+part of 'works_immersive_viewer.dart';
+
+extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
+  void _openCommentFor(String postId) {
+    _setMountedState(() {
+      _commentSplitPostId = postId;
+      _invalidateVideoViewport(resetDurationWindow: false);
+    });
+  }
+
+  Widget _buildCommentSplitContent(ContentPostViewData post) {
+    return ColoredBox(
+      color: AppColors.worksBackground,
+      child: _buildPostCanvas(
+        post,
+        enableArticlePageCurl: _enableArticlePageCurl,
+        isVisible: true,
+        videoViewportEpoch: _videoViewportEpoch,
+      ),
+    );
+  }
+
+  ContentPostViewData? _postById(
+    List<ContentPostViewData> posts,
+    String postId,
+  ) {
+    for (final post in posts) {
+      if (post.id == postId) {
+        return post;
+      }
+    }
+    return null;
+  }
+
+  void _sharePost(
+    BuildContext ctx,
+    ContentPostViewData post, {
+    required bool enableIdentityTemplate,
+  }) {
+    runWhenLoggedIn(ref, context, AuthGateReason.share, () {
+      final template = _buildShareTemplate(
+        post: post,
+        enableIdentityTemplate: enableIdentityTemplate,
+      );
+      ContentShareSheet.show(
+        ctx,
+        template: template,
+        circlePostPlacementWriter: ref.read(
+          workBrowserCirclePostPlacementWriterProvider,
+        ),
+        circleMembershipQuery: ref.read(
+          workBrowserCircleMembershipQueryProvider,
+        ),
+        outboundShareWriter: ref.read(
+          workBrowserContentOutboundShareWriterProvider,
+        ),
+        onActionCompleted: (result) async {
+          await _recordShare(post.id, result.actionId);
+        },
+      );
+    });
+  }
+
+  Future<void> _copyLink(
+    BuildContext context,
+    ContentPostViewData post, {
+    required bool enableIdentityTemplate,
+  }) async {
+    final result = await const DefaultContentShareActionHandler().execute(
+      context,
+      _buildShareTemplate(
+        post: post,
+        enableIdentityTemplate: enableIdentityTemplate,
+      ),
+      ContentShareAction(id: 'copy_link', label: FoundationText.copyLink),
+    );
+    if (result.success) {
+      await _recordShare(post.id, result.actionId);
+    }
+  }
+
+  ContentShareTemplate _buildShareTemplate({
+    required ContentPostViewData post,
+    required bool enableIdentityTemplate,
+  }) {
+    final raw = _rawPostById(post.id);
+    final visibility =
+        raw?[ContentPostImmersiveWireKeys.visibility]?.toString() ?? 'public';
+    final surfaceView = ContentSurfaceViewMapper.fromDto(post, wire: raw);
+    return ContentShareTemplateBuilder.build(
+      surfaceView: surfaceView,
+      enableIdentityTemplate: enableIdentityTemplate,
+      visibility: visibility,
+    );
+  }
+
+  Future<void> _recordShare(String postId, String actionId) async {
+    ref
+        .read(contentBehaviorTrackerProvider)
+        .trackShare(postId, tags: <String>[actionId]);
+  }
+
+  MediaViewerResult _buildResult() {
+    final posts = _buildFeed();
+    final postsById = <String, ContentPostViewData>{
+      for (final post in posts) post.id: post,
+    };
+    final scopePostIds =
+        widget.initialInteractionSnapshot.effectiveScopePostIds;
+    final scopeProfileIds =
+        widget.initialInteractionSnapshot.effectiveScopeProfileIds;
+    final postInteractionState = ref.read(postInteractionStateProvider);
+    final relationshipState = ref.read(userRelationshipStateProvider);
+    return MediaViewerResult(
+      scopePostIds: Set<String>.from(scopePostIds),
+      scopeProfileIds: Set<String>.from(scopeProfileIds),
+      followingUsers: {
+        for (final profileId in scopeProfileIds)
+          if (relationshipState.isFollowing(profileId)) profileId,
+      },
+      likedPosts: {
+        for (final postId in scopePostIds)
+          if (postInteractionState.isLiked(postId)) postId,
+      },
+      postLikesCount: {
+        for (final postId in scopePostIds)
+          postId: postInteractionState.likeCountFor(
+            postId,
+            fallback: postsById[postId]?.likeCount ?? 0,
+          ),
+      },
+      postSharesCount: {
+        for (final postId in scopePostIds)
+          postId: postInteractionState.shareCountFor(
+            postId,
+            fallback: postsById[postId]?.shareCount ?? 0,
+          ),
+      },
+      postCommentCount: {
+        for (final postId in scopePostIds)
+          postId: postInteractionState.commentCountFor(
+            postId,
+            fallback: postsById[postId]?.commentCount ?? 0,
+          ),
+      },
+    );
+  }
+
+  void _dismissViewer() {
+    final result = _buildResult();
+    if (widget.onDismissed != null) {
+      widget.onDismissed!(result);
+      return;
+    }
+    widget.onTapBack?.call();
+  }
+
+  bool _canDeletePost(
+    ContentPostViewData post,
+    ActivePersonaContextViewData? activePersonaContext,
+  ) {
+    final postPersonaId = post.personaId.trim();
+    if (postPersonaId.isEmpty) {
+      return false;
+    }
+    final personaPersonaId = activePersonaContext?.personaId.trim() ?? '';
+    if (personaPersonaId.isNotEmpty) {
+      return personaPersonaId == postPersonaId;
+    }
+    final sessionPersonaId = ref
+        .read(authSessionControllerProvider)
+        .activePersonaId
+        .trim();
+    if (sessionPersonaId.isNotEmpty) {
+      return sessionPersonaId == postPersonaId;
+    }
+    final currentUserId = ref.read(currentUserIdProvider).trim();
+    return currentUserId.isNotEmpty && currentUserId == postPersonaId;
+  }
+
+  Future<void> _deleteCurrentPost(
+    BuildContext context,
+    ContentPostViewData post,
+  ) async {
+    runWhenLoggedIn(ref, context, AuthGateReason.deletePost, () async {
+      final displayName = post.displayName.trim().isNotEmpty
+          ? post.displayName.trim()
+          : post.title.trim().isNotEmpty
+          ? post.title.trim()
+          : ContentText.contentUnavailable;
+      final confirmed = await showAppActionSheet<bool>(
+        context,
+        title: ChatText.messageActionDelete,
+        message: ProfileText.profilePersonaDeleteConfirmTemplate.replaceFirst(
+          '%s',
+          displayName,
+        ),
+        sections: const [
+          AppActionSheetSection<bool>(
+            items: [
+              AppActionSheetItem<bool>(
+                value: true,
+                label: ChatText.messageActionDelete,
+                icon: CupertinoIcons.delete,
+                isDestructive: true,
+              ),
+            ],
+          ),
+        ],
+      );
+      if (confirmed != true || !context.mounted) {
+        return;
+      }
+      try {
+        await ref
+            .read(contentPostDeleteCommandWriterProvider)
+            .deletePost(
+              postId: post.id,
+              idempotencyKey: contentPostDeleteIdempotencyKey(post.id),
+            );
+        ref.read(discoveryFeedMapProvider.notifier).removePostLocally(post.id);
+        if (context.mounted) {
+          AppToast.show(context, ProfileText.contentDeleteSuccess);
+        }
+        if (!mounted) {
+          return;
+        }
+        _setMountedState(() {
+          _commentSplitPostId = null;
+          _postStateWindow.remove(post.id);
+          _articleHydrationAdmission.cancelPost(post.id);
+        });
+        _dismissViewer();
+      } catch (error) {
+        if (!context.mounted) {
+          return;
+        }
+        final semantic = runtime_error_display.runtimeErrorSemantic(
+          context,
+          error: error,
+          category: UiErrorCategory.submit,
+          scope: UiErrorScope.global,
+        );
+        await AppActionErrorFeedback.show(context, semantic: semantic);
+      }
+    });
+  }
+
+  Future<void> _requestPostReport(ContentPostViewData post) async {
+    final reason = await showContentReportReasonSheet(context);
+    if (reason == null || !mounted) {
+      return;
+    }
+    if (ref.read(authSessionControllerProvider).isAuthenticated) {
+      await _submitPostReport(post, reason);
+      return;
+    }
+    final accepted = ref
+        .read(authContinuationProvider.notifier)
+        .set(
+          SubmitContentReportContinuation(
+            postId: post.id,
+            surface: ContentReportContinuationSurface.workBrowser,
+            reason: reason,
+          ),
+          ownerToken: 'work-browser-report:${post.id}',
+        );
+    if (!accepted) {
+      return;
+    }
+    unawaited(
+      requireLogin(
+        ref,
+        context,
+        AuthGateReason.report,
+        dismissFallback: AppRoutePaths.home,
+        dismissPolicy: LoginDismissPolicy.safeFallback,
+      ),
+    );
+  }
+
+  Future<void> _submitPostReport(
+    ContentPostViewData post,
+    ReportReason reason,
+  ) async {
+    final journeyTracker = ref.read(journeyEventTrackerProvider);
+    final startedAt = DateTime.now();
+    try {
+      await ref
+          .read(workBrowserContentReportCommandWriterProvider)
+          .createReport(
+            CreateContentReportCommand(
+              targetId: post.id,
+              targetType: ReportTargetType.post,
+              reason: reason,
+            ),
+          );
+      await journeyTracker.trackAction(
+        journey: 'content_report',
+        action: 'submit_report',
+        pageName: 'works_immersive_viewer',
+        payload: <String, Object?>{
+          'result': 'success',
+          'durationMs': DateTime.now().difference(startedAt).inMilliseconds,
+        },
+      );
+      if (!mounted) return;
+      AppToast.show(context, ContentText.reportSubmittedViewProgress);
+    } catch (error) {
+      await journeyTracker.trackAction(
+        journey: 'content_report',
+        action: 'submit_report',
+        pageName: 'works_immersive_viewer',
+        error: error,
+        payload: <String, Object?>{
+          'result': 'failure',
+          'failReasonCode': error is CloudException
+              ? (error.code ?? error.type.name)
+              : error.runtimeType.toString(),
+          'durationMs': DateTime.now().difference(startedAt).inMilliseconds,
+        },
+      );
+      if (!mounted) return;
+      await AppActionErrorFeedback.show(
+        context,
+        semantic: runtime_error_display.runtimeErrorSemantic(
+          context,
+          error: error,
+          category: UiErrorCategory.submit,
+          scope: UiErrorScope.global,
+        ),
+        onAction: (action) async {
+          if (action.type == UiErrorActionType.retry ||
+              action.type == UiErrorActionType.resubmit) {
+            await _submitPostReport(post, reason);
+          }
+        },
+      );
+    }
+  }
+
+  void _requestOriginalImageAccess(ContentPostViewData post) {
+    final imageIndex =
+        (_photoInnerIndex[post.id] ?? _defaultImageIndexFor(post))
+            .clamp(0, max(0, _imageUrlsForPost(post).length - 1))
+            .toInt();
+    final mediaId = _originalMediaIdFor(post, imageIndex);
+    if (mediaId == null) {
+      return;
+    }
+    if (ref.read(authSessionControllerProvider).isAuthenticated) {
+      unawaited(
+        _loadOriginalImage(
+          post: post,
+          mediaId: mediaId,
+          imageIndex: imageIndex,
+        ),
+      );
+      return;
+    }
+    final accepted = ref
+        .read(authContinuationProvider.notifier)
+        .set(
+          RequestOriginalImageAccessContinuation(
+            postId: post.id,
+            mediaId: mediaId,
+            imageIndex: imageIndex,
+          ),
+          ownerToken: 'work-browser-original:$mediaId',
+        );
+    if (!accepted) {
+      return;
+    }
+    unawaited(
+      requireLogin(
+        ref,
+        context,
+        AuthGateReason.generic,
+        dismissFallback: AppRoutePaths.home,
+        dismissPolicy: LoginDismissPolicy.safeFallback,
+      ),
+    );
+  }
+
+  Future<void> _loadOriginalImage({
+    required ContentPostViewData post,
+    required String mediaId,
+    required int imageIndex,
+  }) async {
+    if (!_requestingOriginalMediaIds.add(mediaId)) {
+      return;
+    }
+    try {
+      final grant = await ref
+          .read(workBrowserContentMediaFacetProvider)
+          .requestOriginalAccess(
+            RequestContentMediaOriginalAccessCommand(mediaId: mediaId),
+          );
+      if (grant.mediaId != mediaId) {
+        throw StateError('original access grant media id mismatch');
+      }
+      final access = WorksViewerOriginalImageAccess(
+        url: grant.originalUrl.toString(),
+        expiresAt: grant.expiresAt,
+      );
+      if (!access.isUsableAt(DateTime.now())) {
+        throw StateError('original access grant already expired');
+      }
+      if (!mounted || !_postStateWindow.contains(post.id)) {
+        return;
+      }
+      _setMountedState(() {
+        _rememberPostLocalState(post.id);
+        final entries = _originalImageUrlsByPostId[post.id] ??=
+            <int, WorksViewerOriginalImageAccess>{};
+        entries.remove(imageIndex);
+        entries[imageIndex] = access;
+        while (entries.length >
+            _WorksImmersiveViewerState._maxOriginalImageAccessEntriesPerPost) {
+          entries.remove(entries.keys.first);
+        }
+      });
+      AppToast.show(context, MediaText.imageOriginalLoaded);
+    } catch (error) {
+      _requestingOriginalMediaIds.remove(mediaId);
+      if (!mounted) {
+        return;
+      }
+      await AppActionErrorFeedback.show(
+        context,
+        semantic: runtime_error_display.runtimeErrorSemantic(
+          context,
+          error: error,
+          category: UiErrorCategory.submit,
+          scope: UiErrorScope.global,
+        ),
+        onAction: (action) async {
+          if (action.type == UiErrorActionType.retry ||
+              action.type == UiErrorActionType.resubmit) {
+            await _loadOriginalImage(
+              post: post,
+              mediaId: mediaId,
+              imageIndex: imageIndex,
+            );
+          }
+        },
+      );
+    } finally {
+      _requestingOriginalMediaIds.remove(mediaId);
+    }
+  }
+
+  Set<String> get _effectiveFilterIds {
+    if (_selectedWorkFilterIds.isEmpty ||
+        _selectedWorkFilterIds.contains('all')) {
+      return <String>{'all'};
+    }
+    return _selectedWorkFilterIds;
+  }
+
+  Set<String> get _effectiveFilterContentTypes {
+    final types = <String>{};
+    for (final filter in ContentUIConfig.workFormatFilters) {
+      if (_effectiveFilterIds.contains(filter.id) &&
+          filter.contentType != null) {
+        types.add(filter.contentType!);
+      }
+    }
+    return types;
+  }
+
+  Future<void> _requestBlockAuthor(ContentPostViewData post) async {
+    final confirmed = await showAppActionSheet<bool>(
+      context,
+      title: ContentText.profileBlockConfirmTitle,
+      message: ContentText.profileBlockConfirmMessage,
+      sections: const <AppActionSheetSection<bool>>[
+        AppActionSheetSection<bool>(
+          items: <AppActionSheetItem<bool>>[
+            AppActionSheetItem<bool>(
+              value: true,
+              label: ContentText.blockAuthor,
+              icon: CupertinoIcons.person_crop_circle_badge_xmark,
+              isDestructive: true,
+            ),
+          ],
+        ),
+      ],
+    );
+    if (confirmed != true || !mounted) return;
+    if (ref.read(authSessionControllerProvider).isAuthenticated) {
+      await _applyBlockAuthor(post);
+      return;
+    }
+    final accepted = ref
+        .read(authContinuationProvider.notifier)
+        .set(
+          ContentModerationContinuation(
+            postId: post.id,
+            surface: ContentModerationContinuationSurface.workBrowser,
+            action: ContentModerationContinuationAction.blockAuthor,
+            authorId: post.authorId,
+          ),
+          ownerToken: 'work-browser-block-author:${post.id}',
+        );
+    if (!accepted) return;
+    unawaited(
+      requireLogin(
+        ref,
+        context,
+        AuthGateReason.blockUser,
+        dismissFallback: AppRoutePaths.home,
+        dismissPolicy: LoginDismissPolicy.safeFallback,
+      ),
+    );
+  }
+
+  Future<void> _applyBlockAuthor(ContentPostViewData post) async {
+    try {
+      await ref
+          .read(
+            personaRelationshipBlockWriterProvider(AppUiSurfaces.workBrowser),
+          )
+          .blockUser(BlockUserCommand(targetPersonaId: post.authorId));
+      final attribution = _feedAttributionForPost(post);
+      ref
+          .read(contentBehaviorTrackerProvider)
+          .trackHideAuthor(
+            post.id,
+            authorId: post.authorId,
+            contentType: post.type,
+            referralSource: widget.referralSource,
+            feedRequestId: attribution.feedRequestId,
+            channelId: _immersiveChannelId(),
+            policyDigest: attribution.policyDigest,
+            recallPath: post.recallPath,
+            contentVertical: post.contentVertical,
+            supplySource: post.supplySource,
+          );
+      _advanceAfterNegativeFeedback(post);
+    } catch (error) {
+      if (!mounted) return;
+      await AppActionErrorFeedback.show(
+        context,
+        semantic: runtime_error_display.runtimeErrorSemantic(
+          context,
+          error: error,
+          category: UiErrorCategory.submit,
+          scope: UiErrorScope.global,
+        ),
+        onAction: (action) async {
+          if (action.type == UiErrorActionType.retry ||
+              action.type == UiErrorActionType.resubmit) {
+            await _applyBlockAuthor(post);
+          }
+        },
+      );
+    }
+  }
+
+  Future<void> _requestBlockKeyword(ContentPostViewData post) async {
+    final suggested = suggestContentBlockedKeyword(<String>[
+      post.title,
+      post.normalizedBody,
+    ]);
+    final keyword = await showBlockedKeywordConfirmationSheet(
+      context,
+      suggestedKeyword: suggested,
+    );
+    if (keyword == null || !mounted) return;
+    if (ref.read(authSessionControllerProvider).isAuthenticated) {
+      await _applyBlockKeyword(post, keyword);
+      return;
+    }
+    final accepted = ref
+        .read(authContinuationProvider.notifier)
+        .set(
+          ContentModerationContinuation(
+            postId: post.id,
+            surface: ContentModerationContinuationSurface.workBrowser,
+            action: ContentModerationContinuationAction.blockKeyword,
+            keyword: keyword,
+          ),
+          ownerToken: 'work-browser-block-keyword:${post.id}',
+        );
+    if (!accepted) return;
+    unawaited(
+      requireLogin(
+        ref,
+        context,
+        AuthGateReason.settingsAccount,
+        dismissFallback: AppRoutePaths.home,
+        dismissPolicy: LoginDismissPolicy.safeFallback,
+      ),
+    );
+  }
+
+  Future<void> _applyBlockKeyword(
+    ContentPostViewData post,
+    String keyword,
+  ) async {
+    try {
+      await ref.read(blockedKeywordWriterProvider).add(keyword);
+      final attribution = _feedAttributionForPost(post);
+      ref
+          .read(contentBehaviorTrackerProvider)
+          .trackHideContentType(
+            post.id,
+            contentType: post.type,
+            authorId: post.authorId,
+            referralSource: widget.referralSource,
+            feedRequestId: attribution.feedRequestId,
+            channelId: _immersiveChannelId(),
+            policyDigest: attribution.policyDigest,
+            recallPath: post.recallPath,
+            contentVertical: post.contentVertical,
+            supplySource: post.supplySource,
+          );
+      _advanceAfterNegativeFeedback(post);
+    } catch (error) {
+      if (!mounted) return;
+      await AppActionErrorFeedback.show(
+        context,
+        semantic: runtime_error_display.runtimeErrorSemantic(
+          context,
+          error: error,
+          category: UiErrorCategory.submit,
+          scope: UiErrorScope.global,
+        ),
+        onAction: (action) async {
+          if (action.type == UiErrorActionType.retry ||
+              action.type == UiErrorActionType.resubmit) {
+            await _applyBlockKeyword(post, keyword);
+          }
+        },
+      );
+    }
+  }
+
+  /// Opens the post-level more-options sheet for the currently visible post.
+  ///
+  /// 作品浏览器：媒体筛选入口在「更多」菜单内（全部作品/图片/视频/文章）。
+  void _showWorksMoreSheet(BuildContext context) {
+    final posts = _buildFeed();
+    final post = posts.isEmpty
+        ? null
+        : posts[_currentPage.clamp(0, posts.length - 1)]
+              as ContentPostViewData?;
+    if (post == null) return;
+    final journeyTracker = ref.read(journeyEventTrackerProvider);
+    unawaited(
+      journeyTracker.trackAction(
+        journey: 'content_more_actions',
+        action: 'open',
+        pageName: 'works_immersive_viewer',
+        targetType: 'post',
+        targetKey: post.id,
+      ),
+    );
+    final enableIdentityTemplate = ref.read(
+      contentFeatureFlagProvider('enable_identity_share_template'),
+    );
+    final activePersonaContext = ref
+        .read(activePersonaContextProvider)
+        .asData
+        ?.value;
+    final canDelete = _canDeletePost(post, activePersonaContext);
+    final filterOptions = <MoreActionFilterOption>[
+      for (final filter in ContentUIConfig.workFormatFilters)
+        MoreActionFilterOption(
+          id: filter.id,
+          label: UITextConstants.contentLabelForKey(filter.labelKey),
+        ),
+    ];
+    final isArticle = _isArticleLikePost(post);
+    final currentImageIndex =
+        (_photoInnerIndex[post.id] ?? _defaultImageIndexFor(post))
+            .clamp(0, max(0, _imageUrlsForPost(post).length - 1))
+            .toInt();
+    final originalMediaId = _isImageLikePost(post)
+        ? _originalMediaIdFor(post, currentImageIndex)
+        : null;
+    final readingOptions = isArticle
+        ? <MoreActionReadingOption>[
+            for (final option in ContentUIConfig.articlePaperThemeOptions)
+              MoreActionReadingOption(
+                id: option.id,
+                label: UITextConstants.contentLabelForKey(option.labelKey),
+              ),
+          ]
+        : const <MoreActionReadingOption>[];
+    MoreActionPopup.show(
+      context: context,
+      config: MediaPostMoreActionConfig(
+        onActionInvoked: (actionId) => unawaited(
+          journeyTracker.trackAction(
+            journey: 'content_more_actions',
+            action: 'invoke',
+            pageName: 'works_immersive_viewer',
+            targetType: 'post',
+            targetKey: post.id,
+            payload: <String, Object?>{'actionId': actionId},
+          ),
+        ),
+        showShareAction: true,
+        showViewOriginalAction: originalMediaId != null,
+        onViewOriginal: originalMediaId == null
+            ? null
+            : () => _requestOriginalImageAccess(post),
+        filterOptions: filterOptions,
+        selectedFilterIds: _effectiveFilterIds.toList(growable: false),
+        onFilterSelectionChanged: _applyFilterSelection,
+        readingOptions: readingOptions,
+        selectedReadingOptionId: isArticle
+            ? (_articlePaperThemeOverrides[post.id] ?? 'system')
+            : null,
+        onReadingOptionChanged: isArticle
+            ? (id) => _setMountedState(() {
+                _rememberPostLocalState(post.id);
+                if (id == 'system') {
+                  _articlePaperThemeOverrides.remove(post.id);
+                } else {
+                  _articlePaperThemeOverrides[post.id] = id;
+                }
+              })
+            : null,
+        forceDarkAppearance: true,
+        onCopyLink: () => _copyLink(
+          context,
+          post,
+          enableIdentityTemplate: enableIdentityTemplate,
+        ),
+        onShare: () => _sharePost(
+          context,
+          post,
+          enableIdentityTemplate: enableIdentityTemplate,
+        ),
+        onNotInterested: () {
+          final attribution = _feedAttributionForPost(post);
+          final previousPage = _currentPage;
+          ref
+              .read(contentBehaviorTrackerProvider)
+              .trackDislike(
+                post.id,
+                contentType: post.type,
+                authorId: post.authorId,
+                referralSource: widget.referralSource,
+                feedRequestId: attribution.feedRequestId,
+                channelId: _immersiveChannelId(),
+                policyDigest: attribution.policyDigest,
+                recallPath: post.recallPath,
+                contentVertical: post.contentVertical,
+                supplySource: post.supplySource,
+              );
+          _advanceAfterNegativeFeedback(post);
+          AppToast.show(
+            context,
+            DiscoveryFeedText.feedNegativeFeedbackNotInterested,
+            actionLabel: ContentText.undo,
+            onAction: () {
+              ref
+                  .read(contentBehaviorTrackerProvider)
+                  .trackUndoDislike(
+                    post.id,
+                    contentType: post.type,
+                    authorId: post.authorId,
+                    referralSource: widget.referralSource,
+                    feedRequestId: attribution.feedRequestId,
+                    channelId: _immersiveChannelId(),
+                    policyDigest: attribution.policyDigest,
+                    recallPath: post.recallPath,
+                    contentVertical: post.contentVertical,
+                    supplySource: post.supplySource,
+                  );
+              if (_pageController.hasClients) {
+                _pageController.jumpToPage(previousPage);
+              }
+              AppToast.show(context, ContentText.notInterestedUndone);
+            },
+          );
+        },
+        onBlockUser: () => unawaited(_requestBlockAuthor(post)),
+        onBlockWords: () => unawaited(_requestBlockKeyword(post)),
+        onReport: () => _requestPostReport(post),
+        showDeleteAction: canDelete,
+        onDelete: canDelete ? () => _deleteCurrentPost(context, post) : null,
+      ),
+    );
+  }
+
+  void _advanceAfterNegativeFeedback(ContentPostViewData post) {
+    final posts = _buildFeed();
+    final index = posts.indexWhere((candidate) => candidate.id == post.id);
+    if (index >= 0 && index + 1 < posts.length && _pageController.hasClients) {
+      _pageController.jumpToPage(index + 1);
+    }
+  }
+}

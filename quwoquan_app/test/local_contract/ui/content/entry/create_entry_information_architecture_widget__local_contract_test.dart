@@ -5,8 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
-import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
-import 'package:quwoquan_app/ui/content/entry/widgets/create_entry_sheet.dart';
+import 'package:quwoquan_app/content/content/post/domain/create_editor_models.dart';
+import 'package:quwoquan_app/content/content/post/presentation/create_entry_sheet.dart';
 
 void main() {
   testWidgets('首层入口保留三种创作动作与社交动作，不再暴露旧六宫格 taxonomy', (tester) async {

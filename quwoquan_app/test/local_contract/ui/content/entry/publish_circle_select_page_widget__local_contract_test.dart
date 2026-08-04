@@ -6,9 +6,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
-import 'package:quwoquan_app/components/media/app_media_image.dart';
-import 'package:quwoquan_app/ui/content/models/publish_settings_models.dart';
-import 'package:quwoquan_app/ui/content/entry/pages/publish_circle_select_page.dart';
+import 'package:quwoquan_app/content/media/media_asset/presentation/app_media_image.dart';
+import 'package:quwoquan_app/content/content/post/domain/publish_settings_models.dart';
+import 'package:quwoquan_app/content/content/post/presentation/publish_circle_select_page.dart';
 
 void main() {
   late FlutterExceptionHandler? originalOnError;

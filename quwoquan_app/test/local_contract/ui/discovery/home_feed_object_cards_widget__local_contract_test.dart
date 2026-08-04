@@ -13,13 +13,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/media/media_download_cache.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
-import 'package:quwoquan_app/ui/discovery/widgets/home_multi_form_feed.dart';
+import 'package:quwoquan_app/content/content/post/application/discovery_feed_provider.dart';
+import 'package:quwoquan_app/content/content/post/presentation/home_multi_form_feed.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show ContentPostProjection, FeedObjectCard;
 
 import '../../../support/cloud_services/content_facet_overrides.dart';
-import '../../../support/cloud_services/content/mock_content_repository.dart';
+import '../../../support/content/content/post/mock_content_repository.dart';
 
 ContentPostViewData _post(int index) {
   return ContentPostViewData.fromWire(

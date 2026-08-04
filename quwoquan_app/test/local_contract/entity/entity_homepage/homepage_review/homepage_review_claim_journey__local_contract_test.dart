@@ -7,15 +7,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/application/entity/homepage_view_data.dart';
+import 'package:quwoquan_app/entity/entity_homepage/homepage/domain/homepage_view_data.dart';
 import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
 import '../../../../support/cloud_services/homepage_alpha_test_adapter.dart';
-import 'package:quwoquan_app/cloud/services/content/content_repository_contract.dart';
+import 'package:quwoquan_app/content/content/post/application/content_repository_contract.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_claim_page.dart';
-import 'package:quwoquan_app/ui/entity/pages/homepage_detail_page.dart';
+import 'package:quwoquan_app/entity/entity_homepage/homepage/presentation/homepage_detail_page.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show
         CloudOperationCancellationSignal,

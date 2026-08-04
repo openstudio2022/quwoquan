@@ -1,7 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/components/object_page/object_intersection_provider.dart';
-import 'package:quwoquan_app/components/object_page/object_intersection_section.dart';
+import 'package:quwoquan_app/recommendation/recommendation/recommendation_feature_profile_view/application/object_intersection_provider.dart';
+import 'package:quwoquan_app/recommendation/recommendation/recommendation_feature_profile_view/presentation/object_intersection_section.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 

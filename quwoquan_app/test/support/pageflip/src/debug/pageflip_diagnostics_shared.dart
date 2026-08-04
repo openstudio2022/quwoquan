@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:quwoquan_app/ui/content/models/article_document_models.dart';
-import 'package:quwoquan_app/ui/content/models/article_presentation_models.dart';
-import 'package:quwoquan_app/ui/content/widgets/article_paged_canvas.dart';
+import 'package:quwoquan_app/content/content/post/domain/article_document_models.dart';
+import 'package:quwoquan_app/content/content/post/domain/article_presentation_models.dart';
+import 'package:quwoquan_app/content/content/post/presentation/article_paged_canvas.dart';
 
 const ArticleTemplatePreset kPageflipDiagnosticsTemplate =
     ArticleTemplatePreset.tech;

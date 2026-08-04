@@ -14,7 +14,7 @@ import 'package:quwoquan_app/components/pageflip/controller.dart';
 import 'package:quwoquan_app/components/pageflip/page_surface_snapshot.dart';
 import 'package:quwoquan_app/components/pageflip/spread_model.dart';
 import 'package:quwoquan_app/components/pageflip/types.dart';
-import 'package:quwoquan_app/ui/content/models/article_presentation_models.dart';
+import 'package:quwoquan_app/content/content/post/domain/article_presentation_models.dart';
 
 void main() {
   testWidgets('article page textures stay inside the current page window', (

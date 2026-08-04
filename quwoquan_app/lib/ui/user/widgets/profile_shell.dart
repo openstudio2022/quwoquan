@@ -16,7 +16,7 @@ import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
 import 'package:quwoquan_app/components/navigation/tab_swipe_switch_region.dart';
 import 'package:quwoquan_app/components/object_page/object_page_shell.dart';
 import 'package:quwoquan_app/rtc/rtc/call_session/presentation/rtc_call_entry_presenter.dart';
-import 'package:quwoquan_app/components/media/app_media_image.dart';
+import 'package:quwoquan_app/content/media/media_asset/presentation/app_media_image.dart';
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/links/app_public_content_links.dart';

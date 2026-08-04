@@ -1,9 +1,9 @@
 import 'package:quwoquan_app/travel/travel/trip_share_snapshot/application/trip_travelogue_draft.dart';
 import 'package:quwoquan_app/application/content/post/post_publication_continuation_registry.dart';
-import 'package:quwoquan_app/ui/content/entry/providers/create_draft_store_provider.dart';
-import 'package:quwoquan_app/ui/content/models/article_document_models.dart';
-import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
-import 'package:quwoquan_app/ui/content/models/publish_settings_models.dart';
+import 'package:quwoquan_app/content/content/post/application/create_draft_store_provider.dart';
+import 'package:quwoquan_app/content/content/post/domain/article_document_models.dart';
+import 'package:quwoquan_app/content/content/post/domain/create_editor_models.dart';
+import 'package:quwoquan_app/content/content/post/domain/publish_settings_models.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 typedef TripShareDraftClock = int Function();

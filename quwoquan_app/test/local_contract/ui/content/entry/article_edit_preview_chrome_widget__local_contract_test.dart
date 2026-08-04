@@ -2,13 +2,13 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
-import 'package:quwoquan_app/ui/content/models/article_document_models.dart';
-import 'package:quwoquan_app/ui/content/article_render/services/article_pagination_engine.dart';
-import 'package:quwoquan_app/ui/content/models/article_presentation_models.dart';
-import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
-import 'package:quwoquan_app/ui/content/models/publish_settings_models.dart';
-import 'package:quwoquan_app/ui/content/entry/widgets/article_editor.dart';
-import 'package:quwoquan_app/ui/content/entry/widgets/article_preview_book_pager.dart';
+import 'package:quwoquan_app/content/content/post/domain/article_document_models.dart';
+import 'package:quwoquan_app/content/content/post/presentation/article_pagination_engine.dart';
+import 'package:quwoquan_app/content/content/post/domain/article_presentation_models.dart';
+import 'package:quwoquan_app/content/content/post/domain/create_editor_models.dart';
+import 'package:quwoquan_app/content/content/post/domain/publish_settings_models.dart';
+import 'package:quwoquan_app/content/content/post/presentation/article_editor.dart';
+import 'package:quwoquan_app/content/content/post/presentation/article_preview_book_pager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {

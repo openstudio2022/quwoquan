@@ -3,17 +3,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
-import '../../../../support/cloud_services/repository_mock_reexports.dart';
-import 'package:quwoquan_app/components/media/reorderable/media_reorderable_view.dart';
+import 'package:quwoquan_app/content/media/media_upload_session/presentation/media_reorderable_view.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
-import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
-import 'package:quwoquan_app/ui/content/entry/pages/create_page.dart';
-import 'package:quwoquan_app/ui/content/entry/providers/create_editor_provider.dart';
+import 'package:quwoquan_app/content/content/post/domain/create_editor_models.dart';
+import 'package:quwoquan_app/content/content/post/presentation/create_page.dart';
+import 'package:quwoquan_app/content/content/post/application/create_editor_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../support/cloud_services/content_facet_overrides.dart';
-import '../../../../support/cloud_services/content/mock_content_repository.dart';
+import '../../../../support/content/content/post/mock_content_repository.dart';
+import '../../../../support/cloud_services/repository_mock_reexports.dart';
 
 Widget _buildCreatePageApp({
   String? initialTabKey,

@@ -10,7 +10,7 @@ library;
 
 import 'package:flutter_test/flutter_test.dart';
 
-import '../../../../support/cloud_services/content/mock_content_repository.dart';
+import '../../../../support/content/content/post/mock_content_repository.dart';
 import '../../../../support/cloud_services/repository_mock_reexports.dart';
 
 void main() {

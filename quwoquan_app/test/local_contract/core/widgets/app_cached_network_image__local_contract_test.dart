@@ -10,7 +10,7 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 // ignore: depend_on_referenced_packages
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
-import 'package:quwoquan_app/cloud/media/cdn_image_url_builder.dart';
+import 'package:quwoquan_app/content/media/media_asset/adapters/cdn_image_url_builder.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/media/avatar_image_url.dart';

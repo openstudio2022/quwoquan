@@ -1,6 +1,6 @@
-import 'package:quwoquan_app/ui/content/article_render/markdown/qwq_markdown.dart';
-import 'package:quwoquan_app/ui/content/models/article_document_models.dart';
-import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
+import 'package:quwoquan_app/content/content/post/presentation/qwq_markdown.dart';
+import 'package:quwoquan_app/content/content/post/domain/article_document_models.dart';
+import 'package:quwoquan_app/content/content/post/domain/create_editor_models.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 final class ResolvedArticleMediaPayload {

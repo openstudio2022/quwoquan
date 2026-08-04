@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/ui/discovery/models/home_feed_video_focus_coordinator.dart';
+import 'package:quwoquan_app/content/media/media_asset/domain/home_feed_video_focus_coordinator.dart';
 
 void main() {
   group('HomeFeedVideoFocusCoordinator 单活跃视频不变量', () {

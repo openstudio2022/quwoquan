@@ -2,11 +2,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
-import 'package:quwoquan_app/cloud/services/content/content_read_model_projection.dart';
+import 'package:quwoquan_app/content/content/post/adapters/content_read_model_projection.dart';
 import 'package:quwoquan_app/realtime/realtime/connection/presentation/realtime_message_handler.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
-import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
-import 'package:quwoquan_app/ui/discovery/providers/feed_realtime_patch_provider.dart';
+import 'package:quwoquan_app/content/content/post/application/discovery_feed_provider.dart';
+import 'package:quwoquan_app/content/content/post/application/feed_realtime_patch_provider.dart';
 
 import '../../../../support/recording_app_telemetry_recorder.dart';
 

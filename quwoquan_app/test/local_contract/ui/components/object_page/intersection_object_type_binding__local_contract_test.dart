@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import '../../../../support/fixtures/intersection_fixtures.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_kind_metadata.g.dart';
-import 'package:quwoquan_app/components/object_page/intersection_target_navigator.dart';
+import 'package:quwoquan_app/recommendation/recommendation/recommendation_feature_profile_view/presentation/intersection_target_navigator.dart';
 
 /// 对象页把 objectType 翻译成 objectKind 的那段逻辑，曾经是端上一段手写 switch，
 /// 只认 user / circle / homepage 三个字面量。博物馆、古镇、交通枢纽这些垂类主页

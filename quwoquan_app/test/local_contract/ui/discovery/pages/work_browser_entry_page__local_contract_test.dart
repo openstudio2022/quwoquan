@@ -12,7 +12,7 @@ import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.dart';
-import 'package:quwoquan_app/cloud/services/content/content_repository_contract.dart'
+import 'package:quwoquan_app/content/content/post/application/content_repository_contract.dart'
     show ContentPostDetailReader, contentPostDeleteIdempotencyKey;
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
@@ -22,10 +22,10 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
-import 'package:quwoquan_app/ui/discovery/pages/work_browser_entry_page.dart';
+import 'package:quwoquan_app/content/content/post/presentation/work_browser_entry_page.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import '../../../../support/cloud_services/content_facet_overrides.dart';
-import '../../../../support/cloud_services/content/mock_content_repository.dart';
+import '../../../../support/content/content/post/mock_content_repository.dart';
 
 void main() {
   final mediaEndpoints = MediaEndpointConfig(

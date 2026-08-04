@@ -23,13 +23,13 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/circle/services/home_circles_hub_media_viewer_wiring.dart';
 import 'package:quwoquan_app/ui/circle/services/home_circles_hub_wire.dart';
-import 'package:quwoquan_app/components/media/app_media_image.dart';
-import 'package:quwoquan_app/ui/circle/models/circle_hub_feed_post_entry.dart';
+import 'package:quwoquan_app/content/media/media_asset/presentation/app_media_image.dart';
+import 'package:quwoquan_app/circle/circle_management/circle/domain/circle_hub_feed_post_entry.dart';
 import 'package:quwoquan_app/ui/circle/widgets/home_circles_category_tab.dart';
 import 'package:quwoquan_app/ui/circle/widgets/home_circles_entity_bridge_strip.dart';
 import 'package:quwoquan_app/core/models/circle_detail_page_route_extra.dart';
-import 'package:quwoquan_app/ui/discovery/services/media_viewer_interaction_bridge.dart';
-import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
+import 'package:quwoquan_app/content/media/media_asset/application/media_viewer_interaction_bridge.dart';
+import 'package:quwoquan_app/content/content/post/domain/content_surface_view_mapper.dart';
 import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
 
 part 'home_circles_hub_page_widgets.dart';

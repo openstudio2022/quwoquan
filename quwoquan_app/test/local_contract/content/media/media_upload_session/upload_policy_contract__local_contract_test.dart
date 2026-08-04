@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/application/content/media/generated/content_media_upload_policy.g.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
-import 'package:quwoquan_app/cloud/media/upload_policy.dart';
+import 'package:quwoquan_app/content/media/media_upload_session/domain/upload_policy.dart';
 
 void main() {
   group('UploadPolicy — 常规契约', () {

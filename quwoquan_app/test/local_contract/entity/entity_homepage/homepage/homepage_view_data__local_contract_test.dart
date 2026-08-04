@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/application/entity/homepage_view_data.dart';
+import 'package:quwoquan_app/entity/entity_homepage/homepage/domain/homepage_view_data.dart';
 import 'package:quwoquan_cloud_contracts/generated/entity_contracts.dart'
     as wire;
 

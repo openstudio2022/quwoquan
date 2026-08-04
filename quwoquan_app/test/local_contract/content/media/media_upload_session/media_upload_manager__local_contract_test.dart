@@ -8,7 +8,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/application/content/media/content_media_upload_coordinator.dart';
 import 'package:quwoquan_app/cloud/media/media_upload_manager.dart';
-import 'package:quwoquan_app/cloud/media/upload_policy.dart';
+import 'package:quwoquan_app/content/media/media_upload_session/domain/upload_policy.dart';
 import 'package:quwoquan_app/cloud/remote/content/media/local_media_upload_source.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';

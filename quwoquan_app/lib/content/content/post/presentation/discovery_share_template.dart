@@ -1,0 +1,21 @@
+import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
+import 'package:quwoquan_app/content/content/post/domain/content_surface_view_mapper.dart';
+import 'package:quwoquan_app/content/content/post/presentation/content_share_template.dart';
+
+ContentShareTemplate buildDiscoveryShareTemplate({
+  required ContentPostViewData post,
+  required bool enableIdentityTemplate,
+  List<String> tags = const <String>[],
+  String visibility = 'public',
+}) {
+  final surfaceView = ContentSurfaceViewMapper.fromDto(post).copyWith(
+    tags: List<String>.unmodifiable(
+      tags.map((tag) => tag.trim()).where((tag) => tag.isNotEmpty),
+    ),
+  );
+  return ContentShareTemplateBuilder.build(
+    surfaceView: surfaceView,
+    enableIdentityTemplate: enableIdentityTemplate,
+    visibility: visibility,
+  );
+}

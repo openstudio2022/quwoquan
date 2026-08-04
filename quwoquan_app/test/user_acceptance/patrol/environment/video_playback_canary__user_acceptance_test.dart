@@ -6,7 +6,7 @@ import 'package:flutter/rendering.dart' show RenderObject, RenderParagraph;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:patrol/patrol.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/components/media/shared/toolbar/immersive_engagement_bar.dart';
+import 'package:quwoquan_app/content/media/media_asset/presentation/immersive_engagement_bar.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/testing/patrol_test_support.dart';

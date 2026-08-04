@@ -7,10 +7,10 @@ import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/components/navigation/home_primary_tab_strip.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/discovery/pages/home_page.dart';
-import 'package:quwoquan_app/ui/discovery/widgets/home_multi_form_feed.dart';
+import 'package:quwoquan_app/content/content/post/presentation/home_multi_form_feed.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../support/cloud_services/content_facet_overrides.dart';
-import '../../../support/cloud_services/content/mock_content_repository.dart';
+import '../../../support/content/content/post/mock_content_repository.dart';
 
 const HomeChannelConfig _following = HomeChannelConfig(
   id: 'following',

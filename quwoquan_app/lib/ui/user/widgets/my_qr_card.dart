@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:pretty_qr_code/pretty_qr_code.dart';
 
 import 'package:quwoquan_app/cloud/services/user/profile_edit_models.dart';
-import 'package:quwoquan_app/components/media/app_media_image.dart';
+import 'package:quwoquan_app/content/media/media_asset/presentation/app_media_image.dart';
 import 'package:quwoquan_app/components/object_page/profile_ios_components.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';

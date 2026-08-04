@@ -13,8 +13,8 @@ import 'package:quwoquan_app/cloud/media/media_download_cache.dart';
 import 'package:quwoquan_app/core/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
-import 'package:quwoquan_app/components/media/video/player/video_player_widget.dart';
-import 'package:quwoquan_app/components/object_page/interactive_intersection_text.dart';
+import 'package:quwoquan_app/content/media/media_asset/presentation/video_player_widget.dart';
+import 'package:quwoquan_app/recommendation/recommendation/recommendation_feature_profile_view/presentation/interactive_intersection_text.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
@@ -27,8 +27,8 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/core/widgets/app_terminal_viewport.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
-import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
-import 'package:quwoquan_app/ui/discovery/widgets/home_multi_form_feed.dart';
+import 'package:quwoquan_app/content/content/post/application/discovery_feed_provider.dart';
+import 'package:quwoquan_app/content/content/post/presentation/home_multi_form_feed.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show
         ContentFeedEmptyReason,
@@ -43,7 +43,7 @@ import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../support/cloud_services/behavior_repository_double.dart';
 import '../../../support/cloud_services/content_facet_overrides.dart';
-import '../../../support/cloud_services/content/mock_content_repository.dart';
+import '../../../support/content/content/post/mock_content_repository.dart';
 
 TextSpan _spanByText(RichText richText, String text) {
   TextSpan? result;

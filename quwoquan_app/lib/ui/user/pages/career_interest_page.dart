@@ -10,7 +10,7 @@ import 'package:quwoquan_app/tag/tag/tag_node_view/application/tag_catalog_query
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_edit_models.dart';
 import 'package:quwoquan_app/cloud/user/generated/user_profile_ui_config.g.dart';
-import 'package:quwoquan_app/components/media/reorderable/media_reorderable_view.dart';
+import 'package:quwoquan_app/content/media/media_upload_session/presentation/media_reorderable_view.dart';
 import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/trackers/journey_event_tracker.dart';

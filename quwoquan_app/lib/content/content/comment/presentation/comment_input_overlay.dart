@@ -8,7 +8,7 @@ import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/navigation/generated/page_access_internal_routes.g.dart';
 import 'package:quwoquan_app/application/content/media/content_media_upload_coordinator.dart';
 import 'package:quwoquan_app/cloud/runtime/models/comment_remote_config.dart';
-import 'package:quwoquan_app/components/media/picker/image_pick_gateway.dart';
+import 'package:quwoquan_app/content/media/media_upload_session/adapters/image_pick_gateway.dart';
 import 'package:quwoquan_app/content/content/comment/domain/comment_composer_models.dart';
 import 'package:quwoquan_app/content/content/comment/adapters/comment_draft_store.dart';
 import 'package:quwoquan_app/content/content/comment/domain/comment_models.dart';

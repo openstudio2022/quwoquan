@@ -8,9 +8,9 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_record.dart';
 import 'package:riverpod/misc.dart' show ProviderListenable, ProviderOrFamily;
 import 'package:quwoquan_app/ui/chat/providers/chat_message_provider.dart';
-import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
+import 'package:quwoquan_app/chat/chat/conversation/application/conversation_members_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/group_home_provider.dart';
-import 'package:quwoquan_app/ui/discovery/providers/feed_realtime_patch_provider.dart';
+import 'package:quwoquan_app/content/content/post/application/feed_realtime_patch_provider.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 

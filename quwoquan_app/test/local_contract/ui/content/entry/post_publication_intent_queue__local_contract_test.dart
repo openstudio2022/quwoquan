@@ -10,9 +10,9 @@ import 'package:quwoquan_app/application/content/post/post_publication_status_re
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/ui/content/entry/providers/create_draft_store_provider.dart';
+import 'package:quwoquan_app/content/content/post/application/create_draft_store_provider.dart';
 import 'package:quwoquan_app/ui/content/entry/providers/post_publication_intent_queue_provider.dart';
-import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
+import 'package:quwoquan_app/content/content/post/domain/create_editor_models.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 import 'package:shared_preferences/shared_preferences.dart';

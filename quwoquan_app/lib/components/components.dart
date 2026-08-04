@@ -28,32 +28,32 @@
 /// - 不依赖 app 模块（保持组件独立性）
 
 // ==================== Post 组件 ====================
-export 'post/post_preview_card.dart';
-export 'post/post_preview_list_tile.dart';
+export '../content/content/post/presentation/post_preview_card.dart';
+export '../content/content/post/presentation/post_preview_list_tile.dart';
 
 // ==================== 导航组件 ====================
 export 'navigation/tab_navigation.dart';
 export 'navigation/centered_scrollable_tab_bar.dart';
-export 'media/image/navigation/image_sub_tab_navigation.dart';
+export '../content/media/media_asset/presentation/image_sub_tab_navigation.dart';
 
 // ==================== 头像组件 ====================
 export 'avatar/rounded_square_avatar.dart';
 export 'avatar/conversation_avatar.dart';
 
-// ==================== 助理组件 ====================
-// assistant_floating_ball 已迁入 assistant/assistant/assistant_entry_view/presentation；
-// 共享 barrel 禁止 export lib/<domain>/**，消费者按对象路径直接 import。
-export 'assistant/assistant_avatar.dart';
+// 助理组件已全部离开本 barrel：assistant_floating_ball 迁入
+// assistant/assistant/assistant_entry_view/presentation（共享 barrel 禁止
+// export lib/<domain>/**），assistant_avatar / petal_mark 迁入 design_system。
+// 两者均按目标路径直接 import，不在此留转发。
 
 // ==================== 输入组件 ====================
 export 'input/unified_emoji_picker.dart';
 export 'input/customizable_chat_input_bar.dart';
 
 // ==================== 媒体查看器组件 ====================
-export 'media/video/viewer/video_media_viewer.dart';
-export 'media/video/player/video_player_widget.dart';
-export 'media/shared/toolbar/media_viewer_toolbar.dart';
-export 'media/shared/viewer/media_caption_widgets.dart';
+export '../content/media/media_asset/presentation/video_media_viewer.dart';
+export '../content/media/media_asset/presentation/video_player_widget.dart';
+export '../content/media/media_asset/presentation/media_viewer_toolbar.dart';
+export '../content/media/media_asset/presentation/media_caption_widgets.dart';
 
 // ==================== 用户相关组件 ====================
 // AuthorProfile 已迁移至 lib/ui/user/pages/author_profile_page.dart

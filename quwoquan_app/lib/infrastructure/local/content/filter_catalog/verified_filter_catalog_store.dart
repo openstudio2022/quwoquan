@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/services.dart';
 import 'package:quwoquan_app/application/content/filter_catalog/filter_catalog_coordinator.dart';
-import 'package:quwoquan_app/components/media/image/editor/filter/image_editor_filter_models.dart';
+import 'package:quwoquan_app/content/media/filter_catalog_release/adapters/image_editor_filter_models.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

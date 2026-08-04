@@ -5,12 +5,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
-import 'package:quwoquan_app/components/object_page/interactive_intersection_text.dart';
-import 'package:quwoquan_app/components/object_page/intersection_icon_resolver.dart';
+import 'package:quwoquan_app/recommendation/recommendation/recommendation_feature_profile_view/presentation/interactive_intersection_text.dart';
+import 'package:quwoquan_app/recommendation/recommendation/recommendation_feature_profile_view/presentation/intersection_icon_resolver.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
-import 'package:quwoquan_app/components/content/intersection_reason_chip.dart';
+import 'package:quwoquan_app/recommendation/recommendation/recommendation_feature_profile_view/presentation/intersection_reason_chip.dart';
 
 import '../../../../support/cloud_services/behavior_repository_double.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';

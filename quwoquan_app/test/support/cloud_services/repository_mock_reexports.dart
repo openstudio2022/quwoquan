@@ -3,7 +3,7 @@
 /// production composition 与 Patrol/UAT 不可导入本文件。
 library;
 
-export 'package:quwoquan_app/application/entity/homepage_operation_ports.dart';
+export 'package:quwoquan_app/entity/entity_homepage/homepage/application/homepage_operation_ports.dart';
 export 'package:quwoquan_app/application/entity/homepage_review_operation_ports.dart';
 
 export 'behavior_repository_double.dart';
@@ -18,11 +18,11 @@ export '../circle/circle_management/circle_group_membership/circle_group_members
 export '../circle/circle_management/circle_membership/circle_membership_typed_double.dart';
 export '../circle/circle_management/circle_post_placement/circle_post_placement_typed_double.dart';
 export '../content/content/comment/comment_facets_typed_double.dart';
-export 'object_doubles/content/alpha_filter_catalog_query.dart';
+export '../content/media/filter_catalog_release/filter_catalog_query_typed_double.dart';
 export '../recommendation/recommendation/recommendation_feature_profile_view/intersection_repository_typed_double.dart';
-export 'object_doubles/content/alpha_media_facets.dart';
+export '../content/media/media_asset/media_facets_typed_double.dart';
 export '../content/content/outbound_share_fact/outbound_share_writer_typed_double.dart';
-export 'object_doubles/content/alpha_post_publication_writer.dart';
+export '../content/content/post/post_publication_writer_typed_double.dart';
 export '../content/content/content_reaction/post_reaction_facets_typed_double.dart';
 export '../content/content/profile_interaction_activity_view/profile_interaction_facets_typed_double.dart';
 export '../content/trust_safety/report/report_command_typed_double.dart';
@@ -31,7 +31,6 @@ export '../entity/entity_homepage/homepage/homepage_facets_typed_double.dart';
 export '../entity/entity_homepage/homepage_review/homepage_review_facets_typed_double.dart';
 export 'object_doubles/object_scenario_seed_reader.dart';
 export '../rtc/rtc/call_session/call_session_typed_double.dart';
-export 'object_doubles/search/alpha_search_facets.dart';
 export '../user/account/account_session/account_session_typed_double.dart';
 export '../user/account/credential_binding/credential_binding_typed_double.dart';
 export '../user/relationship/contact_discovery_record/contact_discovery_record_typed_double.dart';

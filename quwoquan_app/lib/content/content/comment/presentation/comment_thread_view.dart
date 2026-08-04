@@ -10,7 +10,7 @@ import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
-import 'package:quwoquan_app/core/media/media_aspect_ratio.dart';
+import 'package:quwoquan_app/content/media/media_asset/domain/media_aspect_ratio.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show ReportReason, ReportTargetType, CreateContentReportCommand;

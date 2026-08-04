@@ -4,8 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/content/media/media_upload_session/presentation/create_media_picker_presentation.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/models/create_media_models.dart';
-import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
-import 'package:quwoquan_app/ui/content/entry/services/create_page_remote_helpers.dart';
+import 'package:quwoquan_app/content/content/post/domain/create_editor_models.dart';
+import 'package:quwoquan_app/content/content/post/adapters/create_page_remote_helpers.dart';
 
 void main() {
   group('creation media mode split', () {

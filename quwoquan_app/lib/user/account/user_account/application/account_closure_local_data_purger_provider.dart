@@ -24,8 +24,8 @@ import 'package:quwoquan_app/core/telemetry/app_telemetry_outbox.dart';
 import 'package:quwoquan_app/infrastructure/local/actor_queue/actor_queue_storage.dart';
 import 'package:quwoquan_app/infrastructure/local/onboarding/secure_interest_onboarding_draft_store.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_send_outbox.dart';
-import 'package:quwoquan_app/ui/content/entry/services/create_draft_local_storage.dart';
-import 'package:quwoquan_app/ui/content/entry/services/post_publication_intent_local_storage.dart';
+import 'package:quwoquan_app/content/content/post/adapters/create_draft_local_storage.dart';
+import 'package:quwoquan_app/content/content/post/adapters/post_publication_intent_local_storage.dart';
 
 /// 主动注销路径在 auth 状态切换前读取，固定本次 closed actor 身份。
 final accountClosureLocalDataPurgerProvider =

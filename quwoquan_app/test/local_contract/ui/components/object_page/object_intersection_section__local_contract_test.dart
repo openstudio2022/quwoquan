@@ -8,8 +8,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/recommendation/recommendation/recommendation_feature_profile_view/presentation/object_intersection_card.dart';
 import 'package:quwoquan_app/recommendation/recommendation/recommendation_feature_profile_view/presentation/object_intersection_card_skeleton.dart';
-import 'package:quwoquan_app/components/object_page/object_intersection_provider.dart';
-import 'package:quwoquan_app/components/object_page/object_intersection_section.dart';
+import 'package:quwoquan_app/recommendation/recommendation/recommendation_feature_profile_view/application/object_intersection_provider.dart';
+import 'package:quwoquan_app/recommendation/recommendation/recommendation_feature_profile_view/presentation/object_intersection_section.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 

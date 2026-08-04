@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import 'package:quwoquan_app/core/platform/platform_target.dart';
-import 'package:quwoquan_app/ui/content/models/article_presentation_models.dart';
+import 'package:quwoquan_app/content/content/post/domain/article_presentation_models.dart';
 
 /// Bundled font family names registered in [pubspec.yaml].
 abstract final class BundledFontFamilies {

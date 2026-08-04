@@ -15,14 +15,14 @@ import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
-import 'package:quwoquan_app/ui/content/share/content_share_sheet.dart';
-import 'package:quwoquan_app/ui/content/share/content_share_template.dart';
+import 'package:quwoquan_app/content/content/post/domain/content_surface_view_mapper.dart';
+import 'package:quwoquan_app/content/content/post/presentation/content_share_sheet.dart';
+import 'package:quwoquan_app/content/content/post/presentation/content_share_template.dart';
 import 'package:quwoquan_app/ui/share/widgets/forward_confirm_sheet.dart';
 import 'package:quwoquan_app/ui/user/widgets/my_qr_card.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-import '../../../../support/fixtures/chat/chat_inbox_fixture_builder.dart';
+import '../../../../support/chat/chat/chat_inbox_view/chat_inbox_view_fixture_builder.dart';
 
 const _qrCard = ProfileQrCardData(
   publicProfileUrl: 'https://mock.quwoquan.local/u/current',

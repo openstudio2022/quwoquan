@@ -6,7 +6,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:file/file.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
-import 'package:quwoquan_app/cloud/media/cdn_image_url_builder.dart';
+import 'package:quwoquan_app/content/media/media_asset/adapters/cdn_image_url_builder.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 import 'package:quwoquan_app/core/media/media_delivery_reference.dart';

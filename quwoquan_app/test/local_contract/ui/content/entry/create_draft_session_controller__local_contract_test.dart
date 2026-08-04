@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/ui/content/entry/services/create_draft_session_controller.dart';
+import 'package:quwoquan_app/content/content/post/adapters/create_draft_session_controller.dart';
 
 void main() {
   test('草稿自动保存失败进入可见失败态并上报原始异常语义', () async {

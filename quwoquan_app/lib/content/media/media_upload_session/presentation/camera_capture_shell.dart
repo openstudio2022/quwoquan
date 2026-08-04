@@ -1,6 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
-import 'package:quwoquan_app/components/media/image/editor/icons/image_editor_semantic_icon.dart';
+import 'package:quwoquan_app/content/media/filter_catalog_release/presentation/image_editor_semantic_icon.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
 /// 高保相机共享壳（图片 / 视频两种模式共用）。

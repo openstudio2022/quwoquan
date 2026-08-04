@@ -4,8 +4,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
-import 'package:quwoquan_app/cloud/remote/content/post/author_impact_remote.dart';
-import 'package:quwoquan_app/cloud/remote/content/post/content_behavior_remote.dart';
+import 'package:quwoquan_app/content/content/post/adapters/author_impact_remote.dart';
+import 'package:quwoquan_app/content/content/post/adapters/content_behavior_remote.dart';
 import 'package:quwoquan_app/tag/tag/tag_node_view/adapters/tag_catalog_remote.dart';
 import 'package:quwoquan_app/cloud/runtime/auth/cloud_auth_token_provider.dart';
 import 'package:quwoquan_app/cloud/runtime/config/cloud_runtime_environment.dart';

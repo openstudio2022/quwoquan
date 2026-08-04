@@ -1,10 +1,10 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
-import 'package:quwoquan_app/components/post/post_preview_card.dart';
+import 'package:quwoquan_app/content/content/post/presentation/post_preview_card.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
-import 'package:quwoquan_app/ui/circle/models/circle_hub_feed_post_entry.dart';
+import 'package:quwoquan_app/circle/circle_management/circle/domain/circle_hub_feed_post_entry.dart';
 
 const Set<String> _visualPriorityCategoryIds = <String>{
   'travel',

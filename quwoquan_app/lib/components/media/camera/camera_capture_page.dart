@@ -7,11 +7,11 @@ import 'package:quwoquan_app/content/media/media_upload_session/presentation/cam
 import 'package:quwoquan_app/core/services/app_permission_coordinator.dart';
 import 'package:quwoquan_app/content/media/media_upload_session/presentation/camera_filter_strip.dart';
 import 'package:quwoquan_app/content/media/media_upload_session/presentation/camera_session_models.dart';
-import 'package:quwoquan_app/components/media/image/editor/icons/image_editor_semantic_icon.dart';
-import 'package:quwoquan_app/components/media/image/editor/filter/image_editor_filter_matrix.dart';
-import 'package:quwoquan_app/components/media/image/editor/filter/image_editor_filter_models.dart';
+import 'package:quwoquan_app/content/media/filter_catalog_release/presentation/image_editor_semantic_icon.dart';
+import 'package:quwoquan_app/content/media/filter_catalog_release/adapters/image_editor_filter_matrix.dart';
+import 'package:quwoquan_app/content/media/filter_catalog_release/adapters/image_editor_filter_models.dart';
 import 'package:quwoquan_app/components/media/image/editor/filter/image_editor_filter_repository.dart';
-import 'package:quwoquan_app/components/media/image/editor/image_editor_page.dart';
+import 'package:quwoquan_app/content/media/filter_catalog_release/presentation/image_editor_page.dart';
 import 'package:quwoquan_app/content/media/media_upload_session/adapters/local_video_file_readiness.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';

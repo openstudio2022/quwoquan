@@ -24,8 +24,8 @@ import 'package:quwoquan_app/ui/content/article_reader/pageflip/pipelines/articl
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/pipelines/backward_article_flip_pipeline.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/pipelines/forward_article_flip_pipeline.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/texture/article_reader_texture_capture_layer.dart';
-import 'package:quwoquan_app/ui/content/models/article_document_models.dart';
-import 'package:quwoquan_app/ui/content/models/article_presentation_models.dart';
+import 'package:quwoquan_app/content/content/post/domain/article_document_models.dart';
+import 'package:quwoquan_app/content/content/post/domain/article_presentation_models.dart';
 import 'package:quwoquan_app/components/pageflip/book_layout.dart';
 import 'package:quwoquan_app/components/pageflip/controller.dart';
 import 'package:quwoquan_app/components/pageflip/geometry.dart';

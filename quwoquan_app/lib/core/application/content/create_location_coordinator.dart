@@ -2,7 +2,7 @@ import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/integration/external_integration/location/application/location_query_contracts.dart';
 import 'package:quwoquan_app/core/platform/location/location_gateway.dart';
-import 'package:quwoquan_app/ui/content/models/publish_settings_models.dart';
+import 'package:quwoquan_app/content/content/post/domain/publish_settings_models.dart';
 
 /// 创作选点的跨边界编排：组合 Integration query 与端侧定位能力。
 final class CreateLocationCoordinator {

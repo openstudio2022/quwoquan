@@ -1,7 +1,7 @@
 // spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/streaming-feed-performance/spec.md#gwt-002
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/ui/discovery/models/home_feed_scroll_anchor.dart';
+import 'package:quwoquan_app/content/content/post/domain/home_feed_scroll_anchor.dart';
 
 HomeFeedScrollAnchor _anchor(String channelId, String identity) {
   return HomeFeedScrollAnchor(

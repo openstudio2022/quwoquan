@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
-import 'package:quwoquan_app/ui/content/entry/services/create_page_provider_bridge.dart';
+import 'package:quwoquan_app/content/content/post/adapters/create_page_provider_bridge.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 void main() {

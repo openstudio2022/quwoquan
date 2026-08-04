@@ -1,7 +1,7 @@
 import 'package:flutter/widgets.dart';
-import 'package:quwoquan_app/ui/content/models/article_document_models.dart';
-import 'package:quwoquan_app/ui/content/article_render/services/article_flow_layout_engine.dart';
-import 'package:quwoquan_app/ui/content/models/article_presentation_models.dart';
+import 'package:quwoquan_app/content/content/post/domain/article_document_models.dart';
+import 'package:quwoquan_app/content/content/post/presentation/article_flow_layout_engine.dart';
+import 'package:quwoquan_app/content/content/post/domain/article_presentation_models.dart';
 import 'package:quwoquan_app/ui/content/models/article_theme.dart';
 
 List<ArticlePageData> resolvePaginatedArticlePages({

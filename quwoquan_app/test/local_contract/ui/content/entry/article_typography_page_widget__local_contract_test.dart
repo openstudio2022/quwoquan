@@ -3,11 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/ui/content/article_reader/content/article_reader_pagination.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/host/article_read_only_book_deck.dart';
-import 'package:quwoquan_app/ui/content/models/article_document_models.dart';
-import 'package:quwoquan_app/ui/content/models/article_editor_projection.dart';
-import 'package:quwoquan_app/ui/content/models/article_presentation_models.dart';
-import 'package:quwoquan_app/ui/content/entry/pages/article_typography_page.dart';
-import 'package:quwoquan_app/ui/content/entry/providers/create_editor_provider.dart';
+import 'package:quwoquan_app/content/content/post/domain/article_document_models.dart';
+import 'package:quwoquan_app/content/content/post/domain/article_editor_projection.dart';
+import 'package:quwoquan_app/content/content/post/domain/article_presentation_models.dart';
+import 'package:quwoquan_app/content/content/post/presentation/article_typography_page.dart';
+import 'package:quwoquan_app/content/content/post/application/create_editor_provider.dart';
 
 void main() {
   testWidgets('含图文档在排版预览中优先走 document flow', (tester) async {

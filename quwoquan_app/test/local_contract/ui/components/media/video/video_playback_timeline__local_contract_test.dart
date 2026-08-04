@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/components/media/video/player/video_playback_session.dart';
-import 'package:quwoquan_app/components/media/video/player/video_playback_timeline.dart';
+import 'package:quwoquan_app/content/media/media_asset/presentation/video_playback_session.dart';
+import 'package:quwoquan_app/content/media/media_asset/presentation/video_playback_timeline.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:video_player/video_player.dart';
 import 'package:video_player_platform_interface/video_player_platform_interface.dart';

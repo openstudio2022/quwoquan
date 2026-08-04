@@ -2,7 +2,7 @@
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:quwoquan_app/application/content/onboarding/interest_onboarding.dart';
+import 'package:quwoquan_app/content/content/post/application/interest_onboarding.dart';
 import 'package:quwoquan_app/infrastructure/local/onboarding/secure_interest_onboarding_draft_store.dart';
 
 void main() {

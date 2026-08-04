@@ -9,8 +9,8 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/content/media/media_upload_session/domain/media_capture_metadata.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
-import 'package:quwoquan_app/ui/content/models/publish_settings_models.dart';
-import 'package:quwoquan_app/ui/content/entry/widgets/create_publish_confirm_sheet.dart';
+import 'package:quwoquan_app/content/content/post/domain/publish_settings_models.dart';
+import 'package:quwoquan_app/content/content/post/presentation/create_publish_confirm_sheet.dart';
 import '../../../../support/fake_location_gateway.dart';
 import '../../../../support/fake_location_readers.dart';
 

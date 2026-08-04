@@ -1,6 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/cloud/user/generated/user_profile_ui_config.g.dart';
-import 'package:quwoquan_app/components/media/app_media_image.dart';
+import 'package:quwoquan_app/content/media/media_asset/presentation/app_media_image.dart';
 import 'package:quwoquan_app/components/object_page/object_page_sections.dart';
 import 'package:quwoquan_app/core/media/content_media_url.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';

@@ -36,7 +36,7 @@ import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
-import 'package:quwoquan_app/cloud/services/content/content_read_model_projection.dart';
+import 'package:quwoquan_app/content/content/post/adapters/content_read_model_projection.dart';
 
 import '../../../support/api_contract/local_gamma_anonymous_session.dart';
 

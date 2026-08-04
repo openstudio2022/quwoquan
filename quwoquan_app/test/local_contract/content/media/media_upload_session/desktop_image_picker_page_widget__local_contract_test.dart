@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/components/media/picker/desktop/desktop_image_picker_page.dart';
+import 'package:quwoquan_app/content/media/media_upload_session/presentation/desktop_image_picker_page.dart';
 import 'package:quwoquan_app/content/media/media_upload_session/adapters/desktop_picker_services.dart';
 import 'package:quwoquan_app/content/media/media_upload_session/presentation/desktop_thumbnail_image_provider.dart';
 import 'package:quwoquan_app/core/models/create_media_models.dart';

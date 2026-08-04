@@ -19,7 +19,7 @@ import 'package:quwoquan_app/content/content/comment/presentation/comment_input_
 import 'package:quwoquan_app/content/content/comment/domain/comment_composer_models.dart';
 import 'package:quwoquan_app/content/content/comment/domain/comment_models.dart';
 import 'package:quwoquan_app/components/input/unified_emoji_picker.dart';
-import 'package:quwoquan_app/components/media/picker/image_pick_gateway.dart';
+import 'package:quwoquan_app/content/media/media_upload_session/adapters/image_pick_gateway.dart';
 import 'package:quwoquan_app/core/platform/file_storage_gateway.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
@@ -30,7 +30,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../support/cloud_services/content_facet_overrides.dart';
 import '../../../../support/recording_content_media_facet.dart';
 import '../../../../support/cloud_services/test_content_comment_facet.dart';
-import '../../../../support/cloud_services/content/mock_content_repository.dart';
+import '../../../../support/content/content/post/mock_content_repository.dart';
 import '../../../../support/runtime_failure_fixtures.dart';
 
 class _AuthenticatedSession extends AuthSessionController {

@@ -20,8 +20,7 @@ import 'package:quwoquan_app/core/services/cache/conversation_cache_service.dart
 import 'package:quwoquan_app/core/services/cache/object_cache_store.dart';
 import 'package:quwoquan_app/core/services/cache/user_profile_cache_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../../support/cloud_services/content/mock_content_repository.dart';
-import '../../../support/cloud_services/content/content_post_contract_fixture.dart';
+import '../../../support/content/content/post/mock_content_repository.dart';
 
 CachedContentRepository _cachedContentRepository({
   required _CountingContentRepository delegate,

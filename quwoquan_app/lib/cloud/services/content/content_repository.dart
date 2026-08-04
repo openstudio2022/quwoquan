@@ -4,18 +4,18 @@ import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
 
 import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
-import 'package:quwoquan_app/cloud/runtime/models/discovery_feed_page.dart';
+import 'package:quwoquan_app/content/content/feed_delivery_page/domain/discovery_feed_page.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     hide ContentDiscoveryFeedQuery;
-import 'package:quwoquan_app/cloud/services/content/content_repository_contract.dart'
+import 'package:quwoquan_app/content/content/post/application/content_repository_contract.dart'
     show
         ContentDiscoveryFeedQuery,
         ContentReadRepository,
         kFeedSortRecommend;
 
-export 'package:quwoquan_app/cloud/runtime/models/discovery_feed_page.dart'
+export 'package:quwoquan_app/content/content/feed_delivery_page/domain/discovery_feed_page.dart'
     show DiscoveryFeedPage;
-export 'package:quwoquan_app/cloud/services/content/content_repository_contract.dart'
+export 'package:quwoquan_app/content/content/post/application/content_repository_contract.dart'
     show
         ContentDiscoveryFeedQuery,
         ContentReadRepository,

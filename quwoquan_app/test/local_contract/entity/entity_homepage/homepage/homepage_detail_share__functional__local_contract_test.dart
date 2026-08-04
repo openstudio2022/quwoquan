@@ -10,7 +10,7 @@ import '../../../../support/recommendation/recommendation/recommendation_feature
 import '../../../../support/cloud_services/homepage_alpha_test_adapter.dart';
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/ui/entity/pages/homepage_detail_page.dart';
+import 'package:quwoquan_app/entity/entity_homepage/homepage/presentation/homepage_detail_page.dart';
 import 'package:quwoquan_app/ui/share/widgets/forward_share_sheet.dart';
 
 /// GWT（homepage-entry-and-preview 分享分发面）：

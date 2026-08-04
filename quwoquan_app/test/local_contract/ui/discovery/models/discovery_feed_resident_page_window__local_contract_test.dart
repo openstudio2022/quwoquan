@@ -2,8 +2,8 @@
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
-import 'package:quwoquan_app/cloud/runtime/models/discovery_feed_page.dart';
-import 'package:quwoquan_app/ui/discovery/models/discovery_feed_resident_page_window.dart';
+import 'package:quwoquan_app/content/content/feed_delivery_page/domain/discovery_feed_page.dart';
+import 'package:quwoquan_app/content/content/post/domain/discovery_feed_resident_page_window.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show ContentPostProjection, FeedObjectCard;
 

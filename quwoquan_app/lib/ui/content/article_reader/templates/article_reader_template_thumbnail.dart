@@ -1,7 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/core/constants/create_page_text_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/ui/content/models/article_presentation_models.dart';
+import 'package:quwoquan_app/content/content/post/domain/article_presentation_models.dart';
 import 'package:quwoquan_app/ui/content/article_reader/content/article_reader_page_surfaces.dart';
 import 'package:quwoquan_app/ui/content/article_reader/templates/article_reader_template_theme.dart';
 

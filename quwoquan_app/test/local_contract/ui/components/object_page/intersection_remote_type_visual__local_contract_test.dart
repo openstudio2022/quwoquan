@@ -1,7 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/components/object_page/intersection_icon_resolver.dart';
+import 'package:quwoquan_app/recommendation/recommendation/recommendation_feature_profile_view/presentation/intersection_icon_resolver.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 
 /// T2：类型图标的零发版视觉扩展位（§21.5.2）。

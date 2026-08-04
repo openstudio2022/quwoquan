@@ -5,10 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../support/cloud_services/homepage_alpha_test_adapter.dart';
-import 'package:quwoquan_app/application/entity/homepage_view_data.dart';
+import 'package:quwoquan_app/entity/entity_homepage/homepage/domain/homepage_view_data.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
-import 'package:quwoquan_app/ui/entity/models/homepage_route_models.dart';
+import 'package:quwoquan_app/entity/entity_homepage/homepage/domain/homepage_route_models.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_picker_page.dart';
 
 void main() {

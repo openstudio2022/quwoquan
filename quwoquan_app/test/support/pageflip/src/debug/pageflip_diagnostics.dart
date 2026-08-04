@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'pageflip_diagnostics_shared.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
-import 'package:quwoquan_app/ui/content/models/article_presentation_models.dart';
+import 'package:quwoquan_app/content/content/post/domain/article_presentation_models.dart';
 import 'package:quwoquan_app/components/pageflip/book_layout.dart';
 import 'package:quwoquan_app/components/pageflip/controller.dart';
 import 'package:quwoquan_app/components/pageflip/types.dart';
-import 'package:quwoquan_app/ui/content/widgets/article_paged_canvas.dart';
+import 'package:quwoquan_app/content/content/post/presentation/article_paged_canvas.dart';
 
 class PageflipDiagnosticsApp extends StatefulWidget {
   const PageflipDiagnosticsApp({super.key, this.showDebugOverlay = false});

@@ -7,14 +7,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/media/media_download_cache.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
-import 'package:quwoquan_app/cloud/runtime/models/discovery_feed_page.dart';
-import 'package:quwoquan_app/cloud/services/content/content_repository_contract.dart';
+import 'package:quwoquan_app/content/content/feed_delivery_page/domain/discovery_feed_page.dart';
+import 'package:quwoquan_app/content/content/post/application/content_repository_contract.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
-import 'package:quwoquan_app/ui/discovery/models/home_feed_scroll_anchor.dart';
-import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
-import 'package:quwoquan_app/ui/discovery/providers/home_feed_scroll_anchor_provider.dart';
-import 'package:quwoquan_app/ui/discovery/widgets/home_multi_form_feed.dart';
+import 'package:quwoquan_app/content/content/post/domain/home_feed_scroll_anchor.dart';
+import 'package:quwoquan_app/content/content/post/application/discovery_feed_provider.dart';
+import 'package:quwoquan_app/content/content/post/application/home_feed_scroll_anchor_provider.dart';
+import 'package:quwoquan_app/content/content/post/presentation/home_multi_form_feed.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show
         CloudOperationCancellationSignal,

@@ -1,7 +1,7 @@
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_metadata.g.dart';
 import 'package:quwoquan_app/content/content/feed_delivery_page/domain/discovery_feed_page.dart';
-import 'package:quwoquan_app/cloud/services/content/content_repository_contract.dart'
+import 'package:quwoquan_app/content/content/post/application/content_repository_contract.dart'
     as app;
 import 'package:quwoquan_app/cloud/services/content/remote/content_post_projection_mapper.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'

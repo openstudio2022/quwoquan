@@ -4,7 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 // ignore: depend_on_referenced_packages
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
-import 'package:quwoquan_app/cloud/media/cdn_image_url_builder.dart';
+import 'package:quwoquan_app/content/media/media_asset/adapters/cdn_image_url_builder.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/media/app_image_cache_controller.dart';
 import 'package:quwoquan_app/core/media/avatar_image_url.dart';

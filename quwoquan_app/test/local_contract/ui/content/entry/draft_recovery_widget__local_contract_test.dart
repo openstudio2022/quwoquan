@@ -5,23 +5,23 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/providers/startup_auth_restore_gate_provider.dart';
-import '../../../../support/cloud_services/repository_mock_reexports.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
-import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
-import 'package:quwoquan_app/ui/content/entry/pages/create_page.dart';
-import 'package:quwoquan_app/ui/content/entry/pages/local_draft_page.dart';
-import 'package:quwoquan_app/ui/content/entry/providers/create_draft_store_provider.dart';
-import 'package:quwoquan_app/ui/content/entry/services/create_draft_local_storage.dart';
+import 'package:quwoquan_app/content/content/post/domain/create_editor_models.dart';
+import 'package:quwoquan_app/content/content/post/presentation/create_page.dart';
+import 'package:quwoquan_app/content/content/post/presentation/local_draft_page.dart';
+import 'package:quwoquan_app/content/content/post/application/create_draft_store_provider.dart';
+import 'package:quwoquan_app/content/content/post/adapters/create_draft_local_storage.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../support/cloud_services/content_facet_overrides.dart';
 import '../../../../support/recording_content_media_facet.dart';
 import '../../../../support/recording_content_post_publication_writer.dart';
-import '../../../../support/cloud_services/content/mock_content_repository.dart';
+import '../../../../support/content/content/post/mock_content_repository.dart';
+import '../../../../support/cloud_services/repository_mock_reexports.dart';
 
 const _resolvedActivePersona = ActivePersonaContextViewData(
   personaId: 'user_001',

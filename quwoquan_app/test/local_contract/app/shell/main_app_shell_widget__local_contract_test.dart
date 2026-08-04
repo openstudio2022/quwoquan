@@ -6,7 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:quwoquan_app/cloud/rtc/incoming_call_coordinator.dart';
+import 'package:quwoquan_app/rtc/rtc/call_session/application/incoming_call_coordinator.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
@@ -32,7 +32,7 @@ import 'package:quwoquan_app/core/auth/auth_gate.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_page.dart';
 import 'package:quwoquan_app/ui/discovery/pages/home_page.dart';
-import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
+import 'package:quwoquan_app/content/content/post/application/discovery_feed_provider.dart';
 import 'package:quwoquan_app/ui/interest_match/pages/interest_match_page.dart';
 import 'package:quwoquan_app/ui/user/pages/login_page.dart';
 import 'package:quwoquan_app/ui/user/pages/my_profile_page.dart';
@@ -40,7 +40,7 @@ import 'package:quwoquan_app/ui/welcome/widgets/welcome_flower_mark.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../support/cloud_services/content/mock_content_repository.dart';
+import '../../../support/content/content/post/mock_content_repository.dart';
 import '../../../support/cloud_services/content_facet_overrides.dart';
 
 List<Override> _shellTestOverrides({

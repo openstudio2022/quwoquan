@@ -9,8 +9,8 @@ import 'package:quwoquan_app/cloud/runtime/models/intersection_display_config.da
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import '../../../support/cloud_services/content_facet_overrides.dart';
-import '../../../support/cloud_services/content/mock_content_repository.dart';
-import '../../../support/cloud_services/content/test_content_app_config.dart';
+import '../../../support/content/content/post/mock_content_repository.dart';
+import '../../../support/content/content/post/test_content_app_config.dart';
 
 class _ConfigRepo extends MockContentRepository {
   _ConfigRepo(this.config);
