@@ -1,6 +1,18 @@
-part of 'app_providers.dart';
-
-const Map<String, bool> _contentStoryBootstrapFlags = <String, bool>{
+import 'dart:async';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
+import 'package:quwoquan_app/cloud/runtime/models/home_channels_remote_override.dart';
+import 'package:quwoquan_app/cloud/runtime/models/intersection_display_config.dart';
+import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
+import 'package:quwoquan_app/cloud/runtime/models/app_remote_config_snapshot.dart';
+import 'package:quwoquan_app/cloud/runtime/models/comment_remote_config.dart';
+import 'package:quwoquan_app/core/models/client_state_sync.dart';
+import 'package:quwoquan_app/core/services/app_remote_config_store.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    hide ContentDiscoveryFeedQuery;
+import 'package:quwoquan_app/core/providers/app_providers_content_facets.dart';
+import 'package:quwoquan_app/core/providers/app_providers_content_runtime_defaults.dart';
+const Map<String, bool> contentStoryBootstrapFlags = <String, bool>{
   'enable_create_action_entry': true,
   'enable_unified_create_editor': true,
   'simple_create_action_sheet': true,

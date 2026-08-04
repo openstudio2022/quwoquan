@@ -1,5 +1,19 @@
-part of 'app_providers.dart';
-
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
+import 'package:quwoquan_app/assistant/observability/logging/app_trace_context_store.dart';
+import 'package:quwoquan_app/core/di/generated_operation_client_dependencies.dart';
+import 'package:quwoquan_app/rtc/rtc/call_session/adapters/chat_member_presentation_resolver.dart';
+import 'package:quwoquan_app/rtc/rtc/call_session/application/incoming_call_presentation_acknowledger.dart';
+import 'package:quwoquan_app/rtc/rtc/call_session/application/call_participant_presentation.dart';
+import 'package:quwoquan_app/application/user/device_registration/device_push_endpoint_writer.dart';
+import 'package:quwoquan_app/runtime/di/notification_dependencies.dart';
+import 'package:quwoquan_app/runtime/di/rtc_dependencies.dart';
+import 'package:quwoquan_app/runtime/di/user_dependencies.dart';
+import 'package:quwoquan_app/core/platform/platform_providers.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    hide ContentDiscoveryFeedQuery;
+import 'package:quwoquan_app/core/providers/app_providers_app_state.dart';
+import 'package:quwoquan_app/core/providers/app_providers_chat_search.dart';
 final callParticipantPresentationResolverProvider =
     Provider<CallParticipantPresentationResolver>((ref) {
       return ChatMemberCallParticipantPresentationResolver(
@@ -45,10 +59,10 @@ CloudOperationInvocationContext rtcOperationInvocationContext(
 final incomingCallPresentationAcknowledgerProvider =
     Provider<IncomingCallPresentationAcknowledger>(
       (ref) =>
-          AppProductionComposition.generatedAdapter<
+          NotificationProductionComposition.generatedAdapter<
             IncomingCallPresentationAcknowledger
           >(
-            AppProductionAdapter.incomingCallPresentation,
+            NotificationProductionAdapter.incomingCallPresentation,
             client: ref.watch(generatedCloudOperationClientProvider),
             invocationContext: (clientPageId) => rtcOperationInvocationContext(
               ref,
@@ -60,8 +74,8 @@ final incomingCallPresentationAcknowledgerProvider =
     );
 
 final devicePushEndpointWriterProvider = Provider<DevicePushEndpointWriter>(
-  (ref) => AppProductionComposition.generatedAdapter<DevicePushEndpointWriter>(
-    AppProductionAdapter.devicePushEndpoint,
+  (ref) => UserProductionComposition.generatedAdapter<DevicePushEndpointWriter>(
+    UserProductionAdapter.devicePushEndpoint,
     client: ref.watch(generatedCloudOperationClientProvider),
     clientContextSnapshot: ref.watch(cloudClientContextProvider).snapshot,
     invocationContext: (clientPageId) => rtcOperationInvocationContext(
@@ -83,10 +97,10 @@ final devicePushEndpointCoordinatorProvider =
 
 final rtcCallLifecycleCommandWriterProvider =
     Provider.family<CallLifecycleCommandWriter, AppUiSurface>((ref, surface) {
-      return AppProductionComposition.generatedAdapter<
+      return RtcProductionComposition.generatedAdapter<
         CallLifecycleCommandWriter
       >(
-        AppProductionAdapter.rtcCallLifecycle,
+        RtcProductionAdapter.callLifecycle,
         client: ref.watch(generatedCloudOperationClientProvider),
         invocationContext: (clientPageId, {required command}) =>
             _rtcInvocationContext(
@@ -100,10 +114,10 @@ final rtcCallLifecycleCommandWriterProvider =
 
 final rtcCallParticipantCommandWriterProvider =
     Provider.family<CallParticipantCommandWriter, AppUiSurface>((ref, surface) {
-      return AppProductionComposition.generatedAdapter<
+      return RtcProductionComposition.generatedAdapter<
         CallParticipantCommandWriter
       >(
-        AppProductionAdapter.rtcCallParticipant,
+        RtcProductionAdapter.callParticipant,
         client: ref.watch(generatedCloudOperationClientProvider),
         invocationContext: (clientPageId, {required command}) =>
             _rtcInvocationContext(
@@ -117,8 +131,8 @@ final rtcCallParticipantCommandWriterProvider =
 
 final rtcCallMediaControlWriterProvider =
     Provider.family<CallMediaControlWriter, AppUiSurface>((ref, surface) {
-      return AppProductionComposition.generatedAdapter<CallMediaControlWriter>(
-        AppProductionAdapter.rtcCallMediaControl,
+      return RtcProductionComposition.generatedAdapter<CallMediaControlWriter>(
+        RtcProductionAdapter.callMediaControl,
         client: ref.watch(generatedCloudOperationClientProvider),
         invocationContext: (clientPageId, {required command}) =>
             _rtcInvocationContext(
@@ -132,8 +146,8 @@ final rtcCallMediaControlWriterProvider =
 
 final rtcCallScreenShareWriterProvider =
     Provider.family<CallScreenShareWriter, AppUiSurface>((ref, surface) {
-      return AppProductionComposition.generatedAdapter<CallScreenShareWriter>(
-        AppProductionAdapter.rtcCallScreenShare,
+      return RtcProductionComposition.generatedAdapter<CallScreenShareWriter>(
+        RtcProductionAdapter.callScreenShare,
         client: ref.watch(generatedCloudOperationClientProvider),
         invocationContext: (clientPageId, {required command}) =>
             _rtcInvocationContext(
@@ -149,8 +163,8 @@ final rtcCallQueryProvider = Provider.family<CallQuery, AppUiSurface>((
   ref,
   surface,
 ) {
-  return AppProductionComposition.generatedAdapter<CallQuery>(
-    AppProductionAdapter.rtcCallQuery,
+  return RtcProductionComposition.generatedAdapter<CallQuery>(
+    RtcProductionAdapter.callQuery,
     client: ref.watch(generatedCloudOperationClientProvider),
     invocationContext: (clientPageId, {required command}) =>
         _rtcInvocationContext(

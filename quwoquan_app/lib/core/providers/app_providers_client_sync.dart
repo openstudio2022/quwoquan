@@ -1,5 +1,49 @@
-part of 'app_providers.dart';
-
+import 'dart:async';
+import 'dart:developer' as developer;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
+import 'package:quwoquan_app/assistant/capabilities/assistant_presentation_capability_catalog.dart';
+import 'package:quwoquan_app/application/assistant/learning/assistant_learning_fact_outbox.dart';
+import 'package:quwoquan_app/assistant/observability/logging/app_trace_context_store.dart';
+import 'package:quwoquan_app/assistant/infrastructure/infrastructure.dart'
+    show AppLogService, AppLogType, AppLogLevel, AppLogContext;
+import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
+import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
+import 'package:quwoquan_app/cloud/runtime/context/actor_queue_partition.dart';
+import 'package:quwoquan_app/core/di/generated_operation_client_dependencies.dart';
+import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/core/platform/platform_target.dart';
+import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
+import 'package:quwoquan_app/cloud/remote/assistant/assistant_learning_fact_remote.dart';
+import 'package:quwoquan_app/cloud/remote/assistant/assistant_skill_catalog_remote.dart';
+import 'package:quwoquan_app/cloud/remote/assistant/assistant_skill_activity_remote.dart';
+import 'package:quwoquan_app/cloud/remote/assistant/assistant_skill_consent_remote.dart';
+import 'package:quwoquan_app/cloud/remote/assistant/assistant_skill_data_control_remote.dart';
+import 'package:quwoquan_app/cloud/remote/assistant/assistant_skill_subscription_remote.dart';
+import 'package:quwoquan_app/cloud/remote/assistant/assistant_skill_user_setting_remote.dart';
+import 'package:quwoquan_app/cloud/remote/entity/homepage/homepage_command_remote.dart';
+import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
+import 'package:quwoquan_app/cloud/services/entity/remote/homepage_query_remote.dart';
+import 'package:quwoquan_app/cloud/services/integration/connector_management_facet.dart';
+import 'package:quwoquan_app/notification/notification_delivery/notification/application/notification_facets.dart';
+import 'package:quwoquan_app/notification/notification_delivery/notification/adapters/app_message_facets_remote.dart';
+import 'package:quwoquan_app/core/auth/auth_session.dart';
+import 'package:quwoquan_app/core/models/client_state_sync.dart';
+import 'package:quwoquan_app/core/services/cache/cache_telemetry_sink.dart';
+import 'package:quwoquan_app/core/di/ops_event_dependencies.dart';
+import 'package:quwoquan_app/runtime/di/integration_dependencies.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/ops/app_telemetry_catalog.g.dart';
+import 'package:quwoquan_app/core/telemetry/app_telemetry_reporter.dart';
+import 'package:quwoquan_app/core/platform/platform_providers.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    hide ContentDiscoveryFeedQuery;
+import 'package:quwoquan_app/core/providers/app_providers_app_state.dart';
+import 'package:quwoquan_app/core/providers/app_providers_chat_search.dart';
+import 'package:quwoquan_app/core/providers/app_providers_content_facets.dart';
+import 'package:quwoquan_app/core/providers/app_providers_content_runtime.dart';
+import 'package:quwoquan_app/core/providers/app_providers_interaction_state.dart';
+import 'package:quwoquan_app/core/providers/app_providers_operations.dart';
 class ClientStateSyncOutboxNotifier
     extends Notifier<ClientStateSyncOutboxState> {
   Timer? _flushTimer;
@@ -17,8 +61,8 @@ class ClientStateSyncOutboxNotifier
   }
 
   Future<void> _hydratePersistedState() async {
-    final raw = await _readPersistedInteractionMap(
-      _clientStateSyncOutboxStorageKey,
+    final raw = await readPersistedInteractionMap(
+      clientStateSyncOutboxStorageKey,
     );
     if (!ref.mounted || _terminallyPurged) {
       return;
@@ -34,8 +78,8 @@ class ClientStateSyncOutboxNotifier
       );
     } on FormatException {
       state = const ClientStateSyncOutboxState();
-      await _writePersistedInteractionMap(
-        _clientStateSyncOutboxStorageKey,
+      await writePersistedInteractionMap(
+        clientStateSyncOutboxStorageKey,
         state.toMap(),
       );
     }
@@ -304,8 +348,8 @@ class ClientStateSyncOutboxNotifier
     if (_terminallyPurged) {
       return;
     }
-    await _writePersistedInteractionMap(
-      _clientStateSyncOutboxStorageKey,
+    await writePersistedInteractionMap(
+      clientStateSyncOutboxStorageKey,
       state.toMap(),
     );
   }
@@ -527,10 +571,10 @@ final assistantSkillDataControlFacetProvider =
 
 final assistantConnectorManagementFacetProvider =
     Provider<ConnectorManagementFacet>((ref) {
-      return AppProductionComposition.generatedAdapter<
+      return IntegrationProductionComposition.generatedAdapter<
         ConnectorManagementFacet
       >(
-        AppProductionAdapter.connectorManagement,
+        IntegrationProductionAdapter.connectorManagement,
         client: ref.watch(generatedCloudOperationClientProvider),
         invocationContext: (String clientPageId, {String? idempotencyKey}) =>
             _assistantSkillCenterInvocationContext(
@@ -784,7 +828,7 @@ class _AppCacheTelemetrySink implements CacheTelemetrySink {
 final homepageFacetSetProvider = Provider<HomepageFacetSet>((ref) {
   final commandWriter = ref.watch(_homepageCommandWriterProvider);
   return HomepageFacetProjectionAdapter(
-    query: ref.watch(_homepageQueryAdapterProvider),
+    query: ref.watch(homepageQueryAdapterProvider),
     candidateWriter: commandWriter,
     claimRequestWriter: commandWriter,
     statusReportWriter: commandWriter,
@@ -811,7 +855,7 @@ final homepageQueryActorContextProvider = Provider<CloudOperationActorContext>((
   );
 });
 
-final _homepageQueryAdapterProvider = Provider<RemoteHomepageQueryAdapter>((
+final homepageQueryAdapterProvider = Provider<RemoteHomepageQueryAdapter>((
   ref,
 ) {
   final actorContext = ref.watch(homepageQueryActorContextProvider);

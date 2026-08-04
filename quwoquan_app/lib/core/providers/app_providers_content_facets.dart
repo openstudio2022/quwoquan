@@ -1,5 +1,32 @@
-part of 'app_providers.dart';
-
+import 'dart:async';
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
+import 'package:quwoquan_app/application/assistant/presentation/assistant_presentation_media_resolver.dart';
+import 'package:quwoquan_app/application/content/filter_catalog/filter_catalog_coordinator.dart';
+import 'package:quwoquan_app/assistant/observability/logging/app_trace_context_store.dart';
+import 'package:quwoquan_app/core/di/generated_operation_client_dependencies.dart';
+import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
+import 'package:quwoquan_app/cloud/remote/content/media/local_media_upload_source.dart';
+import 'package:quwoquan_app/components/media/image/editor/filter/image_editor_filter_repository.dart';
+import 'package:quwoquan_app/application/content/media/content_media_upload_coordinator.dart';
+import 'package:quwoquan_app/cloud/services/user/profile_media_upload_gateway.dart';
+import 'package:quwoquan_app/core/auth/auth_session.dart';
+import 'package:quwoquan_app/core/media/media_delivery_reference.dart';
+import 'package:quwoquan_app/core/di/ops_event_dependencies.dart';
+import 'package:quwoquan_app/runtime/di/circle_dependencies.dart';
+import 'package:quwoquan_app/runtime/di/content_dependencies.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_pages.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/ops/app_telemetry_catalog.g.dart';
+import 'package:quwoquan_app/core/telemetry/app_telemetry_reporter.dart';
+import 'package:quwoquan_app/infrastructure/local/content/filter_catalog/verified_filter_catalog_store.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    hide ContentDiscoveryFeedQuery;
+import 'package:quwoquan_app/core/providers/app_providers_chat_search.dart';
+import 'package:quwoquan_app/core/providers/app_providers_client_sync.dart';
+import 'package:quwoquan_app/core/providers/app_providers_content_extras.dart';
+import 'package:quwoquan_app/core/providers/app_providers_operations.dart';
 /// 仅供组合根装配 Remote / Mock / Cache 的强类型 facets holder。
 /// 它不是业务 Repository；业务消费者只能读取各自的窄 Provider。
 final class _ContentFacets {
@@ -27,15 +54,15 @@ final _contentFacetsProvider = Provider<_ContentFacets>((ref) {
     });
   }
 
-  final facets = AppProductionComposition.contentFacets(
+  final facets = ContentProductionComposition.contentFacets(
     client: ref.watch(generatedCloudOperationClientProvider),
-    invocationContext: (clientPageId) => _contentQueryInvocationContext(
+    invocationContext: (clientPageId) => contentQueryInvocationContext(
       ref,
       surface: AppUiSurfaces.homeFeed,
       clientPageId: clientPageId,
     ),
     deleteInvocationContext: (clientPageId, idempotencyKey) =>
-        _contentCommandInvocationContext(
+        contentCommandInvocationContext(
           ref,
           surface: AppUiSurfaces.workBrowser,
           clientPageId: clientPageId,
@@ -80,17 +107,17 @@ final contentBehaviorCommandWriterProvider =
     );
 
 ContentPostReactionFacet _productionPostReactionFacet(Ref ref) {
-  return AppProductionComposition.generatedAdapter<ContentPostReactionFacet>(
-    AppProductionAdapter.contentPostReaction,
+  return ContentProductionComposition.generatedAdapter<ContentPostReactionFacet>(
+    ContentProductionAdapter.postReaction,
     client: ref.watch(generatedCloudOperationClientProvider),
     invocationContext: (clientPageId, {required command}) {
       if (command) {
-        return _contentCommandInvocationContext(
+        return contentCommandInvocationContext(
           ref,
           clientPageId: clientPageId,
         );
       }
-      return _contentQueryInvocationContext(
+      return contentQueryInvocationContext(
         ref,
         surface: AppUiSurfaces.homeFeed,
         clientPageId: clientPageId,
@@ -105,13 +132,13 @@ final contentPostReactionFacetProvider = Provider<ContentPostReactionFacet>(
 
 final createContentPostPublicationWriterProvider =
     Provider<ContentPostPublicationWriter>((ref) {
-      return AppProductionComposition.generatedAdapter<
+      return ContentProductionComposition.generatedAdapter<
         ContentPostPublicationWriter
       >(
-        AppProductionAdapter.contentPostPublication,
+        ContentProductionAdapter.postPublication,
         client: ref.watch(generatedCloudOperationClientProvider),
         invocationContext: (clientPageId, idempotencyKey) =>
-            _contentCommandInvocationContext(
+            contentCommandInvocationContext(
               ref,
               clientPageId: clientPageId,
               idempotencyKey: idempotencyKey,
@@ -120,18 +147,18 @@ final createContentPostPublicationWriterProvider =
     });
 
 ContentCommentFacet _remoteContentCommentFacet(Ref ref, AppUiSurface surface) {
-  return AppProductionComposition.generatedAdapter<ContentCommentFacet>(
-    AppProductionAdapter.contentComment,
+  return ContentProductionComposition.generatedAdapter<ContentCommentFacet>(
+    ContentProductionAdapter.comment,
     client: ref.watch(generatedCloudOperationClientProvider),
     invocationContext: (clientPageId, {required command}) {
       if (!command) {
-        return _contentQueryInvocationContext(
+        return contentQueryInvocationContext(
           ref,
           surface: surface,
           clientPageId: clientPageId,
         );
       }
-      final base = _contentQueryInvocationContext(
+      final base = contentQueryInvocationContext(
         ref,
         surface: surface,
         clientPageId: clientPageId,
@@ -161,10 +188,10 @@ final profileCommentsContentCommentFacetProvider =
 final contentConfigRepositoryProvider = Provider<ContentConfigRepository>((
   ref,
 ) {
-  return AppProductionComposition.generatedAdapter<ContentConfigRepository>(
-    AppProductionAdapter.contentAppConfigQuery,
+  return ContentProductionComposition.generatedAdapter<ContentConfigRepository>(
+    ContentProductionAdapter.appConfigQuery,
     client: ref.watch(generatedCloudOperationClientProvider),
-    invocationContext: (clientPageId) => _contentQueryInvocationContext(
+    invocationContext: (clientPageId) => contentQueryInvocationContext(
       ref,
       surface: AppUiSurfaces.homeFeed,
       clientPageId: clientPageId,
@@ -174,12 +201,12 @@ final contentConfigRepositoryProvider = Provider<ContentConfigRepository>((
 
 final _imageEditorFilterCatalogQueryProvider =
     Provider<ContentFilterCatalogQuery>((ref) {
-      return AppProductionComposition.generatedAdapter<
+      return ContentProductionComposition.generatedAdapter<
         ContentFilterCatalogQuery
       >(
-        AppProductionAdapter.filterCatalog,
+        ContentProductionAdapter.filterCatalog,
         client: ref.watch(generatedCloudOperationClientProvider),
-        invocationContext: (clientPageId) => _contentQueryInvocationContext(
+        invocationContext: (clientPageId) => contentQueryInvocationContext(
           ref,
           surface: AppUiSurfaces.imageEditor,
           clientPageId: clientPageId,
@@ -275,11 +302,11 @@ final class _AppTelemetryFilterCatalogResolutionObserver
 }
 
 ContentMediaFacet _remoteContentMediaFacet(Ref ref, AppUiSurface surface) =>
-    AppProductionComposition.generatedAdapter<ContentMediaFacet>(
-      AppProductionAdapter.contentMedia,
+    ContentProductionComposition.generatedAdapter<ContentMediaFacet>(
+      ContentProductionAdapter.media,
       client: ref.watch(generatedCloudOperationClientProvider),
       invocationContext: (clientPageId, {required command}) {
-        final base = _contentQueryInvocationContext(
+        final base = contentQueryInvocationContext(
           ref,
           surface: surface,
           clientPageId: clientPageId,
@@ -331,7 +358,7 @@ final assistantPresentationMediaResolverProvider =
 
 final contentMediaStreamObjectUploadProvider =
     Provider<ContentMediaStreamObjectUpload>((ref) {
-      return AppProductionComposition.contentMediaObjectUpload(
+      return ContentProductionComposition.contentMediaObjectUpload(
         onDispose: ref.onDispose,
       );
     });
@@ -362,13 +389,13 @@ ContentOutboundShareAppendWriter _productionOutboundShareWriter(
   Ref ref,
   AppUiSurface surface,
 ) {
-  return AppProductionComposition.generatedAdapter<
+  return ContentProductionComposition.generatedAdapter<
     ContentOutboundShareAppendWriter
   >(
-    AppProductionAdapter.contentOutboundShare,
+    ContentProductionAdapter.outboundShare,
     client: ref.watch(generatedCloudOperationClientProvider),
     invocationContext: (clientPageId, command) {
-      final base = _contentQueryInvocationContext(
+      final base = contentQueryInvocationContext(
         ref,
         surface: surface,
         clientPageId: clientPageId,
@@ -397,13 +424,13 @@ CirclePostPlacementCommandWriter _productionCirclePostPlacementWriter(
   Ref ref,
   AppUiSurface surface,
 ) {
-  return AppProductionComposition.generatedAdapter<
+  return CircleProductionComposition.generatedAdapter<
     CirclePostPlacementCommandWriter
   >(
-    AppProductionAdapter.circlePostPlacement,
+    CircleProductionAdapter.postPlacement,
     client: ref.watch(generatedCloudOperationClientProvider),
     invocationContext: (clientPageId, idempotencyKey) {
-      final base = _contentQueryInvocationContext(
+      final base = contentQueryInvocationContext(
         ref,
         surface: surface,
         clientPageId: clientPageId,

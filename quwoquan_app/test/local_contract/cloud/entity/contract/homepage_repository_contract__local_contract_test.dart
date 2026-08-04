@@ -15,6 +15,7 @@ import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show HomepageIntroduction, HomepageObjectPageBundleQuery;
 import '../../../../support/cloud_services/homepage_alpha_test_adapter.dart';
+import '../../../../support/cloud_services/object_doubles/entity/alpha_homepage_facets.dart'
     show AlphaHomepageFacet;
 
 import '../../../../support/homepage_remote_test_support.dart';

@@ -1,7 +1,36 @@
-part of 'app_providers.dart';
-
+import 'dart:async';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
+import 'package:quwoquan_app/application/travel/trip_guide_assignment_coordinator.dart';
+import 'package:quwoquan_app/application/travel/trip_guide_assignment_facet.dart';
+import 'package:quwoquan_app/application/travel/trip_collaboration_coordinator.dart';
+import 'package:quwoquan_app/application/travel/trip_collaboration_facet.dart';
+import 'package:quwoquan_app/application/travel/trip_content_link_coordinator.dart';
+import 'package:quwoquan_app/application/travel/trip_content_link_facet.dart';
+import 'package:quwoquan_app/application/travel/trip_journey_query.dart';
+import 'package:quwoquan_app/application/travel/trip_moment_coordinator.dart';
+import 'package:quwoquan_app/application/travel/trip_moment_facet.dart';
+import 'package:quwoquan_app/application/travel/trip_plan_creation_coordinator.dart';
+import 'package:quwoquan_app/application/travel/trip_plan_creation_facet.dart';
+import 'package:quwoquan_app/application/travel/trip_plan_directory.dart';
+import 'package:quwoquan_app/application/travel/trip_plan_revision_coordinator.dart';
+import 'package:quwoquan_app/application/travel/trip_plan_revision_facet.dart';
+import 'package:quwoquan_app/application/travel/trip_share_coordinator.dart';
+import 'package:quwoquan_app/application/travel/trip_share_facet.dart';
+import 'package:quwoquan_app/application/travel/trip_share_publication_continuation.dart';
+import 'package:quwoquan_app/application/travel/trip_template_coordinator.dart';
+import 'package:quwoquan_app/application/travel/trip_template_facet.dart';
+import 'package:quwoquan_app/application/content/post/post_publication_continuation_registry.dart';
+import 'package:quwoquan_app/core/di/generated_operation_client_dependencies.dart';
+import 'package:quwoquan_app/runtime/di/travel_dependencies.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    hide ContentDiscoveryFeedQuery;
+import 'package:quwoquan_app/core/providers/app_providers_app_state.dart';
+import 'package:quwoquan_app/core/providers/app_providers_chat_search.dart';
+import 'package:quwoquan_app/core/providers/app_providers_operations.dart';
 final tripCollaborationFacetProvider = Provider<TripCollaborationFacet>((ref) {
-  return AppProductionComposition.tripCollaborationFacet(
+  return TravelProductionComposition.tripCollaborationFacet(
     client: ref.watch(generatedCloudOperationClientProvider),
     invocationContext:
         (AppUiSurface surface, String clientPageId, {String? idempotencyKey}) =>
@@ -23,7 +52,7 @@ final tripCollaborationCoordinatorProvider =
     );
 
 final tripContentLinkFacetProvider = Provider<TripContentLinkFacet>((ref) {
-  return AppProductionComposition.tripContentLinkFacet(
+  return TravelProductionComposition.tripContentLinkFacet(
     client: ref.watch(generatedCloudOperationClientProvider),
     invocationContext:
         (AppUiSurface surface, String clientPageId, {String? idempotencyKey}) =>
@@ -59,7 +88,7 @@ final postPublicationContinuationRegistryProvider =
 final tripGuideAssignmentFacetProvider = Provider<TripGuideAssignmentFacet>((
   ref,
 ) {
-  return AppProductionComposition.tripGuideAssignmentFacet(
+  return TravelProductionComposition.tripGuideAssignmentFacet(
     client: ref.watch(generatedCloudOperationClientProvider),
     invocationContext:
         (AppUiSurface surface, String clientPageId, {String? idempotencyKey}) =>
@@ -84,7 +113,7 @@ final tripGuideAssignmentCoordinatorProvider =
 /// 当前 Persona 自有 Trip 列表。分页状态由页面持有，Remote 仅执行 canonical
 /// keyset query，避免把用户的 Trip 真相复制到 App 本地状态仓库。
 final tripPlanDirectoryProvider = Provider<TripPlanDirectory>((ref) {
-  return AppProductionComposition.tripPlanDirectory(
+  return TravelProductionComposition.tripPlanDirectory(
     client: ref.watch(generatedCloudOperationClientProvider),
     invocationContext: (AppUiSurface surface, String clientPageId) =>
         _travelOperationInvocationContext(
@@ -96,7 +125,7 @@ final tripPlanDirectoryProvider = Provider<TripPlanDirectory>((ref) {
 });
 
 final tripPlanCreationFacetProvider = Provider<TripPlanCreationFacet>((ref) {
-  return AppProductionComposition.tripPlanCreationFacet(
+  return TravelProductionComposition.tripPlanCreationFacet(
     client: ref.watch(generatedCloudOperationClientProvider),
     invocationContext:
         (AppUiSurface surface, String clientPageId, {String? idempotencyKey}) =>
@@ -118,7 +147,7 @@ final tripPlanCreationCoordinatorProvider =
     );
 
 final tripPlanRevisionFacetProvider = Provider<TripPlanRevisionFacet>((ref) {
-  return AppProductionComposition.tripPlanRevisionFacet(
+  return TravelProductionComposition.tripPlanRevisionFacet(
     client: ref.watch(generatedCloudOperationClientProvider),
     invocationContext:
         (AppUiSurface surface, String clientPageId, {String? idempotencyKey}) =>
@@ -140,7 +169,7 @@ final tripPlanRevisionCoordinatorProvider =
     );
 
 final tripMomentFacetProvider = Provider<TripMomentFacet>((ref) {
-  return AppProductionComposition.tripMomentFacet(
+  return TravelProductionComposition.tripMomentFacet(
     client: ref.watch(generatedCloudOperationClientProvider),
     invocationContext:
         (AppUiSurface surface, String clientPageId, {String? idempotencyKey}) =>
@@ -163,7 +192,7 @@ final tripMomentCoordinatorProvider = Provider<TripMomentCoordinator>((ref) {
 /// Travel production read graph：唯一 generated-client adapter，经应用层 loader
 /// 并发组合当前计划、时间线、地图、成员、随拍、内容、Placement 与导游任务。
 final tripJourneyQueryProvider = Provider<TripJourneyQuery>((ref) {
-  return AppProductionComposition.travelJourneyQuery(
+  return TravelProductionComposition.travelJourneyQuery(
     client: ref.watch(generatedCloudOperationClientProvider),
     surface: AppUiSurfaces.travelTimeline,
     invocationContext: (AppUiSurface surface, String clientPageId) =>
@@ -218,7 +247,7 @@ final tripMapProvider = FutureProvider.autoDispose.family<TripMapView, String>((
   ref,
   tripId,
 ) {
-  final query = AppProductionComposition.travelJourneyQuery(
+  final query = TravelProductionComposition.travelJourneyQuery(
     client: ref.watch(generatedCloudOperationClientProvider),
     surface: AppUiSurfaces.travelMap,
     invocationContext: (AppUiSurface surface, String clientPageId) =>
@@ -232,7 +261,7 @@ final tripMapProvider = FutureProvider.autoDispose.family<TripMapView, String>((
 });
 
 final tripShareFacetProvider = Provider<TripShareFacet>((ref) {
-  return AppProductionComposition.tripShareFacet(
+  return TravelProductionComposition.tripShareFacet(
     client: ref.watch(generatedCloudOperationClientProvider),
     invocationContext:
         (AppUiSurface surface, String clientPageId, {String? idempotencyKey}) =>
@@ -258,7 +287,7 @@ final tripShareSnapshotProvider = FutureProvider.autoDispose
     });
 
 final tripTemplateFacetProvider = Provider<TripTemplateFacet>((ref) {
-  return AppProductionComposition.tripTemplateFacet(
+  return TravelProductionComposition.tripTemplateFacet(
     client: ref.watch(generatedCloudOperationClientProvider),
     invocationContext:
         (AppUiSurface surface, String clientPageId, {String? idempotencyKey}) =>

@@ -1,5 +1,8 @@
-part of 'app_providers.dart';
-
+import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
+import 'package:quwoquan_app/cloud/runtime/models/app_remote_config_snapshot.dart';
+import 'package:quwoquan_app/cloud/runtime/models/comment_remote_config.dart';
+import 'package:quwoquan_app/core/models/client_state_sync.dart';
+import 'package:quwoquan_app/core/providers/app_providers_content_runtime.dart';
 ContentRuntimeConfigState buildProductionContentRuntimeConfigDefaults() {
   return ContentRuntimeConfigState(
     featureFlags: <String, bool>{...ContentUIConfig.featureFlags},
@@ -27,7 +30,7 @@ ContentRuntimeConfigState buildAlphaContentRuntimeConfigDefaults() {
   return ContentRuntimeConfigState(
     featureFlags: <String, bool>{
       ...production.featureFlags,
-      ..._contentStoryBootstrapFlags,
+      ...contentStoryBootstrapFlags,
     },
     experimentBucket: 'local_story_enabled',
     currentCanaryStage: '100%',

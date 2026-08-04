@@ -1,9 +1,16 @@
-part of 'app_providers.dart';
-
+import 'dart:async';
+import 'dart:convert';
+import 'dart:math' as math;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
+import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
+import 'package:quwoquan_app/core/providers/app_providers_client_sync.dart';
 const String _clientInteractionStateBoxName = 'client_interaction_state';
 const String _userRelationshipStateStorageKey = 'user_relationship_state';
 const String _postInteractionStateStorageKey = 'post_interaction_state';
-const String _clientStateSyncOutboxStorageKey = 'client_state_sync_outbox';
+const String clientStateSyncOutboxStorageKey = 'client_state_sync_outbox';
 int _clientInteractionStateEpoch = 0;
 
 Future<Box<String>> _ensureClientInteractionStateBox() async {
@@ -18,7 +25,7 @@ Future<Box<String>> _ensureClientInteractionStateBox() async {
   return Hive.box<String>(_clientInteractionStateBoxName);
 }
 
-Future<Map<String, dynamic>?> _readPersistedInteractionMap(String key) async {
+Future<Map<String, dynamic>?> readPersistedInteractionMap(String key) async {
   final epoch = _clientInteractionStateEpoch;
   try {
     final box = await _ensureClientInteractionStateBox();
@@ -42,7 +49,7 @@ Future<Map<String, dynamic>?> _readPersistedInteractionMap(String key) async {
   return null;
 }
 
-Future<void> _writePersistedInteractionMap(
+Future<void> writePersistedInteractionMap(
   String key,
   Map<String, dynamic> value,
 ) async {
@@ -128,7 +135,7 @@ class UserRelationshipStateNotifier extends Notifier<UserRelationshipState> {
   }
 
   Future<void> _hydratePersistedState() async {
-    final raw = await _readPersistedInteractionMap(
+    final raw = await readPersistedInteractionMap(
       _userRelationshipStateStorageKey,
     );
     if (!ref.mounted) {
@@ -219,7 +226,7 @@ class UserRelationshipStateNotifier extends Notifier<UserRelationshipState> {
   }
 
   Future<void> _persistState() async {
-    await _writePersistedInteractionMap(
+    await writePersistedInteractionMap(
       _userRelationshipStateStorageKey,
       state.toMap(),
     );
@@ -329,7 +336,7 @@ class PostInteractionStateNotifier extends Notifier<PostInteractionState> {
   }
 
   Future<void> _hydratePersistedState() async {
-    final raw = await _readPersistedInteractionMap(
+    final raw = await readPersistedInteractionMap(
       _postInteractionStateStorageKey,
     );
     if (!ref.mounted) {
@@ -507,7 +514,7 @@ class PostInteractionStateNotifier extends Notifier<PostInteractionState> {
   }
 
   Future<void> _persistState() async {
-    await _writePersistedInteractionMap(
+    await writePersistedInteractionMap(
       _postInteractionStateStorageKey,
       state.toMap(),
     );

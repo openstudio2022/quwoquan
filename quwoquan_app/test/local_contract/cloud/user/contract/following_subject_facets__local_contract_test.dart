@@ -1,8 +1,8 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/spec.md#sit-001
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/core/di/app_production_composition.dart';
+import 'package:quwoquan_app/runtime/di/user_dependencies.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
-import '../../../../support/cloud_services/object_doubles/user/alpha_following_subject_facets.dart';
+import '../../../../support/user/profile_projection/following_subject/following_subject_typed_double.dart';
 
 void main() {
   group('FollowingSubject object ports', () {
@@ -87,7 +87,7 @@ void main() {
             ],
           },
         );
-        final facets = AppProductionComposition.followingSubjectFacets(
+        final facets = UserProductionComposition.followingSubjectFacets(
           client: GeneratedCloudOperationClient(executor),
           invocationContext: _invocationContext,
         );
@@ -122,7 +122,7 @@ void main() {
             'hasUnreadChanges': false,
           },
         );
-        final facets = AppProductionComposition.followingSubjectFacets(
+        final facets = UserProductionComposition.followingSubjectFacets(
           client: GeneratedCloudOperationClient(executor),
           invocationContext: _invocationContext,
         );

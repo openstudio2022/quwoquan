@@ -1,5 +1,67 @@
-part of 'app_providers.dart';
-
+import 'dart:async';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
+import 'package:quwoquan_app/cloud/media/media_download_cache.dart';
+import 'package:quwoquan_app/cloud/media/media_upload_manager.dart';
+import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
+import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
+import 'package:quwoquan_app/cloud/runtime/context/actor_queue_partition.dart';
+import 'package:quwoquan_app/core/di/generated_operation_client_dependencies.dart';
+import 'package:quwoquan_app/core/services/search_recent_history_store.dart';
+import 'package:quwoquan_app/cloud/remote/tag/tag_catalog_remote.dart';
+import 'package:quwoquan_app/cloud/services/tag/tag_facets.dart';
+import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
+import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
+import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import 'package:quwoquan_app/cloud/remote/chat/conversation/contact_remote.dart';
+import 'package:quwoquan_app/cloud/remote/chat/conversation/conversation_membership_remote.dart';
+import 'package:quwoquan_app/cloud/remote/chat/conversation/conversation_remote.dart';
+import 'package:quwoquan_app/cloud/remote/chat/conversation/conversation_user_state_remote.dart';
+import 'package:quwoquan_app/cloud/remote/chat/conversation/message_home_remote.dart';
+import 'package:quwoquan_app/cloud/remote/chat/message/message_remote.dart';
+import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_delegate.dart';
+import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_notifier.dart';
+import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_operation_gateway.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_request_page_ids.g.dart';
+import 'package:quwoquan_app/cloud/remote/user/contact_discovery/contact_discovery_remote.dart';
+import 'package:quwoquan_app/application/content/media/content_media_upload_coordinator.dart';
+import 'package:quwoquan_app/cloud/services/content/intersection_repository.dart';
+import 'package:quwoquan_app/cloud/services/content/intersection_visit_writer.dart';
+import 'package:quwoquan_app/cloud/services/user/contact_discovery_repository.dart';
+import 'package:quwoquan_app/cloud/services/user/greeting_repository.dart';
+import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
+import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
+import 'package:quwoquan_app/cloud/services/user/user_sync_repository.dart';
+import 'package:quwoquan_app/core/services/cache/conversation_cache_service.dart';
+import 'package:quwoquan_app/core/services/cache/conversation_sync_service.dart';
+import 'package:quwoquan_app/core/services/cache/cache_management_service.dart';
+import 'package:quwoquan_app/core/services/cache/content_cache_services.dart';
+import 'package:quwoquan_app/core/services/cache/local_chat_search_store.dart';
+import 'package:quwoquan_app/core/services/cache/local_search_namespace.dart';
+import 'package:quwoquan_app/core/services/cache/local_chat_search_sync_service.dart';
+import 'package:quwoquan_app/core/services/cache/local_circle_group_search_index.dart';
+import 'package:quwoquan_app/core/services/cache/local_circle_group_snapshot_store.dart';
+import 'package:quwoquan_app/core/services/cache/user_profile_cache_service.dart';
+import 'package:quwoquan_app/core/di/ops_event_dependencies.dart';
+import 'package:quwoquan_app/runtime/di/user_dependencies.dart';
+import 'package:quwoquan_app/core/services/hybrid_search_repository.dart';
+import 'package:quwoquan_app/core/services/location_place_read_query.dart';
+import 'package:quwoquan_app/core/services/remote_search_repository.dart';
+import 'package:quwoquan_app/core/services/search_repository.dart';
+import 'package:quwoquan_app/application/search/search_operation_ports.dart';
+import 'package:quwoquan_app/cloud/remote/search/search_query_remote.dart';
+import 'package:quwoquan_app/core/trackers/content_engagement_tracker.dart';
+import 'package:quwoquan_app/core/trackers/chat_interaction_telemetry_tracker.dart';
+import 'package:quwoquan_app/core/trackers/journey_event_tracker.dart';
+import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    hide ContentDiscoveryFeedQuery;
+import 'package:quwoquan_app/core/providers/app_providers_app_state.dart';
+import 'package:quwoquan_app/core/providers/app_providers_circle_facets.dart';
+import 'package:quwoquan_app/core/providers/app_providers_client_sync.dart';
+import 'package:quwoquan_app/core/providers/app_providers_content_extras.dart';
+import 'package:quwoquan_app/core/providers/app_providers_content_facets.dart';
+import 'package:quwoquan_app/core/providers/app_providers_operations.dart';
 /// Chat 域 production 组合根：单一 Remote 实例实现全部对象级 Facet，
 /// 下方对象 provider 只做类型收窄。production 恒为 Remote-only；alpha runner
 /// 与测试只覆盖本组合根即可让全部对象 Facet 走 Mock。
@@ -219,7 +281,7 @@ final realtimeConnectionManagerProvider =
         operationGatewayResolver: (ref) =>
             RemoteRealtimeConnectionOperationGateway(
               client: ref.read(generatedCloudOperationClientProvider),
-              invocationContext: (clientPageId) => _locationInvocationContext(
+              invocationContext: (clientPageId) => locationInvocationContext(
                 ref,
                 surface: AppUiSurfaces.appShell,
                 clientPageId: clientPageId,
@@ -316,8 +378,8 @@ final localCircleGroupSearchIndexProvider =
 
 final userSyncRepositoryProvider = Provider<UserSyncRepository>((ref) {
   final ownerUserId = ref.watch(resolvedOwnerUserIdProvider);
-  return AppProductionComposition.generatedAdapter<UserSyncRepository>(
-    AppProductionAdapter.userSync,
+  return UserProductionComposition.generatedAdapter<UserSyncRepository>(
+    UserProductionAdapter.userSync,
     client: ref.watch(generatedCloudOperationClientProvider),
     invocationContext: (String clientPageId) {
       final persona = ref.read(activePersonaContextProvider).asData?.value;
@@ -341,10 +403,10 @@ final userSyncRepositoryProvider = Provider<UserSyncRepository>((ref) {
 
 final _followingSubjectFacetsProvider =
     Provider<AppProductionFollowingSubjectFacets>((ref) {
-      return AppProductionComposition.followingSubjectFacets(
+      return UserProductionComposition.followingSubjectFacets(
         client: ref.watch(generatedCloudOperationClientProvider),
         invocationContext: (clientPageId, {String? idempotencyKey}) =>
-            _locationInvocationContext(
+            locationInvocationContext(
               ref,
               surface: AppUiSurfaces.homeFeed,
               clientPageId: clientPageId,
@@ -378,7 +440,7 @@ final contactDiscoveryRepositoryProvider = Provider<ContactDiscoveryRepository>(
   (ref) {
     final facet = RemoteContactDiscoveryFacet(
       client: ref.watch(generatedCloudOperationClientProvider),
-      invocationContext: (clientPageId) => _locationInvocationContext(
+      invocationContext: (clientPageId) => locationInvocationContext(
         ref,
         surface: AppUiSurfaces.addContactPhone,
         clientPageId: clientPageId,
@@ -445,13 +507,13 @@ final intersectionRepositoryProvider = Provider<IntersectionRepository>(
   (ref) => RemoteIntersectionRepository(
     client: ref.watch(generatedCloudOperationClientProvider),
     myIntersectionsInvocationContext: (clientPageId) =>
-        _contentQueryInvocationContext(
+        contentQueryInvocationContext(
           ref,
           surface: AppUiSurfaces.myIntersections,
           clientPageId: clientPageId,
         ),
     objectIntersectionsInvocationContext: (clientPageId) =>
-        _contentQueryInvocationContext(
+        contentQueryInvocationContext(
           ref,
           surface: AppUiSurfaces.objectIntersections,
           clientPageId: clientPageId,
@@ -466,7 +528,7 @@ final intersectionVisitWriterProvider = Provider<IntersectionVisitWriter>((
 ) {
   return RemoteIntersectionVisitWriter(
     client: ref.watch(generatedCloudOperationClientProvider),
-    invocationContext: (clientPageId) => _contentQueryInvocationContext(
+    invocationContext: (clientPageId) => contentQueryInvocationContext(
       ref,
       surface: AppUiSurfaces.myIntersections,
       clientPageId: clientPageId,
@@ -497,7 +559,7 @@ final _canonicalSearchQueryProvider = Provider<CanonicalSearchQueryFacet>((
 ) {
   return RemoteCanonicalSearchQuery(
     client: ref.watch(generatedCloudOperationClientProvider),
-    invocationContext: (clientPageId) => _locationInvocationContext(
+    invocationContext: (clientPageId) => locationInvocationContext(
       ref,
       surface: AppUiSurfaces.globalSearchNetworkResults,
       clientPageId: clientPageId,
@@ -537,7 +599,7 @@ final relationshipCapabilityRepositoryProvider =
     Provider<RelationshipCapabilityRepository>((ref) {
       return RemoteRelationshipCapabilityRepository(
         query: ref.watch(
-          _personaRelationshipRemoteProvider(AppUiSurfaces.userProfile),
+          personaRelationshipRemoteProvider(AppUiSurfaces.userProfile),
         ),
       );
     });
@@ -545,7 +607,7 @@ final relationshipCapabilityRepositoryProvider =
 /// Greeting Repository（打招呼请求箱）
 final greetingRepositoryProvider = Provider<GreetingRepository>((ref) {
   final facet = ref.watch(
-    _greetingRequestRemoteProvider(AppUiSurfaces.userProfile),
+    greetingRequestRemoteProvider(AppUiSurfaces.userProfile),
   );
   return RemoteGreetingRepository(commandWriter: facet, query: facet);
 });
@@ -555,7 +617,7 @@ final greetingRepositoryProvider = Provider<GreetingRepository>((ref) {
 final tagCatalogQueryProvider = Provider<TagCatalogQuery>((ref) {
   return RemoteGeneratedTagCatalogQuery(
     client: ref.watch(generatedCloudOperationClientProvider),
-    invocationContext: (clientPageId) => _locationInvocationContext(
+    invocationContext: (clientPageId) => locationInvocationContext(
       ref,
       surface: AppUiSurfaces.profileCareerInterests,
       clientPageId: clientPageId,

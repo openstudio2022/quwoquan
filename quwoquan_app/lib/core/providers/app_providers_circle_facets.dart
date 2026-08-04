@@ -1,5 +1,12 @@
-part of 'app_providers.dart';
-
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
+import 'package:quwoquan_app/assistant/observability/logging/app_trace_context_store.dart';
+import 'package:quwoquan_app/core/di/generated_operation_client_dependencies.dart';
+import 'package:quwoquan_app/runtime/di/circle_dependencies.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    hide ContentDiscoveryFeedQuery;
+import 'package:quwoquan_app/core/providers/app_providers_app_state.dart';
+import 'package:quwoquan_app/core/providers/app_providers_chat_search.dart';
 CloudOperationInvocationContext _circleOperationInvocationContext(
   Ref ref, {
   required AppUiSurface surface,
@@ -24,8 +31,12 @@ CloudOperationInvocationContext _circleOperationInvocationContext(
   );
 }
 
-T _circlePort<T>(Ref ref, AppUiSurface surface, AppProductionAdapter adapter) {
-  return AppProductionComposition.generatedAdapter<T>(
+T _circlePort<T>(
+  Ref ref,
+  AppUiSurface surface,
+  CircleProductionAdapter adapter,
+) {
+  return CircleProductionComposition.generatedAdapter<T>(
     adapter,
     client: ref.watch(generatedCloudOperationClientProvider),
     invocationContext: (clientPageId, {required command}) =>
@@ -43,7 +54,7 @@ final circlesListDiscoveryFeedQueryProvider =
       (ref) => _circlePort(
         ref,
         AppUiSurfaces.circlesList,
-        AppProductionAdapter.circleQuery,
+        CircleProductionAdapter.query,
       ),
     );
 
@@ -52,7 +63,7 @@ final circlesListQueryProvider = Provider<CircleQueryReader>(
   (ref) => _circlePort(
     ref,
     AppUiSurfaces.circlesList,
-    AppProductionAdapter.circleQuery,
+    CircleProductionAdapter.query,
   ),
 );
 
@@ -61,7 +72,7 @@ final circleDetailQueryProvider = Provider<CircleQueryReader>(
   (ref) => _circlePort(
     ref,
     AppUiSurfaces.circleDetail,
-    AppProductionAdapter.circleQuery,
+    CircleProductionAdapter.query,
   ),
 );
 
@@ -69,16 +80,16 @@ final circleDetailFeedQueryProvider = Provider<CircleFeedQueryReader>(
   (ref) => _circlePort(
     ref,
     AppUiSurfaces.circleDetail,
-    AppProductionAdapter.circleQuery,
+    CircleProductionAdapter.query,
   ),
 );
 
 final circleDetailPostPlacementCommandWriterProvider =
     Provider<CirclePostPlacementCommandWriter>((ref) {
-      return AppProductionComposition.generatedAdapter<
+      return CircleProductionComposition.generatedAdapter<
         CirclePostPlacementCommandWriter
       >(
-        AppProductionAdapter.circlePostPlacement,
+        CircleProductionAdapter.postPlacement,
         client: ref.watch(generatedCloudOperationClientProvider),
         invocationContext: (clientPageId, idempotencyKey) =>
             _circleOperationInvocationContext(
@@ -97,7 +108,7 @@ final circlesListCircleLifecycleCommandWriterProvider =
       (ref) => _circlePort(
         ref,
         AppUiSurfaces.circlesList,
-        AppProductionAdapter.circleLifecycle,
+        CircleProductionAdapter.lifecycle,
       ),
     );
 
@@ -107,7 +118,7 @@ final circleDetailCircleLifecycleCommandWriterProvider =
       (ref) => _circlePort(
         ref,
         AppUiSurfaces.circleDetail,
-        AppProductionAdapter.circleLifecycle,
+        CircleProductionAdapter.lifecycle,
       ),
     );
 
@@ -116,7 +127,7 @@ final circleDetailCircleConfigurationCommandWriterProvider =
       (ref) => _circlePort(
         ref,
         AppUiSurfaces.circleDetail,
-        AppProductionAdapter.circleLifecycle,
+        CircleProductionAdapter.lifecycle,
       ),
     );
 
@@ -124,7 +135,7 @@ final circleDetailGroupQueryProvider = Provider<CircleGroupQueryReader>(
   (ref) => _circlePort(
     ref,
     AppUiSurfaces.circleDetail,
-    AppProductionAdapter.circleGroup,
+    CircleProductionAdapter.group,
   ),
 );
 
@@ -132,7 +143,7 @@ final circleDetailFileCommandWriterProvider = Provider<CircleFileCommandWriter>(
   (ref) => _circlePort(
     ref,
     AppUiSurfaces.circleDetail,
-    AppProductionAdapter.circleFile,
+    CircleProductionAdapter.file,
   ),
 );
 
@@ -140,7 +151,7 @@ final circleDetailFileQueryProvider = Provider<CircleFileQueryReader>(
   (ref) => _circlePort(
     ref,
     AppUiSurfaces.circleDetail,
-    AppProductionAdapter.circleFile,
+    CircleProductionAdapter.file,
   ),
 );
 
@@ -148,7 +159,7 @@ final circleStatsGroupQueryProvider = Provider<CircleGroupQueryReader>(
   (ref) => _circlePort(
     ref,
     AppUiSurfaces.circleDetail,
-    AppProductionAdapter.circleGroup,
+    CircleProductionAdapter.group,
   ),
 );
 
@@ -156,7 +167,7 @@ final globalSearchCircleGroupQueryProvider = Provider<CircleGroupQueryReader>(
   (ref) => _circlePort(
     ref,
     AppUiSurfaces.globalSearchSuggestions,
-    AppProductionAdapter.circleGroup,
+    CircleProductionAdapter.group,
   ),
 );
 
@@ -165,7 +176,7 @@ final circleDetailMembershipCommandWriterProvider =
       (ref) => _circlePort(
         ref,
         AppUiSurfaces.circleDetail,
-        AppProductionAdapter.circleMembership,
+        CircleProductionAdapter.membership,
       ),
     );
 
@@ -173,7 +184,7 @@ final circleDetailMembershipQueryProvider = Provider<CircleMembershipQuery>(
   (ref) => _circlePort(
     ref,
     AppUiSurfaces.circleDetail,
-    AppProductionAdapter.circleMembership,
+    CircleProductionAdapter.membership,
   ),
 );
 
@@ -183,7 +194,7 @@ final circleDetailMembershipModerationWriterProvider =
       (ref) => _circlePort(
         ref,
         AppUiSurfaces.circleDetail,
-        AppProductionAdapter.circleMembership,
+        CircleProductionAdapter.membership,
       ),
     );
 
@@ -192,7 +203,7 @@ final circleDetailPendingMembershipQueryProvider =
       (ref) => _circlePort(
         ref,
         AppUiSurfaces.circleDetail,
-        AppProductionAdapter.circleMembership,
+        CircleProductionAdapter.membership,
       ),
     );
 
@@ -200,7 +211,7 @@ final circleStatsMembershipQueryProvider = Provider<CircleMembershipQuery>(
   (ref) => _circlePort(
     ref,
     AppUiSurfaces.circleStats,
-    AppProductionAdapter.circleMembership,
+    CircleProductionAdapter.membership,
   ),
 );
 
@@ -208,7 +219,7 @@ final homeFeedCircleMembershipQueryProvider = Provider<CircleMembershipQuery>(
   (ref) => _circlePort(
     ref,
     AppUiSurfaces.homeFeed,
-    AppProductionAdapter.circleMembership,
+    CircleProductionAdapter.membership,
   ),
 );
 
@@ -217,7 +228,7 @@ final workBrowserCircleMembershipQueryProvider =
       (ref) => _circlePort(
         ref,
         AppUiSurfaces.workBrowser,
-        AppProductionAdapter.circleMembership,
+        CircleProductionAdapter.membership,
       ),
     );
 
@@ -226,16 +237,16 @@ final userProfileCircleMembershipQueryProvider =
       (ref) => _circlePort(
         ref,
         AppUiSurfaces.userProfile,
-        AppProductionAdapter.circleMembership,
+        CircleProductionAdapter.membership,
       ),
     );
 
 final circleDetailBehaviorFactWriterProvider =
     Provider<CircleBehaviorFactWriter>((ref) {
-      return AppProductionComposition.generatedAdapter<
+      return CircleProductionComposition.generatedAdapter<
         CircleBehaviorFactWriter
       >(
-        AppProductionAdapter.circleBehaviorFact,
+        CircleProductionAdapter.behaviorFact,
         client: ref.watch(generatedCloudOperationClientProvider),
         invocationContext: (clientPageId) => _circleOperationInvocationContext(
           ref,

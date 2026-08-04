@@ -1,5 +1,18 @@
-part of 'app_providers.dart';
-
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
+import 'package:quwoquan_app/app/navigation/main_tab_registry.dart';
+import 'package:quwoquan_app/app/providers/accessibility_provider.dart';
+import 'package:quwoquan_app/core/auth/auth_session.dart';
+import 'package:quwoquan_app/core/design_system/providers/theme_provider.dart';
+import 'package:quwoquan_app/core/media/avatar_image_url.dart';
+import 'package:quwoquan_app/core/media/content_media_url.dart';
+import 'package:quwoquan_app/core/services/visit_recorder_service.dart';
+import 'package:quwoquan_app/core/platform/platform_providers.dart';
+import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
+import 'package:quwoquan_app/core/models/user_models.dart';
+import 'package:quwoquan_app/core/providers/app_providers_operations.dart';
 /// 主题相关的便捷Provider
 final isDarkProvider = Provider<bool>((ref) {
   return ref.watch(effectiveIsDarkProvider);

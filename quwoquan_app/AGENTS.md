@@ -25,6 +25,28 @@
 - 新页面、入口、详情、搜索、创作、消息或推荐相关改动，必须补曝光、停留、异常、关键点击、`referralSource`/`feedRequestId`/trace 传递；内容消费页还要补消费深度和互动反馈。
 - 用户反馈、点赞/评论/收藏/分享/关注、搜索点击、内容停留等行为必须能回流到推荐和运营分析，不得只停留在 UI 状态。
 - 当前阶段未上线：发现不合理 UI/Repository/Provider/路由实现时直接替换为正确模式，不为旧错误保留兼容分支、fallback 或 allowlist。
+- production 装配按 domain 分片：`lib/runtime/di/<domain>_dependencies.dart` 是该 domain
+ 唯一可以命名 `Remote*` 实现的地方，Provider 只声明 typed port。缺文件时按同一范式新建，
+ 不要重建跨 domain 的单一 composition 或 adapter 枚举。
+- `lib/core/providers/app_providers.dart` 只是 domain 级 barrel，不得声明 Provider。新增或
+ 搬迁 Provider 落到所属 domain 的 provider 库，再由 barrel `export`。
+
+## l10n ARB key 归属约定
+
+`lib/l10n/app_zh.arb` 与 `lib/l10n/app_en.arb` 是无法按 domain 分片的共享写点，只能靠
+key 命名表达归属，避免 16 条 domain 并行流互相覆盖。
+
+- 新增或重命名的 key 一律使用 `<domain>_` 前缀，前缀后仍为 lowerCamelCase，例如
+ `content_postDeleteConfirmTitle`、`user_loginPhoneCodeResendTemplate`。
+- `<domain>` 只能取 `quwoquan_ops/gate/object_path_map.py` 派生出的 16 个 domain：
+ `assistant`、`chat`、`circle`、`content`、`entity`、`gateway`、`integration`、
+ `notification`、`ops`、`realtime`、`recommendation`、`rtc`、`search`、`tag`、`travel`、
+ `user`。不属于任何 domain 的横切文案使用 `runtime_` 或 `design_system_` 前缀，与
+ `object_path_map.py` 的两个横切根同名。
+- 两个 arb 文件必须同 key 同序改动；`@key` 元数据紧跟其 key。
+- 存量 579 个无前缀 key 不做批量重命名：每条 domain 流搬迁自己对象时，顺带把该对象用到的
+ key 改成带前缀形式并同步全部引用；禁止为旧 key 保留别名或双写。
+- 冲突判定只看前缀：两条流同时改 arb 时，只要各自 key 前缀不同就不算语义冲突，按文本合并即可。
 
 ## 错误体验与观测
 

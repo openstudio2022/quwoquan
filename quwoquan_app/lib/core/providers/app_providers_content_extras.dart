@@ -1,5 +1,17 @@
-part of 'app_providers.dart';
-
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
+import 'package:quwoquan_app/assistant/observability/logging/app_trace_context_store.dart';
+import 'package:quwoquan_app/core/di/generated_operation_client_dependencies.dart';
+import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
+import 'package:quwoquan_app/cloud/services/content/footprint_repository.dart';
+import 'package:quwoquan_app/cloud/services/content/remote/content_post_projection_mapper.dart';
+import 'package:quwoquan_app/application/content/post/post_publication_status_reader.dart';
+import 'package:quwoquan_app/runtime/di/content_dependencies.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    hide ContentDiscoveryFeedQuery;
+import 'package:quwoquan_app/core/providers/app_providers_app_state.dart';
+import 'package:quwoquan_app/core/providers/app_providers_chat_search.dart';
+import 'package:quwoquan_app/core/providers/app_providers_client_sync.dart';
 final contentPostProjectionMapperProvider =
     Provider<ContentPostProjectionMapper>(
       (ref) => const ContentPostProjectionMapper(),
@@ -10,9 +22,9 @@ final _contentPostReaderFacetsProvider =
       ref,
       surface,
     ) {
-      return AppProductionComposition.contentPostReaderFacets(
+      return ContentProductionComposition.contentPostReaderFacets(
         client: ref.watch(generatedCloudOperationClientProvider),
-        invocationContext: (clientPageId) => _contentQueryInvocationContext(
+        invocationContext: (clientPageId) => contentQueryInvocationContext(
           ref,
           surface: surface,
           clientPageId: clientPageId,
@@ -71,10 +83,10 @@ final userProfileContentAuthorPostsReaderProvider =
     );
 
 final _remoteFootprintRepositoryProvider = Provider<FootprintRepository>((ref) {
-  return AppProductionComposition.generatedAdapter<FootprintRepository>(
-    AppProductionAdapter.contentFootprint,
+  return ContentProductionComposition.generatedAdapter<FootprintRepository>(
+    ContentProductionAdapter.footprint,
     client: ref.watch(generatedCloudOperationClientProvider),
-    invocationContext: (clientPageId) => _contentQueryInvocationContext(
+    invocationContext: (clientPageId) => contentQueryInvocationContext(
       ref,
       surface: AppUiSurfaces.myFootprint,
       clientPageId: clientPageId,
@@ -86,7 +98,7 @@ final footprintRepositoryProvider = Provider<FootprintRepository>((ref) {
   return ref.watch(_remoteFootprintRepositoryProvider);
 });
 
-CloudOperationInvocationContext _contentQueryInvocationContext(
+CloudOperationInvocationContext contentQueryInvocationContext(
   Ref ref, {
   required AppUiSurface surface,
   required String clientPageId,
@@ -105,13 +117,13 @@ CloudOperationInvocationContext _contentQueryInvocationContext(
   );
 }
 
-CloudOperationInvocationContext _contentCommandInvocationContext(
+CloudOperationInvocationContext contentCommandInvocationContext(
   Ref ref, {
   required String clientPageId,
   AppUiSurface surface = AppUiSurfaces.createWorkspace,
   String? idempotencyKey,
 }) {
-  final base = _contentQueryInvocationContext(
+  final base = contentQueryInvocationContext(
     ref,
     surface: surface,
     clientPageId: clientPageId,
