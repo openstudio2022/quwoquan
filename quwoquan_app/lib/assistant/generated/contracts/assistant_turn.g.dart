@@ -9,7 +9,7 @@ import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/orchestrat
 import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/skill_run.dart';
 import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/subagent_plan.dart';
-import 'package:quwoquan_app/assistant/contracts/task_graph_contract.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_task_view/domain/task_graph_contract.dart';
 import 'package:quwoquan_app/assistant/assistant/assistant_turn_view/domain/turn_synthesis_state_contract.dart';
 import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/understanding_result_contract.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/assistant_presentation_document.g.dart';
