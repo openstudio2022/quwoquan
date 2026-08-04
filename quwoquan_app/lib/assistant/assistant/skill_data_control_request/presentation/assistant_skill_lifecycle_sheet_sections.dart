@@ -211,13 +211,7 @@ extension _AssistantSkillLifecycleSheetSections
       key: ValueKey<String>('assistant_skill_data_control_${action.wireName}'),
       padding: EdgeInsets.symmetric(vertical: AppSpacing.intraGroupXs),
       minimumSize: const Size.square(AppSpacing.minInteractiveSize),
-      onPressed: disabled
-          ? null
-          : () => setState(() {
-              selected
-                  ? _selectedActions.remove(action)
-                  : _selectedActions.add(action);
-            }),
+      onPressed: disabled ? null : () => _toggleSelectedAction(action),
       child: Row(
         children: [
           Icon(

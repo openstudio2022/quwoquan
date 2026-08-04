@@ -1,7 +1,7 @@
 // spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/skill-user-lifecycle/spec.md#gwt-001
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/application/assistant/skill_data_control/skill_data_control_coordinator.dart';
-import 'package:quwoquan_app/application/assistant/skill_data_control/skill_data_control_facet.dart';
+import 'package:quwoquan_app/assistant/assistant/skill_data_control_request/application/skill_data_control_coordinator.dart';
+import 'package:quwoquan_app/assistant/assistant/skill_data_control_request/application/skill_data_control_facet.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {

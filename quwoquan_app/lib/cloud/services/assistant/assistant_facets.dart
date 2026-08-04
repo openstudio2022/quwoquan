@@ -15,7 +15,7 @@ import 'package:quwoquan_app/assistant/assistant/page_context/domain/assistant_o
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 export 'package:quwoquan_app/assistant/assistant/skill_activity_view/application/skill_activity_query.dart';
-export 'package:quwoquan_app/application/assistant/skill_data_control/skill_data_control_facet.dart';
+export 'package:quwoquan_app/assistant/assistant/skill_data_control_request/application/skill_data_control_facet.dart';
 
 export 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show

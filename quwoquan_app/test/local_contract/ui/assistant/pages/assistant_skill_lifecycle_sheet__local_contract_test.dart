@@ -2,10 +2,10 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/assistant/assistant/skill_activity_view/application/skill_activity_query.dart';
-import 'package:quwoquan_app/application/assistant/skill_data_control/skill_data_control_facet.dart';
+import 'package:quwoquan_app/assistant/assistant/skill_data_control_request/application/skill_data_control_facet.dart';
 import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
-import 'package:quwoquan_app/ui/assistant/pages/assistant_skill_lifecycle_sheet.dart';
+import 'package:quwoquan_app/assistant/assistant/skill_data_control_request/presentation/assistant_skill_lifecycle_sheet.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 const _skillId = 'travel_companion';

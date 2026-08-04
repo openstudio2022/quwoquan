@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:quwoquan_app/application/assistant/skill_data_control/skill_data_control_facet.dart';
+import 'package:quwoquan_app/assistant/assistant/skill_data_control_request/application/skill_data_control_facet.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:uuid/uuid.dart';
 
@@ -51,13 +51,12 @@ final class SkillDataControlFlowState {
 /// 恢复。Executing 是真实后台状态，轮询到达边界后不会伪装为失败或完成。
 final class SkillDataControlCoordinator {
   SkillDataControlCoordinator({
-    required AssistantSkillDataControlFacet facet,
+    required this._facet,
     SkillDataControlIntentFactory? intentFactory,
     SkillDataControlDelay? delay,
     this.maximumPollAttempts = 6,
     this.onStateChanged,
-  }) : _facet = facet,
-       _intentFactory = intentFactory ?? const Uuid().v4,
+  }) : _intentFactory = intentFactory ?? const Uuid().v4,
        _delay = delay ?? ((duration) => Future<void>.delayed(duration));
 
   final AssistantSkillDataControlFacet _facet;
