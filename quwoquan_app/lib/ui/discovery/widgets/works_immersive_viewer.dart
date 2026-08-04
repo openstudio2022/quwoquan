@@ -47,7 +47,7 @@ import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
-import 'package:quwoquan_app/core/models/assistant_open_context.dart';
+import 'package:quwoquan_app/assistant/assistant/page_context/domain/assistant_open_context.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/ui/discovery/models/work_browser_view_data.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';

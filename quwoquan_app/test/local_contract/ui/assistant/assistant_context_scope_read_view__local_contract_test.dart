@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/ui/assistant/models/assistant_context_scope_read_view.dart';
+import 'package:quwoquan_app/assistant/assistant/page_context/domain/assistant_context_scope_read_view.dart';
 
 void main() {
   test('AssistantContextScopeReadView reads privacyPolicy, tags, pageType', () {

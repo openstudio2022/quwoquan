@@ -6,7 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/navigation/generated/page_access_internal_routes.g.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
-import 'package:quwoquan_app/core/models/assistant_open_context.dart';
+import 'package:quwoquan_app/assistant/assistant/page_context/domain/assistant_open_context.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
     show ReferralSource;

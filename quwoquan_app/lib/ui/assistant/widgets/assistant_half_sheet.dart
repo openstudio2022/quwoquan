@@ -15,7 +15,7 @@ import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
 import 'package:quwoquan_app/core/errors/runtime_error_display.dart'
     show runtimeFailureFromError;
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/core/models/assistant_open_context.dart';
+import 'package:quwoquan_app/assistant/assistant/page_context/domain/assistant_open_context.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 final assistantHalfSheetPersonalizationProvider = FutureProvider.autoDispose

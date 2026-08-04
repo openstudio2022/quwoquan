@@ -15,7 +15,7 @@ import 'package:quwoquan_app/assistant/capabilities/assistant_presentation_capab
 import 'package:quwoquan_app/cloud/remote/assistant/assistant_core_remote.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
 import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/assistant_run_stream_event.dart';
-import 'package:quwoquan_app/core/models/assistant_open_context.dart';
+import 'package:quwoquan_app/assistant/assistant/page_context/domain/assistant_open_context.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 export 'package:quwoquan_app/cloud/services/assistant/assistant_consent_store.dart'

@@ -11,7 +11,7 @@
 /// `lib/core/providers/app_providers_client_sync.dart`（Remote-only）。
 library;
 
-import 'package:quwoquan_app/core/models/assistant_open_context.dart';
+import 'package:quwoquan_app/assistant/assistant/page_context/domain/assistant_open_context.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 export 'package:quwoquan_app/application/assistant/skill_activity/skill_activity_query.dart';
