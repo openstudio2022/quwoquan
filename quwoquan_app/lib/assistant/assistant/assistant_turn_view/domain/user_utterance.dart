@@ -1,5 +1,5 @@
-import 'package:quwoquan_app/assistant/transcript/identity/transcript_line_id.dart';
-import 'package:quwoquan_app/assistant/transcript/user_utterance/utterance_send_state.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_turn_view/domain/transcript_line_id.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_turn_view/domain/utterance_send_state.dart';
 
 /// 用户侧 utterance 快照（C2）。不含 runArtifacts / journey。
 class UserUtterance {

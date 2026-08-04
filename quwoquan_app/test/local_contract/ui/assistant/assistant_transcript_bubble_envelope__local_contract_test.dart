@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/assistant/transcript/persisted_timeline/persisted_timeline_turn_codec.dart';
-import 'package:quwoquan_app/assistant/transcript/row/assistant_transcript_timeline_row.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_turn_view/domain/persisted_timeline_turn_codec.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_turn_view/domain/assistant_transcript_timeline_row.dart';
 import 'package:quwoquan_app/ui/assistant/models/assistant_transcript_bubble_envelope.dart';
 
 void main() {

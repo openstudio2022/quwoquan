@@ -1,7 +1,7 @@
 import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/runtime_enums.dart';
-import 'package:quwoquan_app/assistant/transcript/citation/citation_destination_resolver.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_turn_view/domain/citation_destination_resolver.dart';
 
 /// 当结构化 `processTimeline` 与快照均缺失时，从 [AssistantJourney] 合成可展示的流程帧（读侧恢复 / 写侧补齐）。
 List<ProcessTimelineFrame> buildProcessTimelineFramesFromJourneyFallback(

@@ -2,10 +2,10 @@
 
 import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/run_artifacts.dart';
-import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_turn_view/domain/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/understanding_snapshot_codec.dart';
-import 'package:quwoquan_app/assistant/transcript/persisted_timeline/persisted_timeline_turn_codec.dart';
-import 'package:quwoquan_app/assistant/transcript/row/assistant_transcript_timeline_row.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_turn_view/domain/persisted_timeline_turn_codec.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_turn_view/domain/assistant_transcript_timeline_row.dart';
 
 /// 将时间轴行编码为与 [resolvePersistedAssistantDisplayState] 等协议解析器兼容的扁平 Map。
 ///

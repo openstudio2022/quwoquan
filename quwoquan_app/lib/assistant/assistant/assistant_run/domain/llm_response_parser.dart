@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_turn_view/domain/assistant_turn_contract.dart';
 
 /// LLM 响应统一解析器。
 ///

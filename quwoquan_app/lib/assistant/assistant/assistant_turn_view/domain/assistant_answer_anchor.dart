@@ -1,4 +1,4 @@
-import 'package:quwoquan_app/assistant/transcript/assistant_answer/assistant_quality_metrics_read_view.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_turn_view/domain/assistant_quality_metrics_read_view.dart';
 
 /// 助手回答的运行锚点（C3）。不等于完整持久化 turn。
 class AssistantAnswerAnchor {

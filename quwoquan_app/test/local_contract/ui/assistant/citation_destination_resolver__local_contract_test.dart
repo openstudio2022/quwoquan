@@ -1,7 +1,7 @@
 // spec_ref: specs/feature-tree/runtime/runtime-assistant/context-grounded-answering/spec.md#gwt-002
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/assistant/transcript/citation/assistant_citation.dart';
-import 'package:quwoquan_app/assistant/transcript/citation/citation_destination_resolver.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_turn_view/domain/assistant_citation.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_turn_view/domain/citation_destination_resolver.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {

@@ -6,7 +6,7 @@ import 'package:quwoquan_app/ui/assistant/models/assistant_ui_usage_stats_view_d
 import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/assistant_display_state_projection.dart';
 import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/assistant_display_text_resolver.dart';
 import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/assistant_process_timeline.dart';
-import 'package:quwoquan_app/assistant/transcript/citation/citation_destination_resolver.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_turn_view/domain/citation_destination_resolver.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show CitationDestination;
 

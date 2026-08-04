@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_turn_view/domain/assistant_turn_contract.dart';
 import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/llm_response_parser.dart';
 import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/assistant_stream_chunk_visibility.dart';
 import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/assistant_display_text_resolver.dart';

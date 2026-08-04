@@ -5,7 +5,7 @@ import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/orchestrat
 import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/system_context_envelope.dart';
 import 'package:quwoquan_app/assistant/contracts/task_graph_contract.dart';
-import 'package:quwoquan_app/assistant/contracts/turn_synthesis_state_contract.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_turn_view/domain/turn_synthesis_state_contract.dart';
 import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/understanding_result_contract.dart';
 import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/assistant_display_state_projection.dart';
 import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/assistant_process_timeline.dart';

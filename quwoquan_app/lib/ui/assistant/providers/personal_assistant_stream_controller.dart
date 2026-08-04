@@ -8,10 +8,10 @@ import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/run_artifa
 import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/assistant_process_timeline.dart';
 import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/assistant_presentation_stream_projection.dart';
 import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/assistant_run_stream_event.dart';
-import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
-import 'package:quwoquan_app/assistant/transcript/assistant_answer/assistant_answer_anchor.dart';
-import 'package:quwoquan_app/assistant/transcript/persisted_timeline/persisted_assistant_timeline_payload.dart';
-import 'package:quwoquan_app/assistant/transcript/row/assistant_transcript_timeline_row.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_turn_view/domain/persisted_assistant_turn.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_turn_view/domain/assistant_answer_anchor.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_turn_view/domain/persisted_assistant_timeline_payload.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_turn_view/domain/assistant_transcript_timeline_row.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/assistant_presentation_document.g.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/assistant_presentation_node.g.dart';
 import 'package:quwoquan_app/cloud/assistant/generated/assistant_errors.g.dart';

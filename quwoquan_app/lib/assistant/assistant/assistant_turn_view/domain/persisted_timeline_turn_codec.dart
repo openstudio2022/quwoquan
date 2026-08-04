@@ -1,6 +1,6 @@
-import 'package:quwoquan_app/assistant/transcript/assistant_answer/assistant_answer_anchor.dart';
-import 'package:quwoquan_app/assistant/transcript/persisted_timeline/persisted_assistant_timeline_payload.dart';
-import 'package:quwoquan_app/assistant/transcript/row/assistant_transcript_timeline_row.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_turn_view/domain/assistant_answer_anchor.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_turn_view/domain/persisted_assistant_timeline_payload.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_turn_view/domain/assistant_transcript_timeline_row.dart';
 
 /// 时间轴行 Map ↔ 强类型 Row（单一编解码边界）。
 class PersistedTimelineTurnCodec {

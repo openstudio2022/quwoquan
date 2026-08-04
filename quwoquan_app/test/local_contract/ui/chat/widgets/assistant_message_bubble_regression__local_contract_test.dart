@@ -7,13 +7,13 @@ import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/run_artifa
 import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/assistant_display_state_projection.dart';
 import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/assistant_process_timeline.dart';
-import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_turn_view/domain/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_journey_view_model.dart';
-import 'package:quwoquan_app/assistant/transcript/citation/assistant_citation.dart';
-import 'package:quwoquan_app/assistant/transcript/persisted_timeline/persisted_timeline_turn_codec.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_turn_view/domain/assistant_citation.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_turn_view/domain/persisted_timeline_turn_codec.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_message_bubble.dart';
 
 Widget _bubbleHarness(

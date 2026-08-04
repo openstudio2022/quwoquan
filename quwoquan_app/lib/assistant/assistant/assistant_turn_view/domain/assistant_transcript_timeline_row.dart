@@ -1,9 +1,9 @@
-import 'package:quwoquan_app/assistant/transcript/assistant_answer/assistant_answer_anchor.dart';
-import 'package:quwoquan_app/assistant/transcript/assistant_answer/assistant_dialogue_runtime_read_view.dart';
-import 'package:quwoquan_app/assistant/transcript/identity/transcript_line_id.dart';
-import 'package:quwoquan_app/assistant/transcript/persisted_timeline/persisted_assistant_timeline_payload.dart';
-import 'package:quwoquan_app/assistant/transcript/user_utterance/utterance_send_state.dart';
-import 'package:quwoquan_app/assistant/transcript/user_utterance/user_utterance.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_turn_view/domain/assistant_answer_anchor.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_turn_view/domain/assistant_dialogue_runtime_read_view.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_turn_view/domain/transcript_line_id.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_turn_view/domain/persisted_assistant_timeline_payload.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_turn_view/domain/utterance_send_state.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_turn_view/domain/user_utterance.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show AssistantRunTerminalSnapshotView;
 
