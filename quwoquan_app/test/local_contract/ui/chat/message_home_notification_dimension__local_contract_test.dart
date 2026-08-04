@@ -9,7 +9,7 @@ import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/cloud/services/notification/notification_facets.dart';
+import 'package:quwoquan_app/notification/notification_delivery/notification/application/notification_facets.dart';
 import 'package:quwoquan_app/core/services/visit_recorder_service.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_page.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';

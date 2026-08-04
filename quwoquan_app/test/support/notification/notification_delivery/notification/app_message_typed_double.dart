@@ -1,12 +1,12 @@
-import 'package:quwoquan_app/cloud/services/notification/notification_facets.dart';
+import 'package:quwoquan_app/notification/notification_delivery/notification/application/notification_facets.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-import '../object_scenario_seed_reader.dart';
+import '../../../cloud_services/object_doubles/object_scenario_seed_reader.dart';
 
 /// local_contract Notification 对象替身。
-final class AlphaAppMessageAdapter
+final class AppMessageTypedDouble
     implements AppMessageQuery, AppMessageCommandWriter {
-  AlphaAppMessageAdapter({ObjectScenarioSeedReader? fixtures})
+  AppMessageTypedDouble({ObjectScenarioSeedReader? fixtures})
     : _messages = _readMessages(fixtures ?? objectScenarioSeedReader);
 
   final List<AppMessage> _messages;
@@ -104,7 +104,7 @@ final class AlphaAppMessageAdapter
       (message) => message.messageId == current.messageId,
     );
     if (index < 0) {
-      throw StateError('Notification alpha message is missing');
+      throw StateError('Notification typed double message is missing');
     }
     _messages[index] = replacement;
     return replacement;
@@ -114,11 +114,11 @@ final class AlphaAppMessageAdapter
     final decoded = fixtures.document('notification');
     final seedSets = decoded['seedSets'];
     if (seedSets is! Map) {
-      throw FormatException('Notification alpha fixture seedSets is missing');
+      throw FormatException('Notification typed double seed seedSets is missing');
     }
     final core = seedSets['notification_core'];
     if (core is! Map || core['appMessages'] is! List) {
-      throw FormatException('Notification alpha fixture messages are missing');
+      throw FormatException('Notification typed double seed messages are missing');
     }
     return List<AppMessage>.of(
       (core['appMessages'] as List).map(decodeAppMessage),
