@@ -17,7 +17,7 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_detail_page.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
-import '../../../../support/cloud_services/object_doubles/entity/alpha_homepage_review_facets.dart';
+import '../../../../support/entity/entity_homepage/homepage_review/homepage_review_facets_typed_double.dart';
 
 const String _homepageId = 'homepage_sight_west_lake';
 

@@ -5,7 +5,7 @@ library;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/application/entity/homepage_review_operation_ports.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
-import '../../../../support/cloud_services/object_doubles/entity/alpha_homepage_review_facets.dart';
+import '../../../../support/entity/entity_homepage/homepage_review/homepage_review_facets_typed_double.dart';
 import '../../../../support/user/relationship/subject_follow/subject_follow_typed_double.dart';
 
 void main() {
