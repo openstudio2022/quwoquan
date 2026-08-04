@@ -14,7 +14,7 @@ import 'package:quwoquan_app/core/services/visit_recorder_service.dart';
 import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_page.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
-import '../../../../support/cloud_services/object_doubles/chat/alpha_chat_state_engine.dart';
+import '../../../../support/chat/chat/conversation/conversation_state_typed_double.dart';
 
 import '../../../../support/cloud_services/user_typed_facet_test_support.dart';
 

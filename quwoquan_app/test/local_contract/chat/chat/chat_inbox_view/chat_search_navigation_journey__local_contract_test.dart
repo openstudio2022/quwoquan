@@ -11,8 +11,8 @@ import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.da
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
 import '../../../../support/cloud_services/chat_repository_mock.dart';
-import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_delegate.dart';
-import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_notifier.dart';
+import 'package:quwoquan_app/realtime/realtime/connection/domain/realtime_connection_delegate.dart';
+import 'package:quwoquan_app/realtime/realtime/connection/presentation/realtime_connection_notifier.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
@@ -23,11 +23,11 @@ import 'package:quwoquan_app/ui/chat/providers/voice_send_provider.dart';
 import 'package:quwoquan_app/ui/search/pages/global_search_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
-import '../../../../support/cloud_services/repository_mock_reexports.dart';
 
 import '../../../../support/cloud_services/user_typed_facet_test_support.dart';
 import '../../../../support/fixtures/chat/chat_mock_seed_refs.dart';
-import '../../../../support/fixtures/chat/fixture_realtime_connection_delegate.dart';
+import '../../../../support/realtime/realtime/connection/connection_typed_double.dart';
+import '../../../../support/cloud_services/repository_mock_reexports.dart';
 
 Widget _buildApp() {
   final repo = MockChatRepository(

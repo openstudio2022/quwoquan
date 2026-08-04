@@ -7,7 +7,7 @@ import 'package:quwoquan_app/ui/chat/models/chat_contacts_row.dart';
 import 'package:quwoquan_app/ui/chat/models/chat_list_item_view_model.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-import '../../../support/fixtures/chat/chat_inbox_fixture_builder.dart';
+import '../../../../support/chat/chat/chat_inbox_view/chat_inbox_view_fixture_builder.dart';
 
 void main() {
   final mediaEndpointConfig = MediaEndpointConfig(

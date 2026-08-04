@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import '../../../support/cloud_services/chat_repository_mock.dart';
+import '../../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
@@ -14,7 +14,7 @@ import 'package:quwoquan_app/core/services/visit_recorder_service.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_page.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-import '../../../support/cloud_services/user_typed_facet_test_support.dart';
+import '../../../../support/cloud_services/user_typed_facet_test_support.dart';
 
 /// 消息页`通知`维度契约（interaction-notification-inbox GWT2）：
 /// 通知行只来自 ListAppMessages；点击按 target 路由并 ReadAppMessage；

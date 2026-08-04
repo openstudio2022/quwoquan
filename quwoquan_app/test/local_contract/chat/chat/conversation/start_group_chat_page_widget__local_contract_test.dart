@@ -23,7 +23,7 @@ import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
 import '../../../../support/runtime_failure_fixtures.dart';
 import '../../../../support/recording_app_telemetry_recorder.dart';
-import '../../../../support/cloud_services/object_doubles/user/profile/alpha_user_profile_repository.dart';
+import '../../../../support/user/account/user_account/user_account_profile_typed_double.dart';
 
 void _suppressImageErrors() {
   final original = FlutterError.onError;

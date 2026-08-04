@@ -46,7 +46,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
 import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
 
 import '../../../../support/cloud_services/user_typed_facet_test_support.dart';
-import '../../../../support/fixtures/chat/chat_inbox_fixture_builder.dart';
+import '../../../../support/chat/chat/chat_inbox_view/chat_inbox_view_fixture_builder.dart';
 
 const _primaryAvatarDataUri =
     'data:image/png;base64,'

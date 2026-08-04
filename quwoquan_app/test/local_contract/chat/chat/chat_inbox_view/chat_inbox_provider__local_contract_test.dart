@@ -5,7 +5,7 @@ import '../../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_inbox_provider.dart';
 
-import '../../../../support/fixtures/chat/chat_inbox_fixture_builder.dart';
+import '../../../../support/chat/chat/chat_inbox_view/chat_inbox_view_fixture_builder.dart';
 
 class _SwitchableInboxRepository extends MockChatRepository {
   _SwitchableInboxRepository({required super.seedConversations});
