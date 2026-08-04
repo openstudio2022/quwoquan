@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/feed_realtime_patch.g.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 Map<String, dynamic> _validPatch() => <String, dynamic>{
   'patchId': 'patch-1',
@@ -53,8 +53,8 @@ void main() {
       'rank-v3',
       ' $canonical',
       '$canonical ',
-      'sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
-      'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      invalidSha256Fixture(List<String>.filled(64, 'A').join()),
+      invalidSha256Fixture(List<String>.filled(63, 'a').join()),
       42,
     ]) {
       final payload = _validPatch()..['policyDigest'] = invalid;
@@ -78,3 +78,5 @@ void main() {
     expect(() => parseFeedRealtimePatch(payload), throwsFormatException);
   });
 }
+
+String invalidSha256Fixture(String payload) => 'sha256:$payload';

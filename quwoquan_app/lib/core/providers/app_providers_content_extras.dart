@@ -108,11 +108,12 @@ CloudOperationInvocationContext _contentQueryInvocationContext(
 CloudOperationInvocationContext _contentCommandInvocationContext(
   Ref ref, {
   required String clientPageId,
+  AppUiSurface surface = AppUiSurfaces.createWorkspace,
   String? idempotencyKey,
 }) {
   final base = _contentQueryInvocationContext(
     ref,
-    surface: AppUiSurfaces.createWorkspace,
+    surface: surface,
     clientPageId: clientPageId,
   );
   return CloudOperationInvocationContext(

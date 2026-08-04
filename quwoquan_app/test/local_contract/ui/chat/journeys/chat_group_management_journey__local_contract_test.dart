@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import '../../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
@@ -17,6 +16,7 @@ import 'package:quwoquan_app/ui/chat/pages/transfer_ownership_page.dart';
 import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/group_home_provider.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
 import '../../../../support/fixtures/chat/chat_mock_seed_refs.dart';
 
 const _testConvId = 'fixture_conv_group';
@@ -730,7 +730,7 @@ class _TrackingChatRepository extends MockChatRepository {
 /// 当前用户为普通成员（验证权限隔离）
 class _MemberRoleMockRepo extends MockChatRepository {
   @override
-  Future<List<ChatConversationMemberDto>> listMembers({
+  Future<List<ConversationMemberListRow>> listMembers({
     required String conversationId,
     String? cursor,
     int limit = 20,
@@ -738,8 +738,9 @@ class _MemberRoleMockRepo extends MockChatRepository {
     String? sort,
   }) async {
     return [
-      ChatConversationMemberDto(
+      ConversationMemberListRow(
         userId: chatCurrentUserProfileId(),
+        userHandle: '',
         displayName: '我',
         avatarUrl: '',
         role: 'member',
@@ -747,8 +748,9 @@ class _MemberRoleMockRepo extends MockChatRepository {
         joinedAt: null,
         isCurrentUser: true,
       ),
-      ChatConversationMemberDto(
+      ConversationMemberListRow(
         userId: 'user_002',
+        userHandle: '',
         displayName: '李明',
         avatarUrl: '',
         role: 'member',
@@ -762,16 +764,17 @@ class _MemberRoleMockRepo extends MockChatRepository {
 
 class _OwnerRoleMockRepo extends MockChatRepository {
   @override
-  Future<List<ChatConversationMemberDto>> listMembers({
+  Future<List<ConversationMemberListRow>> listMembers({
     required String conversationId,
     String? cursor,
     int limit = 20,
     String? role,
     String? sort,
   }) async {
-    return <ChatConversationMemberDto>[
-      ChatConversationMemberDto(
+    return <ConversationMemberListRow>[
+      ConversationMemberListRow(
         userId: chatCurrentUserProfileId(),
+        userHandle: '',
         displayName: '当前群主',
         avatarUrl: '',
         role: 'owner',
@@ -779,8 +782,9 @@ class _OwnerRoleMockRepo extends MockChatRepository {
         joinedAt: null,
         isCurrentUser: true,
       ),
-      ChatConversationMemberDto(
+      ConversationMemberListRow(
         userId: 'user_002',
+        userHandle: '',
         displayName: '普通成员',
         avatarUrl: '',
         role: 'member',
@@ -794,21 +798,22 @@ class _OwnerRoleMockRepo extends MockChatRepository {
 
 class _AdminLimitMockRepo extends MockChatRepository {
   @override
-  Future<List<ChatConversationMemberDto>> listMembers({
+  Future<List<ConversationMemberListRow>> listMembers({
     required String conversationId,
     String? cursor,
     int limit = 20,
     String? role,
     String? sort,
   }) async {
-    ChatConversationMemberDto member(
+    ConversationMemberListRow member(
       String userId,
       String displayName,
       String role, {
       bool isCurrentUser = false,
     }) {
-      return ChatConversationMemberDto(
+      return ConversationMemberListRow(
         userId: userId,
+        userHandle: '',
         displayName: displayName,
         avatarUrl: '',
         role: role,
@@ -818,7 +823,7 @@ class _AdminLimitMockRepo extends MockChatRepository {
       );
     }
 
-    return <ChatConversationMemberDto>[
+    return <ConversationMemberListRow>[
       member(chatCurrentUserProfileId(), '当前群主', 'owner', isCurrentUser: true),
       member('initial_admin', '已有管理员', 'admin'),
       member('candidate_1', '候选一', 'member'),
@@ -831,7 +836,7 @@ class _AdminLimitMockRepo extends MockChatRepository {
 /// listMembers 抛异常
 class _ErrorMembersRepo extends MockChatRepository {
   @override
-  Future<List<ChatConversationMemberDto>> listMembers({
+  Future<List<ConversationMemberListRow>> listMembers({
     required String conversationId,
     String? cursor,
     int limit = 20,
@@ -867,7 +872,7 @@ class _FailAdminsRepo extends MockChatRepository {
 /// 返回空成员列表
 class _EmptyMembersRepo extends MockChatRepository {
   @override
-  Future<List<ChatConversationMemberDto>> listMembers({
+  Future<List<ConversationMemberListRow>> listMembers({
     required String conversationId,
     String? cursor,
     int limit = 20,

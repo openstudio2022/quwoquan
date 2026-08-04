@@ -1,4 +1,4 @@
-import '../../cloud_services/repository_mock_reexports.dart';
+import '../../cloud_services/object_doubles/chat/alpha_chat_state_engine.dart';
 
 final _chatFixtureEngine = AlphaChatStateEngine();
 

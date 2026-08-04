@@ -30,6 +30,7 @@ class RuntimeLogSpoolWiringContractTest(unittest.TestCase):
             config_version="config-20260720-1",
             versioned_image=True,
             instance="prod",
+            replica_id="r0",
             config_root="/runtime/config-root",
             media_root="/runtime/media",
             legal_root="/runtime/legal",
@@ -102,7 +103,7 @@ class RuntimeLogSpoolWiringContractTest(unittest.TestCase):
             with self.subTest(service=service):
                 rendered = self.rewrite(service)
                 environment = rendered["environment"]
-                cluster = "prod-prod-control-a"
+                cluster = "prod-prod-control-r0"
                 self.assertEqual(
                     environment["PLATFORM_OPS_BASE_URL"],
                     "http://platform-ops-service:18088",
@@ -116,7 +117,7 @@ class RuntimeLogSpoolWiringContractTest(unittest.TestCase):
 
         platform = self.rewrite("platform-ops-service")["environment"]
         expected = {
-            f"{service}-prod-prod-control-a-0"
+            f"{service}-prod-prod-control-r0-0"
             for service in self.render.RUNTIME_LOG_EXPORT_SERVICES
         }
         self.assertEqual(

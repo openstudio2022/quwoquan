@@ -22,7 +22,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/GetAppConfigResponse'
+                                $ref: '#/components/schemas/AppConfigSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -93,8 +93,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/ReportContentBehaviorsCommand'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ContentBehaviorReportReceipt'
                 default:
                     description: Runtime failure
                     content:
@@ -1273,8 +1277,12 @@ paths:
                   schema:
                     type: string
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PostDeletionReceipt'
                 default:
                     description: Runtime failure
                     content:
@@ -1576,7 +1584,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/GetCountersResponse'
+                                $ref: '#/components/schemas/PostCounterSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -1923,8 +1931,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/CreateContentReportCommand'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ReportCommandResult'
                 default:
                     description: Runtime failure
                     content:
@@ -3096,6 +3108,11 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ActivateFilterCatalogReleaseRequest
             x-contract-placeholder: true
+        AppConfigSlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: AppConfigSlice
+            x-contract-placeholder: true
         AppendContentProfileInteractionReadFactCommand:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -3160,6 +3177,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ContentArticleSummaryGenerateResponse
+            x-contract-placeholder: true
+        ContentBehaviorReportReceipt:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ContentBehaviorReportReceipt
             x-contract-placeholder: true
         ContentCommentReactionCommandResult:
             type: object
@@ -3240,16 +3262,6 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: GenerateArticleSummaryRequest
-            x-contract-placeholder: true
-        GetAppConfigResponse:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: GetAppConfigResponse
-            x-contract-placeholder: true
-        GetCountersResponse:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: GetCountersResponse
             x-contract-placeholder: true
         GetMediaAssetDeliveryReferenceResponse:
             type: object
@@ -3365,6 +3377,16 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: PauseMediaImageReprocessRunRequest
+            x-contract-placeholder: true
+        PostCounterSlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: PostCounterSlice
+            x-contract-placeholder: true
+        PostDeletionReceipt:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: PostDeletionReceipt
             x-contract-placeholder: true
         PostModerationCaseOpsSlice:
             type: object

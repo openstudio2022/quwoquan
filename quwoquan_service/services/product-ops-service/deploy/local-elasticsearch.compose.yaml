@@ -2,7 +2,13 @@
 # 该片段只由 stackctl 本地环境入口装配；Prod renderer 不扫描本文件。
 services:
   elasticsearch:
-    image: "docker.elastic.co/elasticsearch/elasticsearch@sha256:f455c50fb82017dae23878c1b12fb2188dfb984723d62db2c5bd0c1f78e246f0"
+    # Default is the ES 8.13.4 multi-arch index digest (amd64+arm64). Host-native
+    # selection is provided by QWQ_COMPOSE_ELASTICSEARCH_IMAGE from the local
+    # start script; do not pin linux/amd64 platform or an amd64-only manifest.
+    image: "${QWQ_COMPOSE_ELASTICSEARCH_IMAGE:-docker.elastic.co/elasticsearch/elasticsearch@sha256:dfd318b417be1356d9c7fdd6a5577c8a45553ac9d34354929a416c69c85daa9f}"
+    networks:
+      - default
+      - edge
     environment:
       discovery.type: single-node
       xpack.security.enabled: "false"

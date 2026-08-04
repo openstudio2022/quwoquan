@@ -18,7 +18,6 @@ const (
 	locationEndpointRoleBase = "base"
 	locationBaiduAKSecret    = "INTEGRATION_LOCATION_BAIDU_AK"
 	locationAMapKeySecret    = "INTEGRATION_LOCATION_AMAP_KEY"
-	locationFixtureAKSecret  = "INTEGRATION_LOCATION_FIXTURE_AK"
 )
 
 // NewLocationProvider 仅为编译期选中的 Binding 装配一个具体 Adapter。
@@ -29,9 +28,6 @@ func NewLocationProvider(
 ) (ports.LocationProvider, error) {
 	if client == nil {
 		return nil, fmt.Errorf("location provider HTTP client is required")
-	}
-	if binding.AdapterID == LocationAdapterProtocolFixtureID {
-		return NewProtocolFixtureLocationProvider(), nil
 	}
 	endpoint, err := requiredLocationBindingValue(
 		binding.Endpoint,
@@ -46,6 +42,8 @@ func NewLocationProvider(
 	}
 
 	switch binding.AdapterID {
+	case LocationAdapterProtocolFixtureID:
+		return NewBaiduClient(endpoint, "nonprod-protocol-substitute", client), nil
 	case LocationAdapterBaiduID:
 		accessKey, secretErr := requiredLocationBindingValue(
 			binding.Secret,
@@ -88,7 +86,8 @@ func requiredLocationBindingValue(
 
 func validateLocationProviderEndpoint(value string) error {
 	endpoint, err := url.ParseRequestURI(value)
-	if err != nil || endpoint.Scheme != "https" || endpoint.Host == "" {
+	if err != nil || endpoint == nil || endpoint.Scheme != "https" ||
+		endpoint.Host == "" {
 		return fmt.Errorf("location provider endpoint must be an absolute HTTPS URL")
 	}
 	return nil

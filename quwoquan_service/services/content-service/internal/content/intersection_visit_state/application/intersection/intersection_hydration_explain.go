@@ -390,7 +390,7 @@ func concreteObjectNameForReason(r IntersectionReasonView) string {
 }
 
 // containerObjectNameForReason 解析「容器/第三方对象位」（圈子/地点/内容/实体）的名字。
-// person reason 的 DisplayName 是对方人名，禁止冒充容器对象名（V3 修复：
+// person reason 的 DisplayName 是对方人名，禁止冒充容器对象名（已修复：
 // 曾产出「…都加入了『<人名>』」错句）；无真实容器名时返回空，由调用方降级为
 // 纯计数句或隐藏（§20.4 降级链），不造名。
 func containerObjectNameForReason(r IntersectionReasonView) string {
@@ -426,7 +426,7 @@ func renderedObjectNameForReason(r IntersectionReasonView, kind string) string {
 		// 宾语=人本身（被共同关注的人 / 同行的对方），人名合法。
 		name = concreteObjectNameForReason(r)
 	default:
-		// 宾语=圈子/地点/内容/实体等第三方对象，人名不得占位（V3）。
+		// 宾语=圈子/地点/内容/实体等第三方对象，人名不得占位。
 		name = containerObjectNameForReason(r)
 	}
 	return decorateObjectName(kind, name)

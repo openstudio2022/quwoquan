@@ -1,15 +1,13 @@
 import 'package:flutter/cupertino.dart';
+import '../../../support/fixtures/intersection_fixtures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_inbox_summary.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_repository.dart';
 import 'package:quwoquan_app/components/object_page/intersection_entity.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/home_intersection_spotlight_rail.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// 首页交集 spotlight 落地面契约：
 /// 数据只来自「我的交集」事实读面，端不合成句子、不占空版式，点击落到统一导航器。
@@ -47,9 +45,7 @@ void main() {
         findsNothing,
       );
       // 空态必须零高度：否则首页会给「你即将有交集」留一块假模块。
-      final size = tester.getSize(
-        find.byType(HomeIntersectionSpotlightRail),
-      );
+      final size = tester.getSize(find.byType(HomeIntersectionSpotlightRail));
       expect(size.height, 0);
     });
 
@@ -131,13 +127,13 @@ IntersectionReason _factReason({
   required String text,
   String intersectionClass = 'fact',
 }) {
-  final target = IntersectionTarget(
+  final target = intersectionTargetFixture(
     objectType: 'homepage',
     objectId: 'homepage_$id',
     objectKind: 'entity',
     routeId: 'homepageDetail',
   );
-  return IntersectionReason(
+  return intersectionReasonFixture(
     kind: 'coVisitedEntity',
     dimension: 'location',
     intersectionClass: intersectionClass,
@@ -146,7 +142,7 @@ IntersectionReason _factReason({
     displayName: name,
     primaryText: text,
     primarySpans: <IntersectionTextSpan>[
-      IntersectionTextSpan(text: text, role: 'object', target: target),
+      intersectionTextSpanFixture(text: text, role: 'object', target: target),
     ],
     actionTargetId: 'homepage_$id',
     source: 'coVisitedEntity',
@@ -162,7 +158,7 @@ class _FixedIntersectionRepository implements IntersectionRepository {
 
   @override
   Future<IntersectionInboxSummary> getMyIntersectionSummary() async =>
-      IntersectionInboxSummary(totalCount: 0, totalNewCount: 0);
+      intersectionInboxSummaryFixture(totalCount: 0, totalNewCount: 0);
 
   @override
   Future<List<IntersectionReason>> listMyIntersections({

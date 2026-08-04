@@ -339,6 +339,9 @@ final clientStateSyncOutboxProvider =
 final _assistantRemoteProvider = Provider<RemoteAssistantRepository>((ref) {
   return RemoteAssistantRepository(
     operationClient: ref.watch(generatedCloudOperationClientProvider),
+    presentationCapabilities: ref.watch(
+      assistantPresentationCapabilitySnapshotFactoryProvider,
+    ),
     invocationContext:
         (clientPageId, {idempotencyKey, networkSurface = false}) =>
             _assistantOperationInvocationContext(
@@ -349,6 +352,46 @@ final _assistantRemoteProvider = Provider<RemoteAssistantRepository>((ref) {
             ),
   );
 });
+
+final assistantPresentationCapabilitySnapshotFactoryProvider =
+    Provider<AssistantPresentationCapabilitySnapshotFactory>((ref) {
+      return (surfacePolicy) =>
+          _assistantPresentationCapabilities(ref, surfacePolicy);
+    });
+
+AssistantPresentationCapabilitySnapshot _assistantPresentationCapabilities(
+  Ref ref,
+  AssistantPresentationSurfacePolicy surfacePolicy,
+) {
+  final appearance = ref.read(appearanceSnapshotProvider);
+  final viewportWidth = appearance.responsiveState.size.width;
+  if (!viewportWidth.isFinite || viewportWidth <= 0) {
+    throw StateError(
+      'Assistant presentation viewport is unavailable before the App shell snapshot',
+    );
+  }
+  final networkClass = ref.read(appTelemetryContextProvider).networkClass;
+  return AssistantPresentationCapabilitySnapshot(
+    surfacePolicy: surfacePolicy,
+    viewportClass: AssistantPresentationViewportClass.fromWidth(
+      viewportWidth,
+      compactBelow: AppSpacing.markdownCompactBreakpoint,
+      expandedFrom: AppSpacing.expandedBreakpoint,
+    ),
+    platform: platformWireName(ref.read(platformTargetProvider)),
+    darkTheme: appearance.isDark,
+    textScale: appearance.textScaleFactor,
+    reducedMotion: appearance.disableAnimations,
+    offline: networkClass == 'none',
+    // No canonical MediaAssetRef -> delivery URL resolver is wired into the
+    // Assistant renderer yet, so production must not advertise media nodes.
+    mediaEnabled: false,
+    // The personal Assistant page owns typed preference/tool continuation
+    // handlers. Global network search owns no presentation action handler.
+    actionsEnabled:
+        surfacePolicy == AssistantPresentationSurfacePolicy.personal,
+  );
+}
 
 CloudOperationInvocationContext _assistantOperationInvocationContext(
   Ref ref, {
@@ -438,16 +481,49 @@ final assistantSkillUserSettingFacetProvider =
     );
 
 final assistantSkillConsentFacetProvider = Provider<AssistantSkillConsentFacet>(
-  (ref) => RemoteAssistantSkillConsentAdapter(
-    client: ref.watch(generatedCloudOperationClientProvider),
-    invocationContext: (clientPageId, {idempotencyKey}) =>
-        _assistantSkillCenterInvocationContext(
-          ref,
-          clientPageId: clientPageId,
-          idempotencyKey: idempotencyKey,
-        ),
-  ),
+  (ref) {
+    final accountId = ref.watch(resolvedOwnerUserIdProvider).trim();
+    final consentAccountId = accountId;
+    final remote = RemoteAssistantSkillConsentAdapter(
+      client: ref.watch(generatedCloudOperationClientProvider),
+      invocationContext: (clientPageId, {idempotencyKey}) =>
+          _assistantSkillCenterInvocationContext(
+            ref,
+            clientPageId: clientPageId,
+            idempotencyKey: idempotencyKey,
+          ),
+    );
+    return AssistantConsentStore.decorateRemoteSuccess(
+      accountId: consentAccountId,
+      remote: remote,
+    );
+  },
 );
+
+final assistantSkillActivityQueryProvider =
+    Provider<AssistantSkillActivityQuery>(
+      (ref) => RemoteAssistantSkillActivityAdapter(
+        client: ref.watch(generatedCloudOperationClientProvider),
+        invocationContext: (clientPageId) =>
+            _assistantSkillCenterInvocationContext(
+              ref,
+              clientPageId: clientPageId,
+            ),
+      ),
+    );
+
+final assistantSkillDataControlFacetProvider =
+    Provider<AssistantSkillDataControlFacet>(
+      (ref) => RemoteAssistantSkillDataControlAdapter(
+        client: ref.watch(generatedCloudOperationClientProvider),
+        invocationContext: (clientPageId, {idempotencyKey}) =>
+            _assistantSkillCenterInvocationContext(
+              ref,
+              clientPageId: clientPageId,
+              idempotencyKey: idempotencyKey,
+            ),
+      ),
+    );
 
 final assistantConnectorManagementFacetProvider =
     Provider<ConnectorManagementFacet>((ref) {
@@ -598,7 +674,7 @@ final assistantPersonalDataFacetProvider = Provider<AssistantPersonalDataFacet>(
   (ref) => ref.watch(_assistantRemoteProvider),
 );
 
-final assistantPreferenceFactFacetProvider = Provider<AssistantPreferenceFacet>(
+final assistantPreferenceFacetProvider = Provider<AssistantPreferenceFacet>(
   (ref) => ref.watch(_assistantRemoteProvider),
 );
 
@@ -649,25 +725,6 @@ CloudOperationInvocationContext _notificationInvocationContext(
     ),
   );
 }
-
-final personalContentAccessProvider =
-    NotifierProvider<PersonalContentAccessNotifier, PersonalContentAccessState>(
-      PersonalContentAccessNotifier.new,
-    );
-
-final assistantPersonalContentAccessGrantedProvider = Provider<bool>((ref) {
-  return ref.watch(personalContentAccessProvider).granted;
-});
-
-final assistantContentIdentityIndexEnabledProvider = Provider<bool>((ref) {
-  final consentGranted = ref.watch(
-    assistantPersonalContentAccessGrantedProvider,
-  );
-  final featureFlag = ref.watch(
-    contentFeatureFlagProvider('enable_assistant_content_identity_index'),
-  );
-  return consentGranted && featureFlag;
-});
 
 final cacheTelemetrySinkProvider = Provider<CacheTelemetrySink>((ref) {
   return _AppCacheTelemetrySink(ref.watch(appTelemetryReporterProvider));

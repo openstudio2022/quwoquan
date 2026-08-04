@@ -6,12 +6,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
 import 'package:quwoquan_app/ui/discovery/services/home_feed_post_open_action.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show ContentPostProjection;
 
 import '../../../../support/cloud_services/behavior_repository_double.dart';
 
@@ -116,7 +118,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(extras.single.feedRequestId, 'frq_recommend');
       expect(extras.single.policyDigest, _policyA);
-      expect(reporter.recorded.single.action, BehaviorAction.click);
+      expect(reporter.recorded.single.action, BehaviorEventType.click);
       expect(reporter.recorded.single.policyDigest, _policyA);
 
       router.pop();
@@ -125,7 +127,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(extras.last.feedRequestId, 'frq_campus');
       expect(extras.last.policyDigest, _policyB);
-      expect(reporter.recorded.last.action, BehaviorAction.click);
+      expect(reporter.recorded.last.action, BehaviorEventType.click);
       expect(reporter.recorded.last.policyDigest, _policyB);
     },
   );
@@ -140,23 +142,25 @@ final class _SeededFeedMap extends DiscoveryFeedMapNotifier {
   Map<String, AsyncValue<DiscoveryFeedState>> build() => seed;
 }
 
-MicroPostDto _post(String id) {
-  return MicroPostDto(
-    id: id,
-    type: 'moment',
-    identity: 'moment',
-    assistantUsePolicy: 'allow',
-    authorId: 'author-$id',
-    displayName: 'Attribution Author',
-    avatarUrl: '',
-    authorRoleLabel: '',
-    authorIdentityTags: const <String>[],
-    authorVerified: false,
-    body: 'Attribution body',
-    imageUrls: const <String>[],
-    likeCount: 0,
-    commentCount: 0,
-    shareCount: 0,
-    createdAt: DateTime.utc(2026, 7, 29),
+ContentPostViewData _post(String id) {
+  return ContentPostViewData.fromWire(
+    ContentPostProjection(
+      postId: id,
+      contentType: 'micro',
+      contentIdentity: 'moment',
+      assistantUsePolicy: 'allow',
+      authorId: 'author-$id',
+      authorDisplayName: 'Attribution Author',
+      authorAvatarUrl: '',
+      authorRoleLabel: '',
+      authorIdentityTags: const <String>[],
+      authorVerified: false,
+      body: 'Attribution body',
+      mediaUrls: const <String>[],
+      likeCount: 0,
+      commentCount: 0,
+      shareCount: 0,
+      createdAt: DateTime.utc(2026, 7, 29),
+    ),
   );
 }

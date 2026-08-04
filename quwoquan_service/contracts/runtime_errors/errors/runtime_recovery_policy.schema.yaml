@@ -1,4 +1,4 @@
-schema: 1
+schema: runtime-recovery-policy
 types:
   RuntimeRecoveryDecision:
     fields:

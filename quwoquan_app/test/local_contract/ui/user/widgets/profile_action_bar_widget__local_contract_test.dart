@@ -5,13 +5,13 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_action_bar.dart';
 
-RelationshipCapabilityDto _cap(
+RelationshipCapabilityViewData _cap(
   String relationState, {
   bool canStartVoiceCall = false,
   bool canStartVideoCall = false,
   bool isBlocked = false,
 }) {
-  return RelationshipCapabilityDto(
+  return RelationshipCapabilityViewData(
     viewerPersonaId: 'viewer',
     targetPersonaId: 'target',
     relationState: relationState,

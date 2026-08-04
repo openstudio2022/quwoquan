@@ -170,7 +170,7 @@ func TestGetCounters(t *testing.T) {
 	}
 	var counters map[string]any
 	decodeCommentResponse(t, recorder, &counters)
-	if numberAsInt64(counters["comment"]) != 1 {
+	if numberAsInt64(counters["commentCount"]) != 1 {
 		t.Fatalf("Comment count projection is not converged: %+v", counters)
 	}
 }
@@ -186,7 +186,7 @@ func TestCommentCountersStayConsistentAcrossReadModels(t *testing.T) {
 		"/content/posts/"+postID+"/counters", "viewer", nil)
 	var counters map[string]any
 	decodeCommentResponse(t, counterRecorder, &counters)
-	if page.Total != 1 || numberAsInt64(counters["comment"]) != page.Total {
+	if page.Total != 1 || numberAsInt64(counters["commentCount"]) != page.Total {
 		t.Fatalf("Comment reader/Post projection mismatch: page=%+v counters=%+v", page, counters)
 	}
 
@@ -200,7 +200,7 @@ func TestCommentCountersStayConsistentAcrossReadModels(t *testing.T) {
 	counterRecorder = commentAPIRequest(t, http.MethodGet,
 		"/content/posts/"+postID+"/counters", "viewer", nil)
 	decodeCommentResponse(t, counterRecorder, &counters)
-	if page.Total != 0 || numberAsInt64(counters["comment"]) != 0 {
+	if page.Total != 0 || numberAsInt64(counters["commentCount"]) != 0 {
 		t.Fatalf("Comment deletion projection mismatch: page=%+v counters=%+v", page, counters)
 	}
 }
@@ -689,7 +689,7 @@ func assertCommentCounter(t *testing.T, postID string, want int64) {
 	}
 	var counters map[string]any
 	decodeCommentResponse(t, recorder, &counters)
-	if got := numberAsInt64(counters["comment"]); got != want {
+	if got := numberAsInt64(counters["commentCount"]); got != want {
 		t.Fatalf("Comment count projection=%d want=%d payload=%+v", got, want, counters)
 	}
 }

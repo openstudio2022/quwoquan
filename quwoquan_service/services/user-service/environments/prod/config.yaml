@@ -9,36 +9,11 @@ secretRefs:
   sys.user-service.postgres.dsn: POSTGRES_DSN
   sys.user-service.redis.general.password: REDIS_PASSWORD
 externalBindings:
-  runtime.message.transport:
-    state: enabled
-  identity.sms.otp:
-    state: enabled
   identity.carrier.one_tap:
     state: enabled
     adapter: ext.auth.carrier_one_tap
     endpointRef: environment_binding:identity.one_tap
-    endpointEnvs:
-      endpoint: ALIYUN_DYPNS_ENDPOINT
-    secretRefs:
-    - ALIYUN_DYPNS_ACCESS_KEY_ID
-    - ALIYUN_DYPNS_ACCESS_KEY_SECRET
-    timeoutMs: 10000
   identity.social.login:
     state: enabled
     adapter: ext.auth.federated_identity
     endpointRef: environment_binding:identity.social
-    endpointEnvs:
-      wechat_token: WECHAT_OAUTH_TOKEN_URL
-      wechat_user_info: WECHAT_OAUTH_USER_INFO_URL
-      alipay_token: ALIPAY_OAUTH_TOKEN_URL
-      alipay_user_info: ALIPAY_OAUTH_USER_INFO_URL
-      qq_user_info: QQ_OAUTH_USER_INFO_URL
-    secretRefs:
-    - WECHAT_OAUTH_APP_ID
-    - WECHAT_OAUTH_APP_SECRET
-    - ALIPAY_OAUTH_APP_ID
-    - ALIPAY_OAUTH_APP_PRIVATE_KEY_PEM
-    - ALIPAY_OAUTH_PLATFORM_PUBLIC_KEY_PEM
-    - ALIPAY_OAUTH_MERCHANT_PID
-    - QQ_OAUTH_APP_ID
-    timeoutMs: 10000

@@ -1,6 +1,6 @@
 // spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/greeting-request-inbox-and-upgrade/spec.md#gwt-001
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
-import '../../../../support/cloud_services/repository_mock_reexports.dart';
+import '../../../../support/cloud_services/object_doubles/user/alpha_greeting_request_facets.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -24,7 +24,7 @@ void main() {
       expect(record.requesterPersonaId, 'user_a');
       expect(record.targetPersonaId, 'user_b');
       expect(record.requestMessage, '你好，很高兴认识你！');
-      expect(record.status, 'pending');
+      expect(record.status, GreetingRequestStatus.pending);
       expect(record.expireAt, DateTime.utc(2026, 7, 23, 8));
     });
 
@@ -102,7 +102,7 @@ void main() {
         const ListGreetingRequestsQuery(status: 'pending', limit: 20),
       );
 
-      expect(first.status, 'pending');
+      expect(first.status, GreetingRequestStatus.pending);
       expect(first.requestMessage, '认识一下');
       expect(first.id, isNot(second.id));
       expect(
@@ -115,7 +115,7 @@ void main() {
       final replied = await facet.replyGreeting(
         ReplyGreetingCommand(requestId: 'inbox-1'),
       );
-      expect(replied.status, 'replied');
+      expect(replied.status, GreetingRequestStatus.replied);
       expect(replied.promotedConversationId, isNotEmpty);
 
       final ignoreFacet = AlphaGreetingRequestFacet(
@@ -126,7 +126,7 @@ void main() {
       final ignored = await ignoreFacet.ignoreGreeting(
         IgnoreGreetingCommand(requestId: 'inbox-ignore'),
       );
-      expect(ignored.status, 'ignored');
+      expect(ignored.status, GreetingRequestStatus.ignored);
       expect(ignored.decisionAt, isNotNull);
     });
 
@@ -141,7 +141,7 @@ void main() {
         const ListGreetingRequestsQuery(status: 'cancelled'),
       );
 
-      expect(cancelled.status, 'cancelled');
+      expect(cancelled.status, GreetingRequestStatus.cancelled);
       expect(pending.items, isEmpty);
       expect(cancelledSlice.items.single.id, 'outbox-1');
     });
@@ -159,8 +159,8 @@ GreetingRequestRecord _greetingRecord({
     requesterPersonaId: requester,
     targetPersonaId: target,
     requestMessage: 'fixture greeting',
-    status: 'pending',
-    source: 'profile',
+    status: GreetingRequestStatus.pending,
+    source: GreetingRequestSource.profile,
     createdAt: createdAt,
     updatedAt: createdAt,
   );

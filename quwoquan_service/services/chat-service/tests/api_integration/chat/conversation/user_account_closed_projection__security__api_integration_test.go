@@ -318,7 +318,7 @@ func TestUserAccountClosedProjectionDeletesPrivateStateAndAnonymizesAudit(
 		"restricted": true, "accountVersion": int64(5),
 	})
 	insertClosureDocument(t, "chat_user_account_restriction_inbox", bson.M{
-		"_id": "event-legacy-suspend-chat-5", "accountId": accountID,
+		"_id": "event-retired-suspend-chat-5", "accountId": accountID,
 		"accountVersion": int64(5),
 	})
 

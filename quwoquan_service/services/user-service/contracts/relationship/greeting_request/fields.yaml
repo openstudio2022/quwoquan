@@ -188,41 +188,6 @@ types:
         type: string
         constraints:
           - NOT_BLANK
-  GreetingIntersectionSnapshot:
-    description: user-service 以当前双方重新解析后持久化的不可变展示快照
-    fields:
-      - name: intersectionId
-        type: string
-        constraints:
-          - NOT_BLANK
-      - name: evidenceId
-        type: string
-        constraints:
-          - NOT_BLANK
-      - name: sourceRef
-        type: string
-        constraints:
-          - NOT_BLANK
-      - name: objectTypeRef
-        type: string
-        constraints:
-          - NOT_BLANK
-      - name: objectId
-        type: string
-        constraints:
-          - NOT_BLANK
-      - name: primaryText
-        type: string
-        constraints:
-          - NOT_BLANK
-      - name: dimension
-        type: string
-        constraints:
-          - NULLABLE
-      - name: resolvedAt
-        type: timestamp
-        constraints:
-          - NOT_NULL
   GreetingRequestRecord:
     fields:
       - {name: id, type: string, constraints: [NOT_BLANK]}

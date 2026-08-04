@@ -2,11 +2,13 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show RealtimeEventEnvelope;
 import 'package:quwoquan_app/cloud/runtime/auth/cloud_auth_token_provider.dart';
 import 'package:quwoquan_app/cloud/runtime/auth/realtime_connection_credential.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_config.dart';
+import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_operation_gateway.dart';
 
 /// Callback for incoming realtime events from WebSocket.
 typedef RealtimeEventCallback = void Function(Map<String, dynamic> event);
@@ -18,18 +20,16 @@ class WebSocketTransport {
   WebSocketTransport({
     required this.config,
     required this.authTokenProvider,
+    this.operations,
     required this.onEvent,
     required this.onDisconnect,
-    http.Client? ticketClient,
-  }) : _ticketClient = ticketClient ?? http.Client(),
-       _ownsTicketClient = ticketClient == null;
+  });
 
   final RealtimeConfig config;
   final CloudAuthTokenProvider authTokenProvider;
+  final RealtimeConnectionOperationGateway? operations;
   final RealtimeEventCallback onEvent;
   final VoidCallback onDisconnect;
-  final http.Client _ticketClient;
-  final bool _ownsTicketClient;
 
   WebSocketChannel? _channel;
   Timer? _heartbeatTimer;
@@ -43,10 +43,15 @@ class WebSocketTransport {
     if (_disposed) return;
     WebSocketChannel? pendingChannel;
     try {
+      final gateway = operations;
+      if (gateway == null) {
+        throw StateError(
+          'websocket requires generated realtime operation gateway',
+        );
+      }
       final credential = await RealtimeConnectionCredential.resolveWebSocket(
         authTokenProvider,
-        gatewayBaseUrl: config.gatewayBaseUrl,
-        client: _ticketClient,
+        issueTicket: () async => (await gateway.issueConnectionTicket()).ticket,
       );
       if (credential == null) {
         _handleDisconnect();
@@ -122,7 +127,10 @@ class WebSocketTransport {
       }
       if (!_authenticated) return;
       if (type == 'pong') return;
-      onEvent(json);
+      final event = RealtimeEventEnvelope.fromWire(
+        Map<String, Object?>.from(json),
+      );
+      onEvent(Map<String, dynamic>.from(event.toWire()));
     } catch (_) {
       if (kDebugMode) {
         debugPrint('WebSocketTransport: dropped malformed frame');
@@ -179,8 +187,5 @@ class WebSocketTransport {
     _disposed = true;
     disconnect();
     _connected.dispose();
-    if (_ownsTicketClient) {
-      _ticketClient.close();
-    }
   }
 }

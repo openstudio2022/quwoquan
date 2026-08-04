@@ -73,7 +73,7 @@ class _GroupMemberSearchPageState extends ConsumerState<GroupMemberSearchPage> {
           category: UiErrorCategory.pageLoad,
           scope: UiErrorScope.page,
         ),
-        onAction: (action) async {
+        onRecovery: (action) async {
           if (action.type == UiErrorActionType.retry ||
               action.type == UiErrorActionType.resubmit) {
             await ref
@@ -81,7 +81,16 @@ class _GroupMemberSearchPageState extends ConsumerState<GroupMemberSearchPage> {
                   conversationMembersProvider(widget.conversationId).notifier,
                 )
                 .load();
+            return ref
+                        .read(
+                          conversationMembersProvider(widget.conversationId),
+                        )
+                        .error ==
+                    null
+                ? UiRecoveryOutcome.recovered
+                : UiRecoveryOutcome.stillBlocked;
           }
+          return UiRecoveryOutcome.cancelled;
         },
       );
     } else if (filteredMembers.isEmpty) {

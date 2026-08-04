@@ -42,6 +42,7 @@
 .PHONY: verify-retired-terms-zero
 .PHONY: verify-app-production-data-source-single-path
 .PHONY: verify-production-wiring-purity
+.PHONY: verify-provider-substitute-prod-purity
 .PHONY: verify-nonprod-business-data-provisioning
 .PHONY: fetch-app-bundled-fonts
 .PHONY: verify-app-bundled-fonts
@@ -99,6 +100,7 @@
 .PHONY: config-slo-gate
 .PHONY: stackctl-package
 .PHONY: stackctl-verify
+.PHONY: dev-session
 .PHONY: stackctl-up
 .PHONY: stackctl-down
 .PHONY: stackctl-status
@@ -280,7 +282,10 @@ verify-app-production-data-source-single-path:
 	@python3 -m unittest \
 		quwoquan_app.test.local_contract.app.production_release_artifact__local_contract_test
 
-verify-production-wiring-purity: verify-app-mock-isolation verify-app-lib-test-only-symbols verify-app-production-data-source-single-path verify-app-cloud-package-boundaries
+verify-production-wiring-purity: verify-app-mock-isolation verify-app-lib-test-only-symbols verify-app-production-data-source-single-path verify-app-cloud-package-boundaries verify-provider-substitute-prod-purity
+
+verify-provider-substitute-prod-purity:
+	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/gate/verify_provider_substitute_prod_purity.py
 
 verify-nonprod-business-data-provisioning:
 	@python3 quwoquan_ops/gate/verify_nonprod_business_data_provisioning.py
@@ -428,6 +433,22 @@ stackctl-verify:
 
 dev-up:
 	@python3 quwoquan_ops/cli/stackctl.py up $(if $(ENV),--env "$(ENV)",) $(if $(DEVICE_ID),--device-id "$(DEVICE_ID)",) $(if $(SKIP_APP),--skip-app,) $(if $(ROLLOUT_MODE),--rollout-mode "$(ROLLOUT_MODE)",)
+
+dev-session:
+	@if [ -z "$(RELEASE_ATTESTATION)" ] || [ -z "$(ROLLBACK_RELEASE_ATTESTATION)" ]; then \
+		echo "FAIL: RELEASE_ATTESTATION and ROLLBACK_RELEASE_ATTESTATION are required"; \
+		exit 2; \
+	fi
+	@if [ -z "$(ALL_NONPROD)" ] && [ -z "$(ENV)" ] && [ -z "$(TARGET)" ]; then \
+		echo "FAIL: ENV or TARGET is required, or set ALL_NONPROD=1"; \
+		exit 2; \
+	fi
+	@python3 quwoquan_ops/cli/stackctl.py dev-session \
+		$(if $(ALL_NONPROD),--all-nonprod,$(if $(ENV),--env "$(ENV)",--target "$(TARGET)")) \
+		--release-attestation "$(RELEASE_ATTESTATION)" \
+		--rollback-release-attestation "$(ROLLBACK_RELEASE_ATTESTATION)" \
+		$(if $(DEVICE_ID),--device-id "$(DEVICE_ID)",) \
+		$(if $(LAUNCH_APP),--launch-app,)
 
 stackctl-up:
 	@if [ -z "$(TARGET)" ]; then \
@@ -607,7 +628,7 @@ verify-app-assistant-search-weak-typing-ratchet:
 	@python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/assistant-service/gate/verify_assistant_search_weak_typing_ratchet.py
 
 verify-assistant-agent-replay-evaluation:
-	@cd quwoquan_service/services/assistant-service && go test ./tests/local_contract/assistant/assistant_session -run '^TestAgentReplayEvaluationGate$$' -count=1
+	@cd quwoquan_service/services/assistant-service && go test ./tests/local_contract/assistant/assistant_run -run '^TestAgentReplayEvaluationGate$$' -count=1
 
 gate:
 	@$(MAKE) verify-global-increment-constraints

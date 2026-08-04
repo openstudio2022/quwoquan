@@ -120,11 +120,25 @@ func (r *Run) CreateCheckpoint(
 		return Checkpoint{}, ErrInvalidRun
 	}
 	var deviceActionReceipts []DeviceActionExecutionReceipt
+	var budgetConsumption BudgetConsumption
+	var budgetReceiptScope string
+	var budgetReceiptSeq int64
+	var contextState ContextExecutionState
+	var contextCompaction *ContextCompactionCheckpoint
+	var contextReceiptScope string
+	var contextReceiptSeq int64
 	if r.Checkpoint != nil {
 		deviceActionReceipts = append(
 			[]DeviceActionExecutionReceipt{},
 			r.Checkpoint.DeviceActionReceipts...,
 		)
+		budgetConsumption = r.Checkpoint.BudgetConsumption
+		budgetReceiptScope = r.Checkpoint.BudgetReceiptScope
+		budgetReceiptSeq = r.Checkpoint.BudgetReceiptSeq
+		contextState = cloneContextExecutionState(r.Checkpoint.ContextState)
+		contextCompaction = cloneContextCompaction(r.Checkpoint.ContextCompaction)
+		contextReceiptScope = r.Checkpoint.ContextReceiptScope
+		contextReceiptSeq = r.Checkpoint.ContextReceiptSeq
 	}
 	checkpoint := Checkpoint{
 		CheckpointID:         checkpointID,
@@ -133,6 +147,13 @@ func (r *Run) CreateCheckpoint(
 		DecisionSummary:      append([]string{}, decisionSummary...),
 		PendingApprovalRef:   strings.TrimSpace(pendingApprovalRef),
 		DeviceActionReceipts: deviceActionReceipts,
+		BudgetConsumption:    budgetConsumption,
+		BudgetReceiptScope:   budgetReceiptScope,
+		BudgetReceiptSeq:     budgetReceiptSeq,
+		ContextState:         contextState,
+		ContextCompaction:    contextCompaction,
+		ContextReceiptScope:  contextReceiptScope,
+		ContextReceiptSeq:    contextReceiptSeq,
 		RemainingBudget:      cloneInt64Map(remainingBudget),
 		CreatedAt:            now.UTC(),
 	}

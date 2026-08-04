@@ -21,9 +21,10 @@ void main() {
         ReportContentBehaviorsCommand(
           events: <ContentBehaviorEventWire>[
             ContentBehaviorEventWire(
+              clientEventId: 'event-1',
+              occurredAt: DateTime.utc(2026, 8, 3),
               contentId: 'post-1',
-              eventType: 'effective_play',
-              timestamp: '2026-07-29T00:00:00Z',
+              action: BehaviorEventType.click,
             ),
           ],
         ),
@@ -38,12 +39,17 @@ void main() {
         executor.context?.clientPageId,
         ContentRequestPageIds.reportBehaviors,
       );
+      expect(
+        executor.context?.idempotencyKey,
+        matches(RegExp(r'^behavior-batch-[0-9a-f]{64}$')),
+      );
       expect(executor.body, <String, Object?>{
         'events': <Object?>[
           <String, Object?>{
+            'clientEventId': 'event-1',
+            'occurredAt': '2026-08-03T00:00:00.000Z',
             'contentId': 'post-1',
-            'eventType': 'effective_play',
-            'timestamp': '2026-07-29T00:00:00Z',
+            'action': 'click',
           },
         ],
       });

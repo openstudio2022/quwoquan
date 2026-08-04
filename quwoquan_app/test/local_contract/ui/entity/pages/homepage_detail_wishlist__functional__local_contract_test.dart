@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
+import 'package:quwoquan_app/application/entity/homepage_view_data.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository_contract.dart';
 import '../../../../support/cloud_services/behavior_repository_double.dart';
@@ -116,7 +116,7 @@ void main() {
       findsOneWidget,
     );
     expect(reporter.events, hasLength(1));
-    expect(reporter.events.single.action, BehaviorAction.wishlistAdd);
+    expect(reporter.events.single.action, BehaviorEventType.wishlistAdd);
     expect(reporter.events.single.objectId, _homepageId);
     expect(reporter.events.single.objectKind, 'homepage');
     expect(
@@ -137,7 +137,7 @@ void main() {
       findsOneWidget,
     );
     expect(reporter.events, hasLength(2));
-    expect(reporter.events.last.action, BehaviorAction.wishlistRemove);
+    expect(reporter.events.last.action, BehaviorEventType.wishlistRemove);
   });
 
   testWidgets('云侧已想去状态在首帧加载完成后保持选中', (tester) async {

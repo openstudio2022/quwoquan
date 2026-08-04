@@ -14,6 +14,6 @@
 `draft_meta.json` 必须至少包含 `generator=agent`、真实 `model`、`citedSourcePaths`、`createdAt`、`updatedAt`；运行标识由控制器在 Agent 成功后补齐。
 </task>
 
-<source_frames>
-{{source_frames_json}}
-</source_frames>
+<source_video>
+{{source_video_json}}
+</source_video>

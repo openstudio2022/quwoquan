@@ -14,7 +14,6 @@ type recPatchContract struct {
 	RealtimeContract        string `yaml:"realtime_contract"`
 	RealtimeChannelTemplate string `yaml:"realtime_channel_template"`
 	ClientCodegen           struct {
-		OutputPath           string `yaml:"output_path"`
 		PatchTypeEnum        string `yaml:"patch_type_enum"`
 		ReasonCodeEnum       string `yaml:"reason_code_enum"`
 		RemovalDimensionEnum string `yaml:"removal_dimension_enum"`
@@ -86,8 +85,16 @@ func writeRecommendationFeedPatches(appDir, metadataDir string) error {
 		return fmt.Errorf("recommendation realtime patch contract: %w", err)
 	}
 	out := renderRecommendationFeedPatchesDart(metadataSourceLabel(contractPath), contract)
-	relOut := strings.TrimSpace(contract.ClientCodegen.OutputPath)
-	outPath := filepath.Join(appDir, "lib", filepath.FromSlash(relOut))
+	outPath := filepath.Join(
+		appDir,
+		"packages",
+		"quwoquan_cloud_contracts",
+		"lib",
+		"src",
+		"generated",
+		"realtime",
+		"feed_realtime_patch.g.dart",
+	)
 	writeFile(outPath, out)
 	return nil
 }
@@ -95,9 +102,6 @@ func writeRecommendationFeedPatches(appDir, metadataDir string) error {
 func validateRecPatchContract(c *recPatchContract) error {
 	if strings.TrimSpace(c.RealtimeChannelTemplate) == "" {
 		return fmt.Errorf("realtime_channel_template is required")
-	}
-	if strings.TrimSpace(c.ClientCodegen.OutputPath) == "" {
-		return fmt.Errorf("client_codegen.output_path is required")
 	}
 	if len(c.PatchTypes) == 0 {
 		return fmt.Errorf("patch_types cannot be empty")
@@ -231,7 +235,7 @@ func renderRecommendationFeedPatchesDart(sourcePath string, c *recPatchContract)
 	b.WriteString(filepath.ToSlash(sourcePath))
 	b.WriteString("\n// ignore_for_file: prefer_const_constructors\n\n")
 	if hasCanonicalSHA256 {
-		b.WriteString("import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';\n\n")
+		b.WriteString("import '../../canonical_sha256_digest.dart';\n\n")
 	}
 	b.WriteString("T? _optionalValue<T>(Object? value, String fieldName) {\n")
 	b.WriteString("  if (value == null) return null;\n")
@@ -339,7 +343,17 @@ func renderRecommendationFeedPatchesDart(sourcePath string, c *recPatchContract)
 		}
 		b.WriteString(fmt.Sprintf("      %s: %s,\n", f.Name, recPatchFieldFromWireExpr(f, enumClass)))
 	}
-	b.WriteString("    );\n  }\n}\n\n")
+	b.WriteString("    );\n  }\n\n")
+	b.WriteString("  Map<String, Object?> toWire() => <String, Object?>{\n")
+	for _, f := range c.EnvelopeFields {
+		expression := recPatchFieldToWireExpr(f)
+		if f.Nullable {
+			b.WriteString(fmt.Sprintf("    if (%s != null) '%s': %s,\n", f.Name, f.Name, expression))
+		} else {
+			b.WriteString(fmt.Sprintf("    '%s': %s,\n", f.Name, expression))
+		}
+	}
+	b.WriteString("  };\n}\n\n")
 
 	// wire keys manifest (single source for contract tests)
 	b.WriteString("/// envelope wire 字段顺序（codegen 与 recommendation_realtime_patch.yaml 同步）。\n")
@@ -363,6 +377,21 @@ func renderRecommendationFeedPatchesDart(sourcePath string, c *recPatchContract)
 	b.WriteString("}\n")
 
 	return b.String()
+}
+
+func recPatchFieldToWireExpr(field recPatchEnvelopeField) string {
+	access := field.Name
+	if field.Nullable {
+		access += "!"
+	}
+	switch field.Type {
+	case "enum":
+		return access + ".wire"
+	case "[]string":
+		return access + ".toList(growable: false)"
+	default:
+		return access
+	}
 }
 
 func recPatchCtorDefault(f recPatchEnvelopeField) string {

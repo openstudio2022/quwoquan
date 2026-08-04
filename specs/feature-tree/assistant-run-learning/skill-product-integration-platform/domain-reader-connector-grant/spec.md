@@ -59,7 +59,9 @@
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：尚缺 Circle/Content/Entity typed Reader descriptor/adapter、真实 ConnectorAuthorization native/OAuth verifier、地图 typed intent 与旅行外链代理。Assistant capability intersection 已在 PreToolUse 边界接入：仅从 active SkillConsent、enabled SkillUserSetting 的 connection refs、surface allowlist 和 Integration 的脱敏实时 grant 决策得出结果，撤权/过期/共享 surface/网关失败均 fail closed；但 internal operation 仍处于 commercial blocked，尚无受管环境证据。Trip Reader 已通过 Travel 公开 query 组合 Timeline、Map 与 GuideAssignment，Conversation Reader 已消费 membership-filtered 的冻结消息窗口。
-- 尚缺验收证据：ConnectorAuthorization/Connection 的真实 Mongo tests 与 Assistant capability gateway local_contract 已存在；仍缺真实 Provider adapter API integration、Alpha/Beta/Gamma binding/conformance、Android/iPhone device continuation、并发撤权竞态、SLI/SLO、告警与回滚收据。
+- 影响或价值：尚缺新的 immutable package 激活与外部 Connector 完整装配；虽然站内 Reader 已进入统一运行时和官方 Skill source，本地安全实现仍不能证明用户请求可在真实环境持续完成。
+- 已完成实现：Circle/Content/Entity Reader 已通过 generated operation metadata 绑定 owner public GET，以独立 observed client、投影 allowlist、来源 digest 和唯一对象目标 fail-closed；生产组合根已将其与 Trip/Conversation Resolver 装入同一 RuntimeRegistry。官方 `travel_companion` ContextProfile source 已声明三个 Resolver，并通过真实 profile digest、official package builder 与 replay gate。
+- 尚缺实现：从 current source 生成并激活包含上述 ContextProfile 的新 immutable Skill package；完成 ConnectorAuthorization native/OAuth verifier、地图 typed intent 与旅行外链代理。Reader 必须继续只读 owner public query，Connector 必须继续在每个安全边界实时求权限交集。
+- 尚缺验收证据：各 Reader 的真实服务 adapter API integration、真实 Provider adapter API integration、Alpha/Beta/Gamma binding/conformance、Android/iPhone device continuation、并发撤权竞态、SLI/SLO、告警与回滚收据。
 - 完成判定：`GWT-001` 具有 Reader/Connector/Tool local_contract、真实 adapter api_integration 与 Android/iPhone user_acceptance 直接 `spec_ref`。
 - 依赖：Integration Service Connector、各领域 Reader、Assistant Tool Fabric 与 Flutter native bridge。

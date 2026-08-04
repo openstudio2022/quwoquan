@@ -23,8 +23,8 @@ Widget _scopedApp({CircleQueryReader? circleQuery}) {
       ? query as CircleDiscoveryFeedQueryReader
       : CircleDiscoveryFeedQueryTestDouble(
           (CircleDiscoveryFeedQuery query) => CircleDiscoveryFeedPageSlice(
-            circles: const <CircleProjection>[],
-            items: const <CircleFeedPostProjection>[],
+            circles: const <Circle>[],
+            items: const <CircleFeedItemView>[],
           ),
         );
   return ProviderScope(
@@ -156,10 +156,10 @@ class _ErrorCircleQuery extends CircleQueryReaderTestDouble {
 class _EmptyCircleQuery extends CircleQueryReaderTestDouble {
   @override
   Future<CirclePageSlice> list(CircleListQuery query) async =>
-      CirclePageSlice(items: const <CircleProjection>[]);
+      CirclePageSlice(items: const <Circle>[]);
 
   @override
-  Future<CircleProjection> get(CircleDetailQuery query) async {
+  Future<Circle> get(CircleDetailQuery query) async {
     return Future.error(Exception('Circle not found'));
   }
 }

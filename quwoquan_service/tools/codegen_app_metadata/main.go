@@ -18,6 +18,7 @@ func main() {
 	var checkAssistantRuntimeEnumsGo bool
 	var citationDestinationsGoOutput string
 	var checkCitationDestinationsGo bool
+	var realtimeContractsOnly bool
 	flag.StringVar(&metadataDir, "metadata-dir", "contracts/metadata", "metadata root directory")
 	flag.StringVar(&appDir, "app-dir", "../quwoquan_app", "app root directory")
 	flag.StringVar(&contractGraphPath, "contract-graph", "generated/contract_graph.json", "fixed ContractGraph JSON bundle")
@@ -47,6 +48,12 @@ func main() {
 		false,
 		"verify the citation destination Go output is current",
 	)
+	flag.BoolVar(
+		&realtimeContractsOnly,
+		"realtime-contracts-only",
+		false,
+		"generate only the cloud-contracts realtime payloads and tagged event catalog without accepting or rewriting global ContractGraph outputs",
+	)
 	flag.Parse()
 	if checkAssistantRuntimeEnumsGo && assistantRuntimeEnumsGoOutput == "" {
 		exitErr(fmt.Errorf(
@@ -60,7 +67,8 @@ func main() {
 	}
 	serviceOutputRequested :=
 		assistantRuntimeEnumsGoOutput != "" ||
-			citationDestinationsGoOutput != ""
+			citationDestinationsGoOutput != "" ||
+			realtimeContractsOnly
 	if serviceOutputRequested {
 		if err := initializeMetadataSourceForServiceOutput(metadataDir); err != nil {
 			exitErr(err)
@@ -81,6 +89,20 @@ func main() {
 			citationDestinationsGoOutput,
 			checkCitationDestinationsGo,
 		); err != nil {
+			exitErr(err)
+		}
+	}
+	if realtimeContractsOnly {
+		if err := writeRtcSignalPayloads(appDir, metadataDir); err != nil {
+			exitErr(err)
+		}
+		if err := writeChatRealtimeEventPayloads(appDir, metadataDir); err != nil {
+			exitErr(err)
+		}
+		if err := writeRecommendationFeedPatches(appDir, metadataDir); err != nil {
+			exitErr(err)
+		}
+		if err := writeRealtimeEventCatalog(appDir); err != nil {
 			exitErr(err)
 		}
 	}
@@ -208,7 +230,6 @@ func main() {
 	if err := writePostReadPresentationArtifacts(appDir, filepath.Join(postDir, "projections")); err != nil {
 		exitErr(err)
 	}
-	writeContentAppConfigClientDart(filepath.Join(contentGenDir, "content_app_config_client_dto.g.dart"))
 
 	// 3a. 生成 content_errors.g.dart（ContentErrorCode enum + messages）。
 	// content 域错误码按对象目录拆分登记，此处按固定顺序合并为域级客户端枚举；
@@ -444,8 +465,6 @@ func main() {
 		writeFile(filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "integration", "integration_location_errors.g.dart"), locErrOut)
 	}
 
-	writeFile(filepath.Join(contentGenDir, "content_dtos.dart"), renderContentDtosBarrelDart())
-
 	// 3b. 生成其他 domain projections（无 base_class 的 standalone DTO，如 chat inbox）。
 	// 用户域 Auth/Invite/Greeting 等 wire 读模型见：
 	//   user/account/user_account/projections/*.yaml
@@ -507,13 +526,16 @@ func main() {
 			pageIDsOut,
 		)
 	}
-	if err := writeRtcCallSessionDtos(appDir, metadataDir); err != nil {
-		exitErr(err)
-	}
 	if err := writeRtcSignalPayloads(appDir, metadataDir); err != nil {
 		exitErr(err)
 	}
+	if err := writeChatRealtimeEventPayloads(appDir, metadataDir); err != nil {
+		exitErr(err)
+	}
 	if err := writeRecommendationFeedPatches(appDir, metadataDir); err != nil {
+		exitErr(err)
+	}
+	if err := writeRealtimeEventCatalog(appDir); err != nil {
 		exitErr(err)
 	}
 	if err := writeIntersectionKindMetadata(appDir, metadataDir); err != nil {
@@ -589,129 +611,10 @@ func main() {
 			renderSearchFeedbackEventTypeDart(feedbackEventTypes),
 		)
 	}
-	canonicalCircleFields, canonicalCircleFieldsErr := readFields(filepath.Join(
-		metadataDir,
-		"circle",
-		"circle_management",
-		"circle",
-		"fields.yaml",
-	))
-	if canonicalCircleFieldsErr != nil {
-		exitErr(fmt.Errorf("read canonical Circle fields: %w", canonicalCircleFieldsErr))
-	}
-	circleMembershipFields, circleMembershipFieldsErr := readFields(filepath.Join(
-		metadataDir,
-		"circle",
-		"circle_management",
-		"circle_membership",
-		"fields.yaml",
-	))
-	if circleMembershipFieldsErr != nil {
-		exitErr(fmt.Errorf("read PersonaCircleSlice fields: %w", circleMembershipFieldsErr))
-	}
-	circleEnumRefs, circleEnumRefsErr := personaCircleSliceEnumRefs(
-		canonicalCircleFields,
-		circleMembershipFields,
-	)
-	if circleEnumRefsErr != nil {
-		exitErr(circleEnumRefsErr)
-	}
-	if circleContractEnums, renderErr := renderCircleContractEnumsDart(
-		shared.Enums,
-		enumRefsWithout(circleEnumRefs, "HomepageType"),
-	); renderErr != nil {
-		exitErr(renderErr)
-	} else {
-		writeFile(
-			filepath.Join(
-				appDir,
-				"packages",
-				"quwoquan_cloud_contracts",
-				"lib",
-				"src",
-				"generated",
-				"circle_contract_enums.g.dart",
-			),
-			circleContractEnums,
-		)
-	}
-	if homepageType, renderErr := renderSharedOperationEnumDart(
-		"HomepageType",
-		shared.Enums["HomepageType"],
-	); renderErr != nil {
-		exitErr(renderErr)
-	} else {
-		writeFile(
-			filepath.Join(
-				appDir,
-				"packages",
-				"quwoquan_cloud_contracts",
-				"lib",
-				"src",
-				"generated",
-				"homepage_type.g.dart",
-			),
-			homepageType,
-		)
-	}
-	if userContractEnums, renderErr := renderSharedContractEnumsDart(
-		shared.Enums,
-		[]string{"FollowSubjectKind"},
-	); renderErr != nil {
-		exitErr(renderErr)
-	} else {
-		writeFile(
-			filepath.Join(
-				appDir,
-				"packages",
-				"quwoquan_cloud_contracts",
-				"lib",
-				"src",
-				"generated",
-				"user_contract_enums.g.dart",
-			),
-			userContractEnums,
-		)
-	}
-	if chatContractEnums, renderErr := renderSharedContractEnumsDart(
-		shared.Enums,
-		[]string{"MessageType"},
-	); renderErr != nil {
-		exitErr(renderErr)
-	} else {
-		writeFile(
-			filepath.Join(
-				appDir,
-				"packages",
-				"quwoquan_cloud_contracts",
-				"lib",
-				"src",
-				"generated",
-				"chat_contract_enums.g.dart",
-			),
-			chatContractEnums,
-		)
-	}
-	if contentContractEnums, renderErr := renderSharedContractEnumsDart(
-		shared.Enums,
-		[]string{"ContentType", "ContentIdentity"},
-	); renderErr != nil {
-		exitErr(renderErr)
-	} else {
-		writeFile(
-			filepath.Join(
-				appDir,
-				"packages",
-				"quwoquan_cloud_contracts",
-				"lib",
-				"src",
-				"generated",
-				"content_contract_enums.g.dart",
-			),
-			contentContractEnums,
-		)
-	}
 	if err := generateCanonicalSearchClientModels(metadataDir, appDir); err != nil {
+		exitErr(err)
+	}
+	if err := generateContentPreviewTrackManifestContract(appDir); err != nil {
 		exitErr(err)
 	}
 	if searchObjects != nil {

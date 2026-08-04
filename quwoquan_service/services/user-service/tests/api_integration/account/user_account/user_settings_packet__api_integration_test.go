@@ -184,7 +184,7 @@ func TestUserSettingsTypedCommandsCASNoopAndAuditOutbox(t *testing.T) {
 		t,
 		http.MethodPatch,
 		"/user/settings/notifications",
-		`{"enablePush":true,"legacyDynamicPatch":true}`,
+		`{"enablePush":true,"retiredDynamicPatch":true}`,
 		headers,
 	)
 	if unknownField.Code != http.StatusBadRequest {

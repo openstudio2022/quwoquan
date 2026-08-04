@@ -15,7 +15,7 @@ void main() {
     });
 
     test('严格解码举报生命周期且不需要运营字段', () {
-      final page = decodeContentMyReportPage(<String, Object?>{
+      final page = decodeMyReportPageSlice(<String, Object?>{
         'items': <Object?>[
           <String, Object?>{
             'id': 'report-1',
@@ -33,15 +33,15 @@ void main() {
       });
 
       expect(page.items, hasLength(1));
-      expect(page.items.single.targetType, ContentReportTargetType.post);
-      expect(page.items.single.reason, ContentReportReason.spam);
-      expect(page.items.single.status, ContentReportStatus.resolved);
+      expect(page.items.single.targetType, ReportTargetType.post);
+      expect(page.items.single.reason, ReportReason.spam);
+      expect(page.items.single.status, ReportStatus.resolved);
       expect(page.nextCursor, 'cursor-2');
     });
 
     test('未知状态 fail closed', () {
       expect(
-        () => decodeContentMyReportPage(<String, Object?>{
+        () => decodeMyReportPageSlice(<String, Object?>{
           'items': <Object?>[
             <String, Object?>{
               'id': 'report-1',

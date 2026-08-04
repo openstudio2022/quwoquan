@@ -1,274 +1,211 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/feed_item_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
-import 'package:quwoquan_app/cloud/services/content/feed_item_discovery_wire_map.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
 import '../../../../../support/cloud_services/content/content_mock_data.dart';
+import '../../../../../support/cloud_services/content/content_post_contract_fixture.dart';
 
-/// L1a 契约测试：FeedItemDto — 覆盖 mock.yaml dto_scenarios
-///
-/// 三维度覆盖：
-///   常规契约  — 四类内容 canonical 字段正确解析
-///   单轨契约 — 拒绝旧字段/alias；toMap round-trip；copyWith 偏更新
-///   异常/边界契约 — 缺字段降级为零值；全字段缺失不崩溃
+ContentPostProjection _projectionFromView(ContentPostViewData view) =>
+    contentPostProjectionFixture(
+      postId: view.id,
+      contentType: view.type,
+      contentIdentity: view.identity,
+      assistantUsePolicy: view.assistantUsePolicy,
+      authorId: view.authorId,
+      authorDisplayName: view.displayName,
+      authorAvatarUrl: view.avatarUrl,
+      authorBackgroundUrl: view.authorBackgroundUrl,
+      authorRoleLabel: view.authorRoleLabel,
+      authorIdentityTags: view.authorIdentityTags,
+      authorVerified: view.authorVerified,
+      title: view.title,
+      body: view.body,
+      summary: view.summary,
+      coverUrl: view.coverUrl,
+      articleTemplate: view.articleTemplate,
+      articleFontPreset: view.articleFontPreset,
+      mediaUrls: view.imageUrls,
+      videoUrl: view.videoUrl,
+      thumbnailUrl: view.thumbnailUrl,
+      width: view.width,
+      height: view.height,
+      durationMs: view.durationMs,
+      likeCount: view.likeCount,
+      commentCount: view.commentCount,
+      shareCount: view.shareCount,
+      createdAt: view.createdAt,
+      updatedAt: view.updatedAt,
+      publishedAt: view.publishedAt,
+      contentVertical: view.contentVertical,
+      recallPath: view.recallPath,
+      supplySource: view.supplySource,
+      intersectionReasons: view.intersectionReasons,
+    );
+
+ContentDiscoveryFeedPageSlice _page(List<ContentPostViewData> views) =>
+    ContentDiscoveryFeedPageSlice(
+      items: views.map(_projectionFromView).toList(growable: false),
+      outcome: views.isEmpty
+          ? ContentFeedOutcome.empty
+          : ContentFeedOutcome.content,
+      emptyReason: views.isEmpty
+          ? ContentFeedEmptyReason.noEligibleContent
+          : null,
+      feedRequestId: 'feed-request-1',
+      objectCards: const <FeedObjectCard>[],
+    );
+
 void main() {
-  // ──────────────────────────────────────────────────────────────────
-  // 常规契约
-  // ──────────────────────────────────────────────────────────────────
-  group('PostFeedDto — 常规契约', () {
-    test('parses canonical photo item correctly', () {
-      final dto = FeedItemDto.fromMap(
-        ContentMockData.discoveryPhotoData.first.toDiscoveryWireMap(),
-      );
+  group('ContentDiscoveryFeedPageSlice — canonical items', () {
+    test('photo item 保持作者、媒体、统计和时间事实', () {
+      final original = ContentMockData.discoveryPhotoData.first;
+      final projection = _page(<ContentPostViewData>[original]).items.single;
+      final item = ContentPostViewData.fromWire(projection);
 
-      expect(dto.id, equals('d1'));
-      expect(dto.type, equals('image'));
-      expect(dto.authorId, equals('nature_photographer'));
-      expect(dto.displayName, equals('自然摄影师'));
-      expect(dto.avatarUrl, contains('media/avatar/s/archived-avatar/'));
-      expect(dto.coverUrl, contains('media/image/s/archived-image/'));
-      expect(dto.thumbnailUrl, contains('media/image/s/archived-image/'));
-      expect(dto.imageUrls, isNotEmpty);
-      expect(dto.likeCount, equals(1200));
-      expect(dto.commentCount, equals(45));
-      expect(dto.shareCount, equals(18));
-      expect(dto.createdAt, isA<DateTime>());
-      expect(dto.createdAt.year, equals(2025));
+      expect(item.id, 'd1');
+      expect(item.type, 'image');
+      expect(item.authorId, 'nature_photographer');
+      expect(item.displayName, '自然摄影师');
+      expect(item.avatarUrl, contains('media/avatar/s/archived-avatar/'));
+      expect(item.coverUrl, contains('media/image/s/archived-image/'));
+      expect(item.imageUrls, isNotEmpty);
+      expect(item.likeCount, 1200);
+      expect(item.commentCount, 45);
+      expect(item.shareCount, 18);
+      expect(item.createdAt.year, 2025);
     });
 
-    test('parses canonical video item correctly', () {
-      final dto = FeedItemDto.fromMap(
-        ContentMockData.discoveryVideoData.first.toDiscoveryWireMap(),
+    test('video item 保持单一视频形态和时长', () {
+      final original = ContentMockData.discoveryVideoData.first;
+      final item = ContentPostViewData.fromWire(
+        _page(<ContentPostViewData>[original]).items.single,
       );
 
-      expect(dto.id, equals('video_tokyo_midnight'));
-      expect(dto.type, equals('video'));
-      expect(dto.authorId, equals('a1'));
-      expect(dto.displayName, equals('楹语小筑'));
-      expect(
-        dto.coverUrl,
-        equals('media/video/s/media-canary-seek-125s/v1/cover.webp'),
-      );
-      expect(dto.body, contains('东京'));
-      expect(dto.durationMs, equals(125000));
-      expect(dto.likeCount, equals(12500));
-      expect(dto.commentCount, equals(892));
+      expect(item.id, 'video_tokyo_midnight');
+      expect(item.type, 'video');
+      expect(item.authorId, 'a1');
+      expect(item.displayName, '楹语小筑');
+      expect(item.body, contains('东京'));
+      expect(item.durationMs, 125000);
+      expect(item.likeCount, 12500);
+      expect(item.commentCount, 892);
+      expect(item.hasVideo, isTrue);
+      expect(item.imageUrls, isEmpty);
     });
 
-    test('parses canonical moment item correctly', () {
-      final dto = FeedItemDto.fromMap(
-        ContentMockData.discoveryMomentData.first.toDiscoveryWireMap(),
-      );
+    test('moment 与 article 使用同一 ContentPostProjection owner', () {
+      final source = <ContentPostViewData>[
+        ContentMockData.discoveryMomentData.first,
+        ContentMockData.discoveryArticleData.first,
+      ];
+      final page = _page(source);
+      final items = page.items
+          .map(ContentPostViewData.fromWire)
+          .toList(growable: false);
 
-      expect(dto.id, equals('m4'));
-      expect(dto.type, equals('micro'));
-      expect(dto.authorId, equals('u4'));
-      expect(dto.displayName, equals('李想'));
-      expect(dto.likeCount, equals(1581));
-      expect(dto.commentCount, equals(301));
+      expect(items.map((item) => item.type), <String>['micro', 'article']);
+      expect(items.first.identity, 'moment');
+      expect(items.last.identity, 'work');
+      expect(items.last.title, contains('Web开发'));
     });
 
-    test('parses canonical article item correctly', () {
-      final dto = FeedItemDto.fromMap(
-        ContentMockData.discoveryArticleData.first.toDiscoveryWireMap(),
-      );
-
-      expect(dto.id, equals('web-dev'));
-      expect(dto.type, equals('article'));
-      expect(dto.authorId, equals('tech_daily'));
-      expect(dto.displayName, equals('TechDaily'));
-      expect(dto.title, contains('Web开发'));
-      expect(dto.likeCount, equals(1240));
-    });
-
-    test('all mock data: id/authorId/displayName non-empty for every item', () {
-      for (final item in [
+    test('每个 feed item 均具有 canonical post/author identity', () {
+      final page = _page(<ContentPostViewData>[
         ...ContentMockData.discoveryPhotoData,
         ...ContentMockData.discoveryVideoData,
         ...ContentMockData.discoveryMomentData,
         ...ContentMockData.discoveryArticleData,
-      ]) {
-        final dto = FeedItemDto.fromMap(item.toDiscoveryWireMap());
-        expect(
-          dto.id,
-          isNotEmpty,
-          reason: 'id must be non-empty for ${item.id}',
-        );
-        expect(
-          dto.authorId,
-          isNotEmpty,
-          reason: 'authorId must be set for ${item.id}',
-        );
-        expect(
-          dto.displayName,
-          isNotEmpty,
-          reason: 'displayName must be set for ${item.id}',
-        );
+      ]);
+
+      for (final projection in page.items) {
+        final item = ContentPostViewData.fromWire(projection);
+        expect(item.id, isNotEmpty);
+        expect(item.authorId, isNotEmpty, reason: 'postId=${item.id}');
+        expect(item.displayName, isNotEmpty, reason: 'postId=${item.id}');
       }
     });
-
-    test('persona alias 不再覆盖 authorId 真相源', () {
-      const serverRaw = <String, dynamic>{
-        'id': 'v_subject',
-        'type': 'video',
-        'authorId': 'current_author',
-        'personaId': 'persona_author',
-        'displayName': 'Server Author',
-        'avatarUrl': 'https://example.com/avatar.jpg',
-        'thumbnailUrl': 'https://example.com/thumb.jpg',
-        'publishedAt': '2025-06-01T00:00:00Z',
-      };
-      final dto = FeedItemDto.fromMap(serverRaw);
-      expect(dto.authorId, equals('current_author'));
-      expect(dto.authorId, isNot(equals(serverRaw['personaId'])));
-    });
   });
 
-  // ──────────────────────────────────────────────────────────────────
-  // 单轨契约：拒绝旧字段/alias；round-trip 只输出 canonical 字段
-  // ──────────────────────────────────────────────────────────────────
-  group('PostFeedDto — 单轨契约', () {
-    test('解析 canonical wire 字段', () {
-      const serverRaw = <String, dynamic>{
-        'id': 'v_server',
-        'type': 'video',
-        'authorId': 'a_server',
-        'displayName': 'Server Author',
-        'avatarUrl': 'https://example.com/avatar.jpg',
-        'thumbnailUrl': 'https://example.com/thumb.jpg',
-        'likeCount': 200,
-        'commentCount': 20,
-        'shareCount': 5,
-        'createdAt': '2025-05-01T00:00:00Z',
-        'publishedAt': '2025-06-01T00:00:00Z',
-      };
-      final dto = FeedItemDto.fromMap(serverRaw);
-      expect(dto.id, equals('v_server'));
-      expect(dto.displayName, equals('Server Author'));
-      expect(dto.likeCount, equals(200));
-      expect(dto.commentCount, equals(20));
-      expect(dto.shareCount, equals(5));
-      expect(dto.createdAt.year, equals(2025));
-      expect(dto.createdAt.month, equals(5));
-      expect(dto.publishedAt?.month, equals(6));
+  group('ContentDiscoveryFeedPageSlice — single track', () {
+    test('authorId 是唯一作者身份，personaId alias 被 generated decoder 拒绝', () {
+      final wire = contentPostProjectionFixture(
+        postId: 'subject-1',
+        contentType: 'video',
+        authorId: 'current-author',
+        videoUrl: 'https://example.com/video.mp4',
+      ).toWire()..['personaId'] = 'retired-persona';
+
+      expect(() => ContentPostProjection.fromWire(wire), throwsFormatException);
     });
 
-    test('toMap round-trips canonical fields correctly', () {
-      final dto = ContentMockData.discoveryPhotoData.first;
-      final map = dto.toMap();
-
-      expect(map['id'], equals(dto.id));
-      expect(map['type'], equals(dto.type));
-      expect(map['authorId'], equals(dto.authorId));
-      expect(map['displayName'], equals(dto.displayName));
-      expect(map['likeCount'], equals(dto.likeCount));
-      expect(map['imageUrls'], equals(dto.imageUrls));
-    });
-
-    test('toDiscoveryWireMap 不再用 createdAt 伪造 publishedAt', () {
-      const raw = <String, dynamic>{
-        'id': 'wire_only_created',
-        'type': 'article',
-        'authorId': 'writer',
-        'displayName': 'Writer',
-        'avatarUrl': 'https://example.com/avatar.jpg',
-        'title': '仅创作时间',
-        'body': '正文',
-        'coverUrl': 'https://example.com/cover.jpg',
-        'createdAt': '2026-01-01T08:00:00Z',
-      };
-      final dto = FeedItemDto.fromMap(raw);
-      final wire = dto.toDiscoveryWireMap();
-      expect(wire['createdAt'], equals('2026-01-01T08:00:00.000Z'));
-      expect(wire.containsKey('publishedAt'), isFalse);
-    });
-
-    test(
-      'copyWith produces correct partial update while preserving other fields',
-      () {
-        final original = ContentMockData.discoveryPhotoData.first;
-        final updated = original.copyWith(
-          likeCount: 9999,
-          displayName: 'Updated Name',
-        );
-
-        expect(updated.likeCount, equals(9999));
-        expect(updated.displayName, equals('Updated Name'));
-        expect(updated.id, equals(original.id));
-        expect(updated.type, equals(original.type));
-      },
-    );
-  });
-
-  // ──────────────────────────────────────────────────────────────────
-  // 异常/边界契约：缺字段降级为零值；全字段缺失不崩溃
-  // ──────────────────────────────────────────────────────────────────
-  group('PostFeedDto — 异常/边界契约', () {
-    test('missing count fields fall back to zero', () {
-      const minimalRaw = <String, dynamic>{
-        'id': 'x1',
-        'type': 'image',
-        'authorId': 'u1',
-        'displayName': 'Test',
-        'avatarUrl': 'https://example.com/a.jpg',
-        'thumbnailUrl': 'https://example.com/t.jpg',
-        'createdAt': '2025-01-01T00:00:00Z',
-      };
-      final dto = FeedItemDto.fromMap(minimalRaw);
-      expect(dto.likeCount, equals(0));
-      expect(dto.commentCount, equals(0));
-      expect(dto.shareCount, equals(0));
-      expect(dto.imageUrls, isEmpty);
-    });
-
-    test('all fields missing → fromMap returns object without crash', () {
-      expect(() => FeedItemDto.fromMap(const {}), returnsNormally);
-    });
-
-    test('nextCursor from CursorPage is non-empty when more data exists', () {
-      // CursorPage.nextCursor is managed by ContentReadRepository, not FeedItemDto.
-      // This test validates that CursorPage correctly stores and returns the cursor.
-      const cursorValue = 'post_d1';
-      final page = CursorPage<FeedItemDto>(
-        items: [ContentMockData.discoveryPhotoData.first],
-        nextCursor: cursorValue,
+    test('feed page round-trip 保持 typed cursor envelope 和 items', () {
+      final source = ContentMockData.discoveryPhotoData.first;
+      final page = ContentDiscoveryFeedPageSlice(
+        items: <ContentPostProjection>[_projectionFromView(source)],
+        outcome: ContentFeedOutcome.content,
+        nextCursor: 'feed.next',
+        previousCursor: 'feed.previous',
+        paginationExpiresAt: DateTime.utc(2026, 8, 4, 12),
+        feedRequestId: 'feed-request-roundtrip',
+        policyDigest:
+            'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        objectCards: const <FeedObjectCard>[],
       );
+
+      final decoded = ContentDiscoveryFeedPageSlice.fromWire(page.toWire());
+
+      expect(decoded.items.single.postId, source.id);
+      expect(decoded.nextCursor, 'feed.next');
+      expect(decoded.previousCursor, 'feed.previous');
+      expect(decoded.paginationExpiresAt, DateTime.utc(2026, 8, 4, 12));
+      expect(decoded.feedRequestId, 'feed-request-roundtrip');
+    });
+
+    test('generated decoder 拒绝旧 item 字段和未知 page 字段', () {
+      final page = _page(<ContentPostViewData>[
+        ContentMockData.discoveryPhotoData.first,
+      ]).toWire();
+      final item = Map<String, Object?>.from(
+        (page['items']! as List<Object?>).single! as Map,
+      )..['id'] = 'retired-id';
+      page['items'] = <Object?>[item];
+
       expect(
-        page.nextCursor,
-        equals(cursorValue),
-        reason: 'nextCursor must be preserved in CursorPage for pagination',
+        () => ContentDiscoveryFeedPageSlice.fromWire(page),
+        throwsFormatException,
       );
+
+      final unknownPage = _page(const <ContentPostViewData>[]).toWire()
+        ..['cursor'] = 'retired-cursor';
       expect(
-        page.items,
-        isNotEmpty,
-        reason: 'items must be non-empty when cursor is set',
+        () => ContentDiscoveryFeedPageSlice.fromWire(unknownPage),
+        throwsFormatException,
       );
     });
 
-    test('CursorPage with null nextCursor indicates last page', () {
-      final page = CursorPage<FeedItemDto>(
-        items: [ContentMockData.discoveryPhotoData.first],
-        // no nextCursor — this is the last page
-      );
+    test('缺少 required counts 或 page envelope 不再静默补零', () {
+      final itemWire = contentPostProjectionFixture(
+        postId: 'missing-counts',
+        contentType: 'image',
+      ).toWire()..remove('likeCount');
       expect(
-        page.nextCursor,
-        isNull,
-        reason: 'null nextCursor signals the last page to the consumer',
+        () => ContentPostProjection.fromWire(itemWire),
+        throwsFormatException,
+      );
+
+      expect(
+        () => ContentDiscoveryFeedPageSlice.fromWire(const <String, Object?>{}),
+        throwsFormatException,
       );
     });
 
-    test('null imageUrls field returns empty list (not null)', () {
-      const raw = <String, dynamic>{
-        'id': 'x2',
-        'type': 'image',
-        'authorId': 'u1',
-        'displayName': 'Test',
-        'avatarUrl': '',
-        'imageUrls': null,
-        'publishedAt': '2025-01-01T00:00:00Z',
-      };
-      final dto = FeedItemDto.fromMap(raw);
-      expect(dto.imageUrls, isNotNull);
-      expect(dto.imageUrls, isEmpty);
+    test('empty feed 使用明确 outcome/emptyReason，不伪造成功内容', () {
+      final page = _page(const <ContentPostViewData>[]);
+      final decoded = ContentDiscoveryFeedPageSlice.fromWire(page.toWire());
+
+      expect(decoded.items, isEmpty);
+      expect(decoded.outcome, ContentFeedOutcome.empty);
+      expect(decoded.emptyReason, ContentFeedEmptyReason.noEligibleContent);
     });
   });
 }

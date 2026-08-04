@@ -29,13 +29,13 @@ void main() {
       await repo.createReport(
         CreateContentReportCommand(
           targetId: 'post_1',
-          targetType: ContentReportTargetType.post,
-          reason: ContentReportReason.spam,
+          targetType: ReportTargetType.post,
+          reason: ReportReason.spam,
           description: '广告',
         ),
       );
       expect(repo.submitted.length, equals(1));
-      expect(repo.submitted.first.reason, ContentReportReason.spam);
+      expect(repo.submitted.first.reason, ReportReason.spam);
       expect(repo.submitted.first.description, equals('广告'));
     });
 
@@ -44,8 +44,8 @@ void main() {
       await repo.createReport(
         CreateContentReportCommand(
           targetId: 'post_2',
-          targetType: ContentReportTargetType.post,
-          reason: ContentReportReason.other,
+          targetType: ReportTargetType.post,
+          reason: ReportReason.other,
         ),
       );
       expect(repo.submitted.first.description, isNull);

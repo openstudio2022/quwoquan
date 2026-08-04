@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/core/di/cloud_http_client_provider.dart';
+import 'package:quwoquan_app/core/di/ops_event_record_dependencies.dart';
 import 'package:quwoquan_app/core/observability/runtime_log_ports.dart';
 import 'package:quwoquan_app/core/observability/runtime_log_record.dart';
 import 'package:quwoquan_app/core/observability/runtime_log_transport.dart';
@@ -27,7 +28,7 @@ final runtimeLoggerProvider = Provider<RuntimeLogger>((ref) {
     transport: CloudRuntimeConfig.appRuntimeEnv == 'alpha'
         ? null
         : CloudRuntimeLogTransport(
-            httpClient: ref.watch(cloudHttpClientProvider),
+            writer: ref.watch(opsEventRecordBatchWriterProvider),
           ),
   );
   final latencyDispatcher = ref.watch(runtimeApiLatencyDispatcherProvider);

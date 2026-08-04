@@ -5,6 +5,27 @@ import 'package:quwoquan_app/cloud/remote/travel/trip_template_remote.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {
+  test('template get uses generated owner and typed template path', () async {
+    final executor = _TemplateExecutor();
+    final facet = RemoteTripTemplateFacet(
+      client: GeneratedCloudOperationClient(executor),
+      invocationContext: _context,
+    );
+
+    final result = await facet.getTemplate(
+      GetTripPlanTemplateQuery(templateId: 'template-1'),
+    );
+
+    expect(
+      executor.operation?.canonicalOperationId,
+      AppCloudOperationIds.travelTripPlanTemplateGetTripPlanTemplate,
+    );
+    expect(executor.context?.surfaceId, AppUiSurfaces.travelTemplates.id);
+    expect(executor.context?.idempotencyKey, isNull);
+    expect(executor.pathParameters, containsPair('templateId', 'template-1'));
+    expect(result.id, 'template-1');
+  });
+
   test(
     'template list uses generated owner and travelTemplates surface',
     () async {

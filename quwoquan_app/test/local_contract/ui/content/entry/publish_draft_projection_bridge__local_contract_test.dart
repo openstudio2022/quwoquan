@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/post_read_surface_id.g.dart';
 import 'package:quwoquan_app/ui/content/models/article_document_models.dart';
 import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/models/publish_settings_models.dart';
@@ -294,10 +294,10 @@ void main() {
       );
       expect(cover.role, 'cover');
       expect(
-        cover.toJson().keys,
+        cover.toWire().keys,
         unorderedEquals(<Object?>['assetId', 'role']),
       );
-      expect('${manifest.toJson()['assets']}', isNot(contains('/tmp/')));
+      expect('${manifest.toWire()['assets']}', isNot(contains('/tmp/')));
     });
 
     test('article markdown is serialized directly from document nodes', () {

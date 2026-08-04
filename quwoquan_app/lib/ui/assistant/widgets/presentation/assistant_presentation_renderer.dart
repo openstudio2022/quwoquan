@@ -1,10 +1,11 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:quwoquan_app/assistant/capabilities/assistant_presentation_capability_catalog.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/assistant_presentation_document.g.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/assistant_presentation_node.g.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/platform/platform_target.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 
 part 'assistant_presentation_validation.dart';
@@ -12,7 +13,7 @@ part 'assistant_route_map_node.dart';
 
 typedef AssistantPresentationMarkdownBuilder = Widget Function(String markdown);
 typedef AssistantPresentationMediaUrlResolver =
-    String? Function(AssistantPresentationMediaRefWire media);
+    Future<String?> Function(AssistantPresentationMediaRefWire media);
 typedef AssistantPresentationActionHandler =
     void Function(AssistantActionIntentWire action);
 typedef AssistantPresentationActionPredicate =
@@ -20,88 +21,28 @@ typedef AssistantPresentationActionPredicate =
 typedef AssistantPresentationFallbackObserver =
     void Function(String reason, AssistantPresentationDocumentWire document);
 
-enum AssistantPresentationViewportClass { compact, standard, expanded }
-
-@immutable
-class AssistantPresentationRenderCapabilities {
-  const AssistantPresentationRenderCapabilities({
-    required this.viewportClass,
-    required this.platform,
-    required this.darkTheme,
-    required this.textScale,
-    required this.reducedMotion,
-    required this.offline,
-    this.mediaEnabled = false,
-    this.actionsEnabled = false,
-  });
-
-  final AssistantPresentationViewportClass viewportClass;
-  final TargetPlatform platform;
-  final bool darkTheme;
-  final double textScale;
-  final bool reducedMotion;
-  final bool offline;
-  final bool mediaEnabled;
-  final bool actionsEnabled;
-
-  static AssistantPresentationRenderCapabilities fromContext(
-    BuildContext context, {
-    bool mediaEnabled = false,
-    bool actionsEnabled = false,
-    bool offline = false,
-  }) {
-    final media = MediaQuery.of(context);
-    final width = media.size.width;
-    final viewportClass = width < AppSpacing.markdownCompactBreakpoint
-        ? AssistantPresentationViewportClass.compact
-        : width < AppSpacing.expandedBreakpoint
-        ? AssistantPresentationViewportClass.standard
-        : AssistantPresentationViewportClass.expanded;
-    return AssistantPresentationRenderCapabilities(
-      viewportClass: viewportClass,
-      platform: defaultTargetPlatform,
-      darkTheme: Theme.of(context).brightness == Brightness.dark,
-      textScale:
-          media.textScaler.scale(AppTypography.base) / AppTypography.base,
-      reducedMotion: media.disableAnimations,
-      offline: offline,
-      mediaEnabled: mediaEnabled,
-      actionsEnabled: actionsEnabled,
-    );
-  }
-
-  Set<AssistantPresentationNodeKind> get supportedNodeKinds => {
-    AssistantPresentationNodeKind.card,
-    AssistantPresentationNodeKind.column,
-    AssistantPresentationNodeKind.row,
-    AssistantPresentationNodeKind.grid,
-    AssistantPresentationNodeKind.list,
-    AssistantPresentationNodeKind.carousel,
-    AssistantPresentationNodeKind.markdown,
-    AssistantPresentationNodeKind.text,
-    AssistantPresentationNodeKind.icon,
-    AssistantPresentationNodeKind.badge,
-    AssistantPresentationNodeKind.divider,
-    AssistantPresentationNodeKind.stat,
-    AssistantPresentationNodeKind.keyValue,
-    AssistantPresentationNodeKind.entityReference,
-    AssistantPresentationNodeKind.sourceReference,
-    AssistantPresentationNodeKind.timeline,
-    AssistantPresentationNodeKind.routeMap,
-    AssistantPresentationNodeKind.comparisonTable,
-    AssistantPresentationNodeKind.sourceList,
-    AssistantPresentationNodeKind.callout,
-    if (mediaEnabled && !offline) ...{
-      AssistantPresentationNodeKind.media,
-      AssistantPresentationNodeKind.mediaGallery,
-    },
-    if (actionsEnabled) ...{
-      AssistantPresentationNodeKind.actionGroup,
-      AssistantPresentationNodeKind.choiceChips,
-      AssistantPresentationNodeKind.dateTimeInput,
-      AssistantPresentationNodeKind.confirmationCard,
-    },
-  };
+AssistantPresentationCapabilitySnapshot _presentationCapabilitiesFromContext(
+  BuildContext context, {
+  bool mediaEnabled = false,
+  bool actionsEnabled = false,
+  bool offline = false,
+}) {
+  final media = MediaQuery.of(context);
+  return AssistantPresentationCapabilitySnapshot(
+    surfacePolicy: AssistantPresentationSurfacePolicy.personal,
+    viewportClass: AssistantPresentationViewportClass.fromWidth(
+      media.size.width,
+      compactBelow: AppSpacing.markdownCompactBreakpoint,
+      expandedFrom: AppSpacing.expandedBreakpoint,
+    ),
+    platform: platformWireName(currentAppPlatform),
+    darkTheme: Theme.of(context).brightness == Brightness.dark,
+    textScale: media.textScaler.scale(AppTypography.base) / AppTypography.base,
+    reducedMotion: media.disableAnimations,
+    offline: offline,
+    mediaEnabled: mediaEnabled,
+    actionsEnabled: actionsEnabled,
+  );
 }
 
 /// Flutter-native renderer for the canonical Assistant presentation AST.
@@ -140,6 +81,8 @@ class _AssistantPresentationRendererState
     extends State<AssistantPresentationRenderer> {
   String _runtimeFallbackReason = '';
   String _observedFallbackReason = '';
+  final Map<String, Future<String?>> _mediaResolutionCache =
+      <String, Future<String?>>{};
 
   @override
   void didUpdateWidget(covariant AssistantPresentationRenderer oldWidget) {
@@ -149,12 +92,15 @@ class _AssistantPresentationRendererState
         oldWidget.document.dataDigest != widget.document.dataDigest) {
       _runtimeFallbackReason = '';
       _observedFallbackReason = '';
+      _mediaResolutionCache.clear();
+    } else if (oldWidget.mediaUrlResolver != widget.mediaUrlResolver) {
+      _mediaResolutionCache.clear();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final capabilities = AssistantPresentationRenderCapabilities.fromContext(
+    final capabilities = _presentationCapabilitiesFromContext(
       context,
       mediaEnabled: widget.mediaUrlResolver != null,
       actionsEnabled: widget.onAction != null,
@@ -163,7 +109,7 @@ class _AssistantPresentationRendererState
     final validation = _validateDocument(
       widget.document,
       capabilities: capabilities,
-      mediaUrlResolver: widget.mediaUrlResolver,
+      mediaUrlResolver: widget.mediaUrlResolver == null ? null : _resolveMedia,
       hasActionHandler: widget.onAction != null,
       canHandleAction: widget.canHandleAction,
     );
@@ -189,7 +135,7 @@ class _AssistantPresentationRendererState
       capabilities: capabilities,
       textColor: widget.textColor,
       markdownBuilder: widget.markdownBuilder,
-      mediaUrlResolver: widget.mediaUrlResolver,
+      mediaUrlResolver: widget.mediaUrlResolver == null ? null : _resolveMedia,
       onAction: widget.onAction,
       onMediaFailed: _handleMediaFailed,
       byParent: byParent,
@@ -217,6 +163,14 @@ class _AssistantPresentationRendererState
     setState(() => _runtimeFallbackReason = 'media_load_failed');
   }
 
+  Future<String?> _resolveMedia(AssistantPresentationMediaRefWire media) {
+    final key = '${media.mediaAssetId}:${media.provenanceRef}';
+    return _mediaResolutionCache.putIfAbsent(
+      key,
+      () => widget.mediaUrlResolver!(media),
+    );
+  }
+
   void _observeFallback(String reason) {
     if (_observedFallbackReason == reason) return;
     _observedFallbackReason = reason;
@@ -240,7 +194,7 @@ class _AssistantPresentationRendererRegistry {
   });
 
   final BuildContext context;
-  final AssistantPresentationRenderCapabilities capabilities;
+  final AssistantPresentationCapabilitySnapshot capabilities;
   final Color textColor;
   final AssistantPresentationMarkdownBuilder markdownBuilder;
   final AssistantPresentationMediaUrlResolver? mediaUrlResolver;
@@ -472,7 +426,6 @@ class _AssistantPresentationRendererRegistry {
 
   Widget _media(AssistantPresentationNodeWire node) {
     final media = node.media!;
-    final url = mediaUrlResolver!(media)!.trim();
     final ratio = node.style.aspectRatio > 0
         ? node.style.aspectRatio
         : media.width > 0 && media.height > 0
@@ -481,26 +434,51 @@ class _AssistantPresentationRendererRegistry {
     return Semantics(
       image: true,
       label: media.alt,
-      child: AspectRatio(
-        aspectRatio: ratio,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-          child: AppCachedNetworkImage(
-            imageUrl: url,
-            fit: BoxFit.cover,
-            cdnPreset: CdnImagePreset.inline,
-            onLoadFailed: onMediaFailed,
-            errorWidget: ColoredBox(
-              color: _themeColors.backgroundTertiary,
-              child: Center(
-                child: Icon(
-                  CupertinoIcons.photo,
-                  color: _themeColors.foregroundSecondary,
+      child: FutureBuilder<String?>(
+        future: mediaUrlResolver!(media),
+        builder: (context, snapshot) {
+          final url = snapshot.data?.trim() ?? '';
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return AspectRatio(
+              aspectRatio: ratio,
+              child: ColoredBox(
+                color: _themeColors.backgroundTertiary,
+                child: const Center(child: CupertinoActivityIndicator()),
+              ),
+            );
+          }
+          final parsed = Uri.tryParse(url);
+          if (snapshot.hasError ||
+              parsed == null ||
+              parsed.scheme != 'https' ||
+              parsed.host.isEmpty) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              onMediaFailed(snapshot.error ?? StateError('media unavailable'));
+            });
+            return const SizedBox.shrink();
+          }
+          return AspectRatio(
+            aspectRatio: ratio,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+              child: AppCachedNetworkImage(
+                imageUrl: url,
+                fit: BoxFit.cover,
+                cdnPreset: CdnImagePreset.inline,
+                onLoadFailed: onMediaFailed,
+                errorWidget: ColoredBox(
+                  color: _themeColors.backgroundTertiary,
+                  child: Center(
+                    child: Icon(
+                      CupertinoIcons.photo,
+                      color: _themeColors.foregroundSecondary,
+                    ),
+                  ),
                 ),
               ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
@@ -879,7 +857,7 @@ class _PresentationValidation {
 
 _PresentationValidation _validateDocument(
   AssistantPresentationDocumentWire document, {
-  required AssistantPresentationRenderCapabilities capabilities,
+  required AssistantPresentationCapabilitySnapshot capabilities,
   required AssistantPresentationMediaUrlResolver? mediaUrlResolver,
   required bool hasActionHandler,
   required AssistantPresentationActionPredicate? canHandleAction,
@@ -912,11 +890,12 @@ _PresentationValidation _validateDocument(
     }
     if (node.media != null) {
       final media = node.media!;
-      final url = mediaUrlResolver?.call(media)?.trim() ?? '';
       if (media.mediaAssetId.isEmpty ||
           media.alt.isEmpty ||
           media.provenanceRef.isEmpty ||
-          url.isEmpty) {
+          media.width <= 0 ||
+          media.height <= 0 ||
+          mediaUrlResolver == null) {
         return const _PresentationValidation(reason: 'media_unavailable');
       }
     }

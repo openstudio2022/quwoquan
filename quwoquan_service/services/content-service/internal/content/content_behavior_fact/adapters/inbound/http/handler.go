@@ -13,13 +13,17 @@ import (
 
 	rtauth "quwoquan_service/runtime/auth"
 	rterr "quwoquan_service/runtime/errors"
+	"quwoquan_service/runtime/httpcodec"
 	"quwoquan_service/runtime/operation"
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	behaviorapp "quwoquan_service/services/content-service/internal/content/content_behavior_fact/application"
 )
 
 type BatchProcessor interface {
-	ProcessBatch(context.Context, []behaviorapp.BehaviorEventInput) error
+	ProcessBatch(
+		context.Context,
+		[]behaviorapp.BehaviorEventInput,
+	) (behaviorapp.BatchReceipt, error)
 }
 
 type Handler struct {
@@ -34,10 +38,7 @@ func NewHandler(processor BatchProcessor) *Handler {
 }
 
 type reportBatch struct {
-	UserID        string                           `json:"userId"`
-	SessionID     string                           `json:"sessionId"`
-	FeedSessionID string                           `json:"feedSessionId"`
-	Events        []behaviorapp.BehaviorEventInput `json:"events"`
+	Events []behaviorapp.BehaviorEventInput `json:"events"`
 }
 
 func (handler *Handler) Report(writer http.ResponseWriter, request *http.Request) {
@@ -87,21 +88,16 @@ func (handler *Handler) Report(writer http.ResponseWriter, request *http.Request
 		))
 		return
 	}
-	batch.UserID = actorID
+	trustedSessionID := ""
 	if operationContext, found := operation.FromContext(request.Context()); found && strings.TrimSpace(operationContext.SessionID) != "" {
-		batch.SessionID = strings.TrimSpace(operationContext.SessionID)
+		trustedSessionID = strings.TrimSpace(operationContext.SessionID)
 	}
 	for index := range batch.Events {
 		event := &batch.Events[index]
 		event.UserID = actorID
 		event.PersonaID = strings.TrimSpace(principal.Actor.PersonaID)
 		event.DeviceActorID = strings.TrimSpace(principal.Actor.DeviceActorID)
-		if strings.TrimSpace(event.SessionID) == "" {
-			event.SessionID = strings.TrimSpace(batch.SessionID)
-		}
-		if strings.TrimSpace(event.FeedSessionID) == "" {
-			event.FeedSessionID = strings.TrimSpace(batch.FeedSessionID)
-		}
+		event.SessionID = trustedSessionID
 		switch strings.ToLower(strings.TrimSpace(event.Action)) {
 		case "like", "comment", "report":
 			writeHTTPError(writer, request, rterr.NewInvalidArgument(
@@ -112,11 +108,12 @@ func (handler *Handler) Report(writer http.ResponseWriter, request *http.Request
 			return
 		}
 	}
-	if err := handler.processor.ProcessBatch(request.Context(), batch.Events); err != nil {
+	receipt, err := handler.processor.ProcessBatch(request.Context(), batch.Events)
+	if err != nil {
 		writeHTTPError(writer, request, mapCommandError(err))
 		return
 	}
-	writer.WriteHeader(http.StatusNoContent)
+	httpcodec.WriteJSON(writer, http.StatusOK, receipt, "content_behavior_fact")
 }
 
 func mapCommandError(err error) error {

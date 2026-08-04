@@ -2,8 +2,8 @@ overrides:
   sys.assistant-service.account_security_authority.base_url: http://user-service:18081
   sys.assistant-service.account_security_authority.timeout_ms: 300
   sys.assistant-service.notification_service.base_url: http://notification-service:18087
-  sys.assistant-service.policy_publication.release_artifact_ref: assistant/assistant-default/releases/95f06f8e01d2023c814eb50e1f394642ac563905b68ae0fff5a010e322c5c7bc.json
-  sys.assistant-service.policy_publication.rollout_artifact_ref: assistant/assistant-default/rollouts/revision-2.json
+  sys.assistant-service.policy_publication.release_artifact_ref: assistant/assistant-default/releases/6579402860644c0273747b33c23962cff013caec0839407afbe7dffdcc50f8e7.json
+  sys.assistant-service.policy_publication.rollout_artifact_ref: assistant/assistant-default/rollouts/revision-4.json
   sys.assistant-service.redis.general.mode: cluster
   sys.assistant-service.redis.general.tls: true
   sys.assistant-service.redis.rec.mode: cluster
@@ -15,63 +15,31 @@ secretRefs:
   sys.assistant-service.redis.general.password: REDIS_GENERAL_PASSWORD
   sys.assistant-service.redis.rec.password: REDIS_REC_PASSWORD
 externalBindings:
-  runtime.message.transport:
-    state: enabled
   integration.connector_grant.read:
     state: enabled
     adapter: ext.first_party.http_authority
     endpointRef: service_topology:integration-service
-    endpointEnvs:
-      base: ASSISTANT_INTEGRATION_BASE_URL
-    secretRefs: []
-    timeoutMs: 1200
   chat.conversation.membership.read:
     state: enabled
     adapter: ext.first_party.http_authority
     endpointRef: service_topology:chat-service
-    endpointEnvs:
-      base: ASSISTANT_CHAT_BASE_URL
-    secretRefs: []
-    timeoutMs: 3000
   circle.membership.self.read:
     state: enabled
     adapter: ext.first_party.http_authority
     endpointRef: service_topology:circle-service
-    endpointEnvs:
-      base: ASSISTANT_CIRCLE_BASE_URL
-    secretRefs: []
-    timeoutMs: 3000
   assistant.model.generation:
     state: enabled
     adapter: ext.llm.xiaomi_mimo
     endpointRef: environment_binding:assistant.model
-    endpointEnvs:
-      completion: ASSISTANT_MODEL_COMPLETION_URL
-    secretRefs:
-    - ASSISTANT_MODEL_API_KEY
-    timeoutMs: 60000
   assistant.public.search:
     state: enabled
     adapter: ext.search.duckduckgo_html
     endpointRef: environment_binding:assistant.search
-    endpointEnvs:
-      search: ASSISTANT_PUBLIC_SEARCH_URL
-    secretRefs: []
-    timeoutMs: 10000
   assistant.weather.forecast:
     state: enabled
     adapter: ext.weather.open_meteo
     endpointRef: environment_binding:assistant.weather
-    endpointEnvs:
-      geocoding: ASSISTANT_WEATHER_GEOCODING_URL
-      forecast: ASSISTANT_WEATHER_FORECAST_URL
-    secretRefs: []
-    timeoutMs: 10000
   assistant.finance.quote:
     state: enabled
     adapter: ext.finance.yahoo_chart
     endpointRef: environment_binding:assistant.finance
-    endpointEnvs:
-      chart: ASSISTANT_FINANCE_CHART_URL
-    secretRefs: []
-    timeoutMs: 10000

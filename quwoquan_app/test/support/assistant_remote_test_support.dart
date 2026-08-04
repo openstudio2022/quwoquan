@@ -1,4 +1,5 @@
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
+import 'package:quwoquan_app/assistant/capabilities/assistant_presentation_capability_catalog.dart';
 import 'package:quwoquan_app/cloud/runtime/auth/cloud_auth_token_provider.dart';
 import 'package:quwoquan_app/cloud/runtime/config/cloud_runtime_environment.dart';
 import 'package:quwoquan_app/cloud/runtime/context/cloud_client_context.dart';
@@ -18,6 +19,23 @@ GeneratedCloudOperationClient buildAssistantRemoteTestOperationClient(
       environment: CloudEnvironment.gamma,
       gatewayBaseUri: Uri.parse('https://assistant.test'),
     ),
+  );
+}
+
+AssistantPresentationCapabilitySnapshot
+assistantRemoteTestPresentationCapabilities(
+  AssistantPresentationSurfacePolicy surfacePolicy,
+) {
+  return AssistantPresentationCapabilitySnapshot(
+    surfacePolicy: surfacePolicy,
+    viewportClass: AssistantPresentationViewportClass.standard,
+    platform: 'ios',
+    darkTheme: false,
+    textScale: 1.2,
+    reducedMotion: true,
+    offline: false,
+    mediaEnabled: true,
+    actionsEnabled: true,
   );
 }
 

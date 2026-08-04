@@ -21,7 +21,7 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 		"identity.sms.otp": {
 			State:       "enabled",
 			AdapterID:   "ext.sms.local_capture",
-			EndpointRef: "local_topology:integration.local_capture",
+			EndpointRef: "local_topology:sms-provider-substitute",
 			EndpointEnvironmentKeys: map[string]string{
 				"endpoint": "INTEGRATION_SMS_ENDPOINT",
 			},
@@ -38,7 +38,7 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 		"identity.sms.otp": {
 			State:       "enabled",
 			AdapterID:   "ext.sms.local_capture",
-			EndpointRef: "local_topology:integration.local_capture",
+			EndpointRef: "local_topology:sms-provider-substitute",
 			EndpointEnvironmentKeys: map[string]string{
 				"endpoint": "INTEGRATION_SMS_ENDPOINT",
 			},
@@ -55,7 +55,7 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 		"identity.sms.otp": {
 			State:       "enabled",
 			AdapterID:   "ext.sms.local_capture",
-			EndpointRef: "local_topology:integration.local_capture",
+			EndpointRef: "local_topology:sms-provider-substitute",
 			EndpointEnvironmentKeys: map[string]string{
 				"endpoint": "INTEGRATION_SMS_ENDPOINT",
 			},

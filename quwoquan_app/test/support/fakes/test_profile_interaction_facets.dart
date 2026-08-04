@@ -6,18 +6,20 @@ final class TestProfileInteractionFacets
         ContentProfileInteractionQueryFacet,
         ContentProfileInteractionReadFactAppendFacet {
   const TestProfileInteractionFacets({
-    this.items = const <ContentProfileInteractionActivity>[],
+    this.items = const <ProfileInteractionActivityView>[],
   });
 
-  final List<ContentProfileInteractionActivity> items;
+  final List<ProfileInteractionActivityView> items;
 
   @override
-  Future<ContentProfileInteractionPage> listActivities(
+  Future<ProfileInteractionActivityPageSlice> listActivities(
     ContentProfileInteractionPageQuery query, {
-    required ContentProfileInteractionDirection direction,
+    required InteractionDirection direction,
   }) async {
-    return ContentProfileInteractionPage(
+    return ProfileInteractionActivityPageSlice(
       items: items.take(query.limit).toList(growable: false),
+      nextCursor: null,
+      hasMore: false,
     );
   }
 
@@ -28,7 +30,7 @@ final class TestProfileInteractionFacets
     return ProfileInteractionReadFactAck(
       factId: 'test-fact-${command.activityId}',
       activityId: command.activityId,
-      state: command.state.wireValue,
+      state: command.state,
       occurredAt: DateTime.utc(2026, 7, 20),
       replayed: false,
     );

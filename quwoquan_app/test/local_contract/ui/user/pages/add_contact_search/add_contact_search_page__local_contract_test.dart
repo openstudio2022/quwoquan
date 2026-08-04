@@ -15,14 +15,14 @@ void main() {
         overrides: [
           profileQueryProvider.overrideWith(
             (ref, surface) => ContactProfileQueryFake(
-              searchItems: <SocialRelationSearchItemView>[
-                SocialRelationSearchItemView(
+              searchItems: <SocialRelationSearchItemViewData>[
+                SocialRelationSearchItemViewData(
                   personaId: 'persona-alice',
                   userHandle: 'alice',
                   displayName: 'Alice',
                   headline: '摄影作者',
                   chatAvailable: false,
-                  relationshipCapability: RelationshipCapabilityDto(
+                  relationshipCapability: RelationshipCapabilityViewData(
                     viewerPersonaId: 'persona-viewer',
                     targetPersonaId: 'persona-alice',
                     relationState: 'not_following',

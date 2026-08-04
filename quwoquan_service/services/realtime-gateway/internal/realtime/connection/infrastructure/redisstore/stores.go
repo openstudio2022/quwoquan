@@ -297,7 +297,8 @@ func (s *identitySubscription) forward(ctx context.Context) {
 			if !ok {
 				return
 			}
-			if !realtimeMessageMatchesIdentity(message, s.identity) {
+			message, matches := bindRealtimeMessageToIdentity(message, s.identity)
+			if !matches {
 				continue
 			}
 			select {
@@ -311,27 +312,39 @@ func (s *identitySubscription) forward(ctx context.Context) {
 	}
 }
 
-func realtimeMessageMatchesIdentity(
+func bindRealtimeMessageToIdentity(
 	message runtimemessaging.EphemeralDelivery,
 	identity application.TrustedIdentity,
-) bool {
+) (runtimemessaging.EphemeralDelivery, bool) {
 	if !strings.HasPrefix(message.Channel, "rt:rtc:persona:") {
-		return true
+		return message, true
 	}
-	var target struct {
-		TargetPersonaID string `json:"targetPersonaId"`
-		DeviceID        string `json:"deviceId"`
+	target, event, targeted, err :=
+		runtimemessaging.UnwrapTargetedEphemeralPayload(message.Payload)
+	if err != nil {
+		return message, false
 	}
-	if json.Unmarshal(message.Payload, &target) != nil {
-		return true
+	if !targeted {
+		// Device/persona routing belongs only to the trusted transport wrapper.
+		// A legacy flat RTC frame carrying either field must not cross the client
+		// boundary.
+		var top map[string]json.RawMessage
+		if json.Unmarshal(message.Payload, &top) != nil {
+			return message, false
+		}
+		if top["deviceId"] != nil || top["targetPersonaId"] != nil {
+			return message, false
+		}
+		return message, true
 	}
-	if personaID := strings.TrimSpace(target.TargetPersonaID); personaID != "" &&
+	if personaID := strings.TrimSpace(target.PersonaID); personaID != "" &&
 		personaID != strings.TrimSpace(identity.PersonaID) {
-		return false
+		return message, false
 	}
 	if deviceID := strings.TrimSpace(target.DeviceID); deviceID != "" &&
 		deviceID != strings.TrimSpace(identity.DeviceID) {
-		return false
+		return message, false
 	}
-	return true
+	message.Payload = event
+	return message, true
 }

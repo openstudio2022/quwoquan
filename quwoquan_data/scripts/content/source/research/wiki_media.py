@@ -31,7 +31,6 @@ from content.source.research.wiki_common import (
 from content.source.research.image_search_providers import (
     _commons_category_images,
     _commons_images,
-    _commons_images_for_titles,
     _openverse_images,
     _wikidata_commons_images,
 )

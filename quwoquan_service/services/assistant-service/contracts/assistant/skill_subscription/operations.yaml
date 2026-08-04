@@ -76,7 +76,7 @@ api_routes:
       status: ready
     request_entity: CreateAssistantSkillSubscriptionCommand
     request_body_kind: object
-    response_entity: SkillSubscription
+    response_entity: SkillSubscriptionWire
     reliability:
       timeout_ms: 1500
       cancellation: supported
@@ -131,7 +131,7 @@ api_routes:
           field: subscriptionId
     commercial:
       status: ready
-    response_entity: SkillSubscription
+    response_entity: SkillSubscriptionWire
     reliability:
       timeout_ms: 1500
       cancellation: supported
@@ -187,7 +187,7 @@ api_routes:
       path:
         - name: subscriptionId
           field: subscriptionId
-    response_entity: SkillSubscription
+    response_entity: SkillSubscriptionWire
     reliability:
       timeout_ms: 1500
       cancellation: supported

@@ -466,10 +466,8 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
                       post,
                     ).previewTrackManifestUrl,
                     previewTrackVersion: _workItemFor(post).previewTrackVersion,
-                    hlsCmafMasterManifestUrl:
-                        post.hlsCmafMasterManifestUrl,
-                    hlsCmafDescriptorVersion:
-                        post.hlsCmafDescriptorVersion,
+                    hlsCmafMasterManifestUrl: post.hlsCmafMasterManifestUrl,
+                    hlsCmafDescriptorVersion: post.hlsCmafDescriptorVersion,
                   ),
                 ]);
     final resolved = <_WorksVideoDeliveryItem>[];
@@ -602,7 +600,7 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
   Map<String, dynamic> _wireMapForPresentation(ContentPostViewData post) {
     final raw = _effectiveRawPostById(post.id);
     if (raw == null) {
-      return post.toPresentationMap();
+      return const <String, dynamic>{};
     }
     return Map<String, dynamic>.from(
       raw.map((k, v) => MapEntry(k.toString(), v)),

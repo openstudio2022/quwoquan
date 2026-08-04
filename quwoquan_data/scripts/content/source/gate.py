@@ -17,7 +17,6 @@ from core.image_asset_strategy import (
     image_strategy_requires_publishable_images,
 )
 from content.execution.workspace import execution_command_root, execution_root
-from governance.content_supply_policy import load_content_supply_policy
 from core.control_types import ContentType
 from content.execution.identity import parse_execution_id
 from governance.coverage.license import rights_proof_required
@@ -32,7 +31,6 @@ class DownloadRequirements:
     min_article_base_sources: int
     min_homepage_sources: int
     min_homepage_media: int
-    min_video_frames: int
 
 
 def _validate_execution_identity(execution_id: str) -> None:
@@ -43,7 +41,7 @@ def download_requirements(execution_id: str) -> DownloadRequirements:
     """Derive download gates from the admitted single-carrier execution spec."""
     from content.execution import store
 
-    identity = parse_execution_id(execution_id)
+    parse_execution_id(execution_id)
     spec = store.load_spec_model(execution_id)
     content_type = spec.content.carriers[0]
     quota = spec.content.quotas.for_type(content_type)
@@ -69,18 +67,12 @@ def download_requirements(execution_id: str) -> DownloadRequirements:
         and image_strategy_requires_publishable_images(spec.to_dict())
         else 0
     )
-    min_video_frames = (
-        load_content_supply_policy(identity.vertical).video_delivery.minimum_source_frames
-        if content_type is ContentType.VIDEO
-        else 0
-    )
     return DownloadRequirements(
         min_sources=max(min_homepage_sources, min_article_sources),
         min_images=min_images,
         min_article_base_sources=min_article_sources,
         min_homepage_sources=min_homepage_sources,
         min_homepage_media=min_homepage_media,
-        min_video_frames=min_video_frames,
     )
 
 

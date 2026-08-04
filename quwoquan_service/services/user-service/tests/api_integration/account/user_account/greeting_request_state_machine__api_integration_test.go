@@ -47,8 +47,8 @@ func TestGreeting_SendReplyIgnoreCancel(t *testing.T) {
 		if len(listBody) != 2 || listBody["items"] == nil {
 			t.Fatalf("list %s must return exact GreetingRequestSlice: %#v", listing.path, listBody)
 		}
-		if _, legacy := listBody["cursor"]; legacy {
-			t.Fatalf("list %s retains legacy cursor response key: %#v", listing.path, listBody)
+		if _, retired := listBody["cursor"]; retired {
+			t.Fatalf("list %s retains retired cursor response key: %#v", listing.path, listBody)
 		}
 		if _, exists := listBody["nextCursor"]; !exists {
 			t.Fatalf("list %s missing canonical nextCursor: %#v", listing.path, listBody)

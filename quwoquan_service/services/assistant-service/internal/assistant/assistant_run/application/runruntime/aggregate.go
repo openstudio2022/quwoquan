@@ -1,11 +1,14 @@
 package runruntime
 
 import (
+	"encoding/hex"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
 	generated "quwoquan_service/services/assistant-service/generated/assistant/assistant_session"
+	assistantmodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/model"
 )
 
 func NewRun(
@@ -102,6 +105,52 @@ func (r *Run) BindExecutionInput(
 	return nil
 }
 
+func (r *Run) BindSessionContinuity(continuity SessionContinuity) error {
+	if r == nil || r.SessionContinuity != nil {
+		return ErrInvalidRun
+	}
+	continuity = cloneSessionContinuity(continuity)
+	if strings.TrimSpace(continuity.SummaryID) == "" {
+		return nil
+	}
+	if strings.TrimSpace(continuity.Text) == "" ||
+		strings.TrimSpace(continuity.FromTurnID) == "" ||
+		strings.TrimSpace(continuity.ToTurnID) == "" ||
+		continuity.TurnCount <= 0 {
+		return ErrInvalidRun
+	}
+	r.SessionContinuity = &continuity
+	return nil
+}
+
+// MergeConfirmedSlots advances only the current AssistantRun's explicitly
+// confirmed descriptor values. Previous AssistantSession continuity is not an
+// input here; terminal compaction is the sole owner of cross-Run merging.
+func (r *Run) MergeConfirmedSlots(
+	slots assistantmodel.AssistantRunConfirmedSlots,
+	now time.Time,
+) error {
+	if r == nil || terminalState(r.State) {
+		return ErrInvalidRun
+	}
+	merged, err := r.ConfirmedSlots.Merge(slots)
+	if err != nil {
+		return ErrInvalidRun
+	}
+	if r.ConfirmedSlots.Equal(merged) {
+		return nil
+	}
+	r.ConfirmedSlots = merged.Clone()
+	r.touch(now)
+	return nil
+}
+
+// ConfirmedSlotSnapshot prevents repository callers, terminal projectors and
+// executors from sharing the aggregate's mutable map.
+func (r Run) ConfirmedSlotSnapshot() assistantmodel.AssistantRunConfirmedSlots {
+	return r.ConfirmedSlots.Clone()
+}
+
 func (r *Run) BindSkillPackage(
 	packageID string,
 	releaseDigest string,
@@ -116,16 +165,200 @@ func (r *Run) BindSkillPackage(
 	return nil
 }
 
-func (r *Run) SetTerminalSnapshot(snapshot map[string]any, now time.Time) error {
-	if r == nil || !terminalState(r.State) || len(snapshot) == 0 {
+func (r *Run) BindFeedbackContext(
+	snapshot assistantmodel.AssistantFeedbackContextSnapshot,
+) error {
+	if r == nil || strings.TrimSpace(r.FeedbackContextSnapshot.Decision) != "" ||
+		!validFeedbackContextSnapshot(snapshot) ||
+		!validFeedbackContextAgainstPolicy(
+			snapshot,
+			r.FrozenPolicySelection.LearningContextPolicy,
+		) {
 		return ErrInvalidRun
 	}
-	if unsafeReasoningPayload(snapshot) {
-		return ErrUnsafePayload
+	r.FeedbackContextSnapshot = snapshot.Clone()
+	return nil
+}
+
+func validFeedbackContextSnapshot(
+	snapshot assistantmodel.AssistantFeedbackContextSnapshot,
+) bool {
+	decision := strings.TrimSpace(snapshot.Decision)
+	if !assistantmodel.IsKnownAssistantFeedbackContextDecision(decision) ||
+		snapshot.WindowDays < 0 || snapshot.WindowDays > 90 {
+		return false
 	}
-	r.TerminalSnapshot = cloneMap(snapshot)
+	if decision == "injected" {
+		return strings.TrimSpace(snapshot.ConsentID) != "" &&
+			!snapshot.ConsentGrantedAt.IsZero() &&
+			validBareSHA256(snapshot.DefinitionDigest) &&
+			snapshot.SourceWatermarkSequence > 0 &&
+			snapshot.WindowDays > 0 && snapshot.FeedbackSampleCount > 0 &&
+			validFeedbackAggregates(snapshot)
+	}
+	return strings.TrimSpace(snapshot.ConsentID) == "" &&
+		snapshot.ConsentGrantedAt.IsZero() &&
+		strings.TrimSpace(snapshot.DefinitionDigest) == "" &&
+		snapshot.SourceWatermarkSequence == 0 &&
+		snapshot.FeedbackSampleCount == 0 &&
+		snapshot.PositiveFeedbackCount == 0 &&
+		snapshot.NegativeFeedbackCount == 0 &&
+		snapshot.TextFeedbackCount == 0 &&
+		len(snapshot.Metrics) == 0 && len(snapshot.Reasons) == 0 &&
+		!snapshot.SnapshotTrainingEligible
+}
+
+func validFeedbackAggregates(
+	snapshot assistantmodel.AssistantFeedbackContextSnapshot,
+) bool {
+	if snapshot.PositiveFeedbackCount < 0 ||
+		snapshot.NegativeFeedbackCount < 0 ||
+		snapshot.TextFeedbackCount < 0 ||
+		snapshot.PositiveFeedbackCount > snapshot.FeedbackSampleCount ||
+		snapshot.NegativeFeedbackCount > snapshot.FeedbackSampleCount ||
+		snapshot.TextFeedbackCount > snapshot.FeedbackSampleCount {
+		return false
+	}
+	metricIDs := make(map[string]struct{}, len(snapshot.Metrics))
+	for _, metric := range snapshot.Metrics {
+		metricID := strings.TrimSpace(metric.MetricID)
+		if metricID == "" || metric.SampleCount <= 0 ||
+			metric.SampleCount > snapshot.FeedbackSampleCount ||
+			math.IsNaN(metric.Average) || math.IsInf(metric.Average, 0) ||
+			math.IsNaN(metric.Latest) || math.IsInf(metric.Latest, 0) {
+			return false
+		}
+		if _, exists := metricIDs[metricID]; exists {
+			return false
+		}
+		metricIDs[metricID] = struct{}{}
+	}
+	reasonCodes := make(map[string]struct{}, len(snapshot.Reasons))
+	for _, reason := range snapshot.Reasons {
+		reasonCode := strings.TrimSpace(reason.ReasonCode)
+		if reasonCode == "" || reason.Count <= 0 ||
+			reason.Count > snapshot.FeedbackSampleCount {
+			return false
+		}
+		if _, exists := reasonCodes[reasonCode]; exists {
+			return false
+		}
+		reasonCodes[reasonCode] = struct{}{}
+	}
+	return true
+}
+
+func validFeedbackContextAgainstPolicy(
+	snapshot assistantmodel.AssistantFeedbackContextSnapshot,
+	policy FrozenLearningContextPolicy,
+) bool {
+	if snapshot.WindowDays != policy.WindowDays {
+		return false
+	}
+	if snapshot.Decision != "injected" {
+		return true
+	}
+	if !policy.Enabled || policy.MinimumFeedbackSamples < 1 ||
+		snapshot.FeedbackSampleCount < int64(policy.MinimumFeedbackSamples) ||
+		snapshot.SnapshotTrainingEligible != policy.SnapshotTrainingEligible {
+		return false
+	}
+	allowedSignals := feedbackValueSet(policy.AllowedSignals)
+	if _, allowed := allowedSignals["feedback_counts"]; !allowed &&
+		(snapshot.PositiveFeedbackCount != 0 || snapshot.NegativeFeedbackCount != 0 ||
+			snapshot.TextFeedbackCount != 0) {
+		return false
+	}
+	if _, allowed := allowedSignals["metric_summaries"]; !allowed && len(snapshot.Metrics) > 0 {
+		return false
+	}
+	allowedMetrics := feedbackValueSet(policy.AllowedMetricIDs)
+	for _, metric := range snapshot.Metrics {
+		if _, allowed := allowedMetrics[strings.TrimSpace(metric.MetricID)]; !allowed {
+			return false
+		}
+	}
+	if _, allowed := allowedSignals["top_reason_codes"]; !allowed && len(snapshot.Reasons) > 0 {
+		return false
+	}
+	allowedReasons := feedbackValueSet(policy.AllowedReasonCodes)
+	for _, reason := range snapshot.Reasons {
+		if _, allowed := allowedReasons[strings.TrimSpace(reason.ReasonCode)]; !allowed {
+			return false
+		}
+	}
+	return true
+}
+
+func feedbackValueSet(values []string) map[string]struct{} {
+	result := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		if value = strings.TrimSpace(value); value != "" {
+			result[value] = struct{}{}
+		}
+	}
+	return result
+}
+
+func validBareSHA256(value string) bool {
+	value = strings.TrimSpace(value)
+	if len(value) != 64 || value != strings.ToLower(value) {
+		return false
+	}
+	_, err := hex.DecodeString(value)
+	return err == nil
+}
+
+func (r *Run) SetTerminalSnapshot(
+	snapshot assistantmodel.AssistantRunTerminalSnapshot,
+	now time.Time,
+) error {
+	if r == nil || !terminalState(r.State) || !validTerminalSnapshot(r.State, snapshot) {
+		return ErrInvalidRun
+	}
+	r.TerminalSnapshot = snapshot.Clone()
 	r.touch(now)
 	return nil
+}
+
+func validTerminalSnapshot(
+	state generated.AssistantRunState,
+	snapshot assistantmodel.AssistantRunTerminalSnapshot,
+) bool {
+	if state == generated.AssistantRunStateCompleted &&
+		strings.TrimSpace(snapshot.AnswerText) == "" {
+		return false
+	}
+	if state == generated.AssistantRunStateFailed && snapshot.Failure == nil {
+		return false
+	}
+	if snapshot.Failure != nil &&
+		(strings.TrimSpace(snapshot.Failure.Code) == "" ||
+			strings.TrimSpace(snapshot.Failure.Origin) == "" ||
+			strings.TrimSpace(snapshot.Failure.Kind) == "" ||
+			strings.TrimSpace(snapshot.Failure.Nature) == "") {
+		return false
+	}
+	if snapshot.SelectedPolicyRef != nil &&
+		(strings.TrimSpace(snapshot.SelectedPolicyRef.PolicyID) == "" ||
+			strings.TrimSpace(snapshot.SelectedPolicyRef.ReleaseDigest) == "" ||
+			strings.TrimSpace(snapshot.SelectedPolicyRef.Cohort) == "") {
+		return false
+	}
+	return true
+}
+
+func terminalSelectedPolicyRef(
+	selection FrozenPolicySelection,
+) *assistantmodel.AssistantSelectedPolicyRef {
+	if strings.TrimSpace(selection.PolicyID) == "" {
+		return nil
+	}
+	return &assistantmodel.AssistantSelectedPolicyRef{
+		PolicyID:      strings.TrimSpace(selection.PolicyID),
+		ReleaseDigest: strings.TrimSpace(selection.ReleaseDigest),
+		Cohort:        strings.TrimSpace(selection.Cohort),
+	}
 }
 
 func (r *Run) SetPresentationDocument(document map[string]any, now time.Time) error {
@@ -255,6 +488,34 @@ func (r *Run) RequestSteer(instruction string, now time.Time) error {
 	return nil
 }
 
+// EffectiveGoal returns the immutable starting goal plus every steering
+// instruction that has crossed a durable safe boundary. The original input is
+// retained for audit, while execution always receives the cumulative current
+// goal instead of silently ignoring GoalHistory.
+func (r Run) EffectiveGoal() string {
+	base := strings.TrimSpace(r.InputText)
+	var revisions []GoalRevision
+	for _, revision := range r.GoalHistory {
+		if strings.TrimSpace(revision.Instruction) == "" {
+			continue
+		}
+		revisions = append(revisions, revision)
+	}
+	if len(revisions) == 0 {
+		return base
+	}
+	var goal strings.Builder
+	goal.WriteString(base)
+	goal.WriteString("\n\n已生效的后续约束：")
+	for _, revision := range revisions {
+		goal.WriteString("\n- 修订 ")
+		goal.WriteString(fmt.Sprint(revision.Revision))
+		goal.WriteString("：")
+		goal.WriteString(strings.TrimSpace(revision.Instruction))
+	}
+	return goal.String()
+}
+
 // ApplySafeBoundary applies steering and cooperative pause only after the
 // current Item/Task has reached a durable boundary.
 func (r *Run) ApplySafeBoundary(now time.Time) error {
@@ -315,4 +576,32 @@ func cloneDefinition(value DefinitionOfDone) DefinitionOfDone {
 	value.Constraints = append([]string{}, value.Constraints...)
 	value.VerificationRequirements = append([]string{}, value.VerificationRequirements...)
 	return value
+}
+
+func cloneSessionContinuity(value SessionContinuity) SessionContinuity {
+	value.ConfirmedFacts = append([]string(nil), value.ConfirmedFacts...)
+	value.PendingItems = append([]string(nil), value.PendingItems...)
+	if value.ConfirmedSlots != nil {
+		value.ConfirmedSlots = cloneStringMap(value.ConfirmedSlots)
+	}
+	return value
+}
+
+func cloneSessionContinuityPtr(value *SessionContinuity) *SessionContinuity {
+	if value == nil {
+		return nil
+	}
+	cloned := cloneSessionContinuity(*value)
+	return &cloned
+}
+
+func cloneStringMap(value map[string]string) map[string]string {
+	if value == nil {
+		return nil
+	}
+	cloned := make(map[string]string, len(value))
+	for key, item := range value {
+		cloned[key] = item
+	}
+	return cloned
 }

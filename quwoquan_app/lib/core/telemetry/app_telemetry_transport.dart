@@ -2,12 +2,8 @@
 
 import 'dart:convert';
 
-import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
-import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
-import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/ops/ops_api_metadata.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/ops/ops_request_page_ids.g.dart';
-import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
+import 'package:quwoquan_app/cloud/services/ops/event_record_batch_writer.dart';
+import 'package:quwoquan_cloud_contracts/generated/ops_contracts.dart' as ops;
 
 final class AppTelemetryBatchAck {
   const AppTelemetryBatchAck({
@@ -27,63 +23,33 @@ abstract interface class AppTelemetryTransport {
 }
 
 final class CloudAppTelemetryTransport implements AppTelemetryTransport {
-  CloudAppTelemetryTransport({
-    required CloudHttpClient httpClient,
-    String? baseUrl,
-  }) : _httpClient = httpClient,
-       _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim();
+  const CloudAppTelemetryTransport({required OpsEventRecordBatchWriter writer})
+    : _writer = writer;
 
-  final CloudHttpClient _httpClient;
-  final String _baseUrl;
+  final OpsEventRecordBatchWriter _writer;
 
   @override
   Future<AppTelemetryBatchAck> sendSealedBatch({
     required String canonicalBody,
     required String idempotencyKey,
   }) async {
-    final path = OpsApiMetadata.reportEventBatchPath;
-    final response = await _httpClient.post(
-      Uri.parse('$_baseUrl$path'),
-      headers: <String, String>{
-        ...CloudRequestHeaders.forPage(OpsRequestPageIds.reportEventBatch),
-        'Content-Type': 'application/json',
-        'Idempotency-Key': idempotencyKey,
-      },
-      body: canonicalBody,
-      encoding: utf8,
+    final decoded = jsonDecode(canonicalBody);
+    if (decoded is! Map || decoded.keys.any((key) => key is! String)) {
+      throw const FormatException(
+        'sealed telemetry batch must be a canonical object',
+      );
+    }
+    final request = ops.EventRecordBatchRequest.fromWire(
+      Map<String, Object?>.from(decoded),
     );
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw CloudErrorMapper.fromStatusCode(
-        response.statusCode,
-        body: response.body,
-        requestPath: path,
-        retryAfter: response.headers['retry-after'],
-      );
-    }
-    final decoded = jsonDecode(response.body);
-    if (decoded is! Map) {
-      throw CloudErrorMapper.invalidResponse(
-        message: 'telemetry batch ACK must be an object',
-        requestPath: path,
-      );
-    }
-    final acceptedCount = _asInt(decoded['acceptedCount']);
-    final duplicateBatch = decoded['duplicateBatch'];
-    if (acceptedCount < 0 || duplicateBatch is! bool) {
-      throw CloudErrorMapper.invalidResponse(
-        message: 'telemetry batch ACK has invalid fields',
-        requestPath: path,
-      );
-    }
+    final receipt = await _writer.reportEventBatch(
+      request,
+      idempotencyKey: idempotencyKey,
+    );
     return AppTelemetryBatchAck(
-      acceptedCount: acceptedCount,
-      duplicateBatch: duplicateBatch,
+      acceptedCount: receipt.acceptedCount,
+      duplicateBatch: receipt.duplicateBatch,
     );
-  }
-
-  int _asInt(Object? value) {
-    if (value is int) return value;
-    return int.tryParse(value?.toString() ?? '') ?? -1;
   }
 }
 

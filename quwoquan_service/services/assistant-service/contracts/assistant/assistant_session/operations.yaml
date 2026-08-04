@@ -9,18 +9,58 @@ externalDependencies:
     port: ModelCompletionPort
     operations: [complete, stream]
     conformance: model_generation
+    adapterContracts:
+      ext.llm.protocol_fixture:
+        endpointEnvs: {completion: ASSISTANT_MODEL_COMPLETION_URL}
+        secretRefs: []
+        defaultTimeoutMs: 60000
+      ext.llm.xiaomi_mimo:
+        endpointEnvs: {completion: ASSISTANT_MODEL_COMPLETION_URL}
+        secretRefs: [ASSISTANT_MODEL_API_KEY]
+        defaultTimeoutMs: 60000
   - capability: assistant.public.search
     port: PublicSearchPort
     operations: [search]
     conformance: public_search
+    adapterContracts:
+      ext.search.protocol_fixture:
+        endpointEnvs: {search: ASSISTANT_PUBLIC_SEARCH_URL}
+        secretRefs: []
+        defaultTimeoutMs: 10000
+      ext.search.duckduckgo_html:
+        endpointEnvs: {search: ASSISTANT_PUBLIC_SEARCH_URL}
+        secretRefs: []
+        defaultTimeoutMs: 10000
   - capability: assistant.weather.forecast
     port: WeatherForecastPort
     operations: [forecast]
     conformance: weather_forecast
+    adapterContracts:
+      ext.weather.protocol_fixture:
+        endpointEnvs:
+          geocoding: ASSISTANT_WEATHER_GEOCODING_URL
+          forecast: ASSISTANT_WEATHER_FORECAST_URL
+        secretRefs: []
+        defaultTimeoutMs: 10000
+      ext.weather.open_meteo:
+        endpointEnvs:
+          geocoding: ASSISTANT_WEATHER_GEOCODING_URL
+          forecast: ASSISTANT_WEATHER_FORECAST_URL
+        secretRefs: []
+        defaultTimeoutMs: 10000
   - capability: assistant.finance.quote
     port: FinanceQuotePort
     operations: [quote]
     conformance: finance_quote
+    adapterContracts:
+      ext.finance.protocol_fixture:
+        endpointEnvs: {chart: ASSISTANT_FINANCE_CHART_URL}
+        secretRefs: []
+        defaultTimeoutMs: 10000
+      ext.finance.yahoo_chart:
+        endpointEnvs: {chart: ASSISTANT_FINANCE_CHART_URL}
+        secretRefs: []
+        defaultTimeoutMs: 10000
   - role: use
     capability: runtime.message.transport
     port: MessageTransportPort
@@ -41,7 +81,7 @@ api_routes:
     description: 一次创建助手 Session；clientRequestId 为稳定 intent，重放返回首个结果。
     request_entity: AssistantCreateSessionRequest
     request_body_kind: object
-    response_entity: AssistantSession
+    response_entity: AssistantSessionWire
     reliability:
       timeout_ms: 1500
       cancellation: supported
@@ -153,7 +193,7 @@ api_routes:
       path:
         - name: sessionId
           field: sessionId
-    response_entity: AssistantSession
+    response_entity: AssistantSessionWire
     reliability:
       timeout_ms: 1500
       cancellation: supported

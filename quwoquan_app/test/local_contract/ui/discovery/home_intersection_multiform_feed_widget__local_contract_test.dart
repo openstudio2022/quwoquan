@@ -8,7 +8,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
 import 'package:quwoquan_app/cloud/media/media_download_cache.dart';
 import 'package:quwoquan_app/core/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
@@ -77,8 +77,7 @@ IntersectionReason _canonicalReason({
   List<IntersectionActorEvidence> actorEvidence =
       const <IntersectionActorEvidence>[],
   List<IntersectionVisual> sampleVisuals = const <IntersectionVisual>[],
-  List<IntersectionActionHint> actionHints =
-      const <IntersectionActionHint>[],
+  List<IntersectionActionHint> actionHints = const <IntersectionActionHint>[],
 }) {
   return IntersectionReason(
     kind: 'content',
@@ -489,7 +488,11 @@ Widget _buildFeed(
   ContentPostViewData post, {
   ContentBehaviorTracker? tracker,
   bool authenticated = false,
-  void Function(ContentPostViewData post, int index, {List<ContentPostViewData>? feedPosts})?
+  void Function(
+    ContentPostViewData post,
+    int index, {
+    List<ContentPostViewData>? feedPosts,
+  })?
   onPostTap,
 }) {
   return ProviderScope(
@@ -1750,7 +1753,7 @@ void main() {
     final impressions = behaviorRepo.recorded
         .where(
           (event) =>
-              event.action == BehaviorAction.impression &&
+              event.action == BehaviorEventType.impression &&
               event.contentId == 'post_intersection_demo_fact_1',
         )
         .toList(growable: false);
@@ -1762,7 +1765,7 @@ void main() {
     await tester.pump();
     expect(opened, isTrue);
     final clicks = behaviorRepo.recorded
-        .where((event) => event.action == BehaviorAction.click)
+        .where((event) => event.action == BehaviorEventType.click)
         .toList(growable: false);
     expect(clicks, hasLength(1));
     expect(clicks.single.position, 0);
@@ -1800,7 +1803,7 @@ void main() {
       await tracker.flush();
 
       final clicks = behaviorRepo.recorded
-          .where((event) => event.action == BehaviorAction.tagClick)
+          .where((event) => event.action == BehaviorEventType.tagClick)
           .toList(growable: false);
       expect(clicks, hasLength(1));
       final click = clicks.single;
@@ -1934,7 +1937,9 @@ class _RecommendEmptyFeedMapNotifier extends DiscoveryFeedMapNotifier {
   @override
   Map<String, AsyncValue<DiscoveryFeedState>> build() {
     return <String, AsyncValue<DiscoveryFeedState>>{
-      'recommend': AsyncData(const DiscoveryFeedState(items: <ContentPostViewData>[])),
+      'recommend': AsyncData(
+        const DiscoveryFeedState(items: <ContentPostViewData>[]),
+      ),
     };
   }
 
@@ -2093,14 +2098,15 @@ class _EightPageScrollFeedMapNotifier extends DiscoveryFeedMapNotifier {
 
   DiscoveryFeedState get currentFeed => state['recommend']!.value!;
 
-  List<ContentPostViewData> _page(int pageIndex) => List<ContentPostViewData>.generate(
-    20,
-    (index) => _microPost(
-      id: 'widget_page_${pageIndex}_post_$index',
-      imageUrls: const <String>[],
-    ),
-    growable: false,
-  );
+  List<ContentPostViewData> _page(int pageIndex) =>
+      List<ContentPostViewData>.generate(
+        20,
+        (index) => _microPost(
+          id: 'widget_page_${pageIndex}_post_$index',
+          imageUrls: const <String>[],
+        ),
+        growable: false,
+      );
 
   @override
   Map<String, AsyncValue<DiscoveryFeedState>> build() {

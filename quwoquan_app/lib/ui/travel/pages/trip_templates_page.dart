@@ -83,16 +83,29 @@ final class _TripTemplatesPageState extends ConsumerState<TripTemplatesPage> {
                     .travelTripPlanTemplateListTripPlanTemplates,
               ),
             ),
-            onAction: (action) async {
-              if (action.type == UiErrorActionType.retry ||
-                  action.type == UiErrorActionType.resubmit) {
-                ref.invalidate(tripPlanTemplatesProvider);
-              }
-            },
+            onRecovery: _recoverTemplates,
           ),
         ),
       ),
     );
+  }
+
+  Future<UiRecoveryOutcome> _recoverTemplates(UiErrorAction action) async {
+    if (action.type != UiErrorActionType.retry &&
+        action.type != UiErrorActionType.resubmit) {
+      return UiRecoveryOutcome.cancelled;
+    }
+    try {
+      ref.invalidate(tripPlanTemplatesProvider);
+      await ref.read(tripPlanTemplatesProvider.future);
+      return mounted
+          ? UiRecoveryOutcome.recovered
+          : UiRecoveryOutcome.superseded;
+    } catch (_) {
+      return mounted
+          ? UiRecoveryOutcome.stillBlocked
+          : UiRecoveryOutcome.superseded;
+    }
   }
 
   Future<void> _createFromTemplate(TripPlanTemplate template) async {

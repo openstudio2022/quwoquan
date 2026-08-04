@@ -6,7 +6,9 @@ from typing import Any
 from pymongo import ASCENDING, DESCENDING, ReturnDocument
 from pymongo.errors import DuplicateKeyError
 
-from internal.recommendation.recommendation_feedback_fact.application.appender import FeedbackFact
+from internal.recommendation.recommendation_feedback_fact.domain.fact import (
+    RecommendationFeedbackFact,
+)
 
 
 def _bson_datetime(value: datetime) -> datetime:
@@ -15,7 +17,7 @@ def _bson_datetime(value: datetime) -> datetime:
     )
 
 
-class MongoFeedbackFactStore:
+class MongoRecommendationFeedbackFactStore:
     def __init__(self, database: Any) -> None:
         self._facts = database["recommendation_feedback_facts"]
         self._failures = database["recommendation_feedback_failures"]
@@ -42,7 +44,7 @@ class MongoFeedbackFactStore:
         )
 
     @staticmethod
-    def _document(fact: FeedbackFact) -> dict[str, Any]:
+    def _document(fact: RecommendationFeedbackFact) -> dict[str, Any]:
         return {
             "_id": fact.feedback_id,
             "sourceEventId": fact.source_event_id,
@@ -59,8 +61,8 @@ class MongoFeedbackFactStore:
         }
 
     @staticmethod
-    def _fact(document: dict[str, Any]) -> FeedbackFact:
-        return FeedbackFact(
+    def _fact(document: dict[str, Any]) -> RecommendationFeedbackFact:
+        return RecommendationFeedbackFact(
             feedback_id=str(document["_id"]),
             source_event_id=str(document["sourceEventId"]),
             exposure_id=str(document["exposureId"]),
@@ -75,7 +77,9 @@ class MongoFeedbackFactStore:
             recorded_at=document["recordedAt"],
         )
 
-    def append_if_absent(self, fact: FeedbackFact) -> tuple[FeedbackFact, bool]:
+    def append_if_absent(
+        self, fact: RecommendationFeedbackFact
+    ) -> tuple[RecommendationFeedbackFact, bool]:
         document = self._document(fact)
         try:
             result = self._facts.update_one(

@@ -104,10 +104,15 @@ def _run_lane(
     )
     command = [sys.executable, "-B", str(cli), *_lane_argv(submission, stage=stage)]
     try:
-        return (
-            lane_runner(command, clone.path, env, log_path, timeout_seconds),
-            None,
-        )
+        code = lane_runner(command, clone.path, env, log_path, timeout_seconds)
+        if code == 0:
+            return 0, None
+        try:
+            lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            lines = []
+        detail = "\n".join(lines[-12:]).strip()
+        return int(code), detail[-2400:] or f"{stage} exited with code {code}"
     except subprocess.TimeoutExpired:
         return 124, f"{stage} timed out after {timeout_seconds}s"
     except Exception as exc:  # noqa: BLE001

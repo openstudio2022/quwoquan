@@ -106,7 +106,7 @@ class VerifyMarkdownArticleTruthSourceTest(unittest.TestCase):
         payload = {
             "schema": "quwoquan.object_job",
             "contentType": "article",
-            "articleDocument": {"body": "legacy"},
+            "articleDocument": {"body": "retired"},
         }
         failures = self.verifier.validate_article(
             payload,

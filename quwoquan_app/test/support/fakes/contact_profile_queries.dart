@@ -1,20 +1,20 @@
 import 'package:quwoquan_app/application/user/persona/persona_query.dart';
 import 'package:quwoquan_app/application/user/profile/profile_edit_query.dart';
 import 'package:quwoquan_app/application/user/profile/profile_query.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/profile_qr_resolve_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_edit_models.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/models/search_models.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 final class ContactProfileQueryFake implements ProfileQuery {
   ContactProfileQueryFake({
     this.profile,
-    this.searchItems = const <SocialRelationSearchItemView>[],
+    this.searchItems = const <SocialRelationSearchItemViewData>[],
     this.searchError,
   });
 
   final PersonaProfileViewData? profile;
-  final List<SocialRelationSearchItemView> searchItems;
+  final List<SocialRelationSearchItemViewData> searchItems;
   final Object? searchError;
 
   @override
@@ -27,7 +27,7 @@ final class ContactProfileQueryFake implements ProfileQuery {
   }
 
   @override
-  Future<List<SocialRelationSearchItemView>> searchSocialRelations({
+  Future<List<SocialRelationSearchItemViewData>> searchSocialRelations({
     required String query,
     int limit = 20,
   }) async {
@@ -53,7 +53,7 @@ final class ContactProfileEditQueryFake implements ProfileEditQuery {
   ContactProfileEditQueryFake({required this.qrCard, this.resolveResult});
 
   final ProfileQrCardData qrCard;
-  final ProfileQrResolveWireDto? resolveResult;
+  final ProfileQrResolveWire? resolveResult;
 
   @override
   Future<ProfileQrCardData> getProfileQrCard() async => qrCard;
@@ -64,7 +64,7 @@ final class ContactProfileEditQueryFake implements ProfileEditQuery {
   }
 
   @override
-  Future<ProfileQrResolveWireDto> resolveProfileQrToken({
+  Future<ProfileQrResolveWire> resolveProfileQrToken({
     required String token,
     String handle = '',
   }) async {

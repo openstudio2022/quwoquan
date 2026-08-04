@@ -25,6 +25,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../typed_circle_query_test_double.dart';
+import '../../../../support/cloud_services/object_doubles/circle/circle_contract_test_builders.dart';
 
 Future<void> _hubPumpSettled(WidgetTester tester) async {
   for (var i = 0; i < 24; i++) {
@@ -149,8 +150,8 @@ class _AuthenticatedHubSession extends AuthSessionController {
 }
 
 CircleDiscoveryFeedPageSlice _hubDiscoveryFeedFixture() {
-  final circles = <CircleProjection>[
-    CircleProjection(
+  final circles = <Circle>[
+    buildCircleContract(
       circleId: 'fixture_circle_campus',
       name: '校园同行',
       ownerId: 'owner-campus',
@@ -158,7 +159,7 @@ CircleDiscoveryFeedPageSlice _hubDiscoveryFeedFixture() {
       subCategory: '母校',
       memberCount: 120,
     ),
-    CircleProjection(
+    buildCircleContract(
       circleId: 'fixture_circle_travel',
       name: '一起旅行',
       ownerId: 'owner-travel',
@@ -166,7 +167,7 @@ CircleDiscoveryFeedPageSlice _hubDiscoveryFeedFixture() {
       subCategory: '城市',
       memberCount: 110,
     ),
-    CircleProjection(
+    buildCircleContract(
       circleId: 'fixture_circle_photo',
       name: '契约摄影社',
       ownerId: 'owner-photo',
@@ -174,7 +175,7 @@ CircleDiscoveryFeedPageSlice _hubDiscoveryFeedFixture() {
       subCategory: '风光',
       memberCount: 100,
     ),
-    CircleProjection(
+    buildCircleContract(
       circleId: 'fixture_circle_tech',
       name: '科技前沿',
       ownerId: 'owner-tech',
@@ -182,7 +183,7 @@ CircleDiscoveryFeedPageSlice _hubDiscoveryFeedFixture() {
       subCategory: '数码',
       memberCount: 90,
     ),
-    CircleProjection(
+    buildCircleContract(
       circleId: 'fixture_circle_car',
       name: '自驾同好',
       ownerId: 'owner-car',
@@ -193,48 +194,42 @@ CircleDiscoveryFeedPageSlice _hubDiscoveryFeedFixture() {
   ];
   return CircleDiscoveryFeedPageSlice(
     circles: circles,
-    items: <CircleFeedPostProjection>[
-      CircleFeedPostProjection(
+    items: <CircleFeedItemView>[
+      buildCircleFeedItemContract(
         circleId: 'fixture_circle_campus',
         placementId: 'fixture-placement-campus-1',
-        post: ContentPostProjection(
-          postId: 'circle_post_campus_1',
-          contentType: 'image',
-          contentIdentity: 'work',
-          authorId: 'author-campus',
-          authorDisplayName: '校园作者',
-          body: '校园记录',
-          coverUrl: 'media/image/circle_post_campus_1.jpg',
-          mediaUrls: const <String>['media/image/circle_post_campus_1.jpg'],
-        ),
+        postId: 'circle_post_campus_1',
+        contentType: 'image',
+        contentIdentity: 'work',
+        authorId: 'author-campus',
+        authorDisplayName: '校园作者',
+        body: '校园记录',
+        coverUrl: 'media/image/circle_post_campus_1.jpg',
+        imageUrls: const <String>['media/image/circle_post_campus_1.jpg'],
       ),
-      CircleFeedPostProjection(
+      buildCircleFeedItemContract(
         circleId: 'fixture_circle_photo',
         placementId: 'fixture-placement-photo-image-1',
-        post: ContentPostProjection(
-          postId: 'circle_post_image_1',
-          contentType: 'image',
-          contentIdentity: 'work',
-          authorId: 'author-photo',
-          authorDisplayName: '摄影作者',
-          body: '山谷晨光',
-          coverUrl: 'media/image/circle_post_image_1.jpg',
-          mediaUrls: const <String>['media/image/circle_post_image_1.jpg'],
-        ),
+        postId: 'circle_post_image_1',
+        contentType: 'image',
+        contentIdentity: 'work',
+        authorId: 'author-photo',
+        authorDisplayName: '摄影作者',
+        body: '山谷晨光',
+        coverUrl: 'media/image/circle_post_image_1.jpg',
+        imageUrls: const <String>['media/image/circle_post_image_1.jpg'],
       ),
-      CircleFeedPostProjection(
+      buildCircleFeedItemContract(
         circleId: 'fixture_circle_photo',
         placementId: 'fixture-placement-photo-video-1',
-        post: ContentPostProjection(
-          postId: 'circle_post_video_1',
-          contentType: 'video',
-          contentIdentity: 'work',
-          authorId: 'author-video',
-          authorDisplayName: '视频作者',
-          body: '城市延时',
-          videoUrl: 'media/video/circle_post_video_1.mp4',
-          thumbnailUrl: 'media/image/circle_post_video_1.jpg',
-        ),
+        postId: 'circle_post_video_1',
+        contentType: 'video',
+        contentIdentity: 'work',
+        authorId: 'author-video',
+        authorDisplayName: '视频作者',
+        body: '城市延时',
+        videoUrl: 'media/video/circle_post_video_1.mp4',
+        thumbnailUrl: 'media/image/circle_post_video_1.jpg',
       ),
     ],
   );
@@ -247,35 +242,31 @@ CircleDiscoveryFeedPageSlice _pagedHubDiscoveryFeedFixture({
   bool includeFirstPlacement = false,
 }) {
   final firstCircle = _hubDiscoveryFeedFixture().circles.first;
-  final items = <CircleFeedPostProjection>[
+  final items = <CircleFeedItemView>[
     if (includeFirstPlacement)
-      CircleFeedPostProjection(
-        circleId: firstCircle.circleId,
+      buildCircleFeedItemContract(
+        circleId: firstCircle.id,
         placementId: 'page-placement-0',
-        post: ContentPostProjection(
-          postId: 'page-post-0',
-          contentType: 'image',
-          contentIdentity: 'work',
-        ),
+        postId: 'page-post-0',
+        contentType: 'image',
+        contentIdentity: 'work',
       ),
-    ...List<CircleFeedPostProjection>.generate(count, (index) {
+    ...List<CircleFeedItemView>.generate(count, (index) {
       final id = start + index;
-      return CircleFeedPostProjection(
-        circleId: firstCircle.circleId,
+      return buildCircleFeedItemContract(
+        circleId: firstCircle.id,
         placementId: 'page-placement-$id',
-        post: ContentPostProjection(
-          postId: 'page-post-$id',
-          contentType: 'image',
-          contentIdentity: 'work',
-          body: '第 $id 个游标帖子',
-        ),
+        postId: 'page-post-$id',
+        contentType: 'image',
+        contentIdentity: 'work',
+        body: '第 $id 个游标帖子',
       );
     }),
   ];
   return CircleDiscoveryFeedPageSlice(
-    circles: <CircleProjection>[firstCircle],
+    circles: <Circle>[firstCircle],
     items: items,
-    nextCursor: nextCursor,
+    cursor: nextCursor,
   );
 }
 

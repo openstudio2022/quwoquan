@@ -9,12 +9,10 @@ import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.d
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_created_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/selectable_group_conversation_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository_api.dart';
+import 'package:quwoquan_app/cloud/services/chat/chat_view_data.dart';
 import '../../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/core/models/start_group_chat_route_extra.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -22,9 +20,10 @@ import 'package:quwoquan_app/ui/chat/pages/start_group_chat_page.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_contacts_rows_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_inbox_provider.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
+import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
 import '../../../../support/runtime_failure_fixtures.dart';
 import '../../../../support/recording_app_telemetry_recorder.dart';
-import '../../../../support/cloud_services/repository_mock_reexports.dart';
+import '../../../../support/cloud_services/object_doubles/user/profile/alpha_user_profile_repository.dart';
 
 void _suppressImageErrors() {
   final original = FlutterError.onError;
@@ -117,7 +116,7 @@ class _TitleCapturingChatRepository extends MockChatRepository {
   final List<String?> titles = <String?>[];
 
   @override
-  Future<ChatConversationCreatedDto> createConversation({
+  Future<ChatConversationCreatedViewData> createConversation({
     required String type,
     String? title,
     int? maxGroupSize,
@@ -143,7 +142,7 @@ class _RejectingCreateChatRepository extends MockChatRepository {
   final CloudException _error;
 
   @override
-  Future<ChatConversationCreatedDto> createConversation({
+  Future<ChatConversationCreatedViewData> createConversation({
     required String type,
     String? title,
     int? maxGroupSize,
@@ -161,7 +160,7 @@ class _ResponseLostCreateChatRepository extends MockChatRepository {
   bool _firstResponseLost = true;
 
   @override
-  Future<ChatConversationCreatedDto> createConversation({
+  Future<ChatConversationCreatedViewData> createConversation({
     required String type,
     String? title,
     int? maxGroupSize,
@@ -185,7 +184,7 @@ class _ResponseLostCreateChatRepository extends MockChatRepository {
         ),
       );
     }
-    return ChatConversationCreatedDto(
+    return const ChatConversationCreatedViewData(
       conversationId: 'conversation-replayed-after-response-loss',
     );
   }
@@ -194,11 +193,11 @@ class _ResponseLostCreateChatRepository extends MockChatRepository {
 class _SeededGroupCandidatesChatRepository extends MockChatRepository {
   _SeededGroupCandidatesChatRepository(this._rows);
 
-  final List<ChatContactRowDto> _rows;
+  final List<ChatContactRowViewData> _rows;
   final List<int> requestedCandidateLimits = <int>[];
 
   @override
-  Future<List<ChatContactRowDto>> listGroupCandidates({
+  Future<List<ChatContactRowViewData>> listGroupCandidates({
     String? conversationId,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
@@ -216,14 +215,14 @@ class _SelectableGroupChatRepository extends MockChatRepository {
     this.pageSize = CloudApiDefaults.pageLimit,
   });
 
-  final List<SelectableGroupConversationRowDto> groups;
-  final Map<String, List<ChatContactRowDto>> membersByConversation;
+  final List<SelectableGroupConversationRow> groups;
+  final Map<String, List<ChatContactRowViewData>> membersByConversation;
   final int pageSize;
   final List<String?> groupQueries = <String?>[];
   final List<String?> memberQueries = <String?>[];
 
   @override
-  Future<CursorPage<SelectableGroupConversationRowDto>>
+  Future<CursorPage<SelectableGroupConversationRow>>
   listSelectableGroupConversations({
     String? query,
     ChatSelectableGroupSource source = ChatSelectableGroupSource.all,
@@ -248,7 +247,7 @@ class _SelectableGroupChatRepository extends MockChatRepository {
   }
 
   @override
-  Future<CursorPage<ChatContactRowDto>> listSelectableGroupContactMembers({
+  Future<CursorPage<ChatContactRowViewData>> listSelectableGroupContactMembers({
     required String conversationId,
     String? query,
     String? cursor,
@@ -257,7 +256,8 @@ class _SelectableGroupChatRepository extends MockChatRepository {
     memberQueries.add(query);
     final normalizedQuery = query?.trim().toLowerCase() ?? '';
     final rows =
-        (membersByConversation[conversationId] ?? const <ChatContactRowDto>[])
+        (membersByConversation[conversationId] ??
+                const <ChatContactRowViewData>[])
             .where(
               (member) =>
                   normalizedQuery.isEmpty ||
@@ -289,20 +289,21 @@ void main() {
   testWidgets('发起群聊使用设置页同源壳且空/坏头像显示默认图标兜底', (tester) async {
     _suppressImageErrors();
 
-    final repository = _SeededGroupCandidatesChatRepository(<ChatContactRowDto>[
-      ChatContactRowDto(
-        userId: 'user_empty_avatar',
-        displayName: '空头像联系人',
-        avatarUrl: '',
-        relationState: 'mutual',
-      ),
-      ChatContactRowDto(
-        userId: 'user_broken_avatar',
-        displayName: '坏头像联系人',
-        avatarUrl: 'https://avatar.invalid.test/broken.png',
-        relationState: 'mutual',
-      ),
-    ]);
+    final repository =
+        _SeededGroupCandidatesChatRepository(<ChatContactRowViewData>[
+          ChatContactRowViewData(
+            userId: 'user_empty_avatar',
+            displayName: '空头像联系人',
+            avatarUrl: '',
+            relationState: 'mutual',
+          ),
+          ChatContactRowViewData(
+            userId: 'user_broken_avatar',
+            displayName: '坏头像联系人',
+            avatarUrl: 'https://avatar.invalid.test/broken.png',
+            relationState: 'mutual',
+          ),
+        ]);
     final container = _buildContainer(repository);
     await _pumpStartGroupChatPage(tester, container: container);
 
@@ -587,20 +588,21 @@ void main() {
   testWidgets('添加成员向导只展示服务端过滤后的候选成员', (tester) async {
     _suppressImageErrors();
 
-    final repository = _SeededGroupCandidatesChatRepository(<ChatContactRowDto>[
-      ChatContactRowDto(
-        userId: 'user_003',
-        displayName: '张华',
-        relationState: 'mutual',
-        source: 'mutual',
-      ),
-      ChatContactRowDto(
-        userId: 'user_004',
-        displayName: '李青',
-        relationState: 'mutual',
-        source: 'mutual',
-      ),
-    ]);
+    final repository =
+        _SeededGroupCandidatesChatRepository(<ChatContactRowViewData>[
+          ChatContactRowViewData(
+            userId: 'user_003',
+            displayName: '张华',
+            relationState: 'mutual',
+            source: 'mutual',
+          ),
+          ChatContactRowViewData(
+            userId: 'user_004',
+            displayName: '李青',
+            relationState: 'mutual',
+            source: 'mutual',
+          ),
+        ]);
     final container = _buildContainer(repository);
     await _pumpStartGroupChatPage(
       tester,
@@ -648,14 +650,14 @@ void main() {
     _suppressImageErrors();
 
     final container = _buildContainer(
-      _SeededGroupCandidatesChatRepository(<ChatContactRowDto>[
-        ChatContactRowDto(
+      _SeededGroupCandidatesChatRepository(<ChatContactRowViewData>[
+        ChatContactRowViewData(
           userId: 'user_li_ming',
           displayName: '李明',
           relationState: 'mutual',
           source: 'mutual',
         ),
-        ChatContactRowDto(
+        ChatContactRowViewData(
           userId: 'user_zhang_hua',
           displayName: '张华',
           relationState: 'mutual',
@@ -755,25 +757,27 @@ void main() {
     _suppressImageErrors();
 
     final repository = _SelectableGroupChatRepository(
-      groups: <SelectableGroupConversationRowDto>[
-        SelectableGroupConversationRowDto(
+      groups: <SelectableGroupConversationRow>[
+        SelectableGroupConversationRow(
           conversationId: 'conv_private',
           title: '私建同行群',
+          avatarUrl: '',
           circleId: '',
           friendMemberCount: 1,
           memberCount: 3,
         ),
-        SelectableGroupConversationRowDto(
+        SelectableGroupConversationRow(
           conversationId: 'conv_circle',
           title: '摄影圈交流群',
+          avatarUrl: '',
           circleId: 'circle_photo',
           friendMemberCount: 1,
           memberCount: 8,
         ),
       ],
-      membersByConversation: <String, List<ChatContactRowDto>>{
-        'conv_circle': <ChatContactRowDto>[
-          ChatContactRowDto(
+      membersByConversation: <String, List<ChatContactRowViewData>>{
+        'conv_circle': <ChatContactRowViewData>[
+          ChatContactRowViewData(
             userId: 'user_circle_friend',
             displayName: '圈友',
             relationState: 'mutual',
@@ -883,18 +887,19 @@ void main() {
 
     final ops = RecordingAppTelemetryRecorder();
     final repository = _SelectableGroupChatRepository(
-      groups: <SelectableGroupConversationRowDto>[
-        SelectableGroupConversationRowDto(
+      groups: <SelectableGroupConversationRow>[
+        SelectableGroupConversationRow(
           conversationId: 'conv_source',
           title: '产品交流群',
           avatarUrl: '',
+          circleId: '',
           friendMemberCount: 1,
           memberCount: 8,
         ),
       ],
-      membersByConversation: <String, List<ChatContactRowDto>>{
-        'conv_source': <ChatContactRowDto>[
-          ChatContactRowDto(
+      membersByConversation: <String, List<ChatContactRowViewData>>{
+        'conv_source': <ChatContactRowViewData>[
+          ChatContactRowViewData(
             userId: 'user_002',
             displayName: '李明',
             avatarUrl: '',
@@ -983,41 +988,47 @@ void main() {
 
     final repository = _SelectableGroupChatRepository(
       pageSize: 2,
-      groups: <SelectableGroupConversationRowDto>[
-        SelectableGroupConversationRowDto(
+      groups: <SelectableGroupConversationRow>[
+        SelectableGroupConversationRow(
           conversationId: 'conv_page_1',
           title: '分页群一',
+          avatarUrl: '',
+          circleId: '',
           friendMemberCount: 3,
           memberCount: 4,
         ),
-        SelectableGroupConversationRowDto(
+        SelectableGroupConversationRow(
           conversationId: 'conv_page_2',
           title: '分页群二',
+          avatarUrl: '',
+          circleId: '',
           friendMemberCount: 3,
           memberCount: 4,
         ),
-        SelectableGroupConversationRowDto(
+        SelectableGroupConversationRow(
           conversationId: 'conv_page_3',
           title: '分页群三',
+          avatarUrl: '',
+          circleId: '',
           friendMemberCount: 3,
           memberCount: 4,
         ),
       ],
-      membersByConversation: <String, List<ChatContactRowDto>>{
-        'conv_page_3': <ChatContactRowDto>[
-          ChatContactRowDto(
+      membersByConversation: <String, List<ChatContactRowViewData>>{
+        'conv_page_3': <ChatContactRowViewData>[
+          ChatContactRowViewData(
             userId: 'user_page_1',
             displayName: '分页成员一',
             relationState: 'mutual',
             source: 'group',
           ),
-          ChatContactRowDto(
+          ChatContactRowViewData(
             userId: 'user_page_2',
             displayName: '分页成员二',
             relationState: 'mutual',
             source: 'group',
           ),
-          ChatContactRowDto(
+          ChatContactRowViewData(
             userId: 'user_page_3',
             displayName: '分页成员三',
             relationState: 'mutual',
@@ -1088,18 +1099,19 @@ void main() {
 
     const longTitle = '一个用于压力测试横向溢出的超长群聊名称连续不断没有空格也没有换行符号';
     final repository = _SelectableGroupChatRepository(
-      groups: <SelectableGroupConversationRowDto>[
-        SelectableGroupConversationRowDto(
+      groups: <SelectableGroupConversationRow>[
+        SelectableGroupConversationRow(
           conversationId: 'conv_long',
           title: longTitle,
           avatarUrl: '',
+          circleId: '',
           friendMemberCount: 12,
           memberCount: 30,
         ),
       ],
-      membersByConversation: <String, List<ChatContactRowDto>>{
-        'conv_long': <ChatContactRowDto>[
-          ChatContactRowDto(
+      membersByConversation: <String, List<ChatContactRowViewData>>{
+        'conv_long': <ChatContactRowViewData>[
+          ChatContactRowViewData(
             userId: 'user_002',
             displayName: '李明',
             avatarUrl: '',

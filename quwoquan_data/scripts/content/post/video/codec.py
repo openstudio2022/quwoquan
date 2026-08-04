@@ -12,7 +12,6 @@ from core.io import read_json
 from core.schema import assert_valid
 from governance.creators.assignment import creator_from_payload
 from content.post.video.source_video import SourcedVideoEvidence
-from governance.coverage.license import RightsAuditStatus
 
 
 class VideoReviewDecision(StrEnum):
@@ -28,102 +27,6 @@ def _strings(value: object) -> tuple[str, ...]:
     if not isinstance(value, (list, tuple)):
         return ()
     return tuple(text for item in value if (text := _string(item)))
-
-
-@dataclass(frozen=True, slots=True)
-class VideoSourceFrameEvidence:
-    asset_ref: str
-    source_ref: str
-    rights_ref: str
-    source_url: str
-    creator: str
-    license: str
-    sha256: str
-    source_use_mode: str
-    rights_audit_status: RightsAuditStatus
-    rights_audit_issues: tuple[str, ...]
-    caption: str = ""
-    source_collection_id: str = ""
-
-    @classmethod
-    def from_mapping(
-        cls,
-        payload: Mapping[str, object],
-        *,
-        index: int,
-    ) -> "VideoSourceFrameEvidence":
-        required = {
-            "assetRef": _string(payload.get("assetRef")),
-            "sourceRef": _string(payload.get("sourceRef")),
-            "rightsRef": _string(payload.get("rightsRef")),
-            "sourceUrl": _string(payload.get("sourceUrl")),
-            "creator": _string(payload.get("creator")),
-            "license": _string(payload.get("license")),
-            "sha256": _string(payload.get("sha256")),
-        }
-        missing = tuple(key for key, value in required.items() if not value)
-        if missing:
-            raise ValueError(
-                f"sourceFrames[{index}] missing {','.join(missing)}"
-            )
-        source_use_mode = _string(payload.get("sourceUseMode"))
-        if source_use_mode not in {
-            "licensed_adaptation",
-            "factual_reference_only",
-        }:
-            raise ValueError(
-                f"sourceFrames[{index}] sourceUseMode is invalid or missing"
-            )
-        try:
-            rights_audit_status = RightsAuditStatus(
-                _string(payload.get("rightsAuditStatus"))
-            )
-        except ValueError as exc:
-            raise ValueError(
-                f"sourceFrames[{index}] rightsAuditStatus is invalid or missing"
-            ) from exc
-        rights_audit_issues = _strings(payload.get("rightsAuditIssues"))
-        if (
-            rights_audit_status is not RightsAuditStatus.VERIFIED
-            and not rights_audit_issues
-        ):
-            raise ValueError(
-                f"sourceFrames[{index}] unverified rights require rightsAuditIssues"
-            )
-        return cls(
-            asset_ref=required["assetRef"],
-            source_ref=required["sourceRef"],
-            rights_ref=required["rightsRef"],
-            source_url=required["sourceUrl"],
-            creator=required["creator"],
-            license=required["license"],
-            sha256=required["sha256"],
-            source_use_mode=source_use_mode,
-            rights_audit_status=rights_audit_status,
-            rights_audit_issues=rights_audit_issues,
-            caption=_string(payload.get("caption")),
-            source_collection_id=_string(payload.get("sourceCollectionId")),
-        )
-
-    def to_dict(self) -> dict[str, object]:
-        return {
-            "assetRef": self.asset_ref,
-            "sourceRef": self.source_ref,
-            "rightsRef": self.rights_ref,
-            "sourceUrl": self.source_url,
-            "creator": self.creator,
-            "license": self.license,
-            "sha256": self.sha256,
-            "sourceUseMode": self.source_use_mode,
-            "rightsAuditStatus": self.rights_audit_status.value,
-            "rightsAuditIssues": list(self.rights_audit_issues),
-            **({"caption": self.caption} if self.caption else {}),
-            **(
-                {"sourceCollectionId": self.source_collection_id}
-                if self.source_collection_id
-                else {}
-            ),
-        }
 
 
 @dataclass(frozen=True, slots=True)
@@ -191,7 +94,6 @@ class VideoWritingPack:
     entity_refs: tuple[str, ...]
     tag_refs: tuple[str, ...]
     template_id: str
-    source_frames: tuple[VideoSourceFrameEvidence, ...]
     source_video: SourcedVideoEvidence | None
     creator: VideoCreatorAssignment
 
@@ -203,17 +105,15 @@ class VideoWritingPack:
 
     @property
     def source_paths(self) -> tuple[str, ...]:
-        values = [frame.source_ref for frame in self.source_frames]
-        if self.source_video is not None:
-            values.append(self.source_video.source_ref)
-        return tuple(dict.fromkeys(values))
+        return (self.source_video.source_ref,) if self.source_video is not None else ()
 
     @property
     def source_urls(self) -> tuple[str, ...]:
-        values = [frame.source_url for frame in self.source_frames]
-        if self.source_video is not None:
-            values.append(self.source_video.source_post_url)
-        return tuple(dict.fromkeys(values))
+        return (
+            (self.source_video.source_post_url,)
+            if self.source_video is not None
+            else ()
+        )
 
     @classmethod
     def from_brief(
@@ -221,36 +121,18 @@ class VideoWritingPack:
         ref: str,
         payload: Mapping[str, object],
     ) -> tuple["VideoWritingPack", tuple[str, ...]]:
-        raw_frames = payload.get("sourceFrames")
         raw_source_video = payload.get("sourceVideo")
         failures: list[str] = []
-        frames: list[VideoSourceFrameEvidence] = []
         source_video: SourcedVideoEvidence | None = None
         if isinstance(raw_source_video, Mapping):
             source_video, source_video_issues = SourcedVideoEvidence.from_mapping(
                 raw_source_video
             )
             failures.extend(source_video_issues)
-            if isinstance(raw_frames, list) and raw_frames:
-                failures.append(
-                    "sourceVideo and sourceFrames are mutually exclusive"
-                )
-        elif not isinstance(raw_frames, list):
-            failures.append("sourceFrames must be an array")
         else:
-            for index, raw_frame in enumerate(raw_frames):
-                if not isinstance(raw_frame, Mapping):
-                    failures.append(f"sourceFrames[{index}] must be an object")
-                    continue
-                try:
-                    frames.append(
-                        VideoSourceFrameEvidence.from_mapping(
-                            raw_frame,
-                            index=index,
-                        )
-                    )
-                except ValueError as exc:
-                    failures.append(str(exc))
+            failures.append("sourceVideo must be an admitted sourced video")
+        if payload.get("sourceFrames"):
+            failures.append("sourceFrames cannot satisfy the video carrier")
         entity_refs = _strings(payload.get("entityRefs"))
         primary = entity_refs[0].rstrip("/").rsplit("/", 1)[-1] if entity_refs else ""
         title = _string(payload.get("titleHint")) or primary
@@ -264,7 +146,6 @@ class VideoWritingPack:
                     _string(payload.get("templateId"))
                     or "travel.entity.short_video"
                 ),
-                source_frames=tuple(frames),
                 source_video=source_video,
                 creator=VideoCreatorAssignment.from_payload(payload),
             ),
@@ -288,12 +169,9 @@ class VideoWritingPack:
         )
 
     def to_dict(self) -> dict[str, object]:
-        frames = [frame.to_dict() for frame in self.source_frames]
-        source_video = (
-            self.source_video.to_dict()
-            if self.source_video is not None
-            else None
-        )
+        if self.source_video is None:
+            raise ValueError("video writing pack requires sourceVideo")
+        source_video = self.source_video.to_dict()
         primary = self.primary_entity
         return {
             "ref": self.ref,
@@ -303,28 +181,15 @@ class VideoWritingPack:
             "entityRefs": list(self.entity_refs),
             "tagRefs": list(self.tag_refs),
             "templateId": self.template_id,
-            **({"sourceFrames": frames} if source_video is None else {}),
-            **({"sourceVideo": source_video} if source_video is not None else {}),
-            "sourceMode": (
-                "sourced_video"
-                if source_video is not None
-                else "rights_cleared_image_sequence"
-            ),
-            "assetRefs": (
-                [source_video["assetRef"]]
-                if source_video is not None
-                else [frame.asset_ref for frame in self.source_frames]
-            ),
+            "sourceVideo": source_video,
+            "sourceMode": "sourced_video",
+            "assetRefs": [source_video["assetRef"]],
             "sourcePaths": list(self.source_paths),
             "sourceUrls": list(self.source_urls),
             "storySpine": {
                 "primaryEntity": primary,
                 "routeEntities": [primary] if primary else [],
-                "beats": (
-                    [primary]
-                    if source_video is not None
-                    else [frame.caption or primary for frame in self.source_frames]
-                ),
+                "beats": [primary],
             },
             **self.creator.to_dict(),
         }
@@ -433,7 +298,6 @@ __all__ = [
     "VideoDraftMeta",
     "VideoReviewDecision",
     "VideoScriptDraft",
-    "VideoSourceFrameEvidence",
     "VideoWritingPack",
     "load_video_draft_meta",
     "load_video_writing_pack",

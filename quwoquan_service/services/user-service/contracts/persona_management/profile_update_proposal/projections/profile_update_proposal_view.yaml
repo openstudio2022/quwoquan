@@ -15,7 +15,8 @@ fields:
   type: string
   nullable: false
 - name: source
-  type: string
+  type: enum
+  enum_ref: ProposalSource
   nullable: false
 - name: reason
   type: string
@@ -30,7 +31,8 @@ fields:
   type: string
   nullable: false
 - name: status
-  type: string
+  type: enum
+  enum_ref: ProposalStatus
   nullable: false
 - name: displayName
   type: string

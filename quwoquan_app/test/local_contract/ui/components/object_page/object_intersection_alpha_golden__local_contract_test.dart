@@ -1,7 +1,7 @@
 import 'package:flutter/cupertino.dart';
+import '../../../../support/fixtures/intersection_fixtures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_card.dart';
 
 import '../../../../support/cloud_services/content/alpha_intersection_repository.dart';
@@ -25,7 +25,7 @@ void main() {
       objectId: 'fixture_homepage_travel_route_erhai',
       objectType: 'entity',
     );
-    final hostTarget = IntersectionTarget(
+    final hostTarget = intersectionTargetFixture(
       objectType: 'homepage',
       objectId: 'fixture_homepage_travel_route_erhai',
       objectKind: 'route',

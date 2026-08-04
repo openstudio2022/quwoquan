@@ -5,6 +5,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/services/realtime/remote_realtime_connection_delegate.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_delegate.dart';
+import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_operation_gateway.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/app_telemetry_catalog.g.dart';
 import 'package:quwoquan_app/core/di/ops_event_dependencies.dart';
@@ -16,6 +17,8 @@ typedef RealtimeConnectionDelegateFactory =
       required RealtimeConnectionStateListener onStateChanged,
       required RealtimeCurrentUserIdResolver currentUserIdResolver,
     });
+typedef RealtimeConnectionOperationGatewayResolver =
+    RealtimeConnectionOperationGateway Function(Ref ref);
 
 /// UI 唯一入口。production 默认装配只能创建 Remote delegate。
 ///
@@ -25,9 +28,11 @@ class RealtimeConnectionNotifier extends Notifier<TransportState> {
   RealtimeConnectionNotifier({
     RealtimeCurrentUserIdResolver? currentUserIdResolver,
     RealtimeConnectionDelegateFactory? delegateFactory,
+    RealtimeConnectionOperationGatewayResolver? operationGatewayResolver,
   }) : _currentUserIdResolver =
            currentUserIdResolver ?? _defaultCurrentUserIdResolver,
-       _delegateFactory = delegateFactory ?? _createRemoteDelegate;
+       _delegateFactory = delegateFactory,
+       _operationGatewayResolver = operationGatewayResolver;
 
   static String _defaultCurrentUserIdResolver(Ref ref) {
     final authSession = ref.read(authSessionControllerProvider);
@@ -42,7 +47,8 @@ class RealtimeConnectionNotifier extends Notifier<TransportState> {
   }
 
   final RealtimeCurrentUserIdResolver _currentUserIdResolver;
-  final RealtimeConnectionDelegateFactory _delegateFactory;
+  final RealtimeConnectionDelegateFactory? _delegateFactory;
+  final RealtimeConnectionOperationGatewayResolver? _operationGatewayResolver;
   RealtimeConnectionDelegate? _delegate;
   bool _isAppForeground = false;
 
@@ -50,6 +56,7 @@ class RealtimeConnectionNotifier extends Notifier<TransportState> {
     required Ref ref,
     required RealtimeConnectionStateListener onStateChanged,
     required RealtimeCurrentUserIdResolver currentUserIdResolver,
+    required RealtimeConnectionOperationGateway operations,
   }) {
     return RemoteRealtimeConnectionDelegate(
       read: ref.read,
@@ -60,6 +67,7 @@ class RealtimeConnectionNotifier extends Notifier<TransportState> {
             .read(authSessionControllerProvider.notifier)
             .accessTokenForRequest(),
       ),
+      operations: operations,
       onStateChanged: onStateChanged,
       telemetryRecorder:
           ({
@@ -94,11 +102,27 @@ class RealtimeConnectionNotifier extends Notifier<TransportState> {
   @override
   TransportState build() {
     _silentlyDisposeDelegate(_delegate);
-    _delegate = _delegateFactory(
-      ref: ref,
-      onStateChanged: _syncDelegateState,
-      currentUserIdResolver: _currentUserIdResolver,
-    );
+    final delegateFactory = _delegateFactory;
+    if (delegateFactory != null) {
+      _delegate = delegateFactory(
+        ref: ref,
+        onStateChanged: _syncDelegateState,
+        currentUserIdResolver: _currentUserIdResolver,
+      );
+    } else {
+      final gatewayResolver = _operationGatewayResolver;
+      if (gatewayResolver == null) {
+        throw StateError(
+          'production realtime notifier requires generated operation gateway',
+        );
+      }
+      _delegate = _createRemoteDelegate(
+        ref: ref,
+        onStateChanged: _syncDelegateState,
+        currentUserIdResolver: _currentUserIdResolver,
+        operations: gatewayResolver(ref),
+      );
+    }
     ref.listen<AuthSessionState>(authSessionControllerProvider, (
       previous,
       next,

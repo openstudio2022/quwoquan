@@ -45,7 +45,9 @@ api_routes:
     slo:
       latency_p95_ms: 800
       availability_percent: 99.9
-    response_body_kind: ack
+    response_entity: ContentBehaviorReportReceipt
+    response_body: ContentBehaviorReportReceipt
+    response_body_kind: object
     description: 行为批量上报；Post 仅作为 contentId 引用，不拥有行为事实。
     security:
       auth_mode: required

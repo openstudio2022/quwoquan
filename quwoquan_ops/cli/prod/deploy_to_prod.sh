@@ -75,12 +75,10 @@ if [[ "$DRY_RUN" != "true" && "$PROD_IMAGE_DELIVERY_MODE" != "skip" && ! -s "$RE
   exit 2
 fi
 
-# SSH 属于受限管理面，不得从面向 App 的 publicBases 推导。
+# SSH 属于受限管理面，不得从面向 App 的 publicBases 推导。单主机
+# PROD_SSH_HOST 仅保留为 break-glass 覆盖；常规发布从 access-isolation
+# 的 management.hosts + deploymentInstances 解析全部 placement。
 PROD_SSH_HOST="${PROD_SSH_HOST:-}"
-if [[ -z "$PROD_SSH_HOST" ]]; then
-  echo "FAIL: PROD_SSH_HOST is required for the production management plane" >&2
-  exit 2
-fi
 
 agent_has_pubkey() {
   local pub_file="$1"
@@ -128,13 +126,14 @@ resolve_plane_ssh() {
 run_remote_bash() {
   local account="$1"
   local secret_name="$2"
-  local remote_cmd="$3"
+  local host="$3"
+  local remote_cmd="$4"
   resolve_plane_ssh "$secret_name" "$account"
   if [[ "$RESOLVED_SSH_USE_AGENT" == "true" ]]; then
     printf '%s\n' "$remote_cmd" | ssh \
       -o StrictHostKeyChecking=accept-new \
       -o BatchMode=yes \
-      "${account}@${PROD_SSH_HOST}" \
+      "${account}@${host}" \
       "bash -s"
     return $?
   fi
@@ -142,44 +141,24 @@ run_remote_bash() {
     -i "$RESOLVED_SSH_KEY_FILE" \
     -o StrictHostKeyChecking=accept-new \
     -o BatchMode=yes \
-    "${account}@${PROD_SSH_HOST}" \
+    "${account}@${host}" \
     "bash -s"
 }
 
-# 解析本 stage 适用的读写平面计划（account / composeRoot / secret / governed+support compose services）。
-PLANE_PLAN="$(python3 - "$ACCESS_MANIFEST" "$ROLLOUT_STAGE" <<'PY'
-import sys, yaml
-access = yaml.safe_load(open(sys.argv[1], encoding="utf-8"))
-stage = sys.argv[2]
-service_filter = __import__("os").environ.get("SERVICE", "").strip()
-rows = []
-for p in access.get("planes") or []:
-    if str(p.get("access")) != "read-write":
-        continue
-    if stage not in (p.get("appliesToStages") or []):
-        continue
-    governed = [str(item) for item in (p.get("rootlessGovernedComposeServices") or []) if str(item).strip()]
-    support = [str(item) for item in (p.get("rootlessSupportComposeServices") or []) if str(item).strip()]
-    if str(p.get("plane")) == "service" and service_filter:
-        alias = {
-            "recommendation-service": "recommendation-service",
-            "service-plane": "__all__",
-        }
-        target = alias.get(service_filter, service_filter)
-        if target != "__all__":
-            governed = [item for item in governed if item == target]
-    rows.append("\t".join([
-        str(p.get("plane")),
-        str(p.get("account")),
-        str(p.get("composeProjectRoot")),
-        str(p.get("sshKeySecret")),
-        ",".join(governed) or "-",
-        ",".join(support) or "-",
-        str(p.get("credentialsPath") or "-"),
-    ]))
-print("\n".join(rows))
-PY
-)"
+# 解析本 stage 的 host / deployment instance / replica 计划。输出只包含
+# SSH credential 逻辑 id，不包含私钥或 Secret Bundle。
+plan_args=(
+  python3 quwoquan_ops/cli/prod/prod_hosted_topology.py
+  --stage "$ROLLOUT_STAGE"
+  --format tsv
+)
+if [[ -n "$SERVICE_FILTER" ]]; then
+  plan_args+=(--service-filter "$SERVICE_FILTER")
+fi
+if [[ -n "$PROD_SSH_HOST" ]]; then
+  plan_args+=(--ssh-host "$PROD_SSH_HOST")
+fi
+PLANE_PLAN="$("${plan_args[@]}")"
 
 if [[ -z "$PLANE_PLAN" ]]; then
   echo "FAIL: stage=$ROLLOUT_STAGE 未解析出任何读写平面（检查 $ACCESS_MANIFEST）" >&2
@@ -193,7 +172,7 @@ else
   INSTANCE_SUFFIX="prod"
 fi
 
-echo "[deploy] prod-hosted host=$PROD_SSH_HOST stage=$ROLLOUT_STAGE instance=$INSTANCE_SUFFIX imageTransportTag=$IMAGE_TRANSPORT_TAG candidateDigest=$CANDIDATE_DIGEST DRY_RUN=$DRY_RUN"
+echo "[deploy] prod-hosted stage=$ROLLOUT_STAGE instance=$INSTANCE_SUFFIX imageTransportTag=$IMAGE_TRANSPORT_TAG candidateDigest=$CANDIDATE_DIGEST DRY_RUN=$DRY_RUN"
 
 # 凭据硬校验（缺失/非法即硬失败，禁止失败放通）。
 # 真实发布（DRY_RUN=false）必须硬失败；dry-run 预览给出告警但仍展示发布计划。
@@ -207,10 +186,10 @@ fi
 
 deploy_plane() {
   local plane="$1" account="$2" compose_root="$3" secret_name="$4" governed_csv="$5" support_csv="$6" credentials_root="$7"
+  local host_id="$8" ssh_host="$9" replica_id="${10}" replica_count="${11}" remote_root="${12}" project="${13}" systemd_unit="${14}" render_name="${15}"
   [[ "$governed_csv" == "-" ]] && governed_csv=""
   [[ "$support_csv" == "-" ]] && support_csv=""
   [[ "$credentials_root" == "-" ]] && credentials_root=""
-  local project="quwoquan-${plane}-${INSTANCE_SUFFIX}"
   local governed_services="${governed_csv//,/ }"
   local support_services="${support_csv//,/ }"
   local startup_services="$governed_services"
@@ -224,7 +203,7 @@ deploy_plane() {
 
   if [[ "$plane" == "service" || "$plane" == "edge" ]]; then
     local render_dir
-    render_dir="$(PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 - "$plane" "$INSTANCE_SUFFIX" <<'PY'
+    render_dir="$(PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 - "$render_name" <<'PY'
 import sys
 
 from quwoquan_ops.cli.lib.output_paths import deployment_render_dir
@@ -233,7 +212,7 @@ print(
     deployment_render_dir(
         "prod",
         target="prod-hosted",
-        name=f"{sys.argv[1]}-{sys.argv[2]}",
+        name=sys.argv[1],
     )
 )
 PY
@@ -241,10 +220,10 @@ PY
     if [[ "$DRY_RUN" == "true" ]]; then
       # Dry-run 是源码配置的发布计划预览，不得依赖或生成可删除的发布输出。
       # 真正渲染仍在下方非 dry-run 分支中校验 package/report/release provenance。
-      echo "[dry_run] ${plane} plane would render verified package into: ${render_dir}"
+      echo "[dry_run] ${plane}/${replica_id} host=${host_id} would render verified package into: ${render_dir}"
       local image_load_args=(
         --plane "$plane"
-        --host "$PROD_SSH_HOST"
+        --host "$ssh_host"
         --key-dir "$PROD_SSH_KEY_DIR"
         --services "${governed_csv}"
         --image-transport-tag "$IMAGE_TRANSPORT_TAG"
@@ -260,17 +239,20 @@ PY
       python3 quwoquan_ops/cli/prod/render_prod_plane_stack.py \
         --plane "$plane" \
         --instance "$INSTANCE_SUFFIX" \
+        --replica-id "$replica_id" \
+        --host-id "$host_id" \
         --rollout-stage "$ROLLOUT_STAGE" \
         --candidate-digest "$CANDIDATE_DIGEST" \
         --image-transport-tag "$IMAGE_TRANSPORT_TAG" \
         --release-evidence-digest "$RELEASE_EVIDENCE_DIGEST" \
-        --output-dir "$render_dir" >/dev/null
+        --output-dir "$render_dir" \
+        --host "$ssh_host" >/dev/null
       if [[ "$PROD_IMAGE_DELIVERY_MODE" == "skip" ]]; then
         echo "[skip] service plane image delivery skipped; assuming remote images are already prepared"
       elif [[ "$PROD_IMAGE_DELIVERY_MODE" == "prebuilt" ]]; then
         python3 quwoquan_ops/cli/prod/load_prod_plane_images.py \
           --plane "$plane" \
-          --host "$PROD_SSH_HOST" \
+          --host "$ssh_host" \
           --key-dir "$PROD_SSH_KEY_DIR" \
           --services "${governed_csv}" \
           --image-transport-tag "$IMAGE_TRANSPORT_TAG" \
@@ -282,8 +264,9 @@ PY
       fi
       bash quwoquan_ops/cli/prod/sync_prod_plane_stack.sh \
         --plane "$plane" \
-        --host "$PROD_SSH_HOST" \
-        --source-dir "$render_dir"
+        --host "$ssh_host" \
+        --source-dir "$render_dir" \
+        --root-suffix "instances/${INSTANCE_SUFFIX}/${replica_id}"
     fi
   fi
 
@@ -367,12 +350,12 @@ done"
   fi
   local remote_cmd
   remote_cmd="set -euo pipefail
-cd '${compose_root}'
+cd '${remote_root}'
 compose_file='docker-compose.prod-hosted.yaml'
 env_file='stack.env'
 export ROLLOUT_STAGE='${ROLLOUT_STAGE}'
 ${runtime_credential_preflight}
-unit='quwoquan-${plane}-${INSTANCE_SUFFIX}.service'
+unit='${systemd_unit}'
 unit_source=\"systemd/\$unit\"
 unit_dir=\"\${XDG_CONFIG_HOME:-\$HOME/.config}/systemd/user\"
 if [[ ! -f \"\$unit_source\" || -L \"\$unit_source\" || ! -r \"\$unit_source\" ]]; then
@@ -390,35 +373,27 @@ ${config_ack_wait}
 ${image_retention}
 echo \"[plane ${plane}] rollout ok project=${project} unit=\$unit services=[${startup_services}]\""
 
-  echo "----- plane=${plane} account=${account} project=${project} -----"
+  echo "----- plane=${plane} replica=${replica_id}/${replica_count} host=${host_id} account=${account} project=${project} -----"
   if [[ "$DRY_RUN" == "true" ]]; then
     if resolve_plane_ssh "$secret_name" "$account" >/dev/null 2>&1; then
-      echo "[dry_run] ssh ${account}@${PROD_SSH_HOST} (${RESOLVED_SSH_SOURCE}) <<remote>>"
+      echo "[dry_run] ssh ${account}@${ssh_host} (${RESOLVED_SSH_SOURCE}) <<remote>>"
     else
-      echo "[dry_run] ssh ${account}@${PROD_SSH_HOST} (credential unresolved for ${secret_name}) <<remote>>"
+      echo "[dry_run] ssh ${account}@${ssh_host} (credential unresolved for ${secret_name}) <<remote>>"
     fi
     echo "$remote_cmd"
     return 0
   fi
 
-  if ! run_remote_bash "$account" "$secret_name" "$remote_cmd"; then
+  if ! run_remote_bash "$account" "$secret_name" "$ssh_host" "$remote_cmd"; then
     echo "::error::plane=${plane} 发布失败；由 stackctl 全平面事务统一回滚" >&2
     return 2
   fi
   echo "[plane ${plane}] deploy ok"
 }
 
-deploy_observability_stack() {
-  local service_account="" service_root="" service_secret="" credentials_root=""
-  while IFS=$'\t' read -r plane account compose_root secret_name _governed _support plane_credentials; do
-    if [[ "$plane" == "service" ]]; then
-      service_account="$account"
-      service_root="$compose_root"
-      service_secret="$secret_name"
-      credentials_root="$plane_credentials"
-      break
-    fi
-  done <<< "$PLANE_PLAN"
+deploy_observability_replica() {
+  local service_account="$1" service_root="$2" service_secret="$3" credentials_root="$4"
+  local ssh_host="$5" host_id="$6" replica_id="$7"
   if [[ -z "$service_account" || -z "$service_root" || -z "$service_secret" || -z "$credentials_root" || "$credentials_root" == "-" ]]; then
     echo "::error::service plane credentials are required for the observability stack" >&2
     return 2
@@ -480,7 +455,7 @@ PY
   local observability_dir="" observability_compose="" systemd_unit_file="" runtime_env_relative="" credentials_env_relative="" required_environment="" health_urls=""
   IFS=$'\t' read -r observability_dir observability_compose systemd_unit_file runtime_env_relative credentials_env_relative required_environment health_urls <<< "$runtime_plan"
   local observability_env="${credentials_root%/}/${credentials_env_relative}"
-  local project="quwoquan-observability-prod"
+  local project="quwoquan-observability-prod-${replica_id}"
 
   local remote_cmd
   remote_cmd="set -euo pipefail
@@ -563,42 +538,38 @@ if down:
 PY
 echo \"[plane service] observability stack ready project=${project}\""
 
-  echo "----- plane=service observability project=${project} -----"
+  echo "----- plane=service replica=${replica_id} host=${host_id} observability project=${project} -----"
   if [[ "$DRY_RUN" == "true" ]]; then
     if resolve_plane_ssh "$service_secret" "$service_account" >/dev/null 2>&1; then
-      echo "[dry_run] ssh ${service_account}@${PROD_SSH_HOST} (${RESOLVED_SSH_SOURCE}) <<observability>>"
+      echo "[dry_run] ssh ${service_account}@${ssh_host} (${RESOLVED_SSH_SOURCE}) <<observability>>"
     else
-      echo "[dry_run] ssh ${service_account}@${PROD_SSH_HOST} (credential unresolved for ${service_secret}) <<observability>>"
+      echo "[dry_run] ssh ${service_account}@${ssh_host} (credential unresolved for ${service_secret}) <<observability>>"
     fi
     echo "$remote_cmd"
     return 0
   fi
-  run_remote_bash "$service_account" "$service_secret" "$remote_cmd"
+  run_remote_bash "$service_account" "$service_secret" "$ssh_host" "$remote_cmd"
 }
 
-update_stable_gray_router() {
-  local service_account="" service_root="" service_secret=""
-  while IFS=$'\t' read -r plane account compose_root secret_name _governed _support _credentials; do
-    if [[ "$plane" == "service" ]]; then
-      service_account="$account"
-      service_root="$compose_root"
-      service_secret="$secret_name"
-      break
-    fi
-  done <<< "$PLANE_PLAN"
+update_stable_gray_router_replica() {
+  local service_account="$1" compose_root="$2" service_secret="$3"
+  local ssh_host="$4" host_id="$5" replica_id="$6"
+  local service_root="${compose_root%/}/instances/prod/${replica_id}"
   if [[ -z "$service_account" || -z "$service_root" || -z "$service_secret" ]]; then
     echo "::error::service plane is required to update the stable gray router" >&2
     return 2
   fi
   local render_dir
-  render_dir="$(PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
+  render_dir="$(PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 - "$replica_id" <<'PY'
+import sys
+
 from quwoquan_ops.cli.lib.output_paths import deployment_render_dir
 
 print(
     deployment_render_dir(
         "prod",
         target="prod-hosted",
-        name="service-router-prod",
+        name=f"service-prod-{sys.argv[1]}",
     )
 )
 PY
@@ -606,50 +577,69 @@ PY
   python3 quwoquan_ops/cli/prod/render_prod_plane_stack.py \
     --plane service \
     --instance prod \
+    --replica-id "$replica_id" \
+    --host-id "$host_id" \
+    --host "$ssh_host" \
     --rollout-stage "$ROLLOUT_STAGE" \
     --candidate-digest "$CANDIDATE_DIGEST" \
     --image-transport-tag "$IMAGE_TRANSPORT_TAG" \
     --output-dir "$render_dir" >/dev/null
   bash quwoquan_ops/cli/prod/sync_prod_plane_stack.sh \
     --plane service \
-    --host "$PROD_SSH_HOST" \
-    --source-dir "$render_dir"
+    --host "$ssh_host" \
+    --source-dir "$render_dir" \
+    --root-suffix "instances/prod/${replica_id}"
   local remote_cmd="set -euo pipefail
 cd '${service_root}'
-systemctl --user restart quwoquan-service-prod.service
-systemctl --user is-active --quiet quwoquan-service-prod.service
+podman compose --env-file stack.env -f docker-compose.prod-hosted.yaml -p quwoquan-service-prod-${replica_id} restart gamma-proxy
+podman compose --env-file stack.env -f docker-compose.prod-hosted.yaml -p quwoquan-service-prod-${replica_id} ps gamma-proxy
 echo '[plane service] stable Caddy gray routing updated for ${ROLLOUT_STAGE}'"
-  run_remote_bash "$service_account" "$service_secret" "$remote_cmd"
+  run_remote_bash "$service_account" "$service_secret" "$ssh_host" "$remote_cmd"
 }
 
 cleanup_gray_stacks() {
-  while IFS=$'\t' read -r plane account compose_root secret_name _governed _support _credentials; do
+  while IFS=$'\t' read -r plane account compose_root secret_name _governed _support _credentials host_id ssh_host replica_id _replica_count _remote_root _project _systemd_unit _render_name; do
     [[ -z "$plane" ]] && continue
-    local project="quwoquan-${plane}-gray"
+    local project="quwoquan-${plane}-gray-${replica_id}"
+    local gray_root="${compose_root%/}/instances/gray/${replica_id}"
     local remote_cmd="set -euo pipefail
-cd '${compose_root}'
-unit='quwoquan-${plane}-gray.service'
+cd '${gray_root}'
+unit='quwoquan-${plane}-gray-${replica_id}.service'
 if systemctl --user list-unit-files \"\$unit\" --no-legend 2>/dev/null | grep -q \"\$unit\"; then
   systemctl --user disable --now \"\$unit\"
 fi
 echo '[plane ${plane}] removed completed gray stack ${project}'"
-    run_remote_bash "$account" "$secret_name" "$remote_cmd"
+    run_remote_bash "$account" "$secret_name" "$ssh_host" "$remote_cmd"
   done <<< "$PLANE_PLAN"
 }
 
-while IFS=$'\t' read -r plane account compose_root secret_name governed_csv support_csv credentials_root; do
+while IFS=$'\t' read -r plane account compose_root secret_name governed_csv support_csv credentials_root host_id ssh_host replica_id replica_count remote_root project systemd_unit render_name; do
   [[ -z "$plane" ]] && continue
-  deploy_plane "$plane" "$account" "$compose_root" "$secret_name" "$governed_csv" "$support_csv" "$credentials_root"
+  deploy_plane "$plane" "$account" "$compose_root" "$secret_name" "$governed_csv" "$support_csv" "$credentials_root" "$host_id" "$ssh_host" "$replica_id" "$replica_count" "$remote_root" "$project" "$systemd_unit" "$render_name"
 done <<< "$PLANE_PLAN"
 
-deploy_observability_stack
+if [[ "$ROLLOUT_STAGE" == "full" ]]; then
+  while IFS=$'\t' read -r plane account _compose_root secret_name _governed _support credentials_root host_id ssh_host replica_id _replica_count remote_root _project _systemd_unit _render_name; do
+    [[ "$plane" == "service" ]] || continue
+    deploy_observability_replica "$account" "$remote_root" "$secret_name" "$credentials_root" "$ssh_host" "$host_id" "$replica_id"
+  done <<< "$PLANE_PLAN"
+else
+  echo "[skip] observability remains bound to stable prod replicas during gray rollout"
+fi
 
 if [[ "$DRY_RUN" != "true" && "$ROLLOUT_STAGE" != "full" ]]; then
-  update_stable_gray_router
+  while IFS=$'\t' read -r plane account compose_root secret_name _governed _support _credentials host_id ssh_host replica_id _replica_count _remote_root _project _systemd_unit _render_name; do
+    [[ "$plane" == "service" ]] || continue
+    update_stable_gray_router_replica "$account" "$compose_root" "$secret_name" "$ssh_host" "$host_id" "$replica_id"
+  done <<< "$PLANE_PLAN"
 fi
 if [[ "$DRY_RUN" != "true" && "$ROLLOUT_STAGE" == "full" ]]; then
   cleanup_gray_stacks
 fi
+
+placement_count="$(printf '%s\n' "$PLANE_PLAN" | awk 'NF {c++} END {print c+0}')"
+host_count="$(printf '%s\n' "$PLANE_PLAN" | awk -F'\t' 'NF {print $8}' | sort -u | awk 'NF {c++} END {print c+0}')"
+echo "[deploy] placementCoverage hosts=${host_count} planeReplicas=${placement_count} instance=${INSTANCE_SUFFIX}"
 
 if [[ "$DRY_RUN" == "true" ]]; then
   echo "[deploy] dry_run — 已预览各平面 SSH 发布计划，未执行。设置 DRY_RUN=false 并提供各平面 SSH 凭据后真实发布。"

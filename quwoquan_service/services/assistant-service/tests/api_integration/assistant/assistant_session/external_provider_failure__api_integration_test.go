@@ -9,27 +9,25 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/orchestration"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
+	toolpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/tool"
+	assistant "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/model"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/ports"
 	assistanthttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/adapters/inbound/http"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
-	skillpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/skill"
-	toolpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/tool"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/ports"
+	sessionmodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/model"
+	skillpkg "quwoquan_service/services/assistant-service/internal/assistant/skill_package_release/application/packageasset"
 	modeldouble "quwoquan_service/services/assistant-service/tests/support/modeldouble"
 	"quwoquan_service/services/assistant-service/tests/support/promptassets"
+	"quwoquan_service/services/assistant-service/tests/support/skillfixture"
 )
 
 func TestExternalProviderFailureApiIntegrationUsesStructuredRuntimeCode(t *testing.T) {
 	resetIntegrationState(t)
 	registry := toolpkg.BaseRegistry()
 	registry.Register(
-		toolpkg.WebSearchMetadata(),
-		orchestration.NewExternalWebSearchHandler(
-			nil,
-			apiUnavailableWeatherProvider{},
-			nil,
-		),
+		toolpkg.WeatherLookupMetadata(),
+		orchestration.NewWeatherLookupHandler(apiUnavailableWeatherProvider{}),
 	)
 	model := modeldouble.DeterministicModelProvider{}
 	loop := orchestration.NewAgentLoop(
@@ -41,19 +39,17 @@ func TestExternalProviderFailureApiIntegrationUsesStructuredRuntimeCode(t *testi
 		nil,
 	)
 	loop.PromptAssets = promptassets.MustResolver(t)
-	loop.Catalog = skillpkg.StaticLoader{Manifests: []skillpkg.Manifest{{
+	loop.Catalog = skillfixture.StaticLoader{Manifests: []skillpkg.Manifest{{
 		SkillID:     "fallback_general_search",
 		DomainID:    "fallback_general_search",
 		DisplayName: "通用搜索助手",
 		ToolPolicy: skillpkg.ToolPolicy{
-			AllowedTools: []string{"web_search"},
+			AllowedTools: []string{"weather_lookup"},
 			MaxToolCalls: 2,
 		},
 	}}}
 	handler := assistanthttp.NewHandler(
-		newIntegrationAssistantService(
-			orchestration.WithAgentLoop(loop),
-		),
+		newIntegrationAssistantService(),
 	).Routes()
 	create := assistantAPIRequest(
 		t,
@@ -68,7 +64,7 @@ func TestExternalProviderFailureApiIntegrationUsesStructuredRuntimeCode(t *testi
 	if create.Code != http.StatusCreated {
 		t.Fatalf("create status=%d body=%s", create.Code, create.Body.String())
 	}
-	var session assistant.AssistantSession
+	var session sessionmodel.AssistantSession
 	if err := json.Unmarshal(create.Body.Bytes(), &session); err != nil {
 		t.Fatalf("decode session: %v", err)
 	}
@@ -156,9 +152,7 @@ func TestExternalProviderFailureApiIntegrationUsesStructuredRuntimeCode(t *testi
 		t.Fatalf("expire failed run journal: %v", err)
 	}
 	restarted := assistanthttp.NewHandler(
-		newIntegrationAssistantService(
-			orchestration.WithAgentLoop(loop),
-		),
+		newIntegrationAssistantService(),
 	).Routes()
 	replayedFailure := assistantAPIRequest(
 		t,
@@ -209,7 +203,7 @@ func (apiWeatherSkillRuntime) SelectSkill(
 	return orchestration.SkillSelection{
 		SkillID:    "fallback_general_search",
 		DomainID:   "fallback_general_search",
-		ToolPolicy: []string{"web_search"},
+		ToolPolicy: []string{"weather_lookup"},
 	}, nil
 }
 

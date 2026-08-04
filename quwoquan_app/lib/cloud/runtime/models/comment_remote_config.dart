@@ -1,4 +1,4 @@
-import 'package:quwoquan_app/cloud/runtime/models/content_app_config_wire.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 class CommentRemoteConfig {
   const CommentRemoteConfig({
@@ -25,51 +25,36 @@ class CommentRemoteConfig {
 
   static const CommentRemoteConfig fallback = CommentRemoteConfig();
 
-  factory CommentRemoteConfig.fromAppConfigRoot(
-    ContentAppConfigWireRoot root, {
+  factory CommentRemoteConfig.fromAppConfig(
+    ContentAppConfig config, {
     CommentRemoteConfig fallback = CommentRemoteConfig.fallback,
   }) {
-    final content = (root['content'] as Map?)?.cast<String, Object?>();
-    final comment = (content?['comment'] as Map?)?.cast<String, Object?>();
+    final comment = config.comment;
     if (comment == null) return fallback;
-    final attachment = (comment['attachment'] as Map?)?.cast<String, Object?>();
     return CommentRemoteConfig(
-      maxLength: _positiveOrFallback(
-        _asInt(comment['max_length']),
-        fallback.maxLength,
-      ),
+      maxLength: _positiveOrFallback(comment.maxLength, fallback.maxLength),
       replyPreviewCount: _positiveOrFallback(
-        _asInt(comment['reply_preview_count']),
+        comment.replyPreviewCount,
         fallback.replyPreviewCount,
       ),
       replyFirstExpandPageSize: _positiveOrFallback(
-        _asInt(comment['reply_first_expand_page_size']),
+        comment.replyFirstExpandPageSize,
         fallback.replyFirstExpandPageSize,
       ),
       replyExpandPageSize: _positiveOrFallback(
-        _asInt(comment['reply_expand_page_size']),
+        comment.replyExpandPageSize,
         fallback.replyExpandPageSize,
       ),
       foldLineCount: _positiveOrFallback(
-        _asInt(comment['fold_line_count']),
+        comment.foldLineCount,
         fallback.foldLineCount,
       ),
       maxImageAttachments: _positiveOrFallback(
-        _asInt(attachment?['max_images']),
+        comment.attachment?.maxImages,
         fallback.maxImageAttachments,
       ),
-      enabled: _asBool(comment['enabled'], fallback.enabled),
+      enabled: comment.enabled ?? fallback.enabled,
     );
-  }
-
-  static int? _asInt(Object? value) {
-    if (value is int) return value;
-    return null;
-  }
-
-  static bool _asBool(Object? value, bool fallback) {
-    if (value is bool) return value;
-    return fallback;
   }
 
   static int _positiveOrFallback(int? value, int fallback) {

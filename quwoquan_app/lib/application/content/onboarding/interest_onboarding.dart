@@ -45,8 +45,8 @@ final class InterestOnboardingDraft {
       'tagRefs',
       'status',
     };
-    // 本地草稿严格只认当前单轨形状；携带旧 catalogVersion
-    // 或任何未知字段的存量输入直接 fail-closed，不双读或升级。
+    // 本地草稿严格只认当前单轨形状；任何未知字段直接 fail-closed，
+    // 不做字段猜测、升级或第二路径解码。
     if (raw.keys.any((key) => key is! String || !canonicalKeys.contains(key))) {
       return null;
     }

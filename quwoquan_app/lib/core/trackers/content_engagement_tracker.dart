@@ -1,18 +1,12 @@
 // ignore_for_file: prefer_initializing_formals
 
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
-    show BehaviorAction, BehaviorEvent, BehaviorReporter, ReferralSource;
+    show BehaviorEventType, BehaviorEvent, BehaviorReporter, ReferralSource;
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show ContentType;
 
-/// Content type for engagement depth calculation.
-enum ContentType {
-  article,
-  image,
-  video,
-  micro;
-
-  /// Wire-format string matching Go `contentType` field (ContentType 真相源 types.yaml）。
-  String get wireValue => name;
-}
+export 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show ContentType;
 
 /// Tracks in-progress content engagement and computes depth on exit.
 class _ContentSession {
@@ -109,14 +103,14 @@ class ContentEngagementTracker {
         events: [
           BehaviorEvent(
             contentId: contentId,
-            action: BehaviorAction.impression,
+            action: BehaviorEventType.impression,
             state: 'visible',
             clientEventId: _clientEventId(
-              action: BehaviorAction.impression,
+              action: BehaviorEventType.impression,
               contentId: contentId,
               feedRequestId: feedRequestId,
             ),
-            contentType: contentType.wireValue,
+            contentType: contentType.wireName,
             tags: tags,
             feedRequestId: feedRequestId,
             position: position,
@@ -172,15 +166,15 @@ class ContentEngagementTracker {
     final ratio = _computeConsumedRatio(session);
     final totalUnits = _computeTotalUnits(session);
 
-    final ct = session.contentType.wireValue;
+    final ct = session.contentType.wireName;
     final events = <BehaviorEvent>[
       if (emitDwell)
         BehaviorEvent(
           contentId: contentId,
-          action: BehaviorAction.dwell,
+          action: BehaviorEventType.dwell,
           state: 'dwell',
           clientEventId: _clientEventId(
-            action: BehaviorAction.dwell,
+            action: BehaviorEventType.dwell,
             contentId: contentId,
             feedRequestId: session.feedRequestId,
           ),
@@ -198,10 +192,10 @@ class ContentEngagementTracker {
         ),
       BehaviorEvent(
         contentId: contentId,
-        action: BehaviorAction.contentDepth,
+        action: BehaviorEventType.contentDepth,
         state: 'interaction',
         clientEventId: _clientEventId(
-          action: BehaviorAction.contentDepth,
+          action: BehaviorEventType.contentDepth,
           contentId: contentId,
           feedRequestId: session.feedRequestId,
         ),
@@ -227,10 +221,10 @@ class ContentEngagementTracker {
         events: [
           BehaviorEvent(
             contentId: authorId,
-            action: BehaviorAction.authorView,
+            action: BehaviorEventType.authorView,
             state: 'interaction',
             clientEventId: _clientEventId(
-              action: BehaviorAction.authorView,
+              action: BehaviorEventType.authorView,
               contentId: authorId,
             ),
             referralSource: from,
@@ -254,10 +248,10 @@ class ContentEngagementTracker {
         events: [
           BehaviorEvent(
             contentId: fromContentId,
-            action: BehaviorAction.tagClick,
+            action: BehaviorEventType.tagClick,
             state: 'interaction',
             clientEventId: _clientEventId(
-              action: BehaviorAction.tagClick,
+              action: BehaviorEventType.tagClick,
               contentId: fromContentId,
               feedRequestId: feedRequestId ?? session?.feedRequestId,
             ),
@@ -281,10 +275,10 @@ class ContentEngagementTracker {
         events: [
           BehaviorEvent(
             contentId: entityId,
-            action: BehaviorAction.entityPageView,
+            action: BehaviorEventType.entityPageView,
             state: 'interaction',
             clientEventId: _clientEventId(
-              action: BehaviorAction.entityPageView,
+              action: BehaviorEventType.entityPageView,
               contentId: entityId,
             ),
             referralSource: from,
@@ -326,15 +320,15 @@ class ContentEngagementTracker {
         events: [
           BehaviorEvent(
             contentId: contentId,
-            action: BehaviorAction.playProgress,
+            action: BehaviorEventType.playProgress,
             state: 'interaction',
             clientEventId: _clientEventId(
-              action: BehaviorAction.playProgress,
+              action: BehaviorEventType.playProgress,
               contentId: contentId,
               feedRequestId: session.feedRequestId,
               suffix: currentThreshold.toStringAsFixed(2),
             ),
-            contentType: session.contentType.wireValue,
+            contentType: session.contentType.wireName,
             consumedRatio: ratio,
             totalUnits: (totalDurationMs / 1000).round(),
             referralSource: session.referralSource,
@@ -368,12 +362,12 @@ class ContentEngagementTracker {
         events: [
           BehaviorEvent(
             contentId: contentId,
-            action: BehaviorAction.effectivePlay,
+            action: BehaviorEventType.effectivePlay,
             state: 'foreground_visible_playing',
             clientEventId:
                 'eng:effective_play:$contentId:${playbackSessionId.trim()}',
-            sessionId: playbackSessionId.trim(),
-            contentType: session.contentType.wireValue,
+            playbackSessionId: playbackSessionId.trim(),
+            contentType: session.contentType.wireName,
             effectivePlayMs: effectivePlayMs,
             consumedRatio: consumedRatio.clamp(0.0, 1.0),
             totalUnits: totalUnits,
@@ -387,7 +381,7 @@ class ContentEngagementTracker {
   }
 
   String _clientEventId({
-    required BehaviorAction action,
+    required BehaviorEventType action,
     required String contentId,
     String? feedRequestId,
     String? suffix,
@@ -399,7 +393,7 @@ class ContentEngagementTracker {
     final safeSuffix = suffix == null || suffix.isEmpty
         ? now.toString()
         : suffix;
-    return 'eng:${action.wireValue}:$contentId:$feed:$safeSuffix';
+    return 'eng:${action.wireName}:$contentId:$feed:$safeSuffix';
   }
 
   /// Compute engagement depth level (0-4).

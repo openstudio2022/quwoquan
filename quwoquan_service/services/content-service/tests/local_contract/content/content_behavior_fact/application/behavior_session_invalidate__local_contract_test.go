@@ -24,7 +24,7 @@ func TestProcessBatchInvalidatesSessionCacheWithFeedSessionID(t *testing.T) {
 		}),
 	)
 
-	err := svc.ProcessBatch(context.Background(), []BehaviorEventInput{
+	_, err := svc.ProcessBatch(context.Background(), []BehaviorEventInput{
 		{
 			ClientEventID: "evt-invalidate-001",
 			OccurredAt:    validBehaviorOccurredAt(),
@@ -57,7 +57,7 @@ func TestProcessBatchDoesNotGuessCacheKeyFromTraceSessionID(t *testing.T) {
 		}),
 	)
 
-	err := svc.ProcessBatch(context.Background(), []BehaviorEventInput{
+	_, err := svc.ProcessBatch(context.Background(), []BehaviorEventInput{
 		{
 			ClientEventID: "evt-invalidate-002",
 			OccurredAt:    validBehaviorOccurredAt(),

@@ -77,7 +77,7 @@ def test_behavior_projection_rejects_forged_impact_help_type_grammar() -> None:
                 "contentId": "post-001",
                 "action": "like",
                 "state": "interaction",
-                "impactHelpType": "decision/legacy",
+                "impactHelpType": "decision/unsupported",
             },
             feedback_fact_id="feedback-001",
             exposure_fact_id="exposure-001",

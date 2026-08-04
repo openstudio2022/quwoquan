@@ -642,7 +642,7 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
           .upsertMessages(
             namespace: resolvedNamespace,
             messages: messages
-                .map(LocalChatSearchMessageRecord.fromMessageDto)
+                .map(LocalChatSearchMessageRecord.fromMessageViewData)
                 .toList(growable: false),
           );
     } catch (error, stackTrace) {

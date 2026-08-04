@@ -1,7 +1,7 @@
-import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
-import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
+import 'package:quwoquan_app/application/entity/homepage_view_data.dart';
 import 'package:quwoquan_app/core/media/media_capture_metadata.dart';
+import 'package:quwoquan_cloud_contracts/generated/integration_contracts.dart'
+    show LocationPoi;
 
 /// 通用发布设置状态模型（design B1），承载位置/公开/圈子选择，供创作、编辑等多页面复用。
 class PublishSettings {
@@ -101,11 +101,7 @@ class PublishSettings {
       circleNames: vis == 'public'
           ? List<String>.from(map['circleNames'] as List? ?? const <String>[])
           : const <String>[],
-      homepage: map['homepage'] is Map
-          ? HomepageCanonicalReference.fromMap(
-              Map<String, dynamic>.from(map['homepage'] as Map),
-            )
-          : null,
+      homepage: _homepageReferenceFromDraftMap(map['homepage']),
       summary: (map['summary'] as String? ?? '').trim(),
       tagRefs: List<String>.from(map['tagRefs'] as List? ?? const <String>[]),
       tagLabels: List<String>.from(
@@ -155,7 +151,7 @@ class PublishSettings {
     'visitedAt': visitedAt?.toIso8601String(),
     'circleIds': circleIds,
     'circleNames': circleNames,
-    'homepage': homepage?.toMap(),
+    'homepage': _homepageReferenceToDraftMap(homepage),
     'summary': summary,
     'tagRefs': tagRefs,
     'tagLabels': tagLabels,
@@ -200,7 +196,7 @@ class PublishSettings {
       };
     }
     if (homepage != null) {
-      payload.addAll(homepage!.toPayloadFields());
+      payload.addAll(_homepageReferenceToPublicationFields(homepage!));
     }
     if (summary.trim().isNotEmpty) payload['summary'] = summary.trim();
     if (tagRefs.isNotEmpty) payload['tagRefs'] = tagRefs;
@@ -249,6 +245,68 @@ class PublishSettings {
     captureDisclosure: captureDisclosure ?? this.captureDisclosure,
     captureMetadata: captureMetadata ?? this.captureMetadata,
   );
+}
+
+/// 本地创作草稿的 Homepage ViewData codec。
+///
+/// 这是 App 本地持久化边界，不承担 Cloud wire 解码；Remote Homepage 仍只从
+/// generated Homepage projection 经 typed mapper 进入 ViewData。
+HomepageCanonicalReference? _homepageReferenceFromDraftMap(Object? raw) {
+  if (raw is! Map) return null;
+  final map = Map<String, dynamic>.from(raw);
+  String? optionalString(String key) {
+    final value = map[key]?.toString().trim() ?? '';
+    return value.isEmpty ? null : value;
+  }
+
+  final id = map['id']?.toString().trim() ?? '';
+  final homepageType = map['homepageType']?.toString().trim() ?? '';
+  final title = map['title']?.toString().trim() ?? '';
+  if (id.isEmpty || homepageType.isEmpty || title.isEmpty) return null;
+  return HomepageCanonicalReference(
+    id: id,
+    homepageType: homepageType,
+    title: title,
+    subtitle: optionalString('subtitle'),
+    coverUrl: optionalString('coverUrl'),
+    status: optionalString('status'),
+    canonicalEntityId: optionalString('canonicalEntityId'),
+  );
+}
+
+Map<String, dynamic>? _homepageReferenceToDraftMap(
+  HomepageCanonicalReference? reference,
+) {
+  if (reference == null) return null;
+  return <String, dynamic>{
+    'id': reference.id,
+    'homepageType': reference.homepageType,
+    'title': reference.title,
+    if (reference.subtitle != null) 'subtitle': reference.subtitle,
+    if (reference.coverUrl != null) 'coverUrl': reference.coverUrl,
+    if (reference.status != null) 'status': reference.status,
+    if (reference.canonicalEntityId != null)
+      'canonicalEntityId': reference.canonicalEntityId,
+  };
+}
+
+Map<String, dynamic> _homepageReferenceToPublicationFields(
+  HomepageCanonicalReference reference,
+) {
+  return <String, dynamic>{
+    'primaryHomepageId': reference.id,
+    'primaryHomepageType': reference.homepageType,
+    'primaryHomepageSnapshot': <String, dynamic>{
+      'title': reference.title,
+      if (reference.subtitle != null && reference.subtitle!.isNotEmpty)
+        'subtitle': reference.subtitle,
+      if (reference.coverUrl != null && reference.coverUrl!.isNotEmpty)
+        'coverUrl': reference.coverUrl,
+      if (reference.canonicalEntityId != null &&
+          reference.canonicalEntityId!.isNotEmpty)
+        'canonicalEntityId': reference.canonicalEntityId,
+    },
+  };
 }
 
 String homepageEntityRef(HomepageCanonicalReference reference) {
@@ -338,22 +396,6 @@ class CreateCircleOption {
     this.recommendationReason,
     this.isJoined = true,
   });
-
-  factory CreateCircleOption.fromCircleDto(
-    CircleDto dto, {
-    bool isJoined = true,
-    String? recommendationReason,
-  }) {
-    return CreateCircleOption(
-      id: dto.id,
-      name: dto.name,
-      memberCount: dto.memberCount,
-      postCount: dto.postCount,
-      coverUrl: dto.coverUrl,
-      isJoined: isJoined,
-      recommendationReason: recommendationReason,
-    );
-  }
 
   final String id;
   final String name;

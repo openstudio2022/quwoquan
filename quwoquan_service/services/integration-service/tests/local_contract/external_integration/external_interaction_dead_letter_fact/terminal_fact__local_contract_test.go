@@ -7,7 +7,6 @@ import (
 
 	"quwoquan_service/runtime/reliabletask"
 	"quwoquan_service/services/integration-service/internal/external_integration/external_interaction/application"
-	pushapp "quwoquan_service/services/integration-service/internal/external_integration/push_delivery/application"
 	integrationsupport "quwoquan_service/services/integration-service/tests/support"
 )
 
@@ -18,7 +17,7 @@ func TestExternalInteractionDeadLetterUsesCanonicalTaskAndAttemptFacts(t *testin
 	service, err := application.NewExternalInteractionService(
 		store,
 		map[string]reliabletask.ExternalProvider{
-			"push_dispatch": pushapp.LocalRecorderPushProvider{},
+			"push_dispatch": deadLetterTestProvider{},
 		},
 		map[string]reliabletask.ProviderPolicy{
 			reliabletask.ExternalInteractionOperationPush: {
@@ -115,4 +114,18 @@ func TestExternalInteractionDeadLetterUsesCanonicalTaskAndAttemptFacts(t *testin
 	if err != nil || len(deadLetters) != 1 || deadLetters[0] != deadLetter {
 		t.Fatalf("immutable dead-letter fact changed after recovery: %#v err=%v", deadLetters, err)
 	}
+}
+
+type deadLetterTestProvider struct{}
+
+func (deadLetterTestProvider) Send(
+	_ context.Context,
+	request reliabletask.ExternalInteractionRequest,
+	_ reliabletask.ReliableAsyncTask,
+) (reliabletask.ExternalInteractionResult, error) {
+	return reliabletask.ExternalInteractionResult{
+		RequestID: request.RequestID,
+		Operation: request.Operation,
+		Status:    reliabletask.ExternalInteractionStatusSentUnconfirmed,
+	}, nil
 }

@@ -17,7 +17,6 @@ import (
 
 	"quwoquan_service/generated/linktemplates"
 	rtobs "quwoquan_service/runtime/observability"
-	runtimesync "quwoquan_service/runtime/sync"
 	"quwoquan_service/services/user-service/generated/account/user_account"
 	event "quwoquan_service/services/user-service/internal/account/user_account/domain/user/event"
 	"quwoquan_service/services/user-service/internal/account/user_account/domain/user/model"
@@ -371,11 +370,15 @@ func (s *ProfileService) UpdateProfile(
 		return nil, err
 	}
 	if avatarChanged && profile.AvatarVersion != oldAvatarVersion {
+		avatarURL := avatarURLWithVersion(
+			profile.AvatarURL,
+			profile.AvatarVersion,
+		)
 		avatarPayload := map[string]any{
 			"userId":         profile.UserID,
 			"avatarAssetId":  profile.AvatarAssetID,
 			"avatarVersion":  profile.AvatarVersion,
-			"avatarUrl":      avatarURLWithVersion(profile.AvatarURL, profile.AvatarVersion),
+			"avatarUrl":      avatarURL,
 			"profileVersion": profile.ProfileVersion,
 			"updatedAt":      updatedAt,
 		}
@@ -383,7 +386,15 @@ func (s *ProfileService) UpdateProfile(
 			return nil, err
 		}
 		if s.sync != nil {
-			if _, err := s.sync.AppendPatch(ctx, userID, "user.avatar.updated", avatarPayload); err != nil {
+			if _, err := s.sync.AppendUserAvatarPatch(
+				ctx,
+				userID,
+				UserAvatarSyncPatchPayload{
+					UserID:        profile.UserID,
+					AvatarURL:     avatarURL,
+					AvatarVersion: int64(profile.AvatarVersion),
+				},
+			); err != nil {
 				return nil, err
 			}
 		}
@@ -837,15 +848,15 @@ func (s *ProfileService) PullSync(
 	userID string,
 	afterSeq int64,
 	limit int,
-) (_ runtimesync.PullResponse, err error) {
+) (_ PullUserSyncSlice, err error) {
 	ctx, span := rtobs.StartBusinessSpan(ctx, "user.PullSync",
 		attribute.String("user.id", userID),
 		attribute.Int64("sync.after_seq", afterSeq))
 	defer func() { rtobs.EndSpan(span, err) }()
 
 	if s.sync == nil {
-		return runtimesync.PullResponse{
-			Patches:        []runtimesync.Patch{},
+		return PullUserSyncSlice{
+			Patches:        []UserSyncPatch{},
 			LatestSyncSeq:  0,
 			HasMore:        false,
 			RequiresResync: false,

@@ -25,9 +25,13 @@ abstract final class PostReadPresentationMapper {
       updatedAt: post.updatedAt,
       publishedAt: post.publishedAt,
       articleTemplate:
-          (wire?[ArticleDetailWireKeys.articleTemplate] ?? '').toString(),
+          (wire?[ArticleDetailWireKeys.articleTemplate] ??
+                  post.articleTemplate)
+              .toString(),
       articleFontPreset:
-          (wire?[ArticleDetailWireKeys.articleFontPreset] ?? '').toString(),
+          (wire?[ArticleDetailWireKeys.articleFontPreset] ??
+                  post.articleFontPreset)
+              .toString(),
     );
   }
 }

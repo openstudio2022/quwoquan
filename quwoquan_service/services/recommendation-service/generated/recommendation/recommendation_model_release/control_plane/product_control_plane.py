@@ -17,41 +17,80 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
   "object_types": [
     {
       "deployment_profile": "latency_sensitive",
+      "label": "产品遥测事件摄入与汇总",
+      "object_type": "event_record_telemetry",
+      "operations": [
+        {
+          "auth_mode": "required",
+          "contract_operation_id": "ops.event_record.ReportEventBatch",
+          "method": "POST",
+          "operation": "ReportEventBatch",
+          "path": "/ops/events",
+          "principal": "public",
+          "scopes": null
+        },
+        {
+          "auth_mode": "required",
+          "contract_operation_id": "ops.event_record.GetEventSummary",
+          "method": "GET",
+          "operation": "GetEventSummary",
+          "path": "/ops/events/summary",
+          "principal": "account",
+          "scopes": [
+            "ops.telemetry.read"
+          ]
+        }
+      ],
+      "risk_level": "medium",
+      "source_entity": "EventRecord",
+      "view_kind": "dashboard",
+      "view_model": "EventSummarySlice"
+    },
+    {
+      "deployment_profile": "latency_sensitive",
       "label": "四层指标快照",
       "object_type": "l1l4_metric_snapshot",
       "operations": [
         {
+          "auth_mode": "required",
           "contract_operation_id": "ops.event_record.ListL1L4MetricSnapshots",
           "method": "GET",
           "operation": "ListL1L4MetricSnapshots",
           "path": "/control-plane/product/metrics/l1l4",
+          "principal": "operator",
           "scopes": [
             "ops.product.dashboard.read"
           ]
         },
         {
+          "auth_mode": "required",
           "contract_operation_id": "ops.event_record.GetServiceRouteRED",
           "method": "GET",
           "operation": "GetServiceRouteRED",
           "path": "/control-plane/product/metrics/red-routes",
+          "principal": "operator",
           "scopes": [
             "ops.product.dashboard.read"
           ]
         },
         {
+          "auth_mode": "required",
           "contract_operation_id": "ops.event_record.GetGrowthOverview",
           "method": "GET",
           "operation": "GetGrowthOverview",
           "path": "/control-plane/product/growth/overview",
+          "principal": "operator",
           "scopes": [
             "ops.product.dashboard.read"
           ]
         },
         {
+          "auth_mode": "required",
           "contract_operation_id": "ops.event_record.GetPageExperience",
           "method": "GET",
           "operation": "GetPageExperience",
           "path": "/control-plane/product/experience/pages",
+          "principal": "operator",
           "scopes": [
             "ops.product.dashboard.read"
           ]
@@ -79,10 +118,12 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
       "object_type": "rtc_media_qoe_summary",
       "operations": [
         {
+          "auth_mode": "required",
           "contract_operation_id": "ops.event_record.GetRtcMediaQoeSummary",
           "method": "GET",
           "operation": "GetRtcMediaQoeSummary",
           "path": "/ops/events/rtc-media-qoe/summary",
+          "principal": "account",
           "scopes": [
             "ops.telemetry.read"
           ]
@@ -99,46 +140,56 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
       "object_type": "product_control_plane_journal",
       "operations": [
         {
+          "auth_mode": "required",
           "contract_operation_id": "ops.event_record.ListProductWorkflows",
           "method": "GET",
           "operation": "ListProductWorkflows",
           "path": "/control-plane/product/workflows",
+          "principal": "operator",
           "scopes": [
             "ops.product.dashboard.read"
           ]
         },
         {
+          "auth_mode": "required",
           "contract_operation_id": "ops.event_record.ListProductAudits",
           "method": "GET",
           "operation": "ListProductAudits",
           "path": "/control-plane/product/audits",
+          "principal": "operator",
           "scopes": [
             "ops.product.dashboard.read"
           ]
         },
         {
+          "auth_mode": "required",
           "contract_operation_id": "ops.event_record.ListProductApprovals",
           "method": "GET",
           "operation": "ListProductApprovals",
           "path": "/control-plane/product/approvals",
+          "principal": "operator",
           "scopes": [
             "ops.product.dashboard.read"
           ]
         },
         {
+          "auth_mode": "required",
           "contract_operation_id": "ops.event_record.GetProductProjectionSummary",
           "method": "GET",
           "operation": "GetProductProjectionSummary",
           "path": "/control-plane/product/projections/summary",
+          "principal": "operator",
           "scopes": [
             "ops.product.dashboard.read"
           ]
         },
         {
+          "auth_mode": "required",
           "contract_operation_id": "ops.event_record.GetProductTriageSummary",
           "method": "GET",
           "operation": "GetProductTriageSummary",
           "path": "/control-plane/product/triage/summary",
+          "principal": "operator",
           "scopes": [
             "ops.product.dashboard.read"
           ]
@@ -155,77 +206,93 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
       "object_type": "report_queue",
       "operations": [
         {
+          "auth_mode": "required",
           "contract_operation_id": "content.report.ListReports",
           "method": "GET",
           "operation": "ListReports",
           "path": "/content/reports",
+          "principal": "operator",
           "scopes": [
             "ops.case.read"
           ]
         },
         {
+          "auth_mode": "required",
           "contract_operation_id": "content.report.GetReport",
           "method": "GET",
           "operation": "GetReport",
           "path": "/content/reports/{reportId}",
+          "principal": "operator",
           "scopes": [
             "ops.case.read"
           ]
         },
         {
+          "auth_mode": "required",
           "contract_operation_id": "content.report.BeginReportReview",
           "method": "POST",
           "operation": "BeginReportReview",
           "path": "/content/reports/{reportId}/review",
+          "principal": "operator",
           "scopes": [
             "ops.case.write"
           ]
         },
         {
           "approval_mode": "single",
+          "auth_mode": "required",
           "contract_operation_id": "content.report.ResolveReport",
           "danger_level": "high",
           "method": "PATCH",
           "operation": "ResolveReport",
           "path": "/content/reports/{reportId}",
+          "principal": "operator",
           "scopes": [
             "ops.case.write"
           ]
         },
         {
+          "auth_mode": "required",
           "contract_operation_id": "content.report.DismissReport",
           "method": "POST",
           "operation": "DismissReport",
           "path": "/content/reports/{reportId}:dismiss",
+          "principal": "operator",
           "scopes": [
             "ops.case.write"
           ]
         },
         {
+          "auth_mode": "required",
           "contract_operation_id": "content.post_moderation_case.GetCurrentPostModerationCase",
           "method": "GET",
           "operation": "GetCurrentPostModerationCase",
           "path": "/internal/content/posts/{postId}/moderation-case",
+          "principal": "operator",
           "scopes": [
             "ops.case.read"
           ]
         },
         {
+          "auth_mode": "required",
           "contract_operation_id": "content.post_moderation_case.ReviewPostModerationCase",
           "method": "POST",
           "operation": "ReviewPostModerationCase",
           "path": "/internal/content/posts/{postId}:review-moderation",
+          "principal": "operator",
           "scopes": [
             "ops.case.write"
           ]
         },
         {
           "approval_mode": "single",
+          "auth_mode": "required",
           "contract_operation_id": "content.post_moderation_case.DecidePostModeration",
           "danger_level": "high",
           "method": "POST",
           "operation": "DecidePostModeration",
           "path": "/internal/content/posts/{postId}:moderate",
+          "principal": "operator",
           "scopes": [
             "ops.case.write"
           ]
@@ -242,30 +309,36 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
       "object_type": "homepage_candidate_queue",
       "operations": [
         {
+          "auth_mode": "required",
           "contract_operation_id": "entity.homepage.ListHomepageCandidates",
           "method": "GET",
           "operation": "ListHomepageCandidates",
           "path": "/homepages/candidates",
+          "principal": "operator",
           "scopes": [
             "ops.case.read"
           ]
         },
         {
+          "auth_mode": "required",
           "contract_operation_id": "entity.homepage.IntakeHomepageCandidate",
           "method": "POST",
           "operation": "IntakeHomepageCandidate",
           "path": "/homepages/candidates",
+          "principal": "operator",
           "scopes": [
             "ops.case.write"
           ]
         },
         {
           "approval_mode": "single",
+          "auth_mode": "required",
           "contract_operation_id": "entity.homepage.PublishHomepageCandidate",
           "danger_level": "high",
           "method": "POST",
           "operation": "PublishHomepageCandidate",
           "path": "/homepages/candidates/{homepageId}:publish",
+          "principal": "operator",
           "scopes": [
             "ops.case.write"
           ]
@@ -282,21 +355,25 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
       "object_type": "homepage_claim_request_queue",
       "operations": [
         {
+          "auth_mode": "required",
           "contract_operation_id": "entity.homepage_claim_request.ListHomepageClaimRequests",
           "method": "GET",
           "operation": "ListHomepageClaimRequests",
           "path": "/homepage-claim-requests",
+          "principal": "operator",
           "scopes": [
             "ops.case.read"
           ]
         },
         {
           "approval_mode": "single",
+          "auth_mode": "required",
           "contract_operation_id": "entity.homepage_claim_request.ReviewHomepageClaimRequest",
           "danger_level": "high",
           "method": "POST",
           "operation": "ReviewHomepageClaimRequest",
           "path": "/homepages/{homepageId}/claim-requests/{claimRequestId}:review",
+          "principal": "operator",
           "scopes": [
             "ops.case.write"
           ]
@@ -313,21 +390,25 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
       "object_type": "homepage_status_report_queue",
       "operations": [
         {
+          "auth_mode": "required",
           "contract_operation_id": "entity.homepage_status_report.ListHomepageStatusReports",
           "method": "GET",
           "operation": "ListHomepageStatusReports",
           "path": "/homepage-status-reports",
+          "principal": "operator",
           "scopes": [
             "ops.case.read"
           ]
         },
         {
           "approval_mode": "single",
+          "auth_mode": "required",
           "contract_operation_id": "entity.homepage_status_report.ReviewHomepageStatusReport",
           "danger_level": "high",
           "method": "POST",
           "operation": "ReviewHomepageStatusReport",
           "path": "/homepages/{homepageId}/status-reports/{reportId}:review",
+          "principal": "operator",
           "scopes": [
             "ops.case.write"
           ]
@@ -344,30 +425,36 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
       "object_type": "experiment",
       "operations": [
         {
+          "auth_mode": "required",
           "contract_operation_id": "ops.experiment.CreateExperiment",
           "method": "POST",
           "operation": "CreateExperiment",
           "path": "/control-plane/product/experiments",
+          "principal": "operator",
           "scopes": [
             "ops.experiment.write"
           ]
         },
         {
+          "auth_mode": "required",
           "contract_operation_id": "ops.experiment.ListExperiments",
           "method": "GET",
           "operation": "ListExperiments",
           "path": "/control-plane/product/experiments",
+          "principal": "operator",
           "scopes": [
             "ops.experiment.read"
           ]
         },
         {
           "approval_mode": "single",
+          "auth_mode": "required",
           "contract_operation_id": "ops.experiment.UpdateExperimentRollout",
           "danger_level": "high",
           "method": "POST",
           "operation": "UpdateExperimentRollout",
           "path": "/control-plane/product/experiments/{experimentId}:rollout",
+          "principal": "operator",
           "scopes": [
             "ops.experiment.write"
           ]
@@ -384,43 +471,51 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
       "object_type": "premium_pool_entry",
       "operations": [
         {
+          "auth_mode": "required",
           "contract_operation_id": "ops.premium_pool_entry.ListPremiumPoolEntries",
           "method": "GET",
           "operation": "ListPremiumPoolEntries",
           "path": "/control-plane/product/recommendation/premium-pool",
+          "principal": "operator",
           "scopes": [
             "ops.reco.read"
           ]
         },
         {
           "approval_mode": "single",
+          "auth_mode": "required",
           "contract_operation_id": "ops.premium_pool_entry.UpsertPremiumPoolEntry",
           "danger_level": "high",
           "method": "POST",
           "operation": "UpsertPremiumPoolEntry",
           "path": "/control-plane/product/recommendation/premium-pool",
+          "principal": "operator",
           "scopes": [
             "ops.reco.write"
           ]
         },
         {
           "approval_mode": "single",
+          "auth_mode": "required",
           "contract_operation_id": "ops.premium_pool_entry.RollbackPremiumPoolEntry",
           "danger_level": "high",
           "method": "POST",
           "operation": "RollbackPremiumPoolEntry",
           "path": "/control-plane/product/recommendation/premium-pool/{contentId}:rollback",
+          "principal": "operator",
           "scopes": [
             "ops.reco.write"
           ]
         },
         {
           "approval_mode": "dual",
+          "auth_mode": "required",
           "contract_operation_id": "ops.premium_pool_entry.TakedownPremiumPoolEntry",
           "danger_level": "critical",
           "method": "POST",
           "operation": "TakedownPremiumPoolEntry",
           "path": "/control-plane/product/recommendation/premium-pool/{contentId}:takedown",
+          "principal": "operator",
           "scopes": [
             "ops.reco.write"
           ]

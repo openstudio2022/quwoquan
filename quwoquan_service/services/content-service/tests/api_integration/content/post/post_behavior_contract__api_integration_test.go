@@ -332,16 +332,16 @@ func TestBehaviorBatchCanonicalWire(t *testing.T) {
 
 	// 旧键 payload（postId/type/dwellMs）不再承载对象与动作语义：
 	// contentId/action 缺失必须被拒绝，服务端不得回退双读。
-	legacy := fmt.Sprintf(
-		`{"userId":"user_reporter_001","events":[{"clientEventId":"evt-legacy-wire-001","occurredAt":%q,"postId":%q,"type":"dwell","dwellMs":12000,"userId":"user_reporter_001"}]}`,
+	noncanonical := fmt.Sprintf(
+		`{"userId":"user_reporter_001","events":[{"clientEventId":"evt-retired-wire-001","occurredAt":%q,"postId":%q,"type":"dwell","dwellMs":12000,"userId":"user_reporter_001"}]}`,
 		time.Now().UTC().Format(time.RFC3339Nano), postID,
 	)
-	legacyReq := httptest.NewRequest(http.MethodPost, "/content/behaviors", strings.NewReader(legacy))
-	legacyReq.Header.Set("Content-Type", "application/json")
-	legacyRec := httptest.NewRecorder()
-	testHandler.ServeHTTP(legacyRec, legacyReq)
-	if legacyRec.Code != http.StatusBadRequest {
-		t.Fatalf("legacy dual-read keys must be rejected with 400, got %d: %s", legacyRec.Code, legacyRec.Body.String())
+	noncanonicalReq := httptest.NewRequest(http.MethodPost, "/content/behaviors", strings.NewReader(noncanonical))
+	noncanonicalReq.Header.Set("Content-Type", "application/json")
+	noncanonicalRec := httptest.NewRecorder()
+	testHandler.ServeHTTP(noncanonicalRec, noncanonicalReq)
+	if noncanonicalRec.Code != http.StatusBadRequest {
+		t.Fatalf("retired keys must be rejected with 400, got %d: %s", noncanonicalRec.Code, noncanonicalRec.Body.String())
 	}
 }
 
@@ -409,7 +409,7 @@ func TestBehaviorBatchDeduplicatesClientEventID(t *testing.T) {
 		newMongoPostStore(mongoDB.Collection("posts")),
 	)
 
-	err := behaviorService.ProcessBatch(ctx, []behaviorapp.BehaviorEventInput{
+	_, err := behaviorService.ProcessBatch(ctx, []behaviorapp.BehaviorEventInput{
 		{
 			ClientEventID: "evt-dedup-001",
 			OccurredAt:    occurredAt,
@@ -697,7 +697,7 @@ func TestBehaviorBatchPersistsCanonicalFunnelStates(t *testing.T) {
 	)
 
 	occurredAt := time.Now().UTC().Format(time.RFC3339Nano)
-	err := behaviorService.ProcessBatch(ctx, []behaviorapp.BehaviorEventInput{
+	_, err := behaviorService.ProcessBatch(ctx, []behaviorapp.BehaviorEventInput{
 		{ClientEventID: "evt-seven-visible-" + runID, OccurredAt: occurredAt, UserID: userID, ContentID: visibleID, Action: "impression", State: "visible", ContentType: "image", ChannelID: "following", PolicyDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", FeedRequestID: "frq_ss"},
 		{ClientEventID: "evt-seven-impressed-" + runID, OccurredAt: occurredAt, UserID: userID, ContentID: impressedID, Action: "impression", State: "impressed", ContentType: "image", ChannelID: "following", PolicyDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", FeedRequestID: "frq_ss"},
 		{ClientEventID: "evt-seven-click-" + runID, OccurredAt: occurredAt, UserID: userID, ContentID: clickID, Action: "click", State: "click", ContentType: "image", ChannelID: "following", PolicyDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", FeedRequestID: "frq_ss"},

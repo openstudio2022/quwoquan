@@ -6,7 +6,7 @@
 
 ## 1. 背景、目标与非目标
 
-- 背景：已有 Skill Catalog/Consent/Subscription/Package/Context，但生产仍扫描文件资产，用户端只呈现分类和开关，启用与主动投递混为一体。
+- 背景：Skill 源码资产由独立 publisher 构建，生产 Catalog/Router/Prompt/Context/Presentation 只消费 active/frozen package；用户端仍需继续收敛启用、授权、主动投递和共享挂载的分轨体验。
 - 设计目标：以 immutable active package 和四个独立用户/共享对象建立单轨，使普通 Skill 资产化扩展并在个人、群聊、圈子安全运行。
 - 非目标：开放第三方代码、复制业务数据、由 Assistant 保存 OAuth 凭证或让 App 成为权限真相源。
 
@@ -22,6 +22,7 @@
 - App 责任：渲染 package CatalogProfile/InputProfile/Presentation，收集确认，执行 native continuation；不扫描资产或持有凭证。
 - Metadata/contract：Assistant 对象 contracts 拥有 package/setting/consent/subscription/placement/run wire；Integration contracts 拥有 connector wire。
 - Service/Data/Ops 责任：publisher 构建签名 package，Assistant active resolver、Reader Registry 和 Tool Router 只消费冻结资产，Integration Gateway 隔离 Provider。
+- Skill 的 `domainId` 只来自已冻结 Manifest 并随 Run/Context 显式传递；Context Runtime 禁止从 `skillId` 命名、前缀或垂类约定推测领域。
 - 缓存或投影：Catalog detail 与活动列表可缓存/投影，digest mismatch 必须失效；Context/Tool 大结果进 Artifact Store。
 - 外部依赖：Domain Reader、Public Web Runtime、Connector Gateway、device continuation 与 model provider。
 

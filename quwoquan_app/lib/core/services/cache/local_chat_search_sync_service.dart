@@ -128,14 +128,12 @@ class LocalChatSearchSyncService implements LocalChatSearchSynchronizer {
         cloudIds.add(conversationId);
         final localConversation =
             _conversationCache.get(conversationId) ?? localById[conversationId];
-        final cloudSettingsUpdatedAt = _firstNonEmpty(<Object?>[
-          timestamp.settingsUpdatedAt,
-          timestamp.updatedAt,
-        ]);
-        final cloudLastMessageAt = _firstNonEmpty(<Object?>[
-          timestamp.lastMessageAt,
-          timestamp.lastMessageTime,
-        ]);
+        final cloudSettingsUpdatedAt = timestamp.settingsUpdatedAt
+            .toUtc()
+            .toIso8601String();
+        final cloudLastMessageAt = timestamp.lastMessageAt
+            .toUtc()
+            .toIso8601String();
         final localSettingsUpdatedAt =
             localConversation?.settingsTimestamp ?? '';
         final localLastMessageAt = localConversation?.messageTimestamp ?? '';
@@ -311,7 +309,7 @@ class LocalChatSearchSyncService implements LocalChatSearchSynchronizer {
           );
         }
       }
-      final messageRecord = LocalChatSearchMessageRecord.fromMessageDto(
+      final messageRecord = LocalChatSearchMessageRecord.fromMessageViewData(
         message,
         conversation: conversation,
       );
@@ -435,7 +433,7 @@ class LocalChatSearchSyncService implements LocalChatSearchSynchronizer {
       );
       final messages = delta.messages
           .map(
-            (message) => LocalChatSearchMessageRecord.fromMessageDto(
+            (message) => LocalChatSearchMessageRecord.fromMessageViewData(
               message,
               conversation: conversation,
             ),
@@ -461,7 +459,7 @@ class LocalChatSearchSyncService implements LocalChatSearchSynchronizer {
       );
       aggregatedMessages.addAll(
         fallbackMessages.map(
-          (message) => LocalChatSearchMessageRecord.fromMessageDto(
+          (message) => LocalChatSearchMessageRecord.fromMessageViewData(
             message,
             conversation: conversation,
           ),

@@ -410,9 +410,9 @@ def test_intersection_evidence_is_versioned_idempotent_and_object_local(mongo_da
     store = MongoFeatureProfileStore(mongo_database)
     store.ensure_indexes()
     occurred_at = datetime(2026, 8, 2, 12, tzinfo=timezone.utc)
-    relationship_digest = hashlib.sha256(b"relationship-v1").hexdigest()
+    relationship_digest = hashlib.sha256(b"relationship-seed").hexdigest()
     assert store.apply_persona_relationship_evidence(
-        event_id="relationship-v1",
+        event_id="relationship-seed",
         event_digest=relationship_digest,
         source_persona_id="viewer",
         target_persona_id="actor",
@@ -422,7 +422,7 @@ def test_intersection_evidence_is_versioned_idempotent_and_object_local(mongo_da
         occurred_at=occurred_at,
     )
     assert not store.apply_persona_relationship_evidence(
-        event_id="relationship-v1",
+        event_id="relationship-seed",
         event_digest=relationship_digest,
         source_persona_id="viewer",
         target_persona_id="actor",
@@ -449,9 +449,9 @@ def test_intersection_evidence_is_versioned_idempotent_and_object_local(mongo_da
     assert store.list_following("viewer", 10) == ("actor",)
     assert store.list_followers("actor", 10) == ("viewer",)
 
-    membership_digest = hashlib.sha256(b"membership-v1").hexdigest()
+    membership_digest = hashlib.sha256(b"membership-seed").hexdigest()
     assert store.apply_circle_membership_evidence(
-        event_id="membership-v1",
+        event_id="membership-seed",
         event_digest=membership_digest,
         membership_id="membership-001",
         circle_id="circle-001",
@@ -463,9 +463,9 @@ def test_intersection_evidence_is_versioned_idempotent_and_object_local(mongo_da
     assert store.list_circle_ids("actor", 10) == ("circle-001",)
     assert store.count_intersection_supply("circle_membership") == 1
 
-    profile_digest = hashlib.sha256(b"profile-v1").hexdigest()
+    profile_digest = hashlib.sha256(b"profile-seed").hexdigest()
     assert store.apply_persona_profile_evidence(
-        event_id="profile-v1",
+        event_id="profile-seed",
         event_digest=profile_digest,
         persona_id="actor",
         display_name="公开昵称",

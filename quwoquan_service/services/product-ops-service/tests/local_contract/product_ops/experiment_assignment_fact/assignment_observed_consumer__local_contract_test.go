@@ -48,6 +48,17 @@ func TestAssignmentObservedConsumerProjectsCanonicalFactAndRejectsUnauthorizedPr
 	if err != nil || processed != 1 || store.count() != 1 {
 		t.Fatalf("unauthorized producer processed=%d facts=%d err=%v", processed, store.count(), err)
 	}
+
+	nulSubject := expected
+	nulSubject.SubjectKey = "anonymous-session\x00stackctl-content-consumer-health"
+	appendAssignmentMessage(t, ctx, transport, "event-nul-subject", "recommendation-service", nulSubject, assignedAt)
+	processed, err = consumer.ProcessOnce(ctx)
+	if err != nil || processed != 1 || store.count() != 1 {
+		t.Fatalf("NUL subjectKey processed=%d facts=%d err=%v", processed, store.count(), err)
+	}
+	if healthyErr := consumer.Healthy(10 * time.Second); healthyErr != nil {
+		t.Fatalf("consumer should stay healthy after NUL subject DLQ, err=%v", healthyErr)
+	}
 }
 
 func appendAssignmentMessage(

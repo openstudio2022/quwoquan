@@ -318,6 +318,84 @@ class NonprodDataProvisionerContractTest(unittest.TestCase):
             persisted["cleanupProgress"]["accountClosureComplete"]
         )
 
+    def test_actorless_incomplete_identity_receipt_is_archived_for_retry(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory)
+            provisioner = NonprodDataProvisioner(
+                base_url="https://api.alpha.quwoquan.local:17000",
+                candidate=_candidate(),
+            )
+            epoch = provisioner._epoch(NONPROD_REFERENCE_IDENTITY)
+            incomplete = provisioner._base_receipt(NONPROD_REFERENCE_IDENTITY, epoch)
+            incomplete.update(
+                {
+                    "status": "GATE_BLOCK",
+                    "failureClass": "identity_provision_incomplete",
+                    "actorReceiptRefs": [],
+                    "operationReceipts": [],
+                    "createdObjectIdsOrHashes": {"ownerIds": [], "personaIds": []},
+                    "cleanupState": "pending",
+                }
+            )
+            actors = [
+                LocalAcceptanceActor(
+                    role="primary" if index == 0 else f"member-{index}",
+                    session=LocalAcceptanceSession(
+                        owner_id=f"owner-{index}",
+                        persona_id=f"persona-{index}",
+                        access_token=f"secret-{index}",
+                    ),
+                    challenge_id=f"challenge-{index}",
+                    account_state="active",
+                    identity_origin="phone",
+                )
+                for index in range(6)
+            ]
+
+            def response(*_args, **kwargs):
+                path = kwargs["path"]
+                if path == "/user/personas":
+                    return {"personaId": "persona-secondary"}
+                if path == "/user/greeting-request":
+                    return {"id": "greeting-1"}
+                if path.endswith("/reply"):
+                    return {
+                        "status": "replied",
+                        "promotedConversationId": "conversation-promoted",
+                    }
+                return {"status": "ok"}
+
+            with (
+                mock.patch(
+                    "quwoquan_ops.cli.lib.nonprod_data_provisioner.env_runs_root",
+                    return_value=output,
+                ),
+                mock.patch.object(
+                    NonprodDataProvisioner,
+                    "_open_identity_actors_with_recovery",
+                    return_value=actors,
+                ),
+                mock.patch(
+                    "quwoquan_ops.cli.lib.nonprod_data_provisioner.request_local_environment_json",
+                    side_effect=response,
+                ),
+            ):
+                provisioner._write_receipt(
+                    NONPROD_REFERENCE_IDENTITY, epoch, incomplete
+                )
+                receipt = provisioner.provision_reference_identity()
+                active_path = provisioner._receipt_path(
+                    NONPROD_REFERENCE_IDENTITY, epoch
+                )
+                history = list((active_path.parent / "history").glob("*.json"))
+                self.assertEqual(receipt["status"], "passed")
+                self.assertEqual(receipt["cleanupState"], "retained")
+                self.assertEqual(len(history), 1)
+                archived = json.loads(history[0].read_text(encoding="utf-8"))
+                self.assertEqual(
+                    archived["failureClass"], "identity_provision_incomplete"
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

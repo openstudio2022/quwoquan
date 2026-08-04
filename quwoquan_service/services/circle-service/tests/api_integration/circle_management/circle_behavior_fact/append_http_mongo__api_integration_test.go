@@ -3,6 +3,7 @@ package api_integration
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -32,8 +33,15 @@ func TestAppendCircleBehaviorFactHTTPCommitsFactAndOutboxAtomically(t *testing.T
 	}, "circle.circle_behavior_fact.AppendCircleBehaviorFact", "persona-behavior", "behavior-object-1")
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, request)
-	if recorder.Code != http.StatusNoContent {
+	if recorder.Code != http.StatusOK {
 		t.Fatalf("append status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	var appended app.AppendResult
+	if err := json.NewDecoder(recorder.Body).Decode(&appended); err != nil {
+		t.Fatal(err)
+	}
+	if appended.FactID == "" || appended.IdempotentReplay {
+		t.Fatalf("append result=%+v", appended)
 	}
 
 	replayRequest := testsupport.Request(t, http.MethodPost, "/circles/behaviors", map[string]any{
@@ -41,8 +49,15 @@ func TestAppendCircleBehaviorFactHTTPCommitsFactAndOutboxAtomically(t *testing.T
 	}, "circle.circle_behavior_fact.AppendCircleBehaviorFact", "persona-behavior", "behavior-object-1")
 	replay := httptest.NewRecorder()
 	handler.ServeHTTP(replay, replayRequest)
-	if replay.Code != http.StatusNoContent {
+	if replay.Code != http.StatusOK {
 		t.Fatalf("replay status=%d body=%s", replay.Code, replay.Body.String())
+	}
+	var replayed app.AppendResult
+	if err := json.NewDecoder(replay.Body).Decode(&replayed); err != nil {
+		t.Fatal(err)
+	}
+	if replayed.FactID != appended.FactID || !replayed.IdempotentReplay {
+		t.Fatalf("replay result=%+v appended=%+v", replayed, appended)
 	}
 	testsupport.AssertCollectionCount(t, database, "circle_behavior_facts", 1)
 	testsupport.AssertCollectionCount(t, database, "circle_behavior_fact_outbox", 1)

@@ -5,7 +5,7 @@ import "testing"
 func TestBuildMigrationPlanResolvesHandleConflictsAndInheritsPrimaryContacts(t *testing.T) {
 	plan := BuildMigrationPlan(Input{
 		ReservedHandles: []string{"alice"},
-		Personas: []CurrentPersona{
+		Personas: []PersonaMigrationSource{
 			{
 				UserID:    "user_1",
 				PersonaID: "persona_primary",
@@ -46,7 +46,7 @@ func TestBuildMigrationPlanResolvesHandleConflictsAndInheritsPrimaryContacts(t *
 
 func TestValidatePlanDetectsPublicLeakageAndMissingIdentity(t *testing.T) {
 	plan := BuildMigrationPlan(Input{
-		Personas: []CurrentPersona{
+		Personas: []PersonaMigrationSource{
 			{
 				UserID:            "",
 				PersonaID:         "persona_1",

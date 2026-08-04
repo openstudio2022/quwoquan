@@ -1,4 +1,4 @@
-schema: 1
+schema: runtime-failure
 types:
   RuntimeFailure:
     fields:

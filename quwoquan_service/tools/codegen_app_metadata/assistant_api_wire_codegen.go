@@ -227,7 +227,25 @@ func containsString(slice []string, s string) bool {
 	return false
 }
 
-var assistantWireListTypeRe = regexp.MustCompile(`^\[\](.+)$`)
+var (
+	assistantWireListTypeRe        = regexp.MustCompile(`^\[\](.+)$`)
+	assistantWireNullDerivedBoolRe = regexp.MustCompile(
+		`^([A-Za-z_][A-Za-z0-9_]*)\s+IS\s+NULL$`,
+	)
+)
+
+func assistantWireNullDerivedBoolean(field fieldDef) (string, bool) {
+	if strings.TrimSpace(field.Type) != "bool" {
+		return "", false
+	}
+	match := assistantWireNullDerivedBoolRe.FindStringSubmatch(
+		strings.TrimSpace(field.Source),
+	)
+	if len(match) != 2 {
+		return "", false
+	}
+	return match[1], true
+}
 
 func assistantWireListElementType(t string) (string, bool) {
 	t = strings.TrimSpace(t)
@@ -236,6 +254,19 @@ func assistantWireListElementType(t string) (string, bool) {
 		return "", false
 	}
 	return strings.TrimSpace(m[1]), true
+}
+
+func assistantWireListEnumRef(
+	catalog *assistantEnumCatalog,
+	field fieldDef,
+) (string, bool) {
+	inner, isList := assistantWireListElementType(field.Type)
+	enumRef := strings.TrimSpace(field.EnumRef)
+	if !isList || inner != "enum" || enumRef == "" ||
+		!assistantWireHasEnum(catalog, enumRef) {
+		return "", false
+	}
+	return enumRef, true
 }
 
 func assistantWireTopoEntityOrder(names []string, deps map[string]map[string]bool) []string {
@@ -299,6 +330,12 @@ func assistantWireDartType(
 		return t
 	}
 	if inner, ok := assistantWireListElementType(t); ok {
+		if enumRef, isEnum := assistantWireListEnumRef(enumCatalog, f); isEnum {
+			if nullable {
+				return "List<" + enumRef + ">?"
+			}
+			return "List<" + enumRef + ">"
+		}
 		if _, isEnt := ff.Entities[inner]; isEnt {
 			if nullable {
 				return "List<" + inner + ">?"
@@ -383,6 +420,10 @@ func assistantWireEmitEntityDart(
 		nul := assistantWireFieldNullable(f)
 		if nul {
 			if inner, ok := assistantWireListElementType(f.Type); ok {
+				if _, isEnum := assistantWireListEnumRef(enumCatalog, f); isEnum {
+					fmt.Fprintf(b, "    this.%s,\n", f.Name)
+					continue
+				}
 				if _, isEnt := ff.Entities[inner]; isEnt {
 					fmt.Fprintf(b, "    this.%s = const [],\n", f.Name)
 					continue
@@ -472,6 +513,9 @@ func assistantWireEmitJsonValidation(
 	)
 	b.WriteString("    }\n")
 	for _, field := range ent.Fields {
+		if _, derived := assistantWireNullDerivedBoolean(field); derived {
+			continue
+		}
 		condition := assistantWireJsonInvalidCondition(ff, enumCatalog, field)
 		if condition == "" {
 			continue
@@ -501,6 +545,47 @@ func assistantWireEmitJsonValidation(
 		)
 		b.WriteString("    }\n")
 	}
+	declaredDerivedLocals := map[string]bool{}
+	for _, field := range ent.Fields {
+		sourceField, derived := assistantWireNullDerivedBoolean(field)
+		if !derived {
+			continue
+		}
+		if !declaredDerivedLocals[field.Name] {
+			fmt.Fprintf(b, "    final %s = json['%s'];\n", field.Name, field.Name)
+			declaredDerivedLocals[field.Name] = true
+		}
+		fmt.Fprintf(b, "    if (%s is! bool) {\n", field.Name)
+		fmt.Fprintf(
+			b,
+			"      throw const FormatException('%s field %s has an invalid wire value');\n",
+			entityName,
+			field.Name,
+		)
+		b.WriteString("    }\n")
+		if !declaredDerivedLocals[sourceField] {
+			fmt.Fprintf(b, "    final %s = json['%s'];\n", sourceField, sourceField)
+			declaredDerivedLocals[sourceField] = true
+		}
+		fmt.Fprintf(b, "    if (%s != null && %s) {\n", sourceField, field.Name)
+		fmt.Fprintf(
+			b,
+			"      throw const FormatException('%s fields %s and %s are inconsistent');\n",
+			entityName,
+			sourceField,
+			field.Name,
+		)
+		b.WriteString("    }\n")
+		fmt.Fprintf(b, "    if (%s == null && !%s) {\n", sourceField, field.Name)
+		fmt.Fprintf(
+			b,
+			"      throw const FormatException('%s fields %s and %s are inconsistent');\n",
+			entityName,
+			sourceField,
+			field.Name,
+		)
+		b.WriteString("    }\n")
+	}
 }
 
 func assistantWireJsonInvalidCondition(
@@ -518,7 +603,9 @@ func assistantWireJsonInvalidCondition(
 	}
 	if inner, ok := assistantWireListElementType(typeName); ok {
 		invalidItemCondition := "false"
-		if _, isEntity := ff.Entities[inner]; isEntity || inner == "object" {
+		if _, isEnum := assistantWireListEnumRef(enumCatalog, field); isEnum {
+			invalidItemCondition = "item is! String"
+		} else if _, isEntity := ff.Entities[inner]; isEntity || inner == "object" {
 			invalidItemCondition = "item is! Map"
 		} else if inner == "string" {
 			invalidItemCondition = "item is! String"
@@ -551,6 +638,9 @@ func assistantWireFromJsonExpr(
 	n := f.Name
 	nul := assistantWireFieldNullable(f)
 	t := strings.TrimSpace(f.Type)
+	if sourceField, derived := assistantWireNullDerivedBoolean(f); derived {
+		return fmt.Sprintf("%s && %s == null", n, sourceField)
+	}
 
 	if t == "enum" && assistantWireHasEnum(enumCatalog, f.EnumRef) {
 		if nul {
@@ -574,6 +664,14 @@ func assistantWireFromJsonExpr(
 	}
 
 	if inner, ok := assistantWireListElementType(t); ok {
+		if enumRef, isEnum := assistantWireListEnumRef(enumCatalog, f); isEnum {
+			return assistantWireEnumListFromJsonExpr(
+				entityName,
+				n,
+				enumRef,
+				nul,
+			)
+		}
 		if _, isEnt := ff.Entities[inner]; isEnt {
 			if entityName == "AssistantSearchResultView" && n == "citations" {
 				return `((json['citations'] as List?) ?? const [])
@@ -690,6 +788,33 @@ func assistantWireFromJsonExpr(
 	}
 }
 
+func assistantWireEnumListFromJsonExpr(
+	entityName string,
+	fieldName string,
+	enumRef string,
+	nullable bool,
+) string {
+	listAccess := fmt.Sprintf("(json['%s'] as List)", fieldName)
+	if nullable {
+		listAccess = fmt.Sprintf(
+			"json['%s'] == null\n          ? null\n          : (json['%s'] as List)",
+			fieldName,
+			fieldName,
+		)
+	}
+	return fmt.Sprintf(`%s.asMap().entries.map((entry) {
+            final wireValue = entry.value as String;
+            try {
+              return parse%sStrict(wireValue);
+            } on FormatException {
+              throw FormatException(
+                '%s.%s[${entry.key}] has an invalid enum wire value',
+                wireValue,
+              );
+            }
+          }).toList(growable: false)`, listAccess, enumRef, entityName, fieldName)
+}
+
 func assistantWireToJsonExpr(
 	ff *fieldsFile,
 	enumCatalog *assistantEnumCatalog,
@@ -709,6 +834,13 @@ func assistantWireToJsonExpr(
 		return f.Name + ".toJson()"
 	}
 	if inner, ok := assistantWireListElementType(t); ok {
+		if _, isEnum := assistantWireListEnumRef(enumCatalog, f); isEnum {
+			access := f.Name
+			if assistantWireFieldNullable(f) {
+				access += "?"
+			}
+			return access + ".map((item) => item.wireName).toList(growable: false)"
+		}
 		if _, isEnt := ff.Entities[inner]; isEnt {
 			if assistantWireFieldNullable(f) {
 				return f.Name + "?.map((item) => item.toJson()).toList(growable: false)"

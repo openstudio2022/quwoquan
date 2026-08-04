@@ -17,7 +17,7 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/trackers/journey_event_tracker.dart';
 import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/assistant_half_sheet.dart';
 import 'package:quwoquan_app/ui/discovery/services/home_feed_post_open_action.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';

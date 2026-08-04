@@ -375,12 +375,21 @@ class ContentMockData {
         imageUrls: imageUrls,
       );
       return <String, dynamic>{
-        ...row.toPresentationMap(),
-        'id': row.id,
-        'type': 'article',
+        ...contentPostProjectionFromViewData(row).toWire(),
         'articleMarkdown': markdown,
         'markdownDialect': 'qwq-rich-md',
-        'articleAssetManifest': const <String, dynamic>{'assets': []},
+        'articleAssetManifest': const <String, dynamic>{
+          'schema': 'article-asset-manifest',
+          'articleMarkdownDigest':
+              'sha256:760672367557300130bdf88db43b01f07917475ae4f60ff0b9be95aa78d7e2f1',
+          'documentSha256':
+              'sha256:760672367557300130bdf88db43b01f07917475ae4f60ff0b9be95aa78d7e2f1',
+          'assetManifestSha256':
+              'sha256:760672367557300130bdf88db43b01f07917475ae4f60ff0b9be95aa78d7e2f1',
+          'documentVersionSha256':
+              'sha256:760672367557300130bdf88db43b01f07917475ae4f60ff0b9be95aa78d7e2f1',
+          'assets': <Object?>[],
+        },
         'articleRenderProfile': <String, dynamic>{
           'template': row.articleTemplate.isEmpty
               ? 'journal'

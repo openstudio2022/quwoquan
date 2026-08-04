@@ -1,4 +1,5 @@
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/post_read_presentation.g.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
 import 'package:quwoquan_app/cloud/runtime/models/post_read_presentation_mapper.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
@@ -46,26 +47,11 @@ final class ContentPostDetailPayload {
   final ContentPostViewData post;
   final ContentPostDetailSlice detailWire;
 
-  /// App presentation data derived from the already-decoded canonical wire.
-  Map<String, dynamic> get mergedArticleWireMap => <String, dynamic>{
-    ...post.toPresentationMap(),
-    if (detailWire.articleMarkdown != null)
-      ArticleDetailWireKeys.articleMarkdown: detailWire.articleMarkdown,
-    if (detailWire.markdownDialect != null)
-      ArticleDetailWireKeys.markdownDialect: detailWire.markdownDialect,
-    if (detailWire.articleAssetManifest != null)
-      ArticleDetailWireKeys.articleAssetManifest: detailWire
-          .articleAssetManifest!
-          .toWire(),
-    if (detailWire.articleRenderProfile != null)
-      ArticleDetailWireKeys.articleRenderProfile: detailWire
-          .articleRenderProfile!
-          .toWire(),
-    if (detailWire.articleTemplate != null)
-      ArticleDetailWireKeys.articleTemplate: detailWire.articleTemplate,
-    if (detailWire.articleFontPreset != null)
-      ArticleDetailWireKeys.articleFontPreset: detailWire.articleFontPreset,
-  };
+  /// App presentation data projected from the one decoded canonical detail
+  /// contract. Do not merge the App-local presentation map here: its keys are
+  /// intentionally not a second cloud-wire vocabulary.
+  Map<String, dynamic> get mergedArticleWireMap =>
+      Map<String, dynamic>.from(detailWire.toWire());
 
   PostReadPresentation get readPresentation =>
       PostReadPresentationMapper.fromViewData(post, wire: mergedArticleWireMap);

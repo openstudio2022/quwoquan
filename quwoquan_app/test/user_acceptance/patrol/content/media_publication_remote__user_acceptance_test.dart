@@ -212,7 +212,7 @@ Future<void> _runMediaPublicationJourney(
     subscription.close();
     if (postId != null) {
       await container
-          .read(contentWriteRepositoryProvider)
+          .read(contentPostDeleteCommandWriterProvider)
           .deletePost(
             postId: postId!,
             idempotencyKey: contentPostDeleteIdempotencyKey(postId!),
@@ -344,7 +344,7 @@ Future<void> _runTextPublicationJourney(
     subscription.close();
     if (postId != null) {
       await container
-          .read(contentWriteRepositoryProvider)
+          .read(contentPostDeleteCommandWriterProvider)
           .deletePost(
             postId: postId!,
             idempotencyKey: contentPostDeleteIdempotencyKey(postId!),

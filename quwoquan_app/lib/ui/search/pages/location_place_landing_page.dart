@@ -176,12 +176,16 @@ class _LocationPlaceLandingPageState
             semantic: _loadFailure == null
                 ? semantic
                 : ensureRetryUiErrorSemantic(semantic),
-            onAction: (action) async {
+            onRecovery: (action) async {
               if (action.type == UiErrorActionType.retry) {
                 await _startCanonicalRead();
-                return;
+                return _loadFailure == null &&
+                        _resolved is! LocationPlaceReadUnavailable
+                    ? UiRecoveryOutcome.recovered
+                    : UiRecoveryOutcome.stillBlocked;
               }
               _handleClose();
+              return UiRecoveryOutcome.handedOff;
             },
           ),
         ),

@@ -1,11 +1,10 @@
 import 'package:test/test.dart';
-import 'package:quwoquan_app/cloud/runtime/models/content_reaction_state.dart';
-import 'package:quwoquan_app/cloud/runtime/models/post_engagement_counters.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {
-  group('ContentReactionState.fromMap', () {
+  group('ContentReactionStateSlice.fromWire', () {
     test('parses liked and postId', () {
-      final s = ContentReactionState.fromMap(<String, dynamic>{
+      final s = ContentReactionStateSlice.fromWire(<String, Object?>{
         'found': true,
         'postId': 'p1',
         'liked': true,
@@ -19,7 +18,7 @@ void main() {
 
     test('rejects retired mixed reaction/share aliases', () {
       expect(
-        () => ContentReactionState.fromMap(<String, dynamic>{
+        () => ContentReactionStateSlice.fromWire(<String, Object?>{
           'found': true,
           'postId': 'p1',
           'liked': true,
@@ -28,27 +27,6 @@ void main() {
         }),
         throwsFormatException,
       );
-    });
-  });
-
-  group('PostEngagementCounters.fromMap', () {
-    test('只解析 canonical 计数字段并拒绝 aliases', () {
-      final canonical = PostEngagementCounters.fromMap(<String, dynamic>{
-        'likeCount': 3,
-        'commentCount': 7,
-        'shareCount': 2,
-      });
-      final retired = PostEngagementCounters.fromMap(<String, dynamic>{
-        'likesCount': 30,
-        'commentsCount': 70,
-        'shares': 20,
-      });
-      expect(canonical.likeCount, 3);
-      expect(canonical.commentCount, 7);
-      expect(canonical.shareCount, 2);
-      expect(retired.likeCount, 0);
-      expect(retired.commentCount, 0);
-      expect(retired.shareCount, 0);
     });
   });
 }

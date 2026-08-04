@@ -29,6 +29,8 @@ services:
       PUBLIC_WEB_BASE_URL: "${QWQ_COMPOSE_PUBLIC_WEB_BASE_URL:?QWQ_COMPOSE_PUBLIC_WEB_BASE_URL is required}"
       SEARCH_ES_ENABLED: "${QWQ_COMPOSE_SEARCH_ES_ENABLED:-true}"
       SEARCH_ES_ENDPOINTS: "${QWQ_COMPOSE_SEARCH_ES_ENDPOINTS:-http://elasticsearch:9200}"
+      USER_CARRIER_ONE_TAP_SUBSTITUTE_ENDPOINT: "${USER_CARRIER_ONE_TAP_SUBSTITUTE_ENDPOINT:-}"
+      USER_FEDERATED_IDENTITY_SUBSTITUTE_ENDPOINT: "${USER_FEDERATED_IDENTITY_SUBSTITUTE_ENDPOINT:-}"
       ALIYUN_DYPNS_ENDPOINT: "${ALIYUN_DYPNS_ENDPOINT:-}"
       ALIYUN_DYPNS_ACCESS_KEY_ID: "${ALIYUN_DYPNS_ACCESS_KEY_ID:-}"
       ALIYUN_DYPNS_ACCESS_KEY_SECRET: "${ALIYUN_DYPNS_ACCESS_KEY_SECRET:-}"
@@ -44,6 +46,7 @@ services:
       ALIPAY_OAUTH_MERCHANT_PID: "${ALIPAY_OAUTH_MERCHANT_PID:-}"
       QQ_OAUTH_USER_INFO_URL: "${QQ_OAUTH_USER_INFO_URL:-}"
       QQ_OAUTH_APP_ID: "${QQ_OAUTH_APP_ID:-}"
+      INTEGRATION_EXTERNAL_INTERACTION_BASE_URL: "${INTEGRATION_EXTERNAL_INTERACTION_BASE_URL:-}"
       INTEGRATION_SERVICE_MTLS_CA_FILE: /run/quwoquan/integration-mtls/ca.crt
       INTEGRATION_SERVICE_MTLS_CLIENT_CERT_FILE: /run/quwoquan/integration-mtls/client.crt
       INTEGRATION_SERVICE_MTLS_CLIENT_KEY_FILE: /run/quwoquan/integration-mtls/client.key
@@ -65,9 +68,9 @@ services:
       - "${QWQ_COMPOSE_USER_PORT:-19210}:18081"
     volumes:
       - ${QWQ_COMPOSE_CONFIG_ROOT:?QWQ_COMPOSE_CONFIG_ROOT is required}:/etc/qwq-config:ro
-      - ${INTEGRATION_SERVICE_MTLS_CA_FILE:-/dev/null}:/run/quwoquan/integration-mtls/ca.crt:ro
-      - ${INTEGRATION_SERVICE_MTLS_CLIENT_CERT_FILE:-/dev/null}:/run/quwoquan/integration-mtls/client.crt:ro
-      - ${INTEGRATION_SERVICE_MTLS_CLIENT_KEY_FILE:-/dev/null}:/run/quwoquan/integration-mtls/client.key:ro
+      - ${INTEGRATION_SERVICE_MTLS_CA_FILE:?INTEGRATION_SERVICE_MTLS_CA_FILE is required}:/run/quwoquan/integration-mtls/ca.crt:ro
+      - ${INTEGRATION_SERVICE_MTLS_CLIENT_CERT_FILE:?INTEGRATION_SERVICE_MTLS_CLIENT_CERT_FILE is required}:/run/quwoquan/integration-mtls/client.crt:ro
+      - ${INTEGRATION_SERVICE_MTLS_CLIENT_KEY_FILE:?INTEGRATION_SERVICE_MTLS_CLIENT_KEY_FILE is required}:/run/quwoquan/integration-mtls/client.key:ro
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18081/healthz >/dev/null 2>&1"]
       interval: 10s

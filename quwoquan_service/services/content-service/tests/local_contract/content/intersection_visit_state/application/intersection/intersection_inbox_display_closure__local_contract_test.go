@@ -69,7 +69,7 @@ func TestIntersectionService_ListAndSummaryDropHiddenReasons(t *testing.T) {
 	}
 }
 
-// V2 补充合同：多维度 point 的 reason，Summary 按 point 维度分桶计数，
+// 多维度 point 合同：Summary 按 point 维度分桶计数，
 // List 按同一谓词下钻——「地点 1」红点点进地点维度必须能看到该 reason。
 // fixture 形态对齐 gamma 真实链路：person reason 的代表人=对象本人
 // （fallback actor target==reason target，计数降级句才满足 explicit_link 对象链接合同）。
@@ -113,7 +113,7 @@ func TestIntersectionService_DimensionDrilldownMatchesSummaryTally(t *testing.T)
 	}
 }
 
-// V3 收口合同：person reason 的 DisplayName（人名）禁止冒充圈子/地点/内容等
+// person reason 收口合同：DisplayName（人名）禁止冒充圈子/地点/内容等
 // 容器对象名（曾产出「…都加入了『<人名>』」错句）；无可证容器名时按 §20.4
 // 降级为纯计数句，且 join(primarySpans)==primaryText 不变量在降级形态下成立。
 func TestExplainRejectsPersonNameAsContainerObject(t *testing.T) {

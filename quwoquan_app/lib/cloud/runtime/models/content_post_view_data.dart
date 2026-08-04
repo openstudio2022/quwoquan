@@ -254,49 +254,4 @@ final class ContentPostViewData {
     sourceAttribution: sourceAttribution,
   );
 
-  /// App-local presentation payload; never used as a cloud decoder.
-  Map<String, dynamic> toPresentationMap() => <String, dynamic>{
-    'id': id,
-    'type': type,
-    'identity': identity,
-    'assistantUsePolicy': assistantUsePolicy,
-    'authorId': authorId,
-    'displayName': displayName,
-    'avatarUrl': avatarUrl,
-    if (authorBackgroundUrl != null) 'authorBackgroundUrl': authorBackgroundUrl,
-    'authorRoleLabel': authorRoleLabel,
-    'authorIdentityTags': authorIdentityTags,
-    'authorVerified': authorVerified,
-    if (title.isNotEmpty) 'title': title,
-    if (body != null) 'body': body,
-    if (summary.isNotEmpty) 'summary': summary,
-    if (coverUrl != null) 'coverUrl': coverUrl,
-    if (articleTemplate.isNotEmpty) 'articleTemplate': articleTemplate,
-    if (articleFontPreset.isNotEmpty) 'articleFontPreset': articleFontPreset,
-    'imageUrls': imageUrls,
-    if (videoUrl != null) 'videoUrl': videoUrl,
-    if (thumbnailUrl != null) 'thumbnailUrl': thumbnailUrl,
-    if (width != null) 'width': width,
-    if (height != null) 'height': height,
-    if (durationMs != null) 'durationMs': durationMs,
-    if (mediaAssetId != null) 'mediaAssetId': mediaAssetId,
-    if (mediaAssetVersion != null) 'mediaAssetVersion': mediaAssetVersion,
-    if (hlsCmafMasterManifestUrl != null)
-      'hlsCmafMasterManifestUrl': hlsCmafMasterManifestUrl,
-    if (hlsCmafDescriptorVersion != null)
-      'hlsCmafDescriptorVersion': hlsCmafDescriptorVersion,
-    'likeCount': likeCount,
-    'commentCount': commentCount,
-    'shareCount': shareCount,
-    'createdAt': createdAt,
-    if (updatedAt != null) 'updatedAt': updatedAt,
-    if (publishedAt != null) 'publishedAt': publishedAt,
-    if (contentVertical != null) 'contentVertical': contentVertical,
-    if (recallPath != null) 'recallPath': recallPath,
-    if (supplySource != null) 'supplySource': supplySource,
-    if (intersectionReasons != null)
-      'intersectionReasons': intersectionReasons!
-          .map((value) => value.toWire())
-          .toList(growable: false),
-  };
 }

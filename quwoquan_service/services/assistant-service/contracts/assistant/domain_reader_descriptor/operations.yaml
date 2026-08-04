@@ -1,0 +1,45 @@
+commercial_defaults:
+  status: blocked
+  block_reason: Domain Reader 目录只供 Assistant 内部 composition 读取，新增操作需单独完成商业证据
+  gap_id: ASSISTANT_DOMAIN_READER_UNDECLARED_OPERATION
+  target_story: domain-reader-connector-grant
+description: Assistant internal DomainReaderDescriptor catalog queries.
+api_routes:
+- method: GET
+  path: /internal/assistant/domain-readers/{descriptorId}
+  operation: GetDomainReaderDescriptor
+  actor: none
+  commercial:
+    status: ready
+  application: {kind: query, facet: DomainReaderDescriptorQueryFacade, method: getDescriptor, reader: DomainReaderDescriptorReader, slice: DomainReaderDescriptor}
+  request_entity: GetDomainReaderDescriptorQuery
+  request_body_kind: none
+  request_bindings:
+    path: [{name: descriptorId, field: descriptorId}]
+  response_entity: DomainReaderDescriptor
+  authorization: {principal: service, scopes: [assistant.domain_reader.read], ownership_policy: service_delegation}
+  reliability: {timeout_ms: 500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [ASSISTANT.USER.domain_reader_descriptor_not_found, ASSISTANT.USER.domain_reader_invalid_argument, ASSISTANT.MIDDLEWARE.domain_reader_unauthorized, ASSISTANT.SYSTEM.domain_reader_catalog_unavailable]
+  privacy: {request_classification: PUBLIC, response_classification: PUBLIC, log_policy: metadata_only}
+  telemetry: {metric: assistant_domain_reader_catalog_query, trace: true, attributes: [operation, outcome, error_code, descriptor_id]}
+  slo: {latency_p95_ms: 100, availability_percent: 99.9}
+  security: {auth_mode: required, principal: service, token_transport: bearer, anonymous_policy: deny, visibility: internal}
+- method: GET
+  path: /internal/assistant/domain-readers
+  operation: ListDomainReaderDescriptors
+  actor: none
+  commercial:
+    status: ready
+  application: {kind: query, facet: DomainReaderDescriptorQueryFacade, method: listDescriptors, reader: DomainReaderDescriptorReader, slice: DomainReaderDescriptorListSlice}
+  request_entity: ListDomainReaderDescriptorsQuery
+  request_body_kind: none
+  request_bindings:
+    query: [{name: limit, field: limit, required: false}]
+  response_entity: DomainReaderDescriptorListSlice
+  authorization: {principal: service, scopes: [assistant.domain_reader.read], ownership_policy: service_delegation}
+  reliability: {timeout_ms: 500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [ASSISTANT.USER.domain_reader_invalid_argument, ASSISTANT.MIDDLEWARE.domain_reader_unauthorized, ASSISTANT.SYSTEM.domain_reader_catalog_unavailable]
+  privacy: {request_classification: PUBLIC, response_classification: PUBLIC, log_policy: metadata_only}
+  telemetry: {metric: assistant_domain_reader_catalog_query, trace: true, attributes: [operation, outcome, error_code, item_count]}
+  slo: {latency_p95_ms: 100, availability_percent: 99.9}
+  security: {auth_mode: required, principal: service, token_transport: bearer, anonymous_policy: deny, visibility: internal}

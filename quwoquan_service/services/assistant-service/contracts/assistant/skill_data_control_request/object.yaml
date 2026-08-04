@@ -1,0 +1,32 @@
+kind: aggregate_root
+description: >-
+  用户对单个 Skill 的 Assistant-owned 活动可见性、Consent 与主动订阅执行隐藏、撤销或归档的确认型流程聚合。
+  Connector、业务对象与法定 Run 审计仍由各 owner 管理，不由本对象复制或伪装删除。
+identity:
+  fields: [requestId]
+  version_field: revision
+  version_source: field
+access:
+  commands: aggregate_facade
+  queries: named_reader
+  cross_context: public_contract_only
+relationships:
+- {name: accountOwner, target_object: user.UserAccount, reference_fields: [accountId], kind: reference, cardinality: 'N:1', consistency: eventual, access: named_reader, on_delete: cascade}
+local_identity_reasons:
+  skillId: stable active Skill package key scoped under the authenticated account and never used as aggregate identity
+capabilities: [commandable, queryable, idempotent_commands, auditable]
+taggable: false
+vector_enabled: false
+business_rules:
+- accountId 只来自可信主体；请求只允许 hide_activity_history、revoke_consent、archive_subscriptions 三种去重后稳定排序的 action。
+- Create 只建立 pending_confirmation；Confirm 必须提交 expectedRevision 与显式 confirmed，未确认不得执行任何 owner command。
+- 每个 action 只通过其对象 Facade 或 SkillActivity visibility port 执行；不得直写 sibling store、Connector、Run journal 或业务对象。
+- completedActions 逐步持久化；进程中断后以 requestId+action 稳定幂等键只续接未完成 action。
+- executing 请求只由 object-local Worker 以 lease、heartbeat、fencing token 与 CAS 认领；过期 lease 的新 winner 不得重做 completedActions。
+- 同一 accountId+clientRequestId 同意图返回原回执，不同意图返回 canonical conflict。
+- completed 只表示请求中声明的 Assistant-owned action 已完成，不表示 Connector、外部应用或其他领域数据已删除。
+lifecycle:
+  state_field: status
+  states: [pending_confirmation, executing, completed, cancelled, failed]
+  optimistic_concurrency: revision
+  idempotency: command_receipt

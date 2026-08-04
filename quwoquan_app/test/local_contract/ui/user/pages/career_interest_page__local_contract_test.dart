@@ -1,10 +1,9 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import '../../../../support/cloud_services/repository_mock_reexports.dart';
+import '../../../../support/cloud_services/object_doubles/tag/alpha_tag_facets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/application/user/profile/profile_edit_query.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/profile_qr_resolve_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/tag/tag_facets.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_edit_models.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
@@ -163,6 +162,8 @@ final class _CapturingProfileCommandWriter implements ProfileCommandWriter {
       nickname: '测试用户',
       nicknameCustomized: true,
       profileVersion: 2,
+      avatarVersion: 0,
+      identityTags: <String>[],
     );
   }
 }
@@ -253,7 +254,7 @@ class _CareerProfileEditQuery implements ProfileEditQuery {
   }
 
   @override
-  Future<ProfileQrResolveWireDto> resolveProfileQrToken({
+  Future<ProfileQrResolveWire> resolveProfileQrToken({
     required String token,
     String handle = '',
   }) {

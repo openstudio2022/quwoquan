@@ -344,10 +344,14 @@ class _GreetingInboxPageState extends ConsumerState<GreetingInboxPage> {
           category: UiErrorCategory.pageLoad,
           scope: UiErrorScope.page,
         ),
-        onAction: (action) async {
+        onRecovery: (action) async {
           if (action.type == UiErrorActionType.retry) {
             await _load();
+            return _rawError == null
+                ? UiRecoveryOutcome.recovered
+                : UiRecoveryOutcome.stillBlocked;
           }
+          return UiRecoveryOutcome.cancelled;
         },
       );
     }

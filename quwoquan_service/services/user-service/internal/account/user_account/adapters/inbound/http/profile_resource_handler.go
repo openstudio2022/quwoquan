@@ -187,23 +187,22 @@ func (h *UserHandler) handlePullUserSync(w http.ResponseWriter, r *http.Request)
 		writeInvalidArg(w, r, "X-Client-User-Id header required")
 		return
 	}
-	body, err := readBody(r)
-	if err != nil {
+	var request pullUserSyncRequest
+	if err := decodeStrictJSON(r, &request); err != nil {
 		writeInvalidArg(w, r, "invalid request body")
 		return
 	}
 	afterSeq := int64(0)
-	switch raw := body["afterSeq"].(type) {
-	case float64:
-		afterSeq = int64(raw)
-	case int64:
-		afterSeq = raw
-	case int:
-		afterSeq = int64(raw)
+	if request.AfterSeq != nil {
+		afterSeq = *request.AfterSeq
 	}
 	limit := 200
-	if raw, ok := body["limit"].(float64); ok && int(raw) > 0 {
-		limit = int(raw)
+	if request.Limit != nil {
+		limit = *request.Limit
+	}
+	if afterSeq < 0 || limit < 1 || limit > 500 {
+		writeInvalidArg(w, r, "invalid sync cursor or limit")
+		return
 	}
 	resp, err := h.profile.PullSync(r.Context(), userID, afterSeq, limit)
 	if err != nil {
@@ -211,6 +210,11 @@ func (h *UserHandler) handlePullUserSync(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	writeJSON(w, http.StatusOK, resp)
+}
+
+type pullUserSyncRequest struct {
+	AfterSeq *int64 `json:"afterSeq"`
+	Limit    *int   `json:"limit"`
 }
 
 func (h *UserHandler) handleSearchSocialRelations(w http.ResponseWriter, r *http.Request) {

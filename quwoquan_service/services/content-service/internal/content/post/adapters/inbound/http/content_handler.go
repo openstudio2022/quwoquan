@@ -690,16 +690,17 @@ func (h *ContentHandler) handlePromotePostToWork(w http.ResponseWriter, r *http.
 
 func (h *ContentHandler) handleDeletePost(w http.ResponseWriter, r *http.Request) {
 	postID := postIDFromPath(r.URL.Path)
-	if err := h.postService.DeletePost(r.Context(), postID, ResolvePersonaID(r)); err != nil {
+	receipt, err := h.postService.DeletePost(r.Context(), postID, ResolvePersonaID(r))
+	if err != nil {
 		writeHTTPError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"postId": postID, "status": "deleted"})
+	writeJSON(w, http.StatusOK, receipt)
 }
 
 func (h *ContentHandler) handleGetAppConfig(w http.ResponseWriter, r *http.Request) {
 	payload := h.postService.GetAppConfig()
-	hash, _ := payload["configHash"].(string)
+	hash := payload.ConfigHash
 	if hash != "" {
 		etag := `"` + hash + `"`
 		w.Header().Set("ETag", etag)

@@ -128,7 +128,7 @@ def test_restore_after_subject_closure_is_persisted_only_as_terminal_noop() -> N
 def test_decoder_rejects_a_second_payload_field_track() -> None:
     values = {key.decode(): value.decode() for key, value in _fields().items()}
     payload = json.loads(values["payload"])
-    payload["legacyUserId"] = payload["userId"]
+    payload["unknownUserId"] = payload["userId"]
     values["payload"] = json.dumps(payload)
 
     try:
@@ -136,4 +136,4 @@ def test_decoder_rejects_a_second_payload_field_track() -> None:
     except ValueError as error:
         assert "payload fields" in str(error)
     else:
-        raise AssertionError("legacy payload field was accepted")
+        raise AssertionError("unknown payload field was accepted")

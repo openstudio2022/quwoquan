@@ -45,7 +45,7 @@ class _EntryCountFacet extends TestContentCommentFacet {
     required String postId,
     String? cursor,
     int limit = 20,
-    ContentCommentSort sort = ContentCommentSort.hot,
+    CommentSort sort = CommentSort.hot,
   }) async {
     return CommentPageSlice(
       items: items.take(3).toList(growable: false),

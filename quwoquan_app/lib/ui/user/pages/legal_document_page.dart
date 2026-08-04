@@ -221,12 +221,15 @@ class _LegalDocumentPageState extends ConsumerState<LegalDocumentPage> {
                   category: UiErrorCategory.pageLoad,
                   scope: UiErrorScope.page,
                 ),
-                onAction: (action) async {
+                onRecovery: (action) async {
                   if (action.type == UiErrorActionType.retry ||
                       action.type == UiErrorActionType.resubmit) {
                     await _retry();
-                    return;
+                    return _hasError
+                        ? UiRecoveryOutcome.stillBlocked
+                        : UiRecoveryOutcome.recovered;
                   }
+                  return UiRecoveryOutcome.cancelled;
                 },
               )
             else if (controller == null)

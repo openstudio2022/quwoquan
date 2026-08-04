@@ -1,7 +1,6 @@
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_metadata.g.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
-import 'package:quwoquan_app/cloud/services/content/content_read_model_projection.dart';
 
 /// 我的足迹条目（云侧只读契约 GET /content/footprint 的端侧映射）。
 ///
@@ -20,19 +19,6 @@ class FootprintEntry {
   final String occurredAt;
   final ContentPostViewData? post;
 
-  factory FootprintEntry.fromMap(Map<String, dynamic> map) {
-    ContentPostViewData? post;
-    final rawPost = map['post'];
-    if (rawPost is Map) {
-      post = contentPostViewDataFromReadModelMap(Map<String, dynamic>.from(rawPost));
-    }
-    return FootprintEntry(
-      postId: (map['postId'] ?? '').toString(),
-      action: (map['action'] ?? '').toString(),
-      occurredAt: (map['occurredAt'] ?? '').toString(),
-      post: post,
-    );
-  }
 }
 
 /// 我的足迹只读 Repository（WP1·T5）。

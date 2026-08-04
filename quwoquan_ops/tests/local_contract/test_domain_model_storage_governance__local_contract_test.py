@@ -189,3 +189,93 @@ redis_cache:
     )
 
     assert collect_storage_governance_issues(tmp_path) == []
+
+
+def test_storage_governance_rejects_go_redis_helper_key_without_owner(
+    tmp_path: Path,
+) -> None:
+    _write(
+        tmp_path
+        / "quwoquan_service/services/alpha-service/contracts/domain/item/storage.yaml",
+        "collections: {alpha_items: {entity: Item}}\n",
+    )
+    _write(
+        tmp_path
+        / "quwoquan_service/services/alpha-service/internal/domain/item/cache.go",
+        '''package item
+
+import "fmt"
+
+func quotaKey(subject string) string { return fmt.Sprintf("missing:quota:%s", subject) }
+
+func increment(client interface{ Incr(any, string) (int64, error) }) {
+    _, _ = client.Incr(nil, quotaKey("subject-1"))
+}
+''',
+    )
+
+    issues = collect_storage_governance_issues(tmp_path)
+
+    assert any("missing:quota:" in issue and "undeclared" in issue for issue in issues)
+
+
+def test_storage_governance_rejects_python_attribute_database_collection(
+    tmp_path: Path,
+) -> None:
+    _write(
+        tmp_path
+        / "quwoquan_service/services/alpha-service/contracts/domain/item/storage.yaml",
+        "collections: {alpha_items: {entity: Item}}\n",
+    )
+    _write(
+        tmp_path
+        / "quwoquan_service/services/alpha-service/internal/domain/item/store.py",
+        '''class Store:
+    def __init__(self, database):
+        self._db = database
+
+    def find(self):
+        return self._db["missing_items"].find_one({})
+''',
+    )
+
+    issues = collect_storage_governance_issues(tmp_path)
+
+    assert any("missing_items" in issue and "undeclared" in issue for issue in issues)
+
+
+def test_storage_governance_scans_sql_outbox_inbox_and_checkpoint_tables(
+    tmp_path: Path,
+) -> None:
+    _write(
+        tmp_path
+        / "quwoquan_service/services/alpha-service/contracts/domain/item/storage.yaml",
+        '''backend: postgresql
+tables:
+  alpha_outbox: {entity: ItemOutbox}
+  alpha_inbox: {entity: ItemInbox}
+''',
+    )
+    _write(
+        tmp_path
+        / "quwoquan_service/services/alpha-service/internal/domain/item/store.go",
+        '''package item
+
+import "database/sql"
+
+func persist(db *sql.DB) {
+    _, _ = db.Exec(`INSERT INTO alpha_outbox (event_id) VALUES ($1)`, "event-1")
+    _, _ = db.Exec(`SELECT event_id FROM alpha_inbox WHERE event_id = $1`, "event-1")
+    _, _ = db.Exec(`UPDATE alpha_projector_checkpoints SET cursor = $1`, "cursor-1")
+}
+''',
+    )
+
+    issues = collect_storage_governance_issues(tmp_path)
+
+    assert not any("alpha_outbox" in issue for issue in issues)
+    assert not any("alpha_inbox" in issue for issue in issues)
+    assert any(
+        "alpha_projector_checkpoints" in issue and "undeclared" in issue
+        for issue in issues
+    )

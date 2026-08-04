@@ -4,8 +4,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_inbox_summary.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
@@ -14,6 +12,7 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_interaction_tab.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_shell.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../../support/cloud_services/content/mock_content_repository.dart';
 import '../../../../support/cloud_services/repository_mock_reexports.dart';
@@ -28,7 +27,7 @@ class _ThrowingCapabilityRepository extends RelationshipCapabilityRepository {
   bool get reconcilesCapabilityWithSharedRelationshipState => false;
 
   @override
-  Future<RelationshipCapabilityDto> getCapability(String targetUserId) {
+  Future<RelationshipCapabilityViewData> getCapability(String targetUserId) {
     return Future.error(StateError('capability unavailable in test'));
   }
 }
@@ -38,7 +37,14 @@ class _EmptyIntersectionRepository implements IntersectionRepository {
 
   @override
   Future<IntersectionInboxSummary> getMyIntersectionSummary() async =>
-      IntersectionInboxSummary(totalCount: 0, totalNewCount: 0);
+      const IntersectionInboxSummary(
+        totalCount: 0,
+        totalNewCount: 0,
+        dimensions: [],
+        generatedAt: '2026-08-03T00:00:00Z',
+        totalStrengthenedCount: 0,
+        totalReactivatedCount: 0,
+      );
 
   @override
   Future<List<IntersectionReason>> getObjectIntersections({
@@ -163,9 +169,7 @@ void main() {
       findsOneWidget,
     );
 
-    await tester.tap(
-      find.text(ProfileText.profileInteractionDirectionSent),
-    );
+    await tester.tap(find.text(ProfileText.profileInteractionDirectionSent));
     await _pumpFrames(tester, count: 4);
     expect(
       find.text(ProfileText.profileShareInitiatedEmptyTitle),

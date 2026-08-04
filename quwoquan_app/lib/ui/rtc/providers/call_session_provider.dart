@@ -4,7 +4,6 @@ import 'dart:developer' as developer;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/rtc/rtc_signal_events.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/rtc/rtc_signal_payloads.g.dart';
 import 'package:quwoquan_app/application/rtc/call_session/call_participant_presentation.dart';
 import 'package:quwoquan_app/application/rtc/call_session/rtc_call_entry_coordinator.dart';
 import 'package:quwoquan_app/application/rtc/call_session/rtc_media_qoe_tracker.dart';

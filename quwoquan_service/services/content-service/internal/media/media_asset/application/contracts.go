@@ -49,10 +49,14 @@ type DiscardMediaAssetCommand struct {
 	OwnerID string
 }
 
+type MediaAssetDiscardStatus string
+
+const MediaAssetDiscardStatusDeleted MediaAssetDiscardStatus = "deleted"
+
 type DiscardMediaAssetResult struct {
-	MediaID  string                      `json:"mediaId"`
-	Status   mediamodel.ProcessingStatus `json:"status"`
-	Replayed bool                        `json:"replayed"`
+	MediaID  string                  `json:"mediaId"`
+	Status   MediaAssetDiscardStatus `json:"status"`
+	Replayed bool                    `json:"replayed"`
 }
 
 type SelectAutoMediaCoverCommand struct {

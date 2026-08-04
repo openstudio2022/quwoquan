@@ -310,7 +310,7 @@ class _ChatConversationPageState extends _ChatConversationPageActionsState
                     category: UiErrorCategory.pageLoad,
                     scope: UiErrorScope.page,
                   ),
-                  onAction: (action) async {
+                  onRecovery: (action) async {
                     if (action.type == UiErrorActionType.retry ||
                         action.type == UiErrorActionType.resubmit) {
                       await ref
@@ -318,7 +318,14 @@ class _ChatConversationPageState extends _ChatConversationPageActionsState
                             chatMessageProvider(widget.conversationId).notifier,
                           )
                           .loadMessages();
+                      final refreshed = ref.read(
+                        chatMessageProvider(widget.conversationId),
+                      );
+                      return refreshed.error == null
+                          ? UiRecoveryOutcome.recovered
+                          : UiRecoveryOutcome.stillBlocked;
                     }
+                    return UiRecoveryOutcome.cancelled;
                   },
                 )
               : displayMessages.isEmpty

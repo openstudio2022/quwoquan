@@ -119,6 +119,20 @@ func parseProductionFiles(repositoryRoot, servicesRoot string) ([]parsedFile, ma
 
 func collectConstants(file *ast.File, constants packageConstants) {
 	for _, declaration := range file.Decls {
+		if function, ok := declaration.(*ast.FuncDecl); ok {
+			if function.Recv != nil || function.Body == nil || len(function.Body.List) != 1 {
+				continue
+			}
+			result, ok := function.Body.List[0].(*ast.ReturnStmt)
+			if !ok || len(result.Results) != 1 {
+				continue
+			}
+			// Storage identities are commonly centralized in a package-local key
+			// helper (for example `otpQuotaKey(phone)`).  Retain the single return
+			// expression so calls to that helper cannot escape the AST gate.
+			constants[function.Name.Name] = result.Results[0]
+			continue
+		}
 		general, ok := declaration.(*ast.GenDecl)
 		if !ok || (general.Tok != token.CONST && general.Tok != token.VAR) {
 			continue
@@ -168,12 +182,13 @@ func scanFile(source parsedFile, constants packageConstants, seen map[reference]
 							add("collection", value, "read_write")
 						}
 					}
-				case "XAdd", "XDel", "XTrimMaxLen", "XTrimMinID",
+				case "XAdd", "XDel", "XTrimMaxLen", "XTrimMinID", "XTrimOlderThan",
 					"XAck", "XAutoClaim", "XClaim", "XGroupCreate",
-					"XGroupCreateMkStream", "XPending", "XRead", "XReadGroup":
+					"XGroupCreateMkStream", "XPending", "XPendingCount", "XRead", "XReadGroup":
 					access := "read"
 					if selector.Sel.Name == "XAdd" || selector.Sel.Name == "XDel" ||
-						selector.Sel.Name == "XTrimMaxLen" || selector.Sel.Name == "XTrimMinID" {
+						selector.Sel.Name == "XTrimMaxLen" || selector.Sel.Name == "XTrimMinID" ||
+						selector.Sel.Name == "XTrimOlderThan" {
 						access = "write"
 					}
 					for _, argument := range call.Args {
@@ -181,7 +196,10 @@ func scanFile(source parsedFile, constants packageConstants, seen map[reference]
 							add("stream", value, access)
 						}
 					}
-				case "Get", "Set", "SetNX", "Del", "HGet", "HSet", "SAdd", "SRem", "ZAdd", "ZRem":
+				case "Get", "GetBytes", "GetDel", "Set", "SetBytes", "SetNX", "Del", "Incr", "Expire",
+					"HGet", "HSet", "HDel", "HGetAll", "HIncrByFloat",
+					"SAdd", "SRem", "SMembers", "SIsMember",
+					"ZAdd", "ZRangeByScore", "ZRem", "ZCard":
 					for _, argument := range call.Args {
 						if value, resolved := evalString(argument, constants, nil); resolved && isRedisKey(value) {
 							add("redis_key", value, "read_write")
@@ -255,6 +273,22 @@ func evalString(expression ast.Expr, constants packageConstants, resolving map[s
 		delete(resolving, value.Name)
 		return result, resultOK
 	case *ast.CallExpr:
+		if function, ok := value.Fun.(*ast.Ident); ok {
+			if resolving == nil {
+				resolving = map[string]bool{}
+			}
+			if resolving[function.Name] {
+				return "", false
+			}
+			resolved, exists := constants[function.Name]
+			if !exists {
+				return "", false
+			}
+			resolving[function.Name] = true
+			result, resultOK := evalString(resolved, constants, resolving)
+			delete(resolving, function.Name)
+			return result, resultOK
+		}
 		selector, ok := value.Fun.(*ast.SelectorExpr)
 		if !ok || selector.Sel.Name != "Sprintf" || len(value.Args) == 0 {
 			return "", false

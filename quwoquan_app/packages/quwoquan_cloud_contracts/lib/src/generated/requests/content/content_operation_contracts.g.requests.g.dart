@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 9816b2b7d9fedea34ad78dd719fc16fdf3e982073304d7f50f7a8ea4064f6b7f
+// ContractGraph SHA256: 93359367b8614f01bb5e1c51e37af383332b01f117cc1c6cf39e4fdf838e49d2
 
 part of '../../../content/content_operation_contracts.g.dart';
 
@@ -58,6 +58,12 @@ int _generatedRequestInt(Object? value, String path) {
 double _generatedRequestDouble(Object? value, String path) {
   if (value is num) return value.toDouble();
   throw FormatException('$path must be a number');
+}
+
+
+bool _generatedRequestBool(Object? value, String path) {
+  if (value is bool) return value;
+  throw FormatException('$path must be a boolean');
 }
 
 
@@ -269,6 +275,262 @@ final class ContentAuthorPostsQuery {
     if (this.visibility != null) "visibility": this.visibility!,
     if (this.cursor != null) "cursor": this.cursor!,
     "limit": this.limit,
+  };
+}
+
+final class ContentBehaviorEventWire {
+  ContentBehaviorEventWire({
+    required String clientEventId,
+    required DateTime occurredAt,
+    String? contentId,
+    required BehaviorEventType action,
+    String? state,
+    ContentType? contentType,
+    String? objectId,
+    String? objectKind,
+    String? displayName,
+    String? sourceSurface,
+    List<String>? tagRefs,
+    double? duration,
+    String? feedRequestId,
+    int? position,
+    String? channelId,
+    String? policyDigest,
+    String? recallPath,
+    String? contentVertical,
+    String? supplySource,
+    int? commentLength,
+    String? authorId,
+    String? referralSource,
+    int? engagementDepth,
+    double? consumedRatio,
+    int? totalUnits,
+    int? effectivePlayMs,
+    String? feedSessionId,
+    String? playbackSessionId,
+    List<String>? entityRefs,
+    String? pageVisitId,
+    IntersectionDimension? intersectionDimension,
+    String? intersectionSourceRef,
+    List<String>? intersectionTagRefs,
+    String? intersectionId,
+    String? intersectionClass,
+    String? intersectionEvidenceId,
+    String? subjectId,
+    String? feedbackKind,
+    String? taxonomyReleaseId,
+    String? direction,
+    String? motionProfile,
+    int? settleMs,
+    bool? reducedMotion,
+    bool? committed,
+  }) : clientEventId = clientEventId,
+       occurredAt = occurredAt,
+       contentId = contentId,
+       action = action,
+       state = state,
+       contentType = contentType,
+       objectId = objectId,
+       objectKind = objectKind,
+       displayName = displayName,
+       sourceSurface = sourceSurface,
+       tagRefs = tagRefs == null ? null : List.unmodifiable(tagRefs),
+       duration = duration,
+       feedRequestId = feedRequestId,
+       position = position,
+       channelId = channelId,
+       policyDigest = policyDigest,
+       recallPath = recallPath,
+       contentVertical = contentVertical,
+       supplySource = supplySource,
+       commentLength = commentLength,
+       authorId = authorId,
+       referralSource = referralSource,
+       engagementDepth = engagementDepth,
+       consumedRatio = consumedRatio,
+       totalUnits = totalUnits,
+       effectivePlayMs = effectivePlayMs,
+       feedSessionId = feedSessionId,
+       playbackSessionId = playbackSessionId,
+       entityRefs = entityRefs == null ? null : List.unmodifiable(entityRefs),
+       pageVisitId = pageVisitId,
+       intersectionDimension = intersectionDimension,
+       intersectionSourceRef = intersectionSourceRef,
+       intersectionTagRefs = intersectionTagRefs == null ? null : List.unmodifiable(intersectionTagRefs),
+       intersectionId = intersectionId,
+       intersectionClass = intersectionClass,
+       intersectionEvidenceId = intersectionEvidenceId,
+       subjectId = subjectId,
+       feedbackKind = feedbackKind,
+       taxonomyReleaseId = taxonomyReleaseId,
+       direction = direction,
+       motionProfile = motionProfile,
+       settleMs = settleMs,
+       reducedMotion = reducedMotion,
+       committed = committed {
+    if (this.clientEventId.isEmpty) {
+      throw ArgumentError.value(this.clientEventId, "clientEventId", 'must not be blank');
+    }
+    if (this.position != null && this.position! < 0) {
+      throw ArgumentError.value(this.position, "position", "must be at least 0");
+    }
+    if (this.commentLength != null && this.commentLength! < 0) {
+      throw ArgumentError.value(this.commentLength, "commentLength", "must be at least 0");
+    }
+    if (this.engagementDepth != null && this.engagementDepth! < 0) {
+      throw ArgumentError.value(this.engagementDepth, "engagementDepth", "must be at least 0");
+    }
+    if (this.totalUnits != null && this.totalUnits! < 0) {
+      throw ArgumentError.value(this.totalUnits, "totalUnits", "must be at least 0");
+    }
+    if (this.effectivePlayMs != null && this.effectivePlayMs! < 0) {
+      throw ArgumentError.value(this.effectivePlayMs, "effectivePlayMs", "must be at least 0");
+    }
+    if (this.settleMs != null && this.settleMs! < 0) {
+      throw ArgumentError.value(this.settleMs, "settleMs", "must be at least 0");
+    }
+  }
+
+  final String clientEventId;
+  final DateTime occurredAt;
+  final String? contentId;
+  final BehaviorEventType action;
+  final String? state;
+  final ContentType? contentType;
+  final String? objectId;
+  final String? objectKind;
+  final String? displayName;
+  final String? sourceSurface;
+  final List<String>? tagRefs;
+  final double? duration;
+  final String? feedRequestId;
+  final int? position;
+  final String? channelId;
+  final String? policyDigest;
+  final String? recallPath;
+  final String? contentVertical;
+  final String? supplySource;
+  final int? commentLength;
+  final String? authorId;
+  final String? referralSource;
+  final int? engagementDepth;
+  final double? consumedRatio;
+  final int? totalUnits;
+  final int? effectivePlayMs;
+  final String? feedSessionId;
+  final String? playbackSessionId;
+  final List<String>? entityRefs;
+  final String? pageVisitId;
+  final IntersectionDimension? intersectionDimension;
+  final String? intersectionSourceRef;
+  final List<String>? intersectionTagRefs;
+  final String? intersectionId;
+  final String? intersectionClass;
+  final String? intersectionEvidenceId;
+  final String? subjectId;
+  final String? feedbackKind;
+  final String? taxonomyReleaseId;
+  final String? direction;
+  final String? motionProfile;
+  final int? settleMs;
+  final bool? reducedMotion;
+  final bool? committed;
+
+  factory ContentBehaviorEventWire.fromWire(Map<String, Object?> map, [String path = "ContentBehaviorEventWire"]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{"clientEventId", "occurredAt", "contentId", "action", "state", "contentType", "objectId", "objectKind", "displayName", "sourceSurface", "tagRefs", "duration", "feedRequestId", "position", "channelId", "policyDigest", "recallPath", "contentVertical", "supplySource", "commentLength", "authorId", "referralSource", "engagementDepth", "consumedRatio", "totalUnits", "effectivePlayMs", "feedSessionId", "playbackSessionId", "entityRefs", "pageVisitId", "intersectionDimension", "intersectionSourceRef", "intersectionTagRefs", "intersectionId", "intersectionClass", "intersectionEvidenceId", "subjectId", "feedbackKind", "taxonomyReleaseId", "direction", "motionProfile", "settleMs", "reducedMotion", "committed"}, path);
+    return ContentBehaviorEventWire(
+      clientEventId: _generatedRequestString(map["clientEventId"], '$path.clientEventId'),
+      occurredAt: _generatedRequestTimestamp(map["occurredAt"], '$path.occurredAt'),
+      contentId: map["contentId"] == null ? null : _generatedRequestString(map["contentId"], '$path.contentId'),
+      action: switch (map["action"]) { "impression" => BehaviorEventType.impression, "click" => BehaviorEventType.click, "dwell" => BehaviorEventType.dwell, "like" => BehaviorEventType.like, "dislike" => BehaviorEventType.dislike, "undo_dislike" => BehaviorEventType.undoDislike, "hide_author" => BehaviorEventType.hideAuthor, "hide_content_type" => BehaviorEventType.hideContentType, "report" => BehaviorEventType.report, "share" => BehaviorEventType.share, "comment" => BehaviorEventType.comment, "intersection_expand" => BehaviorEventType.intersectionExpand, "intersection_feedback" => BehaviorEventType.intersectionFeedback, "wishlist_add" => BehaviorEventType.wishlistAdd, "wishlist_remove" => BehaviorEventType.wishlistRemove, "skip" => BehaviorEventType.skip, "follow" => BehaviorEventType.follow, "join_circle" => BehaviorEventType.joinCircle, "leave_circle" => BehaviorEventType.leaveCircle, "add_contact" => BehaviorEventType.addContact, "author_view" => BehaviorEventType.authorView, "entity_page_view" => BehaviorEventType.entityPageView, "tag_click" => BehaviorEventType.tagClick, "content_depth" => BehaviorEventType.contentDepth, "play_progress" => BehaviorEventType.playProgress, "effective_play" => BehaviorEventType.effectivePlay, "assistant_interest" => BehaviorEventType.assistantInterest, "onboarding_interest" => BehaviorEventType.onboardingInterest, _ => throw FormatException('$path.action' + ' has an invalid enum value'), },
+      state: map["state"] == null ? null : _generatedRequestString(map["state"], '$path.state'),
+      contentType: map["contentType"] == null ? null : switch (map["contentType"]) { "image" => ContentType.image, "video" => ContentType.video, "micro" => ContentType.micro, "article" => ContentType.article, _ => throw FormatException('$path.contentType' + ' has an invalid enum value'), },
+      objectId: map["objectId"] == null ? null : _generatedRequestString(map["objectId"], '$path.objectId'),
+      objectKind: map["objectKind"] == null ? null : _generatedRequestString(map["objectKind"], '$path.objectKind'),
+      displayName: map["displayName"] == null ? null : _generatedRequestString(map["displayName"], '$path.displayName'),
+      sourceSurface: map["sourceSurface"] == null ? null : _generatedRequestString(map["sourceSurface"], '$path.sourceSurface'),
+      tagRefs: map["tagRefs"] == null ? null : List<String>.unmodifiable(_generatedRequestList(map["tagRefs"], '$path.tagRefs').asMap().entries.map((entry) => _generatedRequestString(entry.value, '$path.tagRefs' + '[${entry.key}]'))),
+      duration: map["duration"] == null ? null : _generatedRequestDouble(map["duration"], '$path.duration'),
+      feedRequestId: map["feedRequestId"] == null ? null : _generatedRequestString(map["feedRequestId"], '$path.feedRequestId'),
+      position: map["position"] == null ? null : _generatedRequestInt(map["position"], '$path.position'),
+      channelId: map["channelId"] == null ? null : _generatedRequestString(map["channelId"], '$path.channelId'),
+      policyDigest: map["policyDigest"] == null ? null : _generatedRequestString(map["policyDigest"], '$path.policyDigest'),
+      recallPath: map["recallPath"] == null ? null : _generatedRequestString(map["recallPath"], '$path.recallPath'),
+      contentVertical: map["contentVertical"] == null ? null : _generatedRequestString(map["contentVertical"], '$path.contentVertical'),
+      supplySource: map["supplySource"] == null ? null : _generatedRequestString(map["supplySource"], '$path.supplySource'),
+      commentLength: map["commentLength"] == null ? null : _generatedRequestInt(map["commentLength"], '$path.commentLength'),
+      authorId: map["authorId"] == null ? null : _generatedRequestString(map["authorId"], '$path.authorId'),
+      referralSource: map["referralSource"] == null ? null : _generatedRequestString(map["referralSource"], '$path.referralSource'),
+      engagementDepth: map["engagementDepth"] == null ? null : _generatedRequestInt(map["engagementDepth"], '$path.engagementDepth'),
+      consumedRatio: map["consumedRatio"] == null ? null : _generatedRequestDouble(map["consumedRatio"], '$path.consumedRatio'),
+      totalUnits: map["totalUnits"] == null ? null : _generatedRequestInt(map["totalUnits"], '$path.totalUnits'),
+      effectivePlayMs: map["effectivePlayMs"] == null ? null : _generatedRequestInt(map["effectivePlayMs"], '$path.effectivePlayMs'),
+      feedSessionId: map["feedSessionId"] == null ? null : _generatedRequestString(map["feedSessionId"], '$path.feedSessionId'),
+      playbackSessionId: map["playbackSessionId"] == null ? null : _generatedRequestString(map["playbackSessionId"], '$path.playbackSessionId'),
+      entityRefs: map["entityRefs"] == null ? null : List<String>.unmodifiable(_generatedRequestList(map["entityRefs"], '$path.entityRefs').asMap().entries.map((entry) => _generatedRequestString(entry.value, '$path.entityRefs' + '[${entry.key}]'))),
+      pageVisitId: map["pageVisitId"] == null ? null : _generatedRequestString(map["pageVisitId"], '$path.pageVisitId'),
+      intersectionDimension: map["intersectionDimension"] == null ? null : switch (map["intersectionDimension"]) { "identity" => IntersectionDimension.identity, "location" => IntersectionDimension.location, "content" => IntersectionDimension.content, "interest" => IntersectionDimension.interest, "relationship" => IntersectionDimension.relationship, _ => throw FormatException('$path.intersectionDimension' + ' has an invalid enum value'), },
+      intersectionSourceRef: map["intersectionSourceRef"] == null ? null : _generatedRequestString(map["intersectionSourceRef"], '$path.intersectionSourceRef'),
+      intersectionTagRefs: map["intersectionTagRefs"] == null ? null : List<String>.unmodifiable(_generatedRequestList(map["intersectionTagRefs"], '$path.intersectionTagRefs').asMap().entries.map((entry) => _generatedRequestString(entry.value, '$path.intersectionTagRefs' + '[${entry.key}]'))),
+      intersectionId: map["intersectionId"] == null ? null : _generatedRequestString(map["intersectionId"], '$path.intersectionId'),
+      intersectionClass: map["intersectionClass"] == null ? null : _generatedRequestString(map["intersectionClass"], '$path.intersectionClass'),
+      intersectionEvidenceId: map["intersectionEvidenceId"] == null ? null : _generatedRequestString(map["intersectionEvidenceId"], '$path.intersectionEvidenceId'),
+      subjectId: map["subjectId"] == null ? null : _generatedRequestString(map["subjectId"], '$path.subjectId'),
+      feedbackKind: map["feedbackKind"] == null ? null : _generatedRequestString(map["feedbackKind"], '$path.feedbackKind'),
+      taxonomyReleaseId: map["taxonomyReleaseId"] == null ? null : _generatedRequestString(map["taxonomyReleaseId"], '$path.taxonomyReleaseId'),
+      direction: map["direction"] == null ? null : _generatedRequestString(map["direction"], '$path.direction'),
+      motionProfile: map["motionProfile"] == null ? null : _generatedRequestString(map["motionProfile"], '$path.motionProfile'),
+      settleMs: map["settleMs"] == null ? null : _generatedRequestInt(map["settleMs"], '$path.settleMs'),
+      reducedMotion: map["reducedMotion"] == null ? null : _generatedRequestBool(map["reducedMotion"], '$path.reducedMotion'),
+      committed: map["committed"] == null ? null : _generatedRequestBool(map["committed"], '$path.committed'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "clientEventId": this.clientEventId,
+    "occurredAt": this.occurredAt.toUtc().toIso8601String(),
+    if (this.contentId != null) "contentId": this.contentId!,
+    "action": this.action.wireName,
+    if (this.state != null) "state": this.state!,
+    if (this.contentType != null) "contentType": this.contentType!.wireName,
+    if (this.objectId != null) "objectId": this.objectId!,
+    if (this.objectKind != null) "objectKind": this.objectKind!,
+    if (this.displayName != null) "displayName": this.displayName!,
+    if (this.sourceSurface != null) "sourceSurface": this.sourceSurface!,
+    if (this.tagRefs != null) "tagRefs": this.tagRefs!.map((value) => value).toList(growable: false),
+    if (this.duration != null) "duration": this.duration!,
+    if (this.feedRequestId != null) "feedRequestId": this.feedRequestId!,
+    if (this.position != null) "position": this.position!,
+    if (this.channelId != null) "channelId": this.channelId!,
+    if (this.policyDigest != null) "policyDigest": this.policyDigest!,
+    if (this.recallPath != null) "recallPath": this.recallPath!,
+    if (this.contentVertical != null) "contentVertical": this.contentVertical!,
+    if (this.supplySource != null) "supplySource": this.supplySource!,
+    if (this.commentLength != null) "commentLength": this.commentLength!,
+    if (this.authorId != null) "authorId": this.authorId!,
+    if (this.referralSource != null) "referralSource": this.referralSource!,
+    if (this.engagementDepth != null) "engagementDepth": this.engagementDepth!,
+    if (this.consumedRatio != null) "consumedRatio": this.consumedRatio!,
+    if (this.totalUnits != null) "totalUnits": this.totalUnits!,
+    if (this.effectivePlayMs != null) "effectivePlayMs": this.effectivePlayMs!,
+    if (this.feedSessionId != null) "feedSessionId": this.feedSessionId!,
+    if (this.playbackSessionId != null) "playbackSessionId": this.playbackSessionId!,
+    if (this.entityRefs != null) "entityRefs": this.entityRefs!.map((value) => value).toList(growable: false),
+    if (this.pageVisitId != null) "pageVisitId": this.pageVisitId!,
+    if (this.intersectionDimension != null) "intersectionDimension": this.intersectionDimension!.wireName,
+    if (this.intersectionSourceRef != null) "intersectionSourceRef": this.intersectionSourceRef!,
+    if (this.intersectionTagRefs != null) "intersectionTagRefs": this.intersectionTagRefs!.map((value) => value).toList(growable: false),
+    if (this.intersectionId != null) "intersectionId": this.intersectionId!,
+    if (this.intersectionClass != null) "intersectionClass": this.intersectionClass!,
+    if (this.intersectionEvidenceId != null) "intersectionEvidenceId": this.intersectionEvidenceId!,
+    if (this.subjectId != null) "subjectId": this.subjectId!,
+    if (this.feedbackKind != null) "feedbackKind": this.feedbackKind!,
+    if (this.taxonomyReleaseId != null) "taxonomyReleaseId": this.taxonomyReleaseId!,
+    if (this.direction != null) "direction": this.direction!,
+    if (this.motionProfile != null) "motionProfile": this.motionProfile!,
+    if (this.settleMs != null) "settleMs": this.settleMs!,
+    if (this.reducedMotion != null) "reducedMotion": this.reducedMotion!,
+    if (this.committed != null) "committed": this.committed!,
   };
 }
 
@@ -667,6 +929,29 @@ final class DeleteContentCommentCommand {
   };
 }
 
+final class DeletePostCommand {
+  DeletePostCommand({
+    required String postId,
+  }) : postId = postId.trim() {
+    if (this.postId.isEmpty) {
+      throw ArgumentError.value(this.postId, "postId", 'must not be blank');
+    }
+  }
+
+  final String postId;
+
+  factory DeletePostCommand.fromWire(Map<String, Object?> map, [String path = "DeletePostCommand"]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{"postId"}, path);
+    return DeletePostCommand(
+      postId: _generatedRequestString(map["postId"], '$path.postId'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "postId": this.postId,
+  };
+}
+
 final class DiscardContentMediaAssetCommand {
   DiscardContentMediaAssetCommand({
     required String mediaId,
@@ -716,6 +1001,10 @@ final class EntityWishlistStateQuery {
 
 final class FilterCatalogQuery {
   const FilterCatalogQuery();
+}
+
+final class GetAppConfigQuery {
+  const GetAppConfigQuery();
 }
 
 final class GetAuthorImpactQuery {
@@ -1071,6 +1360,25 @@ final class ListMyIntersectionsQuery {
   };
 }
 
+final class MarkIntersectionsVisitedRequest {
+  const MarkIntersectionsVisitedRequest({
+    IntersectionDimension? dimension,
+  }) : dimension = dimension;
+
+  final IntersectionDimension? dimension;
+
+  factory MarkIntersectionsVisitedRequest.fromWire(Map<String, Object?> map, [String path = "MarkIntersectionsVisitedRequest"]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{"dimension"}, path);
+    return MarkIntersectionsVisitedRequest(
+      dimension: map["dimension"] == null ? null : switch (map["dimension"]) { "identity" => IntersectionDimension.identity, "location" => IntersectionDimension.location, "content" => IntersectionDimension.content, "interest" => IntersectionDimension.interest, "relationship" => IntersectionDimension.relationship, _ => throw FormatException('$path.dimension' + ' has an invalid enum value'), },
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    if (this.dimension != null) "dimension": this.dimension!.wireName,
+  };
+}
+
 final class MediaCaptureMetadata {
   MediaCaptureMetadata({
     String? cameraMake,
@@ -1334,21 +1642,24 @@ final class ReactToContentCommentCommand {
 
 final class ReportContentBehaviorsCommand {
   ReportContentBehaviorsCommand({
-    required List<Map<String, Object?>> events,
+    required List<ContentBehaviorEventWire> events,
   }) : events = List.unmodifiable(events) {
+    if (this.events.length < 1) {
+      throw ArgumentError.value(this.events, "events", "item count is below 1");
+    }
   }
 
-  final List<Map<String, Object?>> events;
+  final List<ContentBehaviorEventWire> events;
 
   factory ReportContentBehaviorsCommand.fromWire(Map<String, Object?> map, [String path = "ReportContentBehaviorsCommand"]) {
     _generatedRequestRejectUnknownFields(map, const <String>{"events"}, path);
     return ReportContentBehaviorsCommand(
-      events: List<Map<String, Object?>>.unmodifiable(_generatedRequestList(map["events"], '$path.events').asMap().entries.map((entry) => _generatedRequestObject(entry.value, '$path.events' + '[${entry.key}]'))),
+      events: List<ContentBehaviorEventWire>.unmodifiable(_generatedRequestList(map["events"], '$path.events').asMap().entries.map((entry) => ContentBehaviorEventWire.fromWire(_generatedRequestObject(entry.value, '$path.events' + '[${entry.key}]'), '$path.events' + '[${entry.key}]'))),
     );
   }
 
   Map<String, Object?> toWire() => <String, Object?>{
-    "events": this.events.map((value) => value).toList(growable: false),
+    "events": this.events.map((value) => value.toWire()).toList(growable: false),
   };
 }
 
@@ -1747,7 +2058,7 @@ CloudOperationRequestPayload encodeContentCommentUnpinCommentGeneratedRequest(Ch
 CloudOperationRequestPayload encodeContentContentBehaviorFactReportBehaviorsGeneratedRequest(ReportContentBehaviorsCommand request) {
   return CloudOperationRequestPayload(
     body: <String, Object?>{
-      "events": request.events.map((value) => value).toList(growable: false),
+      "events": request.events.map((value) => value.toWire()).toList(growable: false),
     },
   );
 }
@@ -1816,6 +2127,14 @@ CloudOperationRequestPayload encodeContentIntersectionVisitStateListMyIntersecti
       if (request.timeBucket != null) "timeBucket": request.timeBucket!,
       if (request.cursor != null) "cursor": request.cursor!,
       "limit": (request.limit).toString(),
+    },
+  );
+}
+
+CloudOperationRequestPayload encodeContentIntersectionVisitStateMarkIntersectionsVisitedGeneratedRequest(MarkIntersectionsVisitedRequest request) {
+  return CloudOperationRequestPayload(
+    body: <String, Object?>{
+      if (request.dimension != null) "dimension": request.dimension!.wireName,
     },
   );
 }
@@ -1920,6 +2239,19 @@ CloudOperationRequestPayload encodeContentOutboundShareFactCreateOutboundShareGe
       "clientConfirmedAt": request.clientConfirmedAt.toUtc().toIso8601String(),
       "deliverySucceeded": true,
     },
+  );
+}
+
+CloudOperationRequestPayload encodeContentPostDeletePostGeneratedRequest(DeletePostCommand request) {
+  return CloudOperationRequestPayload(
+    pathParameters: <String, String>{
+      "postId": request.postId,
+    },
+  );
+}
+
+CloudOperationRequestPayload encodeContentPostGetAppConfigGeneratedRequest(GetAppConfigQuery request) {
+  return CloudOperationRequestPayload(
   );
 }
 

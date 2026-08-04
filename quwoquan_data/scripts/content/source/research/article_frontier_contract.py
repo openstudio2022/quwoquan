@@ -12,7 +12,6 @@ from typing import Any, Protocol
 
 from content.source.research.plan_state import _source
 from core.data_issue import DataIssue
-from core.paths import DATA_LOCAL_ROOT
 from core.schema import assert_valid
 
 
@@ -236,7 +235,14 @@ class FileDailyPageBudget:
     """Cross-process daily page budget under the disposable Data local root."""
 
     def __init__(self, root: Path | None = None) -> None:
-        self._root = Path(root or DATA_LOCAL_ROOT) / "article-source-frontier"
+        if root is None:
+            # ``core.paths`` is deliberately reloaded by contract tests that
+            # switch disposable roots. Resolve at construction time instead of
+            # retaining a stale module-import constant.
+            from core import paths
+
+            root = paths.DATA_LOCAL_ROOT
+        self._root = Path(root) / "article-source-frontier"
 
     def reserve(
         self,

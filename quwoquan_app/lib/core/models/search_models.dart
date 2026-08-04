@@ -249,7 +249,7 @@ class SocialRelationSearchItemViewData {
   final int avatarVersion;
   final String? headline;
   final bool chatAvailable;
-  final RelationshipCapabilityDto relationshipCapability;
+  final RelationshipCapabilityViewData relationshipCapability;
 
   factory SocialRelationSearchItemViewData.fromWire(
     cloud_contracts.SocialRelationSearchItemView projection,
@@ -258,7 +258,7 @@ class SocialRelationSearchItemViewData {
     final displayName = projection.displayName.isNotEmpty
         ? projection.displayName
         : personaId;
-    final capView = RelationshipCapabilityDto.fromWire(
+    final capView = RelationshipCapabilityViewData.fromWire(
       projection.relationshipCapability,
     );
     return SocialRelationSearchItemViewData(
@@ -276,13 +276,11 @@ class SocialRelationSearchItemViewData {
   }
 }
 
-/// 联系人本地检索结果行（chat 本地检索单轨 ViewModel）。
+/// 联系人本地检索结果行（chat 本地检索单轨 ViewData）。
 ///
-/// 历史上曾是 `SearchContacts` 云端 operation 的 generated wire DTO；
-/// B5 收敛为本地 sqlite 检索单轨后随 operation 一并去 wire 化，保留类名
-/// 以稳定本地检索链（record/hit payload/coordinator）的类型引用。
-class ChatContactSearchItemDto {
-  const ChatContactSearchItemDto({
+/// 数据只来自本地 sqlite 索引，不承担 Cloud wire 或 transport DTO 语义。
+class ChatContactSearchItemViewData {
+  const ChatContactSearchItemViewData({
     this.contactId = '',
     this.userHandle = '',
     this.displayName = '',
@@ -306,7 +304,7 @@ class ChatContactSearchItemDto {
   final String? highlightText;
   final String? matchedField;
 
-  ChatContactSearchItemDto copyWith({
+  ChatContactSearchItemViewData copyWith({
     String? contactId,
     String? userHandle,
     String? displayName,
@@ -318,7 +316,7 @@ class ChatContactSearchItemDto {
     String? highlightText,
     String? matchedField,
   }) {
-    return ChatContactSearchItemDto(
+    return ChatContactSearchItemViewData(
       contactId: contactId ?? this.contactId,
       userHandle: userHandle ?? this.userHandle,
       displayName: displayName ?? this.displayName,

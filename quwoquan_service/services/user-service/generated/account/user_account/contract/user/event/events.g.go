@@ -2,6 +2,7 @@
 package event
 
 const (
+	UserSyncHinted         = "UserSyncHinted"
 	UserProfileUpdated     = "UserProfileUpdated"
 	UserProfileTagsChanged = "UserProfileTagsChanged"
 	UserAvatarUpdated      = "UserAvatarUpdated"

@@ -51,4 +51,12 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
             "premium_stream"
         ),
     )
+    verify.add_argument(
+        "--lifecycle-exit-ref",
+        default="",
+        help=(
+            "commercial phase 必需的 canonical rollback/replay lifecycle Exit "
+            "ref（相对 QWQ_OUTPUT_ROOT）"
+        ),
+    )
     verify.set_defaults(handler=handle_ship)

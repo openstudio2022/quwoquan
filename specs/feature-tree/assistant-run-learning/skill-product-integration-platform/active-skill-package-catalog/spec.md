@@ -26,9 +26,13 @@
 ### REQ-001 所有 Skill 消费方必须解析同一 active release
 
 - Manifest 必须引用 Catalog/Activation/Input/Context/Capability/Orchestration/Trigger/Memory/Presentation/Evaluation/Prompt/Replay 不可变资产。
+- builder 必须拒绝未被任何 Manifest 引用的 Profile 资产；新增或退出垂类时必须在同一 source change 中完成 Manifest 引用或物理删除，禁止以休眠 Profile 形成隐藏目录和第二路由真相源。
 - activate 前必须校验 publisher、签名、所有 asset digest、schema、capability/node compatibility 与 replay gate；失败不改变 active pointer。
 - Catalog、Router、Context、Prompt、Tool Policy、Presentation、Evaluation 不得维护自己的 built-in 项或文件扫描 fallback。
 - Catalog 每个目录项必须携带 active `packageId/releaseDigest`、输入 schema digest、setup template、激活模式和适用 surface；用户设置只能绑定该已验证发布的 schema，不得伪造 digest。
+- 只有价值说明、目标用户、数据使用、适用场景和成果示例均完整且引用同一 resolved package 的 Skill 才能进入用户目录；内部路由或质量未达标 Skill 不得以半成品目录项暴露。
+- 目标用户、场景、授权说明和成果示例必须由 active package 提供可直接展示的安全语义，App 不得按 Skill、垂类、scope 或 surface 另建文案映射；示例中的展示模板必须解析到同一 package 的 digest-qualified template。
+- Catalog 封面或示例媒体只有在 package 同时携带 canonical MediaAssetRef、尺寸、alt、来源与授权证明时才可发布；当前无该证明的字符串引用必须在构建阶段拒绝，不得形成悬空媒体。
 - Catalog 只是 `SkillPackageRelease` 的投影；账号 Consent、Setting 与 Subscription 必须通过各自对象读取，不得拼接到目录描述或发布元数据。
 
 ## 4. 契约引用

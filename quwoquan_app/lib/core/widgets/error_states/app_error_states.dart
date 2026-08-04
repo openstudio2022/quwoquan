@@ -19,19 +19,13 @@ class AppPageErrorState extends StatefulWidget {
   const AppPageErrorState({
     super.key,
     required this.semantic,
-    this.onAction,
     this.onRecovery,
     this.padding,
     this.experienceTracker,
-  }) : assert(
-         onAction == null || onRecovery == null,
-         'Use the typed onRecovery callback for page recovery, not both.',
-       );
+  });
 
   final UiErrorSemantic semantic;
 
-  /// 存量非阻塞页面的动作回调；新增页面恢复必须使用 [onRecovery]。
-  final UiErrorActionCallback? onAction;
   final UiRecoveryActionCallback? onRecovery;
   final EdgeInsetsGeometry? padding;
   final AppPageExperienceTracker? experienceTracker;
@@ -84,8 +78,7 @@ class _AppPageErrorStateState extends State<AppPageErrorState> {
 
   Future<void> _handleAction(UiErrorAction action) async {
     final callback = widget.onRecovery;
-    final legacyCallback = widget.onAction;
-    if (callback == null && legacyCallback == null) {
+    if (callback == null) {
       return;
     }
     final semantic = widget.semantic;
@@ -95,9 +88,7 @@ class _AppPageErrorStateState extends State<AppPageErrorState> {
       action: action,
     );
     try {
-      final outcome = callback != null
-          ? await callback(action)
-          : await _runLegacyAction(legacyCallback!, action);
+      final outcome = await callback(action);
       _enqueueErrorOutcome(
         semantic: semantic,
         result: switch (outcome) {
@@ -122,16 +113,6 @@ class _AppPageErrorStateState extends State<AppPageErrorState> {
         stackTrace: stackTrace,
       );
     }
-  }
-
-  Future<UiRecoveryOutcome> _runLegacyAction(
-    UiErrorActionCallback callback,
-    UiErrorAction action,
-  ) async {
-    await callback(action);
-    // Future<void> 无法证明页面是否真的离开错误态；只有 typed callback
-    // 明确返回 recovered 才允许记录恢复成功。
-    return UiRecoveryOutcome.handedOff;
   }
 
   void _enqueueErrorOutcome({
@@ -207,10 +188,7 @@ class _AppPageErrorStateState extends State<AppPageErrorState> {
                   ),
                   child: _ErrorEmptyPageBody(
                     semantic: widget.semantic,
-                    onAction:
-                        widget.onAction == null && widget.onRecovery == null
-                        ? null
-                        : _handleAction,
+                    onAction: widget.onRecovery == null ? null : _handleAction,
                   ),
                 ),
               ),

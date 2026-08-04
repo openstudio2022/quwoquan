@@ -63,7 +63,7 @@
 
 ## 3. 体验埋点与监控事件（RUM Events）
 
-> 体验事件也是“反馈”，建议统一走 Ops（运营）事件接收与平台可观测性体系（日志/指标）双写或可互相导出。
+> 体验事件也是“反馈”，统一经 Ops（运营）事件接收形成唯一事件事实；日志和指标只由该事实派生，禁止向第二接收链或第二事实存储双写。
 > 事件字段复用 `contracts/metadata/_shared/request_context.yaml` 里的端侧 headers（pageId/sessionId/sentAt/device/appVersion/traceId/requestId）。
 
 ### 3.1 事件类型（建议）

@@ -7,7 +7,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 void main() {
   group('ContentComment pure contract', () {
     test('严格解码商用查询投影', () {
-      final page = decodeContentCommentPageSlice(<String, Object?>{
+      final page = decodeCommentPageSlice(<String, Object?>{
         'items': <Object?>[
           _wireItem(
             id: 'comment-1',
@@ -31,10 +31,14 @@ void main() {
       final item = page.items.single;
       expect(item.id, 'comment-1');
       expect(item.version, 3);
-      expect(item.attachments.single.displayUrl, contains('asset-1.jpg'));
-      expect(item.attachments.single.aspectRatio, 1.5);
+      expect(
+        item.attachments.single.url.toString(),
+        contains('asset-1.jpg'),
+      );
+      expect(item.attachments.single.width, 1200);
+      expect(item.attachments.single.height, 800);
       expect(item.replyPreview.single.id, 'reply-1');
-      expect(item.viewerReaction, ContentCommentReactionValue.like);
+      expect(item.viewerReaction, CommentReactionType.like);
       expect(item.canDelete, isTrue);
       expect(item.canPin, isTrue);
       expect(page.nextCursor, 'cursor-2');
@@ -44,7 +48,7 @@ void main() {
     test('解码器对缺少商用字段 fail closed', () {
       final wire = _wireItem(id: 'comment-1')..remove('viewerReaction');
       expect(
-        () => decodeContentCommentPageSlice(<String, Object?>{
+        () => decodeCommentPageSlice(<String, Object?>{
           'items': <Object?>[wire],
           'nextCursor': null,
           'total': 1,
@@ -58,7 +62,7 @@ void main() {
         ..['viewerReaction'] = 'hearted'
         ..['likeCount'] = '12';
       expect(
-        () => decodeContentCommentPageSlice(<String, Object?>{
+        () => decodeCommentPageSlice(<String, Object?>{
           'items': <Object?>[wire],
           'nextCursor': null,
           'total': 1,
@@ -74,8 +78,8 @@ void main() {
           content: '端云对象闭环',
           replyToCommentId: 'comment-root',
           attachmentMediaIds: const <String>['asset-1'],
-          mentions: <ContentCommentMention>[
-            ContentCommentMention(
+          mentions: <CommentMention>[
+            CommentMention(
               subjectType: 'user',
               subjectId: 'persona-2',
               displayName: '小李',
@@ -152,6 +156,8 @@ Map<String, Object?> _wireItem({
     'likeCount': 12,
     'dislikeCount': 2,
     'viewerReaction': 'like',
+    'authorLiked': true,
+    'viewerRelation': 'following',
     'isAuthor': true,
     'canDelete': true,
     'canReply': true,

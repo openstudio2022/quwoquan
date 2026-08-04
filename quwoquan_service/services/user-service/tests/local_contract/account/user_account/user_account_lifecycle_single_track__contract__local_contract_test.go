@@ -18,7 +18,7 @@ func TestUserAccountLifecycleUsesAccountStateAsItsOnlyRuntimeState(t *testing.T)
 		t.Fatal("generated UserAccount must expose canonical AccountState")
 	}
 	if _, exists := profileType.FieldByName("Status"); exists {
-		t.Fatal("generated UserAccount must not reintroduce legacy Status")
+		t.Fatal("generated UserAccount must not reintroduce retired Status")
 	}
 }
 

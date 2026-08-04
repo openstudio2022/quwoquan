@@ -1,10 +1,13 @@
 // spec_ref: specs/feature-tree/discovery-content/content-type-framework/unified-presentation-model/spec.md#gwt-001
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import '../../../../support/fixtures/intersection_fixtures.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
 import 'package:quwoquan_app/core/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
+import '../../../../support/cloud_services/content/content_post_contract_fixture.dart';
 
 final _mediaResolver = MediaDeliveryResolver(
   MediaEndpointConfig(
@@ -23,26 +26,30 @@ final _unavailableMediaResolver = MediaDeliveryResolver(
   )!,
 );
 
+ContentPostViewData _viewData(ContentPostProjection projection) =>
+    ContentPostViewData.fromWire(projection);
+
 void main() {
-  group('ContentSurfaceViewMapper.fromDto — 四媒体类型投影契约 (T1)', () {
-    test('image 帖 → kind.image，多图 + 作者/统计字段对齐', () {
-      final dto = PhotoPostDto.fromMap(<String, dynamic>{
-        'id': 'photo1',
-        'type': 'image',
-        'identity': 'work',
-        'authorId': 'a1',
-        'displayName': '作者甲',
-        'avatarUrl': 'media/avatar/s/fixture/a1/v1/avatar.png',
-        'imageUrls': <String>[
-          'media/image/s/fixture/photo1/v1/1.jpg',
-          'media/image/s/fixture/photo1/v1/2.jpg',
-        ],
-        'coverUrl': 'media/image/s/fixture/photo1/v1/cover.jpg',
-        'likeCount': 10,
-        'commentCount': 2,
-        'shareCount': 3,
-        'createdAt': '2026-01-01T00:00:00.000Z',
-      });
+  group('ContentSurfaceViewMapper — canonical ContentPostProjection', () {
+    test('image 投影为多图 surface，并保持作者和统计口径', () {
+      final dto = _viewData(
+        contentPostProjectionFixture(
+          postId: 'photo1',
+          contentType: 'image',
+          contentIdentity: 'work',
+          authorId: 'a1',
+          authorDisplayName: '作者甲',
+          authorAvatarUrl: 'media/avatar/s/fixture/a1/v1/avatar.png',
+          mediaUrls: const <String>[
+            'media/image/s/fixture/photo1/v1/1.jpg',
+            'media/image/s/fixture/photo1/v1/2.jpg',
+          ],
+          coverUrl: 'media/image/s/fixture/photo1/v1/cover.jpg',
+          likeCount: 10,
+          commentCount: 2,
+          shareCount: 3,
+        ),
+      );
 
       final view = ContentSurfaceViewMapper.fromDto(
         dto,
@@ -54,33 +61,26 @@ void main() {
       expect(view.contentType, dto.type);
       expect(view.author.id, 'a1');
       expect(view.author.displayName, '作者甲');
-      // 媒体 object key 经 content_media_url 解析为可加载 CDN URL（仍保留 object key 路径）。
-      final imageUrls = view.images.map((e) => e.url).toList();
-      expect(imageUrls, hasLength(2));
-      expect(imageUrls[0], contains('media/image/s/fixture/photo1/v1/1.jpg'));
-      expect(imageUrls[1], contains('media/image/s/fixture/photo1/v1/2.jpg'));
+      expect(view.images, hasLength(2));
+      expect(view.images.first.url, contains('/photo1/v1/1.jpg'));
       expect(view.video, isNull);
       expect(view.stats.like, 10);
       expect(view.stats.comment, 2);
       expect(view.stats.share, 3);
     });
 
-    test('video 帖 → kind.video，单视频 ref + 时长', () {
-      final dto = VideoPostDto.fromMap(<String, dynamic>{
-        'id': 'video1',
-        'type': 'video',
-        'identity': 'work',
-        'authorId': 'a2',
-        'displayName': '作者乙',
-        'avatarUrl': '',
-        'videoUrl': 'media/video/s/fixture/video1/v1/clip.mp4',
-        'thumbnailUrl': 'media/image/s/fixture/video1/v1/thumb.jpg',
-        'durationMs': 12000,
-        'likeCount': 0,
-        'commentCount': 0,
-        'shareCount': 0,
-        'createdAt': '2026-01-01T00:00:00.000Z',
-      });
+    test('video 使用 thumbnail 作为 cover 与播放 poster 的唯一来源', () {
+      final dto = _viewData(
+        contentPostProjectionFixture(
+          postId: 'video1',
+          contentType: 'video',
+          contentIdentity: 'work',
+          videoUrl: 'media/video/s/fixture/video1/v1/clip.mp4',
+          thumbnailUrl: 'media/image/s/fixture/video1/v1/manual-thumb.jpg',
+          coverUrl: 'media/image/s/fixture/video1/v1/stale-cover.jpg',
+          durationMs: 12000,
+        ),
+      );
 
       final view = ContentSurfaceViewMapper.fromDto(
         dto,
@@ -89,78 +89,31 @@ void main() {
 
       expect(view.kind, ContentSurfaceKind.video);
       expect(view.hasVideo, isTrue);
-      expect(
-        view.video!.url,
-        contains('media/video/s/fixture/video1/v1/clip.mp4'),
-      );
-      expect(
-        view.video!.thumbnailUrl,
-        contains('media/image/s/fixture/video1/v1/thumb.jpg'),
-      );
+      expect(view.video!.url, contains('/video1/v1/clip.mp4'));
       expect(view.video!.durationMs, 12000);
+      expect(view.cover!.url, contains('/video1/v1/manual-thumb.jpg'));
+      expect(view.cover!.url, view.video!.thumbnailUrl);
       expect(view.hasImages, isFalse);
     });
 
-    test('video 帖封面优先使用 thumbnailUrl，cover 与播放 poster 同源', () {
-      final dto = VideoPostDto.fromMap(<String, dynamic>{
-        'id': 'video-cover-priority',
-        'type': 'video',
-        'identity': 'work',
-        'authorId': 'a2',
-        'displayName': '作者乙',
-        'avatarUrl': '',
-        'videoUrl': 'media/video/s/fixture/video1/v1/clip.mp4',
-        'thumbnailUrl': 'media/image/s/fixture/video1/v1/manual-thumb.jpg',
-        'coverUrl': 'media/image/s/fixture/video1/v1/stale-cover.jpg',
-        'durationMs': 12000,
-        'likeCount': 0,
-        'commentCount': 0,
-        'shareCount': 0,
-        'createdAt': '2026-01-01T00:00:00.000Z',
-      });
+    test('article 保持标题、正文、封面与页面 presentation 字段', () {
+      final dto = _viewData(
+        contentPostProjectionFixture(
+          postId: 'article1',
+          contentType: 'article',
+          contentIdentity: 'work',
+          title: '统一展示标题',
+          body: '正文摘要',
+          coverUrl: 'media/image/s/fixture/article1/v1/cover.jpg',
+          articleTemplate: 'modern',
+          articleFontPreset: 'serif',
+        ),
+      );
 
       final view = ContentSurfaceViewMapper.fromDto(
         dto,
         mediaResolver: _mediaResolver,
-      );
-
-      expect(view.kind, ContentSurfaceKind.video);
-      expect(
-        dto.mediaVideoCoverUrl,
-        contains('media/image/s/fixture/video1/v1/manual-thumb.jpg'),
-      );
-      expect(
-        view.cover!.url,
-        contains('media/image/s/fixture/video1/v1/manual-thumb.jpg'),
-      );
-      expect(
-        view.video!.thumbnailUrl,
-        contains('media/image/s/fixture/video1/v1/manual-thumb.jpg'),
-      );
-      expect(view.cover!.url, equals(view.video!.thumbnailUrl));
-    });
-
-    test('article 帖 → kind.article，标题/正文/封面 + wire 模板字段', () {
-      final dto = ArticlePostDto.fromMap(<String, dynamic>{
-        'id': 'article1',
-        'type': 'article',
-        'identity': 'work',
-        'authorId': 'a3',
-        'displayName': '作者丙',
-        'avatarUrl': '',
-        'title': '统一展示标题',
-        'body': '正文摘要',
-        'coverUrl': 'media/image/s/fixture/article1/v1/cover.jpg',
-        'likeCount': 0,
-        'commentCount': 0,
-        'shareCount': 0,
-        'createdAt': '2026-01-01T00:00:00.000Z',
-      });
-
-      final view = ContentSurfaceViewMapper.fromDto(
-        dto,
-        mediaResolver: _mediaResolver,
-        wire: <String, dynamic>{
+        wire: const <String, dynamic>{
           'articleTemplate': 'modern',
           'articleFontPreset': 'serif',
           'tagRefs': <String>['校园', '摄影'],
@@ -170,30 +123,21 @@ void main() {
       expect(view.kind, ContentSurfaceKind.article);
       expect(view.title, '统一展示标题');
       expect(view.body, '正文摘要');
-      expect(view.cover, isNotNull);
-      expect(
-        view.cover!.url,
-        contains('media/image/s/fixture/article1/v1/cover.jpg'),
-      );
+      expect(view.cover!.url, contains('/article1/v1/cover.jpg'));
       expect(view.articleTemplate, 'modern');
       expect(view.articleFontPreset, 'serif');
       expect(view.tags, <String>['校园', '摄影']);
     });
 
-    test('micro 帖 → kind.micro，仅正文，无媒体', () {
-      final dto = MicroPostDto.fromMap(<String, dynamic>{
-        'id': 'micro1',
-        'type': 'micro',
-        'identity': 'moment',
-        'authorId': 'a4',
-        'displayName': '作者丁',
-        'avatarUrl': '',
-        'body': '随手一条',
-        'likeCount': 0,
-        'commentCount': 0,
-        'shareCount': 0,
-        'createdAt': '2026-01-01T00:00:00.000Z',
-      });
+    test('micro 仅正文且无媒体', () {
+      final dto = _viewData(
+        contentPostProjectionFixture(
+          postId: 'micro1',
+          contentType: 'micro',
+          contentIdentity: 'moment',
+          body: '随手一条',
+        ),
+      );
 
       final view = ContentSurfaceViewMapper.fromDto(dto);
 
@@ -204,159 +148,127 @@ void main() {
       expect(view.cover, isNull);
     });
 
-    test('媒体端点不可用时仍保留 typed 内容事实且不伪造 URL', () {
-      final dto = PhotoPostDto.fromMap(<String, dynamic>{
-        'id': 'photo-without-endpoint',
-        'type': 'image',
-        'identity': 'work',
-        'authorId': 'a5',
-        'displayName': '作者戊',
-        'avatarUrl': 'media/avatar/s/fixture/a5/v1/avatar.png',
-        'imageUrls': <String>[
-          'media/image/s/fixture/photo-without-endpoint/v1/1.jpg',
-        ],
-        'createdAt': '2026-01-01T00:00:00.000Z',
-      });
+    test('媒体端点不可用时保留 typed 内容事实且不伪造 URL', () {
+      final dto = _viewData(
+        contentPostProjectionFixture(
+          postId: 'photo-without-endpoint',
+          contentType: 'image',
+          mediaUrls: const <String>[
+            'media/image/s/fixture/photo-without-endpoint/v1/1.jpg',
+          ],
+          authorAvatarUrl:
+              'media/avatar/s/fixture/photo-without-endpoint/v1/avatar.png',
+        ),
+      );
 
       final view = ContentSurfaceViewMapper.fromDto(
         dto,
         mediaResolver: _unavailableMediaResolver,
       );
 
-      expect(view.kind, ContentSurfaceKind.image);
       expect(view.postId, 'photo-without-endpoint');
+      expect(view.kind, ContentSurfaceKind.image);
       expect(view.images, isEmpty);
       expect(view.cover, isNull);
       expect(view.author.avatar, isNull);
     });
 
-    test('intersectionReasons 透传到统一 model', () {
-      final dto = MicroPostDto.fromMap(<String, dynamic>{
-        'id': 'micro2',
-        'type': 'micro',
-        'identity': 'moment',
-        'authorId': 'a5',
-        'displayName': '作者戊',
-        'avatarUrl': '',
-        'body': '带交集理由',
-        'likeCount': 0,
-        'commentCount': 0,
-        'shareCount': 0,
-        'createdAt': '2026-01-01T00:00:00.000Z',
-        'intersectionReasons': <Map<String, dynamic>>[
-          <String, dynamic>{
-            'dimension': 'alumni',
-            'tagRefs': <String>['tag:school:neworiental'],
-            'objectKind': 'circle',
-            'relationObjectId': 'circle1',
-            'label': '校友圈',
-            'sharedCount': 12,
-            'strength': 0.8,
-            'primaryText': '你和 TA 都来自新东方校友圈',
-            'actionType': 'open',
-            'actionTargetId': 'circle1',
-            'source': 'rec',
-          },
-        ],
-      });
+    test('canonical IntersectionReason 透传到统一 surface', () {
+      final reason = intersectionReasonFixture(
+        dimension: 'alumni',
+        tagRefs: const <String>['tag:school:neworiental'],
+        objectKind: 'circle',
+        relationObjectId: 'circle1',
+        primaryText: '你和 TA 都来自新东方校友圈',
+        actionTargetId: 'circle1',
+      );
+      final dto = _viewData(
+        contentPostProjectionFixture(
+          postId: 'micro2',
+          contentType: 'micro',
+          contentIdentity: 'moment',
+          body: '带交集理由',
+          intersectionReasons: <IntersectionReason>[reason],
+        ),
+      );
 
       final view = ContentSurfaceViewMapper.fromDto(dto);
 
       expect(view.hasIntersectionReasons, isTrue);
-      expect(view.intersectionReasons, isA<List<IntersectionReason>>());
-      expect(view.intersectionReasons.first.primaryText, '你和 TA 都来自新东方校友圈');
+      expect(view.intersectionReasons.single, same(reason));
+      expect(view.intersectionReasons.single.primaryText, '你和 TA 都来自新东方校友圈');
     });
 
-    test('时间语义：createdAt 用真实创作时间，updatedAt/publishedAt 透传 (T1)', () {
-      final dto = ArticlePostDto.fromMap(<String, dynamic>{
-        'id': 'time1',
-        'type': 'article',
-        'identity': 'work',
-        'authorId': 'a7',
-        'displayName': '作者庚',
-        'avatarUrl': '',
-        'title': '时间语义文章',
-        'body': '正文',
-        'coverUrl': '',
-        'likeCount': 0,
-        'commentCount': 0,
-        'shareCount': 0,
-        'createdAt': '2026-01-01T00:00:00.000Z',
-        'updatedAt': '2026-02-01T00:00:00.000Z',
-        'publishedAt': '2026-01-03T00:00:00.000Z',
-      });
+    test('createdAt、updatedAt、publishedAt 保持各自时间语义', () {
+      final dto = _viewData(
+        contentPostProjectionFixture(
+          postId: 'time1',
+          contentType: 'article',
+          contentIdentity: 'work',
+          title: '时间语义文章',
+          body: '正文',
+          createdAt: DateTime.utc(2026, 1),
+          updatedAt: DateTime.utc(2026, 2),
+          publishedAt: DateTime.utc(2026, 1, 3),
+        ),
+      );
 
       final view = ContentSurfaceViewMapper.fromDto(dto);
 
-      expect(view.createdAt, DateTime.utc(2026, 1, 1));
-      expect(view.updatedAt, DateTime.utc(2026, 2, 1));
+      expect(view.createdAt, DateTime.utc(2026, 1));
+      expect(view.updatedAt, DateTime.utc(2026, 2));
       expect(view.publishedAt, DateTime.utc(2026, 1, 3));
-      // updatedAt 明显晚于 createdAt → 视为实质更新。
       expect(view.hasMeaningfulUpdate, isTrue);
     });
 
-    test('时间语义：未更新内容只有 createdAt，hasMeaningfulUpdate=false (T1)', () {
-      final dto = ArticlePostDto.fromMap(<String, dynamic>{
-        'id': 'time2',
-        'type': 'article',
-        'identity': 'work',
-        'authorId': 'a8',
-        'displayName': '作者辛',
-        'avatarUrl': '',
-        'title': '未更新文章',
-        'body': '正文',
-        'coverUrl': '',
-        'likeCount': 0,
-        'commentCount': 0,
-        'shareCount': 0,
-        'createdAt': '2026-01-01T00:00:00.000Z',
-      });
+    test('createdAt 缺失不借用 publishedAt，使用明确 epoch 缺省', () {
+      final dto = ContentPostViewData.fromWire(
+        const ContentPostProjection(
+          postId: 'time2',
+          contentType: 'article',
+          contentIdentity: 'work',
+          title: '仅有发布时间',
+          body: '正文',
+          likeCount: 0,
+          commentCount: 0,
+          shareCount: 0,
+          publishedAt: null,
+        ),
+      );
+      final publishedAt = DateTime.utc(2026, 1, 5);
+      final wire = ContentPostProjection(
+        postId: dto.id,
+        contentType: dto.type,
+        contentIdentity: dto.identity,
+        title: dto.title,
+        body: dto.body,
+        likeCount: 0,
+        commentCount: 0,
+        shareCount: 0,
+        publishedAt: publishedAt,
+      );
 
-      final view = ContentSurfaceViewMapper.fromDto(dto);
+      final view = ContentSurfaceViewMapper.fromDto(
+        ContentPostViewData.fromWire(wire),
+      );
 
-      expect(view.createdAt, DateTime.utc(2026, 1, 1));
-      expect(view.updatedAt, isNull);
-      expect(view.hasMeaningfulUpdate, isFalse);
+      expect(
+        view.createdAt,
+        DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+      );
+      expect(view.createdAt, isNot(view.publishedAt));
+      expect(view.publishedAt, publishedAt);
     });
 
-    test('时间语义：createdAt 缺失时不以 publishedAt 借壳（契约纯洁） (T1)', () {
-      final dto = ArticlePostDto.fromMap(<String, dynamic>{
-        'id': 'time3',
-        'type': 'article',
-        'identity': 'work',
-        'authorId': 'a9',
-        'displayName': '作者壬',
-        'avatarUrl': '',
-        'title': '仅有发布时间',
-        'body': '正文',
-        'coverUrl': '',
-        'likeCount': 0,
-        'commentCount': 0,
-        'shareCount': 0,
-        'publishedAt': '2026-01-05T00:00:00.000Z',
-      });
-
-      final view = ContentSurfaceViewMapper.fromDto(dto);
-
-      expect(view.createdAt, dto.createdAt);
-      expect(view.createdAt, isNot(equals(view.publishedAt)));
-      expect(view.publishedAt, DateTime.utc(2026, 1, 5));
-    });
-
-    test('referral 上下文透传（不影响展示字段）', () {
-      final dto = MicroPostDto.fromMap(<String, dynamic>{
-        'id': 'micro3',
-        'type': 'micro',
-        'identity': 'moment',
-        'authorId': 'a6',
-        'displayName': '作者己',
-        'avatarUrl': '',
-        'body': 'x',
-        'likeCount': 0,
-        'commentCount': 0,
-        'shareCount': 0,
-        'createdAt': '2026-01-01T00:00:00.000Z',
-      });
+    test('referral 上下文只透传，不改变展示事实', () {
+      final dto = _viewData(
+        contentPostProjectionFixture(
+          postId: 'micro3',
+          contentType: 'micro',
+          contentIdentity: 'moment',
+          body: 'x',
+        ),
+      );
 
       final view = ContentSurfaceViewMapper.fromDto(
         dto,
@@ -366,6 +278,7 @@ void main() {
         ),
       );
 
+      expect(view.postId, 'micro3');
       expect(view.referral.position, 7);
       expect(view.referral.feedRequestId, 'req-123');
     });

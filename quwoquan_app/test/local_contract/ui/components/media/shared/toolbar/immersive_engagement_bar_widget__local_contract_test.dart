@@ -81,7 +81,7 @@ void main() {
     );
   });
 
-  testWidgets('作者认证角标随云侧快照显示，空字段不渲染（V1.0）', (tester) async {
+  testWidgets('作者认证角标随云侧快照显示，空字段不渲染', (tester) async {
     await tester.pumpWidget(
       _wrap(
         const ImmersiveEngagementBar(

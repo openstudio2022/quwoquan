@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import '../../../../support/fixtures/intersection_fixtures.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_kind_metadata.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
 import 'package:quwoquan_app/components/object_page/intersection_target_navigator.dart';
 
 /// 对象页把 objectType 翻译成 objectKind 的那段逻辑，曾经是端上一段手写 switch，
@@ -76,7 +76,7 @@ void main() {
         expect(routeId, 'homepageDetail', reason: '$objectType 落点应是主页详情');
 
         final path = IntersectionTargetNavigator.resolvePath(
-          IntersectionTarget(
+          intersectionTargetFixture(
             objectId: 'h_$objectType',
             objectKind: objectKind,
             routeId: routeId,
@@ -92,7 +92,7 @@ void main() {
       final objectKind = intersectionObjectKindForObjectType('not_a_type');
       expect(
         IntersectionTargetNavigator.resolvePath(
-          IntersectionTarget(
+          intersectionTargetFixture(
             objectId: 'h_unknown',
             objectKind: objectKind,
             routeId: intersectionRouteIdForObjectKind(objectKind),

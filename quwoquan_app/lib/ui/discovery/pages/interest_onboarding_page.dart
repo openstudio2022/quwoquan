@@ -381,7 +381,12 @@ class _InterestOnboardingPageState
             sourceSurfaceId: AppUiSurfaces.interestOnboarding.id,
           ),
         ),
-        onAction: (_) => _load(),
+        onRecovery: (_) async {
+          await _load();
+          return _loadError == null
+              ? UiRecoveryOutcome.recovered
+              : UiRecoveryOutcome.stillBlocked;
+        },
       );
     }
     final colors = CupertinoTheme.of(context);

@@ -53,7 +53,10 @@
     },
     "livekit-http": {
       "plane": "media",
-      "slotOffset": 140
+      "slotOffset": 140,
+      "serviceHost": "livekit-sfu",
+      "containerPort": 7880,
+      "scheme": "http"
     },
     "livekit-rtc-tcp": {
       "plane": "media",
@@ -125,7 +128,10 @@
     },
     "sms-provider-substitute": {
       "plane": "service",
-      "slotOffset": 330
+      "slotOffset": 330,
+      "serviceHost": "sms-provider-substitute",
+      "containerPort": 9443,
+      "scheme": "https"
     },
     "realtime-gateway": {
       "plane": "service",
@@ -134,6 +140,13 @@
     "rtc-service": {
       "plane": "service",
       "slotOffset": 350
+    },
+    "provider-protocol-substitute": {
+      "plane": "service",
+      "slotOffset": 360,
+      "serviceHost": "provider-protocol-substitute",
+      "containerPort": 18089,
+      "scheme": "https"
     },
     "postgres": {
       "plane": "dataDebug",

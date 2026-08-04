@@ -4,40 +4,43 @@ import 'package:quwoquan_app/core/services/cache/conversation_cache_record.dart'
 import 'package:quwoquan_app/core/services/cache/conversation_cache_service.dart';
 import 'package:quwoquan_app/core/services/cache/local_chat_search_store.dart';
 import 'package:quwoquan_app/core/services/cache/local_search_namespace.dart';
+import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import '../../../support/sqflite_ffi_test_support.dart';
 
 void main() {
   group('Conversation avatar cloud chain', () {
-    test('ConversationViewData -> cache record preserves group avatar fields', () {
-      final dto = ConversationViewData.fromMap(const <String, dynamic>{
-        'id': 'conv_cloud_group',
-        'type': 'group',
-        'title': '云侧群头像',
-        'avatarUrl': 'https://cdn.example.com/groups/conv_cloud_group.png',
-        'groupAvatarVersion': 7,
-        'groupAvatarSourceHash': 'members-current',
-        'creatorId': 'user_001',
-        'maxSeq': 12,
-        'memberCount': 5,
-        'maxGroupSize': 1000,
-        'receiptEnabled': true,
-        'lastMessageType': 'text',
-        'messageCount': 12,
-        'status': 'active',
-        'createdAt': '2026-05-19T00:00:00Z',
-        'updatedAt': '2026-05-19T01:00:00Z',
-      });
+    test(
+      'ConversationViewData -> cache record preserves group avatar fields',
+      () {
+        final dto = ConversationViewData.fromWire(
+          decodeChatConversation(
+            _conversationWire(const <String, Object?>{
+              'id': 'conv_cloud_group',
+              'conversationId': 'conv_cloud_group',
+              'title': '云侧群头像',
+              'avatarUrl':
+                  'https://cdn.example.com/groups/conv_cloud_group.png',
+              'groupAvatarVersion': 7,
+              'groupAvatarSourceHash': 'members-current',
+              'maxSeq': 12,
+              'memberCount': 5,
+              'messageCount': 12,
+              'updatedAt': '2026-05-19T01:00:00Z',
+            }),
+          ),
+        );
 
-      final record = ConversationCacheRecord.fromConversationViewData(dto);
+        final record = ConversationCacheRecord.fromConversationViewData(dto);
 
-      expect(record.avatarUrl, dto.avatarUrl);
-      expect(record.groupAvatarVersion, 7);
-      expect(record.groupAvatarSourceHash, 'members-current');
-      expect(record.toChatInboxDto().avatarUrl, dto.avatarUrl);
-      expect(record.toChatInboxDto().groupAvatarVersion, 7);
-    });
+        expect(record.avatarUrl, dto.avatarUrl);
+        expect(record.groupAvatarVersion, 7);
+        expect(record.groupAvatarSourceHash, 'members-current');
+        expect(record.toChatInboxViewData().avatarUrl, dto.avatarUrl);
+        expect(record.toChatInboxViewData().groupAvatarVersion, 7);
+      },
+    );
 
     test(
       'avatar patch updates conversation cache and local search payload',
@@ -155,4 +158,41 @@ void main() {
       },
     );
   });
+}
+
+Map<String, Object?> _conversationWire([
+  Map<String, Object?> overrides = const <String, Object?>{},
+]) {
+  return <String, Object?>{
+    'id': 'conv_default',
+    'conversationId': 'conv_default',
+    'type': 'group',
+    'title': '',
+    'avatarUrl': '',
+    'groupAvatarVersion': 0,
+    'groupAvatarSourceHash': '',
+    'creatorId': 'user_001',
+    'circleId': '',
+    'circleGroupId': '',
+    'entityId': '',
+    'originType': 'direct_init',
+    'maxSeq': 0,
+    'memberCount': 0,
+    'membersRosterRevision': 0,
+    'maxGroupSize': 1000,
+    'receiptEnabled': true,
+    'announcement': '',
+    'announcementUpdatedBy': '',
+    'announcementUpdatedAt': '2026-05-19T00:00:00Z',
+    'nameEditableByAdminOnly': true,
+    'lastMessageId': '',
+    'lastMessagePreview': '',
+    'lastMessageType': 'text',
+    'lastMessageTime': '2026-05-19T00:00:00Z',
+    'messageCount': 0,
+    'status': 'active',
+    'createdAt': '2026-05-19T00:00:00Z',
+    'updatedAt': '2026-05-19T00:00:00Z',
+    ...overrides,
+  };
 }

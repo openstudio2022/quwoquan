@@ -99,7 +99,7 @@ extension _CircleEditSettingsPageStateHelpers on _CircleEditSettingsPageState {
                           _nameController.text.trim().isEmpty
                               ? (_isCreateMode
                                     ? CommunityText.createCircle
-                                    : _seedCircle.name)
+                                    : (_seedCircle?.name ?? ''))
                               : _nameController.text.trim(),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,

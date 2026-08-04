@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
+import 'package:quwoquan_app/cloud/services/chat/chat_view_data.dart';
 import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 import 'package:quwoquan_app/core/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/ui/chat/models/chat_contacts_row.dart';
@@ -41,8 +41,9 @@ void main() {
 
     test('contact rows expose loadable user avatar URLs', () {
       final row = ChatContactsRow.fromContactDto(
-        ChatContactRowDto(
+        ChatContactRowViewData(
           userId: 'user_2',
+          userHandle: 'user_2',
           displayName: '契约联系人',
           avatarUrl:
               'media/avatar/s/archived-avatar/user/user_2/v1/profile.png',
@@ -62,7 +63,7 @@ void main() {
 
     test('message display maps expose loadable sender avatars', () {
       final item =
-          ChatMessageDto(
+          ChatMessageViewData(
             id: 'msg_1',
             conversationId: 'conv_1',
             seq: 1,
@@ -89,7 +90,7 @@ void main() {
     });
 
     test('image message display maps media url to preview image', () {
-      final item = ChatMessageDto(
+      final item = ChatMessageViewData(
         id: 'msg_img',
         conversationId: 'conv_1',
         seq: 2,
@@ -111,7 +112,7 @@ void main() {
     test(
       'image message display falls back to image url when thumbnail missing',
       () {
-        final item = ChatMessageDto(
+        final item = ChatMessageViewData(
           id: 'msg_img_fallback',
           conversationId: 'conv_1',
           seq: 3,
@@ -144,10 +145,10 @@ void main() {
     };
 
     for (final entry in expectedFallback.entries) {
-      test('${entry.key.wireValue} uses the canonical list preview', () {
+      test('${entry.key.wireName} uses the canonical list preview', () {
         final item = ChatListItemViewModel.fromDto(
           chatInboxFixture(
-            id: 'conv_${entry.key.wireValue}',
+            id: 'conv_${entry.key.wireName}',
             type: 'group',
             title: '类型渲染',
             lastMessageType: entry.key,

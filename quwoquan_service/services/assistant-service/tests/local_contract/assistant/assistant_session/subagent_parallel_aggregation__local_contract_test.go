@@ -8,10 +8,10 @@ import (
 	"sync"
 	"testing"
 
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
-	toolpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/tool"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/ports"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/orchestration"
+	toolpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/tool"
+	assistant "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/model"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/ports"
 	"quwoquan_service/services/assistant-service/tests/support/promptassets"
 	"quwoquan_service/services/assistant-service/tests/support/skillfixture"
 )
@@ -100,9 +100,10 @@ func subagentLoop(t *testing.T, model orchestration.ModelProvider) *orchestratio
 		toolpkg.WebSearchMetadata(),
 		func(_ context.Context, _ toolpkg.Request) (toolpkg.Result, error) {
 			return toolpkg.Result{Output: map[string]any{
-				"summary":    "杭州周末多云，适合安排室外行程。",
-				"references": []any{},
-				"reliable":   true,
+				"summary":            "杭州周末多云，适合安排室外行程。",
+				"references":         []any{},
+				"reliable":           true,
+				"evidenceAssessment": acceptedEvidenceAssessment("subagent_web_search_stub"),
 			}}, nil
 		},
 	)
@@ -110,14 +111,34 @@ func subagentLoop(t *testing.T, model orchestration.ModelProvider) *orchestratio
 		toolpkg.AppSearchMetadata(),
 		func(_ context.Context, _ toolpkg.Request) (toolpkg.Result, error) {
 			return toolpkg.Result{Output: map[string]any{
-				"provider":   "search-service",
-				"summary":    "杭州东站到市区的地铁与公交班次充足。",
-				"results":    []any{},
-				"citations":  []any{},
-				"provenance": map[string]any{"source": "search-service"},
+				"provider":           "search-service",
+				"summary":            "杭州东站到市区的地铁与公交班次充足。",
+				"results":            []any{},
+				"citations":          []any{},
+				"provenance":         map[string]any{"source": "search-service"},
+				"evidenceAssessment": acceptedEvidenceAssessment("subagent_app_search_stub"),
 			}}, nil
 		},
 	)
+	// Weather/travel capability profiles also declare these tools; register them
+	// so frozenToolMetadataFor can resolve canonical metadata for subagent runs.
+	for _, meta := range []toolpkg.Metadata{
+		toolpkg.WeatherLookupMetadata(),
+		toolpkg.WebOpenMetadata(),
+		toolpkg.WebFindMetadata(),
+		toolpkg.CalendarCreateReminderMetadata(),
+	} {
+		metadata := meta
+		registry.Register(
+			metadata,
+			func(_ context.Context, _ toolpkg.Request) (toolpkg.Result, error) {
+				return toolpkg.Result{Output: map[string]any{
+					"summary":            "stub " + metadata.ToolName,
+					"evidenceAssessment": acceptedEvidenceAssessment("subagent_" + metadata.ToolName + "_stub"),
+				}}, nil
+			},
+		)
+	}
 	loop := orchestration.NewAgentLoop(
 		nil,
 		orchestration.ReactRuntime{
@@ -175,7 +196,8 @@ func TestMultiSkillTurnAggregatesParallelSubagentRuns(t *testing.T) {
 	if primaries != 1 {
 		t.Fatalf("subagentPlan must declare exactly one primary, got %d", primaries)
 	}
-	dispatching, merging, probes := false, false, 0
+	dispatching, merging := false, false
+	probeLifecycle := map[string]map[string]bool{}
 	for _, process := range processEvents(events) {
 		switch process.Stage {
 		case "dispatching":
@@ -183,14 +205,23 @@ func TestMultiSkillTurnAggregatesParallelSubagentRuns(t *testing.T) {
 		case "merging":
 			merging = true
 		case "executing":
-			probes++
+			if probeLifecycle[process.ProcessID] == nil {
+				probeLifecycle[process.ProcessID] = map[string]bool{}
+			}
+			probeLifecycle[process.ProcessID][process.Status] = true
 		}
 	}
 	if !dispatching || !merging {
 		t.Fatalf("multi skill turn must emit dispatching and merging processes, got %v/%v", dispatching, merging)
 	}
-	if probes != 2 {
-		t.Fatalf("parallel probes=%d want one per subagent", probes)
+	if len(probeLifecycle) != 2 {
+		t.Fatalf("parallel probe tasks=%d want one per subagent", len(probeLifecycle))
+	}
+	for processID, lifecycle := range probeLifecycle {
+		if !lifecycle["active"] ||
+			(!lifecycle["completed"] && !lifecycle["failed"]) {
+			t.Fatalf("parallel probe %s lifecycle=%#v", processID, lifecycle)
+		}
 	}
 }
 

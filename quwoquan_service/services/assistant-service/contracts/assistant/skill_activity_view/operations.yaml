@@ -1,0 +1,26 @@
+commercial_defaults:
+  status: blocked
+  block_reason: Skill 活动联邦 Slice 尚缺受管 Remote 与双端物理真机证据
+  gap_id: ASSISTANT_SKILL_ACTIVITY_ENV_EVIDENCE
+  target_story: skill-user-lifecycle
+description: SkillActivityView 的 owner-scoped 脱敏查询。
+api_routes:
+- method: GET
+  path: /assistant/skills/{skillId}/activities
+  operation: ListSkillActivities
+  actor: account
+  commercial: {status: ready}
+  request_entity: ListSkillActivitiesQuery
+  request_body_kind: none
+  request_bindings:
+    path: [{name: skillId, field: skillId}]
+    query: [{name: cursor, field: cursor, required: false}, {name: limit, field: limit, required: false}]
+  response_entity: SkillActivitySlice
+  application: {kind: query, facet: SkillActivityViewQueryFacade, method: listActivities, reader: SkillActivityViewReader, slice: SkillActivitySlice}
+  reliability: {timeout_ms: 1000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [ASSISTANT.USER.skill_activity_invalid_argument, ASSISTANT.USER.skill_activity_unauthorized, ASSISTANT.SYSTEM.skill_activity_unavailable]
+  privacy: {request_classification: INTERNAL, response_classification: SENSITIVE, log_policy: metadata_only}
+  telemetry: {metric: assistant_skill_activity_query, trace: true, attributes: [operation, outcome, error_code, source_kind]}
+  slo: {latency_p95_ms: 800, availability_percent: 99.9}
+  authorization: {principal: account, ownership_policy: requester_self}
+  security: {auth_mode: required, principal: owner, token_transport: bearer, anonymous_policy: deny, visibility: private}

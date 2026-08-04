@@ -4,13 +4,13 @@ package local_contract
 import (
 	"context"
 	"path/filepath"
-	. "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/simulator"
+	. "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/replay"
 	"testing"
 	"time"
 
 	"quwoquan_service/runtime/streaming"
-	assistantstreaming "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/streaming"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
+	assistantstreaming "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/streaming"
+	assistant "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/model"
 	"quwoquan_service/services/assistant-service/tests/support/promptassets"
 	"quwoquan_service/services/assistant-service/tests/support/skillfixture"
 )

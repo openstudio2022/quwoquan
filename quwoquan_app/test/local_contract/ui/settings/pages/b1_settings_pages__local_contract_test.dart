@@ -9,7 +9,6 @@ import 'package:quwoquan_app/app/providers/startup_auth_restore_gate_provider.da
 import 'package:quwoquan_app/application/user/account/account_closure_local_data_purger.dart';
 import 'package:quwoquan_app/application/user/account/account_closure_local_data_purger_provider.dart';
 import 'package:quwoquan_app/core/auth/terminal_account_cleanup_receipt_store.dart';
-import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_consent_store.dart';
 import 'package:quwoquan_app/components/comment_system/comment_draft_store.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
@@ -130,12 +129,8 @@ void main() {
       actorScope: actorB,
       draft: const CommentDraft(content: '账号 B 未发评论'),
     );
-    await AssistantConsentStore(
-      accountId: actorA,
-    ).save(const <SkillConsent>[]);
-    await AssistantConsentStore(
-      accountId: actorB,
-    ).save(const <SkillConsent>[]);
+    await AssistantConsentStore(accountId: actorA).save(const <SkillConsent>[]);
+    await AssistantConsentStore(accountId: actorB).save(const <SkillConsent>[]);
     final emoji = EmojiRepository(preferences);
     await emoji.setLastReportDate('2026-07-24');
 
@@ -550,14 +545,16 @@ final class _RecordingAccountLifecycleWriter
   int closeCalls = 0;
 
   @override
-  Future<CloseAccountResult> closeAccount(CloseAccountCommand command) async {
+  Future<CloseAccountResultWire> closeAccount(
+    CloseAccountCommand command,
+  ) async {
     closeCalls += 1;
     if (error != null) {
       throw error!;
     }
-    return const CloseAccountResult(
-      accountState: 'closed',
-      closedAt: '2026-07-20T12:00:00Z',
+    return CloseAccountResultWire(
+      accountState: AccountState.closed,
+      closedAt: DateTime.utc(2026, 7, 20, 12),
       idempotentReplay: false,
     );
   }

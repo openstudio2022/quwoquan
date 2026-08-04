@@ -48,7 +48,7 @@ void main() {
   });
 }
 
-ContentPostPublicationReceipt _receipt() => ContentPostPublicationReceipt(
+PostPublicationReceipt _receipt() => PostPublicationReceipt(
   publishIntentId: 'publish-1',
   localDraftId: 'draft-1',
   postId: 'post-1',
@@ -67,7 +67,7 @@ final class _RecordingHandler implements PostPublicationContinuationHandler {
   @override
   Future<void> apply({
     required CreateDraftPublicationContinuationRef continuation,
-    required ContentPostPublicationReceipt receipt,
+    required PostPublicationReceipt receipt,
   }) async {
     continuations.add(continuation);
   }

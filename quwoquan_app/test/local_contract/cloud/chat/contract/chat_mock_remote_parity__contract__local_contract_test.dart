@@ -1,8 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_cloud_contracts/chat_contracts.dart';
-import '../../../../support/cloud_services/repository_mock_reexports.dart';
 
 import '../../../../support/cloud_services/chat_repository_mock.dart';
+import '../../../../support/cloud_services/object_doubles/chat/alpha_chat_state_engine.dart';
+import '../../../../support/cloud_services/object_doubles/chat/alpha_message_writer.dart';
 
 void main() {
   group('chat mock remote parity contract', () {

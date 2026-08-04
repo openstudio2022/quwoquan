@@ -13,12 +13,16 @@ import 'package:quwoquan_app/app/bootstrap_recovery.dart';
 import 'package:quwoquan_app/app/recovery/recovery_failure_reporter.dart';
 import 'package:quwoquan_app/app/recovery/runtime_recovery_host.dart';
 import 'package:quwoquan_app/app/startup/startup_telemetry.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/cloud/remote/ops/startup_telemetry_remote.dart';
 import 'package:quwoquan_app/cloud/runtime/context/cloud_client_context.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
+import 'package:quwoquan_app/cloud/runtime/executor/cloud_operation_client_factory.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/ops/ops_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/core/di/app_cloud_client_context_provider.dart';
+import 'package:quwoquan_app/core/di/app_cloud_operation_telemetry_sink.dart';
 import 'package:quwoquan_app/core/platform/firebase_incoming_call_runtime.dart';
 import 'package:quwoquan_app/core/platform/app_recovery_native_bridge.dart';
 import 'package:quwoquan_app/core/platform/native_runtime_config_bridge.dart';
@@ -27,6 +31,7 @@ import 'package:quwoquan_app/core/telemetry/app_telemetry_session_store.dart';
 import 'package:quwoquan_app/core/telemetry/app_telemetry_context_provider.dart';
 import 'package:quwoquan_app/core/platform/platform_target.dart';
 import 'package:quwoquan_app/quwoquan_app_shell.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 RawReceivePort? _rootIsolateErrorPort;
 bool _bootstrapErrorBoundaryInstalled = false;
@@ -110,6 +115,7 @@ Future<void> _runQuwoquanAppInBootstrapZone({
     await AppStartupRuntime.instance.beginNativeStartupAttempt();
     CloudRuntimeConfig.hydrateFromNativeRuntimePackage(
       await NativeRuntimeConfigBridge.readRuntimePackage(),
+      enforceNativeLaunchBinding: currentAppPlatform != AppPlatform.web,
     );
     CloudRuntimeConfig.validateRequiredEndpoints();
     _configureStartupTelemetry();
@@ -180,11 +186,24 @@ Future<void> _runQuwoquanAppInBootstrapZone({
 }
 
 void _configureStartupTelemetry() {
+  const clientContext = AppCloudClientContextProvider();
   StartupTelemetryRuntime.instance.configure(
     StartupTelemetryReporter(
       journal: StartupJournal(SharedPreferencesStartupJournalStore()),
-      transport: RemoteStartupTelemetryTransport.fromRuntimeConfig(
-        httpClient: CloudHttpClient(),
+      transport: RemoteStartupTelemetryTransport(
+        client: buildGeneratedCloudOperationClient(
+          httpClient: CloudHttpClient(),
+          clientContextProvider: clientContext,
+          telemetrySink: const AppCloudOperationTelemetrySink(
+            clientContextProvider: clientContext,
+          ),
+        ),
+        invocationContext: () => CloudOperationInvocationContext(
+          surfaceId: AppUiSurfaces.appShell.id,
+          routeId: AppUiSurfaces.appShell.routeId,
+          clientPageId: OpsRequestPageIds.reportStartupEventBatch,
+          actor: const CloudOperationActorContext(),
+        ),
       ),
       platform: platformWireName(currentAppPlatform),
       runtimeEnv: CloudRuntimeConfig.appRuntimeEnv,

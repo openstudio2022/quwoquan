@@ -9,6 +9,11 @@ externalDependencies:
   port: ConnectorCapabilityGrantReaderPort
   operations: [resolveCapabilityGrant]
   conformance: connector_capability_grant
+  adapterContracts:
+    ext.first_party.http_authority:
+      endpointEnvs: {base: ASSISTANT_INTEGRATION_BASE_URL}
+      secretRefs: []
+      defaultTimeoutMs: 1200
 api_routes:
 
 - method: POST
@@ -33,7 +38,7 @@ api_routes:
   request_bindings:
     path:
     - {name: sessionId, field: sessionId}
-  response_entity: AssistantRunEnvelope
+  response_entity: AssistantRunEnvelopeWire
   success_status: 201
   reliability:
     timeout_ms: 5000
@@ -101,7 +106,7 @@ api_routes:
   request_bindings:
     path:
     - {name: runId, field: runId}
-  response_entity: AssistantRunEnvelope
+  response_entity: AssistantRunEnvelopeWire
   reliability:
     timeout_ms: 1500
     cancellation: supported
@@ -159,7 +164,7 @@ api_routes:
     - {name: runId, field: runId}
     injected:
     - {name: Idempotency-Key, field: idempotencyKey}
-  response_entity: AssistantRunEnvelope
+  response_entity: AssistantRunEnvelopeWire
   reliability:
     timeout_ms: 1500
     cancellation: supported
@@ -205,7 +210,7 @@ api_routes:
   request_bindings:
     path: [{name: runId, field: runId}]
     injected: [{name: Idempotency-Key, field: idempotencyKey}]
-  response_entity: AssistantRunEnvelope
+  response_entity: AssistantRunEnvelopeWire
   reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
   error_codes: [ASSISTANT.USER.run_not_found, ASSISTANT.USER.run_unauthorized, ASSISTANT.USER.run_state_conflict, ASSISTANT.SYSTEM.run_storage_unavailable]
   privacy: {request_classification: SENSITIVE, response_classification: SENSITIVE, log_policy: metadata_only}
@@ -225,7 +230,7 @@ api_routes:
   request_bindings:
     path: [{name: runId, field: runId}]
     injected: [{name: Idempotency-Key, field: idempotencyKey}]
-  response_entity: AssistantRunEnvelope
+  response_entity: AssistantRunEnvelopeWire
   reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
   error_codes: [ASSISTANT.USER.run_not_found, ASSISTANT.USER.run_unauthorized, ASSISTANT.USER.run_state_conflict, ASSISTANT.SYSTEM.run_storage_unavailable]
   privacy: {request_classification: INTERNAL, response_classification: SENSITIVE, log_policy: metadata_only}
@@ -245,7 +250,7 @@ api_routes:
   request_bindings:
     path: [{name: runId, field: runId}]
     injected: [{name: Idempotency-Key, field: idempotencyKey}]
-  response_entity: AssistantRunEnvelope
+  response_entity: AssistantRunEnvelopeWire
   reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
   error_codes: [ASSISTANT.USER.run_not_found, ASSISTANT.USER.run_unauthorized, ASSISTANT.USER.run_invalid_argument, ASSISTANT.USER.run_state_conflict, ASSISTANT.SYSTEM.run_storage_unavailable]
   privacy: {request_classification: SENSITIVE, response_classification: SENSITIVE, log_policy: metadata_only}
@@ -265,7 +270,7 @@ api_routes:
   request_bindings:
     path: [{name: runId, field: runId}, {name: toolUseId, field: toolUseId}]
     injected: [{name: Idempotency-Key, field: idempotencyKey}]
-  response_entity: AssistantRunEnvelope
+  response_entity: AssistantRunEnvelopeWire
   reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
   error_codes: [ASSISTANT.USER.run_not_found, ASSISTANT.USER.run_unauthorized, ASSISTANT.USER.run_invalid_argument, ASSISTANT.USER.run_state_conflict, ASSISTANT.SYSTEM.run_storage_unavailable]
   privacy: {request_classification: SENSITIVE, response_classification: SENSITIVE, log_policy: metadata_only}

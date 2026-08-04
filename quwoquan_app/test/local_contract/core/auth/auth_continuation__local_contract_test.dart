@@ -27,8 +27,8 @@ void main() {
           content: '游客想说的话',
           replyToCommentId: 'c1',
           attachmentMediaIds: const <String>['media-1'],
-          mentions: <ContentCommentMention>[
-            ContentCommentMention(
+          mentions: <CommentMention>[
+            CommentMention(
               subjectType: 'assistant',
               subjectId: 'assistant_xiaoqu',
               displayName: '小趣',
@@ -67,7 +67,7 @@ void main() {
       const report = SubmitContentReportContinuation(
         postId: 'post-report',
         surface: ContentReportContinuationSurface.workBrowser,
-        reason: ContentReportReason.spam,
+        reason: ReportReason.spam,
       );
       const original = RequestOriginalImageAccessContinuation(
         postId: 'post-image',
@@ -90,7 +90,7 @@ void main() {
       );
 
       expect(report.surface, ContentReportContinuationSurface.workBrowser);
-      expect(report.reason, ContentReportReason.spam);
+      expect(report.reason, ReportReason.spam);
       expect(original.mediaId, 'media-original');
       expect(share.target, ContentShareContinuationTarget.groupChat);
       expect(create.action, CreateActionContinuationKind.pickImages);

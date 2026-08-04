@@ -1,12 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_kind_metadata.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_statement_synthesizer.dart';
 
 import '../../../support/cloud_services/content/alpha_intersection_repository.dart';
+import '../../../support/fixtures/intersection_fixtures.dart';
 
 /// 交集统一体验 · Alpha fixture 本地契约。
 ///
@@ -49,7 +48,9 @@ void main() {
 
     test('仅访问某维度 → 仅该维度清零，其余维度未读保留', () async {
       final repo = AlphaIntersectionRepository();
-      await repo.markIntersectionsVisited(dimension: 'relationship');
+      await repo.markIntersectionsVisited(
+        dimension: IntersectionDimension.relationship,
+      );
       final summary = await repo.getMyIntersectionSummary();
 
       final rel = summary.dimensions.firstWhere(
@@ -105,7 +106,7 @@ void main() {
         items.every((reason) => reason.intersectionPoints.isNotEmpty),
         isTrue,
       );
-      final hostTarget = IntersectionTarget(
+      final hostTarget = intersectionTargetFixture(
         objectType: 'homepage',
         objectId: 'fixture_homepage_travel_route_erhai',
         objectKind: 'route',
@@ -189,7 +190,7 @@ void main() {
     test(
       '禁止 reason 级 displayText/label/sharedCount/recommendationTraceId 回归',
       () {
-        final map = IntersectionReason().toMap();
+        final map = intersectionReasonFixture().toWire();
         expect(map.containsKey('displayText'), isFalse);
         expect(map.containsKey('label'), isFalse);
         expect(map.containsKey('sharedCount'), isFalse);

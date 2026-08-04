@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
+import 'package:quwoquan_app/cloud/services/chat/chat_view_data.dart';
 import '../../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_inbox_provider.dart';
@@ -13,12 +13,12 @@ class _SwitchableInboxRepository extends MockChatRepository {
   bool returnEmptyInbox = false;
 
   @override
-  Future<List<ChatInboxDto>> listInbox({
+  Future<List<ChatInboxViewData>> listInbox({
     String? cursor,
     int limit = 100,
   }) async {
     if (returnEmptyInbox) {
-      return const <ChatInboxDto>[];
+      return const <ChatInboxViewData>[];
     }
     return super.listInbox(cursor: cursor, limit: limit);
   }
@@ -105,8 +105,11 @@ void main() {
 
 class _UnreadMentionChatRepository extends MockChatRepository {
   @override
-  Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
-    return <ChatInboxDto>[
+  Future<List<ChatInboxViewData>> listInbox({
+    String? cursor,
+    int limit = 20,
+  }) async {
+    return <ChatInboxViewData>[
       chatInboxFixture(
         id: 'conv_unread_mention_test',
         type: 'group',
@@ -119,7 +122,7 @@ class _UnreadMentionChatRepository extends MockChatRepository {
   }
 
   @override
-  Future<List<ChatInboxDto>> listConversations({
+  Future<List<ChatInboxViewData>> listConversations({
     String? cursor,
     int limit = 20,
   }) async {

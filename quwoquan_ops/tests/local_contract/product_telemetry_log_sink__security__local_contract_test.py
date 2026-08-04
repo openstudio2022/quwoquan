@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import tempfile
 import unittest
@@ -22,6 +23,10 @@ UNDECLARED_PROVIDER_ENVIRONMENT = {
     "PRODUCT_OPS_LOG_SINK_ENDPOINT": "https://undeclared-provider.invalid",
     "PRODUCT_OPS_LOG_SINK_TOKEN": "should-not-be-read",
 }
+
+
+def _sha256_digest(payload: str) -> str:
+    return "sha256:" + hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 class ProductTelemetryLogSinkSecurityLocalContractTest(unittest.TestCase):
@@ -134,7 +139,7 @@ class ProductTelemetryLogSinkSecurityLocalContractTest(unittest.TestCase):
             secret_path=None,
             source="gamma-local-elasticsearch-topology",
             status="ready",
-            redacted_digest="sha256:1234567890abcdef",
+            redacted_digest=_sha256_digest("gamma-local-elasticsearch-topology"),
         )
         with tempfile.TemporaryDirectory() as temporary_dir:
             report_dir = Path(temporary_dir)
@@ -152,7 +157,7 @@ class ProductTelemetryLogSinkSecurityLocalContractTest(unittest.TestCase):
                     stackctl,
                     "command_health",
                     return_value={"exitCode": 0},
-                ),
+                ) as command_health,
                 mock.patch.object(stackctl, "_write_summary_bundle"),
             ):
                 result = stackctl.command_product_telemetry_log_sink(args)
@@ -161,6 +166,10 @@ class ProductTelemetryLogSinkSecurityLocalContractTest(unittest.TestCase):
             self.assertEqual(
                 result["actions"],
                 [{"action": "health", "status": "passed"}],
+            )
+            self.assertEqual(
+                command_health.call_args.args[0].scope,
+                "content-commercial",
             )
             self.assertEqual(result["logSink"], bundle.redacted_receipt())
             serialized = json.dumps(
@@ -180,7 +189,7 @@ class ProductTelemetryLogSinkSecurityLocalContractTest(unittest.TestCase):
             secret_path=None,
             source="alpha-local-elasticsearch-topology",
             status="ready",
-            redacted_digest="sha256:1234567890abcdef",
+            redacted_digest=_sha256_digest("alpha-local-elasticsearch-topology"),
         )
         with tempfile.TemporaryDirectory() as temporary_dir:
             report_dir = Path(temporary_dir)

@@ -22,7 +22,9 @@ services:
       IMAGE_VERSION: "${QWQ_COMPOSE_IMAGE_VERSION:?immutable image version is required}"
       PYTHONUNBUFFERED: "1"
       MODEL_CACHE_DIR: /app/cache
-      REC_MODEL_UVICORN_WORKERS: "${QWQ_COMPOSE_REC_MODEL_WORKERS:-2}"
+      # Local gamma/full stacks share ~8GiB Docker Desktop with many first-party
+      # services; each worker boots the full lifespan consumer set. Default to 1.
+      REC_MODEL_UVICORN_WORKERS: "${QWQ_COMPOSE_REC_MODEL_WORKERS:-1}"
       REC_MODEL_SCORE_CACHE_TTL_MS: "${QWQ_COMPOSE_REC_MODEL_SCORE_CACHE_TTL_MS:-500}"
       REC_MODEL_SCORE_CACHE_MAX_ENTRIES: "${QWQ_COMPOSE_REC_MODEL_SCORE_CACHE_MAX_ENTRIES:-4096}"
       REC_MODEL_MICROBATCH_WINDOW_MS: "${QWQ_COMPOSE_REC_MODEL_MICROBATCH_WINDOW_MS:-2}"
@@ -41,9 +43,11 @@ services:
       - ${QWQ_COMPOSE_REC_POLICY_SOURCE:?QWQ_COMPOSE_REC_POLICY_SOURCE is required}:/etc/qwq-rec-policy/policy.yaml:ro
       - recommendation-model-cache:/app/cache
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')\" || exit 1"]
+      # urlopen must carry a socket timeout; otherwise a dead worker leaves hung
+      # healthcheck PIDs that starve Docker exec ("timed out starting health check").
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)\" || exit 1"]
       interval: 10s
-      timeout: 3s
+      timeout: 5s
       start_period: 240s
       retries: 5
 

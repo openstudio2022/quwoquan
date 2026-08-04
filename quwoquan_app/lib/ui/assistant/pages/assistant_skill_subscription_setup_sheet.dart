@@ -1,4 +1,7 @@
 import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
+import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 
 const String assistantSkillSubscriptionDefaultTimezone = 'Asia/Shanghai';
 
@@ -51,7 +54,9 @@ class _AssistantSkillSubscriptionSetupSheetState
   void initState() {
     super.initState();
     _topicController = TextEditingController(
-      text: '提醒我关注${widget.skillName}的重要变化和下一步',
+      text: AssistantText.assistantSkillSubscriptionDefaultTopic(
+        widget.skillName,
+      ),
     );
   }
 
@@ -73,22 +78,29 @@ class _AssistantSkillSubscriptionSetupSheetState
       isSurfacePainted: true,
       child: Container(
         key: const ValueKey<String>('assistant_skill_subscription_setup_sheet'),
-        height: MediaQuery.sizeOf(context).height * 0.76,
+        height:
+            MediaQuery.sizeOf(context).height *
+            AppSpacing.modalSheetMaxHeightRatio,
         color: background,
         child: SafeArea(
           top: false,
           child: Column(
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 12, 8),
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.md,
+                  AppSpacing.sm + AppSpacing.xs,
+                  AppSpacing.sm + AppSpacing.xs,
+                  AppSpacing.sm,
+                ),
                 child: Row(
                   children: [
                     Expanded(
                       child: Text(
-                        '设置主动提醒',
+                        AssistantText.assistantSkillSubscriptionSetupTitle,
                         style: theme.textTheme.navLargeTitleTextStyle.copyWith(
                           color: primary,
-                          fontSize: 24,
+                          fontSize: AppTypography.iosTitle2,
                         ),
                       ),
                     ),
@@ -96,8 +108,10 @@ class _AssistantSkillSubscriptionSetupSheetState
                       key: const ValueKey<String>(
                         'assistant_skill_subscription_setup_close',
                       ),
-                      padding: const EdgeInsets.all(8),
-                      minimumSize: const Size.square(44),
+                      padding: const EdgeInsets.all(AppSpacing.sm),
+                      minimumSize: const Size.square(
+                        AppSpacing.minInteractiveSize,
+                      ),
                       onPressed: () => Navigator.of(context).pop(),
                       child: Icon(
                         CupertinoIcons.xmark_circle_fill,
@@ -109,26 +123,32 @@ class _AssistantSkillSubscriptionSetupSheetState
               ),
               Expanded(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.twenty,
+                    AppSpacing.sm,
+                    AppSpacing.twenty,
+                    AppSpacing.twentyEight,
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Text(
-                        '小趣会按设定时间检查你关注的变化；静默时段、频控和最终投递仍由服务端策略控制。',
+                        AssistantText
+                            .assistantSkillSubscriptionSetupDescription,
                         style: theme.textTheme.textStyle.copyWith(
                           color: secondary,
-                          fontSize: 13,
-                          height: 1.4,
+                          fontSize: AppTypography.smPlus,
+                          height: AppTypography.bodyLineHeight,
                         ),
                       ),
-                      const SizedBox(height: 18),
+                      const SizedBox(height: AppSpacing.eighteen),
                       Text(
-                        '提醒关注什么',
+                        AssistantText.assistantSkillSubscriptionTopicTitle,
                         style: theme.textTheme.navTitleTextStyle.copyWith(
                           color: primary,
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: AppSpacing.sm),
                       CupertinoTextField(
                         key: const ValueKey<String>(
                           'assistant_skill_subscription_setup_topic',
@@ -136,11 +156,14 @@ class _AssistantSkillSubscriptionSetupSheetState
                         controller: _topicController,
                         minLines: 2,
                         maxLines: 4,
-                        placeholder: '例如：行程天气、交通变化和集合时间',
-                        padding: const EdgeInsets.all(12),
+                        placeholder: AssistantText
+                            .assistantSkillSubscriptionTopicPlaceholder,
+                        padding: const EdgeInsets.all(
+                          AppSpacing.sm + AppSpacing.xs,
+                        ),
                       ),
                       if (_validationError != null) ...[
-                        const SizedBox(height: 6),
+                        const SizedBox(height: AppSpacing.six),
                         Text(
                           _validationError!,
                           key: const ValueKey<String>(
@@ -150,31 +173,33 @@ class _AssistantSkillSubscriptionSetupSheetState
                             color: CupertinoColors.systemRed.resolveFrom(
                               context,
                             ),
-                            fontSize: 13,
+                            fontSize: AppTypography.smPlus,
                           ),
                         ),
                       ],
-                      const SizedBox(height: 20),
+                      const SizedBox(height: AppSpacing.twenty),
                       Text(
-                        '每天检查时间',
+                        AssistantText.assistantSkillSubscriptionTimeTitle,
                         style: theme.textTheme.navTitleTextStyle.copyWith(
                           color: primary,
                         ),
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: AppSpacing.six),
                       Text(
-                        '北京时间（Asia/Shanghai）',
+                        AssistantText.assistantSkillSubscriptionTimezoneLabel,
                         style: theme.textTheme.textStyle.copyWith(
                           color: secondary,
-                          fontSize: 13,
+                          fontSize: AppTypography.smPlus,
                         ),
                       ),
                       Container(
-                        margin: const EdgeInsets.only(top: 8),
-                        height: 168,
+                        margin: const EdgeInsets.only(top: AppSpacing.sm),
+                        height: AppSpacing.oneHundredSixty + AppSpacing.sm,
                         decoration: BoxDecoration(
                           color: grouped,
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(
+                            AppSpacing.largeBorderRadius,
+                          ),
                         ),
                         child: CupertinoDatePicker(
                           key: const ValueKey<String>(
@@ -187,13 +212,15 @@ class _AssistantSkillSubscriptionSetupSheetState
                           onDateTimeChanged: (value) => _time = value,
                         ),
                       ),
-                      const SizedBox(height: 18),
+                      const SizedBox(height: AppSpacing.eighteen),
                       CupertinoButton.filled(
                         key: const ValueKey<String>(
                           'assistant_skill_subscription_setup_save',
                         ),
                         onPressed: _save,
-                        child: const Text('开启主动提醒'),
+                        child: const Text(
+                          AssistantText.assistantSkillSubscriptionEnable,
+                        ),
                       ),
                     ],
                   ),
@@ -209,7 +236,10 @@ class _AssistantSkillSubscriptionSetupSheetState
   void _save() {
     final rawText = _topicController.text.trim();
     if (rawText.isEmpty) {
-      setState(() => _validationError = '请填写要关注的变化');
+      setState(
+        () => _validationError =
+            AssistantText.assistantSkillSubscriptionTopicRequired,
+      );
       return;
     }
     Navigator.of(context).pop(

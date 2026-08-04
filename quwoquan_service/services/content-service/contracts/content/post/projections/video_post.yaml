@@ -54,10 +54,10 @@ fields:
   description: 视频流 URL
 - name: thumbnailUrl
   type: string
-  description: 未播放态主封面 URL
+  description: 视频未播放态专属主封面 URL；存在时展示优先级高于通用 coverUrl
 - name: coverUrl
   type: string
-  description: 通用封面 URL；视频时与 thumbnailUrl 同源或作兼容回退
+  description: 跨内容类型的通用封面 URL；视频缺少 thumbnailUrl 时只使用同一 Post/MediaAsset 的值作为第二展示优先级
 - name: coverStrategy
   type: enum
   description: 视频封面策略 first_frame/manual

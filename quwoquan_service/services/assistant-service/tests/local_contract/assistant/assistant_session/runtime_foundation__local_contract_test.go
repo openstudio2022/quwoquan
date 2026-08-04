@@ -2,7 +2,7 @@ package local_contract
 
 import (
 	"encoding/json"
-	assistantstreaming "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/streaming"
+	assistantstreaming "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/streaming"
 	"testing"
 	"time"
 

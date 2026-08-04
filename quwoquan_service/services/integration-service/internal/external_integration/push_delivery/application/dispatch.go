@@ -21,7 +21,6 @@ import (
 const (
 	PushEndpointKindAPNSVoIP  = "apns_voip"
 	PushEndpointKindFCM       = "fcm"
-	PushProviderLocalRecorder = "local_push_recorder"
 	PushDeliveryActionRing    = "ring"
 	PushDeliveryActionCancel  = "cancel"
 	APNsEnvironmentSandbox    = "sandbox"
@@ -346,34 +345,6 @@ func (p *PushDispatchProvider) Send(
 		Status:            reliabletask.ExternalInteractionStatusSentUnconfirmed,
 		Provider:          secret.EndpointKind,
 		ProviderRequestID: receipt.ProviderRequestID,
-		OccurredAt:        time.Now().UTC(),
-	}, nil
-}
-
-// LocalRecorderPushProvider 只用于 Alpha/Beta/Gamma 的 Port 对等替代装配。它执行完整
-// payload 校验，但不会解析、持久化或记录 endpoint token。
-type LocalRecorderPushProvider struct{}
-
-func (LocalRecorderPushProvider) Send(
-	_ context.Context,
-	request reliabletask.ExternalInteractionRequest,
-	_ reliabletask.ReliableAsyncTask,
-) (reliabletask.ExternalInteractionResult, error) {
-	if _, err := ParsePushDeliveryMessage(request); err != nil {
-		failure := &PushProviderFailure{
-			Code:      generated.ErrPushDeliveryInvalidRequest.Error(),
-			Provider:  PushProviderLocalRecorder,
-			Retryable: false,
-			Cause:     err,
-		}
-		return failedPushResult(request, PushProviderLocalRecorder, failure), failure
-	}
-	return reliabletask.ExternalInteractionResult{
-		RequestID:         request.RequestID,
-		Operation:         request.Operation,
-		Status:            reliabletask.ExternalInteractionStatusSentUnconfirmed,
-		Provider:          PushProviderLocalRecorder,
-		ProviderRequestID: "local-" + request.RequestID,
 		OccurredAt:        time.Now().UTC(),
 	}, nil
 }

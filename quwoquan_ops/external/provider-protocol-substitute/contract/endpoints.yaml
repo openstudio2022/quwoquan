@@ -1,0 +1,23 @@
+schema: provider-endpoint-contract
+role: provider-protocol-substitute
+endpoints:
+  ASSISTANT_MODEL_COMPLETION_URL:
+    path: /v1/chat/completions
+  ASSISTANT_PUBLIC_SEARCH_URL:
+    path: /search/html
+  ASSISTANT_WEATHER_GEOCODING_URL:
+    path: /weather/geocoding
+  ASSISTANT_WEATHER_FORECAST_URL:
+    path: /weather/forecast
+  ASSISTANT_FINANCE_CHART_URL:
+    path: /finance/chart
+  CONTENT_EMBEDDING_ENDPOINT:
+    path: /v1/embeddings
+  INTEGRATION_LOCATION_FIXTURE_BASE_URL:
+    path: /map
+  USER_CARRIER_ONE_TAP_SUBSTITUTE_ENDPOINT:
+    path: /carrier/resolve
+  USER_FEDERATED_IDENTITY_SUBSTITUTE_ENDPOINT:
+    path: /federated/verify
+  INTEGRATION_PUSH_SUBSTITUTE_ENDPOINT:
+    path: /push/send

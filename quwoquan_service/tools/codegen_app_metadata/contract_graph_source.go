@@ -55,6 +55,7 @@ type appExposedOperation struct {
 	ResponseBody         string                      `json:"responseBody"`
 	ResponseBodyKind     string                      `json:"responseBodyKind"`
 	ResponseEntity       string                      `json:"responseEntity"`
+	ResponseEntityRef    string                      `json:"responseEntityRef"`
 	Scopes               []string                    `json:"scopes"`
 	SLO                  appSLOPolicy                `json:"slo"`
 	SourcePath           string                      `json:"sourcePath"`

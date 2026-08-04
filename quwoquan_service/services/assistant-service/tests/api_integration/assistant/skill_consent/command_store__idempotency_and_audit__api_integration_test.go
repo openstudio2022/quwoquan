@@ -57,7 +57,7 @@ func skillConsentRequest(
 func TestSkillConsentHTTPContractPersistsReceiptAndEvent(t *testing.T) {
 	resetSkillConsentState(t)
 	handler := newSkillConsentHandler()
-	path := "/assistant/skills/personal_content_access/consent"
+	path := "/assistant/skills/travel_companion/consent"
 
 	granted := skillConsentRequest(
 		t,
@@ -66,7 +66,7 @@ func TestSkillConsentHTTPContractPersistsReceiptAndEvent(t *testing.T) {
 		path,
 		"consent-http-account",
 		"consent-http-grant",
-		map[string]any{"grantedScopes": []string{"personal_content_access", "travel.trip.read"}},
+		map[string]any{"grantedScopes": []string{"assistant.memory.preferences.read", "travel.trip.read"}},
 	)
 	if granted.Code != http.StatusOK {
 		t.Fatalf("grant status=%d body=%s", granted.Code, granted.Body.String())
@@ -86,7 +86,7 @@ func TestSkillConsentHTTPContractPersistsReceiptAndEvent(t *testing.T) {
 	}
 	if grantPayload.Consent.ID == "" ||
 		grantPayload.Consent.AccountID != "consent-http-account" ||
-		grantPayload.Consent.SkillID != "personal_content_access" ||
+		grantPayload.Consent.SkillID != "travel_companion" ||
 		len(grantPayload.Consent.GrantedScopes) != 2 ||
 		!grantPayload.Consent.Granted || grantPayload.Replayed {
 		t.Fatalf("grant response=%+v", grantPayload)
@@ -99,7 +99,7 @@ func TestSkillConsentHTTPContractPersistsReceiptAndEvent(t *testing.T) {
 		path,
 		"consent-http-account",
 		"consent-http-grant",
-		map[string]any{"grantedScopes": []string{"travel.trip.read", "personal_content_access"}},
+		map[string]any{"grantedScopes": []string{"travel.trip.read", "assistant.memory.preferences.read"}},
 	)
 	if replay.Code != http.StatusOK ||
 		!strings.Contains(replay.Body.String(), `"replayed":true`) {
@@ -131,7 +131,7 @@ func TestSkillConsentHTTPContractPersistsReceiptAndEvent(t *testing.T) {
 	)
 	if list.Code != http.StatusOK ||
 		!strings.Contains(list.Body.String(), `"granted":true`) ||
-		!strings.Contains(list.Body.String(), `"grantedScopes":["personal_content_access","travel.trip.read"]`) {
+		!strings.Contains(list.Body.String(), `"grantedScopes":["assistant.memory.preferences.read","travel.trip.read"]`) {
 		t.Fatalf("list status=%d body=%s", list.Code, list.Body.String())
 	}
 
@@ -142,7 +142,7 @@ func TestSkillConsentHTTPContractPersistsReceiptAndEvent(t *testing.T) {
 		path,
 		"consent-http-account",
 		"consent-http-scope-conflict",
-		map[string]any{"grantedScopes": []string{"personal_content_access", "travel.trip.read", "travel.stay.read"}},
+		map[string]any{"grantedScopes": []string{"assistant.memory.preferences.read", "travel.trip.read", "travel.stay.read"}},
 	)
 	if scopeConflict.Code != http.StatusConflict ||
 		!strings.Contains(scopeConflict.Body.String(), "consent_scope_conflict") {
@@ -202,8 +202,8 @@ func TestSkillConsentConcurrentGrantKeepsOneActiveFact(t *testing.T) {
 				context.Background(),
 				key,
 				"concurrent-account",
-				"personal_content_access",
-				[]string{"personal_content_access", "travel.trip.read"},
+				"travel_companion",
+				[]string{"assistant.memory.preferences.read", "travel.trip.read"},
 			)
 			results <- commandResult{result: result, err: err}
 		}()
@@ -247,8 +247,8 @@ func TestSkillConsentGrantRevokeGrantKeepsImmutableHistory(t *testing.T) {
 		ctx,
 		"history-grant-first",
 		"history-account",
-		"personal_content_access",
-		[]string{"personal_content_access"},
+		"travel_companion",
+		[]string{"travel.trip.read"},
 	)
 	if err != nil || first.Consent == nil {
 		t.Fatalf("first grant result=%+v error=%v", first, err)
@@ -257,7 +257,7 @@ func TestSkillConsentGrantRevokeGrantKeepsImmutableHistory(t *testing.T) {
 		ctx,
 		"history-revoke",
 		"history-account",
-		"personal_content_access",
+		"travel_companion",
 	); err != nil {
 		t.Fatalf("revoke error=%v", err)
 	}
@@ -265,8 +265,8 @@ func TestSkillConsentGrantRevokeGrantKeepsImmutableHistory(t *testing.T) {
 		ctx,
 		"history-grant-second",
 		"history-account",
-		"personal_content_access",
-		[]string{"personal_content_access"},
+		"travel_companion",
+		[]string{"travel.trip.read"},
 	)
 	if err != nil || second.Consent == nil {
 		t.Fatalf("second grant result=%+v error=%v", second, err)
@@ -298,7 +298,7 @@ SELECT
 func TestSkillConsentHTTPRejectsMissingPrincipalAndCommandIdentity(t *testing.T) {
 	resetSkillConsentState(t)
 	handler := newSkillConsentHandler()
-	path := "/assistant/skills/personal_content_access/consent"
+	path := "/assistant/skills/travel_companion/consent"
 	unauthorized := skillConsentRequest(
 		t,
 		handler,
@@ -306,7 +306,7 @@ func TestSkillConsentHTTPRejectsMissingPrincipalAndCommandIdentity(t *testing.T)
 		path,
 		"",
 		"unauthorized-command",
-		map[string]any{"grantedScopes": []string{"personal_content_access"}},
+		map[string]any{"grantedScopes": []string{"travel.trip.read"}},
 	)
 	if unauthorized.Code != http.StatusUnauthorized ||
 		!strings.Contains(unauthorized.Body.String(), "ASSISTANT.USER.consent_unauthorized") {
@@ -319,7 +319,7 @@ func TestSkillConsentHTTPRejectsMissingPrincipalAndCommandIdentity(t *testing.T)
 		path,
 		"identity-account",
 		"",
-		map[string]any{"grantedScopes": []string{"personal_content_access"}},
+		map[string]any{"grantedScopes": []string{"travel.trip.read"}},
 	)
 	if missingKey.Code != http.StatusBadRequest ||
 		!strings.Contains(missingKey.Body.String(), "consent_invalid_argument") {

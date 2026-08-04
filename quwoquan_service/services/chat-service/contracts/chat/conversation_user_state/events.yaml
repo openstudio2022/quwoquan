@@ -15,11 +15,12 @@ events:
   - readAt
   - updatedAt
 - name: ConversationUserSettingsChanged
+  client_ws_type: ConversationUserSettingsChanged
   producer: chat-service
   consumers:
   - projection-workers
   channel: transactional_outbox
-  payload_entity: ConversationUserState
+  payload_entity: ConversationUserSettingsChangedEventPayload
   payload_fields:
   - conversationId
   - userId

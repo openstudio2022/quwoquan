@@ -35,6 +35,7 @@ void main() {
       final repository = RemoteAssistantRepository(
         operationClient: buildAssistantRemoteTestOperationClient(httpClient),
         invocationContext: assistantRemoteTestInvocationContext,
+        presentationCapabilities: assistantRemoteTestPresentationCapabilities,
       );
 
       final page = await repository.listAssistantSessions(

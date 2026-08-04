@@ -1,19 +1,13 @@
-import 'package:quwoquan_app/cloud/runtime/cloud_api_query_defaults.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_action_hint.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_dimension_tally.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_inbox_summary.g.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_kind_metadata.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_point.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_visual.g.dart';
+import 'package:quwoquan_app/cloud/runtime/cloud_api_query_defaults.dart';
 import 'package:quwoquan_app/cloud/runtime/recommendation/intersection_action_keys.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_fact_items.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_visit_writer.dart';
 
 import '../object_scenario_seed_reader.dart';
+import '../../../fixtures/intersection_fixtures.dart';
 
 /// local_contract 交集读写替身。
 ///
@@ -58,7 +52,7 @@ class AlphaIntersectionRepository
       final statement = _briefStatementFor(dimension, items, newCount);
       final sample = items.isNotEmpty ? items.first : null;
       tallies.add(
-        IntersectionDimensionTally(
+        intersectionDimensionTallyFixture(
           dimension: dimension,
           label: _fixtureDimensionLabel(dimension),
           count: items.length,
@@ -81,7 +75,7 @@ class AlphaIntersectionRepository
       return b.count.compareTo(a.count);
     });
 
-    return IntersectionInboxSummary(
+    return intersectionInboxSummaryFixture(
       totalCount: reasons.length,
       totalNewCount: totalNew,
       totalStrengthenedCount: totalStrengthened,
@@ -137,9 +131,11 @@ class AlphaIntersectionRepository
   }
 
   @override
-  Future<void> markIntersectionsVisited({String? dimension}) async {
+  Future<void> markIntersectionsVisited({
+    IntersectionDimension? dimension,
+  }) async {
     final now = DateTime.now().toUtc();
-    final wanted = (dimension ?? '').trim();
+    final wanted = dimension?.wireName ?? '';
     if (wanted.isEmpty) {
       for (final key in intersectionDimensionKeys) {
         _watermark[key] = now;
@@ -168,8 +164,8 @@ class AlphaIntersectionRepository
       context: 'objectIntersections.$objectId',
     );
     // 对象页合同与云侧 Reader 输出口同构（host_plain）：seed 是 canonical
-    // explicit_link 形态，直出会被端侧宿主 self-link 校验整批淘汰（V1）。
-    final hostTarget = IntersectionTarget(
+    // explicit_link 形态，直出会被端侧宿主 self-link 校验整批淘汰。
+    final hostTarget = intersectionTargetFixture(
       objectType: _objectTypeForHost(objectType),
       objectId: objectId,
       objectKind: _objectKindForObjectType(objectType),
@@ -178,7 +174,7 @@ class AlphaIntersectionRepository
       ),
     );
     final projected = reasons
-        .map((reason) => applyHostPlainDisplayContext(reason, hostTarget))
+        .map((reason) => _projectHostPlainFixture(reason, hostTarget))
         .toList(growable: false);
     return projected.length <= limit ? projected : projected.sublist(0, limit);
   }
@@ -226,15 +222,16 @@ class AlphaIntersectionRepository
             (key, value) => MapEntry(key.toString(), value),
           );
           final agoHours = map.remove('freshAgoHours');
-          var reason = IntersectionReason.fromMap(map);
-          if (agoHours is num) {
-            reason = reason.copyWith(
-              freshAt: DateTime.now()
-                  .toUtc()
-                  .subtract(Duration(hours: agoHours.toInt()))
-                  .toIso8601String(),
-            );
-          }
+          final freshAt = agoHours is num
+              ? DateTime.now()
+                    .toUtc()
+                    .subtract(Duration(hours: agoHours.toInt()))
+                    .toIso8601String()
+              : '';
+          var reason = _intersectionReasonFromScenarioSeed(
+            map,
+            freshAt: freshAt,
+          );
           if (reason.intersectionPoints.isEmpty) {
             throw FormatException(
               'content/intersection_core.$context '
@@ -330,7 +327,7 @@ class AlphaIntersectionRepository
   }
 
   static IntersectionTextSpan _plain(String text) =>
-      IntersectionTextSpan(text: text, role: 'plain');
+      intersectionTextSpanFixture(text: text, role: 'plain');
 
   static IntersectionTextSpan _objectSpanOrPlain(
     String text,
@@ -340,10 +337,10 @@ class AlphaIntersectionRepository
     final name = sample.displayName.trim();
     if (objectId.isEmpty || name.isEmpty) return _plain(text);
     final objectKind = _objectKindForReason(sample);
-    return IntersectionTextSpan(
+    return intersectionTextSpanFixture(
       text: text,
       role: 'object',
-      target: IntersectionTarget(
+      target: intersectionTargetFixture(
         objectType: _objectTypeForKind(objectKind),
         objectId: objectId,
         objectKind: objectKind,
@@ -353,10 +350,10 @@ class AlphaIntersectionRepository
   }
 
   static IntersectionTextSpan _countSpan(String text, String dimension) {
-    return IntersectionTextSpan(
+    return intersectionTextSpanFixture(
       text: text,
       role: 'count',
-      target: IntersectionTarget(
+      target: intersectionTargetFixture(
         objectType: 'dimension',
         objectId: dimension,
         objectKind: 'tag',
@@ -376,14 +373,14 @@ class AlphaIntersectionRepository
       final objectKind = _objectKindForReason(item);
       final objectId = item.actionTargetId.trim();
       visuals.add(
-        IntersectionVisual(
+        intersectionVisualFixture(
           assetKind:
               UnifiedObjectKind.fromWire(objectKind)?.assetKind ?? 'avatar',
           imageUrl: url,
           displayName: name,
           target: objectId.isEmpty
               ? null
-              : IntersectionTarget(
+              : intersectionTargetFixture(
                   objectType: _objectTypeForKind(objectKind),
                   objectId: objectId,
                   objectKind: objectKind,
@@ -433,13 +430,15 @@ class AlphaIntersectionRepository
     }
     final summary = byDimension.entries
         .map(
-          (entry) => IntersectionDimensionTally(
+          (entry) => intersectionDimensionTallyFixture(
             dimension: entry.key,
             label: _fixtureDimensionLabel(entry.key),
             count: entry.value,
             newCount: 0,
             briefText: '',
             subtitleText: '',
+            briefSpans: const <IntersectionTextSpan>[],
+            sampleVisuals: const <IntersectionVisual>[],
             sourceRef: '',
             countObjectKind: '',
             strengthenedCount: 0,
@@ -448,7 +447,8 @@ class AlphaIntersectionRepository
           ),
         )
         .toList(growable: false);
-    return reason.copyWith(
+    return copyIntersectionReasonFixture(
+      reason,
       intersectionPoints: visible,
       pointSummarySnapshotId: reason.intersectionId,
       factPointCount: factCount,
@@ -473,12 +473,12 @@ class AlphaIntersectionRepository
         IntersectionActionKeys.askAssistant;
     final metadata = IntersectionActionKeyMeta.of(key);
     return <IntersectionActionHint>[
-      IntersectionActionHint(
+      intersectionActionHintFixture(
         actionKey: key,
         label: _fixtureActionLabel(key),
         target: reason.actionTargetId.trim().isEmpty
             ? null
-            : IntersectionTarget(
+            : intersectionTargetFixture(
                 objectType: _objectTypeForKind(reason.objectKind),
                 objectId: reason.actionTargetId.trim(),
                 objectKind: reason.objectKind.trim(),
@@ -498,12 +498,248 @@ class AlphaIntersectionRepository
   ) {
     final metadata = IntersectionActionKeyMeta.of(hint.actionKey);
     if (metadata == null) return hint;
-    return hint.copyWith(
+    return intersectionActionHintFixture(
+      actionKey: hint.actionKey,
+      label: hint.label,
+      target: hint.target,
+      isPrimary: hint.isPrimary,
+      priority: hint.priority,
       actionTier: metadata.tier,
       requiredGates: metadata.requiredGates,
       dispatch: metadata.dispatch,
     );
   }
+}
+
+IntersectionReason _intersectionReasonFromScenarioSeed(
+  Map<String, Object?> seed, {
+  required String freshAt,
+}) {
+  final points = _seedObjectList(
+    seed['intersectionPoints'],
+  ).map(_intersectionPointFromScenarioSeed).toList(growable: false);
+  final spans = _seedObjectList(
+    seed['primarySpans'],
+  ).map(_intersectionTextSpanFromScenarioSeed).toList(growable: false);
+  final actorEvidence = _seedObjectList(
+    seed['actorEvidence'],
+  ).map(_intersectionActorEvidenceFromScenarioSeed).toList(growable: false);
+  final representativeActorSeed = _seedObject(seed['representativeActor']);
+
+  return intersectionReasonFixture(
+    kind: _seedString(seed, 'kind'),
+    vertical: _seedString(seed, 'vertical'),
+    dimension: _seedString(seed, 'dimension'),
+    tagRefs: _seedStringList(seed['tagRefs']),
+    relationKind: _seedString(seed, 'relationKind'),
+    objectKind: _seedString(seed, 'objectKind'),
+    relationObjectId: _seedString(seed, 'relationObjectId'),
+    strength: _seedDouble(seed, 'strength'),
+    primaryText: _seedString(seed, 'primaryText'),
+    primaryTextL10nKey: _seedString(seed, 'primaryTextL10nKey'),
+    displayBinding: _seedString(
+      seed,
+      'displayBinding',
+      fallback: intersectionDisplayBindingExplicitLink,
+    ),
+    secondaryText: _seedString(seed, 'secondaryText'),
+    weightTier: _seedString(seed, 'weightTier'),
+    actionType: _seedString(seed, 'actionType'),
+    actionTargetId: _seedString(seed, 'actionTargetId'),
+    source: _seedString(seed, 'source'),
+    intersectionId: _seedString(seed, 'intersectionId'),
+    intersectionClass: _seedString(seed, 'intersectionClass'),
+    avatarUrl: _seedString(seed, 'avatarUrl'),
+    displayName: _seedString(seed, 'displayName'),
+    confidenceLabel: _seedString(seed, 'confidenceLabel'),
+    modelReasonBucket: _seedString(seed, 'modelReasonBucket'),
+    freshAt: freshAt,
+    expiresAt: _seedString(seed, 'expiresAt'),
+    intersectionPoints: points,
+    actorEvidenceTotalCount: _seedInt(seed, 'actorEvidenceTotalCount'),
+    actorEvidenceCompleteness: _seedString(seed, 'actorEvidenceCompleteness'),
+    actorEvidence: actorEvidence,
+    totalPointCount: points.length,
+    connectionSummary: _seedString(seed, 'connectionSummary'),
+    primarySpans: spans,
+    representativeActor: representativeActorSeed == null
+        ? null
+        : _intersectionRepresentativeActorFromScenarioSeed(
+            representativeActorSeed,
+          ),
+    lifecycleState: _seedString(seed, 'lifecycleState'),
+    previousStrength: _seedDouble(seed, 'previousStrength'),
+    strengthDelta: _seedDouble(seed, 'strengthDelta'),
+    iconKey: _seedString(seed, 'iconKey'),
+  );
+}
+
+IntersectionPoint _intersectionPointFromScenarioSeed(
+  Map<String, Object?> seed,
+) {
+  return intersectionPointFixture(
+    pointId: _seedString(seed, 'pointId'),
+    pointClass: _seedString(seed, 'pointClass'),
+    dimension: _seedString(seed, 'dimension'),
+    label: _seedString(seed, 'label'),
+    displayText: _seedString(seed, 'displayText'),
+    sourceRef: _seedString(seed, 'sourceRef'),
+    visibility: _seedString(seed, 'visibility', fallback: 'public'),
+    count: _seedInt(seed, 'count'),
+    sampleText: _seedString(seed, 'sampleText'),
+    sampleAvatarUrls: _seedStringList(seed['sampleAvatarUrls']),
+    sampleVisuals: _seedObjectList(
+      seed['sampleVisuals'],
+    ).map(_intersectionVisualFromScenarioSeed).toList(growable: false),
+  );
+}
+
+IntersectionActorEvidence _intersectionActorEvidenceFromScenarioSeed(
+  Map<String, Object?> seed,
+) {
+  final targetSeed = _seedObject(seed['target']);
+  return intersectionActorEvidenceFixture(
+    actorId: _seedString(seed, 'actorId'),
+    displayName: _seedString(seed, 'displayName'),
+    avatarUrl: _seedString(seed, 'avatarUrl'),
+    relationLabel: _seedString(seed, 'relationLabel'),
+    relationSourceRef: _seedString(seed, 'relationSourceRef'),
+    relationObjectId: _seedString(seed, 'relationObjectId'),
+    relationObjectName: _seedString(seed, 'relationObjectName'),
+    sourcePointId: _seedString(seed, 'sourcePointId'),
+    sourceRef: _seedString(seed, 'sourceRef'),
+    actionSummaryText: _seedString(seed, 'actionSummaryText'),
+    likeCount: _seedInt(seed, 'likeCount'),
+    commentCount: _seedInt(seed, 'commentCount'),
+    shareCount: _seedInt(seed, 'shareCount'),
+    privacyState: _seedString(seed, 'privacyState'),
+    target: targetSeed == null
+        ? null
+        : _intersectionTargetFromScenarioSeed(targetSeed),
+    evidenceRank: _seedInt(seed, 'evidenceRank'),
+    snapshotVersion: _seedString(seed, 'snapshotVersion'),
+    sortKey: _seedInt(seed, 'sortKey'),
+  );
+}
+
+IntersectionRepresentativeActor
+_intersectionRepresentativeActorFromScenarioSeed(Map<String, Object?> seed) {
+  final targetSeed = _seedObject(seed['target']);
+  return intersectionRepresentativeActorFixture(
+    actorId: _seedString(seed, 'actorId'),
+    displayName: _seedString(seed, 'displayName'),
+    avatarUrl: _seedString(seed, 'avatarUrl'),
+    relationLabel: _seedString(seed, 'relationLabel'),
+    privacyState: _seedString(seed, 'privacyState'),
+    target: targetSeed == null
+        ? null
+        : _intersectionTargetFromScenarioSeed(targetSeed),
+    evidenceRank: _seedInt(seed, 'evidenceRank'),
+    snapshotVersion: _seedString(seed, 'snapshotVersion'),
+  );
+}
+
+IntersectionTextSpan _intersectionTextSpanFromScenarioSeed(
+  Map<String, Object?> seed,
+) {
+  final targetSeed = _seedObject(seed['target']);
+  final visualSeed = _seedObject(seed['visual']);
+  return intersectionTextSpanFixture(
+    text: _seedString(seed, 'text'),
+    role: _seedString(seed, 'role'),
+    target: targetSeed == null
+        ? null
+        : _intersectionTargetFromScenarioSeed(targetSeed),
+    visual: visualSeed == null
+        ? null
+        : _intersectionVisualFromScenarioSeed(visualSeed),
+  );
+}
+
+IntersectionVisual _intersectionVisualFromScenarioSeed(
+  Map<String, Object?> seed,
+) {
+  final targetSeed = _seedObject(seed['target']);
+  return intersectionVisualFixture(
+    assetKind: _seedString(seed, 'assetKind'),
+    imageUrl: _seedString(seed, 'imageUrl'),
+    displayName: _seedString(seed, 'displayName'),
+    target: targetSeed == null
+        ? null
+        : _intersectionTargetFromScenarioSeed(targetSeed),
+  );
+}
+
+IntersectionTarget _intersectionTargetFromScenarioSeed(
+  Map<String, Object?> seed,
+) {
+  return intersectionTargetFixture(
+    objectType: _seedString(seed, 'objectType'),
+    objectId: _seedString(seed, 'objectId'),
+    objectKind: _seedString(seed, 'objectKind'),
+    routeId: _seedString(seed, 'routeId'),
+  );
+}
+
+IntersectionReason _projectHostPlainFixture(
+  IntersectionReason source,
+  IntersectionTarget hostTarget,
+) {
+  final spans = source.primarySpans
+      .map((span) {
+        final target = span.target;
+        if (target == null || target.objectId != hostTarget.objectId) {
+          return span;
+        }
+        return intersectionTextSpanFixture(
+          text: span.text,
+          role: 'plain',
+          visual: span.visual,
+        );
+      })
+      .toList(growable: false);
+  return copyIntersectionReasonFixture(
+    source,
+    displayBinding: intersectionDisplayBindingHostPlain,
+    primarySpans: spans,
+  );
+}
+
+String _seedString(
+  Map<String, Object?> seed,
+  String key, {
+  String fallback = '',
+}) {
+  final value = seed[key];
+  return value is String ? value : fallback;
+}
+
+int _seedInt(Map<String, Object?> seed, String key) {
+  final value = seed[key];
+  return value is num ? value.toInt() : 0;
+}
+
+double _seedDouble(Map<String, Object?> seed, String key) {
+  final value = seed[key];
+  return value is num ? value.toDouble() : 0;
+}
+
+List<String> _seedStringList(Object? value) {
+  if (value is! List<Object?>) return const <String>[];
+  return value.whereType<String>().toList(growable: false);
+}
+
+List<Map<String, Object?>> _seedObjectList(Object? value) {
+  if (value is! List<Object?>) return const <Map<String, Object?>>[];
+  return value
+      .map(_seedObject)
+      .whereType<Map<String, Object?>>()
+      .toList(growable: false);
+}
+
+Map<String, Object?>? _seedObject(Object? value) {
+  if (value is! Map<Object?, Object?>) return null;
+  return value.map((key, item) => MapEntry(key.toString(), item));
 }
 
 String _objectKindForObjectType(String objectType) {

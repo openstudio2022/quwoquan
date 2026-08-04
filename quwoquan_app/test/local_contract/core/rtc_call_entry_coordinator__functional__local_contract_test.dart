@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/application/rtc/call_session/rtc_call_entry_coordinator.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import '../../support/cloud_services/object_doubles/rtc/rtc_contract_test_builders.dart';
 
 void main() {
   group('RtcCallEntryCoordinator - 1v1 关系能力合同', () {
@@ -210,14 +211,14 @@ void main() {
   });
 }
 
-RelationshipCapabilityDto _capability({
+RelationshipCapabilityViewData _capability({
   required String relationState,
   required bool canStartVoiceCall,
   required bool canStartVideoCall,
   bool isBlocked = false,
   bool isBlockedBy = false,
 }) {
-  return RelationshipCapabilityDto(
+  return RelationshipCapabilityViewData(
     viewerPersonaId: 'viewer-persona',
     targetPersonaId: 'target-persona',
     relationState: relationState,
@@ -249,18 +250,28 @@ final class _RecordingCallLifecycleWriter
     initiateCommands.add(command);
     final now = DateTime.utc(2026, 7, 20);
     return RtcInitiateCallResult(
-      session: CallSession(
-        callId: 'call-${initiateCommands.length}',
+      session: buildCallSessionContract(
+        id: 'call-${initiateCommands.length}',
         callType: command.callType,
         status: CallStatus.ringing,
         initiatorId: 'viewer-persona',
         conversationId: command.conversationId,
         circleId: command.circleId,
         roomId: 'room-${initiateCommands.length}',
+        maxParticipants: 16,
         participantCount: command.inviteeIds.length + 1,
         participants: command.inviteeIds
-            .map((userId) => CallParticipant(userId: userId))
+            .map(
+              (userId) => buildCallParticipantContract(
+                userId: userId,
+                role: ParticipantRole.invitee,
+                status: ParticipantStatus.invited,
+                isMuted: false,
+                isCameraOn: false,
+              ),
+            )
             .toList(growable: false),
+        isScreenSharing: false,
         createdAt: now,
         updatedAt: now,
       ),

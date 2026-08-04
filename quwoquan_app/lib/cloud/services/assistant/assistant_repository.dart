@@ -11,7 +11,7 @@ library;
 
 import 'package:flutter/foundation.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
-import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
+import 'package:quwoquan_app/assistant/capabilities/assistant_presentation_capability_catalog.dart';
 import 'package:quwoquan_app/cloud/remote/assistant/assistant_core_remote.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_run_stream_event.dart';
@@ -63,25 +63,30 @@ class RemoteAssistantRepository extends _RemoteAssistantRepositoryBase
   factory RemoteAssistantRepository({
     required GeneratedCloudOperationClient operationClient,
     required AssistantInvocationContextFactory invocationContext,
+    required AssistantPresentationCapabilitySnapshotFactory
+    presentationCapabilities,
   }) {
     return RemoteAssistantRepository._(
-      core: RemoteAssistantCoreAdapter(
+      RemoteAssistantCoreAdapter(
         client: operationClient,
         invocationContext: invocationContext,
       ),
+      presentationCapabilities,
     );
   }
 
-  RemoteAssistantRepository._({required super.core});
+  RemoteAssistantRepository._(super._core, super._presentationCapabilities);
 }
 
 /// 各 Facet 共享的 generated-client 核心适配器。
 ///
 /// 此基座不声明任何业务 Facet 方法，避免重新聚合对象级职责。
 abstract class _RemoteAssistantRepositoryBase {
-  _RemoteAssistantRepositoryBase({required this._core});
+  _RemoteAssistantRepositoryBase(this._core, this._presentationCapabilities);
 
   final RemoteAssistantCoreAdapter _core;
+  final AssistantPresentationCapabilitySnapshotFactory
+  _presentationCapabilities;
 
   /// [StartAssistantRun] 的唯一 HTTP 写入口。回答、搜索与创作辅助只通过
   /// generated tagged union 区分 intent，不再拥有独立路由或 decoder。
@@ -96,6 +101,15 @@ abstract class _RemoteAssistantRepositoryBase {
       clientRequestId,
       operation: AppCloudOperationIds.assistantAssistantRunStartAssistantRun,
     );
+    final surfacePolicy = networkSurface
+        ? AssistantPresentationSurfacePolicy.network
+        : AssistantPresentationSurfacePolicy.personal;
+    final capabilitySnapshot = _presentationCapabilities(surfacePolicy);
+    if (capabilitySnapshot.surfacePolicy != surfacePolicy) {
+      throw StateError(
+        'Assistant presentation capability factory returned the wrong surface policy',
+      );
+    }
     final request = AssistantStartRunRequest(
       sessionId: sessionId,
       clientRequestId: requestId,
@@ -105,18 +119,14 @@ abstract class _RemoteAssistantRepositoryBase {
         surfaceId: networkSurface
             ? AppUiSurfaces.globalSearchNetworkResults.id
             : AppUiSurfaces.personalAssistantDialog.id,
-        supportedNodeKinds: <String>[
-          AssistantPresentationNodeKind.markdown.wireName,
-          AssistantPresentationNodeKind.column.wireName,
-          AssistantPresentationNodeKind.actionGroup.wireName,
-          AssistantPresentationNodeKind.confirmationCard.wireName,
-        ],
-        viewportClass: 'any',
-        platform: CloudRequestHeaders.platform(),
-        theme: 'system',
-        textScale: 1,
-        reducedMotion: false,
-        offline: false,
+        supportedNodeKinds: capabilitySnapshot.supportedNodeWireNames,
+        supportedActionIntents: capabilitySnapshot.supportedActionIntents,
+        viewportClass: capabilitySnapshot.viewportClass.wireName,
+        platform: capabilitySnapshot.platform,
+        theme: capabilitySnapshot.themeWireName,
+        textScale: capabilitySnapshot.textScale,
+        reducedMotion: capabilitySnapshot.reducedMotion,
+        offline: capabilitySnapshot.offline,
       ),
     );
     return _core.startRun(

@@ -142,6 +142,7 @@ type Operation struct {
 	LegacyRequestKeys      []string                 `json:"-"`
 	ClientBindingOverrides []string                 `json:"-"`
 	ResponseEntity         string                   `json:"responseEntity,omitempty"`
+	ResponseEntityRef      string                   `json:"responseEntityRef,omitempty"`
 	ResponseBody           string                   `json:"responseBody,omitempty"`
 	ResponseBodyKind       string                   `json:"responseBodyKind,omitempty"`
 	SourcePath             string                   `json:"sourcePath"`
@@ -161,6 +162,10 @@ type Operation struct {
 	Telemetry              TelemetryPolicy          `json:"telemetry"`
 	SLO                    SLOPolicy                `json:"slo"`
 	ClientContract         *ClientContract          `json:"clientContract,omitempty"`
+	// ClientContractExplicit records a source-level client_contract block.
+	// ContractGraph derives the App ABI from request_entity/response_entity;
+	// validators use this marker to reject a handwritten second truth source.
+	ClientContractExplicit bool `json:"-"`
 }
 
 type StreamingPolicy struct {

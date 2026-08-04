@@ -536,10 +536,208 @@ class SingleTrackContractsContractTest(unittest.TestCase):
             module.DOC_DUAL_TRACK_TEACHING.search("feature flag 双读")
         )
 
+        contract_inventory = _scan_fixture(
+            module,
+            "quwoquan_service/contracts/feedback_and_learning.md",
+            "体验事件建议进入日志与指标双写或可互相导出。\n",
+        )
+        self.assertEqual(
+            contract_inventory.counts.get("T5_doc_dual_track_teaching"),
+            1,
+        )
+        prohibition_inventory = _scan_fixture(
+            module,
+            "quwoquan_service/contracts/feedback_and_learning.md",
+            "日志和指标只由事件事实派生，禁止向第二事实存储双写。\n",
+        )
+        self.assertEqual(
+            prohibition_inventory.counts.get("T5_doc_dual_track_teaching", 0),
+            0,
+        )
+
+    def test_persona_migration_type_has_one_semantic_identity(self) -> None:
+        module = _load_verifier()
+        for retired in ("LegacyPersona", "CurrentPersona"):
+            with self.subTest(retired=retired):
+                inventory = _scan_fixture(
+                    module,
+                    "quwoquan_service/runtime/persona/rollout.go",
+                    f"type {retired} struct {{}}\n",
+                )
+                self.assertEqual(
+                    inventory.counts.get(
+                        "T1_retired_persona_migration_type",
+                    ),
+                    1,
+                )
+
+        canonical = _scan_fixture(
+            module,
+            "quwoquan_service/runtime/persona/rollout.go",
+            "type PersonaMigrationSource struct {}\n",
+        )
+        self.assertEqual(
+            canonical.counts.get("T1_retired_persona_migration_type", 0),
+            0,
+        )
+
+    def test_runtime_error_decoder_has_no_message_alias_track(self) -> None:
+        module = _load_verifier()
+        fixtures = (
+            (
+                "quwoquan_service/contracts/metadata/_shared/openapi_common.yaml",
+                "        message:\n          type: string\n",
+            ),
+            (
+                "quwoquan_service/runtime/errors/errors.go",
+                'Message string `json:"message,omitempty"`\n',
+            ),
+            (
+                "quwoquan_app/lib/cloud/runtime/errors/cloud_error_mapper.dart",
+                "final value = body['reasonMessage'];\n",
+            ),
+        )
+        for relative_path, source in fixtures:
+            with self.subTest(path=relative_path):
+                inventory = _scan_fixture(module, relative_path, source)
+                self.assertEqual(
+                    inventory.counts.get("T3_runtime_error_message_alias"),
+                    1,
+                )
+
+        canonical = _scan_fixture(
+            module,
+            "quwoquan_app/lib/cloud/runtime/errors/cloud_error_mapper.dart",
+            "final value = body['userMessage'];\n",
+        )
+        self.assertEqual(
+            canonical.counts.get("T3_runtime_error_message_alias", 0),
+            0,
+        )
+
+    def test_sha256_literals_are_canonical_or_explicit_negative_fixtures(self) -> None:
+        module = _load_verifier()
+        positive = _scan_fixture(
+            module,
+            "quwoquan_service/services/content-service/tests/"
+            "local_contract/content/post/digest_test.go",
+            'const digest = "sha256:test"\n',
+        )
+        self.assertEqual(
+            positive.counts.get("T1_noncanonical_sha256_literal"),
+            1,
+        )
+
+        canonical = _scan_fixture(
+            module,
+            "quwoquan_service/services/content-service/tests/"
+            "local_contract/content/post/digest_test.go",
+            'const digest = "sha256:' + "a" * 64 + '"\n',
+        )
+        self.assertEqual(
+            canonical.counts.get("T1_noncanonical_sha256_literal", 0),
+            0,
+        )
+
+        explicit_negative = _scan_fixture(
+            module,
+            "quwoquan_service/services/content-service/tests/"
+            "local_contract/content/post/digest_test.go",
+            "func TestRejectsInvalidDigest(t *testing.T) {\n"
+            '  got := invalidSHA256Fixture("sha256:not-a-digest")\n'
+            "  requireRejected(t, got)\n"
+            "}\n",
+        )
+        self.assertEqual(
+            explicit_negative.counts.get("T1_noncanonical_sha256_literal", 0),
+            0,
+        )
+
+        algorithm_identity = "sha256:qwq-filter-catalog-canonical-json"
+        canonical_algorithm = _scan_fixture(
+            module,
+            "quwoquan_service/services/content-service/internal/demo.go",
+            f'const DigestAlgorithm = "{algorithm_identity}"\n',
+        )
+        self.assertEqual(
+            canonical_algorithm.counts.get("T1_noncanonical_sha256_literal", 0),
+            0,
+        )
+        digest_field_is_not_an_algorithm_identity = _scan_fixture(
+            module,
+            "quwoquan_service/services/user-service/internal/demo.go",
+            f'const digest = "{algorithm_identity}"\n',
+        )
+        self.assertEqual(
+            digest_field_is_not_an_algorithm_identity.counts.get(
+                "T1_noncanonical_sha256_literal"
+            ),
+            1,
+        )
+
+        explicit_tamper = _scan_fixture(
+            module,
+            "quwoquan_service/services/content-service/tests/"
+            "local_contract/content/post/digest_test.go",
+            "func TestDigestTamperingFailsClosed(t *testing.T) {\n"
+            '  got.AssetDigest = "sha256:tampered"\n'
+            "  if err == nil { t.Fatal(\"expected digest error\") }\n"
+            "}\n",
+        )
+        self.assertEqual(
+            explicit_tamper.counts.get("T1_noncanonical_sha256_literal", 0),
+            0,
+        )
+
+        incidental_placeholder_in_negative_test = _scan_fixture(
+            module,
+            "quwoquan_data/tests/local_contract/content_plan_test.py",
+            "def test_rejects_missing_rights():\n"
+            '    asset = {"sha256": "sha256:test", "rights": "missing"}\n'
+            "    assert reject_missing_rights(asset)\n",
+        )
+        self.assertEqual(
+            incidental_placeholder_in_negative_test.counts.get(
+                "T1_noncanonical_sha256_literal"
+            ),
+            1,
+        )
+
+        documentation_placeholder = _scan_fixture(
+            module,
+            "specs/feature-tree/runtime/example/spec.md",
+            "Digest format is `sha256:...` and must be supplied.\n",
+        )
+        self.assertEqual(
+            documentation_placeholder.counts.get(
+                "T1_noncanonical_sha256_literal", 0
+            ),
+            0,
+        )
+
+        concatenated_digest = _scan_fixture(
+            module,
+            "quwoquan_data/tests/local_contract/source_digest_test.py",
+            'digest = ("sha256:'
+            + "a" * 32
+            + '"\n          "'
+            + "b" * 32
+            + '")\n',
+        )
+        self.assertEqual(
+            concatenated_digest.counts.get(
+                "T1_noncanonical_sha256_literal", 0
+            ),
+            0,
+        )
+
     def test_detects_numeric_and_v_suffix_schema(self) -> None:
         module = _load_verifier()
         self.assertIsNotNone(
             module.NUMERIC_SCHEMA_LITERAL.search('"schema": 1')
+        )
+        self.assertIsNotNone(
+            module.NUMERIC_SCHEMA_LITERAL.search("schema: 1")
         )
         self.assertIsNotNone(
             module.SCHEMA_VALUE_V_SUFFIX.search(

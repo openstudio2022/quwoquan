@@ -12,7 +12,7 @@ import 'package:quwoquan_app/core/interactions/media_viewer_interaction_bridge.d
 import 'package:quwoquan_app/ui/content/comments/widgets/comment_input_overlay.dart';
 import 'package:quwoquan_app/ui/content/comments/widgets/comment_thread_view.dart';
 import 'package:quwoquan_app/ui/content/comments/providers/comment_provider.dart';
-import 'package:quwoquan_app/ui/content/comments/models/comment_view_data.dart';
+import 'package:quwoquan_app/ui/content/models/comment_view_data.dart';
 
 enum CommentDetailSurfaceMode {
   cardModal('card_modal', AppUiSurfaces.homeFeed),

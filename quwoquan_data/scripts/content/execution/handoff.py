@@ -169,7 +169,9 @@ def build_author_job_packet(
         "creatorAssignment": creator_assignment,
         "captionPolicy": writing_pack.get("captionPolicy") or ({"titleMaxChars": 80, "captionMaxChars": 300} if is_image else {}),
         "assets": assets,
-        "sourceFrames": list(writing_pack.get("sourceFrames") or []),
+        "sourceVideo": (
+            writing_pack.get("sourceVideo") if is_video else None
+        ),
         "exitGates": [
             *(
                 [

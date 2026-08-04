@@ -12,9 +12,15 @@ fields:
   - { name: tagRefs, type: list<string>, default: [] }
   - { name: executionTarget, type: string, default: cloud }
   - { name: routingHints, type: list<string>, default: [] }
+  - { name: routingFallback, type: bool, default: false }
+  - { name: catalogProfileRef, type: string, required: true }
   - { name: activationProfileRef, type: string, required: true }
+  - { name: inputProfileRef, type: string, required: true }
   - { name: contextProfileRef, type: string, required: true }
   - { name: capabilityProfileRef, type: string, required: true }
+  - { name: orchestrationProfileRef, type: string, required: true }
+  - { name: triggerProfileRef, type: string, required: true }
+  - { name: memoryProfileRef, type: string, required: true }
   - { name: presentationProfileRef, type: string, required: true }
   - { name: evaluationProfileRef, type: string, required: true }
   - { name: replayAssetRef, type: string, required: true }

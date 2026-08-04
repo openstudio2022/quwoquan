@@ -12,7 +12,8 @@ import (
 	rtobs "quwoquan_service/runtime/observability"
 	rtredis "quwoquan_service/runtime/redis"
 	skillgenerated "quwoquan_service/services/assistant-service/generated/assistant/skill_subscription"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
+	assistant "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/model"
+	sessionmodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/model"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/ports"
 	subscriptionapplication "quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/application"
 	skillmodel "quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/domain/model"
@@ -547,7 +548,7 @@ func (s *AssistantService) createProactiveTurnMessage(
 			subscription.SkillID,
 		)
 	}
-	session, err := s.CreateSession(ctx, subscription.Owner.OwnerID, assistant.CreateSessionInput{
+	session, err := s.CreateSession(ctx, subscription.Owner.OwnerID, sessionmodel.CreateSessionInput{
 		Summary:         manifest.DisplayName,
 		ClientRequestID: deliveryID + ":session",
 	})
@@ -592,8 +593,8 @@ func (s *AssistantService) createProactiveTurnMessage(
 	}
 	turn := projectCanonicalRunAsTurnView(run)
 	answer := ""
-	if raw, ok := run.TerminalSnapshot["answerText"].(string); ok {
-		answer = strings.TrimSpace(raw)
+	if run.TerminalSnapshot != nil {
+		answer = strings.TrimSpace(run.TerminalSnapshot.AnswerText)
 	}
 	if run.State.WireName() != "completed" || answer == "" {
 		return assistant.AssistantTurn{}, ports.NotificationAppMessageReceipt{}, fmt.Errorf(

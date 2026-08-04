@@ -390,7 +390,7 @@ final class _RecordingBehaviorRepository extends BehaviorRepository {
     events.add(
       BehaviorEvent(
         contentId: '',
-        action: BehaviorAction.onboardingInterest,
+        action: BehaviorEventType.onboardingInterest,
         clientEventId: clientEventId,
         taxonomyReleaseId: taxonomyReleaseId,
         tags: tagRefs,

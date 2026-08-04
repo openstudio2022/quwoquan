@@ -53,7 +53,7 @@ final class RtcCallEntryIntent {
   factory RtcCallEntryIntent.direct({
     required RtcCallEntryMediaType mediaType,
     required String targetUserId,
-    required RelationshipCapabilityDto? capability,
+    required RelationshipCapabilityViewData? capability,
   }) {
     return RtcCallEntryIntent._(
       mediaType: mediaType,
@@ -99,7 +99,7 @@ final class RtcCallEntryIntent {
   final RtcCallEntryMediaType mediaType;
   final RtcCallEntryContextKind contextKind;
   final String? targetUserId;
-  final RelationshipCapabilityDto? relationshipCapability;
+  final RelationshipCapabilityViewData? relationshipCapability;
   final String? conversationId;
   final String? circleId;
   final int participantCount;

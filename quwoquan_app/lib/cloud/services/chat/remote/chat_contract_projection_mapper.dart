@@ -1,8 +1,6 @@
-import 'package:quwoquan_app/cloud/chat/models/chat_conversation_timestamp_dto.dart';
-import 'package:quwoquan_app/cloud/chat/models/chat_message_receipt_dto.dart';
 import 'package:quwoquan_app/cloud/chat/models/conversation_dto.dart';
 import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
-import 'package:quwoquan_app/cloud/chat/models/sync_response.dart';
+import 'package:quwoquan_app/cloud/chat/models/message_sync_view_data.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_view_data.dart';
 import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
 
@@ -61,29 +59,12 @@ final class ChatContractProjectionMapper {
     );
   }
 
-  SyncResponse toSyncResponse(ChatMessageSyncSlice slice) {
-    return SyncResponse(
+  ChatMessageSyncViewData toMessageSyncViewData(ChatMessageSyncSlice slice) {
+    return ChatMessageSyncViewData(
       messages: slice.messages
           .map(ChatMessageViewData.fromWire)
           .toList(growable: false),
       hasMore: slice.hasMore,
     );
-  }
-
-  ChatConversationTimestampDto toTimestamp(ChatConversationTimestamp item) {
-    return ChatConversationTimestampDto(
-      conversationId: item.conversationId,
-      updatedAt: item.updatedAt.toIso8601String(),
-      settingsUpdatedAt: item.settingsUpdatedAt.toIso8601String(),
-      lastMessageAt: item.lastMessageAt.toIso8601String(),
-      lastMessageTime: item.lastMessageTime.toIso8601String(),
-      lastMessagePreview: item.lastMessagePreview,
-      unreadCount: item.unreadCount,
-      type: item.type,
-    );
-  }
-
-  ChatMessageReceiptDto toReceipt(ChatMessageReceipt item) {
-    return ChatMessageReceiptDto(userId: item.userId, readAt: item.readAt);
   }
 }

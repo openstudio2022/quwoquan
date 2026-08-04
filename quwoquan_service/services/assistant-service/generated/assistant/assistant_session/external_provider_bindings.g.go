@@ -21,7 +21,7 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 		"assistant.finance.quote": {
 			State:       "enabled",
 			AdapterID:   "ext.finance.protocol_fixture",
-			EndpointRef: "local_topology:integration.nonprod_provider_substitute",
+			EndpointRef: "local_topology:provider-protocol-substitute",
 			EndpointEnvironmentKeys: map[string]string{
 				"chart": "ASSISTANT_FINANCE_CHART_URL",
 			},
@@ -32,7 +32,7 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 		"assistant.model.generation": {
 			State:       "enabled",
 			AdapterID:   "ext.llm.protocol_fixture",
-			EndpointRef: "local_topology:integration.nonprod_provider_substitute",
+			EndpointRef: "local_topology:provider-protocol-substitute",
 			EndpointEnvironmentKeys: map[string]string{
 				"completion": "ASSISTANT_MODEL_COMPLETION_URL",
 			},
@@ -43,7 +43,7 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 		"assistant.public.search": {
 			State:       "enabled",
 			AdapterID:   "ext.search.protocol_fixture",
-			EndpointRef: "local_topology:integration.nonprod_provider_substitute",
+			EndpointRef: "local_topology:provider-protocol-substitute",
 			EndpointEnvironmentKeys: map[string]string{
 				"search": "ASSISTANT_PUBLIC_SEARCH_URL",
 			},
@@ -54,7 +54,7 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 		"assistant.weather.forecast": {
 			State:       "enabled",
 			AdapterID:   "ext.weather.protocol_fixture",
-			EndpointRef: "local_topology:integration.nonprod_provider_substitute",
+			EndpointRef: "local_topology:provider-protocol-substitute",
 			EndpointEnvironmentKeys: map[string]string{
 				"forecast":  "ASSISTANT_WEATHER_FORECAST_URL",
 				"geocoding": "ASSISTANT_WEATHER_GEOCODING_URL",
@@ -79,7 +79,7 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 		"assistant.finance.quote": {
 			State:       "enabled",
 			AdapterID:   "ext.finance.protocol_fixture",
-			EndpointRef: "local_topology:integration.nonprod_provider_substitute",
+			EndpointRef: "local_topology:provider-protocol-substitute",
 			EndpointEnvironmentKeys: map[string]string{
 				"chart": "ASSISTANT_FINANCE_CHART_URL",
 			},
@@ -90,7 +90,7 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 		"assistant.model.generation": {
 			State:       "enabled",
 			AdapterID:   "ext.llm.protocol_fixture",
-			EndpointRef: "local_topology:integration.nonprod_provider_substitute",
+			EndpointRef: "local_topology:provider-protocol-substitute",
 			EndpointEnvironmentKeys: map[string]string{
 				"completion": "ASSISTANT_MODEL_COMPLETION_URL",
 			},
@@ -101,7 +101,7 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 		"assistant.public.search": {
 			State:       "enabled",
 			AdapterID:   "ext.search.protocol_fixture",
-			EndpointRef: "local_topology:integration.nonprod_provider_substitute",
+			EndpointRef: "local_topology:provider-protocol-substitute",
 			EndpointEnvironmentKeys: map[string]string{
 				"search": "ASSISTANT_PUBLIC_SEARCH_URL",
 			},
@@ -112,7 +112,7 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 		"assistant.weather.forecast": {
 			State:       "enabled",
 			AdapterID:   "ext.weather.protocol_fixture",
-			EndpointRef: "local_topology:integration.nonprod_provider_substitute",
+			EndpointRef: "local_topology:provider-protocol-substitute",
 			EndpointEnvironmentKeys: map[string]string{
 				"forecast":  "ASSISTANT_WEATHER_FORECAST_URL",
 				"geocoding": "ASSISTANT_WEATHER_GEOCODING_URL",
@@ -137,7 +137,7 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 		"assistant.finance.quote": {
 			State:       "enabled",
 			AdapterID:   "ext.finance.protocol_fixture",
-			EndpointRef: "local_topology:integration.nonprod_provider_substitute",
+			EndpointRef: "local_topology:provider-protocol-substitute",
 			EndpointEnvironmentKeys: map[string]string{
 				"chart": "ASSISTANT_FINANCE_CHART_URL",
 			},
@@ -148,7 +148,7 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 		"assistant.model.generation": {
 			State:       "enabled",
 			AdapterID:   "ext.llm.protocol_fixture",
-			EndpointRef: "local_topology:integration.nonprod_provider_substitute",
+			EndpointRef: "local_topology:provider-protocol-substitute",
 			EndpointEnvironmentKeys: map[string]string{
 				"completion": "ASSISTANT_MODEL_COMPLETION_URL",
 			},
@@ -159,7 +159,7 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 		"assistant.public.search": {
 			State:       "enabled",
 			AdapterID:   "ext.search.protocol_fixture",
-			EndpointRef: "local_topology:integration.nonprod_provider_substitute",
+			EndpointRef: "local_topology:provider-protocol-substitute",
 			EndpointEnvironmentKeys: map[string]string{
 				"search": "ASSISTANT_PUBLIC_SEARCH_URL",
 			},
@@ -170,7 +170,7 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 		"assistant.weather.forecast": {
 			State:       "enabled",
 			AdapterID:   "ext.weather.protocol_fixture",
-			EndpointRef: "local_topology:integration.nonprod_provider_substitute",
+			EndpointRef: "local_topology:provider-protocol-substitute",
 			EndpointEnvironmentKeys: map[string]string{
 				"forecast":  "ASSISTANT_WEATHER_FORECAST_URL",
 				"geocoding": "ASSISTANT_WEATHER_GEOCODING_URL",

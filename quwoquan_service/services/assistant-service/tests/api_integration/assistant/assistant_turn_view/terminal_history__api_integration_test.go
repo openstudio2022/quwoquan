@@ -14,8 +14,9 @@ import (
 	"quwoquan_service/runtime/operation"
 	generated "quwoquan_service/services/assistant-service/generated/assistant/assistant_session"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
+	runmodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/model"
 	runpersistence "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/infrastructure"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
+	assistant "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/model"
 	sessionpersistence "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/persistence"
 	turnviewhttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_turn_view/adapters/inbound/http"
 	turnviewapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_turn_view/application"
@@ -125,21 +126,31 @@ func terminalRun(
 	at time.Time,
 ) runruntime.Run {
 	completedAt := at.UTC()
+	snapshot := runmodel.AssistantRunTerminalSnapshot{
+		AnswerText: input + " answer",
+		Processes:  []runmodel.AssistantRunVisibleProcess{},
+	}
+	if state == generated.AssistantRunStateFailed {
+		snapshot.Failure = &runmodel.AssistantRunTerminalFailure{
+			Code:   "ASSISTANT.SYSTEM.run_execution_failed",
+			Origin: "system",
+			Kind:   "internal",
+			Nature: "transient",
+		}
+	}
 	return runruntime.Run{
-		RunID:           runID,
-		UserID:          userID,
-		SessionID:       sessionID,
-		ClientRequestID: runID + ":request",
-		InputText:       input,
-		Revision:        1,
-		JournalSequence: 1,
-		State:           state,
-		TerminalSnapshot: map[string]any{
-			"answerText": input + " answer",
-		},
-		CreatedAt:   at.UTC(),
-		UpdatedAt:   at.UTC(),
-		CompletedAt: &completedAt,
+		RunID:            runID,
+		UserID:           userID,
+		SessionID:        sessionID,
+		ClientRequestID:  runID + ":request",
+		InputText:        input,
+		Revision:         1,
+		JournalSequence:  1,
+		State:            state,
+		TerminalSnapshot: snapshot.Clone(),
+		CreatedAt:        at.UTC(),
+		UpdatedAt:        at.UTC(),
+		CompletedAt:      &completedAt,
 	}
 }
 

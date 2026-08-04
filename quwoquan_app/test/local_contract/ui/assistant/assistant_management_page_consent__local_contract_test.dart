@@ -4,10 +4,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
 import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/services/visit_recorder_service.dart';
+import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_management_page.dart';
 
@@ -17,63 +17,6 @@ class _CapturingVisitRecorder extends VisitRecorderService {
   @override
   Future<void> recordVisit(VisitTarget target) async {
     recorded.add(target);
-  }
-}
-
-class _AssistantConsentFacet implements AssistantSkillConsentFacet {
-  _AssistantConsentFacet(this._granted, {this.listFailuresRemaining = 0});
-
-  bool _granted;
-  int listFailuresRemaining;
-  int listCallCount = 0;
-
-  @override
-  Future<SkillConsent> grantSkillConsent({
-    required String skillId,
-    required List<String> grantedScopes,
-    required String clientRequestId,
-  }) async {
-    _granted = true;
-    return SkillConsent(
-      id: 'consent:$skillId',
-      accountId: 'owner',
-      skillId: skillId,
-      grantedScopes: grantedScopes,
-      grantedAt: DateTime.utc(2026, 3, 12, 10).toIso8601String(),
-      revokedAt: null,
-      granted: true,
-    );
-  }
-
-  @override
-  Future<List<SkillConsent>> listConsents() async {
-    listCallCount += 1;
-    if (listFailuresRemaining > 0) {
-      listFailuresRemaining -= 1;
-      throw StateError('consent unavailable');
-    }
-    if (!_granted) {
-      return const <SkillConsent>[];
-    }
-    return <SkillConsent>[
-      SkillConsent(
-        id: 'consent:$kPersonalContentAccessSkillId',
-        accountId: 'owner',
-        skillId: kPersonalContentAccessSkillId,
-        grantedScopes: const <String>[kPersonalContentAccessScope],
-        grantedAt: DateTime.utc(2026, 3, 12, 9).toIso8601String(),
-        revokedAt: null,
-        granted: true,
-      ),
-    ];
-  }
-
-  @override
-  Future<void> revokeSkillConsent({
-    required String skillId,
-    required String clientRequestId,
-  }) async {
-    _granted = false;
   }
 }
 
@@ -117,7 +60,7 @@ class _AssistantPreferenceFacet implements AssistantPreferenceFacet {
     String sourceSessionId = '',
     bool confirmed = false,
   }) async {
-    final fact = AssistantPreference(
+    final preference = AssistantPreference(
       preferenceId: 'preference_${_items.length + 1}',
       userId: 'owner',
       scope: scope,
@@ -135,12 +78,12 @@ class _AssistantPreferenceFacet implements AssistantPreferenceFacet {
     _items
       ..removeWhere(
         (item) =>
-            item.scope == fact.scope &&
-            item.sessionId == fact.sessionId &&
-            item.kind == fact.kind,
+            item.scope == preference.scope &&
+            item.sessionId == preference.sessionId &&
+            item.kind == preference.kind,
       )
-      ..add(fact);
-    return fact;
+      ..add(preference);
+    return preference;
   }
 
   @override
@@ -197,7 +140,6 @@ class _AssistantPreferenceFacet implements AssistantPreferenceFacet {
 }
 
 Widget _buildApp({
-  required _AssistantConsentFacet consentFacet,
   required VisitRecorderService visitRecorder,
   _AssistantPreferenceFacet? preferenceFacet,
 }) {
@@ -205,8 +147,7 @@ Widget _buildApp({
       preferenceFacet ?? _AssistantPreferenceFacet();
   return ProviderScope(
     overrides: [
-      assistantSkillConsentFacetProvider.overrideWithValue(consentFacet),
-      assistantPreferenceFactFacetProvider.overrideWithValue(
+      assistantPreferenceFacetProvider.overrideWithValue(
         resolvedPreferenceFacet,
       ),
       visitRecorderServiceProvider.overrideWithValue(visitRecorder),
@@ -221,39 +162,17 @@ Widget _buildApp({
 }
 
 void main() {
-  testWidgets('管理页使用真实内容授权开关', (tester) async {
-    final consentFacet = _AssistantConsentFacet(false);
+  testWidgets('管理页不维护特殊 Skill 授权开关并指向 Skill Center', (tester) async {
     final recorder = _CapturingVisitRecorder();
-    await tester.pumpWidget(
-      _buildApp(consentFacet: consentFacet, visitRecorder: recorder),
-    );
+    await tester.pumpWidget(_buildApp(visitRecorder: recorder));
     await tester.pumpAndSettle();
 
-    expect(
-      find.text(AssistantText.assistantContentAccessPermission),
-      findsOneWidget,
-    );
-    expect(
-      find.text(AssistantText.assistantContentAccessNotGranted),
-      findsOneWidget,
-    );
-    expect(find.byType(CupertinoSwitch), findsOneWidget);
+    expect(find.byType(CupertinoSwitch), findsNothing);
+    expect(find.text(AssistantText.assistantSkillCenter), findsOneWidget);
     expect(find.text('性格选择'), findsNothing);
     expect(find.text('允许读取聊天'), findsNothing);
     expect(find.text('允许访问位置'), findsNothing);
     expect(find.text('系统通知'), findsNothing);
-
-    await tester.tap(find.byType(CupertinoSwitch));
-    await tester.pumpAndSettle();
-
-    final container = ProviderScope.containerOf(
-      tester.element(find.byType(AssistantManagementPage)),
-    );
-    expect(container.read(personalContentAccessProvider).granted, isTrue);
-    expect(
-      find.text(AssistantText.assistantContentAccessGranted),
-      findsOneWidget,
-    );
     expect(
       recorder.recorded.map((target) => target.targetKey),
       contains(const VisitTarget.page('assistant_management').targetKey),
@@ -263,7 +182,6 @@ void main() {
   testWidgets('管理页展示真实显式偏好数据', (tester) async {
     await tester.pumpWidget(
       _buildApp(
-        consentFacet: _AssistantConsentFacet(false),
         visitRecorder: _CapturingVisitRecorder(),
         preferenceFacet: _AssistantPreferenceFacet(
           initial: const <AssistantPreference>[
@@ -298,10 +216,9 @@ void main() {
     expect(find.text('owner'), findsNothing);
   });
 
-  testWidgets('事实记忆展示用户确认内容、类型、来源与生效范围', (tester) async {
+  testWidgets('需确认的偏好展示用户确认内容、类型、来源与生效范围', (tester) async {
     await tester.pumpWidget(
       _buildApp(
-        consentFacet: _AssistantConsentFacet(false),
         visitRecorder: _CapturingVisitRecorder(),
         preferenceFacet: _AssistantPreferenceFacet(
           initial: const <AssistantPreference>[
@@ -343,10 +260,7 @@ void main() {
 
   testWidgets('管理页记忆空态明确', (tester) async {
     await tester.pumpWidget(
-      _buildApp(
-        consentFacet: _AssistantConsentFacet(false),
-        visitRecorder: _CapturingVisitRecorder(),
-      ),
+      _buildApp(visitRecorder: _CapturingVisitRecorder()),
     );
     await tester.pumpAndSettle();
 
@@ -355,10 +269,7 @@ void main() {
 
   testWidgets('管理页可设置长期回答偏好', (tester) async {
     await tester.pumpWidget(
-      _buildApp(
-        consentFacet: _AssistantConsentFacet(false),
-        visitRecorder: _CapturingVisitRecorder(),
-      ),
+      _buildApp(visitRecorder: _CapturingVisitRecorder()),
     );
     await tester.pumpAndSettle();
     expect(
@@ -382,20 +293,20 @@ void main() {
   testWidgets('管理页偏好错误态提供统一重试', (tester) async {
     await tester.pumpWidget(
       _buildApp(
-        consentFacet: _AssistantConsentFacet(false),
         visitRecorder: _CapturingVisitRecorder(),
         preferenceFacet: _AssistantPreferenceFacet(listFailuresRemaining: 1),
       ),
     );
     await tester.pumpAndSettle();
 
-    expect(find.text(SearchText.recoveryReloadLaterTitle), findsOneWidget);
-    expect(find.text(SearchText.reload), findsOneWidget);
-
-    await tester.tap(find.text(SearchText.reload));
+    final errorCard = tester.widget<AppSectionErrorCard>(
+      find.byType(AppSectionErrorCard),
+    );
+    expect(errorCard.semantic.primaryAction, isNotNull);
+    await errorCard.onAction!(errorCard.semantic.primaryAction!);
     await tester.pumpAndSettle();
 
-    expect(find.text(SearchText.recoveryReloadLaterTitle), findsNothing);
+    expect(find.byType(AppSectionErrorCard), findsNothing);
     expect(find.text(AssistantText.assistantMemoryEmpty), findsOneWidget);
   });
 
@@ -418,7 +329,6 @@ void main() {
     );
     await tester.pumpWidget(
       _buildApp(
-        consentFacet: _AssistantConsentFacet(false),
         visitRecorder: _CapturingVisitRecorder(),
         preferenceFacet: preferenceFacet,
       ),
@@ -454,32 +364,5 @@ void main() {
       findsNWidgets(2),
     );
     expect(find.text(AssistantText.assistantPreferenceForget), findsOneWidget);
-  });
-
-  testWidgets('授权加载失败可见且可重试', (tester) async {
-    final consentFacet = _AssistantConsentFacet(
-      false,
-      listFailuresRemaining: 1,
-    );
-    await tester.pumpWidget(
-      _buildApp(
-        consentFacet: consentFacet,
-        visitRecorder: _CapturingVisitRecorder(),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.text(SearchText.recoveryReloadLaterTitle), findsOneWidget);
-    expect(find.text(SearchText.reload), findsOneWidget);
-
-    await tester.tap(find.text(SearchText.reload));
-    await tester.pumpAndSettle();
-
-    expect(consentFacet.listCallCount, 2);
-    expect(find.text(SearchText.recoveryReloadLaterTitle), findsNothing);
-    expect(
-      find.text(AssistantText.assistantContentAccessNotGranted),
-      findsOneWidget,
-    );
   });
 }

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	skillpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/skill"
+	skillpkg "quwoquan_service/services/assistant-service/internal/assistant/skill_package_release/application/packageasset"
 	packageapplication "quwoquan_service/services/assistant-service/internal/assistant/skill_package_release/application"
 	packagemodel "quwoquan_service/services/assistant-service/internal/assistant/skill_package_release/domain/model"
 )

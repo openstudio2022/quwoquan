@@ -5,11 +5,9 @@ import 'dart:developer' as developer;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/feed_realtime_patch.g.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
-import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
-    show isCanonicalSha256Digest;
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 const String _patchLogName = 'FeedRealtimePatch';
 const Object _unsetPolicyDigest = Object();

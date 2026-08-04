@@ -1,19 +1,23 @@
 import 'dart:io';
+import '../../../support/fixtures/intersection_fixtures.dart';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/auth/cloud_auth_token_provider.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
+import 'package:quwoquan_app/cloud/runtime/config/cloud_runtime_environment.dart';
+import 'package:quwoquan_app/cloud/runtime/context/cloud_client_context.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
+import 'package:quwoquan_app/cloud/runtime/executor/cloud_operation_client_factory.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_request_page_ids.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
+import 'package:quwoquan_app/cloud/runtime/observability/cloud_operation_telemetry.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_statement_synthesizer.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_visit_writer.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 const _runSmoke = bool.fromEnvironment('RUN_LOCAL_GAMMA_REMOTE_SMOKE');
 const _baseUrl = String.fromEnvironment('LOCAL_GAMMA_CONTENT_BASE_URL');
@@ -43,6 +47,31 @@ class _StaticTokenProvider implements CloudAuthTokenProvider {
 CloudHttpClient _authedClient() =>
     CloudHttpClient(authTokenProvider: _StaticTokenProvider(_acceptanceToken));
 
+GeneratedCloudOperationClient _operationClient(CloudHttpClient httpClient) =>
+    buildGeneratedCloudOperationClient(
+      httpClient: httpClient,
+      clientContextProvider: const FallbackCloudClientContextProvider(),
+      telemetrySink: const _DiscardTelemetrySink(),
+      environment: CloudRuntimeEnvironment(
+        environment: CloudEnvironment.gamma,
+        gatewayBaseUri: Uri.parse(_baseUrl),
+      ),
+    );
+
+CloudOperationInvocationContext _intersectionContext(String clientPageId) =>
+    CloudOperationInvocationContext(
+      surfaceId: 'myIntersections',
+      clientPageId: clientPageId,
+      actor: const CloudOperationActorContext(),
+    );
+
+final class _DiscardTelemetrySink implements CloudOperationTelemetrySink {
+  const _DiscardTelemetrySink();
+
+  @override
+  void record(CloudOperationTelemetryEvent event) {}
+}
+
 IntersectionReason _expectDisplayReady(
   IntersectionReason reason,
   String label, {
@@ -69,9 +98,9 @@ void main() {
     }
 
     final repo = RemoteIntersectionRepository(
-      httpClient: CloudHttpClient(),
-      baseUrl: _baseUrl,
-      currentUserId: _viewerId,
+      client: _operationClient(CloudHttpClient()),
+      myIntersectionsInvocationContext: _intersectionContext,
+      objectIntersectionsInvocationContext: _intersectionContext,
     );
 
     await expectLater(
@@ -95,14 +124,15 @@ void main() {
         return markTestSkipped('Set RUN_LOCAL_GAMMA_REMOTE_SMOKE=true.');
       }
 
+      final client = _operationClient(_authedClient());
       final repo = RemoteIntersectionRepository(
-        httpClient: _authedClient(),
-        baseUrl: _baseUrl,
-        currentUserId: _viewerId,
+        client: client,
+        myIntersectionsInvocationContext: _intersectionContext,
+        objectIntersectionsInvocationContext: _intersectionContext,
       );
       final visitWriter = RemoteIntersectionVisitWriter(
-        httpClient: _authedClient(),
-        baseUrl: _baseUrl,
+        client: client,
+        invocationContext: _intersectionContext,
       );
 
       final summary = await repo.getMyIntersectionSummary();
@@ -150,7 +180,7 @@ void main() {
         objectId: _personObjectId,
         objectType: 'user',
       );
-      final objectContext = IntersectionTarget(
+      final objectContext = intersectionTargetFixture(
         objectType: 'user',
         objectId: _personObjectId,
         objectKind: 'person',

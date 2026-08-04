@@ -35,7 +35,7 @@ func normalizeVisibility(value string) string {
 	return normalized
 }
 
-// discoveryFeedDoc remains only as the decoder boundary for Content's legacy
+// discoveryFeedDoc remains only as the decoder boundary for Content's remaining
 // intersection presentation source. Candidate ranking no longer consumes it;
 // the remaining read path will be replaced by a typed Recommendation port.
 type discoveryFeedDoc struct {

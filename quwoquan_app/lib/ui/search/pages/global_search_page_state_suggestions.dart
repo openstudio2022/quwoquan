@@ -38,7 +38,14 @@ extension _GlobalSearchPageStateSuggestions on _GlobalSearchPageState {
       return AppPageErrorState(
         key: key,
         semantic: semantic,
-        onAction: (_) async => _coordinator.scheduleSearch(immediate: true),
+        onRecovery: (action) async {
+          if (action.type == UiErrorActionType.retry ||
+              action.type == UiErrorActionType.resubmit) {
+            _coordinator.scheduleSearch(immediate: true);
+            return UiRecoveryOutcome.superseded;
+          }
+          return UiRecoveryOutcome.cancelled;
+        },
       );
     }
     if (state.suggestionSections.isEmpty) {

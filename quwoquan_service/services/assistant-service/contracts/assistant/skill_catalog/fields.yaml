@@ -33,6 +33,16 @@ fields:
   api_exposure: read
   ops_exposure: read
   role: projection
+- name: domainId
+  source: domainId
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
 - name: displayName
   source: displayName
   type: string
@@ -53,11 +63,11 @@ fields:
   api_exposure: read
   ops_exposure: none
   role: projection
-- name: category
-  source: category
-  type: string
+- name: catalogGroup
+  source: catalogGroup
+  type: SkillCatalogSemanticLabel
   constraints:
-  - NULLABLE
+  - NOT_NULL
   classification: PUBLIC
   log_policy: allow
   api_exposure: read
@@ -83,6 +93,16 @@ fields:
   api_exposure: read
   ops_exposure: none
   role: projection
+- name: consentScopeLabels
+  source: consentScopeLabels
+  type: '[]SkillCatalogSemanticLabel'
+  constraints:
+  - NOT_NULL
+  classification: SENSITIVE
+  log_policy: metadata_only
+  api_exposure: read
+  ops_exposure: none
+  role: projection
 - name: iconHint
   source: iconHint
   type: string
@@ -103,9 +123,9 @@ fields:
   api_exposure: read
   ops_exposure: read
   role: projection
-- name: targetUsers
-  source: targetUsers
-  type: '[]string'
+- name: targetAudiences
+  source: targetAudiences
+  type: '[]SkillCatalogSemanticLabel'
   constraints:
   - NOT_NULL
   classification: PUBLIC
@@ -123,9 +143,9 @@ fields:
   api_exposure: read
   ops_exposure: read
   role: projection
-- name: exampleRefs
-  source: exampleRefs
-  type: '[]string'
+- name: examples
+  source: examples
+  type: '[]ResolvedSkillExample'
   constraints:
   - NOT_NULL
   classification: PUBLIC
@@ -144,9 +164,9 @@ fields:
   api_exposure: read
   ops_exposure: read
   role: projection
-- name: allowedSurfaceKinds
-  source: allowedSurfaceKinds
-  type: '[]string'
+- name: surfaceKinds
+  source: surfaceKinds
+  type: '[]SkillCatalogSemanticLabel'
   constraints:
   - NOT_NULL
   classification: PUBLIC
@@ -229,6 +249,92 @@ types:
       log_policy: deny
       api_exposure: drop
       ops_exposure: none
+  SkillCatalogSemanticLabel:
+    description: active package 已解析的稳定语义 ID 与展示文本；App 不按垂类或 scope 自行映射。
+    fields:
+    - name: id
+      source: id
+      type: string
+      constraints: [NOT_NULL]
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: displayText
+      source: displayText
+      type: string
+      constraints: [NOT_NULL]
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: description
+      source: description
+      type: string
+      constraints: [NULLABLE]
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+  ResolvedSkillExample:
+    description: 由同一 active package 解析并校验模板归属后的安全 Skill 成果示例；不暴露内部 asset locator 或未验证模板引用。
+    fields:
+    - name: exampleId
+      source: exampleId
+      type: string
+      constraints: [NOT_NULL]
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: title
+      source: title
+      type: string
+      constraints: [NOT_NULL]
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: summary
+      source: summary
+      type: string
+      constraints: [NOT_NULL]
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: iconToken
+      source: iconToken
+      type: string
+      constraints: [NULLABLE]
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: mediaRef
+      source: mediaRef
+      type: string
+      constraints: [NULLABLE]
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: presentationTemplateRef
+      source: presentationTemplateRef
+      type: string
+      constraints: [NOT_NULL]
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: presentationTemplateDigest
+      source: presentationTemplateDigest
+      type: string
+      constraints: [NOT_NULL]
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
   AssistantSkillCatalogItemView:
     description: 由 active immutable SkillPackageRelease 投影的目录、输入与激活元数据；不包含账号 Consent、Setting 或 Subscription 状态。
     fields:
@@ -259,6 +365,15 @@ types:
       log_policy: allow
       api_exposure: read
       ops_exposure: read
+    - name: domainId
+      source: domainId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
     - name: displayName
       source: displayName
       type: string
@@ -277,11 +392,11 @@ types:
       log_policy: allow
       api_exposure: read
       ops_exposure: none
-    - name: category
-      source: category
-      type: string
+    - name: catalogGroup
+      source: catalogGroup
+      type: SkillCatalogSemanticLabel
       constraints:
-      - NULLABLE
+      - NOT_NULL
       classification: PUBLIC
       log_policy: allow
       api_exposure: read
@@ -304,6 +419,15 @@ types:
       log_policy: hash
       api_exposure: read
       ops_exposure: none
+    - name: consentScopeLabels
+      source: consentScopeLabels
+      type: '[]SkillCatalogSemanticLabel'
+      constraints:
+      - NOT_NULL
+      classification: SENSITIVE
+      log_policy: metadata_only
+      api_exposure: read
+      ops_exposure: none
     - name: iconHint
       source: iconHint
       type: string
@@ -322,9 +446,9 @@ types:
       log_policy: allow
       api_exposure: read
       ops_exposure: read
-    - name: targetUsers
-      source: targetUsers
-      type: '[]string'
+    - name: targetAudiences
+      source: targetAudiences
+      type: '[]SkillCatalogSemanticLabel'
       constraints:
       - NOT_NULL
       classification: PUBLIC
@@ -340,9 +464,9 @@ types:
       log_policy: allow
       api_exposure: read
       ops_exposure: read
-    - name: exampleRefs
-      source: exampleRefs
-      type: '[]string'
+    - name: examples
+      source: examples
+      type: '[]ResolvedSkillExample'
       constraints:
       - NOT_NULL
       classification: PUBLIC
@@ -359,9 +483,9 @@ types:
       log_policy: allow
       api_exposure: read
       ops_exposure: read
-    - name: allowedSurfaceKinds
-      source: allowedSurfaceKinds
-      type: '[]string'
+    - name: surfaceKinds
+      source: surfaceKinds
+      type: '[]SkillCatalogSemanticLabel'
       constraints:
       - NOT_NULL
       classification: PUBLIC

@@ -1,10 +1,10 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
 import 'package:quwoquan_app/components/input/chat_mention_text_editing_controller.dart';
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/ui/chat/widgets/chat_mention_picker.dart';
+import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
 
 void main() {
   testWidgets('选择器排除自己与 assistant，并把服务端查询结果映射为稳定 ID', (tester) async {
@@ -23,19 +23,36 @@ void main() {
                 allowMentionAll: false,
                 searchMembers: (query) async {
                   queries.add(query);
-                  return <ChatConversationMemberDto>[
-                    ChatConversationMemberDto(
+                  return <ConversationMemberListRow>[
+                    ConversationMemberListRow(
                       userId: 'user_me',
+                      userHandle: 'user_me',
                       displayName: '我',
+                      avatarUrl: '',
+                      role: 'member',
+                      memberType: 'user',
+                      joinedAt: null,
+                      isCurrentUser: true,
                     ),
-                    ChatConversationMemberDto(
+                    ConversationMemberListRow(
                       userId: 'assistant',
+                      userHandle: 'assistant',
                       displayName: '小趣',
+                      avatarUrl: '',
+                      role: 'member',
                       memberType: 'assistant',
+                      joinedAt: null,
+                      isCurrentUser: false,
                     ),
-                    ChatConversationMemberDto(
+                    ConversationMemberListRow(
                       userId: 'user_zhang',
+                      userHandle: 'user_zhang',
                       displayName: '张三',
+                      avatarUrl: '',
+                      role: 'member',
+                      memberType: 'user',
+                      joinedAt: null,
+                      isCurrentUser: false,
                     ),
                   ];
                 },
@@ -77,7 +94,7 @@ void main() {
                 context,
                 currentUserId: 'owner',
                 allowMentionAll: true,
-                searchMembers: (_) async => const <ChatConversationMemberDto>[],
+                searchMembers: (_) async => const <ConversationMemberListRow>[],
               );
             },
           ),

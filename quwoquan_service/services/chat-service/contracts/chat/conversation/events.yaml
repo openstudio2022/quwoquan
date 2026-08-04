@@ -47,6 +47,7 @@ events:
   - creatorId
   - createdAt
 - name: ConversationRosterUpdated
+  client_ws_type: ConversationRosterUpdated
   description: '会话成员或群资料变更后的合并刷新信号。客户端以
 
     membersRosterRevision 和 updatedAt 定点拉取会话与成员，而不消费逐成员事件。
@@ -57,7 +58,7 @@ events:
   - realtime-gateway
   - projection-workers
   channel: transactional_outbox
-  payload_entity: Conversation
+  payload_entity: ConversationRosterUpdatedEventPayload
   payload_fields:
   - conversationId
   - membersRosterRevision
@@ -66,6 +67,7 @@ events:
   realtime_channel: rt:user:{recipientId}
   realtime_fanout: conversation_members
 - name: ConversationAvatarUpdated
+  client_ws_type: ConversationAvatarUpdated
   description: '群头像预合成结果更新。
 
     用于统一 sync patch `conversation.avatar.updated` 的上游事件输入。
@@ -76,9 +78,10 @@ events:
   - realtime-gateway
   - notification-service
   channel: transactional_outbox
-  payload_entity: Conversation
+  payload_entity: ConversationAvatarUpdatedEventPayload
   payload_fields:
   - conversationId
+  - avatarUrl
   - groupAvatarAssetId
   - groupAvatarVersion
   - groupAvatarSourceHash
@@ -86,6 +89,7 @@ events:
   realtime_channel: rt:user:{recipientId}
   realtime_fanout: conversation_members
 - name: ConversationDissolved
+  client_ws_type: ConversationDissolved
   description: '群聊解散终态事件（与 aggregate lifecycle `dissolved` 同名单轨）。
 
     成员端收到后收敛会话入口；投影据此下线群相关行。
@@ -96,7 +100,7 @@ events:
   - realtime-gateway
   - projection-workers
   channel: transactional_outbox
-  payload_entity: Conversation
+  payload_entity: ConversationDissolvedEventPayload
   payload_fields:
   - conversationId
   - status

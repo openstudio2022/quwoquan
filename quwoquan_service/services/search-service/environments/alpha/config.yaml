@@ -7,5 +7,3 @@ secretRefs:
   sys.search-service.redis.general.password: SEARCH_REDIS_GENERAL_PASSWORD
   sys.search-service.redis.rec.password: SEARCH_REDIS_REC_PASSWORD
 externalBindings:
-  runtime.message.transport:
-    state: enabled

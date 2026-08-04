@@ -106,6 +106,72 @@ GENERATED_OBJECT_SOURCE_RE = re.compile(
     r"([a-z][a-z0-9_]*)/([a-z][a-z0-9_]*)/"
     r"[a-z][a-z0-9_]*\.yaml"
 )
+GENERIC_OBJECT_DESCRIPTION_RE = re.compile(
+    r"(?:领域对象契约|domain\s+object\s+contract|business\s+object\s+contract)",
+    re.IGNORECASE,
+)
+OBJECT_TEST_SPEC_REF_RE = re.compile(
+    r"(?m)^\s*(?://|#)\s*spec_ref:\s*"
+    r"(specs/feature-tree/(?:[A-Za-z0-9_.-]+/)*spec\.md)#"
+    r"((?:uat|dom|sit|gwt)-\d{3,})\b",
+    re.IGNORECASE,
+)
+OBJECT_ACCESS_BY_KIND = {
+    "aggregate_root": {
+        "commands": "aggregate_facade",
+        "queries": {"named_reader", "none"},
+        "cross_context": {"public_contract_only", "event_only"},
+    },
+    "append_only_fact": {
+        "commands": "append_only_sink",
+        "queries": {"named_reader", "none"},
+        "cross_context": {"event_only", "public_contract_only"},
+    },
+    "projection": {
+        "commands": "none",
+        "queries": "named_reader",
+        "cross_context": "public_contract_only",
+    },
+    "runtime_session": {
+        "commands": "session_facade",
+        "queries": "named_reader",
+        "cross_context": "public_contract_only",
+    },
+    "external_reference": {
+        "commands": "none",
+        "queries": "external_port",
+        "cross_context": "public_contract_only",
+    },
+}
+OBJECT_VERSION_SOURCE_BY_KIND = {
+    "aggregate_root": {"field", "store_commit"},
+    "append_only_fact": {"immutable"},
+    "projection": {"checkpoint"},
+    "runtime_session": {"session"},
+    "external_reference": {"external"},
+}
+RUNTIME_ENTRYPOINT_KIND_BY_OBJECT_KIND = {
+    "aggregate_root": set(),
+    "append_only_fact": {"subscription", "internal_port"},
+    "projection": {"projector"},
+    "runtime_session": {"middleware"},
+    "external_reference": {"external_port"},
+}
+
+# Stable service-owned resource roles.  These are layout semantics enforced by
+# this gate, not an asset registry: services still own the actual resources and
+# are discovered solely from their physical directories.
+COMMON_RESOURCE_ROOT_ROLES = {
+    "migrations": "schema_migration",
+    "templates": "runtime_template",
+    "policies": "runtime_policy",
+    "skill_packages": "controlled_publisher_source",
+    "skills": "immutable_runtime_asset",
+    "static": "static_asset",
+    "models": "model_asset",
+}
+SKILL_PACKAGE_SOURCE_RELATIVE_ROOT = Path("skill_packages/official")
+SKILL_PACKAGE_RUNTIME_RELATIVE_ROOT = Path("skills/packages/official")
 
 
 def is_substantive_implementation_source(path: Path) -> bool:
@@ -135,7 +201,7 @@ def is_substantive_implementation_source(path: Path) -> bool:
             # malformed file masquerade as an empty placeholder here.
             return True
         meaningful = []
-        for node in module.body:
+        for node in ast.walk(module):
             if isinstance(node, (ast.Import, ast.ImportFrom, ast.Pass)):
                 continue
             if (
@@ -161,6 +227,139 @@ def is_substantive_implementation_source(path: Path) -> bool:
         without_import_blocks,
     )
     return bool(without_single_imports.strip())
+
+
+def is_substantive_test_source(path: Path) -> bool:
+    """Return whether *path* contains at least one non-empty executable test.
+
+    Object-level evidence cannot be satisfied by a package marker, support file,
+    test fixture or an empty test function merely placed under the right path.
+    Service tests are Go or Python today, so keep this check deliberately narrow
+    and fail closed for other file types.
+    """
+
+    text = path.read_text(encoding="utf-8", errors="replace")
+    if path.suffix == ".go" and path.name.endswith("_test.go"):
+        without_comments = re.sub(r"/\*.*?\*/", "", text, flags=re.DOTALL)
+        without_comments = re.sub(r"(?m)//.*$", "", without_comments)
+        for match in re.finditer(
+            r"(?ms)^\s*func\s+Test[A-Za-z0-9_]*\s*\([^)]*\)\s*\{(?P<body>.*?)^\s*\}",
+            without_comments,
+        ):
+            if match.group("body").strip():
+                return True
+        return False
+    if path.suffix == ".py" and path.name.startswith("test_"):
+        try:
+            module = ast.parse(text)
+        except SyntaxError:
+            return False
+        for node in module.body:
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            if not node.name.startswith("test_"):
+                continue
+            meaningful = [
+                item
+                for item in node.body
+                if not isinstance(item, ast.Pass)
+                and not (
+                    isinstance(item, ast.Expr)
+                    and isinstance(item.value, ast.Constant)
+                    and isinstance(item.value.value, str)
+                )
+            ]
+            if meaningful:
+                return True
+        return False
+    return False
+
+
+def valid_object_test_spec_refs(
+    path: Path,
+    repo_root: Path = ROOT,
+) -> tuple[set[str], list[str]]:
+    """Return valid feature-tree acceptance refs declared by an executable test.
+
+    Object evidence is only traceable when the physical test names a repository
+    feature-tree spec and an existing UAT/DOM/SIT/GWT anchor.  A support file,
+    arbitrary Markdown path or missing heading cannot satisfy this contract.
+    """
+
+    source = path.read_text(encoding="utf-8", errors="replace")
+    refs: set[str] = set()
+    issues: list[str] = []
+    feature_tree_root = (repo_root / "specs" / "feature-tree").resolve()
+    for spec_path, case_id in OBJECT_TEST_SPEC_REF_RE.findall(source):
+        target = (repo_root / spec_path).resolve()
+        try:
+            target.relative_to(feature_tree_root)
+        except ValueError:
+            issues.append(f"spec_ref escapes feature tree: {spec_path}#{case_id}")
+            continue
+        reference = f"{spec_path}#{case_id.lower()}"
+        if not target.is_file():
+            issues.append(f"spec_ref target does not exist: {reference}")
+            continue
+        anchor = f'<a id="{case_id.lower()}"></a>'
+        if anchor not in target.read_text(encoding="utf-8", errors="replace").lower():
+            issues.append(f"spec_ref acceptance anchor does not exist: {reference}")
+            continue
+        refs.add(reference)
+    return refs, issues
+
+
+def object_contract_semantic_issues(document: dict[str, Any]) -> list[str]:
+    """Validate kind-specific object meaning beyond JSON shape validation."""
+
+    issues: list[str] = []
+    kind = str(document.get("kind") or "")
+    description = str(document.get("description") or "").strip()
+    if GENERIC_OBJECT_DESCRIPTION_RE.search(description):
+        issues.append("description is a generic domain-object-contract placeholder")
+
+    identity = document.get("identity") or {}
+    version_source = str(identity.get("version_source") or "")
+    allowed_version_sources = OBJECT_VERSION_SOURCE_BY_KIND.get(kind, set())
+    if version_source not in allowed_version_sources:
+        issues.append(
+            f"kind={kind} requires identity.version_source in "
+            f"{sorted(allowed_version_sources)}, got {version_source!r}"
+        )
+
+    access = document.get("access") or {}
+    for field, expected in OBJECT_ACCESS_BY_KIND.get(kind, {}).items():
+        actual = access.get(field)
+        allowed = expected if isinstance(expected, set) else {expected}
+        if actual not in allowed:
+            issues.append(
+                f"kind={kind} requires access.{field} in {sorted(allowed)}, "
+                f"got {actual!r}"
+            )
+
+    business_rules = document.get("business_rules")
+    if not isinstance(business_rules, list) or not business_rules:
+        issues.append("business_rules must be a non-empty list")
+    else:
+        for index, rule in enumerate(business_rules):
+            if isinstance(rule, str) and len(rule.strip()) >= 8:
+                continue
+            if isinstance(rule, dict):
+                rule_id = str(rule.get("id") or "")
+                rule_description = str(rule.get("description") or "").strip()
+                if re.fullmatch(r"[a-z][a-z0-9_]*", rule_id) and len(
+                    rule_description
+                ) >= 8:
+                    continue
+            issues.append(
+                f"business_rules[{index}] must be a substantive string or "
+                "an {id, description} rule"
+            )
+    return issues
+
+
+def snake_to_pascal(value: str) -> str:
+    return "".join(part[:1].upper() + part[1:] for part in value.split("_") if part)
 
 
 def load_yaml(path: Path) -> dict[str, Any]:
@@ -232,6 +431,9 @@ class Verification:
         self.application_sources: dict[tuple[str, str, str], set[Path]] = defaultdict(set)
         self.local_contract_objects: set[tuple[str, str, str]] = set()
         self.api_integration_objects: set[tuple[str, str, str]] = set()
+        self.object_test_spec_refs: dict[
+            tuple[str, str, str], set[str]
+        ] = defaultdict(set)
         self.object_kinds: Counter[str] = Counter()
         self.aggregate_members = 0
 
@@ -380,6 +582,8 @@ class Verification:
                 kind = str(document.get("kind") or "")
                 if kind not in KINDS:
                     self.error(f"{relative(object_path)}: invalid kind={kind!r}")
+                for issue in object_contract_semantic_issues(document):
+                    self.error(f"{relative(object_path)}: {issue}")
                 kinds[kind] += 1
                 raw_members = document.get("members") or {}
                 if not isinstance(raw_members, (dict, list)):
@@ -437,12 +641,36 @@ class Verification:
                             )
                         elif runtime_entrypoints:
                             self.runtime_entrypoint_objects.add(key)
+                            runtime_entrypoint = runtime_entrypoints[0]
                             runtime_kind = str(
-                                (runtime_entrypoints[0] or {}).get("kind")
-                                if isinstance(runtime_entrypoints[0], dict)
+                                runtime_entrypoint.get("kind")
+                                if isinstance(runtime_entrypoint, dict)
                                 else ""
                             ).strip()
                             self.runtime_entrypoint_kinds[key] = runtime_kind
+                            allowed_runtime_kinds = (
+                                RUNTIME_ENTRYPOINT_KIND_BY_OBJECT_KIND.get(kind, set())
+                            )
+                            if runtime_kind not in allowed_runtime_kinds:
+                                self.error(
+                                    f"{relative(operations_path)}: kind={kind} requires "
+                                    "runtime_entrypoints.kind in "
+                                    f"{sorted(allowed_runtime_kinds)}, got {runtime_kind!r}"
+                                )
+                            if isinstance(runtime_entrypoint, dict):
+                                application = runtime_entrypoint.get("application") or {}
+                                actual_owner = (
+                                    application.get("object_owner")
+                                    if isinstance(application, dict)
+                                    else None
+                                )
+                                expected_owner = snake_to_pascal(object_name)
+                                if actual_owner != expected_owner:
+                                    self.error(
+                                        f"{relative(operations_path)}: runtime entrypoint "
+                                        "application.object_owner must be "
+                                        f"{expected_owner}, got {actual_owner!r}"
+                                    )
                         if not api_routes and not runtime_entrypoints:
                             self.error(
                                 f"{relative(operations_path)}: canonical object must own an HTTP "
@@ -589,10 +817,16 @@ class Verification:
                         self.error(f"{relative(path)}: expected <context>/<object>/file")
                         continue
                     key = (domain, parts[0], parts[1])
-                    if layer == "local_contract":
+                    substantive = is_substantive_test_source(path)
+                    if layer == "local_contract" and substantive:
                         self.local_contract_objects.add(key)
-                    else:
+                    elif layer == "api_integration" and substantive:
                         self.api_integration_objects.add(key)
+                    if substantive:
+                        refs, issues = valid_object_test_spec_refs(path)
+                        self.object_test_spec_refs[key].update(refs)
+                        for issue in issues:
+                            self.error(f"{relative(path)}: {issue}")
         platform = SERVICE_ROOT / "control-plane/platform-ops"
         if platform.is_dir():
             domain, objects = self.service_identity(platform)
@@ -627,10 +861,16 @@ class Verification:
                         self.error(f"{relative(path)}: expected <context>/<object>/file")
                         continue
                     key = (domain, parts[0], parts[1])
-                    if layer == "local_contract":
+                    substantive = is_substantive_test_source(path)
+                    if layer == "local_contract" and substantive:
                         self.local_contract_objects.add(key)
-                    else:
+                    elif layer == "api_integration" and substantive:
                         self.api_integration_objects.add(key)
+                    if substantive:
+                        refs, issues = valid_object_test_spec_refs(path)
+                        self.object_test_spec_refs[key].update(refs)
+                        for issue in issues:
+                            self.error(f"{relative(path)}: {issue}")
         for key, owners in self.source_owners.items():
             if len(owners) != 1:
                 self.error(f"{'.'.join(key)} has multiple source owners: {sorted(owners)}")
@@ -657,6 +897,12 @@ class Verification:
                 self.error(
                     f"{relative(object_path.parent)}: canonical object requires "
                     "object-local local_contract evidence"
+                )
+            if key not in self.object_test_spec_refs:
+                self.error(
+                    f"{relative(object_path.parent)}: canonical object requires at least "
+                    "one substantive object-local test with a valid feature-tree "
+                    "UAT/DOM/SIT/GWT spec_ref"
                 )
         for key in sorted(self.routed_objects | self.runtime_entrypoint_objects):
             _, object_path, _ = self.objects[key]
@@ -853,15 +1099,84 @@ class Verification:
     def verify_resources_and_migrations(self) -> None:
         for service in service_roots():
             resources = service / "resources"
-            allowed_common = {"migrations", "templates", "policies", "skills", "static", "models"}
             if resources.is_dir():
                 unexpected = {
-                    path.name for path in resources.iterdir() if path.name not in allowed_common
+                    path.name
+                    for path in resources.iterdir()
+                    if path.name not in COMMON_RESOURCE_ROOT_ROLES
                 }
                 if unexpected:
                     self.error(
                         f"{service.name}: unsupported common resource roots: {sorted(unexpected)}"
                     )
+                skill_source_area = resources / "skill_packages"
+                skill_runtime_area = resources / "skills"
+                skill_runtime_packages = skill_runtime_area / "packages"
+                skill_source_root = resources / SKILL_PACKAGE_SOURCE_RELATIVE_ROOT
+                skill_runtime_root = resources / SKILL_PACKAGE_RUNTIME_RELATIVE_ROOT
+                if skill_source_area.exists() or skill_runtime_area.exists():
+                    if not skill_source_root.is_dir():
+                        self.error(
+                            f"{service.name}: controlled Skill publisher source must be "
+                            f"{relative(skill_source_root)}"
+                        )
+                    if not skill_runtime_root.is_dir():
+                        self.error(
+                            f"{service.name}: immutable Skill runtime assets must be "
+                            f"{relative(skill_runtime_root)}"
+                        )
+                    source_entries = (
+                        {path.name for path in skill_source_area.iterdir()}
+                        if skill_source_area.is_dir()
+                        else set()
+                    )
+                    if source_entries != {"official"}:
+                        self.error(
+                            f"{service.name}: Skill publisher source root must contain only "
+                            f"official, got {sorted(source_entries)}"
+                        )
+                    runtime_entries = (
+                        {path.name for path in skill_runtime_area.iterdir()}
+                        if skill_runtime_area.is_dir()
+                        else set()
+                    )
+                    if runtime_entries != {"packages"}:
+                        self.error(
+                            f"{service.name}: Skill runtime root must contain only packages, "
+                            f"got {sorted(runtime_entries)}"
+                        )
+                    package_entries = (
+                        {path.name for path in skill_runtime_packages.iterdir()}
+                        if skill_runtime_packages.is_dir()
+                        else set()
+                    )
+                    if package_entries != {"official"}:
+                        self.error(
+                            f"{service.name}: Skill runtime packages root must contain only "
+                            f"official, got {sorted(package_entries)}"
+                        )
+                    if any(
+                        path.is_symlink()
+                        for path in (
+                            skill_source_area,
+                            skill_source_root,
+                            skill_runtime_area,
+                            skill_runtime_packages,
+                            skill_runtime_root,
+                        )
+                    ):
+                        self.error(
+                            f"{service.name}: Skill source/runtime roots must be physical, not symlinks"
+                        )
+                    if (
+                        skill_source_root.is_dir()
+                        and skill_runtime_root.is_dir()
+                        and skill_source_root.resolve() == skill_runtime_root.resolve()
+                    ):
+                        self.error(
+                            f"{service.name}: Skill publisher source and immutable runtime assets "
+                            "must be physically distinct"
+                        )
             for path in resources.rglob("*") if resources.is_dir() else []:
                 lowered = {part.lower() for part in path.parts}
                 if path.is_file() and lowered & {"fixture", "fixtures", "testdata"}:

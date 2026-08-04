@@ -5,7 +5,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/auth/cloud_auth_token_provider.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/feed_realtime_patch.g.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/cloud/services/realtime/remote_realtime_connection_delegate.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_config.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_delegate.dart';

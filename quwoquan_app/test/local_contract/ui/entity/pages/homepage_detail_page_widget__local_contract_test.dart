@@ -8,14 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/shell/bottom_navigation.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_homepage/homepage_introduction.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_homepage/homepage_introduction_section.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/entity/object_page_bundle.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/entity/object_page_context.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/entity/object_page_rollout_context.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
+import 'package:quwoquan_app/application/entity/homepage_view_data.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
 import '../../../../support/cloud_services/homepage_alpha_test_adapter.dart';
@@ -24,7 +17,15 @@ import 'package:quwoquan_app/core/constants/homepage_detail_text_constants.dart'
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_detail_page.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
-    show CloudOperationCancellationSignal;
+    show
+        CloudOperationCancellationSignal,
+        HomepageIntroduction,
+        HomepageIntroductionSection,
+        IntersectionReason,
+        IntersectionTextSpan,
+        ObjectPageBundle,
+        ObjectPageContext,
+        ObjectPageRolloutContext;
 
 import '../../../../support/cloud_services/behavior_repository_double.dart';
 import '../../../../support/cloud_services/content/alpha_intersection_repository.dart';
@@ -732,24 +733,24 @@ class _HomepageAlphaIntersectionRepository extends AlphaIntersectionRepository {
     required String objectType,
     int limit = 6,
   }) async {
-    return <IntersectionReason>[
-      IntersectionReason(
-        kind: 'shared_interest',
-        dimension: 'interest',
-        objectKind: 'place',
-        relationObjectId: objectId,
-        primaryText: '推荐你了解西湖摄影',
-        displayBinding: 'host_plain',
-        primarySpans: <IntersectionTextSpan>[
-          IntersectionTextSpan(text: '推荐你了解', role: 'plain'),
-          IntersectionTextSpan(text: '西湖摄影', role: 'plain'),
-        ],
-        source: 'test',
-        intersectionId: 'ix_homepage_west_lake',
-        actionType: 'open',
-        actionTargetId: objectId,
-      ),
-    ];
+    final reasons = await super.getObjectIntersections(
+      objectId: 'fixture_homepage_travel_route_erhai',
+      objectType: objectType,
+      limit: 1,
+    );
+    if (reasons.isEmpty) {
+      return reasons;
+    }
+    final wire = Map<String, Object?>.from(reasons.first.toWire())
+      ..['objectKind'] = 'place'
+      ..['relationObjectId'] = objectId
+      ..['actionTargetId'] = objectId
+      ..['primaryText'] = '推荐你了解西湖摄影'
+      ..['primarySpans'] = <Map<String, Object?>>[
+        const IntersectionTextSpan(text: '推荐你了解', role: 'plain').toWire(),
+        const IntersectionTextSpan(text: '西湖摄影', role: 'plain').toWire(),
+      ];
+    return <IntersectionReason>[IntersectionReason.fromWire(wire)];
   }
 }
 
@@ -804,11 +805,18 @@ class _RecordingHomepageRepository extends MockHomepageRepository {
       objectPageTemplate: 'campus',
       tagRefs: const <String>['entity/campus'],
       stats: const <String, dynamic>{},
+      intersectionReasons: const <IntersectionReason>[],
+      highlightItems: const [],
       contentSections: const <String, dynamic>{},
+      relatedObjects: const [],
+      relationEdges: const [],
       assistantContext: ObjectPageContext(
         objectType: 'homepage',
         objectId: homepageId,
         canonicalEntityId: 'entity:$homepageId',
+        tagRefs: const <String>['entity/campus'],
+        entityRefs: <String>['entity:$homepageId'],
+        relationEdgeIds: const <String>[],
         referralSource: referralSource,
         feedRequestId: feedRequestId,
         recommendationTraceId: recommendationTraceId,
@@ -886,11 +894,18 @@ class _TaggedHomepageRepository extends MockHomepageRepository {
       objectPageTemplate: 'travel_photo',
       tagRefs: tagRefs,
       stats: const <String, dynamic>{},
+      intersectionReasons: const <IntersectionReason>[],
+      highlightItems: const [],
       contentSections: const <String, dynamic>{},
+      relatedObjects: const [],
+      relationEdges: const [],
       assistantContext: ObjectPageContext(
         objectType: 'homepage',
         objectId: homepageId,
         canonicalEntityId: 'entity:$homepageId',
+        tagRefs: tagRefs,
+        entityRefs: <String>['entity:$homepageId'],
+        relationEdgeIds: const <String>[],
         referralSource: referralSource,
         feedRequestId: feedRequestId,
         recommendationTraceId: recommendationTraceId,
@@ -931,8 +946,12 @@ class _RecordingHomepageIntroductionRepository
           kind: 'overview',
           title: '概况',
           bodyMarkdown: '真实 introduction summary',
+          assets: const [],
+          timelineItems: const [],
         ),
       ],
+      relatedObjects: const [],
+      sourceUrls: const [],
       updatedAt: '2026-06-12T00:00:00Z',
     );
   }

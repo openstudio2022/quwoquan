@@ -23,7 +23,7 @@ void main() {
       'version': 3,
       'updatedAt': '2026-07-20T00:00:00Z',
     });
-    expect(privacy.profileVisibility, ProfileVisibility.privateProfile);
+    expect(privacy.profileVisibility, 'private');
     expect(privacy.blockedKeywords, contains('spam'));
 
     final call = decodeCallSettingsView(<String, dynamic>{
@@ -36,17 +36,17 @@ void main() {
       'updatedAt': '2026-07-20T00:00:00Z',
     });
     expect(
-      call.defaultIncomingCallRingtoneId?.wireValue,
+      call.defaultIncomingCallRingtoneId,
       'official.classic_bell',
     );
     expect(call.allowCallerRingtoneOverride, isFalse);
     expect(call.enableGroupCallRing, isFalse);
   });
 
-  test('通话铃声空串归一化为 null（恢复默认铃声语义）', () {
+  test('通话铃声显式 null 保留恢复默认铃声语义', () {
     final call = decodeCallSettingsView(<String, dynamic>{
       'userId': 'u001',
-      'defaultIncomingCallRingtoneId': '  ',
+      'defaultIncomingCallRingtoneId': null,
       'allowCallerRingtoneOverride': true,
       'enableCallVibration': true,
       'enableGroupCallRing': true,

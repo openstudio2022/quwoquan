@@ -27,7 +27,6 @@ class EntityFetchPlan:
     sourced_video_failure: str
     image_lane_selected: bool
     homepage_media_selected: bool
-    video_lane_selected: bool
 
 
 def prepare_entity_fetch_plan(
@@ -58,10 +57,7 @@ def prepare_entity_fetch_plan(
                 candidates=video_candidates,
             )
         except (OSError, TimeoutError, ValueError) as exc:
-            # Candidate direct video admission is intentionally non-terminal:
-            # the same frozen plan retains independently rights-cleared frames.
-            # The caller records this diagnostic and continues through the
-            # ordinary image gate, which remains the publication authority.
+            # Record the source failure; image assets cannot satisfy video.
             sourced_video_failure = f"{type(exc).__name__}: {exc}"
     homepage_specs = (
         curated_homepage_media_for_entity(execution_id, entity_id, entity_type)
@@ -78,16 +74,6 @@ def prepare_entity_fetch_plan(
         if image_selected
         else []
     )
-    video_specs = (
-        curated_images_for_entity(
-            execution_id,
-            entity_id,
-            entity_type,
-            research_lane="video",
-        )
-        if video_selected
-        else []
-    )
     return EntityFetchPlan(
         object_dir=resolve_entity_object_dir(
             execution_id,
@@ -101,13 +87,12 @@ def prepare_entity_fetch_plan(
             entity_type,
             selected_lanes,
         ),
-        image_specs=[*homepage_specs, *image_specs, *video_specs],
+        image_specs=[*homepage_specs, *image_specs],
         sourced_video_candidates=video_candidates,
         sourced_video_evidence=video_evidence,
         sourced_video_failure=sourced_video_failure,
         image_lane_selected=image_selected,
         homepage_media_selected=homepage_selected,
-        video_lane_selected=video_selected,
     )
 
 

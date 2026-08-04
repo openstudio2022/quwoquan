@@ -7,6 +7,7 @@ import 'package:quwoquan_app/ui/content/entry/services/publish_circle_services.d
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 import '../../../../../support/fake_location_gateway.dart';
 import '../../../../../support/runtime_failure_fixtures.dart';
+import '../../../../../support/cloud_services/object_doubles/circle/circle_contract_test_builders.dart';
 
 final class _SequencedLocationQuery
     implements NearbyLocationReader, LocationSearchReader {
@@ -47,37 +48,37 @@ final class _SequencedLocationQuery
 final class _FakeCircleQueryReader implements CircleQueryReader {
   _FakeCircleQueryReader({required this.circles});
 
-  final List<CircleProjection> circles;
+  final List<Circle> circles;
 
   @override
   Future<CirclePageSlice> list(CircleListQuery query) async =>
-      CirclePageSlice(items: circles.take(query.limit));
+      CirclePageSlice(items: circles.take(query.limit).toList());
 
   @override
-  Future<CircleSearchResultSlice> search(CircleSearchQuery query) async =>
-      CircleSearchResultSlice(
-        items: const <CircleSearchItemProjection>[],
-        facetBuckets: const <CircleFacetBucketProjection>[],
+  Future<CircleSearchResultView> search(CircleSearchQuery query) async =>
+      CircleSearchResultView(
+        items: const <CircleSearchItemView>[],
+        facetBuckets: const <CircleFacetBucketView>[],
       );
 
   @override
-  Future<CircleProjection> get(CircleDetailQuery query) async =>
+  Future<Circle> get(CircleDetailQuery query) async =>
       throw UnimplementedError();
 
   @override
   Future<CircleFeedPageSlice> feed(CircleFeedQuery query) async =>
-      CircleFeedPageSlice(items: const <CircleFeedPostProjection>[]);
+      CircleFeedPageSlice(items: const <CircleFeedItemView>[]);
 
   @override
-  Future<CircleStatsSlice> stats(CircleStatsQuery query) async =>
-      const CircleStatsSlice();
+  Future<CircleStatsWire> stats(CircleStatsQuery query) async =>
+      buildCircleStatsContract(circleId: query.circleId);
 
   @override
-  Future<CircleImpactSlice> impact(CircleImpactQuery query) async =>
-      CircleImpactSlice(
+  Future<CircleImpactSummary> impact(CircleImpactQuery query) async =>
+      CircleImpactSummary(
         circleId: query.circleId,
         total: 0,
-        items: const <CircleImpactItemProjection>[],
+        items: const <CircleImpactItem>[],
       );
 }
 
@@ -177,8 +178,8 @@ void main() {
     test('uses remote circles when endpoint has data', () async {
       const service = CreateCircleService();
       final fake = _FakeCircleQueryReader(
-        circles: <CircleProjection>[
-          CircleProjection(
+        circles: <Circle>[
+          buildCircleContract(
             circleId: 'c1',
             name: '测试圈子A',
             ownerId: 'u1',
@@ -186,7 +187,7 @@ void main() {
             memberCount: 88,
             postCount: 12,
           ),
-          CircleProjection(circleId: 'c2', name: '测试圈子B', ownerId: 'u1'),
+          buildCircleContract(circleId: 'c2', name: '测试圈子B', ownerId: 'u1'),
         ],
       );
 

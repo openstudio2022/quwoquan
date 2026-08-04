@@ -39,14 +39,15 @@ func validateFieldTypes(contractGraph *graph.ContractGraph) []Issue {
 		}
 		issues = append(issues, validateCanonicalCollectionType(field)...)
 		baseTypes := baseFieldTypes(field.Type)
-		if field.Type == "enum" {
+		if isCanonicalEnumFieldType(field.Type) {
 			if field.EnumRef == "" && len(field.InlineValues) == 0 {
 				issues = append(issues, issue(
 					"CONTRACT.FIELD.ENUM_WITHOUT_OWNER",
 					field.SourcePath,
-					"field %s.%s type enum requires enum_ref or inline values",
+					"field %s.%s type %s requires enum_ref or inline values",
 					field.Entity,
 					field.Name,
+					field.Type,
 				))
 			}
 			baseTypes = nil
@@ -66,6 +67,11 @@ func validateFieldTypes(contractGraph *graph.ContractGraph) []Issue {
 		issues = append(issues, validateSemanticField(field, baseTypes)...)
 	}
 	return issues
+}
+
+func isCanonicalEnumFieldType(raw string) bool {
+	raw = strings.TrimSpace(strings.TrimSuffix(raw, "?"))
+	return raw == "enum" || raw == "[]enum"
 }
 
 func isBareObjectType(raw string) bool {

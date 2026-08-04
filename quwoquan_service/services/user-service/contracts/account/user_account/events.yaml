@@ -1,4 +1,16 @@
 events:
+- name: UserSyncHinted
+  client_ws_type: sync_hint
+  description: durable UserSyncPatch 已提交后发给当前账号的轻量提示；端侧必须通过 PullUserSync 获取 typed patch。
+  producer: runtime-sync
+  consumers:
+  - realtime-gateway
+  channel: realtime_ephemeral
+  payload_entity: UserSyncHintEventPayload
+  payload_fields:
+  - userId
+  - latestSyncSeq
+  realtime_channel: rt:user:{userId}
 - name: UserProfileUpdated
   description: 用户资料已更新
   producer: user-service

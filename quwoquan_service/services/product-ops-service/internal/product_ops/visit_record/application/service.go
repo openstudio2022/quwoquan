@@ -13,6 +13,7 @@ import (
 )
 
 const receiptRetention = 180 * 24 * time.Hour
+const maxIdempotencyKeyLength = 256
 
 var (
 	ErrInvalidInput        = visitdomain.ErrInvalid
@@ -20,28 +21,31 @@ var (
 	ErrIdempotencyConflict = errors.New("visit idempotency key conflicts with the first command")
 )
 
-type VisitInput = visitdomain.VisitInput
+type RecordVisitCommand = visitdomain.RecordVisitCommand
 type VisitRecord = visitdomain.VisitRecord
 type VisitStatsQuery = visitdomain.VisitStatsQuery
 type VisitStats = visitdomain.VisitStats
 
-type CommandResult struct {
+// RecordVisitReceipt is the canonical command result exposed by the object
+// facade and HTTP adapter. The embedded VisitRecord omits UserID on JSON, so
+// no trusted actor identity crosses the boundary.
+type RecordVisitReceipt struct {
 	VisitRecord
-	Replayed bool `json:"replayed,omitempty"`
+	Replayed bool `json:"replayed"`
 }
 
 // CommitCommand is the object-owned atomic persistence packet. ReceiptID never
 // contains the caller's raw Idempotency-Key; CommandDigest binds the first key
 // use to its actor and target.
 type CommitCommand struct {
-	Input          VisitInput
+	Input          RecordVisitCommand
 	ReceiptID      string
 	CommandDigest  string
 	ReceiptExpires time.Time
 }
 
 type CommandStore interface {
-	CommitVisit(context.Context, CommitCommand) (CommandResult, error)
+	CommitVisit(context.Context, CommitCommand) (RecordVisitReceipt, error)
 }
 
 type StatsReader interface {
@@ -67,16 +71,19 @@ func NewService(store Store) *Service {
 
 func (s *Service) RecordVisit(
 	ctx context.Context,
-	input VisitInput,
+	input RecordVisitCommand,
 	idempotencyKey string,
-) (CommandResult, error) {
+) (RecordVisitReceipt, error) {
 	input = input.Normalize()
 	idempotencyKey = strings.TrimSpace(idempotencyKey)
 	if err := input.Validate(); err != nil {
-		return CommandResult{}, ErrInvalidInput
+		return RecordVisitReceipt{}, ErrInvalidInput
 	}
 	if idempotencyKey == "" {
-		return CommandResult{}, ErrIdempotencyRequired
+		return RecordVisitReceipt{}, ErrIdempotencyRequired
+	}
+	if len([]rune(idempotencyKey)) > maxIdempotencyKeyLength {
+		return RecordVisitReceipt{}, ErrInvalidInput
 	}
 
 	receiptID := digest(struct {

@@ -9,6 +9,21 @@ dashboard:
     - rtc_media_qoe
     - sla_watch
 object_types:
+  # App/telemetry ingest + operator aggregate read paths served by product-ops
+  # composition root under RequireGeneratedOperationAuthorization. Keep these
+  # ContractGraph operation_ids in the product plane so /ops/events* is not
+  # rejected as GATEWAY.USER.route_not_found before handlers run.
+  - object_type: event_record_telemetry
+    view_kind: dashboard
+    label: 产品遥测事件摄入与汇总
+    source_entity: EventRecord
+    view_model: EventSummarySlice
+    risk_level: medium
+    deployment_profile: latency_sensitive
+    operation_refs:
+      - operation_id: ops.event_record.ReportEventBatch
+      - operation_id: ops.event_record.GetEventSummary
+
   - object_type: l1l4_metric_snapshot
     view_kind: dashboard
     label: 四层指标快照

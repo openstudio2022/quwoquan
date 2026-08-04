@@ -14,12 +14,17 @@ func TestResolveLocationLookupUsesNonprodProtocolSubstituteAndProdRealProvider(t
 		t.Fatal("unknown binding must fail closed")
 	}
 	for _, environment := range []string{"alpha", "beta", "gamma"} {
-		binding, err := ResolveLocationLookup(environment, emptyConfig)
+		binding, err := ResolveLocationLookup(
+			environment,
+			runtimeconfig.MapRuntimeConfigProvider{Values: map[string]string{
+				"INTEGRATION_LOCATION_FIXTURE_BASE_URL": "https://provider-protocol-substitute:18089/map",
+			}},
+		)
 		if err != nil {
 			t.Fatalf("%s protocol substitute binding failed: %v", environment, err)
 		}
 		if binding.AdapterID != "ext.map.protocol_fixture" ||
-			len(binding.Endpoints) != 0 || len(binding.Secrets) != 0 {
+			len(binding.Endpoints) != 1 || len(binding.Secrets) != 0 {
 			t.Fatalf("%s protocol substitute binding drift: %+v", environment, binding)
 		}
 	}

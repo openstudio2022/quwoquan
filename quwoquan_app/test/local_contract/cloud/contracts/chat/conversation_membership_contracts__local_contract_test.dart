@@ -38,7 +38,7 @@ void main() {
     });
 
     test('strictly decodes canonical member page', () {
-      final page = decodeChatConversationMemberPageSlice(<String, Object?>{
+      final page = decodeConversationMemberPageSlice(<String, Object?>{
         'items': <Object?>[
           <String, Object?>{
             'userId': 'user-1',
@@ -62,7 +62,7 @@ void main() {
 
     test('rejects retired assistantSkillId member binding', () {
       expect(
-        () => decodeChatConversationMemberPageSlice(<String, Object?>{
+        () => decodeConversationMemberPageSlice(<String, Object?>{
           'items': <Object?>[
             <String, Object?>{
               'userId': 'assistant',

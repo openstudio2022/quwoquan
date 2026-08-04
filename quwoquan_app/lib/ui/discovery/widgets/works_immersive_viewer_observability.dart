@@ -1,4 +1,4 @@
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
 import 'package:quwoquan_app/core/trackers/content_engagement_tracker.dart'
     show ContentType;
 import 'package:quwoquan_app/ui/content/models/article_detail_view.dart';

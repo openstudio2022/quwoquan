@@ -1241,12 +1241,14 @@ class CitationDestination {
 
 class AssistantRunVisibleReferenceView {
   const AssistantRunVisibleReferenceView({
+    this.sourceId,
     required this.title,
     required this.destination,
     required this.source,
     required this.snippet,
   });
 
+  final String? sourceId;
   final String title;
   final CitationDestination destination;
   final String source;
@@ -1254,6 +1256,7 @@ class AssistantRunVisibleReferenceView {
 
   factory AssistantRunVisibleReferenceView.fromJson(Map<String, dynamic> json) {
     const allowedFields = <String>{
+      'sourceId',
       'title',
       'destination',
       'source',
@@ -1264,6 +1267,9 @@ class AssistantRunVisibleReferenceView {
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
       throw FormatException('AssistantRunVisibleReferenceView response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('sourceId') && json['sourceId'] != null && (json['sourceId'] is! String)) {
+      throw const FormatException('AssistantRunVisibleReferenceView field sourceId has an invalid wire value');
     }
     if (!json.containsKey('title') || json['title'] == null || (json['title'] is! String)) {
       throw const FormatException('AssistantRunVisibleReferenceView field title has an invalid wire value');
@@ -1278,6 +1284,7 @@ class AssistantRunVisibleReferenceView {
       throw const FormatException('AssistantRunVisibleReferenceView field snippet has an invalid wire value');
     }
     return AssistantRunVisibleReferenceView(
+      sourceId: json['sourceId']?.toString(),
       title: (json['title'] ?? '').toString(),
       destination: CitationDestination.fromJson(((json['destination'] as Map?) ?? const <String, dynamic>{}).cast<String, dynamic>()),
       source: (json['source'] ?? '').toString(),
@@ -1286,6 +1293,7 @@ class AssistantRunVisibleReferenceView {
   }
 
   Map<String, dynamic> toJson() => <String, dynamic>{
+        'sourceId': sourceId,
         'title': title,
         'destination': destination.toJson(),
         'source': source,
@@ -1570,23 +1578,149 @@ class AssistantSessionListView {
       };
 }
 
+class ResolvedSkillExample {
+  const ResolvedSkillExample({
+    required this.exampleId,
+    required this.title,
+    required this.summary,
+    this.iconToken,
+    this.mediaRef,
+    required this.presentationTemplateRef,
+    required this.presentationTemplateDigest,
+  });
+
+  final String exampleId;
+  final String title;
+  final String summary;
+  final String? iconToken;
+  final String? mediaRef;
+  final String presentationTemplateRef;
+  final String presentationTemplateDigest;
+
+  factory ResolvedSkillExample.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'exampleId',
+      'title',
+      'summary',
+      'iconToken',
+      'mediaRef',
+      'presentationTemplateRef',
+      'presentationTemplateDigest',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('ResolvedSkillExample response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (!json.containsKey('exampleId') || json['exampleId'] == null || (json['exampleId'] is! String)) {
+      throw const FormatException('ResolvedSkillExample field exampleId has an invalid wire value');
+    }
+    if (!json.containsKey('title') || json['title'] == null || (json['title'] is! String)) {
+      throw const FormatException('ResolvedSkillExample field title has an invalid wire value');
+    }
+    if (!json.containsKey('summary') || json['summary'] == null || (json['summary'] is! String)) {
+      throw const FormatException('ResolvedSkillExample field summary has an invalid wire value');
+    }
+    if (json.containsKey('iconToken') && json['iconToken'] != null && (json['iconToken'] is! String)) {
+      throw const FormatException('ResolvedSkillExample field iconToken has an invalid wire value');
+    }
+    if (json.containsKey('mediaRef') && json['mediaRef'] != null && (json['mediaRef'] is! String)) {
+      throw const FormatException('ResolvedSkillExample field mediaRef has an invalid wire value');
+    }
+    if (!json.containsKey('presentationTemplateRef') || json['presentationTemplateRef'] == null || (json['presentationTemplateRef'] is! String)) {
+      throw const FormatException('ResolvedSkillExample field presentationTemplateRef has an invalid wire value');
+    }
+    if (!json.containsKey('presentationTemplateDigest') || json['presentationTemplateDigest'] == null || (json['presentationTemplateDigest'] is! String)) {
+      throw const FormatException('ResolvedSkillExample field presentationTemplateDigest has an invalid wire value');
+    }
+    return ResolvedSkillExample(
+      exampleId: (json['exampleId'] ?? '').toString(),
+      title: (json['title'] ?? '').toString(),
+      summary: (json['summary'] ?? '').toString(),
+      iconToken: json['iconToken']?.toString(),
+      mediaRef: json['mediaRef']?.toString(),
+      presentationTemplateRef: (json['presentationTemplateRef'] ?? '').toString(),
+      presentationTemplateDigest: (json['presentationTemplateDigest'] ?? '').toString(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'exampleId': exampleId,
+        'title': title,
+        'summary': summary,
+        'iconToken': iconToken,
+        'mediaRef': mediaRef,
+        'presentationTemplateRef': presentationTemplateRef,
+        'presentationTemplateDigest': presentationTemplateDigest,
+      };
+}
+
+class SkillCatalogSemanticLabel {
+  const SkillCatalogSemanticLabel({
+    required this.id,
+    required this.displayText,
+    this.description,
+  });
+
+  final String id;
+  final String displayText;
+  final String? description;
+
+  factory SkillCatalogSemanticLabel.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'id',
+      'displayText',
+      'description',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('SkillCatalogSemanticLabel response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (!json.containsKey('id') || json['id'] == null || (json['id'] is! String)) {
+      throw const FormatException('SkillCatalogSemanticLabel field id has an invalid wire value');
+    }
+    if (!json.containsKey('displayText') || json['displayText'] == null || (json['displayText'] is! String)) {
+      throw const FormatException('SkillCatalogSemanticLabel field displayText has an invalid wire value');
+    }
+    if (json.containsKey('description') && json['description'] != null && (json['description'] is! String)) {
+      throw const FormatException('SkillCatalogSemanticLabel field description has an invalid wire value');
+    }
+    return SkillCatalogSemanticLabel(
+      id: (json['id'] ?? '').toString(),
+      displayText: (json['displayText'] ?? '').toString(),
+      description: json['description']?.toString(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'id': id,
+        'displayText': displayText,
+        'description': description,
+      };
+}
+
 class AssistantSkillCatalogItemView {
   const AssistantSkillCatalogItemView({
     required this.packageId,
     required this.releaseDigest,
     required this.skillId,
+    required this.domainId,
     required this.displayName,
     this.description,
-    this.category,
+    required this.catalogGroup,
     required this.requiresConsent,
     required this.requiredConsentScopes,
+    required this.consentScopeLabels,
     this.iconHint,
     this.coverMediaRef,
-    required this.targetUsers,
+    required this.targetAudiences,
     required this.dataUseSummary,
-    required this.exampleRefs,
+    required this.examples,
     required this.activationMode,
-    required this.allowedSurfaceKinds,
+    required this.surfaceKinds,
     required this.configurationSchemaDigest,
     required this.setupTemplateRef,
     required this.configurationRequiredFields,
@@ -1595,18 +1729,20 @@ class AssistantSkillCatalogItemView {
   final String packageId;
   final String releaseDigest;
   final String skillId;
+  final String domainId;
   final String displayName;
   final String? description;
-  final String? category;
+  final SkillCatalogSemanticLabel catalogGroup;
   final bool requiresConsent;
   final List<String> requiredConsentScopes;
+  final List<SkillCatalogSemanticLabel> consentScopeLabels;
   final String? iconHint;
   final String? coverMediaRef;
-  final List<String> targetUsers;
+  final List<SkillCatalogSemanticLabel> targetAudiences;
   final String dataUseSummary;
-  final List<String> exampleRefs;
+  final List<ResolvedSkillExample> examples;
   final String? activationMode;
-  final List<String> allowedSurfaceKinds;
+  final List<SkillCatalogSemanticLabel> surfaceKinds;
   final String configurationSchemaDigest;
   final String setupTemplateRef;
   final List<String> configurationRequiredFields;
@@ -1616,18 +1752,20 @@ class AssistantSkillCatalogItemView {
       'packageId',
       'releaseDigest',
       'skillId',
+      'domainId',
       'displayName',
       'description',
-      'category',
+      'catalogGroup',
       'requiresConsent',
       'requiredConsentScopes',
+      'consentScopeLabels',
       'iconHint',
       'coverMediaRef',
-      'targetUsers',
+      'targetAudiences',
       'dataUseSummary',
-      'exampleRefs',
+      'examples',
       'activationMode',
-      'allowedSurfaceKinds',
+      'surfaceKinds',
       'configurationSchemaDigest',
       'setupTemplateRef',
       'configurationRequiredFields',
@@ -1647,14 +1785,17 @@ class AssistantSkillCatalogItemView {
     if (!json.containsKey('skillId') || json['skillId'] == null || (json['skillId'] is! String)) {
       throw const FormatException('AssistantSkillCatalogItemView field skillId has an invalid wire value');
     }
+    if (!json.containsKey('domainId') || json['domainId'] == null || (json['domainId'] is! String)) {
+      throw const FormatException('AssistantSkillCatalogItemView field domainId has an invalid wire value');
+    }
     if (!json.containsKey('displayName') || json['displayName'] == null || (json['displayName'] is! String)) {
       throw const FormatException('AssistantSkillCatalogItemView field displayName has an invalid wire value');
     }
     if (json.containsKey('description') && json['description'] != null && (json['description'] is! String)) {
       throw const FormatException('AssistantSkillCatalogItemView field description has an invalid wire value');
     }
-    if (json.containsKey('category') && json['category'] != null && (json['category'] is! String)) {
-      throw const FormatException('AssistantSkillCatalogItemView field category has an invalid wire value');
+    if (!json.containsKey('catalogGroup') || json['catalogGroup'] == null || (json['catalogGroup'] is! Map)) {
+      throw const FormatException('AssistantSkillCatalogItemView field catalogGroup has an invalid wire value');
     }
     if (!json.containsKey('requiresConsent') || json['requiresConsent'] == null || (json['requiresConsent'] is! bool)) {
       throw const FormatException('AssistantSkillCatalogItemView field requiresConsent has an invalid wire value');
@@ -1662,26 +1803,29 @@ class AssistantSkillCatalogItemView {
     if (!json.containsKey('requiredConsentScopes') || json['requiredConsentScopes'] == null || (json['requiredConsentScopes'] is! List || (json['requiredConsentScopes'] as List).any((item) => item is! String))) {
       throw const FormatException('AssistantSkillCatalogItemView field requiredConsentScopes has an invalid wire value');
     }
+    if (!json.containsKey('consentScopeLabels') || json['consentScopeLabels'] == null || (json['consentScopeLabels'] is! List || (json['consentScopeLabels'] as List).any((item) => item is! Map))) {
+      throw const FormatException('AssistantSkillCatalogItemView field consentScopeLabels has an invalid wire value');
+    }
     if (json.containsKey('iconHint') && json['iconHint'] != null && (json['iconHint'] is! String)) {
       throw const FormatException('AssistantSkillCatalogItemView field iconHint has an invalid wire value');
     }
     if (json.containsKey('coverMediaRef') && json['coverMediaRef'] != null && (json['coverMediaRef'] is! String)) {
       throw const FormatException('AssistantSkillCatalogItemView field coverMediaRef has an invalid wire value');
     }
-    if (!json.containsKey('targetUsers') || json['targetUsers'] == null || (json['targetUsers'] is! List || (json['targetUsers'] as List).any((item) => item is! String))) {
-      throw const FormatException('AssistantSkillCatalogItemView field targetUsers has an invalid wire value');
+    if (!json.containsKey('targetAudiences') || json['targetAudiences'] == null || (json['targetAudiences'] is! List || (json['targetAudiences'] as List).any((item) => item is! Map))) {
+      throw const FormatException('AssistantSkillCatalogItemView field targetAudiences has an invalid wire value');
     }
     if (!json.containsKey('dataUseSummary') || json['dataUseSummary'] == null || (json['dataUseSummary'] is! String)) {
       throw const FormatException('AssistantSkillCatalogItemView field dataUseSummary has an invalid wire value');
     }
-    if (!json.containsKey('exampleRefs') || json['exampleRefs'] == null || (json['exampleRefs'] is! List || (json['exampleRefs'] as List).any((item) => item is! String))) {
-      throw const FormatException('AssistantSkillCatalogItemView field exampleRefs has an invalid wire value');
+    if (!json.containsKey('examples') || json['examples'] == null || (json['examples'] is! List || (json['examples'] as List).any((item) => item is! Map))) {
+      throw const FormatException('AssistantSkillCatalogItemView field examples has an invalid wire value');
     }
     if (!json.containsKey('activationMode') || json['activationMode'] == null || (json['activationMode'] is! String)) {
       throw const FormatException('AssistantSkillCatalogItemView field activationMode has an invalid wire value');
     }
-    if (!json.containsKey('allowedSurfaceKinds') || json['allowedSurfaceKinds'] == null || (json['allowedSurfaceKinds'] is! List || (json['allowedSurfaceKinds'] as List).any((item) => item is! String))) {
-      throw const FormatException('AssistantSkillCatalogItemView field allowedSurfaceKinds has an invalid wire value');
+    if (!json.containsKey('surfaceKinds') || json['surfaceKinds'] == null || (json['surfaceKinds'] is! List || (json['surfaceKinds'] as List).any((item) => item is! Map))) {
+      throw const FormatException('AssistantSkillCatalogItemView field surfaceKinds has an invalid wire value');
     }
     if (!json.containsKey('configurationSchemaDigest') || json['configurationSchemaDigest'] == null || (json['configurationSchemaDigest'] is! String)) {
       throw const FormatException('AssistantSkillCatalogItemView field configurationSchemaDigest has an invalid wire value');
@@ -1696,25 +1840,33 @@ class AssistantSkillCatalogItemView {
       packageId: (json['packageId'] ?? '').toString(),
       releaseDigest: (json['releaseDigest'] ?? '').toString(),
       skillId: (json['skillId'] ?? '').toString(),
+      domainId: (json['domainId'] ?? '').toString(),
       displayName: (json['displayName'] ?? '').toString(),
       description: json['description']?.toString(),
-      category: json['category']?.toString(),
+      catalogGroup: SkillCatalogSemanticLabel.fromJson(((json['catalogGroup'] as Map?) ?? const <String, dynamic>{}).cast<String, dynamic>()),
       requiresConsent: json['requiresConsent'] == true,
       requiredConsentScopes: ((json['requiredConsentScopes'] as List?) ?? const [])
             .map((e) => e.toString())
             .toList(growable: false),
+      consentScopeLabels: ((json['consentScopeLabels'] as List?) ?? const [])
+            .whereType<Map>()
+            .map((item) => SkillCatalogSemanticLabel.fromJson(item.cast<String, dynamic>()))
+            .toList(growable: false),
       iconHint: json['iconHint']?.toString(),
       coverMediaRef: json['coverMediaRef']?.toString(),
-      targetUsers: ((json['targetUsers'] as List?) ?? const [])
-            .map((e) => e.toString())
+      targetAudiences: ((json['targetAudiences'] as List?) ?? const [])
+            .whereType<Map>()
+            .map((item) => SkillCatalogSemanticLabel.fromJson(item.cast<String, dynamic>()))
             .toList(growable: false),
       dataUseSummary: (json['dataUseSummary'] ?? '').toString(),
-      exampleRefs: ((json['exampleRefs'] as List?) ?? const [])
-            .map((e) => e.toString())
+      examples: ((json['examples'] as List?) ?? const [])
+            .whereType<Map>()
+            .map((item) => ResolvedSkillExample.fromJson(item.cast<String, dynamic>()))
             .toList(growable: false),
       activationMode: json['activationMode']?.toString(),
-      allowedSurfaceKinds: ((json['allowedSurfaceKinds'] as List?) ?? const [])
-            .map((e) => e.toString())
+      surfaceKinds: ((json['surfaceKinds'] as List?) ?? const [])
+            .whereType<Map>()
+            .map((item) => SkillCatalogSemanticLabel.fromJson(item.cast<String, dynamic>()))
             .toList(growable: false),
       configurationSchemaDigest: (json['configurationSchemaDigest'] ?? '').toString(),
       setupTemplateRef: (json['setupTemplateRef'] ?? '').toString(),
@@ -1728,18 +1880,20 @@ class AssistantSkillCatalogItemView {
         'packageId': packageId,
         'releaseDigest': releaseDigest,
         'skillId': skillId,
+        'domainId': domainId,
         'displayName': displayName,
         'description': description,
-        'category': category,
+        'catalogGroup': catalogGroup.toJson(),
         'requiresConsent': requiresConsent,
         'requiredConsentScopes': requiredConsentScopes,
+        'consentScopeLabels': consentScopeLabels.map((item) => item.toJson()).toList(growable: false),
         'iconHint': iconHint,
         'coverMediaRef': coverMediaRef,
-        'targetUsers': targetUsers,
+        'targetAudiences': targetAudiences.map((item) => item.toJson()).toList(growable: false),
         'dataUseSummary': dataUseSummary,
-        'exampleRefs': exampleRefs,
+        'examples': examples.map((item) => item.toJson()).toList(growable: false),
         'activationMode': activationMode,
-        'allowedSurfaceKinds': allowedSurfaceKinds,
+        'surfaceKinds': surfaceKinds.map((item) => item.toJson()).toList(growable: false),
         'configurationSchemaDigest': configurationSchemaDigest,
         'setupTemplateRef': setupTemplateRef,
         'configurationRequiredFields': configurationRequiredFields,
@@ -2070,6 +2224,197 @@ class AssistantTurnListView {
       };
 }
 
+class DomainReaderDescriptor {
+  const DomainReaderDescriptor({
+    required this.descriptorId,
+    required this.resolverRef,
+    required this.ownerService,
+    required this.ownerOperationRefs,
+    required this.inputSchemaRef,
+    required this.outputSchemaRef,
+    required this.objectTypeRefs,
+    required this.acceptedSourceKinds,
+    required this.authority,
+    required this.sensitivity,
+    this.maxFreshnessSeconds,
+    this.cacheTtlSeconds,
+    required this.surfaceKinds,
+    required this.artifactPolicy,
+    required this.citationPolicy,
+    required this.descriptorDigest,
+  });
+
+  final String descriptorId;
+  final String resolverRef;
+  final String ownerService;
+  final List<String> ownerOperationRefs;
+  final String inputSchemaRef;
+  final String outputSchemaRef;
+  final List<String> objectTypeRefs;
+  final List<String> acceptedSourceKinds;
+  final AssistantContextAuthority authority;
+  final AssistantContextSensitivity sensitivity;
+  final int? maxFreshnessSeconds;
+  final int? cacheTtlSeconds;
+  final List<String> surfaceKinds;
+  final String? artifactPolicy;
+  final String? citationPolicy;
+  final String descriptorDigest;
+
+  factory DomainReaderDescriptor.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'descriptorId',
+      'resolverRef',
+      'ownerService',
+      'ownerOperationRefs',
+      'inputSchemaRef',
+      'outputSchemaRef',
+      'objectTypeRefs',
+      'acceptedSourceKinds',
+      'authority',
+      'sensitivity',
+      'maxFreshnessSeconds',
+      'cacheTtlSeconds',
+      'surfaceKinds',
+      'artifactPolicy',
+      'citationPolicy',
+      'descriptorDigest',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('DomainReaderDescriptor response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (!json.containsKey('descriptorId') || json['descriptorId'] == null || (json['descriptorId'] is! String)) {
+      throw const FormatException('DomainReaderDescriptor field descriptorId has an invalid wire value');
+    }
+    if (!json.containsKey('resolverRef') || json['resolverRef'] == null || (json['resolverRef'] is! String)) {
+      throw const FormatException('DomainReaderDescriptor field resolverRef has an invalid wire value');
+    }
+    if (!json.containsKey('ownerService') || json['ownerService'] == null || (json['ownerService'] is! String)) {
+      throw const FormatException('DomainReaderDescriptor field ownerService has an invalid wire value');
+    }
+    if (!json.containsKey('ownerOperationRefs') || json['ownerOperationRefs'] == null || (json['ownerOperationRefs'] is! List || (json['ownerOperationRefs'] as List).any((item) => item is! String))) {
+      throw const FormatException('DomainReaderDescriptor field ownerOperationRefs has an invalid wire value');
+    }
+    if (!json.containsKey('inputSchemaRef') || json['inputSchemaRef'] == null || (json['inputSchemaRef'] is! String)) {
+      throw const FormatException('DomainReaderDescriptor field inputSchemaRef has an invalid wire value');
+    }
+    if (!json.containsKey('outputSchemaRef') || json['outputSchemaRef'] == null || (json['outputSchemaRef'] is! String)) {
+      throw const FormatException('DomainReaderDescriptor field outputSchemaRef has an invalid wire value');
+    }
+    if (!json.containsKey('objectTypeRefs') || json['objectTypeRefs'] == null || (json['objectTypeRefs'] is! List || (json['objectTypeRefs'] as List).any((item) => item is! String))) {
+      throw const FormatException('DomainReaderDescriptor field objectTypeRefs has an invalid wire value');
+    }
+    if (!json.containsKey('acceptedSourceKinds') || json['acceptedSourceKinds'] == null || (json['acceptedSourceKinds'] is! List || (json['acceptedSourceKinds'] as List).any((item) => item is! String))) {
+      throw const FormatException('DomainReaderDescriptor field acceptedSourceKinds has an invalid wire value');
+    }
+    if (!json.containsKey('authority') || json['authority'] == null || (json['authority'] is! String)) {
+      throw const FormatException('DomainReaderDescriptor field authority has an invalid wire value');
+    }
+    if (!json.containsKey('sensitivity') || json['sensitivity'] == null || (json['sensitivity'] is! String)) {
+      throw const FormatException('DomainReaderDescriptor field sensitivity has an invalid wire value');
+    }
+    if (json.containsKey('maxFreshnessSeconds') && json['maxFreshnessSeconds'] != null && (json['maxFreshnessSeconds'] is! num)) {
+      throw const FormatException('DomainReaderDescriptor field maxFreshnessSeconds has an invalid wire value');
+    }
+    if (json.containsKey('cacheTtlSeconds') && json['cacheTtlSeconds'] != null && (json['cacheTtlSeconds'] is! num)) {
+      throw const FormatException('DomainReaderDescriptor field cacheTtlSeconds has an invalid wire value');
+    }
+    if (!json.containsKey('surfaceKinds') || json['surfaceKinds'] == null || (json['surfaceKinds'] is! List || (json['surfaceKinds'] as List).any((item) => item is! String))) {
+      throw const FormatException('DomainReaderDescriptor field surfaceKinds has an invalid wire value');
+    }
+    if (!json.containsKey('artifactPolicy') || json['artifactPolicy'] == null || (json['artifactPolicy'] is! String)) {
+      throw const FormatException('DomainReaderDescriptor field artifactPolicy has an invalid wire value');
+    }
+    if (!json.containsKey('citationPolicy') || json['citationPolicy'] == null || (json['citationPolicy'] is! String)) {
+      throw const FormatException('DomainReaderDescriptor field citationPolicy has an invalid wire value');
+    }
+    if (!json.containsKey('descriptorDigest') || json['descriptorDigest'] == null || (json['descriptorDigest'] is! String)) {
+      throw const FormatException('DomainReaderDescriptor field descriptorDigest has an invalid wire value');
+    }
+    return DomainReaderDescriptor(
+      descriptorId: (json['descriptorId'] ?? '').toString(),
+      resolverRef: (json['resolverRef'] ?? '').toString(),
+      ownerService: (json['ownerService'] ?? '').toString(),
+      ownerOperationRefs: ((json['ownerOperationRefs'] as List?) ?? const [])
+            .map((e) => e.toString())
+            .toList(growable: false),
+      inputSchemaRef: (json['inputSchemaRef'] ?? '').toString(),
+      outputSchemaRef: (json['outputSchemaRef'] ?? '').toString(),
+      objectTypeRefs: ((json['objectTypeRefs'] as List?) ?? const [])
+            .map((e) => e.toString())
+            .toList(growable: false),
+      acceptedSourceKinds: ((json['acceptedSourceKinds'] as List?) ?? const [])
+            .map((e) => e.toString())
+            .toList(growable: false),
+      authority: parseAssistantContextAuthorityStrict((json['authority'] ?? '').toString()),
+      sensitivity: parseAssistantContextSensitivityStrict((json['sensitivity'] ?? '').toString()),
+      maxFreshnessSeconds: (json['maxFreshnessSeconds'] as num?)?.toInt(),
+      cacheTtlSeconds: (json['cacheTtlSeconds'] as num?)?.toInt(),
+      surfaceKinds: ((json['surfaceKinds'] as List?) ?? const [])
+            .map((e) => e.toString())
+            .toList(growable: false),
+      artifactPolicy: json['artifactPolicy']?.toString(),
+      citationPolicy: json['citationPolicy']?.toString(),
+      descriptorDigest: (json['descriptorDigest'] ?? '').toString(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'descriptorId': descriptorId,
+        'resolverRef': resolverRef,
+        'ownerService': ownerService,
+        'ownerOperationRefs': ownerOperationRefs,
+        'inputSchemaRef': inputSchemaRef,
+        'outputSchemaRef': outputSchemaRef,
+        'objectTypeRefs': objectTypeRefs,
+        'acceptedSourceKinds': acceptedSourceKinds,
+        'authority': authority.wireName,
+        'sensitivity': sensitivity.wireName,
+        'maxFreshnessSeconds': maxFreshnessSeconds,
+        'cacheTtlSeconds': cacheTtlSeconds,
+        'surfaceKinds': surfaceKinds,
+        'artifactPolicy': artifactPolicy,
+        'citationPolicy': citationPolicy,
+        'descriptorDigest': descriptorDigest,
+      };
+}
+
+class DomainReaderDescriptorListSlice {
+  const DomainReaderDescriptorListSlice({
+    required this.items,
+  });
+
+  final List<DomainReaderDescriptor> items;
+
+  factory DomainReaderDescriptorListSlice.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'items',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('DomainReaderDescriptorListSlice response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (!json.containsKey('items') || json['items'] == null || (json['items'] is! List || (json['items'] as List).any((item) => item is! Map))) {
+      throw const FormatException('DomainReaderDescriptorListSlice field items has an invalid wire value');
+    }
+    return DomainReaderDescriptorListSlice(
+      items: ((json['items'] as List?) ?? const [])
+            .whereType<Map>()
+            .map((item) => DomainReaderDescriptor.fromJson(item.cast<String, dynamic>()))
+            .toList(growable: false),
+    );
+  }
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'items': items.map((item) => item.toJson()).toList(growable: false),
+      };
+}
+
 class SkillConsent {
   const SkillConsent({
     required this.id,
@@ -2087,7 +2432,7 @@ class SkillConsent {
   final List<String> grantedScopes;
   final String grantedAt;
   final String? revokedAt;
-  final dynamic granted;
+  final bool granted;
 
   factory SkillConsent.fromJson(Map<String, dynamic> json) {
     const allowedFields = <String>{
@@ -2123,6 +2468,17 @@ class SkillConsent {
     if (json.containsKey('revokedAt') && json['revokedAt'] != null && (json['revokedAt'] is! String)) {
       throw const FormatException('SkillConsent field revokedAt has an invalid wire value');
     }
+    final granted = json['granted'];
+    if (granted is! bool) {
+      throw const FormatException('SkillConsent field granted has an invalid wire value');
+    }
+    final revokedAt = json['revokedAt'];
+    if (revokedAt != null && granted) {
+      throw const FormatException('SkillConsent fields revokedAt and granted are inconsistent');
+    }
+    if (revokedAt == null && !granted) {
+      throw const FormatException('SkillConsent fields revokedAt and granted are inconsistent');
+    }
     return SkillConsent(
       id: (json['id'] ?? '').toString(),
       accountId: (json['accountId'] ?? '').toString(),
@@ -2132,7 +2488,7 @@ class SkillConsent {
             .toList(growable: false),
       grantedAt: (json['grantedAt'] as String),
       revokedAt: json['revokedAt']?.toString(),
-      granted: json['granted'],
+      granted: granted && revokedAt == null,
     );
   }
 
@@ -2432,6 +2788,206 @@ class RevokeSkillConsentReceipt {
       };
 }
 
+class SkillActivityExternalSource {
+  const SkillActivityExternalSource({
+    this.sourceKind,
+    this.operationRef,
+  });
+
+  final String? sourceKind;
+  final String? operationRef;
+
+  factory SkillActivityExternalSource.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'sourceKind',
+      'operationRef',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('SkillActivityExternalSource response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('sourceKind') && json['sourceKind'] != null && (json['sourceKind'] is! String)) {
+      throw const FormatException('SkillActivityExternalSource field sourceKind has an invalid wire value');
+    }
+    if (json.containsKey('operationRef') && json['operationRef'] != null && (json['operationRef'] is! String)) {
+      throw const FormatException('SkillActivityExternalSource field operationRef has an invalid wire value');
+    }
+    return SkillActivityExternalSource(
+      sourceKind: json['sourceKind']?.toString(),
+      operationRef: json['operationRef']?.toString(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'sourceKind': sourceKind,
+        'operationRef': operationRef,
+      };
+}
+
+class SkillActivityView {
+  const SkillActivityView({
+    required this.activityId,
+    required this.skillId,
+    required this.activityKind,
+    required this.status,
+    required this.displayKey,
+    required this.sourceObjectRef,
+    required this.sourceRevision,
+    this.dataControlRequestId,
+    this.failureCode,
+    this.recoveryAction,
+    required this.occurredAt,
+  });
+
+  final String activityId;
+  final String skillId;
+  final SkillActivityKind activityKind;
+  final String status;
+  final SkillActivityDisplayKey displayKey;
+  final String sourceObjectRef;
+  final int sourceRevision;
+  final String? dataControlRequestId;
+  final String? failureCode;
+  final SkillActivityRecoveryAction? recoveryAction;
+  final String occurredAt;
+
+  factory SkillActivityView.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'activityId',
+      'skillId',
+      'activityKind',
+      'status',
+      'displayKey',
+      'sourceObjectRef',
+      'sourceRevision',
+      'dataControlRequestId',
+      'failureCode',
+      'recoveryAction',
+      'occurredAt',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('SkillActivityView response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (!json.containsKey('activityId') || json['activityId'] == null || (json['activityId'] is! String)) {
+      throw const FormatException('SkillActivityView field activityId has an invalid wire value');
+    }
+    if (!json.containsKey('skillId') || json['skillId'] == null || (json['skillId'] is! String)) {
+      throw const FormatException('SkillActivityView field skillId has an invalid wire value');
+    }
+    if (!json.containsKey('activityKind') || json['activityKind'] == null || (json['activityKind'] is! String)) {
+      throw const FormatException('SkillActivityView field activityKind has an invalid wire value');
+    }
+    if (!json.containsKey('status') || json['status'] == null || (json['status'] is! String)) {
+      throw const FormatException('SkillActivityView field status has an invalid wire value');
+    }
+    if (!json.containsKey('displayKey') || json['displayKey'] == null || (json['displayKey'] is! String)) {
+      throw const FormatException('SkillActivityView field displayKey has an invalid wire value');
+    }
+    if (!json.containsKey('sourceObjectRef') || json['sourceObjectRef'] == null || (json['sourceObjectRef'] is! String)) {
+      throw const FormatException('SkillActivityView field sourceObjectRef has an invalid wire value');
+    }
+    if (!json.containsKey('sourceRevision') || json['sourceRevision'] == null || (json['sourceRevision'] is! num)) {
+      throw const FormatException('SkillActivityView field sourceRevision has an invalid wire value');
+    }
+    if (json.containsKey('dataControlRequestId') && json['dataControlRequestId'] != null && (json['dataControlRequestId'] is! String)) {
+      throw const FormatException('SkillActivityView field dataControlRequestId has an invalid wire value');
+    }
+    if (json.containsKey('failureCode') && json['failureCode'] != null && (json['failureCode'] is! String)) {
+      throw const FormatException('SkillActivityView field failureCode has an invalid wire value');
+    }
+    if (json.containsKey('recoveryAction') && json['recoveryAction'] != null && (json['recoveryAction'] is! String)) {
+      throw const FormatException('SkillActivityView field recoveryAction has an invalid wire value');
+    }
+    if (!json.containsKey('occurredAt') || json['occurredAt'] == null || (json['occurredAt'] is! String)) {
+      throw const FormatException('SkillActivityView field occurredAt has an invalid wire value');
+    }
+    return SkillActivityView(
+      activityId: (json['activityId'] ?? '').toString(),
+      skillId: (json['skillId'] ?? '').toString(),
+      activityKind: parseSkillActivityKindStrict((json['activityKind'] ?? '').toString()),
+      status: (json['status'] ?? '').toString(),
+      displayKey: parseSkillActivityDisplayKeyStrict((json['displayKey'] ?? '').toString()),
+      sourceObjectRef: (json['sourceObjectRef'] ?? '').toString(),
+      sourceRevision: (json['sourceRevision'] as num?)?.toInt() ?? 0,
+      dataControlRequestId: json['dataControlRequestId']?.toString(),
+      failureCode: json['failureCode']?.toString(),
+      recoveryAction: json['recoveryAction'] == null ? null : parseSkillActivityRecoveryActionStrict(json['recoveryAction'].toString()),
+      occurredAt: (json['occurredAt'] as String),
+    );
+  }
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'activityId': activityId,
+        'skillId': skillId,
+        'activityKind': activityKind.wireName,
+        'status': status,
+        'displayKey': displayKey.wireName,
+        'sourceObjectRef': sourceObjectRef,
+        'sourceRevision': sourceRevision,
+        'dataControlRequestId': dataControlRequestId,
+        'failureCode': failureCode,
+        'recoveryAction': recoveryAction?.wireName,
+        'occurredAt': occurredAt,
+      };
+}
+
+class SkillActivitySlice {
+  const SkillActivitySlice({
+    required this.items,
+    this.nextCursor,
+    required this.externalSources,
+  });
+
+  final List<SkillActivityView> items;
+  final String? nextCursor;
+  final List<SkillActivityExternalSource> externalSources;
+
+  factory SkillActivitySlice.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'items',
+      'nextCursor',
+      'externalSources',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('SkillActivitySlice response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (!json.containsKey('items') || json['items'] == null || (json['items'] is! List || (json['items'] as List).any((item) => item is! Map))) {
+      throw const FormatException('SkillActivitySlice field items has an invalid wire value');
+    }
+    if (json.containsKey('nextCursor') && json['nextCursor'] != null && (json['nextCursor'] is! String)) {
+      throw const FormatException('SkillActivitySlice field nextCursor has an invalid wire value');
+    }
+    if (!json.containsKey('externalSources') || json['externalSources'] == null || (json['externalSources'] is! List || (json['externalSources'] as List).any((item) => item is! Map))) {
+      throw const FormatException('SkillActivitySlice field externalSources has an invalid wire value');
+    }
+    return SkillActivitySlice(
+      items: ((json['items'] as List?) ?? const [])
+            .whereType<Map>()
+            .map((item) => SkillActivityView.fromJson(item.cast<String, dynamic>()))
+            .toList(growable: false),
+      nextCursor: json['nextCursor']?.toString(),
+      externalSources: ((json['externalSources'] as List?) ?? const [])
+            .whereType<Map>()
+            .map((item) => SkillActivityExternalSource.fromJson(item.cast<String, dynamic>()))
+            .toList(growable: false),
+    );
+  }
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'items': items.map((item) => item.toJson()).toList(growable: false),
+        'nextCursor': nextCursor,
+        'externalSources': externalSources.map((item) => item.toJson()).toList(growable: false),
+      };
+}
+
 class SkillCapabilityGrant {
   const SkillCapabilityGrant({
     required this.capabilityId,
@@ -2500,6 +3056,182 @@ class SkillConsentListSlice {
 
   Map<String, dynamic> toJson() => <String, dynamic>{
         'items': items.map((item) => item.toJson()).toList(growable: false),
+      };
+}
+
+class SkillDataControlRequest {
+  const SkillDataControlRequest({
+    required this.requestId,
+    required this.skillId,
+    required this.requestedActions,
+    required this.completedActions,
+    required this.status,
+    this.failedAction,
+    this.failureCode,
+    this.confirmedAt,
+    this.completedAt,
+    required this.createdAt,
+    required this.updatedAt,
+    required this.revision,
+  });
+
+  final String requestId;
+  final String skillId;
+  final List<SkillDataControlAction> requestedActions;
+  final List<SkillDataControlAction> completedActions;
+  final SkillDataControlRequestStatus status;
+  final String? failedAction;
+  final String? failureCode;
+  final String? confirmedAt;
+  final String? completedAt;
+  final String createdAt;
+  final String updatedAt;
+  final int revision;
+
+  factory SkillDataControlRequest.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'requestId',
+      'skillId',
+      'requestedActions',
+      'completedActions',
+      'status',
+      'failedAction',
+      'failureCode',
+      'confirmedAt',
+      'completedAt',
+      'createdAt',
+      'updatedAt',
+      'revision',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('SkillDataControlRequest response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (!json.containsKey('requestId') || json['requestId'] == null || (json['requestId'] is! String)) {
+      throw const FormatException('SkillDataControlRequest field requestId has an invalid wire value');
+    }
+    if (!json.containsKey('skillId') || json['skillId'] == null || (json['skillId'] is! String)) {
+      throw const FormatException('SkillDataControlRequest field skillId has an invalid wire value');
+    }
+    if (!json.containsKey('requestedActions') || json['requestedActions'] == null || (json['requestedActions'] is! List || (json['requestedActions'] as List).any((item) => item is! String))) {
+      throw const FormatException('SkillDataControlRequest field requestedActions has an invalid wire value');
+    }
+    if (!json.containsKey('completedActions') || json['completedActions'] == null || (json['completedActions'] is! List || (json['completedActions'] as List).any((item) => item is! String))) {
+      throw const FormatException('SkillDataControlRequest field completedActions has an invalid wire value');
+    }
+    if (!json.containsKey('status') || json['status'] == null || (json['status'] is! String)) {
+      throw const FormatException('SkillDataControlRequest field status has an invalid wire value');
+    }
+    if (json.containsKey('failedAction') && json['failedAction'] != null && (json['failedAction'] is! String)) {
+      throw const FormatException('SkillDataControlRequest field failedAction has an invalid wire value');
+    }
+    if (json.containsKey('failureCode') && json['failureCode'] != null && (json['failureCode'] is! String)) {
+      throw const FormatException('SkillDataControlRequest field failureCode has an invalid wire value');
+    }
+    if (json.containsKey('confirmedAt') && json['confirmedAt'] != null && (json['confirmedAt'] is! String)) {
+      throw const FormatException('SkillDataControlRequest field confirmedAt has an invalid wire value');
+    }
+    if (json.containsKey('completedAt') && json['completedAt'] != null && (json['completedAt'] is! String)) {
+      throw const FormatException('SkillDataControlRequest field completedAt has an invalid wire value');
+    }
+    if (!json.containsKey('createdAt') || json['createdAt'] == null || (json['createdAt'] is! String)) {
+      throw const FormatException('SkillDataControlRequest field createdAt has an invalid wire value');
+    }
+    if (!json.containsKey('updatedAt') || json['updatedAt'] == null || (json['updatedAt'] is! String)) {
+      throw const FormatException('SkillDataControlRequest field updatedAt has an invalid wire value');
+    }
+    if (!json.containsKey('revision') || json['revision'] == null || (json['revision'] is! num)) {
+      throw const FormatException('SkillDataControlRequest field revision has an invalid wire value');
+    }
+    return SkillDataControlRequest(
+      requestId: (json['requestId'] ?? '').toString(),
+      skillId: (json['skillId'] ?? '').toString(),
+      requestedActions: (json['requestedActions'] as List).asMap().entries.map((entry) {
+            final wireValue = entry.value as String;
+            try {
+              return parseSkillDataControlActionStrict(wireValue);
+            } on FormatException {
+              throw FormatException(
+                'SkillDataControlRequest.requestedActions[${entry.key}] has an invalid enum wire value',
+                wireValue,
+              );
+            }
+          }).toList(growable: false),
+      completedActions: (json['completedActions'] as List).asMap().entries.map((entry) {
+            final wireValue = entry.value as String;
+            try {
+              return parseSkillDataControlActionStrict(wireValue);
+            } on FormatException {
+              throw FormatException(
+                'SkillDataControlRequest.completedActions[${entry.key}] has an invalid enum wire value',
+                wireValue,
+              );
+            }
+          }).toList(growable: false),
+      status: parseSkillDataControlRequestStatusStrict((json['status'] ?? '').toString()),
+      failedAction: json['failedAction']?.toString(),
+      failureCode: json['failureCode']?.toString(),
+      confirmedAt: json['confirmedAt']?.toString(),
+      completedAt: json['completedAt']?.toString(),
+      createdAt: (json['createdAt'] as String),
+      updatedAt: (json['updatedAt'] as String),
+      revision: (json['revision'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'requestId': requestId,
+        'skillId': skillId,
+        'requestedActions': requestedActions.map((item) => item.wireName).toList(growable: false),
+        'completedActions': completedActions.map((item) => item.wireName).toList(growable: false),
+        'status': status.wireName,
+        'failedAction': failedAction,
+        'failureCode': failureCode,
+        'confirmedAt': confirmedAt,
+        'completedAt': completedAt,
+        'createdAt': createdAt,
+        'updatedAt': updatedAt,
+        'revision': revision,
+      };
+}
+
+class SkillDataControlMutationReceipt {
+  const SkillDataControlMutationReceipt({
+    required this.request,
+    required this.replayed,
+  });
+
+  final SkillDataControlRequest request;
+  final bool replayed;
+
+  factory SkillDataControlMutationReceipt.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'request',
+      'replayed',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('SkillDataControlMutationReceipt response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (!json.containsKey('request') || json['request'] == null || (json['request'] is! Map)) {
+      throw const FormatException('SkillDataControlMutationReceipt field request has an invalid wire value');
+    }
+    if (!json.containsKey('replayed') || json['replayed'] == null || (json['replayed'] is! bool)) {
+      throw const FormatException('SkillDataControlMutationReceipt field replayed has an invalid wire value');
+    }
+    return SkillDataControlMutationReceipt(
+      request: SkillDataControlRequest.fromJson(((json['request'] as Map?) ?? const <String, dynamic>{}).cast<String, dynamic>()),
+      replayed: json['replayed'] == true,
+    );
+  }
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'request': request.toJson(),
+        'replayed': replayed,
       };
 }
 
@@ -2986,13 +3718,13 @@ class SkillSubscriptionListView {
     return SkillSubscriptionListView(
       items: ((json['items'] as List?) ?? const [])
             .whereType<Map>()
-            .map((item) => SkillSubscriptionWire.fromJson(item.cast<String, dynamic>()))
+            .map((item) => SkillSubscriptionWire.fromWire(item.cast<String, dynamic>()))
             .toList(growable: false),
     );
   }
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'items': items.map((item) => item.toJson()).toList(growable: false),
+        'items': items.map((item) => item.toWire()).toList(growable: false),
       };
 }
 
@@ -3005,8 +3737,6 @@ class SkillSurfacePlacement {
     required this.disabledSkillIds,
     required this.status,
     required this.revision,
-    required this.createdByAccountId,
-    required this.updatedByAccountId,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -3018,8 +3748,6 @@ class SkillSurfacePlacement {
   final List<String> disabledSkillIds;
   final SkillSurfacePlacementStatus status;
   final int revision;
-  final String createdByAccountId;
-  final String updatedByAccountId;
   final String createdAt;
   final String updatedAt;
 
@@ -3032,8 +3760,6 @@ class SkillSurfacePlacement {
       'disabledSkillIds',
       'status',
       'revision',
-      'createdByAccountId',
-      'updatedByAccountId',
       'createdAt',
       'updatedAt',
     };
@@ -3064,12 +3790,6 @@ class SkillSurfacePlacement {
     if (!json.containsKey('revision') || json['revision'] == null || (json['revision'] is! num)) {
       throw const FormatException('SkillSurfacePlacement field revision has an invalid wire value');
     }
-    if (!json.containsKey('createdByAccountId') || json['createdByAccountId'] == null || (json['createdByAccountId'] is! String)) {
-      throw const FormatException('SkillSurfacePlacement field createdByAccountId has an invalid wire value');
-    }
-    if (!json.containsKey('updatedByAccountId') || json['updatedByAccountId'] == null || (json['updatedByAccountId'] is! String)) {
-      throw const FormatException('SkillSurfacePlacement field updatedByAccountId has an invalid wire value');
-    }
     if (!json.containsKey('createdAt') || json['createdAt'] == null || (json['createdAt'] is! String)) {
       throw const FormatException('SkillSurfacePlacement field createdAt has an invalid wire value');
     }
@@ -3086,8 +3806,6 @@ class SkillSurfacePlacement {
             .toList(growable: false),
       status: parseSkillSurfacePlacementStatusStrict((json['status'] ?? '').toString()),
       revision: (json['revision'] as num?)?.toInt() ?? 0,
-      createdByAccountId: (json['createdByAccountId'] ?? '').toString(),
-      updatedByAccountId: (json['updatedByAccountId'] ?? '').toString(),
       createdAt: (json['createdAt'] as String),
       updatedAt: (json['updatedAt'] as String),
     );
@@ -3101,8 +3819,6 @@ class SkillSurfacePlacement {
         'disabledSkillIds': disabledSkillIds,
         'status': status.wireName,
         'revision': revision,
-        'createdByAccountId': createdByAccountId,
-        'updatedByAccountId': updatedByAccountId,
         'createdAt': createdAt,
         'updatedAt': updatedAt,
       };
@@ -3226,6 +3942,20 @@ AssistantTurnListView decodeAssistantTurnListView(Object? response) {
   return AssistantTurnListView.fromJson(response.cast<String, dynamic>());
 }
 
+DomainReaderDescriptor decodeDomainReaderDescriptor(Object? response) {
+  if (response is! Map) {
+    throw const FormatException('DomainReaderDescriptor response must be an object');
+  }
+  return DomainReaderDescriptor.fromJson(response.cast<String, dynamic>());
+}
+
+DomainReaderDescriptorListSlice decodeDomainReaderDescriptorListSlice(Object? response) {
+  if (response is! Map) {
+    throw const FormatException('DomainReaderDescriptorListSlice response must be an object');
+  }
+  return DomainReaderDescriptorListSlice.fromJson(response.cast<String, dynamic>());
+}
+
 GrantSkillConsentReceipt decodeGrantSkillConsentReceipt(Object? response) {
   if (response is! Map) {
     throw const FormatException('GrantSkillConsentReceipt response must be an object');
@@ -3254,11 +3984,32 @@ RevokeSkillConsentReceipt decodeRevokeSkillConsentReceipt(Object? response) {
   return RevokeSkillConsentReceipt.fromJson(response.cast<String, dynamic>());
 }
 
+SkillActivitySlice decodeSkillActivitySlice(Object? response) {
+  if (response is! Map) {
+    throw const FormatException('SkillActivitySlice response must be an object');
+  }
+  return SkillActivitySlice.fromJson(response.cast<String, dynamic>());
+}
+
 SkillConsentListSlice decodeSkillConsentListSlice(Object? response) {
   if (response is! Map) {
     throw const FormatException('SkillConsentListSlice response must be an object');
   }
   return SkillConsentListSlice.fromJson(response.cast<String, dynamic>());
+}
+
+SkillDataControlMutationReceipt decodeSkillDataControlMutationReceipt(Object? response) {
+  if (response is! Map) {
+    throw const FormatException('SkillDataControlMutationReceipt response must be an object');
+  }
+  return SkillDataControlMutationReceipt.fromJson(response.cast<String, dynamic>());
+}
+
+SkillDataControlRequest decodeSkillDataControlRequest(Object? response) {
+  if (response is! Map) {
+    throw const FormatException('SkillDataControlRequest response must be an object');
+  }
+  return SkillDataControlRequest.fromJson(response.cast<String, dynamic>());
 }
 
 SkillPackageActivation decodeSkillPackageActivation(Object? response) {

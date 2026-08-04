@@ -25,7 +25,7 @@ void main() {
       }
     });
 
-    test('首次访问会同步到远端写面且 wire 不含 userId', () async {
+    test('首次访问会同步到远端强类型写面', () async {
       final remote = _RecordingVisitWriter();
       final service = VisitRecorderService(
         boxName: 'visit_recorder_service_test_remote_sync',
@@ -39,10 +39,11 @@ void main() {
       expect(input.targetType, equals('page'));
       expect(input.targetKey, equals('page_discovery_recommend'));
       expect(input.idempotencyKey, isNotEmpty);
-      // 出站 wire 形状与 ops/product_ops/visit_record 契约对齐：actor 由服务端派生。
+      // 本地补传 storage codec 保存三个必需字段；Cloud wire
+      // 由 generated RecordVisitRequest encoder 独立生成。
       expect(
-        input.toWireJson().keys,
-        unorderedEquals(<String>['targetType', 'targetKey']),
+        input.toStorageJson().keys,
+        unorderedEquals(<String>['idempotencyKey', 'targetType', 'targetKey']),
       );
     });
 

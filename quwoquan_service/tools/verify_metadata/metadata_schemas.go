@@ -73,6 +73,8 @@ type controlPlaneDefinition struct {
 			Operation    string   `yaml:"operation"`
 			Method       string   `yaml:"method"`
 			Path         string   `yaml:"path"`
+			AuthMode     string   `yaml:"auth_mode"`
+			Principal    string   `yaml:"principal"`
 			Scopes       []string `yaml:"scopes"`
 			DangerLevel  string   `yaml:"danger_level"`
 			ApprovalMode string   `yaml:"approval_mode"`

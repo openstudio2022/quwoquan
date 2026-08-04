@@ -1,9 +1,12 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: 9816b2b7d9fedea34ad78dd719fc16fdf3e982073304d7f50f7a8ea4064f6b7f
+// ContractGraph SHA256: 93359367b8614f01bb5e1c51e37af383332b01f117cc1c6cf39e4fdf838e49d2
 
 library;
 
 import '../operation_request_payload.dart';
+import "../generated/shared_operation_types.g.dart";
+
+export "../generated/shared_operation_types.g.dart";
 
 part '../generated/requests/user/user_operation_contracts.g.requests.g.dart';
 
@@ -396,6 +399,35 @@ enum ProposalSource {
   }
 }
 
+enum ProposalStatus {
+  pending("pending"),
+  confirmed("confirmed"),
+  applying("applying"),
+  applied("applied"),
+  rollingBack("rolling_back"),
+  rolledBack("rolled_back"),
+  rejected("rejected"),
+  expired("expired");
+
+  const ProposalStatus(this.wireName);
+
+  final String wireName;
+
+  static ProposalStatus fromWire(Object? value, String path) {
+    return switch (value) {
+      "pending" => ProposalStatus.pending,
+      "confirmed" => ProposalStatus.confirmed,
+      "applying" => ProposalStatus.applying,
+      "applied" => ProposalStatus.applied,
+      "rolling_back" => ProposalStatus.rollingBack,
+      "rolled_back" => ProposalStatus.rolledBack,
+      "rejected" => ProposalStatus.rejected,
+      "expired" => ProposalStatus.expired,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
 enum RelationshipState {
   self("self"),
   notFollowing("not_following"),
@@ -450,6 +482,23 @@ enum ThemeModeSetting {
       "system" => ThemeModeSetting.system,
       "light" => ThemeModeSetting.light,
       "dark" => ThemeModeSetting.dark,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum UserSyncPatchKind {
+  userAvatarUpdated("user_avatar_updated"),
+  conversationAvatarUpdated("conversation_avatar_updated");
+
+  const UserSyncPatchKind(this.wireName);
+
+  final String wireName;
+
+  static UserSyncPatchKind fromWire(Object? value, String path) {
+    return switch (value) {
+      "user_avatar_updated" => UserSyncPatchKind.userAvatarUpdated,
+      "conversation_avatar_updated" => UserSyncPatchKind.conversationAvatarUpdated,
       _ => throw FormatException('$path has an invalid enum value'),
     };
   }
@@ -981,6 +1030,37 @@ final class ContactDiscoveryResult {
   };
 }
 
+final class ConversationAvatarSyncPatchPayload {
+  const ConversationAvatarSyncPatchPayload({
+    required this.conversationId,
+    required this.avatarUrl,
+    this.groupAvatarVersion,
+    this.groupAvatarSourceHash,
+  });
+
+  final String conversationId;
+  final String avatarUrl;
+  final int? groupAvatarVersion;
+  final String? groupAvatarSourceHash;
+
+  factory ConversationAvatarSyncPatchPayload.fromWire(Map<String, Object?> map, [String path = "ConversationAvatarSyncPatchPayload"]) {
+    _rejectUnknownFields(map, const <String>{"conversationId", "avatarUrl", "groupAvatarVersion", "groupAvatarSourceHash"}, path);
+    return ConversationAvatarSyncPatchPayload(
+      conversationId: _requiredString(map["conversationId"], '$path.conversationId'),
+      avatarUrl: _requiredString(map["avatarUrl"], '$path.avatarUrl'),
+      groupAvatarVersion: map["groupAvatarVersion"] == null ? null : _requiredInt(map["groupAvatarVersion"], '$path.groupAvatarVersion'),
+      groupAvatarSourceHash: map["groupAvatarSourceHash"] == null ? null : _requiredString(map["groupAvatarSourceHash"], '$path.groupAvatarSourceHash'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "conversationId": conversationId,
+    "avatarUrl": avatarUrl,
+    if (groupAvatarVersion != null) "groupAvatarVersion": groupAvatarVersion!,
+    if (groupAvatarSourceHash != null) "groupAvatarSourceHash": groupAvatarSourceHash!,
+  };
+}
+
 final class CredentialBindingCommandResult {
   const CredentialBindingCommandResult({
     required this.credentialType,
@@ -1469,53 +1549,6 @@ final class GreetingIntersectionRef {
     "sourceRef": sourceRef,
     "objectTypeRef": objectTypeRef,
     "objectId": objectId,
-  };
-}
-
-final class GreetingIntersectionSnapshot {
-  const GreetingIntersectionSnapshot({
-    required this.intersectionId,
-    required this.evidenceId,
-    required this.sourceRef,
-    required this.objectTypeRef,
-    required this.objectId,
-    required this.primaryText,
-    this.dimension,
-    required this.resolvedAt,
-  });
-
-  final String intersectionId;
-  final String evidenceId;
-  final String sourceRef;
-  final String objectTypeRef;
-  final String objectId;
-  final String primaryText;
-  final String? dimension;
-  final DateTime resolvedAt;
-
-  factory GreetingIntersectionSnapshot.fromWire(Map<String, Object?> map, [String path = "GreetingIntersectionSnapshot"]) {
-    _rejectUnknownFields(map, const <String>{"intersectionId", "evidenceId", "sourceRef", "objectTypeRef", "objectId", "primaryText", "dimension", "resolvedAt"}, path);
-    return GreetingIntersectionSnapshot(
-      intersectionId: _requiredNonBlankString(map["intersectionId"], '$path.intersectionId'),
-      evidenceId: _requiredNonBlankString(map["evidenceId"], '$path.evidenceId'),
-      sourceRef: _requiredNonBlankString(map["sourceRef"], '$path.sourceRef'),
-      objectTypeRef: _requiredNonBlankString(map["objectTypeRef"], '$path.objectTypeRef'),
-      objectId: _requiredNonBlankString(map["objectId"], '$path.objectId'),
-      primaryText: _requiredNonBlankString(map["primaryText"], '$path.primaryText'),
-      dimension: map["dimension"] == null ? null : _requiredString(map["dimension"], '$path.dimension'),
-      resolvedAt: _requiredTimestamp(map["resolvedAt"], '$path.resolvedAt'),
-    );
-  }
-
-  Map<String, Object?> toWire() => <String, Object?>{
-    "intersectionId": intersectionId,
-    "evidenceId": evidenceId,
-    "sourceRef": sourceRef,
-    "objectTypeRef": objectTypeRef,
-    "objectId": objectId,
-    "primaryText": primaryText,
-    if (dimension != null) "dimension": dimension!,
-    "resolvedAt": resolvedAt.toUtc().toIso8601String(),
   };
 }
 
@@ -2405,7 +2438,7 @@ final class ProfileUpdateProposalCommandResult {
 
   final String proposalId;
   final int version;
-  final String status;
+  final ProposalStatus status;
   final bool replayed;
 
   factory ProfileUpdateProposalCommandResult.fromWire(Map<String, Object?> map, [String path = "ProfileUpdateProposalCommandResult"]) {
@@ -2413,7 +2446,7 @@ final class ProfileUpdateProposalCommandResult {
     return ProfileUpdateProposalCommandResult(
       proposalId: _requiredString(map["proposalId"], '$path.proposalId'),
       version: _requiredInt(map["version"], '$path.version'),
-      status: _requiredString(map["status"], '$path.status'),
+      status: ProposalStatus.fromWire(map["status"], '$path.status'),
       replayed: _requiredBool(map["replayed"], '$path.replayed'),
     );
   }
@@ -2421,7 +2454,7 @@ final class ProfileUpdateProposalCommandResult {
   Map<String, Object?> toWire() => <String, Object?>{
     "proposalId": proposalId,
     "version": version,
-    "status": status,
+    "status": status.wireName,
     "replayed": replayed,
   };
 }
@@ -2478,12 +2511,12 @@ final class ProfileUpdateProposalView {
 
   final String id;
   final String personaId;
-  final String source;
+  final ProposalSource source;
   final String reason;
   final List<String> evidenceRefs;
   final List<String> impactScope;
   final String createdBy;
-  final String status;
+  final ProposalStatus status;
   final String? displayName;
   final String? bio;
   final String? avatarMediaAssetId;
@@ -2505,12 +2538,12 @@ final class ProfileUpdateProposalView {
     return ProfileUpdateProposalView(
       id: _requiredString(map["id"], '$path.id'),
       personaId: _requiredString(map["personaId"], '$path.personaId'),
-      source: _requiredString(map["source"], '$path.source'),
+      source: ProposalSource.fromWire(map["source"], '$path.source'),
       reason: _requiredString(map["reason"], '$path.reason'),
       evidenceRefs: List<String>.unmodifiable(_requiredList(map["evidenceRefs"], '$path.evidenceRefs').asMap().entries.map((entry) => _requiredString(entry.value, '$path.evidenceRefs' + '[${entry.key}]'))),
       impactScope: List<String>.unmodifiable(_requiredList(map["impactScope"], '$path.impactScope').asMap().entries.map((entry) => _requiredString(entry.value, '$path.impactScope' + '[${entry.key}]'))),
       createdBy: _requiredString(map["createdBy"], '$path.createdBy'),
-      status: _requiredString(map["status"], '$path.status'),
+      status: ProposalStatus.fromWire(map["status"], '$path.status'),
       displayName: map["displayName"] == null ? null : _requiredString(map["displayName"], '$path.displayName'),
       bio: map["bio"] == null ? null : _requiredString(map["bio"], '$path.bio'),
       avatarMediaAssetId: map["avatarMediaAssetId"] == null ? null : _requiredString(map["avatarMediaAssetId"], '$path.avatarMediaAssetId'),
@@ -2532,12 +2565,12 @@ final class ProfileUpdateProposalView {
   Map<String, Object?> toWire() => <String, Object?>{
     "id": id,
     "personaId": personaId,
-    "source": source,
+    "source": source.wireName,
     "reason": reason,
     "evidenceRefs": evidenceRefs.map((value) => value).toList(growable: false),
     "impactScope": impactScope.map((value) => value).toList(growable: false),
     "createdBy": createdBy,
-    "status": status,
+    "status": status.wireName,
     if (displayName != null) "displayName": displayName!,
     if (bio != null) "bio": bio!,
     if (avatarMediaAssetId != null) "avatarMediaAssetId": avatarMediaAssetId!,
@@ -2640,6 +2673,37 @@ final class ProfileUpdateSnapshot {
     if (regionTagRef != null) "regionTagRef": regionTagRef!,
     if (status != null) "status": status!,
     if (updatedAt != null) "updatedAt": updatedAt!.toUtc().toIso8601String(),
+  };
+}
+
+final class PullUserSyncSlice {
+  const PullUserSyncSlice({
+    required this.patches,
+    required this.latestSyncSeq,
+    required this.hasMore,
+    required this.requiresResync,
+  });
+
+  final List<UserSyncPatch> patches;
+  final int latestSyncSeq;
+  final bool hasMore;
+  final bool requiresResync;
+
+  factory PullUserSyncSlice.fromWire(Map<String, Object?> map, [String path = "PullUserSyncSlice"]) {
+    _rejectUnknownFields(map, const <String>{"patches", "latestSyncSeq", "hasMore", "requiresResync"}, path);
+    return PullUserSyncSlice(
+      patches: List<UserSyncPatch>.unmodifiable(_requiredList(map["patches"], '$path.patches').asMap().entries.map((entry) => UserSyncPatch.fromWire(_requiredObject(entry.value, '$path.patches' + '[${entry.key}]'), '$path.patches' + '[${entry.key}]'))),
+      latestSyncSeq: _requiredInt(map["latestSyncSeq"], '$path.latestSyncSeq'),
+      hasMore: _requiredBool(map["hasMore"], '$path.hasMore'),
+      requiresResync: _requiredBool(map["requiresResync"], '$path.requiresResync'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "patches": patches.map((value) => value.toWire()).toList(growable: false),
+    "latestSyncSeq": latestSyncSeq,
+    "hasMore": hasMore,
+    "requiresResync": requiresResync,
   };
 }
 
@@ -2854,6 +2918,33 @@ final class TokenRefreshGrant {
   };
 }
 
+final class UserAvatarSyncPatchPayload {
+  const UserAvatarSyncPatchPayload({
+    required this.userId,
+    required this.avatarUrl,
+    required this.avatarVersion,
+  });
+
+  final String userId;
+  final String avatarUrl;
+  final int avatarVersion;
+
+  factory UserAvatarSyncPatchPayload.fromWire(Map<String, Object?> map, [String path = "UserAvatarSyncPatchPayload"]) {
+    _rejectUnknownFields(map, const <String>{"userId", "avatarUrl", "avatarVersion"}, path);
+    return UserAvatarSyncPatchPayload(
+      userId: _requiredString(map["userId"], '$path.userId'),
+      avatarUrl: _requiredString(map["avatarUrl"], '$path.avatarUrl'),
+      avatarVersion: _requiredInt(map["avatarVersion"], '$path.avatarVersion'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "userId": userId,
+    "avatarUrl": avatarUrl,
+    "avatarVersion": avatarVersion,
+  };
+}
+
 final class UserHomepageBundleWire {
   const UserHomepageBundleWire({
     required this.profile,
@@ -3021,6 +3112,41 @@ final class UserSettingsCommandResult {
   };
 }
 
+final class UserSyncPatch {
+  const UserSyncPatch({
+    required this.syncSeq,
+    required this.kind,
+    this.userAvatarUpdated,
+    this.conversationAvatarUpdated,
+    required this.occurredAt,
+  });
+
+  final int syncSeq;
+  final UserSyncPatchKind kind;
+  final UserAvatarSyncPatchPayload? userAvatarUpdated;
+  final ConversationAvatarSyncPatchPayload? conversationAvatarUpdated;
+  final DateTime occurredAt;
+
+  factory UserSyncPatch.fromWire(Map<String, Object?> map, [String path = "UserSyncPatch"]) {
+    _rejectUnknownFields(map, const <String>{"syncSeq", "kind", "userAvatarUpdated", "conversationAvatarUpdated", "occurredAt"}, path);
+    return UserSyncPatch(
+      syncSeq: _requiredInt(map["syncSeq"], '$path.syncSeq'),
+      kind: UserSyncPatchKind.fromWire(map["kind"], '$path.kind'),
+      userAvatarUpdated: map["userAvatarUpdated"] == null ? null : UserAvatarSyncPatchPayload.fromWire(_requiredObject(map["userAvatarUpdated"], '$path.userAvatarUpdated'), '$path.userAvatarUpdated'),
+      conversationAvatarUpdated: map["conversationAvatarUpdated"] == null ? null : ConversationAvatarSyncPatchPayload.fromWire(_requiredObject(map["conversationAvatarUpdated"], '$path.conversationAvatarUpdated'), '$path.conversationAvatarUpdated'),
+      occurredAt: _requiredTimestamp(map["occurredAt"], '$path.occurredAt'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "syncSeq": syncSeq,
+    "kind": kind.wireName,
+    if (userAvatarUpdated != null) "userAvatarUpdated": userAvatarUpdated!.toWire(),
+    if (conversationAvatarUpdated != null) "conversationAvatarUpdated": conversationAvatarUpdated!.toWire(),
+    "occurredAt": occurredAt.toUtc().toIso8601String(),
+  };
+}
+
 ActivePersonaContextView decodeActivePersonaContextView(Object? response) =>
     ActivePersonaContextView.fromWire(_requiredObject(response, "ActivePersonaContextView"), "ActivePersonaContextView");
 
@@ -3137,6 +3263,9 @@ ProfileUpdateProposalView decodeProfileUpdateProposalView(Object? response) =>
 
 ProfileUpdateSnapshot decodeProfileUpdateSnapshot(Object? response) =>
     ProfileUpdateSnapshot.fromWire(_requiredObject(response, "ProfileUpdateSnapshot"), "ProfileUpdateSnapshot");
+
+PullUserSyncSlice decodePullUserSyncSlice(Object? response) =>
+    PullUserSyncSlice.fromWire(_requiredObject(response, "PullUserSyncSlice"), "PullUserSyncSlice");
 
 RelationshipCapabilityView decodeRelationshipCapabilityView(Object? response) =>
     RelationshipCapabilityView.fromWire(_requiredObject(response, "RelationshipCapabilityView"), "RelationshipCapabilityView");

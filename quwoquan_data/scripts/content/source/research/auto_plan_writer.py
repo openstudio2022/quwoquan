@@ -26,10 +26,8 @@ from content.source.research.auto_plan_lanes import (
 )
 from content.source.research.auto_plan_video import (
     discover_commons_sourced_videos,
-    qualified_video_frame_count,
     write_video_lane,
 )
-from content.source.research.auto_plan_video_rescue import rescue_video_frame_pool
 from content.source.research.auto_plan_article import write_article_lane
 from content.source.research.image_provider_compliance import (
     professional_library_compliance_summary,
@@ -42,7 +40,6 @@ from content.source.research.auto_plan_report import (
 from content.source.research.plan_state import (
     _accept_source,
     _accept_source_with_reject_memory,
-    _hydrate_mediawiki_same_source_images,
     _image_at,
     _image_window,
     _record_unavailable,
@@ -152,7 +149,6 @@ def _write_auto_research_plans_impl(
         "issues": issues,
         "candidates": [],
         "imageCollections": [],
-        "videoFrames": [],
         "homepageMediaCollections": [],
         "sourceUnavailable": [],
         "rescueEvents": [],
@@ -433,20 +429,6 @@ def _write_auto_research_plans_impl(
                         "images": len(rescue_pool),
                     }
                 )
-        if "video" in selected_lanes:
-            open_license_image_pool = rescue_video_frame_pool(
-                entity_id=entity_id,
-                entity_aliases=entity_aliases,
-                vertical=vertical,
-                qid=qid,
-                wiki_title=wiki_title,
-                voyage_title=voyage_title,
-                rejected_image_urls=rejected_image_urls,
-                open_license_image_pool=open_license_image_pool,
-                report=report,
-                discover_image_pools=_discover_open_license_image_pools,
-                qualified_frame_count=qualified_video_frame_count,
-            )
         # 正文来源的 imageUrls 仍只能来自该页面自身图位；开放许可检索结果进入独立
         # homepageMediaCollections，禁止伪装为正文同源图片。
         homepage_image_pool = wiki_page_images or voyage_page_images
@@ -533,8 +515,6 @@ def _write_auto_research_plans_impl(
             homepage_sources=homepage_sources,
             required_article_bases=required_article_bases,
             article_commercial_mode=article_commercial_mode,
-            commons=commons,
-            openverse=openverse,
             force=force,
         )
 
@@ -579,13 +559,10 @@ def _write_auto_research_plans_impl(
             report.setdefault("videoProviderFunnels", []).extend(video_provider_funnel)
             write_video_lane(
                 entity_id=entity_id,
-                entity_aliases=entity_aliases,
-                vertical=vertical,
                 plan_dir=dl,
                 force=force,
                 report=report,
                 updated=updated,
-                open_license_image_pool=open_license_image_pool,
                 sourced_video_pool=sourced_video_pool,
             )
     report["sourceAvailability"] = _source_availability_summary(report, entity_ids)

@@ -293,12 +293,22 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp_dir:
             process_dir = Path(tmp_dir) / "process"
             process_dir.mkdir()
-            (process_dir / "stack.state").write_text(
-                "stack=beta-local\nworkload=content-release\n", encoding="utf-8"
-            )
             health_payload = {"exitCode": 0, "summary": "content release ready"}
             with (
                 mock.patch.object(stackctl, "target_process_dir", return_value=process_dir),
+                mock.patch.object(
+                    stackctl,
+                    "load_startup_attempt",
+                    return_value={
+                        "status": "running",
+                        "target": "beta-local",
+                        "env": "beta",
+                        "workload": "content-release",
+                        "composeProject": "quwoquan_beta_release_test",
+                        "configurationDigest": "sha256:" + "1" * 64,
+                        "imageTransportTag": "sha256:" + "2" * 64,
+                    },
+                ),
                 mock.patch.object(stackctl, "load_environment_topology", return_value={}),
                 mock.patch.object(stackctl, "get_target", return_value={"env": "beta"}),
                 mock.patch.object(stackctl, "resolve_report_dir", return_value=Path(tmp_dir) / "report"),
@@ -315,10 +325,6 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp_dir:
             process_dir = Path(tmp_dir) / "process"
             process_dir.mkdir()
-            (process_dir / "stack.state").write_text(
-                "stack=beta-local\nworkload=content-commercial\n",
-                encoding="utf-8",
-            )
             health_payload = {"exitCode": 0, "summary": "content commercial ready"}
             with (
                 mock.patch.object(stackctl, "target_process_dir", return_value=process_dir),
@@ -327,7 +333,12 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                     "load_startup_attempt",
                     return_value={
                         "status": "running",
+                        "target": "beta-local",
+                        "env": "beta",
                         "workload": "content-commercial",
+                        "composeProject": "quwoquan_beta_release_test",
+                        "configurationDigest": "sha256:" + "1" * 64,
+                        "imageTransportTag": "sha256:" + "2" * 64,
                     },
                 ),
                 mock.patch.object(stackctl, "load_environment_topology", return_value={}),
@@ -342,7 +353,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         self.assertEqual(result, health_payload)
         self.assertEqual(health.call_args.args[0].scope, "content-commercial")
 
-    def test_gamma_status_uses_completed_workload_receipt(self) -> None:
+    def test_gamma_status_ignores_noncanonical_completed_workload_receipt(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             process_dir = Path(tmp_dir) / "process"
             process_dir.mkdir()
@@ -350,10 +361,13 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                 json.dumps({"status": "passed", "workload": "content-release"}),
                 encoding="utf-8",
             )
-            with mock.patch.object(stackctl, "target_process_dir", return_value=process_dir):
+            with (
+                mock.patch.object(stackctl, "target_process_dir", return_value=process_dir),
+                mock.patch.object(stackctl, "load_startup_attempt", return_value=None),
+            ):
                 scope = stackctl._current_runtime_health_scope("gamma-local")
 
-        self.assertEqual(scope, "content-consumer")
+        self.assertEqual(scope, "full")
 
     def test_app_startup_treats_missing_log_sink_as_non_blocking_advisory(self) -> None:
         with mock.patch.object(

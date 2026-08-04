@@ -160,7 +160,7 @@ func displayReadyFactReason(
 }
 
 // withDisplayStatement 把合成 fixture 补齐到「读模型预物化 reason」的真实可下发形态
-// （V2 合同：List/Summary 淘汰展示不完备 reason，排序/分桶 fixture 必须展示完备）：
+// （单轨合同：List/Summary 淘汰展示不完备 reason，排序/分桶 fixture 必须展示完备）：
 // 预置 primaryText 按对象名切出 object span（target=reason 对象），并补代表人锚点。
 func withDisplayStatement(
 	r IntersectionReasonView,
@@ -236,7 +236,7 @@ func displayReadyAffinityReason(
 
 func TestIntersectionService_SummaryNewCountAndVisitClears(t *testing.T) {
 	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
-	// V2 合同：Summary 只计可展示 reason，fixture 必须是展示完备形态（R12：
+	// Summary 只计可展示 reason，fixture 必须是展示完备形态（R12：
 	// fixture 对齐真实可下发行为，裸 reason 会被 display_incomplete 淘汰）。
 	fresh := func(r IntersectionReasonView, at time.Time) IntersectionReasonView {
 		r.FreshAt = at.Format(time.RFC3339)
@@ -1194,7 +1194,7 @@ func TestIntersectionService_ObjectSharedTagSampleVagueSubjectFailsClosed(t *tes
 
 func TestIntersectionService_ListFiltersAndPaginates(t *testing.T) {
 	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
-	// V2 合同：List 只下发展示完备 reason，fixture 用可下发形态（对齐真实读模型输出）。
+	// List 只下发展示完备 reason，fixture 用可下发形态（对齐真实读模型输出）。
 	fresh := func(r IntersectionReasonView, at time.Time, bucket string) IntersectionReasonView {
 		r.FreshAt = at.Format(time.RFC3339)
 		r.TimeBucket = bucket

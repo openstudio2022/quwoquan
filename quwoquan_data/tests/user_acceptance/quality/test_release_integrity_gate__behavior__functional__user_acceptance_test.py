@@ -28,6 +28,7 @@ from content.release.canonical.assemble import assemble_release  # noqa: E402
 from content.release.canonical.gate import _quota_issues  # noqa: E402
 from support.media_fixture import tiny_png_bytes  # noqa: E402
 from support.execution_manifest_fixture import ExecutionFixtureBuilder  # noqa: E402
+from content.execution.production_contracts import sha256_bytes  # noqa: E402
 
 
 TASK = "20260711--travel-homepage-integrity--test-region-b--pilot-901"
@@ -143,7 +144,6 @@ def _seed_execution_post(
     *,
     base_source: str,
     asset_source: str,
-    asset_sha: str = "sha256:abc",
     publish_media_mode: str = "",
     with_assets: bool = True,
     source_use_mode: str = "licensed_adaptation",
@@ -151,7 +151,9 @@ def _seed_execution_post(
 ) -> None:
     runtime_post = execution_root(TASK) / "posts/article/攻略" / title / "1"
     (runtime_post / "assets").mkdir(parents=True, exist_ok=True)
-    (runtime_post / "assets" / "cover.jpg").write_bytes(b"same-image")
+    asset_bytes = b"same-image"
+    (runtime_post / "assets" / "cover.jpg").write_bytes(asset_bytes)
+    asset_sha = sha256_bytes(asset_bytes)
     write_json(
         runtime_post / "1.download" / "source_refs.json",
         {"baseSourceRef": base_source, "sources": [{"sourceRef": base_source}]},
@@ -368,8 +370,8 @@ def _seed_approved_entity(entity: str) -> None:
 def test_runtime_integrity_allows_same_asset_contract_before_release():
     _reset()
     base = _seed_source("测试实体甲", "01.base", kind="维基百科")
-    _seed_execution_post("测试实体甲A", "a", base_source=base, asset_source=base, asset_sha="sha256:abc")
-    _seed_execution_post("测试实体甲B", "b", base_source=base, asset_source="", asset_sha="sha256:abc")
+    _seed_execution_post("测试实体甲A", "a", base_source=base, asset_source=base)
+    _seed_execution_post("测试实体甲B", "b", base_source=base, asset_source="")
     write_json(
         execution_root(TASK) / "_shared" / "base_draft_ledger.json",
         {"schema": "quwoquan_data.base_draft_ledger", "assignments": {base: "a"}},
@@ -438,7 +440,7 @@ def test_runtime_integrity_allows_article_asset_from_independent_source_unit():
     _reset()
     base = _seed_source("测试实体甲", "01.base", kind="维基百科")
     other = _seed_source("测试实体甲", "02.other", kind="今日头条百科")
-    _seed_execution_post("测试实体甲C", "c", base_source=base, asset_source=other, asset_sha="sha256:def")
+    _seed_execution_post("测试实体甲C", "c", base_source=base, asset_source=other)
     write_json(
         execution_root(TASK) / "_shared" / "base_draft_ledger.json",
         {"schema": "quwoquan_data.base_draft_ledger", "assignments": {base: "c"}},
@@ -513,7 +515,7 @@ def test_runtime_integrity_flags_article_asset_not_belonging_to_declared_source_
     _reset()
     base = _seed_source("测试实体甲", "01.base", kind="维基百科")
     other = _seed_source("测试实体甲", "02.other", kind="今日头条百科")
-    _seed_execution_post("测试实体甲D", "d", base_source=base, asset_source=other, asset_sha="sha256:ghi")
+    _seed_execution_post("测试实体甲D", "d", base_source=base, asset_source=other)
     manifest_path = execution_root(TASK) / "posts/article/攻略/测试实体甲D/1/manifest.json"
     manifest = __import__("json").loads(manifest_path.read_text(encoding="utf-8"))
     manifest["assets"][0]["sourceAssetRef"] = base.replace("source.md", "assets/001.jpg")

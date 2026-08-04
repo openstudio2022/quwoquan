@@ -1,22 +1,13 @@
 // spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/user-profile-intersection-redesign/spec.md#gwt-001
 import 'dart:async';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_kind_metadata.g.dart';
+import '../../../../support/fixtures/intersection_fixtures.dart';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_item.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_summary.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_action_hint.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_inbox_summary.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_kind_metadata.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_point.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_representative_actor.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_visual.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_visit_writer.dart';
@@ -24,6 +15,7 @@ import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/core/widgets/app_list_page_semantics.dart';
@@ -34,6 +26,7 @@ import 'package:quwoquan_app/ui/user/providers/author_impact_provider.dart';
 import 'package:quwoquan_app/ui/user/widgets/my_intersection_inbox_timeline.dart';
 
 import '../../../../support/cloud_services/behavior_repository_double.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 TextSpan _spanByText(RichText richText, String text) {
   TextSpan? result;
@@ -49,7 +42,7 @@ TextSpan _spanByText(RichText richText, String text) {
 
 const _authorImpactFixtureId = 'impact_fixture_content_share';
 const _authorImpactFixtureEvidenceSnapshotId = 'impact_evidence_snapshot_001';
-const _authorImpactFixtureFreshAt = '2026-07-23T00:00:00.000Z';
+final _authorImpactFixtureFreshAt = DateTime.utc(2026, 7, 23);
 
 AuthorImpactItem _authorImpactFixture({required String primaryText}) {
   return AuthorImpactItem(
@@ -63,7 +56,7 @@ AuthorImpactItem _authorImpactFixture({required String primaryText}) {
     subtitleText: '',
     impactId: _authorImpactFixtureId,
     primarySpans: <IntersectionTextSpan>[
-      IntersectionTextSpan(text: primaryText, role: 'plain'),
+      intersectionTextSpanFixture(text: primaryText, role: 'plain'),
     ],
     sampleVisuals: const <IntersectionVisual>[],
     actionHints: const <IntersectionActionHint>[],
@@ -102,7 +95,7 @@ IntersectionReason _displayableInboxReason({
   String representativeId = 'u_lin',
 }) {
   final target = _targetFor(objectKind: objectKind, objectId: actionTargetId);
-  return IntersectionReason(
+  return intersectionReasonFixture(
     dimension: dimension,
     intersectionClass: intersectionClass,
     intersectionId: intersectionId,
@@ -112,7 +105,7 @@ IntersectionReason _displayableInboxReason({
     primarySpans:
         primarySpans ??
         <IntersectionTextSpan>[
-          IntersectionTextSpan(
+          intersectionTextSpanFixture(
             text: primaryText,
             role: 'object',
             target: target,
@@ -125,7 +118,7 @@ IntersectionReason _displayableInboxReason({
     freshAt: DateTime.now().toUtc().toIso8601String(),
     actorEvidenceTotalCount: 1,
     actorEvidenceCompleteness: 'complete',
-    representativeActor: IntersectionRepresentativeActor(
+    representativeActor: intersectionRepresentativeActorFixture(
       actorId: representativeId,
       displayName: representativeName,
       relationLabel: '联系人',
@@ -145,28 +138,28 @@ IntersectionTarget _targetFor({
 }) {
   switch (objectKind.trim()) {
     case 'person':
-      return IntersectionTarget(
+      return intersectionTargetFixture(
         objectType: 'user',
         objectId: objectId,
         objectKind: 'person',
         routeId: 'userProfile',
       );
     case 'circle':
-      return IntersectionTarget(
+      return intersectionTargetFixture(
         objectType: 'circle',
         objectId: objectId,
         objectKind: 'circle',
         routeId: 'circleDetail',
       );
     case 'dimension':
-      return IntersectionTarget(
+      return intersectionTargetFixture(
         objectType: 'dimension',
         objectId: objectId,
         objectKind: 'dimension',
         routeId: 'myIntersections',
       );
     case 'content':
-      return IntersectionTarget(
+      return intersectionTargetFixture(
         objectType: 'post',
         objectId: objectId,
         objectKind: 'content',
@@ -175,7 +168,7 @@ IntersectionTarget _targetFor({
     case 'place':
     case 'school':
     default:
-      return IntersectionTarget(
+      return intersectionTargetFixture(
         objectType: 'homepage',
         objectId: objectId,
         objectKind: objectKind,
@@ -257,7 +250,7 @@ void main() {
     expect(behaviorRepo.recorded, hasLength(1));
     final event = behaviorRepo.recorded.single;
     expect(event.contentId, 'u_lin');
-    expect(event.action, BehaviorAction.click);
+    expect(event.action, BehaviorEventType.click);
     // N10：我的交集中心点击 → 来源精确为 myIntersections（非推荐流 organicFeed）。
     expect(event.referralSource, ReferralSource.myIntersections);
     expect(event.intersectionId, 'ix_test_rel');
@@ -306,7 +299,7 @@ void main() {
     // 负反馈事件端云同源：intersection_feedback + subjectId(=coolKey actionTargetId) +
     // feedbackKind ∈ registry 闭集 + 同一漏斗归因键。
     final event = behaviorRepo.recorded.singleWhere(
-      (e) => e.action == BehaviorAction.intersectionFeedback,
+      (e) => e.action == BehaviorEventType.intersectionFeedback,
     );
     expect(event.subjectId, 'u_lin');
     expect(event.feedbackKind, intersectionFeedbackKindNotInterested);
@@ -540,7 +533,14 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
 
     expect(find.byType(AppPageErrorState), findsOneWidget);
-    expect(find.text(SearchText.recoveryReloadLaterTitle), findsOneWidget);
+    final errorState = tester.widget<AppPageErrorState>(
+      find.byType(AppPageErrorState),
+    );
+    expect(
+      errorState.semantic.userRecoveryGroup,
+      AppUserRecoveryGroup.invalidContent,
+    );
+    expect(find.text(errorState.semantic.title), findsOneWidget);
 
     await tester.tap(find.text(SearchText.reload));
     await tester.pump();
@@ -565,7 +565,8 @@ GoRouter _router({Widget page = const MyIntersectionInboxPage()}) {
       ),
       GoRoute(
         path: '/user/:userHandle',
-        builder: (_, state) => Text('USER:${state.pathParameters['userHandle']}'),
+        builder: (_, state) =>
+            Text('USER:${state.pathParameters['userHandle']}'),
       ),
     ],
   );
@@ -593,7 +594,7 @@ class _RecordingIntersectionRepository
 
   @override
   Future<IntersectionInboxSummary> getMyIntersectionSummary() async {
-    return IntersectionInboxSummary(totalCount: 1, totalNewCount: 1);
+    return intersectionInboxSummaryFixture(totalCount: 1, totalNewCount: 1);
   }
 
   @override
@@ -621,8 +622,10 @@ class _RecordingIntersectionRepository
   }
 
   @override
-  Future<void> markIntersectionsVisited({String? dimension}) async {
-    visitedDimension = dimension ?? '';
+  Future<void> markIntersectionsVisited({
+    IntersectionDimension? dimension,
+  }) async {
+    visitedDimension = dimension?.wireName ?? '';
   }
 
   @override
@@ -641,7 +644,7 @@ class _DimensionAxisIntersectionRepository implements IntersectionRepository {
 
   @override
   Future<IntersectionInboxSummary> getMyIntersectionSummary() async =>
-      IntersectionInboxSummary(totalCount: 3, totalNewCount: 1);
+      intersectionInboxSummaryFixture(totalCount: 3, totalNewCount: 1);
 
   @override
   Future<List<IntersectionReason>> listMyIntersections({
@@ -702,7 +705,7 @@ class _SourceRefIntersectionRepository implements IntersectionRepository {
 
   @override
   Future<IntersectionInboxSummary> getMyIntersectionSummary() async {
-    return IntersectionInboxSummary(totalCount: 2, totalNewCount: 1);
+    return intersectionInboxSummaryFixture(totalCount: 2, totalNewCount: 1);
   }
 
   @override
@@ -754,7 +757,7 @@ class _SourceRefIntersectionRepository implements IntersectionRepository {
 class _FiveYearIntersectionRepository implements IntersectionRepository {
   @override
   Future<IntersectionInboxSummary> getMyIntersectionSummary() async {
-    return IntersectionInboxSummary(totalCount: 3, totalNewCount: 1);
+    return intersectionInboxSummaryFixture(totalCount: 3, totalNewCount: 1);
   }
 
   @override
@@ -815,7 +818,10 @@ class _LifecycleIntersectionRepository implements IntersectionRepository {
 
   @override
   Future<IntersectionInboxSummary> getMyIntersectionSummary() async {
-    return IntersectionInboxSummary(totalCount: 1, totalReactivatedCount: 1);
+    return intersectionInboxSummaryFixture(
+      totalCount: 1,
+      totalReactivatedCount: 1,
+    );
   }
 
   @override
@@ -841,33 +847,33 @@ class _LifecycleIntersectionRepository implements IntersectionRepository {
         iconKey: 'discussion',
         primaryText: '你和王然等8人都讨论过黄金投资圈',
         primarySpans: <IntersectionTextSpan>[
-          IntersectionTextSpan(text: '你和', role: 'plain'),
-          IntersectionTextSpan(
+          intersectionTextSpanFixture(text: '你和', role: 'plain'),
+          intersectionTextSpanFixture(
             text: '王然',
             role: 'object',
-            target: IntersectionTarget(
+            target: intersectionTargetFixture(
               objectType: 'user',
               objectId: 'fixture_user_photo',
               objectKind: 'person',
               routeId: 'userProfile',
             ),
           ),
-          IntersectionTextSpan(text: '等', role: 'plain'),
-          IntersectionTextSpan(
+          intersectionTextSpanFixture(text: '等', role: 'plain'),
+          intersectionTextSpanFixture(
             text: '8',
             role: 'count',
-            target: IntersectionTarget(
+            target: intersectionTargetFixture(
               objectType: 'dimension',
               objectId: 'content',
               objectKind: 'dimension',
               routeId: 'myIntersections',
             ),
           ),
-          IntersectionTextSpan(text: '人都讨论过', role: 'plain'),
-          IntersectionTextSpan(
+          intersectionTextSpanFixture(text: '人都讨论过', role: 'plain'),
+          intersectionTextSpanFixture(
             text: '黄金投资圈',
             role: 'object',
-            target: IntersectionTarget(
+            target: intersectionTargetFixture(
               objectType: 'circle',
               objectId: 'fixture_circle_gold_invest',
               objectKind: 'circle',
@@ -876,7 +882,7 @@ class _LifecycleIntersectionRepository implements IntersectionRepository {
           ),
         ],
         intersectionPoints: <IntersectionPoint>[
-          IntersectionPoint(
+          intersectionPointFixture(
             pointId: 'p_lifecycle',
             sourceRef: 'coCommented',
             count: 8,
@@ -884,7 +890,7 @@ class _LifecycleIntersectionRepository implements IntersectionRepository {
           ),
         ],
         actionHints: <IntersectionActionHint>[
-          IntersectionActionHint(
+          intersectionActionHintFixture(
             actionKey: 'open_discussion',
             label: '进入讨论',
             isPrimary: true,
@@ -917,7 +923,7 @@ class _DelayedEmptyIntersectionRepository
 
   @override
   Future<IntersectionInboxSummary> getMyIntersectionSummary() async {
-    return IntersectionInboxSummary(totalCount: 0, totalNewCount: 0);
+    return intersectionInboxSummaryFixture(totalCount: 0, totalNewCount: 0);
   }
 
   @override
@@ -938,7 +944,9 @@ class _DelayedEmptyIntersectionRepository
   }) async => const <IntersectionReason>[];
 
   @override
-  Future<void> markIntersectionsVisited({String? dimension}) async {
+  Future<void> markIntersectionsVisited({
+    IntersectionDimension? dimension,
+  }) async {
     visitCount += 1;
   }
 }
@@ -950,7 +958,7 @@ class _RecoveringIntersectionRepository
 
   @override
   Future<IntersectionInboxSummary> getMyIntersectionSummary() async {
-    return IntersectionInboxSummary(totalCount: 1, totalNewCount: 1);
+    return intersectionInboxSummaryFixture(totalCount: 1, totalNewCount: 1);
   }
 
   @override
@@ -986,7 +994,9 @@ class _RecoveringIntersectionRepository
   }) async => const <IntersectionReason>[];
 
   @override
-  Future<void> markIntersectionsVisited({String? dimension}) async {
+  Future<void> markIntersectionsVisited({
+    IntersectionDimension? dimension,
+  }) async {
     visitCount += 1;
   }
 }

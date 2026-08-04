@@ -55,6 +55,11 @@ class AppGeneratedManifestContractTest(unittest.TestCase):
             outputs,
         )
         self.assertIn(
+            "packages/quwoquan_cloud_contracts/lib/src/content/"
+            "preview_track_manifest_contracts.g.dart",
+            outputs,
+        )
+        self.assertIn(
             "packages/quwoquan_cloud_contracts/lib/src/travel/"
             "travel_operation_contracts.g.dart",
             outputs,

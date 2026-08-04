@@ -1,7 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/rtc/rtc_signal_payloads.g.dart';
-import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
-    show CallType;
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {
   group('RtcCallRingingPayload (metadata-driven)', () {

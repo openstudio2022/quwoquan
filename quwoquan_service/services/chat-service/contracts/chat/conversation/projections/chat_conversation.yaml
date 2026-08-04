@@ -18,6 +18,9 @@ fields:
   type: string
 - name: groupAvatarVersion
   type: int64
+- name: groupAvatarSourceHash
+  type: string
+  nullable: true
 - name: creatorId
   type: string
 - name: circleId

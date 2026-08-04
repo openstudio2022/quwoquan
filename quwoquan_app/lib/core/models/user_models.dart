@@ -27,24 +27,4 @@ class User {
     this.likes,
     this.metadata,
   });
-
-  factory User.fromJson(Map<String, dynamic> json) {
-    return User(
-      id: json['id']?.toString() ?? '',
-      userHandle: json['userHandle']?.toString(),
-      avatarUrl: json['avatarUrl']?.toString(),
-      bio: json['bio']?.toString(),
-      metadata: json['metadata'] as Map<String, dynamic>?,
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'userHandle': userHandle,
-      'avatarUrl': avatarUrl,
-      'bio': bio,
-      'metadata': metadata,
-    };
-  }
 }

@@ -156,14 +156,19 @@ class _WorkBrowserEntryPageState extends ConsumerState<WorkBrowserEntryPage> {
                         AppPageErrorState(
                           key: const ValueKey('work-browser-entry-error'),
                           semantic: ensureRetryUiErrorSemantic(_error!),
-                          onAction: (action) async {
+                          onRecovery: (action) async {
                             if (action.type == UiErrorActionType.retry ||
                                 action.type == UiErrorActionType.resubmit) {
                               await _resolve();
+                              return _error == null
+                                  ? UiRecoveryOutcome.recovered
+                                  : UiRecoveryOutcome.stillBlocked;
                             } else if (action.type ==
                                 UiErrorActionType.dismiss) {
                               _back();
+                              return UiRecoveryOutcome.handedOff;
                             }
+                            return UiRecoveryOutcome.cancelled;
                           },
                         ),
                         Align(

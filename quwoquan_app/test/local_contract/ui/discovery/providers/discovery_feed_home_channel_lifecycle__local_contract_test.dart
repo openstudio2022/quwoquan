@@ -139,6 +139,55 @@ void main() {
       isNotNull,
     );
   });
+
+  test('同一 Provider 实例重试后清除阻断并恢复 canonical 内容', () async {
+    final recommend = ContentUIConfig.homeChannels.firstWhere(
+      (channel) => channel.id == 'recommend',
+    );
+    final query = _SequencedDiscoveryFeedQuery(<
+      Future<DiscoveryFeedPage> Function()
+    >[
+      () async => throw StateError('service unavailable'),
+      () async => DiscoveryFeedPage(
+        items: <ContentPostViewData>[_recoveredCanonicalPost()],
+        outcome: ContentFeedOutcome.content,
+        feedRequestId: 'feed-request-recovered',
+        policyDigest:
+            'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      ),
+    ]);
+    final container = ProviderContainer(
+      overrides: <Override>[
+        contentDiscoveryFeedQueryProvider.overrideWithValue(query),
+        homeChannelsProvider.overrideWithValue(<HomeChannelConfig>[recommend]),
+        postInteractionStateProvider.overrideWith(
+          _NoopPostInteractionStateNotifier.new,
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    final notifier = container.read(discoveryFeedMapProvider.notifier);
+
+    final blocked = await notifier.load('recommend', force: true);
+    expect(blocked.terminal, DiscoveryFeedLoadTerminal.stillBlocked);
+    expect(
+      container
+          .read(discoveryFeedMapProvider)['recommend']
+          ?.value
+          ?.blockingError,
+      isNotNull,
+    );
+
+    final recovered = await notifier.load('recommend', force: true);
+    final state = container
+        .read(discoveryFeedMapProvider)['recommend']
+        ?.requireValue;
+    expect(recovered.terminal, DiscoveryFeedLoadTerminal.content);
+    expect(query.callCount, 2);
+    expect(state?.blockingError, isNull);
+    expect(state?.items.single.id, 'post-recovered');
+    expect(state?.feedRequestId, 'feed-request-recovered');
+  });
 }
 
 final class _NoopPostInteractionStateNotifier
@@ -172,6 +221,33 @@ final class _ImmediateDiscoveryFeedQuery implements ContentDiscoveryFeedQuery {
   }) => _load();
 }
 
+final class _SequencedDiscoveryFeedQuery implements ContentDiscoveryFeedQuery {
+  _SequencedDiscoveryFeedQuery(this._loads);
+
+  final List<Future<DiscoveryFeedPage> Function()> _loads;
+  int callCount = 0;
+
+  @override
+  Future<DiscoveryFeedPage> listDiscoveryFeedPage({
+    required String category,
+    String? channelId,
+    String? identity,
+    String? type,
+    String? subCategory,
+    int limit = 20,
+    String? cursor,
+    String sort = kFeedSortRecommend,
+    String? sessionId,
+    String? feedRequestId,
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
+  }) {
+    final index = callCount;
+    callCount += 1;
+    return _loads[index]();
+  }
+}
+
 final class _PendingDiscoveryFeedQuery implements ContentDiscoveryFeedQuery {
   final Completer<DiscoveryFeedPage> _pending = Completer<DiscoveryFeedPage>();
   CloudOperationCancellationSignal? cancellation;
@@ -199,3 +275,22 @@ final class _PendingDiscoveryFeedQuery implements ContentDiscoveryFeedQuery {
     _pending.complete(const DiscoveryFeedPage(items: []));
   }
 }
+
+ContentPostViewData _recoveredCanonicalPost() => ContentPostViewData(
+  id: 'post-recovered',
+  type: 'micro',
+  identity: 'moment',
+  displayFormat: 'note',
+  assistantUsePolicy: 'allow',
+  authorId: 'author-recovered',
+  displayName: '恢复内容作者',
+  avatarUrl: '',
+  authorRoleLabel: '旅行创作者',
+  authorIdentityTags: const <String>[],
+  authorVerified: false,
+  body: '服务恢复后返回的 canonical 首页内容',
+  likeCount: 0,
+  commentCount: 0,
+  shareCount: 0,
+  createdAt: DateTime.utc(2026, 8, 4),
+);

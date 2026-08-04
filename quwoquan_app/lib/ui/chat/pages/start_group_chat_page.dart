@@ -548,7 +548,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
         onBack: widget.onBack,
         body: AppPageErrorState(
           semantic: _pageErrorSemantic!,
-          onAction: (action) async {
+          onRecovery: (action) async {
             if (action.type == UiErrorActionType.retry ||
                 action.type == UiErrorActionType.resubmit) {
               setState(() {
@@ -556,7 +556,11 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
                 _pageErrorSemantic = null;
               });
               await _loadData();
+              return _pageErrorSemantic == null
+                  ? UiRecoveryOutcome.recovered
+                  : UiRecoveryOutcome.stillBlocked;
             }
+            return UiRecoveryOutcome.cancelled;
           },
         ),
       );

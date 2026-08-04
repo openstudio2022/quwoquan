@@ -1,16 +1,11 @@
 import 'package:flutter/cupertino.dart';
+import '../../../../support/fixtures/intersection_fixtures.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_action_hint.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_point.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_representative_actor.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_visual.g.dart';
 import 'package:quwoquan_app/components/object_page/intersection_visual_cluster.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_card.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// T2：对象页统一交集卡口径（V5 · primaryText 单通道 / 全局验收 G2）。
 /// - 无 primaryText → 不展示；
@@ -31,19 +26,19 @@ IntersectionReason _reason({
   List<IntersectionPoint> intersectionPoints = const <IntersectionPoint>[],
   List<IntersectionActionHint> actionHints = const <IntersectionActionHint>[],
 }) {
-  final actorTarget = IntersectionTarget(
+  final actorTarget = intersectionTargetFixture(
     objectType: 'user',
     objectId: 'u_lin',
     objectKind: 'person',
     routeId: 'userProfile',
   );
-  final objectTarget = IntersectionTarget(
+  final objectTarget = intersectionTargetFixture(
     objectType: 'post',
     objectId: 'post_$id',
     objectKind: 'content',
     routeId: 'workBrowser',
   );
-  return IntersectionReason(
+  return intersectionReasonFixture(
     intersectionId: id,
     source: source,
     dimension: dimension,
@@ -54,7 +49,7 @@ IntersectionReason _reason({
     primarySpans:
         primarySpans ??
         <IntersectionTextSpan>[
-          IntersectionTextSpan(
+          intersectionTextSpanFixture(
             text: primaryText.trim(),
             role: 'object',
             target: objectTarget,
@@ -67,7 +62,7 @@ IntersectionReason _reason({
     objectKind: 'content',
     actorEvidenceTotalCount: 1,
     actorEvidenceCompleteness: 'complete',
-    representativeActor: IntersectionRepresentativeActor(
+    representativeActor: intersectionRepresentativeActorFixture(
       actorId: 'u_lin',
       displayName: '林清越',
       relationLabel: '联系人',
@@ -122,7 +117,7 @@ void main() {
             primaryText: '4 位共同关注的人正在这里讨论',
             connectionSummary: '最近有你关注的人参与讨论',
             intersectionPoints: <IntersectionPoint>[
-              IntersectionPoint(
+              intersectionPointFixture(
                 pointId: 'archive_point',
                 label: '共同关注',
                 displayText: '共同关注',
@@ -155,33 +150,33 @@ void main() {
         id: 'ix_spans',
         primaryText: '联系人林清越等3人赞过《川西雪山和校园摄影路线》',
         primarySpans: <IntersectionTextSpan>[
-          IntersectionTextSpan(text: '联系人', role: 'plain'),
-          IntersectionTextSpan(
+          intersectionTextSpanFixture(text: '联系人', role: 'plain'),
+          intersectionTextSpanFixture(
             text: '林清越',
             role: 'object',
-            target: IntersectionTarget(
+            target: intersectionTargetFixture(
               objectType: 'user',
               objectId: 'u_lin',
               objectKind: 'person',
               routeId: 'userProfile',
             ),
           ),
-          IntersectionTextSpan(text: '等', role: 'plain'),
-          IntersectionTextSpan(
+          intersectionTextSpanFixture(text: '等', role: 'plain'),
+          intersectionTextSpanFixture(
             text: '3',
             role: 'count',
-            target: IntersectionTarget(
+            target: intersectionTargetFixture(
               objectType: 'dimension',
               objectId: 'content',
               objectKind: 'dimension',
               routeId: 'myIntersections',
             ),
           ),
-          IntersectionTextSpan(text: '人赞过', role: 'plain'),
-          IntersectionTextSpan(
+          intersectionTextSpanFixture(text: '人赞过', role: 'plain'),
+          intersectionTextSpanFixture(
             text: '《川西雪山和校园摄影路线》',
             role: 'object',
-            target: IntersectionTarget(
+            target: intersectionTargetFixture(
               objectType: 'post',
               objectId: 'post_ix_spans',
               objectKind: 'content',
@@ -218,13 +213,22 @@ void main() {
               id: 'ix_visuals_${brightness.name}',
               primaryText: '共同关注的人正在讨论这条路线',
               sampleVisuals: <IntersectionVisual>[
-                IntersectionVisual(assetKind: 'avatar', displayName: '林清越'),
-                IntersectionVisual(assetKind: 'avatar', displayName: '周屿'),
-                IntersectionVisual(
+                intersectionVisualFixture(
+                  assetKind: 'avatar',
+                  displayName: '林清越',
+                ),
+                intersectionVisualFixture(
+                  assetKind: 'avatar',
+                  displayName: '周屿',
+                ),
+                intersectionVisualFixture(
                   assetKind: 'circleAvatar',
                   displayName: '校园摄影圈',
                 ),
-                IntersectionVisual(assetKind: 'avatar', displayName: '顾川'),
+                intersectionVisualFixture(
+                  assetKind: 'avatar',
+                  displayName: '顾川',
+                ),
               ],
             ),
           ],
@@ -358,11 +362,11 @@ void main() {
             id: 'ix_action',
             primaryText: '联系人林清越赞过《川西雪山和校园摄影路线》',
             actionHints: <IntersectionActionHint>[
-              IntersectionActionHint(
+              intersectionActionHintFixture(
                 actionKey: 'open_object',
                 label: '查看对象',
                 dispatch: 'navigate',
-                target: IntersectionTarget(
+                target: intersectionTargetFixture(
                   objectType: 'homepage',
                   objectId: 'entity_1',
                   objectKind: 'place',
@@ -395,12 +399,12 @@ void main() {
             primaryText: '联系人林清越赞过《川西雪山和校园摄影路线》',
             connectionSummary: '有可查看的共同证据',
             actionHints: <IntersectionActionHint>[
-              IntersectionActionHint(
+              intersectionActionHintFixture(
                 actionKey: 'follow_person',
                 label: '关注TA',
                 dispatch: 'navigate',
                 requiredGates: const <String>['login'],
-                target: IntersectionTarget(
+                target: intersectionTargetFixture(
                   objectType: 'user',
                   objectId: 'u1',
                   objectKind: 'person',

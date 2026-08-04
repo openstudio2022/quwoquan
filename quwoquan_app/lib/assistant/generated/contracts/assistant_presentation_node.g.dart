@@ -312,6 +312,7 @@ class AssistantPresentationNodeWire {
     this.body = "",
     this.data = const <String, dynamic>{},
     this.binding = const <String, dynamic>{},
+    this.dataPolicyRef = "",
     this.style = const AssistantPresentationStyleWire(),
     this.media,
     this.action,
@@ -326,6 +327,7 @@ class AssistantPresentationNodeWire {
   final String body;
   final Map<String, dynamic> data;
   final Map<String, dynamic> binding;
+  final String dataPolicyRef;
   final AssistantPresentationStyleWire style;
   final AssistantPresentationMediaRefWire? media;
   final AssistantActionIntentWire? action;
@@ -340,6 +342,7 @@ class AssistantPresentationNodeWire {
         'body': body,
         'data': data,
         'binding': binding,
+        'dataPolicyRef': dataPolicyRef,
         'style': style.toJson(),
         'media': media?.toJson(),
         'action': action?.toJson(),
@@ -356,6 +359,7 @@ class AssistantPresentationNodeWire {
       'body',
       'data',
       'binding',
+      'dataPolicyRef',
       'style',
       'media',
       'action',
@@ -391,6 +395,9 @@ class AssistantPresentationNodeWire {
     if (json.containsKey('binding') && json['binding'] != null && (json['binding'] is! Map)) {
       throw const FormatException('AssistantPresentationNodeWire field binding has an invalid wire value');
     }
+    if (json.containsKey('dataPolicyRef') && json['dataPolicyRef'] != null && (json['dataPolicyRef'] is! String)) {
+      throw const FormatException('AssistantPresentationNodeWire field dataPolicyRef has an invalid wire value');
+    }
     if (json.containsKey('style') && json['style'] != null && (json['style'] is! Map)) {
       throw const FormatException('AssistantPresentationNodeWire field style has an invalid wire value');
     }
@@ -412,6 +419,7 @@ class AssistantPresentationNodeWire {
       body: (json['body'] as String?)?.trim() ?? "",
       data: (json['data'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{},
       binding: (json['binding'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{},
+      dataPolicyRef: (json['dataPolicyRef'] as String?)?.trim() ?? "",
       style: json['style'] is Map ? AssistantPresentationStyleWire.fromJson((json['style'] as Map).cast<String, dynamic>()) : const AssistantPresentationStyleWire(),
       media: json['media'] is Map ? AssistantPresentationMediaRefWire.fromJson((json['media'] as Map).cast<String, dynamic>()) : null,
       action: json['action'] is Map ? AssistantActionIntentWire.fromJson((json['action'] as Map).cast<String, dynamic>()) : null,
@@ -430,6 +438,7 @@ class AssistantPresentationNodeWireFields {
   static const String body = 'body';
   static const String data = 'data';
   static const String binding = 'binding';
+  static const String dataPolicyRef = 'dataPolicyRef';
   static const String style = 'style';
   static const String media = 'media';
   static const String action = 'action';

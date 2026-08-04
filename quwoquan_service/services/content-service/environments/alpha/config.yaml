@@ -15,23 +15,11 @@ secretRefs:
   sys.content-service.redis.realtime.password: CONTENT_REDIS_REALTIME_PASSWORD
   sys.content-service.redis.rec.password: CONTENT_REDIS_REC_PASSWORD
 externalBindings:
-  runtime.message.transport:
-    state: enabled
   content.embedding.generation:
     state: enabled
     adapter: ext.embed.protocol_fixture
-    endpointRef: local_topology:integration.nonprod_provider_substitute
-    endpointEnvs:
-      endpoint: CONTENT_EMBEDDING_ENDPOINT
-    secretRefs: []
-    timeoutMs: 10000
+    endpointRef: local_topology:provider-protocol-substitute
   runtime.object.storage:
     state: enabled
     adapter: infra.minio.object_storage
     endpointRef: environment_binding:content.object_storage
-    endpointEnvs:
-      endpoint: CONTENT_OSS_ENDPOINT
-    secretRefs:
-    - CONTENT_OSS_ACCESS_KEY_ID
-    - CONTENT_OSS_ACCESS_KEY_SECRET
-    timeoutMs: 5000

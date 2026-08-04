@@ -10,10 +10,41 @@ externalDependencies:
   port: SmsDeliveryPort
   operations: [sendOtp]
   conformance: sms_delivery
+  adapterContracts:
+    ext.sms.local_capture:
+      endpointEnvs: {endpoint: INTEGRATION_SMS_ENDPOINT}
+      secretRefs: [INTEGRATION_SMS_TOKEN]
+      defaultTimeoutMs: 10000
+    ext.sms.aliyun:
+      endpointEnvs: {endpoint: INTEGRATION_SMS_ENDPOINT}
+      secretRefs:
+      - INTEGRATION_SMS_TOKEN
+      - OTP_CODE_REF_KEYS_JSON
+      - INTEGRATION_SERVICE_MTLS_CA_FILE
+      - INTEGRATION_SERVICE_MTLS_CLIENT_CERT_FILE
+      - INTEGRATION_SERVICE_MTLS_CLIENT_KEY_FILE
+      defaultTimeoutMs: 10000
 - capability: integration.push.delivery
   port: PushDeliveryPort
   operations: [deliver]
   conformance: push_delivery
+  adapterContracts:
+    ext.push.protocol_substitute:
+      endpointEnvs: {endpoint: INTEGRATION_PUSH_SUBSTITUTE_ENDPOINT}
+      secretRefs: []
+      defaultTimeoutMs: 10000
+    ext.push.dispatch:
+      endpointEnvs:
+        user_service_base_url: INTEGRATION_PUSH_USER_SERVICE_BASE_URL
+        apns_environment: INTEGRATION_PUSH_APNS_ENVIRONMENT
+        apns_key_id: INTEGRATION_PUSH_APNS_KEY_ID
+        apns_team_id: INTEGRATION_PUSH_APNS_TEAM_ID
+        apns_topic: INTEGRATION_PUSH_APNS_TOPIC
+        fcm_project_id: INTEGRATION_PUSH_FCM_PROJECT_ID
+      secretRefs:
+      - INTEGRATION_PUSH_APNS_KEY_FILE
+      - INTEGRATION_PUSH_FCM_SERVICE_ACCOUNT_FILE
+      defaultTimeoutMs: 10000
 - capability: runtime.message.transport
   role: use
   port: MessageTransportPort

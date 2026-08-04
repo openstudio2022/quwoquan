@@ -1,7 +1,7 @@
 // spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/spec.md#sit-002
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
-import '../../../support/cloud_services/repository_mock_reexports.dart';
+import '../../../support/cloud_services/object_doubles/user/alpha_persona_relationship_facets.dart';
 
 void main() {
   group('PersonaRelationship block typed contract', () {

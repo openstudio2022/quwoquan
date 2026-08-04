@@ -81,7 +81,7 @@ jobs:
   device:
     name: Beta ${{ inputs.platform }} device matrix
     runs-on: [self-hosted, macOS, ARM64, "mobile-${{ inputs.platform }}"]
-    timeout-minutes: 4
+    timeout-minutes: ${{ inputs.validation_profile == 'nightly_full' && 120 || (inputs.validation_profile == 'release_candidate' && 90 || 4) }}
     permissions:
       contents: read
       packages: write

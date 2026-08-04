@@ -1,36 +1,19 @@
 overrides:
   sys.integration-service.account_security_authority.base_url: http://user-service:18081
   sys.integration-service.account_security_authority.timeout_ms: 300
-  sys.integration-service.integration.external_interaction.push.mode: local_recorder
-  sys.integration-service.integration.external_interaction.sms.enabled: true
-  sys.integration-service.integration.external_interaction.sms.provider: ext.sms.local_capture
   sys.integration-service.redis.general.addr: redis:6379
 secretRefs:
-  sys.integration-service.integration.external_interaction.sms.token: INTEGRATION_SMS_TOKEN
   sys.integration-service.mongodb.uri: INTEGRATION_MONGO_URI
 externalBindings:
-  runtime.message.transport:
-    state: enabled
   identity.sms.otp:
     state: enabled
     adapter: ext.sms.local_capture
-    endpointRef: local_topology:integration.local_capture
-    endpointEnvs:
-      endpoint: INTEGRATION_SMS_ENDPOINT
-    secretRefs:
-    - INTEGRATION_SMS_TOKEN
-    timeoutMs: 10000
+    endpointRef: local_topology:sms-provider-substitute
   integration.push.delivery:
     state: enabled
-    adapter: ext.push.local_recorder
-    endpointRef: local_topology:integration.local_recorder
-    endpointEnvs: {}
-    secretRefs: []
-    timeoutMs: 10000
+    adapter: ext.push.protocol_substitute
+    endpointRef: local_topology:provider-protocol-substitute
   integration.location.lookup:
     state: enabled
     adapter: ext.map.protocol_fixture
-    endpointRef: local_topology:integration.protocol_fixture
-    endpointEnvs: {}
-    secretRefs: []
-    timeoutMs: 1200
+    endpointRef: local_topology:provider-protocol-substitute

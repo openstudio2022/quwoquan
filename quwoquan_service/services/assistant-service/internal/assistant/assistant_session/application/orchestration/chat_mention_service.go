@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	channelpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/channel"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
+	channelpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/channel"
+	assistant "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/model"
+	sessionmodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/model"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/ports"
 )
 
@@ -73,7 +74,7 @@ func (s *AssistantService) HandleAssistantMentioned(ctx context.Context, evt Ass
 		return err
 	}
 	mentionIdentity := assistantMentionClientRequestIdentity(evt)
-	session, err := s.CreateSession(ctx, evt.SenderAccountID, assistant.CreateSessionInput{
+	session, err := s.CreateSession(ctx, evt.SenderAccountID, sessionmodel.CreateSessionInput{
 		Summary:         "群聊 @小趣：" + evt.ChatConversationID,
 		ClientRequestID: mentionIdentity + ":session",
 	})
@@ -96,8 +97,8 @@ func (s *AssistantService) HandleAssistantMentioned(ctx context.Context, evt Ass
 		return err
 	}
 	answer := ""
-	if raw, ok := run.TerminalSnapshot["answerText"].(string); ok {
-		answer = strings.TrimSpace(raw)
+	if run.TerminalSnapshot != nil {
+		answer = strings.TrimSpace(run.TerminalSnapshot.AnswerText)
 	}
 	if answer == "" {
 		return fmt.Errorf(

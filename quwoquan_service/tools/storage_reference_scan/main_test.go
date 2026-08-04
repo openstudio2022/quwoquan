@@ -14,11 +14,14 @@ const (
   eventStream = "events.alpha.items"
   trimStream = "events.alpha.trimmed"
 )
+func quotaKey(subject string) string { return fmt.Sprintf("alpha:quota:%s", subject) }
 func use(db interface{ Collection(string) any }, redis interface {
   XAdd(any, string, any) any
   XReadGroup(any, string, any) any
   XTrimMinID(any, string, string) any
   Set(any, string, any) any
+	Incr(any, string) any
+	Expire(any, string, any) any
 }) {
   _ = db.Collection(collectionName)
   _ = []any{"$lookup", map[string]any{"from": "joined_items"}}
@@ -26,6 +29,8 @@ func use(db interface{ Collection(string) any }, redis interface {
   _ = redis.XReadGroup(nil, eventStream, nil)
   _ = redis.XTrimMinID(nil, trimStream, "1-0")
   _ = redis.Set(nil, fmt.Sprintf("alpha:item:%s", "item-1"), nil)
+	_ = redis.Incr(nil, quotaKey("subject-1"))
+	_ = redis.Expire(nil, quotaKey("subject-1"), nil)
 }
 `, 0)
 	if err != nil {
@@ -46,6 +51,7 @@ func use(db interface{ Collection(string) any }, redis interface {
 		{Kind: "stream", Name: "events.alpha.items", Path: "quwoquan_service/services/alpha-service/internal/domain/item/store.go", Access: "read"},
 		{Kind: "stream", Name: "events.alpha.trimmed", Path: "quwoquan_service/services/alpha-service/internal/domain/item/store.go", Access: "write"},
 		{Kind: "redis_key", Name: "alpha:item:", Path: "quwoquan_service/services/alpha-service/internal/domain/item/store.go", Access: "read_write"},
+		{Kind: "redis_key", Name: "alpha:quota:", Path: "quwoquan_service/services/alpha-service/internal/domain/item/store.go", Access: "read_write"},
 	} {
 		if _, ok := seen[expected]; !ok {
 			t.Fatalf("missing storage reference: %#v; got %#v", expected, seen)

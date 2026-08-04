@@ -4,18 +4,15 @@
 /// 装配（R15 物理隔离）。
 library;
 
-import 'package:quwoquan_app/cloud/content/models/content_behavior_batch_event_dto.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_metadata.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
-import 'package:quwoquan_app/cloud/runtime/models/content_app_config_wire.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import 'package:quwoquan_app/cloud/runtime/models/discovery_feed_page.dart';
-import 'package:quwoquan_app/cloud/runtime/models/post_engagement_counters.dart';
 import 'package:quwoquan_app/cloud/services/content/content_read_model_projection.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository_contract.dart';
 import 'package:quwoquan_app/cloud/services/content/footprint_repository.dart';
@@ -23,6 +20,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../object_doubles/object_scenario_seed_reader.dart';
 import 'content_mock_data.dart';
+import 'test_content_app_config.dart';
 // ── 发现区 wire 聚合与查找（原 lib discovery_wire_lookup.dart，仅测试消费）──
 
 /// 将四类发现区 [ContentPostViewData] 列表合并为单行扫描序列（与 [ContentMockData] 对齐）。
@@ -43,20 +41,69 @@ List<Map<String, dynamic>> aggregateDiscoveryWireSlices({
 }
 
 Map<String, dynamic> _mockReadModelMapFromViewData(ContentPostViewData post) {
-  final map = post.toPresentationMap();
-  map['postId'] = post.id;
-  map['contentType'] = post.type;
-  map['contentIdentity'] = post.identity;
-  map['authorDisplayName'] = post.displayName;
-  map['authorAvatarUrl'] = post.avatarUrl;
-  map['mediaUrls'] = post.imageUrls;
-  map.remove('id');
-  map.remove('type');
-  map.remove('identity');
-  map.remove('displayName');
-  map.remove('avatarUrl');
-  map.remove('imageUrls');
-  return map;
+  return Map<String, dynamic>.from(
+    contentPostProjectionFromViewData(post).toWire(),
+  );
+}
+
+ContentPostDetailSlice _mockDetailSliceFromReadModelMap(
+  Map<String, dynamic> raw,
+) {
+  final projection = contentPostProjectionFromReadModelMap(raw);
+  final manifestRaw = raw['articleAssetManifest'];
+  final renderProfileRaw = raw['articleRenderProfile'];
+  final createdAt =
+      projection.createdAt ??
+      DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+  return ContentPostDetailSlice(
+    postId: projection.postId,
+    contentType: projection.contentType,
+    contentIdentity: projection.contentIdentity,
+    assistantUsePolicy: projection.assistantUsePolicy,
+    authorId: projection.authorId,
+    authorDisplayName: projection.authorDisplayName,
+    authorAvatarUrl: projection.authorAvatarUrl,
+    title: projection.title,
+    body: projection.body,
+    summary: projection.summary,
+    mediaAssetIds: projection.mediaAssetId == null
+        ? null
+        : <String>[projection.mediaAssetId!],
+    mediaUrls: projection.mediaUrls,
+    coverUrl: projection.coverUrl,
+    thumbnailUrl: projection.thumbnailUrl,
+    videoUrl: projection.videoUrl,
+    width: projection.width,
+    height: projection.height,
+    durationMs: projection.durationMs,
+    articleMarkdown: raw['articleMarkdown']?.toString(),
+    markdownDialect: raw['markdownDialect']?.toString(),
+    articleMarkdownDigest: raw['articleMarkdownDigest']?.toString(),
+    articleAssetManifest: manifestRaw is Map
+        ? PostArticleAssetManifest.fromWire(
+            Map<String, Object?>.from(manifestRaw),
+            'MockContentRepository.articleAssetManifest',
+          )
+        : null,
+    articleRenderProfile: renderProfileRaw is Map
+        ? PostArticleRenderProfile.fromWire(
+            Map<String, Object?>.from(renderProfileRaw),
+            'MockContentRepository.articleRenderProfile',
+          )
+        : null,
+    contentVertical: projection.contentVertical,
+    articleTemplate: projection.articleTemplate,
+    articleFontPreset: projection.articleFontPreset,
+    status: raw['status']?.toString() ?? 'published',
+    visibility: raw['visibility']?.toString() ?? 'public',
+    likeCount: projection.likeCount,
+    commentCount: projection.commentCount,
+    shareCount: projection.shareCount,
+    viewCount: raw['viewCount'] is num ? (raw['viewCount'] as num).toInt() : 0,
+    createdAt: createdAt,
+    updatedAt: projection.updatedAt ?? createdAt,
+    publishedAt: projection.publishedAt,
+  );
 }
 
 /// 在已聚合的公共 wire 行中按帖子 id 查找。
@@ -66,7 +113,7 @@ Map<String, dynamic>? findDiscoveryWireRowByPostId(
 ) {
   if (postId.isEmpty) return null;
   for (final item in aggregatedRows) {
-    final itemId = item['id']?.toString() ?? '';
+    final itemId = item['postId']?.toString() ?? '';
     if (itemId == postId) {
       return item;
     }
@@ -86,7 +133,7 @@ Map<String, dynamic>? lookupCanonicalDiscoveryWireRowByPostId(String postId) {
       showcase: ContentMockData.seededShowcaseFeedItems,
     ),
   );
-  if ((row?['type']?.toString() ?? '') == 'article') {
+  if ((row?['contentType']?.toString() ?? '') == 'article') {
     return ContentMockData.articleWireByPostId(postId) ?? row;
   }
   return row;
@@ -150,8 +197,7 @@ class MockContentRepository
         ContentReadRepository,
         ContentPostDetailReader,
         ContentAuthorPostsReader,
-        ContentWriteRepository,
-        ContentEngagementRepository,
+        ContentPostDeleteCommandWriter,
         ContentConfigRepository {
   MockContentRepository({List<ContentPostViewData>? seedPosts})
     : _seedPosts = seedPosts ?? _contractSeedPosts();
@@ -179,8 +225,6 @@ class MockContentRepository
   /// 软删除墓碑：保留期内 [getPost] 返回 410 content_deleted；未知 id 仍为 404。
   /// 该分流与云侧 DeletedPostTombstone 契约同源，使删除旅程可验证（R12/R13）。
   final Set<String> _deletedPostIds = <String>{};
-
-  int countersStubLikeCount = 0;
 
   @override
   Future<DiscoveryFeedPage> listDiscoveryFeedPage({
@@ -360,29 +404,24 @@ class MockContentRepository
       _throwMockPostNotFound(postId);
     }
     return ContentPostDetailPayload.fromWire(
-      ContentPostDetailSlice.fromWire(
-        Map<String, Object?>.from(raw),
-        'MockContentRepository.GetPost',
-      ),
+      _mockDetailSliceFromReadModelMap(raw),
     );
   }
 
   @override
-  Future<ContentAppConfigWire> getAppConfig() async {
-    return ContentAppConfigWire.fromResponseObject({
-      'content': {
-        'comment': {
+  Future<AppConfigSlice> getAppConfig() async {
+    return testAppConfigSlice(
+      content: <String, Object?>{
+        'comment': <String, Object?>{
           'max_length': 500,
           'reply_preview_count': 1,
           'reply_expand_page_size': 10,
           'fold_line_count': 3,
-          'attachment': {'max_images': 1},
+          'attachment': <String, Object?>{'max_images': 1},
         },
-        'feature_flags': {
+        'feature_flags': <String, Object?>{
           'enable_create_action_entry': true,
           'enable_unified_create_editor': true,
-          'simple_create_action_sheet': true,
-          'progressive_title_prompt': true,
           'enable_identity_based_surfaces': true,
           'enable_identity_share_template': true,
           'enable_article_distribution_profiles': true,
@@ -390,36 +429,22 @@ class MockContentRepository
           'enable_article_page_curl': true,
           'enable_assistant_content_identity_index': true,
         },
-        'gray_release': {
+        'gray_release': <String, Object?>{
           'experiment_bucket': 'local_story_enabled',
           'current_stage': '100%',
-          'canary_matrix': [
-            {'stage': '5%', 'rolloutPercent': 5},
-            {'stage': '20%', 'rolloutPercent': 20},
-            {'stage': '50%', 'rolloutPercent': 50},
-            {'stage': '100%', 'rolloutPercent': 100},
+          'canary_matrix': <Object?>[
+            <String, Object?>{'stage': '5%', 'rolloutPercent': 5},
+            <String, Object?>{'stage': '20%', 'rolloutPercent': 20},
+            <String, Object?>{'stage': '50%', 'rolloutPercent': 50},
+            <String, Object?>{'stage': '100%', 'rolloutPercent': 100},
           ],
         },
       },
-    });
-  }
-
-  @override
-  Future<void> reportBehaviors({
-    required List<ContentBehaviorBatchEventDto> events,
-  }) async {}
-
-  @override
-  Future<PostEngagementCounters> getCounters({required String postId}) async {
-    return PostEngagementCounters(
-      likeCount: countersStubLikeCount,
-      commentCount: 0,
-      shareCount: 0,
     );
   }
 
   @override
-  Future<void> deletePost({
+  Future<PostDeletionReceipt> deletePost({
     required String postId,
     required String idempotencyKey,
   }) async {
@@ -429,6 +454,11 @@ class MockContentRepository
       );
     }
     _deletedPostIds.add(postId);
+    return PostDeletionReceipt(
+      postId: postId.trim(),
+      status: PostStatus.deleted,
+      replayed: false,
+    );
   }
 
   @override

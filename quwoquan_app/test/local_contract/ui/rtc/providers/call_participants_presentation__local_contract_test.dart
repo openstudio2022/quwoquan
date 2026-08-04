@@ -5,6 +5,7 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_state.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_participants_provider.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import '../../../../support/cloud_services/object_doubles/rtc/rtc_contract_test_builders.dart';
 
 void main() {
   test('conversation member projection enriches display and trust', () async {
@@ -18,13 +19,13 @@ void main() {
 
     await container
         .read(callParticipantsProvider.notifier)
-        .syncRoster(const <CallParticipant>[
-          CallParticipant(
+        .syncRoster(<CallParticipant>[
+          buildCallParticipantContract(
             userId: 'user-known',
             role: ParticipantRole.invitee,
             status: ParticipantStatus.ringing,
           ),
-          CallParticipant(
+          buildCallParticipantContract(
             userId: 'user-unknown',
             role: ParticipantRole.invitee,
             status: ParticipantStatus.ringing,
@@ -59,8 +60,8 @@ void main() {
       addTearDown(container.dispose);
 
       await container.read(callParticipantsProvider.notifier).syncRoster(
-        const <CallParticipant>[
-          CallParticipant(
+        <CallParticipant>[
+          buildCallParticipantContract(
             userId: 'caller',
             role: ParticipantRole.initiator,
             status: ParticipantStatus.ringing,

@@ -7,7 +7,7 @@ from typing import Any
 from core.data_issue import DataIssueCode, DataRecoveryAction
 from content.source.research.plan_state import (
     _accept_source,
-    _image_at,
+    _hydrate_mediawiki_same_source_images,
     _image_window,
     _record_unavailable,
     _source,
@@ -58,8 +58,6 @@ def write_article_lane(
     homepage_sources: list[dict[str, Any]],
     required_article_bases: int,
     article_commercial_mode: bool,
-    commons: list[dict[str, Any]],
-    openverse: list[dict[str, Any]],
     force: bool,
 ) -> None:
     article_sources: list[dict[str, Any]] = []
@@ -75,6 +73,11 @@ def write_article_lane(
                 frontier_outcome.as_evidence()
             )
             for source in frontier_outcome.source_documents():
+                source = _hydrate_mediawiki_same_source_images(
+                    source,
+                    entity_id=entity_id,
+                    publish_media_mode="illustrated",
+                )
                 accepted = _accept_source(
                     report,
                     source,
@@ -248,33 +251,6 @@ def write_article_lane(
                     if known.get("title"):
                         accepted["title"] = known["title"]
                     article_sources.append(accepted)
-        commons_visual = _image_at(commons, 5)
-        open_visual = _image_at(openverse, 0)
-        if commons_visual or open_visual:
-            visual = commons_visual or open_visual or {}
-            accepted = _accept_source(
-                report,
-                _source(
-                    source_id="article_open_visual_support",
-                    platform=str(visual.get("platform") or "Openverse"),
-                    url=str(visual.get("sourceUrl") or visual.get("url") or ""),
-                    category="open_license",
-                    discovery_provider="open_license_image_search",
-                    match_confidence=0.82,
-                    evidence_reason=_evidence_reason(
-                        entity_id, "article", "Open license image search", "open_license"
-                    ),
-                    source_role="supporting",
-                    images=[],
-                    image_evidence_mode="",
-                ),
-                entity_id=entity_id,
-                lane="article",
-                vertical=vertical,
-                entity_aliases=entity_aliases,
-            )
-            if accepted:
-                article_sources.append(accepted)
         seen_article_urls = {
             str(source.get("url") or "").strip()
             for source in article_sources

@@ -40,7 +40,10 @@ class LocalChatSearchContactRecord {
     );
   }
 
-  factory LocalChatSearchContactRecord.fromWireMap(Map<String, Object?> map) {
+  /// SQLite index record codec; this Map never crosses a Cloud boundary.
+  factory LocalChatSearchContactRecord.fromStorageMap(
+    Map<String, Object?> map,
+  ) {
     final contactId = _string(map['contactId']);
     return LocalChatSearchContactRecord(
       contactId: contactId,
@@ -57,7 +60,7 @@ class LocalChatSearchContactRecord {
     );
   }
 
-  Map<String, Object?> toWireMap() {
+  Map<String, Object?> toStorageMap() {
     return <String, Object?>{
       'contactId': contactId,
       'userHandle': userHandle,
@@ -73,8 +76,8 @@ class LocalChatSearchContactRecord {
     };
   }
 
-  ChatContactSearchItemDto toSearchItemDto() {
-    return ChatContactSearchItemDto(
+  ChatContactSearchItemViewData toSearchItemViewData() {
+    return ChatContactSearchItemViewData(
       contactId: contactId,
       userHandle: userHandle,
       displayName: displayName,

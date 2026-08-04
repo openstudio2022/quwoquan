@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'test_content_post_reaction_facet.dart';
 import 'content/mock_content_repository.dart';
 
@@ -13,6 +14,7 @@ List<Override> mockContentFacetOverrides(
   ContentPostDetailReader? workBrowserDetailReader,
   ContentCommentFacet? commentFacet,
   ContentPostReactionFacet? postReactionFacet,
+  ContentBehaviorCommandWriter? behaviorWriter,
 }) {
   return <Override>[
     contentDiscoveryFeedQueryProvider.overrideWithValue(adapter),
@@ -21,8 +23,10 @@ List<Override> mockContentFacetOverrides(
     ),
     globalSearchContentPostDetailReaderProvider.overrideWithValue(adapter),
     userProfileContentAuthorPostsReaderProvider.overrideWithValue(adapter),
-    contentWriteRepositoryProvider.overrideWithValue(adapter),
-    contentEngagementRepositoryProvider.overrideWithValue(adapter),
+    contentPostDeleteCommandWriterProvider.overrideWithValue(adapter),
+    contentBehaviorCommandWriterProvider.overrideWithValue(
+      behaviorWriter ?? const _TestContentBehaviorCommandWriter(),
+    ),
     contentPostReactionFacetProvider.overrideWithValue(
       postReactionFacet ?? TestContentPostReactionFacet(),
     ),
@@ -34,4 +38,12 @@ List<Override> mockContentFacetOverrides(
       ),
     ],
   ];
+}
+
+final class _TestContentBehaviorCommandWriter
+    implements ContentBehaviorCommandWriter {
+  const _TestContentBehaviorCommandWriter();
+
+  @override
+  Future<void> reportBehaviors(ReportContentBehaviorsCommand command) async {}
 }

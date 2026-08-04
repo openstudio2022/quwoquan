@@ -3,11 +3,6 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_inbox_summary.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_representative_actor.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_repository.dart';
 import 'package:quwoquan_app/components/object_page/interactive_intersection_text.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
@@ -17,8 +12,10 @@ import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/ui/user/widgets/my_intersection_inbox_card.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../../support/cloud_services/behavior_repository_double.dart';
+import '../../../../support/fixtures/intersection_fixtures.dart';
 
 bool _tapSpanByText(WidgetTester tester, String text) {
   final richText = tester.widget<RichText>(
@@ -308,7 +305,7 @@ IntersectionReason _item({
     objectKind: 'circle',
     routeId: 'circleDetail',
   );
-  return IntersectionReason(
+  return intersectionReasonFixture(
     dimension: 'relationship',
     intersectionClass: 'fact',
     intersectionId: id,
@@ -330,6 +327,7 @@ IntersectionReason _item({
     representativeActor: IntersectionRepresentativeActor(
       actorId: 'u_zhang',
       displayName: '张晓明',
+      avatarUrl: '',
       relationLabel: '联系人',
       privacyState: 'visible',
       target: IntersectionTarget(
@@ -338,6 +336,8 @@ IntersectionReason _item({
         objectKind: 'person',
         routeId: 'userProfile',
       ),
+      evidenceRank: 1,
+      snapshotVersion: 'intersection_fixture',
     ),
   );
 }
@@ -396,6 +396,10 @@ class _StubIntersectionRepository implements IntersectionRepository {
     return IntersectionInboxSummary(
       totalCount: items.length,
       totalNewCount: items.length,
+      dimensions: const [],
+      generatedAt: '2026-08-03T00:00:00Z',
+      totalStrengthenedCount: 0,
+      totalReactivatedCount: 0,
     );
   }
 

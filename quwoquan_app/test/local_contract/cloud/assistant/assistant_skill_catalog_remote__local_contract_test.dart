@@ -11,6 +11,18 @@ import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../support/assistant_remote_test_support.dart';
+import '../../../support/canonical_digest_fixture.dart';
+
+const _configurationSchema = <String, Object?>{
+  'type': 'object',
+  'additionalProperties': false,
+  'properties': <String, Object?>{
+    'travelPace': <String, Object?>{
+      'type': 'string',
+      'enum': <String>['relaxed', 'balanced'],
+    },
+  },
+};
 
 void main() {
   test(
@@ -26,16 +38,7 @@ void main() {
                 }
               : <String, Object?>{
                   'item': _catalogItem(),
-                  'configurationSchema': <String, Object?>{
-                    'type': 'object',
-                    'additionalProperties': false,
-                    'properties': <String, Object?>{
-                      'travelPace': <String, Object?>{
-                        'type': 'string',
-                        'enum': <String>['relaxed', 'balanced'],
-                      },
-                    },
-                  },
+                  'configurationSchema': _configurationSchema,
                 };
           return http.Response(
             jsonEncode(response),
@@ -78,7 +81,10 @@ void main() {
 
 Map<String, Object?> _catalogItem() => <String, Object?>{
   'packageId': 'quwoquan.official.travel',
-  'releaseDigest': 'sha256:release',
+  'releaseDigest': canonicalFixtureSha256(const <String, Object?>{
+    'packageId': 'quwoquan.official.travel',
+    'releaseId': 'travel-companion-local-contract',
+  }),
   'skillId': 'travel_companion',
   'displayName': '贴身旅行管家',
   'description': '一路计划，一路记录，一键成游记。',
@@ -95,7 +101,7 @@ Map<String, Object?> _catalogItem() => <String, Object?>{
   'exampleRefs': <String>[],
   'activationMode': 'hybrid',
   'allowedSurfaceKinds': <String>['personal', 'conversation', 'circle'],
-  'configurationSchemaDigest': 'sha256:schema',
+  'configurationSchemaDigest': canonicalFixtureSha256(_configurationSchema),
   'setupTemplateRef': 'assistant.skill.setup.travel_companion',
   'configurationRequiredFields': <String>[],
 };

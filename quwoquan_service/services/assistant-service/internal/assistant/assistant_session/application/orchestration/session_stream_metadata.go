@@ -1,11 +1,11 @@
 package orchestration
 
 import (
-	assistantstreaming "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/streaming"
+	assistantstreaming "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/streaming"
 	"strings"
 
 	"quwoquan_service/runtime/streaming"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
+	assistant "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/model"
 )
 
 func finalAnswerTextFromEvents(events []streaming.Envelope) string {
@@ -14,10 +14,10 @@ func finalAnswerTextFromEvents(events []streaming.Envelope) string {
 		if event.EventType != string(assistantstreaming.AssistantStreamEventCompleted) {
 			continue
 		}
-		if text := strings.TrimSpace(stringValue(event.Payload["finalAnswer"])); text != "" {
+		if text := strings.TrimSpace(streamPayloadString(event.Payload["finalAnswer"])); text != "" {
 			return text
 		}
-		if text := strings.TrimSpace(stringValue(event.Payload["text"])); text != "" {
+		if text := strings.TrimSpace(streamPayloadString(event.Payload["text"])); text != "" {
 			return text
 		}
 	}
@@ -69,7 +69,12 @@ func streamProcessString(payload map[string]any, field string) string {
 		}
 		return streamProcessString(map[string]any{"process": *process}, field)
 	case map[string]any:
-		return strings.TrimSpace(stringValue(process[field]))
+		return strings.TrimSpace(streamPayloadString(process[field]))
 	}
 	return ""
+}
+
+func streamPayloadString(value any) string {
+	text, _ := value.(string)
+	return text
 }

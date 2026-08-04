@@ -34,6 +34,11 @@ externalDependencies:
     port: MediaTransportPort
     operations: [createRoom, closeRoom, issueParticipantAccess, listParticipants, removeParticipant]
     conformance: rtc_transport
+    adapterContracts:
+      infra.livekit_sfu:
+        endpointEnvs: {connection: RTC_MEDIA_CONNECTION_URL}
+        secretRefs: [RTC_MEDIA_API_KEY, RTC_MEDIA_API_SECRET]
+        defaultTimeoutMs: 10000
   - role: use
     capability: runtime.message.transport
     port: MessageTransportPort

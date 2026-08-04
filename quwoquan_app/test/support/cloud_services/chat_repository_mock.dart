@@ -1,23 +1,15 @@
 // Test-only ChatRepository double. Production and all App environments use Remote.
-import 'package:quwoquan_app/cloud/chat/models/chat_conversation_timestamp_dto.dart';
-import 'package:quwoquan_app/cloud/chat/models/chat_message_receipt_dto.dart';
 import 'package:quwoquan_app/cloud/chat/models/conversation_dto.dart';
-import 'package:quwoquan_app/cloud/chat/models/sync_response.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_created_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_group_settings_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_message_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/contact_home_row_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/group_home_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/message_home_row_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/selectable_group_conversation_row_dto.g.dart';
+import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
+import 'package:quwoquan_app/cloud/chat/models/message_sync_view_data.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository_api.dart';
+import 'package:quwoquan_app/cloud/services/chat/chat_view_data.dart';
+import 'package:quwoquan_app/cloud/services/chat/remote/chat_contract_projection_mapper.dart';
+import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
 
-import 'repository_mock_reexports.dart';
+import 'object_doubles/chat/alpha_chat_state_engine.dart';
 
 /// local_contract 专用 App DTO 薄适配器。
 ///
@@ -37,58 +29,62 @@ class MockChatRepository implements ChatRepository {
        );
 
   final AlphaChatStateEngine _engine;
+  static const _mapper = ChatContractProjectionMapper();
 
   @override
-  Future<List<ChatInboxDto>> listInbox({
+  Future<List<ChatInboxViewData>> listInbox({
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async => _engine
       .listInbox(limit: limit)
-      .map((row) => ChatInboxDto.fromMap(_appMap(row)))
+      .map(_chatInboxItem)
+      .map(_mapper.toInbox)
       .toList(growable: false);
 
   @override
-  Future<List<MessageHomeRowDto>> listMessageHome({
+  Future<List<MessageHomeRow>> listMessageHome({
     String filter = 'all',
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async => _engine
       .listMessageHome(filter: filter, limit: limit)
-      .map((row) => MessageHomeRowDto.fromMap(_appMap(row)))
+      .map((row) => MessageHomeRow.fromWire(_appMap(row)))
       .toList(growable: false);
 
   @override
-  Future<List<ChatInboxDto>> listConversations({
+  Future<List<ChatInboxViewData>> listConversations({
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async => _engine
       .listConversations(limit: limit)
-      .map((row) => ChatInboxDto.fromMap(_appMap(row)))
+      .map(_chatInboxItem)
+      .map(_mapper.toInbox)
       .toList(growable: false);
 
   @override
-  Future<ChatConversationCreatedDto> createConversation({
+  Future<ChatConversationCreatedViewData> createConversation({
     required String type,
     String? title,
     int? maxGroupSize,
     List<String>? initialMemberIds,
     String? idempotencyKey,
   }) async {
-    return ChatConversationCreatedDto.fromMap(
-      _appMap(
-        _engine.createConversation(
-          type: type,
-          title: title,
-          maxGroupSize: maxGroupSize,
-          initialMemberIds: initialMemberIds,
-        ),
-      ),
+    final result = _engine.createConversation(
+      type: type,
+      title: title,
+      maxGroupSize: maxGroupSize,
+      initialMemberIds: initialMemberIds,
+    );
+    return ChatConversationCreatedViewData(
+      conversationId: _textValue(result['conversationId']),
     );
   }
 
   @override
   Future<ConversationViewData> getConversation(String conversationId) async =>
-      ConversationViewData.fromMap(_appMap(_engine.getConversation(conversationId)));
+      _mapper.toConversation(
+        _chatConversation(_engine.getConversation(conversationId)),
+      );
 
   @override
   Future<void> updateConversationTitle(
@@ -108,7 +104,7 @@ class MockChatRepository implements ChatRepository {
   );
 
   @override
-  Future<List<ChatMessageDto>> listMessages({
+  Future<List<ChatMessageViewData>> listMessages({
     required String conversationId,
     String? before,
     int limit = CloudApiDefaults.pageLimit,
@@ -118,7 +114,8 @@ class MockChatRepository implements ChatRepository {
         before: before,
         limit: limit,
       )
-      .map((row) => ChatMessageDto.fromMap(_appMap(row)))
+      .map((row) => ChatMessageView.fromWire(_appMap(row)))
+      .map(ChatMessageViewData.fromWire)
       .toList(growable: false);
 
   @override
@@ -131,7 +128,7 @@ class MockChatRepository implements ChatRepository {
   );
 
   @override
-  Future<SyncResponse> syncMessages({
+  Future<ChatMessageSyncViewData> syncMessages({
     required String conversationId,
     required int lastSeq,
     int limit = CloudApiDefaults.syncMessagesLimit,
@@ -141,9 +138,10 @@ class MockChatRepository implements ChatRepository {
       lastSeq: lastSeq,
       limit: limit,
     );
-    return SyncResponse(
+    return ChatMessageSyncViewData(
       messages: page.messages
-          .map((row) => ChatMessageDto.fromMap(_appMap(row)))
+          .map((row) => ChatMessageView.fromWire(_appMap(row)))
+          .map(ChatMessageViewData.fromWire)
           .toList(growable: false),
       hasMore: page.hasMore,
     );
@@ -157,16 +155,16 @@ class MockChatRepository implements ChatRepository {
       _engine.markAsRead(conversationId: conversationId, messageId: messageId);
 
   @override
-  Future<List<ChatMessageReceiptDto>> getReceipts({
+  Future<List<ChatMessageReceipt>> getReceipts({
     required String conversationId,
     required String messageId,
   }) async => _engine
       .getReceipts(conversationId: conversationId, messageId: messageId)
-      .map((row) => ChatMessageReceiptDto.fromMap(_appMap(row)))
+      .map((row) => ChatMessageReceipt.fromWire(_appMap(row)))
       .toList(growable: false);
 
   @override
-  Future<List<ChatConversationMemberDto>> listMembers({
+  Future<List<ConversationMemberListRow>> listMembers({
     required String conversationId,
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
@@ -179,11 +177,11 @@ class MockChatRepository implements ChatRepository {
         role: role,
         sort: sort,
       )
-      .map((row) => ChatConversationMemberDto.fromMap(_appMap(row)))
+      .map(_conversationMember)
       .toList(growable: false);
 
   @override
-  Future<List<ChatConversationMemberDto>> searchMembers({
+  Future<List<ConversationMemberListRow>> searchMembers({
     required String conversationId,
     required String query,
     int limit = CloudApiDefaults.chatMemberSearchLimit,
@@ -194,7 +192,7 @@ class MockChatRepository implements ChatRepository {
         query: query,
         sort: 'display_name_asc',
       )
-      .map((row) => ChatConversationMemberDto.fromMap(_appMap(row)))
+      .map(_conversationMember)
       .toList(growable: false);
 
   @override
@@ -228,40 +226,38 @@ class MockChatRepository implements ChatRepository {
       _engine.removeAssistant(conversationId: conversationId);
 
   @override
-  Future<CursorPage<ChatContactRowDto>> listContacts({
+  Future<CursorPage<ChatContactRowViewData>> listContacts({
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
     final page = _engine.listContacts(cursor: cursor, limit: limit);
-    return CursorPage<ChatContactRowDto>(
-      items: page.items
-          .map((row) => ChatContactRowDto.fromMap(_appMap(row)))
-          .toList(growable: false),
+    return CursorPage<ChatContactRowViewData>(
+      items: page.items.map(_chatContactView).toList(growable: false),
       nextCursor: page.nextCursor,
     );
   }
 
   @override
-  Future<List<ContactHomeRowDto>> listContactHome({
+  Future<List<ContactHomeRow>> listContactHome({
     String filter = 'all',
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async => _engine
       .listContactHome(filter: filter, limit: limit)
-      .map((row) => ContactHomeRowDto.fromMap(_appMap(row)))
+      .map(_contactHomeRow)
       .toList(growable: false);
 
   @override
-  Future<List<ChatContactRowDto>> listGroupCandidates({
+  Future<List<ChatContactRowViewData>> listGroupCandidates({
     String? conversationId,
     int limit = CloudApiDefaults.pageLimit,
   }) async => _engine
       .listGroupCandidates(conversationId: conversationId, limit: limit)
-      .map((row) => ChatContactRowDto.fromMap(_appMap(row)))
+      .map(_chatContactView)
       .toList(growable: false);
 
   @override
-  Future<CursorPage<SelectableGroupConversationRowDto>>
+  Future<CursorPage<SelectableGroupConversationRow>>
   listSelectableGroupConversations({
     String? query,
     ChatSelectableGroupSource source = ChatSelectableGroupSource.all,
@@ -274,16 +270,16 @@ class MockChatRepository implements ChatRepository {
       cursor: cursor,
       limit: limit,
     );
-    return CursorPage<SelectableGroupConversationRowDto>(
+    return CursorPage<SelectableGroupConversationRow>(
       items: page.items
-          .map((row) => SelectableGroupConversationRowDto.fromMap(_appMap(row)))
+          .map((row) => SelectableGroupConversationRow.fromWire(_appMap(row)))
           .toList(growable: false),
       nextCursor: page.nextCursor,
     );
   }
 
   @override
-  Future<CursorPage<ChatContactRowDto>> listSelectableGroupContactMembers({
+  Future<CursorPage<ChatContactRowViewData>> listSelectableGroupContactMembers({
     required String conversationId,
     String? query,
     String? cursor,
@@ -295,46 +291,55 @@ class MockChatRepository implements ChatRepository {
       cursor: cursor,
       limit: limit,
     );
-    return CursorPage<ChatContactRowDto>(
-      items: page.items
-          .map((row) => ChatContactRowDto.fromMap(_appMap(row)))
-          .toList(growable: false),
+    return CursorPage<ChatContactRowViewData>(
+      items: page.items.map(_chatContactView).toList(growable: false),
       nextCursor: page.nextCursor,
     );
   }
 
   @override
-  Future<List<ChatConversationTimestampDto>>
-  getConversationTimestamps() async => _engine
-      .getConversationTimestamps()
-      .map((row) => ChatConversationTimestampDto.fromMap(_appMap(row)))
-      .toList(growable: false);
-
-  @override
-  Future<List<ConversationViewData>> batchGetConversations(List<String> ids) async =>
+  Future<List<ChatConversationTimestamp>> getConversationTimestamps() async =>
       _engine
-          .batchGetConversations(ids)
-          .map((row) => ConversationViewData.fromMap(_appMap(row)))
+          .getConversationTimestamps()
+          .map((row) => ChatConversationTimestamp.fromWire(_appMap(row)))
           .toList(growable: false);
 
   @override
-  Future<ChatGroupSettingsDto> getGroupSettings(String conversationId) async =>
-      ChatGroupSettingsDto.fromMap(
-        _appMap(_engine.getGroupSettings(conversationId)),
-      );
+  Future<List<ConversationViewData>> batchGetConversations(
+    List<String> ids,
+  ) async => _engine
+      .batchGetConversations(ids)
+      .map(_chatConversation)
+      .map(_mapper.toConversation)
+      .toList(growable: false);
 
   @override
-  Future<GroupHomeDto> getGroupHome(String conversationId) async =>
-      GroupHomeDto.fromMap(_appMap(_engine.getGroupHome(conversationId)));
+  Future<ChatGroupSettingsViewData> getGroupSettings(
+    String conversationId,
+  ) async {
+    final row = _engine.getGroupSettings(conversationId);
+    return ChatGroupSettingsViewData(
+      nameEditableByAdminOnly: row['nameEditableByAdminOnly'] == true,
+      conversationType: _textValue(row['conversationType']),
+      circleId: _textValue(row['circleId']),
+      circleGroupId: _textValue(row['circleGroupId']),
+    );
+  }
+
+  @override
+  Future<GroupHome> getGroupHome(String conversationId) async =>
+      GroupHome.fromWire(_appMap(_engine.getGroupHome(conversationId)));
 
   @override
   Future<void> updateGroupSettings(
     String conversationId,
-    ChatGroupSettingsDto settings,
-  ) async => _engine.updateGroupSettings(
-    conversationId,
-    Map<String, Object?>.from(settings.toMap()),
-  );
+    ChatGroupSettingsViewData settings,
+  ) async => _engine.updateGroupSettings(conversationId, <String, Object?>{
+    'nameEditableByAdminOnly': settings.nameEditableByAdminOnly,
+    'conversationType': settings.conversationType,
+    'circleId': settings.circleId,
+    'circleGroupId': settings.circleGroupId,
+  });
 
   @override
   Future<void> updateAnnouncement(
@@ -361,6 +366,152 @@ class MockChatRepository implements ChatRepository {
 
 Map<String, dynamic> _appMap(ChatFixtureObject row) =>
     Map<String, dynamic>.from(row);
+
+ChatInboxItemView _chatInboxItem(ChatFixtureObject row) => ChatInboxItemView(
+  id: _textValue(row['id']),
+  type: _textValue(row['type']),
+  title: _textValue(row['title']),
+  avatarUrl: _textValue(row['avatarUrl']),
+  groupAvatarVersion: _intValue(row['groupAvatarVersion']),
+  lastMessagePreview: _textValue(row['lastMessagePreview']),
+  lastMessageType: MessageType.fromWire(
+    row['lastMessageType'],
+    'ChatInboxItemView.lastMessageType',
+  ),
+  lastMessageTime: _requiredDate(row['lastMessageTime']),
+  lastSeq: _intValue(row['lastSeq']),
+  unreadCount: _intValue(row['unreadCount']),
+  mentionUnreadCount: _intValue(row['mentionUnreadCount']),
+  muted: row['muted'] == true,
+  pinned: row['pinned'] == true,
+  circleId: _optionalText(row['circleId']),
+);
+
+ChatConversation _chatConversation(ChatFixtureObject row) {
+  final now = DateTime.utc(2026, 7, 20);
+  final id = _textValue(row['id']);
+  final updatedAt = _optionalDate(row['updatedAt']) ?? now;
+  return ChatConversation(
+    id: id,
+    conversationId: _optionalText(row['conversationId']) ?? id,
+    type: _textValue(row['type']),
+    title: _textValue(row['title']),
+    avatarUrl: _textValue(row['avatarUrl']),
+    groupAvatarVersion: _intValue(row['groupAvatarVersion']),
+    creatorId: _textValue(row['creatorId']),
+    circleId: _textValue(row['circleId']),
+    circleGroupId: _textValue(row['circleGroupId']),
+    entityId: _textValue(row['entityId']),
+    originType: _textValue(row['originType'], fallback: 'direct_init'),
+    maxSeq: _intValue(row['maxSeq']),
+    memberCount: _intValue(row['memberCount']),
+    membersRosterRevision: _intValue(row['membersRosterRevision'], fallback: 1),
+    maxGroupSize: _intValue(row['maxGroupSize'], fallback: 1000),
+    receiptEnabled: row['receiptEnabled'] != false,
+    announcement: _textValue(row['announcement']),
+    announcementUpdatedBy: _textValue(row['announcementUpdatedBy']),
+    announcementUpdatedAt:
+        _optionalDate(row['announcementUpdatedAt']) ?? updatedAt,
+    nameEditableByAdminOnly: row['nameEditableByAdminOnly'] == true,
+    lastMessageId: _textValue(row['lastMessageId']),
+    lastMessagePreview: _textValue(row['lastMessagePreview']),
+    lastMessageType: MessageType.fromWire(
+      row['lastMessageType'] ?? 'text',
+      'ChatConversation.lastMessageType',
+    ),
+    lastMessageTime: _optionalDate(row['lastMessageTime']) ?? updatedAt,
+    messageCount: _intValue(row['messageCount']),
+    status: _textValue(row['status'], fallback: 'active'),
+    createdAt: _optionalDate(row['createdAt']) ?? now,
+    updatedAt: updatedAt,
+  );
+}
+
+ChatContactRowViewData _chatContactView(ChatFixtureObject row) =>
+    ChatContactRowViewData(
+      userId: _textValue(row['userId']),
+      userHandle: _textValue(row['userHandle']),
+      displayName: _textValue(row['displayName']),
+      avatarUrl: _textValue(row['avatarUrl']),
+      bio: _textValue(row['bio']),
+      metFrom: _textValue(row['metFrom']),
+      lastInteraction: _textValue(row['lastInteraction']),
+      relationState: _textValue(
+        row['relationState'],
+        fallback: 'not_following',
+      ),
+      source: _textValue(row['source']),
+      isStarred: row['isStarred'] == true,
+    );
+
+ConversationMemberListRow _conversationMember(ChatFixtureObject row) =>
+    ConversationMemberListRow(
+      userId: _textValue(row['userId']),
+      userHandle: _textValue(row['userHandle']),
+      displayName: _textValue(row['displayName']),
+      avatarUrl: _textValue(row['avatarUrl']),
+      role: _textValue(row['role'], fallback: 'member'),
+      memberType: _textValue(row['memberType'], fallback: 'user'),
+      joinedAt: _optionalDate(row['joinedAt']),
+      isCurrentUser: row['isCurrentUser'] == true,
+    );
+
+ContactHomeRow _contactHomeRow(ChatFixtureObject row) => ContactHomeRow(
+  id: _textValue(row['id']),
+  kind: _textValue(row['kind']),
+  objectId: _textValue(row['objectId']),
+  userId: _optionalText(row['userId']),
+  userHandle: _textValue(row['userHandle']),
+  conversationId: _optionalText(row['conversationId']),
+  circleId: _optionalText(row['circleId']),
+  circleGroupId: _optionalText(row['circleGroupId']),
+  entityId: _optionalText(row['entityId']),
+  title: _textValue(row['title']),
+  subtitle: _textValue(row['subtitle']),
+  avatarUrl: _textValue(row['avatarUrl']),
+  relationState: _optionalText(row['relationState']),
+  summaryIntersections: switch (row['summaryIntersections']) {
+    List values =>
+      values.map((value) => value.toString()).toList(growable: false),
+    _ => const <String>[],
+  },
+  sourceEntityTitle: _optionalText(row['sourceEntityTitle']),
+  sourceCircleTitle: _optionalText(row['sourceCircleTitle']),
+  memberCount: row['memberCount'] == null
+      ? null
+      : _intValue(row['memberCount']),
+  contactCount: _intValue(row['contactCount']),
+  lastActiveAt: _optionalDate(row['lastActiveAt']),
+  sortKey: _textValue(row['sortKey']),
+  isStarred: row['isStarred'] as bool?,
+);
+
+String _textValue(Object? value, {String fallback = ''}) {
+  final normalized = value?.toString().trim() ?? '';
+  return normalized.isEmpty ? fallback : normalized;
+}
+
+String? _optionalText(Object? value) {
+  final normalized = _textValue(value);
+  return normalized.isEmpty ? null : normalized;
+}
+
+int _intValue(Object? value, {int fallback = 0}) => switch (value) {
+  int number => number,
+  num number => number.toInt(),
+  String text => int.tryParse(text) ?? fallback,
+  _ => fallback,
+};
+
+DateTime _requiredDate(Object? value) =>
+    _optionalDate(value) ??
+    (throw FormatException('fixture timestamp is required'));
+
+DateTime? _optionalDate(Object? value) => switch (value) {
+  DateTime date => date,
+  String text when text.trim().isNotEmpty => DateTime.parse(text),
+  _ => null,
+};
 
 AlphaChatStateEngine _resolveEngine({
   required AlphaChatStateEngine? engine,

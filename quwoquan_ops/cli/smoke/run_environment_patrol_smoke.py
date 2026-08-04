@@ -1819,6 +1819,21 @@ def _create_patrol_secret_define_file(args: argparse.Namespace) -> Path:
     return path
 
 
+def _provider_uat_secret_values() -> tuple[str, ...]:
+    keys = tuple(
+        key.strip()
+        for key in os.environ.get(
+            "QWQ_PROVIDER_UAT_DART_DEFINE_KEYS", ""
+        ).split(",")
+        if key.strip()
+    )
+    return tuple(
+        value
+        for value in (os.environ.get(key, "").strip() for key in keys)
+        if value
+    )
+
+
 def patrol_command(
     device: dict[str, Any],
     args: argparse.Namespace,
@@ -2449,6 +2464,7 @@ def main() -> int:
                             args.test_refresh_token.strip(),
                             _resolved_owner_id(args),
                             _resolved_persona_id(args),
+                            *_provider_uat_secret_values(),
                         ),
                         output_line_handler=(
                             handle_controlled_edge_output

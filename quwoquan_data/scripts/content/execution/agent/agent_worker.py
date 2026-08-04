@@ -92,6 +92,10 @@ def _default_managed_agent_runner_isolated(
     from content.execution.agent.agent_runner import _redact_managed_secret
     from content.execution.agent.outcome import AgentRunOutcome
     from core.control_types import AgentFailureKind, AgentProvider
+    from content.execution.workspace import execution_root
+
+    agent_workspace = execution_root(ctx.execution_id)
+    agent_workspace.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="qwq-managed-agent-") as tmp:
         tmp_path = Path(tmp)
         input_path = tmp_path / "input.json"
@@ -136,7 +140,9 @@ def _default_managed_agent_runner_isolated(
                 "--execution-id",
                 str(ctx.execution_id),
             ],
-            cwd=str(Path.cwd()),
+            # Agent 的工具视野只落在本 execution 工作包；源码 clone 只负责
+            # 运行受版本控制的控制器，绝不能成为 Agent 可写 workspace。
+            cwd=str(agent_workspace),
             env=env,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,

@@ -6,39 +6,30 @@ import (
 
 	rtredis "quwoquan_service/runtime/redis"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
-	skillpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/skill"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/ports"
 	consentapplication "quwoquan_service/services/assistant-service/internal/assistant/skill_consent/application"
 	consentports "quwoquan_service/services/assistant-service/internal/assistant/skill_consent/domain/ports"
+	skillpkg "quwoquan_service/services/assistant-service/internal/assistant/skill_package_release/application/packageasset"
 	subscriptionports "quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/domain/ports"
 )
 
 const pageContextTTL = 5 * time.Minute
 
 type AssistantService struct {
-	consents                   consentports.Reader
-	consentQueries             *consentapplication.QueryFacade
-	cache                      rtredis.Client
-	notificationMessages       ports.NotificationAppMessageCommandWriter
-	subscriptions              subscriptionports.Store
-	deliveryPolicies           ports.AssistantDeliveryPolicyReader
-	intersectionInbox          ports.IntersectionInboxReader
-	learningProjection         ports.LearningProjectionReader
-	chatGrounding              ports.ChatGroundingClient
-	agentLoop                  *AgentLoop
-	skillCatalog               skillpkg.Loader
-	sessions                   ports.SessionStore
-	preferenceSnapshots        ports.PreferenceSnapshotReader
-	runCommands                *runruntime.CommandService
-	intersectionReminderPolicy IntersectionReminderPolicy
-	now                        func() time.Time
+	consents             consentports.Reader
+	consentQueries       *consentapplication.QueryFacade
+	cache                rtredis.Client
+	notificationMessages ports.NotificationAppMessageCommandWriter
+	subscriptions        subscriptionports.Store
+	deliveryPolicies     ports.AssistantDeliveryPolicyReader
+	chatGrounding        ports.ChatGroundingClient
+	skillCatalog         skillpkg.Loader
+	sessions             ports.SessionStore
+	runCommands          *runruntime.CommandService
+	now                  func() time.Time
 }
 
 type AssistantServiceOption func(*AssistantService)
-
-func WithAgentLoop(loop *AgentLoop) AssistantServiceOption {
-	return func(s *AssistantService) { s.agentLoop = loop }
-}
 
 func WithSkillCatalog(catalog skillpkg.Loader) AssistantServiceOption {
 	return func(service *AssistantService) { service.skillCatalog = catalog }
@@ -59,10 +50,6 @@ func (s *AssistantService) RunCommandService() *runruntime.CommandService {
 	return s.runCommands
 }
 
-func WithPreferenceSnapshotReader(reader ports.PreferenceSnapshotReader) AssistantServiceOption {
-	return func(s *AssistantService) { s.preferenceSnapshots = reader }
-}
-
 func WithSkillSubscriptionStore(store subscriptionports.Store) AssistantServiceOption {
 	return func(s *AssistantService) { s.subscriptions = store }
 }
@@ -73,33 +60,14 @@ func WithAssistantDeliveryPolicyReader(
 	return func(s *AssistantService) { s.deliveryPolicies = reader }
 }
 
-func WithIntersectionInboxReader(reader ports.IntersectionInboxReader) AssistantServiceOption {
-	return func(s *AssistantService) { s.intersectionInbox = reader }
-}
-
-func WithLearningProjectionReader(
-	reader ports.LearningProjectionReader,
-) AssistantServiceOption {
-	return func(service *AssistantService) {
-		service.learningProjection = reader
-	}
-}
-
-func WithIntersectionReminderPolicy(policy IntersectionReminderPolicy) AssistantServiceOption {
-	return func(s *AssistantService) {
-		s.intersectionReminderPolicy = normalizeIntersectionReminderPolicy(policy)
-	}
-}
-
 func NewAssistantService(
 	consents consentports.Reader,
 	cache rtredis.Client,
 	opts ...AssistantServiceOption,
 ) *AssistantService {
 	svc := &AssistantService{
-		consents:                   consents,
-		cache:                      cache,
-		intersectionReminderPolicy: defaultIntersectionReminderPolicy(),
+		consents: consents,
+		cache:    cache,
 		now: func() time.Time {
 			return time.Now().UTC()
 		},
@@ -108,9 +76,6 @@ func NewAssistantService(
 		opt(svc)
 	}
 	svc.consentQueries = consentapplication.NewQueryFacade(consents)
-	if svc.agentLoop == nil {
-		svc.agentLoop = NewAgentLoop(nil, ReactRuntime{}, svc.now)
-	}
 	return svc
 }
 

@@ -8,7 +8,7 @@ import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/components/media/app_media_image.dart';
 import 'package:quwoquan_app/ui/content/models/publish_settings_models.dart';
 
-/// 发布圈子选择页（design §3.7）；选项 [CreateCircleOption]（加载链经 CircleDto.fromMap）。
+/// 发布圈子选择页（design §3.7）；选项 [CreateCircleOption] 从 generated Circle 投影构造。
 ///
 /// 已加入 / 推荐圈子分区，Cupertino 语义，底部取消+确认。
 /// 无已加入圈子时展示空态「加入圈子，发现兴趣相近的人」+ 发现页 CTA。

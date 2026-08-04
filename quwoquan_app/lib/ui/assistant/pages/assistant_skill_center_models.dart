@@ -4,25 +4,22 @@ class AssistantSkillCenterItem {
   const AssistantSkillCenterItem({
     required this.catalog,
     this.setting,
-    this.subscription,
+    this.subscriptions = const <SkillSubscriptionWire>[],
     this.consent,
   });
 
   final AssistantSkillCatalogItemView catalog;
   final SkillUserSetting? setting;
-  final SkillSubscriptionWire? subscription;
+  final List<SkillSubscriptionWire> subscriptions;
   final SkillConsent? consent;
 
   String get skillId => catalog.skillId;
-  bool get hasSubscription => subscription != null;
+  bool get hasSubscription => subscriptions.isNotEmpty;
   bool get enabled => setting?.status != SkillUserSettingStatus.disabled;
   bool get proactiveCapable {
     final mode = catalog.activationMode?.trim().toLowerCase() ?? '';
     return mode == 'proactive' || mode == 'hybrid';
   }
-
-  bool get proactiveEnabled =>
-      subscription?.status == SkillSubscriptionStatus.active;
 
   bool get consentGranted {
     final required = catalog.requiredConsentScopes.toSet();
@@ -35,8 +32,30 @@ class AssistantSkillCenterItem {
         current.revokedAt != null) {
       return false;
     }
-    return current.grantedScopes.toSet().length == required.length &&
-        current.grantedScopes.every(required.contains);
+    final granted = current.grantedScopes.toSet();
+    return required.every(granted.contains);
+  }
+
+  bool isConsentScopeGranted(String scopeId) {
+    final current = consent;
+    return current != null &&
+        current.granted == true &&
+        current.revokedAt == null &&
+        current.grantedScopes.contains(scopeId);
+  }
+
+  List<SkillCatalogSemanticLabel> get requiredConsentScopeLabels {
+    final required = catalog.requiredConsentScopes.toSet();
+    return catalog.consentScopeLabels
+        .where((label) => required.contains(label.id))
+        .toList(growable: false);
+  }
+
+  List<SkillCatalogSemanticLabel> get optionalConsentScopeLabels {
+    final required = catalog.requiredConsentScopes.toSet();
+    return catalog.consentScopeLabels
+        .where((label) => !required.contains(label.id))
+        .toList(growable: false);
   }
 }
 
@@ -61,23 +80,33 @@ final assistantSkillCenterProvider =
       final settingsBySkill = <String, SkillUserSetting>{
         for (final item in settings) item.skillId: item,
       };
-      final activeSubscriptions = <String, SkillSubscriptionWire>{
-        for (final item in subscriptions)
-          if (item.status != SkillSubscriptionStatus.archived)
-            item.skillId: item,
-      };
-      final activeConsents = <String, SkillConsent>{
-        for (final item in consents)
-          if (item.granted == true && item.revokedAt == null)
-            item.skillId: item,
+      final activeSubscriptions = <String, List<SkillSubscriptionWire>>{};
+      for (final item in subscriptions) {
+        if (item.status == SkillSubscriptionStatus.archived) {
+          continue;
+        }
+        activeSubscriptions
+            .putIfAbsent(item.skillId, () => <SkillSubscriptionWire>[])
+            .add(item);
+      }
+      for (final items in activeSubscriptions.values) {
+        items.sort(
+          (left, right) => left.subscriptionId.compareTo(right.subscriptionId),
+        );
+      }
+      final consentsBySkill = <String, SkillConsent>{
+        for (final item in consents) item.skillId: item,
       };
       return catalog
           .map(
             (item) => AssistantSkillCenterItem(
               catalog: item,
               setting: settingsBySkill[item.skillId],
-              subscription: activeSubscriptions[item.skillId],
-              consent: activeConsents[item.skillId],
+              subscriptions: List<SkillSubscriptionWire>.unmodifiable(
+                activeSubscriptions[item.skillId] ??
+                    const <SkillSubscriptionWire>[],
+              ),
+              consent: consentsBySkill[item.skillId],
             ),
           )
           .toList(growable: false);

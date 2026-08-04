@@ -34,12 +34,20 @@ func TestCircleBehaviorFactRealAppendReplayProjectionAndStream(t *testing.T) {
 	}
 
 	first := executeBehaviorFact(t, map[string]any{"circleId": "circle-behavior", "eventType": "impression"}, "behavior-key-1", "session-1", operation.ActorContext{AccountID: "account-viewer", PersonaID: "persona-viewer"})
-	if first.Code != http.StatusNoContent || first.Body.Len() != 0 {
+	if first.Code != http.StatusOK {
 		t.Fatalf("behavior append failed: status=%d body=%s", first.Code, first.Body.String())
 	}
+	firstResult := decodeBody(t, first)
+	if firstResult["factId"] == "" || firstResult["idempotentReplay"] != false {
+		t.Fatalf("behavior append result drift: %#v", firstResult)
+	}
 	replay := executeBehaviorFact(t, map[string]any{"circleId": "circle-behavior", "eventType": "impression"}, "behavior-key-1", "session-1", operation.ActorContext{AccountID: "account-viewer", PersonaID: "persona-viewer"})
-	if replay.Code != http.StatusNoContent {
+	if replay.Code != http.StatusOK {
 		t.Fatalf("behavior replay failed: status=%d body=%s", replay.Code, replay.Body.String())
+	}
+	replayResult := decodeBody(t, replay)
+	if replayResult["factId"] != firstResult["factId"] || replayResult["idempotentReplay"] != true {
+		t.Fatalf("behavior replay result drift: %#v first=%#v", replayResult, firstResult)
 	}
 	conflict := executeBehaviorFact(t, map[string]any{"circleId": "circle-behavior", "eventType": "click"}, "behavior-key-1", "session-1", operation.ActorContext{AccountID: "account-viewer", PersonaID: "persona-viewer"})
 	if conflict.Code != http.StatusConflict || decodeBody(t, conflict)["code"] != "CIRCLE.USER.behavior_fact_idempotency_conflict" {
@@ -53,7 +61,7 @@ func TestCircleBehaviorFactRealAppendReplayProjectionAndStream(t *testing.T) {
 	}
 
 	device := executeBehaviorFact(t, map[string]any{"circleId": "circle-behavior", "eventType": "click"}, "behavior-device-1", "session-device", operation.ActorContext{DeviceActorID: "device-actor-1"})
-	if device.Code != http.StatusNoContent {
+	if device.Code != http.StatusOK {
 		t.Fatalf("device behavior append failed: status=%d body=%s", device.Code, device.Body.String())
 	}
 	for collection, want := range map[string]int64{
@@ -144,7 +152,7 @@ func TestCircleDiscoveryRecommendationUsesCircleOwnedLifecycleAndBehaviorFacts(t
 		"session-recommendation-rank",
 		operation.ActorContext{AccountID: "account-active-viewer", PersonaID: "persona-active-viewer"},
 	)
-	if behavior.Code != http.StatusNoContent {
+	if behavior.Code != http.StatusOK {
 		t.Fatalf("behavior append status=%d body=%s", behavior.Code, behavior.Body.String())
 	}
 

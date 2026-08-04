@@ -309,7 +309,7 @@ final class ContentMediaUploadCoordinator {
       ),
     );
     if (result.mediaId != mediaID ||
-        result.status != MediaAssetStatus.deleted) {
+        result.status != MediaAssetDiscardStatus.deleted) {
       throw StateError('media discard response does not match checkpoint');
     }
     await onCheckpoint(
@@ -837,8 +837,7 @@ String contentMediaMimeTypeForPath(String path, MediaType mediaType) {
     MediaType.image when lower.endsWith('.png') => 'image/png',
     MediaType.image when lower.endsWith('.gif') => 'image/gif',
     MediaType.image when lower.endsWith('.webp') => 'image/webp',
-    MediaType.image
-        when lower.endsWith('.heic') || lower.endsWith('.heif') =>
+    MediaType.image when lower.endsWith('.heic') || lower.endsWith('.heif') =>
       'image/heic',
     MediaType.image => 'image/jpeg',
     MediaType.video when lower.endsWith('.mov') => 'video/quicktime',

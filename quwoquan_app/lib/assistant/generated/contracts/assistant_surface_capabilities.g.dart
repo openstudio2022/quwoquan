@@ -6,6 +6,7 @@ class AssistantSurfaceCapabilitiesWire {
   const AssistantSurfaceCapabilitiesWire({
     required this.surfaceId,
     this.supportedNodeKinds = const <String>[],
+    this.supportedActionIntents = const <String>[],
     this.viewportClass = "compact",
     required this.platform,
     this.theme = "system",
@@ -16,6 +17,7 @@ class AssistantSurfaceCapabilitiesWire {
 
   final String surfaceId;
   final List<String> supportedNodeKinds;
+  final List<String> supportedActionIntents;
   final String viewportClass;
   final String platform;
   final String theme;
@@ -26,6 +28,7 @@ class AssistantSurfaceCapabilitiesWire {
   Map<String, dynamic> toJson() => <String, dynamic>{
         'surfaceId': surfaceId,
         'supportedNodeKinds': supportedNodeKinds,
+        'supportedActionIntents': supportedActionIntents,
         'viewportClass': viewportClass,
         'platform': platform,
         'theme': theme,
@@ -38,6 +41,7 @@ class AssistantSurfaceCapabilitiesWire {
     const allowedFields = <String>{
       'surfaceId',
       'supportedNodeKinds',
+      'supportedActionIntents',
       'viewportClass',
       'platform',
       'theme',
@@ -56,6 +60,9 @@ class AssistantSurfaceCapabilitiesWire {
     }
     if (json.containsKey('supportedNodeKinds') && json['supportedNodeKinds'] != null && (json['supportedNodeKinds'] is! List || (json['supportedNodeKinds'] as List).any((item) => item is! String))) {
       throw const FormatException('AssistantSurfaceCapabilitiesWire field supportedNodeKinds has an invalid wire value');
+    }
+    if (json.containsKey('supportedActionIntents') && json['supportedActionIntents'] != null && (json['supportedActionIntents'] is! List || (json['supportedActionIntents'] as List).any((item) => item is! String))) {
+      throw const FormatException('AssistantSurfaceCapabilitiesWire field supportedActionIntents has an invalid wire value');
     }
     if (json.containsKey('viewportClass') && json['viewportClass'] != null && (json['viewportClass'] is! String)) {
       throw const FormatException('AssistantSurfaceCapabilitiesWire field viewportClass has an invalid wire value');
@@ -78,6 +85,7 @@ class AssistantSurfaceCapabilitiesWire {
     return AssistantSurfaceCapabilitiesWire(
       surfaceId: (json['surfaceId'] as String?)?.trim() ?? "",
       supportedNodeKinds: _assistantStringList(json['supportedNodeKinds']),
+      supportedActionIntents: _assistantStringList(json['supportedActionIntents']),
       viewportClass: (json['viewportClass'] as String?)?.trim() ?? "compact",
       platform: (json['platform'] as String?)?.trim() ?? "",
       theme: (json['theme'] as String?)?.trim() ?? "system",
@@ -98,6 +106,7 @@ class AssistantSurfaceCapabilitiesWire {
 class AssistantSurfaceCapabilitiesWireFields {
   static const String surfaceId = 'surfaceId';
   static const String supportedNodeKinds = 'supportedNodeKinds';
+  static const String supportedActionIntents = 'supportedActionIntents';
   static const String viewportClass = 'viewportClass';
   static const String platform = 'platform';
   static const String theme = 'theme';

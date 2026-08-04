@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"maps"
 	"strings"
 	"time"
 
 	generated "quwoquan_service/services/assistant-service/generated/assistant/assistant_session"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
+	assistant "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/model"
 )
 
 type canonicalRunInput struct {
@@ -59,7 +60,7 @@ func (s *AssistantService) startCanonicalRunAndWait(
 		RequestedSkillID:  strings.TrimSpace(input.SkillID),
 		RequestedDomainID: strings.TrimSpace(input.DomainID),
 		Trigger:           trigger,
-		ContextSnapshot:   cloneObject(input.ContextSnapshot),
+		ContextSnapshot:   maps.Clone(input.ContextSnapshot),
 		ReasoningProfile:  generated.AssistantReasoningProfileBalanced,
 	})
 	if err != nil {
@@ -132,14 +133,8 @@ func projectCanonicalRunAsTurnView(
 		CreatedAt:       run.CreatedAt,
 		CompletedAt:     run.CompletedAt,
 	}
-	if len(run.TerminalSnapshot) > 0 {
-		encoded, err := json.Marshal(run.TerminalSnapshot)
-		if err == nil {
-			var snapshot assistant.AssistantRunTerminalSnapshot
-			if json.Unmarshal(encoded, &snapshot) == nil {
-				projected.TerminalSnapshot = &snapshot
-			}
-		}
+	if run.TerminalSnapshot != nil {
+		projected.TerminalSnapshot = run.TerminalSnapshot.Clone()
 	}
 	return projected
 }

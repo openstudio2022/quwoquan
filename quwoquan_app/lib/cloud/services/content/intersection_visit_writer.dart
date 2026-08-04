@@ -1,42 +1,36 @@
-import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
-import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_request_page_ids.g.dart';
-import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
+typedef IntersectionVisitInvocationContextFactory =
+    CloudOperationInvocationContext Function(String clientPageId);
 
 /// IntersectionVisitState 对象的 typed 写面
 /// （quwoquan_service/services/content-service/contracts/content/intersection_visit_state/operations.yaml）。
 ///
 /// 推进「我的交集」已读水位并清零未读红点；[dimension] 为空推进全部维度。
 /// 服务端水位以 $max 单调合并，任意重放自然收敛（无需 Idempotency-Key）。
-abstract class IntersectionVisitWriter {
-  Future<void> markIntersectionsVisited({String? dimension});
+abstract interface class IntersectionVisitWriter {
+  Future<void> markIntersectionsVisited({IntersectionDimension? dimension});
 }
 
-class RemoteIntersectionVisitWriter implements IntersectionVisitWriter {
-  factory RemoteIntersectionVisitWriter({
-    required CloudHttpClient httpClient,
-    String? baseUrl,
-  }) {
-    return RemoteIntersectionVisitWriter._(
-      httpClient,
-      (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim(),
-    );
-  }
+final class RemoteIntersectionVisitWriter implements IntersectionVisitWriter {
+  const RemoteIntersectionVisitWriter({
+    required this.client,
+    required this.invocationContext,
+  });
 
-  RemoteIntersectionVisitWriter._(this._httpClient, this._baseUrl);
-
-  final CloudHttpClient _httpClient;
-  final String _baseUrl;
+  final GeneratedCloudOperationClient client;
+  final IntersectionVisitInvocationContextFactory invocationContext;
 
   @override
-  Future<void> markIntersectionsVisited({String? dimension}) async {
-    await _httpClient.postJson(
-      Uri.parse('$_baseUrl${ContentApiMetadata.markIntersectionsVisitedPath}'),
-      headers: CloudRequestHeaders.forPage(
+  Future<void> markIntersectionsVisited({
+    IntersectionDimension? dimension,
+  }) async {
+    await client.contentIntersectionVisitStateMarkIntersectionsVisited(
+      MarkIntersectionsVisitedRequest(dimension: dimension),
+      context: invocationContext(
         ContentRequestPageIds.markIntersectionsVisited,
       ),
-      body: <String, dynamic>{'dimension': (dimension ?? '').trim()},
     );
   }
 }

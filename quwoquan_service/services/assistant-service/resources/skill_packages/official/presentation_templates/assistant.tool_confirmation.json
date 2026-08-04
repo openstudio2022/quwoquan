@@ -1,0 +1,145 @@
+{
+  "templateId": "assistant.tool_confirmation",
+  "skillId": "quwoquan.official",
+  "inputSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "title": {"type": "string", "minLength": 1, "maxLength": 512},
+      "body": {"type": "string", "minLength": 1, "maxLength": 2000},
+      "details": {"type": "object"},
+      "approveAction": {"type": "object"},
+      "rejectAction": {"type": "object"}
+    },
+    "required": ["title", "body", "details", "approveAction", "rejectAction"]
+  },
+  "rootNodeId": "root",
+  "nodes": [
+    {
+      "nodeId": "root",
+      "parentNodeId": "",
+      "order": 0,
+      "kind": "confirmation_card",
+      "title": "",
+      "body": "",
+      "data": {},
+      "binding": {"title": "$.title", "body": "$.body"},
+      "style": {
+        "tone": "informative",
+        "density": "standard",
+        "emphasis": "strong",
+        "variant": "outlined",
+        "alignment": "start",
+        "spacingRole": "section",
+        "aspectRatio": 0,
+        "responsiveSpan": 12
+      },
+      "accessibility": {
+        "semanticLabel": "待确认操作",
+        "semanticHint": "确认后才会执行",
+        "excludeFromSemantics": false
+      }
+    },
+    {
+      "nodeId": "details",
+      "parentNodeId": "root",
+      "order": 0,
+      "kind": "comparison_table",
+      "title": "操作详情",
+      "body": "",
+      "data": {},
+      "binding": {"data": "$.details"},
+      "style": {
+        "tone": "neutral",
+        "density": "compact",
+        "emphasis": "normal",
+        "variant": "standard",
+        "alignment": "start",
+        "spacingRole": "related",
+        "aspectRatio": 0,
+        "responsiveSpan": 12
+      },
+      "accessibility": {
+        "semanticLabel": "待确认操作详情",
+        "semanticHint": "",
+        "excludeFromSemantics": false
+      }
+    },
+    {
+      "nodeId": "actions",
+      "parentNodeId": "root",
+      "order": 1,
+      "kind": "action_group",
+      "title": "确认",
+      "body": "",
+      "data": {},
+      "binding": {"action": "$.approveAction"},
+      "style": {
+        "tone": "positive",
+        "density": "standard",
+        "emphasis": "strong",
+        "variant": "filled",
+        "alignment": "start",
+        "spacingRole": "related",
+        "aspectRatio": 0,
+        "responsiveSpan": 12
+      },
+      "accessibility": {
+        "semanticLabel": "确认执行",
+        "semanticHint": "",
+        "excludeFromSemantics": false
+      }
+    },
+    {
+      "nodeId": "reject",
+      "parentNodeId": "actions",
+      "order": 0,
+      "kind": "action_group",
+      "title": "取消",
+      "body": "",
+      "data": {},
+      "binding": {"action": "$.rejectAction"},
+      "style": {
+        "tone": "neutral",
+        "density": "standard",
+        "emphasis": "normal",
+        "variant": "outlined",
+        "alignment": "start",
+        "spacingRole": "related",
+        "aspectRatio": 0,
+        "responsiveSpan": 12
+      },
+      "accessibility": {
+        "semanticLabel": "取消执行",
+        "semanticHint": "",
+        "excludeFromSemantics": false
+      }
+    }
+  ],
+  "responsiveVariants": [
+    {
+      "variantId": "compact",
+      "requiredNodeKinds": ["confirmation_card", "comparison_table", "action_group"],
+      "viewportClass": "compact",
+      "density": "standard"
+    },
+    {
+      "variantId": "standard",
+      "requiredNodeKinds": ["confirmation_card", "comparison_table", "action_group"],
+      "viewportClass": "standard",
+      "density": "standard"
+    },
+    {
+      "variantId": "universal",
+      "requiredNodeKinds": ["confirmation_card", "comparison_table", "action_group"],
+      "viewportClass": "any",
+      "density": "standard"
+    }
+  ],
+  "allowedActionIntents": ["ContinueAssistantToolUse"],
+  "fallbackMarkdown": "需要确认后才能执行此操作。",
+  "accessibility": {
+    "summary": "待确认操作及详情"
+  },
+  "assetDigest": "sha256:7ca78aec550926a335bd5ff4e0617347fc148f20b5eb33fecb8b44612028c51d"
+}

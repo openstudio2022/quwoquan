@@ -99,6 +99,25 @@ def test_beta_device_receipt_binds_candidate_directly_without_identity_shim() ->
     assert '--evidence "devices=$RAW/devices.json"' in workflow
 
 
+def test_device_matrix_nightly_schedule_selects_full_profile() -> None:
+    assert SPEC_REF
+    text = DEVICE_WORKFLOW.read_text(encoding="utf-8")
+    payload = yaml.load(text, Loader=yaml.BaseLoader)
+
+    assert payload["on"]["schedule"] == [{"cron": "0 18 * * *"}]
+    assert 'if [ "$EVENT_NAME" = "schedule" ]; then PROFILE="nightly_full"; fi' in text
+    assert "NIGHTLY_COMMERCIAL_RELEASE_ATTESTATION" in text
+    assert "NIGHTLY_ROLLBACK_RELEASE_ATTESTATION" in text
+    assert "stackctl.py dev-session" in text
+    assert "--env gamma" in text
+    assert "managed_runtime_started" in text
+    assert "Inspect and doctor the managed Gamma runtime before soak" in text
+    assert "Inspect and doctor the managed Gamma runtime after soak" in text
+    assert text.count("stackctl.py inspect") >= 2
+    assert text.count("stackctl.py doctor") >= 2
+    assert "nightly full device matrix exceeded the 7200 second soak budget" in text
+
+
 def test_beta_android_and_ios_run_in_parallel_before_one_receipt_aggregation() -> None:
     assert SPEC_REF
     text = DEVICE_WORKFLOW.read_text(encoding="utf-8")
@@ -173,21 +192,17 @@ def test_beta_android_and_ios_run_in_parallel_before_one_receipt_aggregation() -
     assert "RepoDigests" not in text
     assert "timeout-minutes: 120" not in combined
     assert "timeout-minutes: 30" not in combined
-    assert jobs["beta_stack"]["timeout-minutes"] == "2"
+    assert "20 || 2" in jobs["beta_stack"]["timeout-minutes"]
     assert aggregate_job["timeout-minutes"] == "1"
-    assert jobs["beta_teardown"]["timeout-minutes"] == "1"
+    assert "10 || 1" in jobs["beta_teardown"]["timeout-minutes"]
     platform_payload = yaml.load(platform_text, Loader=yaml.BaseLoader)
-    assert platform_payload["jobs"]["device"]["timeout-minutes"] == "4"
-    hard_chain_minutes = sum(
-        int(value)
-        for value in (
-            jobs["beta_stack"]["timeout-minutes"],
-            platform_payload["jobs"]["device"]["timeout-minutes"],
-            aggregate_job["timeout-minutes"],
-            jobs["beta_teardown"]["timeout-minutes"],
-        )
-    )
-    assert hard_chain_minutes == 8
+    platform_timeout = platform_payload["jobs"]["device"]["timeout-minutes"]
+    assert "nightly_full" in platform_timeout
+    assert "120" in platform_timeout
+    assert "release_candidate" in platform_timeout
+    assert "90" in platform_timeout
+    assert "|| 4" in platform_timeout
+    assert 'if [ "$VALIDATION_PROFILE" = mainline_auto_prod ]' in text
     assert 'if [ "$calendar_lead_time_seconds" -gt 480 ]' in text
     assert "STACKCTL_AUTO_WIPE_MIGRATION_DRIFT: \"0\"" in text
     assert "stackctl.py up" in text

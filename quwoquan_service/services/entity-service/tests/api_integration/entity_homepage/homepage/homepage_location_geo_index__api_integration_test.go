@@ -17,7 +17,7 @@ import (
 // TestHomepageLocationIsIndexableAndNearQueryable 用真实 Mongo 证明 location
 // 的落库形状真的能被 idx_homepages_location（2dsphere）建键并被 $nearSphere 召回。
 // 这是「附近」链路唯一无法用内存 double 证明的一段：domain GeoPoint 的
-// {latitude, longitude} 嵌套文档会被 2dsphere 当作 legacy [x, y] 坐标对读取，
+// {latitude, longitude} 嵌套文档会被 2dsphere 当作退役的 [x, y] 坐标对读取，
 // 纬度落到 y 位置后越界，写入直接被拒。
 func TestHomepageLocationIsIndexableAndNearQueryable(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
@@ -109,7 +109,7 @@ func TestHomepageLocationIsIndexableAndNearQueryable(t *testing.T) {
 		t.Fatalf("location must persist on the document")
 	}
 	if raw.Location.Latitude != nil || raw.Location.Longitude != nil {
-		t.Fatalf("location must not persist the legacy latitude/longitude pair, got %+v", *raw.Location)
+		t.Fatalf("location must not persist the retired latitude/longitude pair, got %+v", *raw.Location)
 	}
 	if raw.Location.Type != "Point" || len(raw.Location.Coordinates) != 2 {
 		t.Fatalf("location must persist as GeoJSON Point, got %+v", *raw.Location)

@@ -20,14 +20,31 @@ tools:
         summary: {type: string}
         results: {type: array}
         citations: {type: array}
+        emergedTagRefs:
+          type: array
+          items: {type: string, minLength: 1}
         provenance: {type: object}
-      required: [provider, summary, results, citations, provenance]
+        evidenceAssessment:
+          type: object
+          additionalProperties: false
+          properties:
+            status: {type: string, enum: [accepted, insufficient, rejected]}
+            evidenceSufficient: {type: boolean}
+            replanRequired: {type: boolean}
+            reason: {type: string}
+            targetIds: {type: array, items: {type: string}}
+            documentIds: {type: array, items: {type: string}}
+            artifactRefs: {type: array, items: {type: string}}
+            sourceIds: {type: array, items: {type: string}}
+          required: [status, evidenceSufficient, replanRequired, reason, targetIds, documentIds, artifactRefs, sourceIds]
+      required: [provider, summary, results, citations, emergedTagRefs, provenance, evidenceAssessment]
     requiresConfirmation: false
     idempotency: read_only
     sensitivity: public
     environmentScopes: [alpha, beta, gamma, prod]
     serverInjectedInputs: []
     readOnly: true
+    research: {operation: discover}
     resilience: {timeoutMs: 5000, maxAttempts: 1, retryBackoffMs: 0, loopDetectionWindow: 3}
     recovery: {action: fail_turn, disruptionLevel: partial}
 
@@ -81,7 +98,7 @@ tools:
 
   - toolName: web_search
     displayName: 网络搜索
-    description: 检索公开网络信息并返回可核验引用；也用于天气与行情等实时公共事实。
+    description: 检索公开网络页面并返回可核验引用；天气与行情由各自的 typed capability tool 提供。
     namespace: public_web
     placement: cloud
     inputSchema:
@@ -100,10 +117,6 @@ tools:
               dimension: {type: string}
               query: {type: string}
             required: [dimension, query]
-        location: {type: string}
-        locationSearchName: {type: string}
-        symbol: {type: string}
-        symbols: {type: array, items: {type: string}}
       required: [query]
     outputSchema:
       type: object
@@ -125,14 +138,110 @@ tools:
             artifactRefs: {type: array, items: {type: string}}
             sourceIds: {type: array, items: {type: string}}
           required: [status, evidenceSufficient, replanRequired, reason, targetIds, documentIds, artifactRefs, sourceIds]
-      required: [summary, references, reliable]
+      required: [summary, references, reliable, evidenceAssessment]
     requiresConfirmation: false
     idempotency: read_only
     sensitivity: public
     environmentScopes: [alpha, beta, gamma, prod]
     serverInjectedInputs: [runId, skillId]
     readOnly: true
+    research: {operation: discover, parallelInputField: searchQueries}
+    failure: {providerFailureCode: ASSISTANT.MIDDLEWARE.public_search_provider_unavailable}
     resilience: {timeoutMs: 12000, maxAttempts: 2, retryBackoffMs: 200, loopDetectionWindow: 3}
+    recovery: {action: degrade_answer, disruptionLevel: partial}
+
+  - toolName: weather_lookup
+    displayName: 天气事实查询
+    description: 按地点查询实时天气和预报，并返回可核验的公共来源；不通过 Skill 名称或文本关键词猜测能力。
+    namespace: weather
+    placement: cloud
+    inputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        runId: {type: string, minLength: 1}
+        skillId: {type: string}
+        query: {type: string, minLength: 1, description: 要核验的天气问题。}
+        location: {type: string, minLength: 1}
+        locationSearchName: {type: string, minLength: 1}
+      required: [query]
+    outputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        summary: {type: string}
+        references: {type: array}
+        reliable: {type: boolean}
+        evidenceAssessment:
+          type: object
+          additionalProperties: false
+          properties:
+            status: {type: string, enum: [accepted, insufficient, rejected]}
+            evidenceSufficient: {type: boolean}
+            replanRequired: {type: boolean}
+            reason: {type: string}
+            targetIds: {type: array, items: {type: string}}
+            documentIds: {type: array, items: {type: string}}
+            artifactRefs: {type: array, items: {type: string}}
+            sourceIds: {type: array, items: {type: string}}
+          required: [status, evidenceSufficient, replanRequired, reason, targetIds, documentIds, artifactRefs, sourceIds]
+      required: [summary, references, reliable, evidenceAssessment]
+    requiresConfirmation: false
+    idempotency: read_only
+    sensitivity: public
+    environmentScopes: [alpha, beta, gamma, prod]
+    serverInjectedInputs: [runId, skillId]
+    readOnly: true
+    research: {operation: discover}
+    failure: {providerFailureCode: ASSISTANT.MIDDLEWARE.weather_provider_unavailable}
+    resilience: {timeoutMs: 10000, maxAttempts: 2, retryBackoffMs: 200, loopDetectionWindow: 3}
+    recovery: {action: degrade_answer, disruptionLevel: partial}
+
+  - toolName: finance_quote
+    displayName: 行情事实查询
+    description: 查询证券或市场标的的实时公共行情与来源；不通过 Skill 名称或文本关键词猜测能力。
+    namespace: finance
+    placement: cloud
+    inputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        runId: {type: string, minLength: 1}
+        skillId: {type: string}
+        query: {type: string, minLength: 1, description: 要核验的行情问题。}
+        symbol: {type: string, minLength: 1}
+        symbols: {type: array, items: {type: string, minLength: 1}, maxItems: 20}
+      required: [query]
+    outputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        summary: {type: string}
+        references: {type: array}
+        reliable: {type: boolean}
+        evidenceAssessment:
+          type: object
+          additionalProperties: false
+          properties:
+            status: {type: string, enum: [accepted, insufficient, rejected]}
+            evidenceSufficient: {type: boolean}
+            replanRequired: {type: boolean}
+            reason: {type: string}
+            targetIds: {type: array, items: {type: string}}
+            documentIds: {type: array, items: {type: string}}
+            artifactRefs: {type: array, items: {type: string}}
+            sourceIds: {type: array, items: {type: string}}
+          required: [status, evidenceSufficient, replanRequired, reason, targetIds, documentIds, artifactRefs, sourceIds]
+      required: [summary, references, reliable, evidenceAssessment]
+    requiresConfirmation: false
+    idempotency: read_only
+    sensitivity: public
+    environmentScopes: [alpha, beta, gamma, prod]
+    serverInjectedInputs: [runId, skillId]
+    readOnly: true
+    research: {operation: discover}
+    failure: {providerFailureCode: ASSISTANT.MIDDLEWARE.finance_provider_unavailable}
+    resilience: {timeoutMs: 10000, maxAttempts: 2, retryBackoffMs: 200, loopDetectionWindow: 3}
     recovery: {action: degrade_answer, disruptionLevel: partial}
 
   - toolName: web_open
@@ -180,6 +289,13 @@ tools:
     environmentScopes: [alpha, beta, gamma, prod]
     serverInjectedInputs: [runId, skillId]
     readOnly: true
+    research:
+      operation: navigate
+      targetInputField: target
+      targetKindField: kind
+      targetValueField: value
+      reusableSourceTargetKinds: [source]
+      childTargetKinds: [document_link]
     resilience: {timeoutMs: 15000, maxAttempts: 2, retryBackoffMs: 250, loopDetectionWindow: 3}
     recovery: {action: degrade_answer, disruptionLevel: partial}
 
@@ -223,5 +339,6 @@ tools:
     environmentScopes: [alpha, beta, gamma, prod]
     serverInjectedInputs: [runId]
     readOnly: true
+    research: {operation: inspect}
     resilience: {timeoutMs: 2000, maxAttempts: 1, retryBackoffMs: 0, loopDetectionWindow: 3}
     recovery: {action: degrade_answer, disruptionLevel: partial}

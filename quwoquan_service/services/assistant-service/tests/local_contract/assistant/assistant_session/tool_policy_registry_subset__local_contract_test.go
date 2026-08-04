@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
-	toolpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/tool"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/orchestration"
+	toolpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/tool"
+	assistant "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/model"
 	modeldouble "quwoquan_service/services/assistant-service/tests/support/modeldouble"
 	"quwoquan_service/services/assistant-service/tests/support/promptassets"
 	"quwoquan_service/services/assistant-service/tests/support/skillfixture"
@@ -78,12 +78,24 @@ func TestFrozenPolicyRejectsUnregisteredTool(t *testing.T) {
 		toolpkg.WebSearchMetadata(),
 		func(_ context.Context, _ toolpkg.Request) (toolpkg.Result, error) {
 			return toolpkg.Result{Output: map[string]any{
-				"summary":    "杭州明天多云，适合出门。",
-				"references": []any{},
-				"reliable":   true,
+				"summary":            "杭州明天多云，适合出门。",
+				"references":         []any{},
+				"reliable":           true,
+				"evidenceAssessment": acceptedEvidenceAssessment("policy_web_search_stub"),
 			}}, nil
 		},
 	)
+	for _, metadata := range []toolpkg.Metadata{
+		toolpkg.WebOpenMetadata(),
+		toolpkg.WebFindMetadata(),
+	} {
+		registry.Register(
+			metadata,
+			func(_ context.Context, _ toolpkg.Request) (toolpkg.Result, error) {
+				return toolpkg.Result{}, nil
+			},
+		)
+	}
 	loop := orchestration.NewAgentLoop(
 		nil,
 		orchestration.ReactRuntime{

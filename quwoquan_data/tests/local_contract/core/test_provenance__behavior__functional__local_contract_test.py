@@ -44,12 +44,17 @@ from core.provenance import (  # noqa: E402
     provenance_issues,
 )
 from core.post_evidence_chain import build_source_refs_snapshot  # noqa: E402
+from core.article_package import sha256_text  # noqa: E402
 from content.source.source_unit import write_source_unit  # noqa: E402
 from content.execution.stage_reports import write_stage_result  # noqa: E402
 from content.post.materialize_apply import materialize_posts  # noqa: E402
 from support.execution_manifest_fixture import build_execution_fixture  # noqa: E402
 
 TASK = "20260711--travel-article-provenance--test-region-b--pilot-001"
+PROMPT_SHA256 = sha256_text("provenance fixture prompt")
+WRITING_PACK_SHA256 = sha256_text("provenance fixture writing pack")
+SOURCE_BUNDLE_SHA256 = sha256_text("provenance fixture source bundle")
+DRAFT_SHA256 = sha256_text("provenance fixture draft")
 
 
 def test_source_bundle_hash_accepts_runtime_relative_path_with_batch_prefix():
@@ -388,10 +393,10 @@ def _write_provenance(post_dir: Path, *, digest: str, generator: str, originals,
         "final": {"generator": generator, "articleDigest": digest, "agentRunId": "run-1"},
         "agentInput": {
             "title": "t",
-            "promptSha256": "sha256:a",
-            "writingPackSha256": "sha256:b",
-            "sourceBundleSha256": "sha256:c",
-            "draftSha256": "sha256:d",
+            "promptSha256": PROMPT_SHA256,
+            "writingPackSha256": WRITING_PACK_SHA256,
+            "sourceBundleSha256": SOURCE_BUNDLE_SHA256,
+            "draftSha256": DRAFT_SHA256,
         },
         "originalSources": originals,
         "gateResults": {"decision": decision, "checks": {}},
@@ -444,10 +449,10 @@ def test_build_provenance_uses_meta_over_compose():
             "sessionTrace": "session-1",
             "styleFamily": "旅途随笔风",
             "openingStrategy": "scene_immersion",
-            "promptSha256": "sha256:a",
-            "writingPackSha256": "sha256:b",
-            "sourceBundleSha256": "sha256:c",
-            "draftSha256": "sha256:d",
+            "promptSha256": PROMPT_SHA256,
+            "writingPackSha256": WRITING_PACK_SHA256,
+            "sourceBundleSha256": SOURCE_BUNDLE_SHA256,
+            "draftSha256": DRAFT_SHA256,
         },
         review_payload={"decision": "approved", "checks": {}},
         compose_payload={"sourcePaths": ["sources/a.md"], "generator": "agent", "articleMarkdownDigest": "d"},
@@ -459,7 +464,7 @@ def test_build_provenance_uses_meta_over_compose():
     assert data["final"]["agentRunId"] == "run-1"
     assert data["final"]["articleDigest"] == "d"
     assert "mustIncludeFacts" not in data["agentInput"]
-    assert data["agentInput"]["promptSha256"] == "sha256:a"
+    assert data["agentInput"]["promptSha256"] == PROMPT_SHA256
 
 
 def test_build_provenance_records_cited_binary_asset_as_original_source():
@@ -471,10 +476,10 @@ def test_build_provenance_records_cited_binary_asset_as_original_source():
         draft_meta={
             "generator": "agent",
             "agentRunId": "run-2",
-            "promptSha256": "sha256:p",
-            "writingPackSha256": "sha256:w",
-            "sourceBundleSha256": "sha256:s",
-            "draftSha256": "sha256:d",
+            "promptSha256": PROMPT_SHA256,
+            "writingPackSha256": WRITING_PACK_SHA256,
+            "sourceBundleSha256": SOURCE_BUNDLE_SHA256,
+            "draftSha256": DRAFT_SHA256,
             "citedSourcePaths": [source_md, asset_ref],
         },
         review_payload={"decision": "approved", "checks": {}},

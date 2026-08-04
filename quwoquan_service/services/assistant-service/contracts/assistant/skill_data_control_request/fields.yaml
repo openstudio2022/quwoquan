@@ -1,0 +1,40 @@
+description: Skill 数据控制请求、确认命令与回执。
+fields:
+- {name: requestId, source: requestId, type: string, constraints: [PK, NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: accountId, source: accountId, type: string, constraints: [NOT_NULL], classification: PRIVATE, log_policy: hash, api_exposure: none, ops_exposure: read, role: authoritative_state, reference: true}
+- {name: skillId, source: skillId, type: string, constraints: [NOT_NULL, NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: requestedActions, source: requestedActions, type: '[]enum', enum_ref: SkillDataControlAction, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: completedActions, source: completedActions, type: '[]enum', enum_ref: SkillDataControlAction, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: status, source: status, type: enum, enum_ref: SkillDataControlRequestStatus, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: failedAction, source: failedAction, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: failureCode, source: failureCode, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: confirmedAt, source: confirmedAt, type: timestamp, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: completedAt, source: completedAt, type: timestamp, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: createdAt, source: createdAt, type: timestamp, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: updatedAt, source: updatedAt, type: timestamp, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: revision, source: revision, type: int64, constraints: [NOT_NULL, POSITIVE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: leaseOwner, source: leaseOwner, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read, role: authoritative_state}
+- {name: leaseToken, source: leaseToken, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read, role: authoritative_state}
+- {name: leaseExpiresAt, source: leaseExpiresAt, type: timestamp, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read, role: authoritative_state}
+- {name: leaseHeartbeatAt, source: leaseHeartbeatAt, type: timestamp, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read, role: authoritative_state}
+types:
+  CreateSkillDataControlRequestCommand:
+    description: 创建待确认数据控制请求；accountId 由认证上下文注入。
+    fields:
+    - {name: skillId, source: path.skillId, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+    - {name: requestedActions, source: requestedActions, type: '[]enum', enum_ref: SkillDataControlAction, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: write, ops_exposure: none}
+    - {name: idempotencyKey, source: header.Idempotency-Key, type: string, constraints: [NOT_BLANK], classification: INTERNAL, log_policy: hash, api_exposure: write, ops_exposure: none}
+  ConfirmSkillDataControlRequestCommand:
+    description: owner 显式确认或取消请求；确认后只执行尚未完成的 action。
+    fields:
+    - {name: requestId, source: path.requestId, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: hash, api_exposure: write, ops_exposure: none}
+    - {name: expectedRevision, source: expectedRevision, type: int64, constraints: [NOT_NULL, POSITIVE], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+    - {name: confirmed, source: confirmed, type: bool, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: write, ops_exposure: none}
+    - {name: idempotencyKey, source: header.Idempotency-Key, type: string, constraints: [NOT_BLANK], classification: INTERNAL, log_policy: hash, api_exposure: write, ops_exposure: none}
+  GetSkillDataControlRequestQuery:
+    fields:
+    - {name: requestId, source: path.requestId, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: hash, api_exposure: write, ops_exposure: none}
+  SkillDataControlMutationReceipt:
+    fields:
+    - {name: request, source: request, type: SkillDataControlRequest, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+    - {name: replayed, source: replayed, type: bool, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}

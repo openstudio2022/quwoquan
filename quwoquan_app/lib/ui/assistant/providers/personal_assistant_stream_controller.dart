@@ -264,7 +264,7 @@ class PersonalAssistantStreamController
       }
       try {
         await ref
-            .read(assistantPreferenceFactFacetProvider)
+            .read(assistantPreferenceFacetProvider)
             .setAssistantPreference(
               scope: AssistantPreferenceScope.session,
               sessionId: sessionId,

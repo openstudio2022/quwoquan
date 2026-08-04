@@ -22,6 +22,10 @@ from quwoquan_ops.gate.verify_runtime_media_t4_evidence import (
 )
 
 
+def _sha256_digest(payload: str) -> str:
+    return "sha256:" + hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
 def _report(
     *,
     target: str = "gamma-local",
@@ -41,7 +45,7 @@ def _report(
             "rolloutStage": stage or ("gray-initial" if target == "prod-hosted" else "local"),
             "mediaVideoBaseUrl": "https://cdn.gamma.example.invalid/media/video",
             "commitSha": "abcdef0123456789",
-            "configHash": "sha256:config",
+            "configHash": _sha256_digest(f"runtime-media-config:{target}"),
         },
         "release": {
             "releaseId": "release-video-a",
@@ -625,9 +629,9 @@ class RuntimeMediaT4EvidenceContractTest(unittest.TestCase):
             _report(target="prod-hosted", env="prod", stage=stage)
             for stage in ("gray-initial", "carry-on", "full")
         ]
-        alpha["environment"]["configHash"] = "sha256:alpha"  # type: ignore[index]
-        beta["environment"]["configHash"] = "sha256:beta"  # type: ignore[index]
-        gamma["environment"]["configHash"] = "sha256:gamma"  # type: ignore[index]
+        alpha["environment"]["configHash"] = _sha256_digest("matrix-config")  # type: ignore[index]
+        beta["environment"]["configHash"] = _sha256_digest("matrix-config")  # type: ignore[index]
+        gamma["environment"]["configHash"] = _sha256_digest("matrix-config")  # type: ignore[index]
         matrix = {
             "schema": MATRIX_SCHEMA,
             "scenario": MATRIX_SCENARIO,
@@ -642,7 +646,9 @@ class RuntimeMediaT4EvidenceContractTest(unittest.TestCase):
         self.assertTrue(any("reports[1].uiEvidence.playerError" in issue for issue in issues))
 
         broken_prod = copy.deepcopy(matrix)
-        broken_prod["reports"][-1]["environment"]["configHash"] = "sha256:other"
+        broken_prod["reports"][-1]["environment"]["configHash"] = _sha256_digest(
+            "different-matrix-config"
+        )
         broken_prod["reports"][-1]["post"]["postId"] = "another_release_canary"
         issues = validate_evidence_document(broken_prod)
         self.assertTrue(any("production configHash" in issue for issue in issues), issues)

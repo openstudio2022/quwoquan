@@ -1,4 +1,4 @@
-description: owner 可见、可撤销恢复的结构化助手偏好事实
+description: owner 可见、可撤销恢复的结构化助手偏好
 fields:
 - name: preferenceId
   source: preferenceId
@@ -162,17 +162,17 @@ fields:
   role: authoritative_state
 types:
   ListAssistantPreferencesQuery:
-    description: 按可选作用域、会话与状态读取当前 owner 偏好事实的查询。
+    description: 按可选作用域、会话与状态读取当前 owner 偏好的查询。
     fields:
     - {name: scope, source: scope, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: none}
     - {name: sessionId, source: sessionId, type: string, constraints: [NULLABLE], classification: SENSITIVE, log_policy: hash, api_exposure: write, ops_exposure: none}
     - {name: status, source: status, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: none}
   AssistantPreferenceByIdRequest:
-    description: 以 path 中的 canonical preferenceId 定位 owner 偏好事实的无 body 命令。
+    description: 以 path 中的 canonical preferenceId 定位 owner 偏好的无 body 命令。
     fields:
     - {name: preferenceId, source: preferenceId, type: string, constraints: [NOT_BLANK], classification: SENSITIVE, log_policy: hash, api_exposure: write, ops_exposure: none}
   SetAssistantPreferenceRequest:
-    description: 创建或覆盖结构化助手偏好事实的请求体；userId 只从已验证主体注入。
+    description: 创建或覆盖结构化助手偏好的请求体；userId 只从已验证主体注入。
     fields:
     - name: scope
       source: scope
@@ -234,7 +234,7 @@ types:
       api_exposure: write
       ops_exposure: none
   AssistantPreferenceListView:
-    description: owner 的偏好事实列表
+    description: owner 的助手偏好列表
     fields:
     - name: items
       source: items

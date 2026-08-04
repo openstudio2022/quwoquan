@@ -7,7 +7,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 
-	toolpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/tool"
+	toolpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/tool"
 )
 
 var publicWebToolTotal = promauto.NewCounterVec(prometheus.CounterOpts{

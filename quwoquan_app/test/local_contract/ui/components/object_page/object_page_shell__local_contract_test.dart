@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/components/object_page/object_page_shell.dart';
 
-/// T2：对象页统一壳层骨架（V3 S1）几何引擎 + 渲染正确性。
+/// T2：对象页统一壳层骨架几何引擎 + 渲染正确性。
 void main() {
   group('ObjectPageShell.springDampedOffset（同源下拉回弹）', () {
     test('raw<=0 或 maxPull<=0 → 0', () {

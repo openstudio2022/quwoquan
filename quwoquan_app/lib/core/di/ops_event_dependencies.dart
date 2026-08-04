@@ -9,7 +9,7 @@ import 'package:quwoquan_app/cloud/runtime/context/actor_queue_partition.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/app_telemetry_catalog.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
-import 'package:quwoquan_app/core/di/cloud_http_client_provider.dart';
+import 'package:quwoquan_app/core/di/ops_event_record_dependencies.dart';
 import 'package:quwoquan_app/core/di/runtime_observability_dependencies.dart';
 import 'package:quwoquan_app/core/telemetry/app_telemetry_context_provider.dart';
 import 'package:quwoquan_app/core/telemetry/app_telemetry_coordinator.dart';
@@ -50,7 +50,7 @@ final appTelemetryContextProvider = Provider<AppTelemetryContextProvider>((
 
 final appTelemetryTransportProvider = Provider<AppTelemetryTransport>((ref) {
   return CloudAppTelemetryTransport(
-    httpClient: ref.watch(cloudHttpClientProvider),
+    writer: ref.watch(opsEventRecordBatchWriterProvider),
   );
 });
 

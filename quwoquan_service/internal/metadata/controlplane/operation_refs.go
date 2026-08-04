@@ -66,6 +66,8 @@ func HydrateOperationReferences(document map[string]any, contractGraph *graph.Co
 				"contract_operation_id": operation.ID,
 				"method":                operation.Method,
 				"path":                  operation.PathTemplate,
+				"auth_mode":             operation.AuthMode,
+				"principal":             operation.Principal,
 				"scopes":                append([]string(nil), operation.Scopes...),
 			}
 			for _, key := range []string{"danger_level", "approval_mode"} {

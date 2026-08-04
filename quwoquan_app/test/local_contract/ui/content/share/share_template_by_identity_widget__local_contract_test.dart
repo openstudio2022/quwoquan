@@ -4,21 +4,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/contact_home_row_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/services/chat/chat_view_data.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/app_telemetry_catalog.g.dart';
 import '../../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/errors/ui_error_models.dart';
 import 'package:quwoquan_app/core/links/app_public_content_links.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/telemetry/app_telemetry_outbox.dart';
 import 'package:quwoquan_app/core/telemetry/app_telemetry_reporter.dart';
 import 'package:quwoquan_app/core/trackers/journey_event_tracker.dart';
+import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
 import 'package:quwoquan_app/ui/content/share/content_circle_share_picker_route.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_actions.dart';
@@ -54,10 +54,11 @@ void main() {
   testWidgets('点滴分享模板展示 identity actions 与时间语境', (tester) async {
     final template = ContentShareTemplateBuilder.build(
       surfaceView: ContentSurfaceViewMapper.fromDto(
-        MicroPostDto(
+        ContentPostViewData(
           id: 'moment_1',
           type: 'micro',
           identity: 'moment',
+          displayFormat: 'image',
           assistantUsePolicy: 'inherit',
           authorId: 'user_1',
           displayName: '阿宁',
@@ -111,10 +112,11 @@ void main() {
     final telemetry = _CapturingTelemetryRecorder();
     final template = ContentShareTemplateBuilder.build(
       surfaceView: ContentSurfaceViewMapper.fromDto(
-        MicroPostDto(
+        ContentPostViewData(
           id: 'moment_action',
           type: 'micro',
           identity: 'moment',
+          displayFormat: 'note',
           assistantUsePolicy: 'inherit',
           authorId: 'user_action',
           displayName: '小悠',
@@ -182,13 +184,17 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text(SearchText.recoveryReloadLaterTitle), findsOneWidget);
+    final errorCard = tester.widget<AppSectionErrorCard>(
+      find.byType(AppSectionErrorCard),
+    );
+    expect(errorCard.semantic.scope, UiErrorScope.section);
+    expect(errorCard.semantic.primaryAction?.type, UiErrorActionType.retry);
     expect(find.text(ContentText.shareTargetCircle), findsOneWidget);
     expect(find.text(ChatText.shareTargetGroup), findsOneWidget);
     expect(find.text(ChatText.shareTargetMessage), findsOneWidget);
     expect(find.text(ChatText.shareExternalTitle), findsOneWidget);
 
-    await tester.tap(find.text(SearchText.reload));
+    await tester.tap(find.text(errorCard.semantic.primaryAction!.label));
     await tester.pump();
     expect(retryCount, 1);
   });
@@ -213,10 +219,11 @@ void main() {
 
     final template = ContentShareTemplateBuilder.build(
       surfaceView: ContentSurfaceViewMapper.fromDto(
-        MicroPostDto(
+        ContentPostViewData(
           id: 'moment_clipboard',
           type: 'micro',
           identity: 'moment',
+          displayFormat: 'note',
           assistantUsePolicy: 'inherit',
           authorId: 'user_clipboard',
           displayName: '阿遥',
@@ -269,10 +276,11 @@ void main() {
   testWidgets('作品公开分享生成标准链接并保留标签', (tester) async {
     final template = ContentShareTemplateBuilder.build(
       surfaceView: ContentSurfaceViewMapper.fromDto(
-        ArticlePostDto(
+        ContentPostViewData(
           id: 'work_1',
           type: 'article',
           identity: 'work',
+          displayFormat: 'note',
           assistantUsePolicy: 'inherit',
           authorId: 'user_2',
           displayName: '洛白',
@@ -319,10 +327,11 @@ void main() {
   testWidgets('私密内容会被分享模板拦截', (tester) async {
     final template = ContentShareTemplateBuilder.build(
       surfaceView: ContentSurfaceViewMapper.fromDto(
-        ArticlePostDto(
+        ContentPostViewData(
           id: 'private_1',
           type: 'article',
           identity: 'work',
+          displayFormat: 'note',
           assistantUsePolicy: 'inherit',
           authorId: 'user_3',
           displayName: '周周',
@@ -360,10 +369,11 @@ void main() {
   testWidgets('关闭 identity share flag 仍使用身份模板布局但标记为非身份模板', (tester) async {
     final template = ContentShareTemplateBuilder.build(
       surfaceView: ContentSurfaceViewMapper.fromDto(
-        MicroPostDto(
+        ContentPostViewData(
           id: 'share_flag_off_1',
           type: 'micro',
           identity: 'moment',
+          displayFormat: 'note',
           assistantUsePolicy: 'inherit',
           authorId: 'user_4',
           displayName: '南栀',
@@ -568,15 +578,26 @@ void main() {
   });
 
   testWidgets('选择圈子后调用强类型 PlaceCirclePost 命令', (tester) async {
-    final circle = CircleDto(
-      id: 'circle_share_target',
+    final circle = PersonaCircleSlice(
+      circleId: 'circle_share_target',
       name: '摄影同好圈',
       description: '分享影像与摄影经验',
-      ownerId: 'owner_share',
+      ownerPersonaId: 'owner_share',
+      memberCount: 0,
+      postCount: 0,
+      weeklyActiveCount: 0,
+      status: CircleStatus.active,
+      visibility: CircleVisibility.public,
+      joinPolicy: CircleJoinPolicy.open,
+      kind: CircleKind.interest,
+      displaySubjectType: CircleDisplaySubjectType.circle,
+      followEnabled: true,
       createdAt: DateTime.utc(2026, 7, 14),
       updatedAt: DateTime.utc(2026, 7, 14),
     );
-    final membershipQuery = _CircleMembershipQuery(<CircleDto>[circle]);
+    final membershipQuery = _CircleMembershipQuery(<PersonaCircleSlice>[
+      circle,
+    ]);
     final placementWriter = _RecordingCirclePostPlacementWriter();
     await tester.pumpWidget(
       ProviderScope(
@@ -655,10 +676,11 @@ final class _CapturingTelemetryRecorder implements AppTelemetryRecorder {
 ContentShareTemplate _publicTemplate(String postId) {
   return ContentShareTemplateBuilder.build(
     surfaceView: ContentSurfaceViewMapper.fromDto(
-      MicroPostDto(
+      ContentPostViewData(
         id: postId,
         type: 'micro',
         identity: 'moment',
+        displayFormat: 'note',
         assistantUsePolicy: 'inherit',
         authorId: 'share_author',
         displayName: '分享作者',
@@ -681,7 +703,7 @@ ContentShareTemplate _publicTemplate(String postId) {
 final class _CircleMembershipQuery implements CircleMembershipQuery {
   const _CircleMembershipQuery(this.circles);
 
-  final List<CircleDto> circles;
+  final List<PersonaCircleSlice> circles;
 
   @override
   Future<CircleMembershipSlice> getMyMembership(
@@ -697,48 +719,17 @@ final class _CircleMembershipQuery implements CircleMembershipQuery {
   Future<PersonaCirclePageSlice> listPersonaCircles(
     PersonaCircleListQuery query,
   ) async => PersonaCirclePageSlice(
-    items: circles
-        .take(query.limit)
-        .map(
-          (circle) => PersonaCircleSummary(
-            circleId: circle.id,
-            name: circle.name,
-            description: circle.description ?? '',
-            coverUrl: circle.coverUrl ?? '',
-            iconUrl: circle.iconUrl ?? '',
-            ownerPersonaId: circle.ownerId,
-            ownerDisplayNameSnapshot: '',
-            category: circle.category ?? '',
-            subCategory: circle.subCategory ?? '',
-            tags: circle.tags,
-            memberCount: circle.memberCount,
-            postCount: circle.postCount,
-            weeklyActiveCount: circle.weeklyActiveCount,
-            status: circle.status,
-            visibility: circle.visibility,
-            joinPolicy: circle.joinPolicy,
-            kind: circle.kind,
-            displaySubjectType: circle.displaySubjectType,
-            followEnabled: circle.followEnabled,
-            defaultPublicGroupId: circle.defaultPublicGroupId ?? '',
-            linkedHomepageId: '',
-            linkedHomepageType: null,
-            linkedHomepageTitle: '',
-            createdAt: circle.createdAt,
-            updatedAt: circle.updatedAt,
-          ),
-        )
-        .toList(growable: false),
+    items: circles.take(query.limit).toList(growable: false),
   );
 }
 
 class _ContentShareChatRepository extends MockChatRepository {
   @override
-  Future<List<ChatInboxDto>> listConversations({
+  Future<List<ChatInboxViewData>> listConversations({
     String? cursor,
     int limit = 500,
   }) async {
-    return <ChatInboxDto>[
+    return <ChatInboxViewData>[
       chatInboxFixture(
         id: 'direct_share',
         type: 'direct',
@@ -755,12 +746,12 @@ class _ContentShareChatRepository extends MockChatRepository {
   }
 
   @override
-  Future<List<ContactHomeRowDto>> listContactHome({
+  Future<List<ContactHomeRow>> listContactHome({
     String filter = 'all',
     String? cursor,
     int limit = 500,
   }) async {
-    return const <ContactHomeRowDto>[];
+    return const <ContactHomeRow>[];
   }
 }
 
@@ -862,7 +853,7 @@ class _RecordingOutboundShareWriter
     return OutboundShareFactResult(
       eventId: 'outbound-share-event-1',
       postId: command.postId,
-      channel: command.channel.wireValue,
+      channel: command.channel,
       referralId: command.referralId,
       occurredAt: command.clientConfirmedAt,
       replayed: false,

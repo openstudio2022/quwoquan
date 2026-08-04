@@ -2,9 +2,8 @@
 
 The immutable execution spec keeps the full oversampled candidate pool. After
 ``download_fetch`` persists ``source_unavailable_targets.json`` and absorbs the
-ineligible oversample tail (ready >= approvedQuota), image/video/homepage
-downstream stages may author only the audited ready subset. Article executions
-never absorb shortfall, so they keep the full frozen coverage set.
+ineligible oversample tail (ready >= approvedQuota), every carrier's downstream
+stages may author only the audited ready subset.
 """
 from __future__ import annotations
 
@@ -26,13 +25,10 @@ def source_ready_runtime_spec(
         if isinstance(runtime_spec.get("content"), Mapping)
         else {}
     )
-    article_quota = int((quotas or {}).get("entityArticlesPerTarget") or 0) or int(
-        (quotas or {}).get("entityArticles") or 0
-    )
-    if article_quota > 0:
-        return runtime_spec
     absorbable_quota = (
-        int((quotas or {}).get("imageWorksPerTarget") or 0)
+        int((quotas or {}).get("entityArticlesPerTarget") or 0)
+        + int((quotas or {}).get("entityArticles") or 0)
+        + int((quotas or {}).get("imageWorksPerTarget") or 0)
         + int((quotas or {}).get("videoWorksPerTarget") or 0)
         + int((quotas or {}).get("entityHomepagesPerTarget") or 0)
     )

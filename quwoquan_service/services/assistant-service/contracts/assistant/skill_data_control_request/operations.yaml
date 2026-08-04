@@ -1,0 +1,63 @@
+commercial_defaults:
+  status: blocked
+  block_reason: Skill 数据控制请求尚缺受管 Remote、SLI/SLO 与双端物理真机证据
+  gap_id: ASSISTANT_SKILL_DATA_CONTROL_ENV_EVIDENCE
+  target_story: skill-user-lifecycle
+description: SkillDataControlRequest 的确认型 command/query packet。
+api_routes:
+- method: POST
+  path: /assistant/skills/{skillId}/data-control-requests
+  operation: CreateSkillDataControlRequest
+  actor: account
+  commercial: {status: ready}
+  request_entity: CreateSkillDataControlRequestCommand
+  request_body_kind: object
+  request_bindings:
+    path: [{name: skillId, field: skillId}]
+    injected: [{name: Idempotency-Key, field: idempotencyKey}]
+  response_entity: SkillDataControlMutationReceipt
+  application: {kind: command, facet: SkillDataControlRequestCommandFacade, method: createRequest, aggregate_owner: SkillDataControlRequest, mutation_target: SkillDataControlRequest, invariant_target: SkillDataControlRequest}
+  reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
+  error_codes: [ASSISTANT.USER.skill_data_control_invalid_argument, ASSISTANT.USER.skill_data_control_idempotency_conflict, ASSISTANT.USER.skill_data_control_unauthorized, ASSISTANT.SYSTEM.skill_data_control_unavailable]
+  privacy: {request_classification: SENSITIVE, response_classification: SENSITIVE, log_policy: metadata_only}
+  telemetry: {metric: assistant_skill_data_control_command, trace: true, attributes: [operation, outcome, error_code, replayed]}
+  slo: {latency_p95_ms: 500, availability_percent: 99.9}
+  authorization: {principal: account, ownership_policy: requester_self}
+  security: {auth_mode: required, principal: owner, token_transport: bearer, anonymous_policy: deny, visibility: private}
+- method: POST
+  path: /assistant/skill-data-control-requests/{requestId}/confirm
+  operation: ConfirmSkillDataControlRequest
+  actor: account
+  commercial: {status: ready}
+  request_entity: ConfirmSkillDataControlRequestCommand
+  request_body_kind: object
+  request_bindings:
+    path: [{name: requestId, field: requestId}]
+    injected: [{name: Idempotency-Key, field: idempotencyKey}]
+  response_entity: SkillDataControlMutationReceipt
+  application: {kind: command, facet: SkillDataControlRequestCommandFacade, method: confirmRequest, aggregate_owner: SkillDataControlRequest, mutation_target: SkillDataControlRequest, invariant_target: SkillDataControlRequest}
+  reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
+  error_codes: [ASSISTANT.USER.skill_data_control_invalid_argument, ASSISTANT.USER.skill_data_control_not_found, ASSISTANT.USER.skill_data_control_revision_conflict, ASSISTANT.USER.skill_data_control_idempotency_conflict, ASSISTANT.USER.skill_data_control_unauthorized, ASSISTANT.SYSTEM.skill_data_control_unavailable]
+  privacy: {request_classification: SENSITIVE, response_classification: SENSITIVE, log_policy: metadata_only}
+  telemetry: {metric: assistant_skill_data_control_command, trace: true, attributes: [operation, outcome, error_code, replayed]}
+  slo: {latency_p95_ms: 500, availability_percent: 99.9}
+  authorization: {principal: account, ownership_policy: data_control_request_owner}
+  security: {auth_mode: required, principal: owner, token_transport: bearer, anonymous_policy: deny, visibility: private}
+- method: GET
+  path: /assistant/skill-data-control-requests/{requestId}
+  operation: GetSkillDataControlRequest
+  actor: account
+  commercial: {status: ready}
+  request_entity: GetSkillDataControlRequestQuery
+  request_body_kind: none
+  request_bindings:
+    path: [{name: requestId, field: requestId}]
+  response_entity: SkillDataControlRequest
+  application: {kind: query, facet: SkillDataControlRequestQueryFacade, method: getRequest, reader: SkillDataControlRequestReader, slice: SkillDataControlRequest}
+  reliability: {timeout_ms: 500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [ASSISTANT.USER.skill_data_control_not_found, ASSISTANT.USER.skill_data_control_unauthorized, ASSISTANT.SYSTEM.skill_data_control_unavailable]
+  privacy: {request_classification: INTERNAL, response_classification: SENSITIVE, log_policy: metadata_only}
+  telemetry: {metric: assistant_skill_data_control_query, trace: true, attributes: [operation, outcome, error_code]}
+  slo: {latency_p95_ms: 300, availability_percent: 99.9}
+  authorization: {principal: account, ownership_policy: data_control_request_owner}
+  security: {auth_mode: required, principal: owner, token_transport: bearer, anonymous_policy: deny, visibility: private}

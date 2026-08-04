@@ -108,6 +108,12 @@ fi
   -q
 
 echo "[runtime-media] Alpha Remote media health gate"
+cleanup_alpha_content_runtime() {
+  python3 "${ROOT_DIR}/quwoquan_ops/cli/stackctl.py" down \
+    --target alpha-local \
+    --workload content-release
+}
+trap cleanup_alpha_content_runtime EXIT
 python3 "${ROOT_DIR}/quwoquan_ops/cli/stackctl.py" up \
   --target alpha-local \
   --skip-app \
@@ -127,6 +133,8 @@ echo "[runtime-media] flutter test realtime/cache coverage"
     test/local_contract/core/services/local_chat_search_sync_service__local_contract_test.dart \
     test/local_contract/ui/chat/widgets/chat_page_widget__local_contract_test.dart
 )
+cleanup_alpha_content_runtime
+trap - EXIT
 
 if [[ "${FULL_MODE}" == "--full" ]]; then
   echo "[runtime-media] full gate passed with external T4 evidence: ${RUNTIME_MEDIA_T4_EVIDENCE}"

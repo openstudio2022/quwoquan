@@ -1,0 +1,33 @@
+description: DomainReaderDescriptor canonical fields and bounded internal queries.
+fields:
+- {name: descriptorId, source: descriptorId, type: string, constraints: [PK, NOT_NULL, NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: projection}
+- {name: resolverRef, source: resolverRef, type: string, constraints: [NOT_NULL, NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: projection}
+- {name: ownerService, source: ownerService, type: string, constraints: [NOT_NULL, NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: projection}
+- {name: ownerOperationRefs, source: ownerOperationRefs, type: '[]string', constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: projection}
+- {name: inputSchemaRef, source: inputSchemaRef, type: string, constraints: [NOT_NULL, NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: projection}
+- {name: outputSchemaRef, source: outputSchemaRef, type: string, constraints: [NOT_NULL, NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: projection}
+- {name: objectTypeRefs, source: objectTypeRefs, type: '[]string', constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: projection}
+- {name: acceptedSourceKinds, source: acceptedSourceKinds, type: '[]string', constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: projection}
+- {name: authority, source: authority, type: enum, enum_ref: AssistantContextAuthority, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: projection}
+- {name: sensitivity, source: sensitivity, type: enum, enum_ref: AssistantContextSensitivity, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: projection}
+- {name: maxFreshnessSeconds, source: maxFreshnessSeconds, type: int, constraints: [NULLABLE, POSITIVE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: projection}
+- {name: cacheTtlSeconds, source: cacheTtlSeconds, type: int, constraints: [NULLABLE, POSITIVE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: projection}
+- {name: surfaceKinds, source: surfaceKinds, type: '[]string', constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: projection}
+- {name: artifactPolicy, source: artifactPolicy, type: enum, enum_ref: DomainReaderArtifactPolicy, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: projection}
+- {name: citationPolicy, source: citationPolicy, type: enum, enum_ref: DomainReaderCitationPolicy, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: projection}
+- {name: descriptorDigest, source: descriptorDigest, type: string, constraints: [NOT_NULL, NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: projection}
+types:
+  GetDomainReaderDescriptorQuery:
+    fields:
+    - {name: descriptorId, source: path.descriptorId, type: string, constraints: [NOT_NULL, NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+  ListDomainReaderDescriptorsQuery:
+    fields:
+    - {name: limit, source: query.limit, type: int, constraints: [NULLABLE, POSITIVE, MAX_100], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+  DomainReaderDescriptorListSlice:
+    fields:
+    - {name: items, source: items, type: '[]DomainReaderDescriptor', constraints: [NOT_NULL], classification: PUBLIC, log_policy: metadata_only, api_exposure: read, ops_exposure: none}
+enums:
+  DomainReaderArtifactPolicy:
+    values: [inline_bounded, inline_or_artifact, artifact_required]
+  DomainReaderCitationPolicy:
+    values: [none, source_reference, entity_reference]

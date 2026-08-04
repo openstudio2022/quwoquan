@@ -17,6 +17,7 @@ import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_skill_setup_schema.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_skill_setup_sheet.dart';
+import 'package:quwoquan_app/ui/assistant/pages/assistant_skill_lifecycle_sheet.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_skill_subscription_setup_sheet.dart';
 import 'package:uuid/uuid.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
@@ -232,37 +233,6 @@ class _AssistantSkillCenterPageState
     });
   }
 
-  String _packageOf(AssistantSkillCenterItem skill) {
-    final category = (skill.catalog.category ?? '').trim().toLowerCase();
-    if (category == 'life' || category == 'travel') {
-      return 'life';
-    }
-    if (category == 'productivity' ||
-        category == 'work' ||
-        category == 'content_creation') {
-      return 'work';
-    }
-    if (category == 'knowledge' ||
-        category == 'content' ||
-        category == 'finance') {
-      return 'knowledge';
-    }
-    return 'companion';
-  }
-
-  String _skillCategoryLabel(AssistantSkillCenterItem skill) {
-    return switch ((skill.catalog.category ?? '').trim().toLowerCase()) {
-      'life' || 'travel' => AssistantText.assistantSkillCategoryLife,
-      'work' || 'productivity' => AssistantText.assistantSkillCategoryWork,
-      'knowledge' ||
-      'content' ||
-      'finance' => AssistantText.assistantSkillCategoryKnowledge,
-      'content_creation' => AssistantText.assistantSkillCategoryCreation,
-      'companion' || 'social' => AssistantText.assistantSkillCategoryCompanion,
-      _ => AssistantText.assistantSkillCategoryOther,
-    };
-  }
-
   String _skillStatusLabel(AssistantSkillCenterItem skill) {
     if (!skill.enabled) {
       return AssistantText.assistantSkillDisabled;
@@ -473,17 +443,10 @@ class _AssistantSkillCenterPageState
     );
   }
 
-  Future<void> _toggleProactive(
-    AssistantSkillCenterItem skill,
+  Future<void> _toggleSubscription(
+    SkillSubscriptionWire subscription,
     bool enabled,
   ) async {
-    final subscription = skill.subscription;
-    if (subscription == null) {
-      if (enabled) {
-        await _createProactiveSubscription(skill);
-      }
-      return;
-    }
     Object? mutationError;
     await _setUpdating(true);
     try {
@@ -491,14 +454,16 @@ class _AssistantSkillCenterPageState
           .read(assistantSkillSubscriptionFacetProvider)
           .updateSkillSubscriptionStatus(
             subscriptionId: subscription.subscriptionId,
-            status: enabled ? 'active' : 'paused',
+            status: enabled
+                ? SkillSubscriptionStatus.active.wireName
+                : SkillSubscriptionStatus.paused.wireName,
             clientRequestId: const Uuid().v4(),
           );
-      ref.invalidate(assistantSkillCenterProvider);
     } catch (error) {
       mutationError = error;
-      ref.invalidate(assistantSkillCenterProvider);
     } finally {
+      // 服务端是唯一状态源；成功或失败后都重新读取当前 subscriptionId。
+      ref.invalidate(assistantSkillCenterProvider);
       await _setUpdating(false);
     }
     if (mutationError != null) {
@@ -519,12 +484,15 @@ class _AssistantSkillCenterPageState
     Object? mutationError;
     await _setUpdating(true);
     try {
-      final domainId = skill.catalog.category?.trim() ?? '';
+      final domainId = skill.catalog.domainId.trim();
+      if (domainId.isEmpty) {
+        throw StateError('skill catalog domainId is unavailable');
+      }
       await ref
           .read(assistantSkillSubscriptionFacetProvider)
           .createSkillSubscription(
             skillId: skill.skillId,
-            domainId: domainId.isEmpty ? 'assistant' : domainId,
+            domainId: domainId,
             rawText: setup.rawText,
             queries: <String>[setup.rawText],
             cron: setup.cron,
@@ -551,7 +519,7 @@ class _AssistantSkillCenterPageState
     await _setUpdating(true);
     try {
       final facet = ref.read(assistantSkillConsentFacetProvider);
-      if (skill.consent != null) {
+      if (skill.consentGranted) {
         await facet.revokeSkillConsent(
           skillId: skill.skillId,
           clientRequestId: const Uuid().v4(),
@@ -596,6 +564,20 @@ class _AssistantSkillCenterPageState
       return;
     }
     final item = detail.item;
+    if (item.skillId != skill.skillId ||
+        item.releaseDigest != skill.catalog.releaseDigest) {
+      ref.invalidate(assistantSkillCenterProvider);
+      await _showSkillMutationError(
+        StateError('skill catalog release changed while opening detail'),
+      );
+      return;
+    }
+    final detailSkill = AssistantSkillCenterItem(
+      catalog: item,
+      setting: skill.setting,
+      subscriptions: skill.subscriptions,
+      consent: skill.consent,
+    );
     final rawConfiguration = skill.setting?.configurationData;
     final initialConfiguration = rawConfiguration is Map
         ? Map<String, Object?>.from(rawConfiguration)
@@ -609,11 +591,30 @@ class _AssistantSkillCenterPageState
       title: item.displayName,
       valueDescription: item.description?.trim() ?? '',
       dataUseSummary: item.dataUseSummary,
-      targetUserLabels: item.targetUsers.map(_skillTargetUserLabel).toList(),
-      surfaceLabels: item.allowedSurfaceKinds.map(_skillSurfaceLabel).toList(),
-      permissionLabels: item.requiredConsentScopes
-          .map(_skillConsentScopeLabel)
-          .toList(),
+      targetUserLabels: item.targetAudiences
+          .map((label) => label.displayText)
+          .toList(growable: false),
+      surfaceLabels: item.surfaceKinds
+          .map((label) => label.displayText)
+          .toList(growable: false),
+      requiredPermissionScopes: detailSkill.requiredConsentScopeLabels
+          .map(
+            (label) => AssistantSkillConsentScopePresentation(
+              displayText: label.displayText,
+              description: label.description ?? '',
+              granted: detailSkill.isConsentScopeGranted(label.id),
+            ),
+          )
+          .toList(growable: false),
+      optionalPermissionScopes: detailSkill.optionalConsentScopeLabels
+          .map(
+            (label) => AssistantSkillConsentScopePresentation(
+              displayText: label.displayText,
+              description: label.description ?? '',
+              granted: detailSkill.isConsentScopeGranted(label.id),
+            ),
+          )
+          .toList(growable: false),
       schema: schema,
       initialConfiguration: initialConfiguration,
       onSave: schema == null
@@ -624,6 +625,21 @@ class _AssistantSkillCenterPageState
               configuration: value,
             ),
     );
+  }
+
+  Future<void> _openSkillLifecycle(AssistantSkillCenterItem skill) async {
+    await showAssistantSkillLifecycleSheet(
+      context: context,
+      skillId: skill.skillId,
+      skillName: skill.catalog.displayName,
+      activityQuery: ref.read(assistantSkillActivityQueryProvider),
+      dataControlFacet: ref.read(assistantSkillDataControlFacetProvider),
+      onProductAction: (action) => unawaited(
+        _logSkillLifecycleAction(skillId: skill.skillId, action: action),
+      ),
+    );
+    if (!mounted) return;
+    ref.invalidate(assistantSkillCenterProvider);
   }
 
   Future<void> _saveSkillConfiguration({
@@ -648,31 +664,6 @@ class _AssistantSkillCenterPageState
         );
     ref.invalidate(assistantSkillCenterProvider);
   }
-
-  String _skillTargetUserLabel(String value) => switch (value.trim()) {
-    'all_users' => '所有用户',
-    'small_group_trip_organizer' => '小团自由行组织者',
-    'travel_group_owner' => '旅行群主',
-    'trip_participant' => '同行参与者',
-    'tour_leader' => '领队',
-    'licensed_guide' => '持证导游',
-    'travel_creator' => '旅行创作者',
-    _ => value.trim(),
-  };
-
-  String _skillSurfaceLabel(String value) => switch (value.trim()) {
-    'personal' => '个人会话',
-    'conversation' => '群聊',
-    'circle' => '圈子',
-    _ => value.trim(),
-  };
-
-  String _skillConsentScopeLabel(String value) => switch (value.trim()) {
-    'assistant.memory.preferences.read' => '读取已确认的旅行偏好',
-    'travel.trip.read' => '读取你有权查看的行程',
-    'assistant.personal_content.read' => '读取你的个人内容',
-    _ => value.trim(),
-  };
 
   Future<void> _setUpdating(bool value) async {
     if (!mounted) return;
@@ -725,6 +716,30 @@ class _AssistantSkillCenterPageState
       summaryPayload: const <String, Object?>{
         'event': 'skill_center_action',
         'action': 'single_skill_toggle',
+      },
+    );
+  }
+
+  Future<void> _logSkillLifecycleAction({
+    required String skillId,
+    required AssistantSkillLifecycleUiAction action,
+  }) async {
+    final trace = AppTraceContextStore.instance;
+    await AppLogService.instance.writeEvent(
+      logType: AppLogType.pageAccess,
+      level: AppLogLevel.info,
+      context: AppLogContext(
+        sessionId: trace.sessionId,
+        pageVisitId: trace.newPageVisitId(),
+      ),
+      payload: <String, Object?>{
+        'event': 'skill_center_action',
+        'action': action.name,
+        'skillId': skillId,
+      },
+      summaryPayload: <String, Object?>{
+        'event': 'skill_center_action',
+        'action': action.name,
       },
     );
   }

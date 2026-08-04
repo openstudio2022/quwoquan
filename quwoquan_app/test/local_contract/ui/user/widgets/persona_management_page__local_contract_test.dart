@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/ui/user/pages/persona_management_page.dart';
 import '../../../../support/fakes/test_persona_facets.dart';
 
@@ -38,7 +39,10 @@ void main() {
       await tester.pumpWidget(_wrap(facets));
       await tester.pumpAndSettle();
 
-      expect(find.text(SearchText.recoveryReloadLaterTitle), findsOneWidget);
+      final errorState = tester.widget<AppPageErrorState>(
+        find.byType(AppPageErrorState),
+      );
+      expect(errorState.semantic.primaryAction?.label, SearchText.reload);
       expect(find.byIcon(CupertinoIcons.back), findsOneWidget);
       expect(find.byIcon(CupertinoIcons.xmark), findsNothing);
       expect(find.text(ContentText.back), findsNothing);

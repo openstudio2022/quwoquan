@@ -83,8 +83,8 @@ def main() -> int:
     require(
         "quwoquan_app/lib/cloud/runtime/auth/realtime_connection_credential.dart",
         "resolveWebSocket",
-        "RealtimeApiMetadata.issueConnectionTicketPath",
-        "'Authorization': 'Bearer $token'",
+        "required Future<String> Function() issueTicket",
+        "sha256.convert",
         "'ticket': ticket",
         "websocket credential requires a connection ticket",
         "return null;",
@@ -92,7 +92,18 @@ def main() -> int:
     forbid(
         "quwoquan_app/lib/cloud/runtime/auth/realtime_connection_credential.dart",
         "'access_token': _accessToken",
+        "Authorization",
+        "authorizeHttp",
+        "RealtimeApiMetadata",
         "runtimeEnvironment != 'gamma'",
+    )
+    require(
+        "quwoquan_app/lib/cloud/services/realtime/realtime_connection_operation_gateway.dart",
+        "GeneratedCloudOperationClient client",
+        "realtimeConnectionIssueConnectionTicket",
+        "IssueConnectionTicketRequest",
+        "realtimeConnectionLongPoll",
+        "LongPollRequest",
     )
     require(
         "quwoquan_app/lib/cloud/services/realtime/transport/websocket_transport.dart",
@@ -108,7 +119,15 @@ def main() -> int:
         "quwoquan_app/lib/cloud/rtc/rtc_signal_events.dart",
         "realtime 单通道",
         "RtcSignalEventBus",
+        "RealtimeEventEnvelope envelope",
+        "envelope is! RtcRealtimeEventEnvelope",
+        "RtcSignalEvent.fromEnvelope(envelope)",
+        "final RtcWsPayload payload",
+    )
+    forbid(
+        "quwoquan_app/lib/cloud/rtc/rtc_signal_events.dart",
         "parseRtcWsPayload",
+        "Map<String, dynamic>",
     )
     require(
         "quwoquan_app/lib/cloud/rtc/incoming_call_coordinator.dart",
@@ -118,20 +137,30 @@ def main() -> int:
     require(
         "quwoquan_app/lib/cloud/services/realtime/transport/longpoll_transport.dart",
         "RealtimeConnectionCredential.resolveHttp",
-        "credential.authorizeHttp",
-        "statusCode == 401",
-        "statusCode == 403",
+        "_loadCursor(credential.cursorPartition)",
+        "long poll requires generated realtime operation gateway",
+        ".longPoll(timeout:",
     )
     forbid(
         "quwoquan_app/lib/cloud/services/realtime/transport/longpoll_transport.dart",
         "'userId':",
+        "authorizeHttp",
+        "RealtimeApiMetadata",
+        "CloudHttpClient",
+        "Authorization",
     )
 
     require(
-        "quwoquan_app/lib/cloud/services/assistant/assistant_facets.dart",
+        "quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/generated/assistant/assistant_api_responses.g.dart",
         "if (granted is! bool)",
         "if (revokedAt != null &&",
         "granted: granted && revokedAt == null",
+    )
+    forbid(
+        "quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/generated/assistant/assistant_api_responses.g.dart",
+        "json['granted'] == true || revokedAt.isEmpty",
+        "granted: json['granted'] == true",
+        "granted: json['granted'],",
     )
     forbid(
         "quwoquan_app/lib/cloud/services/assistant/assistant_facets.dart",
@@ -200,10 +229,26 @@ def main() -> int:
     )
     require(
         "quwoquan_app/lib/core/telemetry/app_telemetry_transport.dart",
-        "OpsApiMetadata.reportEventBatchPath",
-        "required CloudHttpClient httpClient",
-        "'Idempotency-Key': idempotencyKey",
-        "CloudErrorMapper.fromStatusCode",
+        "required OpsEventRecordBatchWriter writer",
+        "EventRecordBatchRequest.fromWire",
+        "_writer.reportEventBatch",
+        "idempotencyKey: idempotencyKey",
+    )
+    forbid(
+        "quwoquan_app/lib/core/telemetry/app_telemetry_transport.dart",
+        "CloudHttpClient",
+        "OpsApiMetadata",
+        "CloudErrorMapper",
+        "Authorization",
+    )
+    require(
+        "quwoquan_app/lib/cloud/services/ops/event_record_batch_writer.dart",
+        "GeneratedCloudOperationClient client",
+        "opsEventRecordReportEventBatch",
+        "opsEventRecordReportRuntimeLogBatch",
+        "OpsRequestPageIds.reportEventBatch",
+        "OpsRequestPageIds.reportRuntimeLogBatch",
+        "idempotencyKey: idempotencyKey",
     )
     retired_ops_repository = (
         ROOT / "quwoquan_app/lib/cloud/services/ops/ops_event_repository.dart"
@@ -294,7 +339,7 @@ def main() -> int:
         "ContentMediaSourceReader",
         "ContentMediaStreamObjectUpload",
         "uploadPreparedSource",
-        "ContentMediaAccessPolicy.ownerOnly",
+        "MediaAssetAccessPolicy.ownerOnly",
     )
     forbid(
         profile_object_uploader,

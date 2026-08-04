@@ -74,6 +74,9 @@ def test_release_collector_registry_requires_real_provider_conformance() -> None
 
 
 def test_scanner_rejects_legacy_envelopes_and_compatibility_escapes() -> None:
+    def invalid_sha256_fixture(value: str) -> str:
+        return "sha256:" + value
+
     source = "\n".join(
         (
             "schema: ci-timing-summary-v2",
@@ -86,7 +89,7 @@ def test_scanner_rejects_legacy_envelopes_and_compatibility_escapes() -> None:
             "registryRevision: 2",
             "versions: {imageVersion: old}",
             "schema: mainline-release-artifact",
-            "manifestDigest: sha256:old",
+            "manifestDigest: " + invalid_sha256_fixture("old"),
             "mode=compat",
             "compatibility-alias",
             "dual-read",

@@ -9,6 +9,8 @@ import (
 
 	generated "quwoquan_service/services/assistant-service/generated/assistant/assistant_session"
 	skillcontext "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/skillcontext"
+	readermodel "quwoquan_service/services/assistant-service/internal/assistant/domain_reader_descriptor/domain/model"
+	readerresource "quwoquan_service/services/assistant-service/internal/assistant/domain_reader_descriptor/infrastructure/resource"
 )
 
 type contextResolverFunc func(skillcontext.ResolveRequest) (skillcontext.ResolvedContext, error)
@@ -20,12 +22,77 @@ func (f contextResolverFunc) Resolve(
 	return f(request)
 }
 
+func contextReaderDescriptor(
+	resolverRef string,
+	sourceKind string,
+	authority generated.AssistantContextAuthority,
+	sensitivity generated.AssistantContextSensitivity,
+) readermodel.Descriptor {
+	descriptor, err := readermodel.NewDescriptor(readermodel.Descriptor{
+		DescriptorID:        "test." + resolverRef,
+		ResolverRef:         resolverRef,
+		OwnerService:        "test-service",
+		OwnerOperationRefs:  []string{"test.reader.Resolve"},
+		InputSchemaRef:      "test.ResolveQuery",
+		OutputSchemaRef:     "test.ContextSegment",
+		AcceptedSourceKinds: []string{sourceKind},
+		Authority:           authority,
+		Sensitivity:         sensitivity,
+		SurfaceKinds: []readermodel.SurfaceKind{
+			readermodel.SurfacePersonal,
+			readermodel.SurfaceShared,
+			readermodel.SurfacePublic,
+		},
+		ArtifactPolicy: readermodel.ArtifactInlineOrStored,
+		CitationPolicy: readermodel.CitationSourceReference,
+	})
+	if err != nil {
+		panic(err)
+	}
+	return descriptor
+}
+
+type contextReaderBinding struct {
+	descriptor readermodel.Descriptor
+	resolver   skillcontext.Resolver
+}
+
+func contextReaderRegistry(
+	t *testing.T,
+	bindings ...contextReaderBinding,
+) *skillcontext.ResolverRegistry {
+	t.Helper()
+	descriptors := make([]readermodel.Descriptor, 0, len(bindings))
+	resolvers := make([]skillcontext.RegisteredResolver, 0, len(bindings))
+	for _, binding := range bindings {
+		descriptors = append(descriptors, binding.descriptor)
+		resolvers = append(resolvers, skillcontext.RegisteredResolver{
+			ResolverRef: binding.descriptor.ResolverRef,
+			Resolver:    binding.resolver,
+		})
+	}
+	catalog, err := readerresource.NewCatalog(descriptors)
+	if err != nil {
+		t.Fatal(err)
+	}
+	registry, err := skillcontext.NewResolverRegistry(catalog, resolvers...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return registry
+}
+
 func TestSkillContextLoadsOnlySelectedProfileResolversAndArtifactsLargeValues(t *testing.T) {
 	now := time.Now().UTC()
 	pageCalls := 0
 	unusedCalls := 0
-	registry, err := skillcontext.NewResolverRegistry(
-		skillcontext.RegisteredResolver{ResolverRef: "page.current", Resolver: contextResolverFunc(func(
+	registry := contextReaderRegistry(
+		t,
+		contextReaderBinding{descriptor: contextReaderDescriptor(
+			"page.current", "page",
+			generated.AssistantContextAuthorityDeviceObserved,
+			generated.AssistantContextSensitivityInternal,
+		), resolver: contextResolverFunc(func(
 			request skillcontext.ResolveRequest,
 		) (skillcontext.ResolvedContext, error) {
 			pageCalls++
@@ -45,20 +112,20 @@ func TestSkillContextLoadsOnlySelectedProfileResolversAndArtifactsLargeValues(t 
 				Summary:     "trip plan page summary",
 			}, nil
 		})},
-		skillcontext.RegisteredResolver{ResolverRef: "weather.unused", Resolver: contextResolverFunc(func(
+		contextReaderBinding{descriptor: contextReaderDescriptor(
+			"weather.unused", "domain",
+			generated.AssistantContextAuthorityExternalEvidence,
+			generated.AssistantContextSensitivityPublic,
+		), resolver: contextResolverFunc(func(
 			skillcontext.ResolveRequest,
 		) (skillcontext.ResolvedContext, error) {
 			unusedCalls++
 			return skillcontext.ResolvedContext{}, nil
 		})},
 	)
-	if err != nil {
-		t.Fatal(err)
-	}
 	assembler := skillcontext.NewAssembler(registry)
-	snapshot, err := assembler.Assemble(context.Background(), skillcontext.Profile{
-		ProfileID:   "travel-context",
-		AssetDigest: "sha256:context-profile",
+	profile := skillcontext.Profile{
+		ProfileID: "travel-context",
 		Requirements: []skillcontext.Requirement{{
 			SlotID:              "current_page",
 			Required:            true,
@@ -70,7 +137,9 @@ func TestSkillContextLoadsOnlySelectedProfileResolversAndArtifactsLargeValues(t 
 			ResolverRef:         "page.current",
 			FallbackPolicy:      "clarify",
 		}},
-	}, skillcontext.AssembleRequest{
+	}
+	profile.AssetDigest = canonicalFixtureDigest(profile)
+	snapshot, err := assembler.Assemble(context.Background(), profile, skillcontext.AssembleRequest{
 		RunID:              "run_1",
 		SkillID:            "travel",
 		Visibility:         skillcontext.DeliveryPersonal,
@@ -93,9 +162,13 @@ func TestSkillContextLoadsOnlySelectedProfileResolversAndArtifactsLargeValues(t 
 
 func TestSkillContextNeverInjectsPrivateMemoryIntoSharedOrPublicDelivery(t *testing.T) {
 	now := time.Now().UTC()
-	registry, err := skillcontext.NewResolverRegistry(skillcontext.RegisteredResolver{
-		ResolverRef: "memory.private",
-		Resolver: contextResolverFunc(func(skillcontext.ResolveRequest) (skillcontext.ResolvedContext, error) {
+	registry := contextReaderRegistry(t, contextReaderBinding{
+		descriptor: contextReaderDescriptor(
+			"memory.private", "memory",
+			generated.AssistantContextAuthorityUserDeclared,
+			generated.AssistantContextSensitivityPrivate,
+		),
+		resolver: contextResolverFunc(func(skillcontext.ResolveRequest) (skillcontext.ResolvedContext, error) {
 			return skillcontext.ResolvedContext{
 				Kind:        "memory",
 				SourceRef:   "memory:user_1",
@@ -107,12 +180,8 @@ func TestSkillContextNeverInjectsPrivateMemoryIntoSharedOrPublicDelivery(t *test
 			}, nil
 		}),
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
 	profile := skillcontext.Profile{
-		ProfileID:   "travel-context",
-		AssetDigest: "sha256:memory-profile",
+		ProfileID: "travel-context",
 		Requirements: []skillcontext.Requirement{{
 			SlotID:              "private_preference",
 			Required:            true,
@@ -124,6 +193,7 @@ func TestSkillContextNeverInjectsPrivateMemoryIntoSharedOrPublicDelivery(t *test
 			FallbackPolicy:      "omit",
 		}},
 	}
+	profile.AssetDigest = canonicalFixtureDigest(profile)
 	for _, visibility := range []skillcontext.DeliveryVisibility{
 		skillcontext.DeliveryShared,
 		skillcontext.DeliveryPublic,
@@ -151,9 +221,13 @@ func TestSkillContextNeverInjectsPrivateMemoryIntoSharedOrPublicDelivery(t *test
 
 func TestSkillContextRejectsStaleOrWrongAuthorityResolverOutput(t *testing.T) {
 	now := time.Now().UTC()
-	registry, err := skillcontext.NewResolverRegistry(skillcontext.RegisteredResolver{
-		ResolverRef: "weather.current",
-		Resolver: contextResolverFunc(func(skillcontext.ResolveRequest) (skillcontext.ResolvedContext, error) {
+	registry := contextReaderRegistry(t, contextReaderBinding{
+		descriptor: contextReaderDescriptor(
+			"weather.current", "domain",
+			generated.AssistantContextAuthorityDomainCanonical,
+			generated.AssistantContextSensitivityPublic,
+		),
+		resolver: contextResolverFunc(func(skillcontext.ResolveRequest) (skillcontext.ResolvedContext, error) {
 			return skillcontext.ResolvedContext{
 				Kind:        "domain",
 				SourceRef:   "weather:old",
@@ -165,26 +239,24 @@ func TestSkillContextRejectsStaleOrWrongAuthorityResolverOutput(t *testing.T) {
 			}, nil
 		}),
 	})
-	if err != nil {
-		t.Fatal(err)
+	profile := skillcontext.Profile{
+		ProfileID: "weather-context",
+		Requirements: []skillcontext.Requirement{{
+			SlotID:              "current_weather",
+			Required:            true,
+			AcceptedSourceKinds: []string{"domain"},
+			Authority:           generated.AssistantContextAuthorityDomainCanonical,
+			Freshness:           30 * time.Minute,
+			Sensitivity:         generated.AssistantContextSensitivityPublic,
+			TokenBudget:         100,
+			ResolverRef:         "weather.current",
+			FallbackPolicy:      "clarify",
+		}},
 	}
+	profile.AssetDigest = canonicalFixtureDigest(profile)
 	snapshot, err := skillcontext.NewAssembler(registry).Assemble(
 		context.Background(),
-		skillcontext.Profile{
-			ProfileID:   "weather-context",
-			AssetDigest: "sha256:weather",
-			Requirements: []skillcontext.Requirement{{
-				SlotID:              "current_weather",
-				Required:            true,
-				AcceptedSourceKinds: []string{"domain"},
-				Authority:           generated.AssistantContextAuthorityDomainCanonical,
-				Freshness:           30 * time.Minute,
-				Sensitivity:         generated.AssistantContextSensitivityPublic,
-				TokenBudget:         100,
-				ResolverRef:         "weather.current",
-				FallbackPolicy:      "clarify",
-			}},
-		},
+		profile,
 		skillcontext.AssembleRequest{
 			RunID:              "run_1",
 			SkillID:            "weather",
@@ -200,12 +272,68 @@ func TestSkillContextRejectsStaleOrWrongAuthorityResolverOutput(t *testing.T) {
 	}
 }
 
+func TestSkillContextRejectsResolverThatDowngradesDeclaredSensitivity(t *testing.T) {
+	now := time.Now().UTC()
+	registry := contextReaderRegistry(t, contextReaderBinding{
+		descriptor: contextReaderDescriptor(
+			"trip.private", "domain",
+			generated.AssistantContextAuthorityDomainCanonical,
+			generated.AssistantContextSensitivityPrivate,
+		),
+		resolver: contextResolverFunc(func(skillcontext.ResolveRequest) (skillcontext.ResolvedContext, error) {
+			return skillcontext.ResolvedContext{
+				Kind:        "domain",
+				SourceRef:   "travel.TripTimelineView:trip-1",
+				Authority:   generated.AssistantContextAuthorityDomainCanonical,
+				Sensitivity: generated.AssistantContextSensitivityPublic,
+				CapturedAt:  now,
+				TokenCost:   10,
+				Value:       map[string]any{"hotelRoom": "private"},
+			}, nil
+		}),
+	})
+	profile := skillcontext.Profile{
+		ProfileID: "travel-private",
+		Requirements: []skillcontext.Requirement{{
+			SlotID:              "trip_private",
+			Required:            true,
+			AcceptedSourceKinds: []string{"domain"},
+			Authority:           generated.AssistantContextAuthorityDomainCanonical,
+			Sensitivity:         generated.AssistantContextSensitivityPrivate,
+			TokenBudget:         100,
+			ResolverRef:         "trip.private",
+			FallbackPolicy:      "block",
+		}},
+	}
+	profile.AssetDigest = canonicalFixtureDigest(profile)
+	snapshot, err := skillcontext.NewAssembler(registry).Assemble(
+		context.Background(),
+		profile,
+		skillcontext.AssembleRequest{
+			RunID:              "run_1",
+			SkillID:            "travel",
+			Visibility:         skillcontext.DeliveryShared,
+			AllowedSensitivity: generated.AssistantContextSensitivityPrivate,
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snapshot.Segments) != 0 || len(snapshot.Missing) != 1 {
+		t.Fatalf("resolver sensitivity downgrade escaped policy: %#v", snapshot)
+	}
+}
+
 func TestSkillContextConsentReaderIsFailClosedBeforeResolver(t *testing.T) {
 	now := time.Now().UTC()
 	resolverCalls := 0
-	registry, err := skillcontext.NewResolverRegistry(skillcontext.RegisteredResolver{
-		ResolverRef: "trip.private",
-		Resolver: contextResolverFunc(func(skillcontext.ResolveRequest) (skillcontext.ResolvedContext, error) {
+	registry := contextReaderRegistry(t, contextReaderBinding{
+		descriptor: contextReaderDescriptor(
+			"trip.private", "domain",
+			generated.AssistantContextAuthorityDomainCanonical,
+			generated.AssistantContextSensitivityPrivate,
+		),
+		resolver: contextResolverFunc(func(skillcontext.ResolveRequest) (skillcontext.ResolvedContext, error) {
 			resolverCalls++
 			return skillcontext.ResolvedContext{
 				Kind:        "domain",
@@ -218,12 +346,8 @@ func TestSkillContextConsentReaderIsFailClosedBeforeResolver(t *testing.T) {
 			}, nil
 		}),
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
 	profile := skillcontext.Profile{
-		ProfileID:   "travel-consented-context",
-		AssetDigest: "sha256:travel-consented-context",
+		ProfileID: "travel-consented-context",
 		Requirements: []skillcontext.Requirement{{
 			SlotID:              "trip",
 			Required:            true,
@@ -236,6 +360,7 @@ func TestSkillContextConsentReaderIsFailClosedBeforeResolver(t *testing.T) {
 			FallbackPolicy:      "block",
 		}},
 	}
+	profile.AssetDigest = canonicalFixtureDigest(profile)
 	request := skillcontext.AssembleRequest{
 		RunID:              "run_1",
 		OwnerID:            "user_1",

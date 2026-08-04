@@ -75,14 +75,14 @@ type commandReceiptDocument struct {
 func (s *MongoVisitStore) CommitVisit(
 	ctx context.Context,
 	command application.CommitCommand,
-) (application.CommandResult, error) {
+) (application.RecordVisitReceipt, error) {
 	session, err := s.visits.Database().Client().StartSession()
 	if err != nil {
-		return application.CommandResult{}, fmt.Errorf("start visit transaction: %w", err)
+		return application.RecordVisitReceipt{}, fmt.Errorf("start visit transaction: %w", err)
 	}
 	defer session.EndSession(ctx)
 
-	var result application.CommandResult
+	var result application.RecordVisitReceipt
 	_, err = session.WithTransaction(ctx, func(txCtx context.Context) (any, error) {
 		receipt, found, loadErr := s.loadReceipt(txCtx, command.ReceiptID)
 		if loadErr != nil {
@@ -92,7 +92,7 @@ func (s *MongoVisitStore) CommitVisit(
 			if receipt.CommandDigest != command.CommandDigest {
 				return nil, application.ErrIdempotencyConflict
 			}
-			result = application.CommandResult{
+			result = application.RecordVisitReceipt{
 				VisitRecord: receipt.Result,
 				Replayed:    true,
 			}
@@ -132,14 +132,14 @@ func (s *MongoVisitStore) CommitVisit(
 		}); err != nil {
 			return nil, fmt.Errorf("store visit receipt: %w", err)
 		}
-		result = application.CommandResult{VisitRecord: record}
+		result = application.RecordVisitReceipt{VisitRecord: record}
 		return nil, nil
 	})
 	if err == nil {
 		return result, nil
 	}
 	if errors.Is(err, application.ErrIdempotencyConflict) {
-		return application.CommandResult{}, err
+		return application.RecordVisitReceipt{}, err
 	}
 
 	// Resolve an ambiguous commit or a concurrent duplicate strictly from the
@@ -147,14 +147,14 @@ func (s *MongoVisitStore) CommitVisit(
 	receipt, found, loadErr := s.loadReceipt(ctx, command.ReceiptID)
 	if loadErr == nil && found {
 		if receipt.CommandDigest != command.CommandDigest {
-			return application.CommandResult{}, application.ErrIdempotencyConflict
+			return application.RecordVisitReceipt{}, application.ErrIdempotencyConflict
 		}
-		return application.CommandResult{
+		return application.RecordVisitReceipt{
 			VisitRecord: receipt.Result,
 			Replayed:    true,
 		}, nil
 	}
-	return application.CommandResult{}, fmt.Errorf("commit visit: %w", err)
+	return application.RecordVisitReceipt{}, fmt.Errorf("commit visit: %w", err)
 }
 
 func (s *MongoVisitStore) loadReceipt(

@@ -15,6 +15,7 @@ import (
 
 func TestTravelContextResolverUsesTypedTripReferenceAndPreservesSourceDigest(t *testing.T) {
 	projectedAt := time.Date(2026, 8, 2, 14, 0, 0, 0, time.UTC)
+	sourceDigest := canonicalTravelProjectionFixtureDigest("trip-1", "revision-2", 2)
 	runs := travelRunReader{run: runruntime.Run{
 		RunID: "run-trip", PersonaID: "persona-1",
 		ContextSnapshot: map[string]any{
@@ -25,12 +26,21 @@ func TestTravelContextResolverUsesTypedTripReferenceAndPreservesSourceDigest(t *
 	}}
 	travel := &travelContextReader{value: domainreader.TravelContext{
 		TripID: "trip-1", CurrentRevisionID: "revision-2", CurrentRevisionNumber: 2,
-		SourceDigest: "sha256:travel-source", ProjectedAt: projectedAt,
+		SourceDigest: sourceDigest, ProjectedAt: projectedAt,
 		Timeline: map[string]any{
 			"tripId": "trip-1", "days": []any{map[string]any{"dayIndex": 0}},
 			"sourceMomentIds": []any{"moment-1"}, "sourceContentLinkIds": []any{"link-1"},
 		},
-		Map: map[string]any{"tripId": "trip-1", "stops": []any{map[string]any{"stopId": "stop-1"}}},
+		Map: map[string]any{
+			"tripId": "trip-1", "revisionId": "revision-2", "sourceDigest": sourceDigest,
+			"stops": []any{map[string]any{
+				"placeRef": map[string]any{
+					"objectTypeRef": "entity.Place", "objectId": "place-1",
+				},
+				"dayIndex": 0, "order": 0, "itemId": "item-1", "title": "断桥",
+			}},
+			"segments": []any{}, "markers": []any{},
+		},
 		GuideAssignments: map[string]any{
 			"tripId": "trip-1", "assignments": []any{map[string]any{"taskKey": "meeting"}},
 		},
@@ -43,9 +53,9 @@ func TestTravelContextResolverUsesTypedTripReferenceAndPreservesSourceDigest(t *
 		t.Fatalf("Resolve(): %v", err)
 	}
 	if travel.personaID != "persona-1" || travel.tripID != "trip-1" ||
-		resolved.Kind != "domain" || resolved.SourceRef != "travel.TripTimelineView:trip-1@sha256:travel-source" ||
+		resolved.Kind != "domain" || resolved.SourceRef != "travel.TripTimelineView:trip-1@"+sourceDigest ||
 		resolved.ArtifactRef != resolved.SourceRef || !resolved.CapturedAt.Equal(projectedAt) ||
-		resolved.Summary == "" || resolved.Value["sourceDigest"] != "sha256:travel-source" ||
+		resolved.Summary == "" || resolved.Value["sourceDigest"] != sourceDigest ||
 		resolved.Value["guideAssignments"] == nil {
 		t.Fatalf("travel=%+v resolved=%+v", travel, resolved)
 	}

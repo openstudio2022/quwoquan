@@ -1,12 +1,9 @@
-import 'package:quwoquan_app/cloud/content/models/content_behavior_batch_event_dto.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_metadata.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
-import 'package:quwoquan_app/cloud/runtime/models/content_app_config_wire.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import 'package:quwoquan_app/cloud/runtime/models/discovery_feed_page.dart';
-import 'package:quwoquan_app/cloud/runtime/models/post_engagement_counters.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 const String kFeedSortRecommend = 'recommend';
@@ -96,23 +93,16 @@ abstract interface class ContentAuthorPostsReader {
   });
 }
 
-abstract interface class ContentWriteRepository {
-  Future<void> deletePost({
+/// Post 聚合的删除命令写面；wire request/receipt 由 ContractGraph 生成。
+abstract interface class ContentPostDeleteCommandWriter {
+  Future<PostDeletionReceipt> deletePost({
     required String postId,
     required String idempotencyKey,
   });
 }
 
-abstract interface class ContentEngagementRepository {
-  Future<PostEngagementCounters> getCounters({required String postId});
-
-  Future<void> reportBehaviors({
-    required List<ContentBehaviorBatchEventDto> events,
-  });
-}
-
 abstract interface class ContentConfigRepository {
-  Future<ContentAppConfigWire> getAppConfig();
+  Future<AppConfigSlice> getAppConfig();
 
   bool get requiresResolvedPersonaForMutations;
 }

@@ -18,8 +18,8 @@ final class AlphaPersonaRelationshipFacet
 
   final String viewerPersonaId;
   final Map<String, Map<String, Object?>> _relationshipRows;
-  final Map<String, BlockedUserListItem> _blocked =
-      <String, BlockedUserListItem>{};
+  final Map<String, BlockedListItemView> _blocked =
+      <String, BlockedListItemView>{};
 
   static Map<String, Map<String, Object?>> _loadRelationships(
     ObjectScenarioSeedReader fixtures,
@@ -46,7 +46,7 @@ final class AlphaPersonaRelationshipFacet
     final replayed = _blocked.containsKey(command.targetPersonaId);
     _blocked.putIfAbsent(
       command.targetPersonaId,
-      () => BlockedUserListItem(
+      () => BlockedListItemView(
         targetPersonaId: command.targetPersonaId,
         displayName: command.targetPersonaId,
         userHandle: '',
@@ -84,7 +84,7 @@ final class AlphaPersonaRelationshipFacet
   }
 
   @override
-  Future<RelationshipCapabilityResult> getRelationshipCapability(
+  Future<RelationshipCapabilityView> getRelationshipCapability(
     GetRelationshipCapabilityQuery query,
   ) async {
     final target = query.targetPersonaId;
@@ -95,30 +95,33 @@ final class AlphaPersonaRelationshipFacet
     final isFollowedBy = row?['mutualFollow'] == true;
     final isMutual = isFollowing && isFollowedBy;
     final relationState = isSelf
-        ? 'self'
+        ? RelationshipState.self
         : isMutual
-        ? 'mutual'
+        ? RelationshipState.mutual
         : isFollowing
-        ? 'following'
+        ? RelationshipState.following
         : isFollowedBy
-        ? 'followed_by'
-        : 'not_following';
+        ? RelationshipState.followedBy
+        : RelationshipState.notFollowing;
     final hasFormalConversation = row?['canChat'] == true && !isMutual;
     final canCreateDirectConversation = !isBlocked && isMutual;
     final canSendMessage = !isBlocked && (isMutual || hasFormalConversation);
     final hasPendingGreeting = row?['hasPendingGreeting'] == true;
-    return RelationshipCapabilityResult(
+    return RelationshipCapabilityView(
       viewerPersonaId: viewerPersonaId,
       targetPersonaId: target,
       relationState: relationState,
       canFollow:
           !isBlocked &&
           !isSelf &&
-          (relationState == 'not_following' || relationState == 'followed_by'),
+          (relationState == RelationshipState.notFollowing ||
+              relationState == RelationshipState.followedBy),
       canUnfollow:
           !isBlocked &&
-          (relationState == 'following' || relationState == 'mutual'),
-      canFollowBack: !isBlocked && relationState == 'followed_by',
+          (relationState == RelationshipState.following ||
+              relationState == RelationshipState.mutual),
+      canFollowBack:
+          !isBlocked && relationState == RelationshipState.followedBy,
       canGreet:
           !isBlocked &&
           !isSelf &&

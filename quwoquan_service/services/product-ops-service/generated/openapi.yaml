@@ -1480,8 +1480,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/EventRecordBatchRequest'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/EventRecordBatchReceipt'
                 default:
                     description: Runtime failure
                     content:
@@ -1804,8 +1808,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/RuntimeLogBatchRequest'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/EventRecordBatchReceipt'
                 default:
                     description: Runtime failure
                     content:
@@ -1992,6 +2000,11 @@ paths:
                 method: appendStartupBatch
                 appendSink: EventRecord
             parameters:
+                - name: X-Qwq-Startup-Proof
+                  in: header
+                  required: true
+                  schema:
+                    type: string
                 - name: Idempotency-Key
                   in: header
                   required: true
@@ -1999,14 +2012,18 @@ paths:
                   schema:
                     type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/ReportStartupEventBatchRequest'
+                            $ref: '#/components/schemas/ReportStartupEventBatchCommand'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/StartupTelemetryBatchReceipt'
                 default:
                     description: Runtime failure
                     content:
@@ -2035,14 +2052,18 @@ paths:
                   schema:
                     type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
                             $ref: '#/components/schemas/RecordVisitRequest'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/RecordVisitReceipt'
                 default:
                     description: Runtime failure
                     content:
@@ -2148,6 +2169,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: EventDrilldownSlice
+            x-contract-placeholder: true
+        EventRecordBatchReceipt:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: EventRecordBatchReceipt
             x-contract-placeholder: true
         EventRecordBatchRequest:
             type: object
@@ -2339,6 +2365,11 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: PremiumPoolEntryTakedownResult
             x-contract-placeholder: true
+        RecordVisitReceipt:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: RecordVisitReceipt
+            x-contract-placeholder: true
         RecordVisitRequest:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -2354,10 +2385,10 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ReportRecoveryFailureRequest
             x-contract-placeholder: true
-        ReportStartupEventBatchRequest:
+        ReportStartupEventBatchCommand:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: ReportStartupEventBatchRequest
+            x-contract-entity: ReportStartupEventBatchCommand
             x-contract-placeholder: true
         RetryAccountEnforcementDeliveryRequest:
             type: object
@@ -2383,6 +2414,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: RuntimeLogBatchRequest
+            x-contract-placeholder: true
+        StartupTelemetryBatchReceipt:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: StartupTelemetryBatchReceipt
             x-contract-placeholder: true
         TakedownPremiumPoolEntryRequest:
             type: object

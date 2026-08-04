@@ -44,7 +44,10 @@ void main() {
               label: SearchText.reload,
             ),
           ),
-          onAction: (_) async => retryCount++,
+          onRecovery: (_) async {
+            retryCount += 1;
+            return UiRecoveryOutcome.recovered;
+          },
         ),
       ),
     );
@@ -144,7 +147,10 @@ void main() {
               availableAfterSeconds: 2,
             ),
           ),
-          onAction: (_) async => retryCount++,
+          onRecovery: (_) async {
+            retryCount += 1;
+            return UiRecoveryOutcome.recovered;
+          },
         ),
       ),
     );
@@ -263,6 +269,57 @@ void main() {
           .map((payload) => payload.extensions['result']),
       <Object?>['shown', 'recovery_started', 'still_blocked'],
     );
+  });
+
+  testWidgets('typed 交接、被新请求接管与取消都记录唯一明确终态', (tester) async {
+    const cases = <UiRecoveryOutcome, String>{
+      UiRecoveryOutcome.handedOff: 'handed_off',
+      UiRecoveryOutcome.superseded: 'superseded',
+      UiRecoveryOutcome.cancelled: 'cancelled',
+    };
+
+    for (final entry in cases.entries) {
+      final recorder = _CapturingTelemetryRecorder();
+      final tracker = AppPageExperienceTracker(
+        pageContextStore: AppPageContextStore.instance..setPageName('home'),
+      )
+        ..attachReporter(recorder)
+        ..beginPageVisit(
+          pageName: 'home',
+          pageVisitId: 'visit-${entry.value}',
+          openedAt: DateTime.now(),
+        );
+      await tester.pumpWidget(
+        CupertinoApp(
+          home: AppPageErrorState(
+            key: ValueKey<String>('page-error-${entry.value}'),
+            experienceTracker: tracker,
+            semantic: const UiErrorSemantic(
+              category: UiErrorCategory.pageLoad,
+              scope: UiErrorScope.page,
+              title: SearchText.recoveryReloadLaterTitle,
+              message: SearchText.recoveryReloadLaterMessage,
+              sourceCode: 'CONTENT.SYSTEM.read_unavailable',
+              primaryAction: UiErrorAction(
+                type: UiErrorActionType.retry,
+                label: SearchText.reload,
+              ),
+            ),
+            onRecovery: (_) async => entry.key,
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.tap(find.text(SearchText.reload));
+      await tester.pumpAndSettle();
+
+      expect(
+        recorder.records
+            .where((payload) => payload.eventType == 'page_error_outcome')
+            .map((payload) => payload.extensions['result']),
+        <Object?>['shown', 'recovery_started', entry.value],
+      );
+    }
   });
 
   testWidgets('未分类恢复回调异常被记录但不重抛', (tester) async {

@@ -3,33 +3,42 @@ package local_contract
 
 import (
 	"context"
+	"maps"
 	assistantgenerated "quwoquan_service/services/assistant-service/generated/assistant/assistant_session"
+	prompting "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/prompting"
 	skillcontext "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/skillcontext"
-	prompting "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/prompting"
+	readermodel "quwoquan_service/services/assistant-service/internal/assistant/domain_reader_descriptor/domain/model"
+	readerresource "quwoquan_service/services/assistant-service/internal/assistant/domain_reader_descriptor/infrastructure/resource"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	preferencemodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_preference/domain/model"
-	channelpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/channel"
-	contextassembly "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/contextassembly"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
-	skillpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/skill"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
+	channelpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/channel"
+	contextassembly "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/contextassembly"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/orchestration"
+	assistant "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/model"
+	sessionmodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/model"
+	sessionports "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/ports"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/persistence"
+	skillpkg "quwoquan_service/services/assistant-service/internal/assistant/skill_package_release/application/packageasset"
 	"quwoquan_service/services/assistant-service/tests/support/promptassets"
 	"quwoquan_service/services/assistant-service/tests/support/skillfixture"
 )
 
 type contextAssemblyRecordingModel struct {
-	calls            int
-	askSlotID        string
-	assemblies       []*contextassembly.AssemblyResult
-	sessionFacts     [][]preferencemodel.Snapshot
-	longTermFacts    [][]preferencemodel.Snapshot
-	contextSummaries []*assistant.AssistantSessionContextSummary
-	contextTurns     [][]assistant.AssistantSessionContextTurn
+	calls               int
+	askSlotID           string
+	assemblies          []*contextassembly.AssemblyResult
+	sessionPreferences  [][]preferencemodel.AssistantPreferenceSnapshot
+	longTermPreferences [][]preferencemodel.AssistantPreferenceSnapshot
+	contextSummaries    []*assistant.AssistantRunContextSummary
+	contextTurns        [][]assistant.AssistantRunContextTurn
+}
+
+func (*contextAssemblyRecordingModel) ModelExecutionCapabilities() orchestration.ModelExecutionCapabilities {
+	return durableTestModelCapabilities()
 }
 
 type sharedContextResolverFunc func(
@@ -49,12 +58,12 @@ func (model *contextAssemblyRecordingModel) Complete(
 ) (orchestration.ModelResponse, error) {
 	model.calls++
 	model.assemblies = append(model.assemblies, req.ContextAssembly)
-	model.sessionFacts = append(model.sessionFacts, req.SessionPreferenceFacts)
-	model.longTermFacts = append(model.longTermFacts, req.LongTermPreferenceFacts)
+	model.sessionPreferences = append(model.sessionPreferences, req.SessionPreferences)
+	model.longTermPreferences = append(model.longTermPreferences, req.LongTermPreferences)
 	model.contextSummaries = append(model.contextSummaries, req.ContextSummary)
 	model.contextTurns = append(
 		model.contextTurns,
-		append([]assistant.AssistantSessionContextTurn(nil), req.ContextTurns...),
+		append([]assistant.AssistantRunContextTurn(nil), req.ContextTurns...),
 	)
 	if req.Stage == "reasoning" {
 		if model.askSlotID != "" {
@@ -88,7 +97,10 @@ func contextAssemblyLoop(
 	t.Helper()
 	loop := orchestration.NewAgentLoop(
 		nil,
-		orchestration.ReactRuntime{Model: model},
+		orchestration.ReactRuntime{
+			Model: model,
+			Tools: canonicalTestToolCoordinator(nil),
+		},
 		nil,
 	)
 	loop.Catalog = skillfixture.Loader{}
@@ -170,7 +182,7 @@ func TestContextAssemblyRecallsAuthorizedIntersectionIntoSlots(t *testing.T) {
 	if destination.Value != "杭州" ||
 		destination.Source != "intersection" ||
 		destination.Status.WireName() != "inferred" {
-		t.Fatalf("destination slot=%#v want inferred intersection fact", destination)
+		t.Fatalf("destination slot=%#v want inferred intersection preference", destination)
 	}
 	if len(destination.EvidenceIDs) != 1 ||
 		destination.EvidenceIDs[0] != "evidence-travel" {
@@ -188,6 +200,30 @@ func TestContextAssemblyRecallsAuthorizedIntersectionIntoSlots(t *testing.T) {
 	}
 }
 
+func contextAssemblyRequiredSlot(
+	slotID string,
+	valueType string,
+	parserRefs []string,
+	aliases []string,
+	targetSlot string,
+	prompt string,
+) skillpkg.SlotDefinition {
+	return skillpkg.SlotDefinition{
+		SlotID:         slotID,
+		Required:       true,
+		ValueType:      valueType,
+		ParserRefs:     parserRefs,
+		Aliases:        aliases,
+		SourcePriority: []string{skillpkg.SlotSourceUserQuery, skillpkg.SlotSourceDevice, skillpkg.SlotSourceSessionUser},
+		Clarification: skillpkg.SlotClarification{
+			Policy:      skillpkg.SlotClarificationClarify,
+			TargetSlot:  targetSlot,
+			Prompt:      prompt,
+			RetryPolicy: "single_retry",
+		},
+	}
+}
+
 // spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/context-assembly-slot-filling/spec.md#gwt-001
 func TestContextAssemblyDistinguishesStaleAndConflictedSlots(t *testing.T) {
 	orchestrator := contextassembly.NewContextOrchestrator()
@@ -202,8 +238,17 @@ func TestContextAssemblyDistinguishesStaleAndConflictedSlots(t *testing.T) {
 				Status: "stale",
 				Facts:  map[string]any{"cityLabel": "杭州"},
 			},
-			SlotSchema: skillpkg.SlotSchema{RequiredSlots: []string{"location"}},
-			Channel:    channelpkg.Personal(),
+			SlotSchema: skillpkg.SlotSchema{Slots: []skillpkg.SlotDefinition{
+				contextAssemblyRequiredSlot(
+					"location",
+					skillpkg.SlotValueTypeLocation,
+					[]string{skillpkg.SlotParserLocationBeforeAlias},
+					[]string{"天气"},
+					"gps_or_city_location",
+					"你想查询哪座城市的天气？",
+				),
+			}},
+			Channel: channelpkg.Personal(),
 		},
 	)
 	if err != nil {
@@ -220,16 +265,30 @@ func TestContextAssemblyDistinguishesStaleAndConflictedSlots(t *testing.T) {
 			Turn: assistant.AssistantTurn{
 				TurnID: "turn-conflicted-slots",
 				Input:  assistant.AssistantTurnInput{Text: "帮我安排一下"},
-				ContextTurns: []assistant.AssistantSessionContextTurn{
+				ContextTurns: []assistant.AssistantRunContextTurn{
 					{Role: "user", Text: "目的地是杭州，明天出发"},
 					{Role: "user", Text: "目的地是苏州，明天出发"},
 				},
 			},
 			DomainID: "travel",
-			SlotSchema: skillpkg.SlotSchema{
-				RequiredSlots: []string{"destination", "travel_date"},
-				CarryOver:     true,
-			},
+			SlotSchema: skillpkg.SlotSchema{Slots: []skillpkg.SlotDefinition{
+				contextAssemblyRequiredSlot(
+					"destination",
+					skillpkg.SlotValueTypeLocation,
+					[]string{skillpkg.SlotParserLocationAfterAlias},
+					[]string{"目的地", "去"},
+					"gps_or_city_location",
+					"你想去哪里旅行？",
+				),
+				contextAssemblyRequiredSlot(
+					"travel_date",
+					skillpkg.SlotValueTypeDate,
+					[]string{skillpkg.SlotParserTemporalExpression},
+					nil,
+					"realtime_evidence",
+					"你计划哪天出发？",
+				),
+			}, CarryOver: true},
 			Channel: channelpkg.Personal(),
 		},
 	)
@@ -249,14 +308,14 @@ type channelPreferenceReader struct{}
 func (channelPreferenceReader) ResolveActiveSnapshots(
 	_ context.Context,
 	_, _ string,
-) ([]preferencemodel.Snapshot, []preferencemodel.Snapshot, error) {
-	return []preferencemodel.Snapshot{{
+) ([]preferencemodel.AssistantPreferenceSnapshot, []preferencemodel.AssistantPreferenceSnapshot, error) {
+	return []preferencemodel.AssistantPreferenceSnapshot{{
 			PreferenceID: "session-tone",
 			Scope:        preferencemodel.ScopeSession,
 			Kind:         preferencemodel.KindTone,
 			Value:        "warm",
 			Version:      1,
-		}}, []preferencemodel.Snapshot{{
+		}}, []preferencemodel.AssistantPreferenceSnapshot{{
 			PreferenceID: "private-language",
 			Scope:        preferencemodel.ScopeLongTerm,
 			Kind:         preferencemodel.KindLanguage,
@@ -265,14 +324,14 @@ func (channelPreferenceReader) ResolveActiveSnapshots(
 		}}, nil
 }
 
-type factualMemoryPreferenceReader struct{}
+type confirmedMemoryPreferenceReader struct{}
 
-func (factualMemoryPreferenceReader) ResolveActiveSnapshots(
+func (confirmedMemoryPreferenceReader) ResolveActiveSnapshots(
 	_ context.Context,
 	_, _ string,
-) ([]preferencemodel.Snapshot, []preferencemodel.Snapshot, error) {
+) ([]preferencemodel.AssistantPreferenceSnapshot, []preferencemodel.AssistantPreferenceSnapshot, error) {
 	confirmedAt := time.Date(2026, 7, 28, 9, 0, 0, 0, time.UTC)
-	return nil, []preferencemodel.Snapshot{{
+	return nil, []preferencemodel.AssistantPreferenceSnapshot{{
 		PreferenceID:    "memory-diet",
 		Scope:           preferencemodel.ScopeLongTerm,
 		Kind:            preferencemodel.KindDietaryRestrictions,
@@ -285,8 +344,8 @@ func (factualMemoryPreferenceReader) ResolveActiveSnapshots(
 }
 
 // spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/long-term-memory-compaction/spec.md#gwt-001
-func TestConfirmedFactualMemoryEntersPrivateModelContext(t *testing.T) {
-	_, longTermFacts, err := (factualMemoryPreferenceReader{}).ResolveActiveSnapshots(
+func TestConfirmedConfirmedMemoryEntersPrivateModelContext(t *testing.T) {
+	_, longTermPreferences, err := (confirmedMemoryPreferenceReader{}).ResolveActiveSnapshots(
 		t.Context(),
 		"persona-memory",
 		"session-memory",
@@ -295,26 +354,26 @@ func TestConfirmedFactualMemoryEntersPrivateModelContext(t *testing.T) {
 		t.Fatalf("ResolveActiveSnapshots(): %v", err)
 	}
 	turn := assistant.AssistantTurn{
-		TurnID:                  "execution:memory-context-run",
-		SessionID:               "session-memory",
-		UserID:                  "persona-memory",
-		Status:                  "running",
-		Input:                   assistant.AssistantTurnInput{Text: "给我推荐晚餐"},
-		LongTermPreferenceFacts: longTermFacts,
-		CreatedAt:               time.Now().UTC(),
+		TurnID:              "execution:memory-context-run",
+		SessionID:           "session-memory",
+		UserID:              "persona-memory",
+		Status:              "running",
+		Input:               assistant.AssistantTurnInput{Text: "给我推荐晚餐"},
+		LongTermPreferences: longTermPreferences,
+		CreatedAt:           time.Now().UTC(),
 	}
-	if len(turn.LongTermPreferenceFacts) != 1 {
-		t.Fatalf("turn long-term memories=%#v", turn.LongTermPreferenceFacts)
+	if len(turn.LongTermPreferences) != 1 {
+		t.Fatalf("turn long-term memories=%#v", turn.LongTermPreferences)
 	}
-	if len(turn.LongTermPreferenceFacts) != 1 ||
-		turn.LongTermPreferenceFacts[0].Kind != preferencemodel.KindDietaryRestrictions {
-		t.Fatalf("run long-term memories=%#v", turn.LongTermPreferenceFacts)
+	if len(turn.LongTermPreferences) != 1 ||
+		turn.LongTermPreferences[0].Kind != preferencemodel.KindDietaryRestrictions {
+		t.Fatalf("run long-term memories=%#v", turn.LongTermPreferences)
 	}
-	if prompt := prompting.FormatFactualMemoriesForPrompt(turn.LongTermPreferenceFacts); !strings.Contains(
+	if prompt := prompting.FormatConfirmedPreferencesForPrompt(turn.LongTermPreferences); !strings.Contains(
 		prompt,
 		"对花生过敏",
 	) || !strings.Contains(prompt, "scope=long_term") {
-		t.Fatalf("factual memory prompt=%q", prompt)
+		t.Fatalf("confirmed memory prompt=%q", prompt)
 	}
 }
 
@@ -322,7 +381,7 @@ func TestConfirmedFactualMemoryEntersPrivateModelContext(t *testing.T) {
 func TestLongSessionUsesTraceableSummaryWithoutPerTurnTruncation(t *testing.T) {
 	store := persistence.NewMemorySessionStore()
 	now := time.Date(2026, 7, 1, 8, 0, 0, 0, time.UTC)
-	if _, _, err := store.InsertSession(t.Context(), assistant.AssistantSession{
+	if _, _, err := store.InsertSession(t.Context(), sessionmodel.AssistantSession{
 		SessionID: "asn_summary_context",
 		UserID:    "persona-summary",
 		State:     "active",
@@ -331,7 +390,7 @@ func TestLongSessionUsesTraceableSummaryWithoutPerTurnTruncation(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("InsertSession(): %v", err)
 	}
-	summary := assistant.AssistantSessionContextSummary{
+	summary := sessionmodel.AssistantSessionContextSummary{
 		SummaryID:   "summary-traceable",
 		Text:        "原始目标：目的地是杭州，明天出发，预算5000元",
 		FromTurnID:  "run-history-0",
@@ -343,17 +402,17 @@ func TestLongSessionUsesTraceableSummaryWithoutPerTurnTruncation(t *testing.T) {
 			"travel_date": "明天",
 		},
 	}
-	swapped, err := store.CompareAndSwapSessionSummary(
-		t.Context(),
-		"asn_summary_context",
-		0,
-		0,
-		5,
-		summary,
-		now,
-	)
-	if err != nil || !swapped {
-		t.Fatalf("persist canonical session summary: swapped=%v err=%v", swapped, err)
+	commit, err := store.CommitSessionSummary(t.Context(), sessionports.SessionSummaryCommit{
+		CompletionEventID:      "completion:run-history-4",
+		SessionID:              "asn_summary_context",
+		ExpectedVersion:        0,
+		ExpectedSourceSequence: 0,
+		NextSourceSequence:     5,
+		Summary:                summary,
+		UpdatedAt:              now,
+	})
+	if err != nil || !commit.Applied {
+		t.Fatalf("persist canonical session summary: result=%+v err=%v", commit, err)
 	}
 	persisted, found, err := store.GetSession(t.Context(), "asn_summary_context")
 	if err != nil || !found || persisted.ContextSummary == nil {
@@ -361,13 +420,23 @@ func TestLongSessionUsesTraceableSummaryWithoutPerTurnTruncation(t *testing.T) {
 	}
 	longTail := strings.Repeat("长", 320) + "保留尾部目标"
 	turn := assistant.AssistantTurn{
-		TurnID:         "execution:summary-current-run",
-		SessionID:      persisted.SessionID,
-		UserID:         persisted.UserID,
-		Status:         "running",
-		Input:          assistant.AssistantTurnInput{Text: "继续上面的计划"},
-		ContextSummary: persisted.ContextSummary,
-		ContextTurns: []assistant.AssistantSessionContextTurn{
+		TurnID:    "execution:summary-current-run",
+		SessionID: persisted.SessionID,
+		UserID:    persisted.UserID,
+		Status:    "running",
+		Input:     assistant.AssistantTurnInput{Text: "继续上面的计划"},
+		ContextSummary: &assistant.AssistantRunContextSummary{
+			SummaryID:      persisted.ContextSummary.SummaryID,
+			Text:           persisted.ContextSummary.Text,
+			FromTurnID:     persisted.ContextSummary.FromTurnID,
+			ToTurnID:       persisted.ContextSummary.ToTurnID,
+			TurnCount:      persisted.ContextSummary.TurnCount,
+			CurrentGoal:    persisted.ContextSummary.CurrentGoal,
+			ConfirmedFacts: append([]string(nil), persisted.ContextSummary.ConfirmedFacts...),
+			PendingItems:   append([]string(nil), persisted.ContextSummary.PendingItems...),
+			ConfirmedSlots: maps.Clone(persisted.ContextSummary.ConfirmedSlots),
+		},
+		ContextTurns: []assistant.AssistantRunContextTurn{
 			{Role: "user", Text: longTail},
 		},
 		CreatedAt: now,
@@ -386,7 +455,7 @@ func TestLongSessionUsesTraceableSummaryWithoutPerTurnTruncation(t *testing.T) {
 func TestSessionSummaryCASRejectsConcurrentAndDuplicateSource(t *testing.T) {
 	store := persistence.NewMemorySessionStore()
 	now := time.Date(2026, 7, 1, 8, 0, 0, 0, time.UTC)
-	if _, _, err := store.InsertSession(t.Context(), assistant.AssistantSession{
+	if _, _, err := store.InsertSession(t.Context(), sessionmodel.AssistantSession{
 		SessionID: "asn_summary_cas",
 		UserID:    "persona-summary",
 		State:     "active",
@@ -399,13 +468,13 @@ func TestSessionSummaryCASRejectsConcurrentAndDuplicateSource(t *testing.T) {
 	for index := 0; index < 2; index++ {
 		index := index
 		go func() {
-			swapped, _ := store.CompareAndSwapSessionSummary(
-				t.Context(),
-				"asn_summary_cas",
-				0,
-				0,
-				1,
-				assistant.AssistantSessionContextSummary{
+			commit, _ := store.CommitSessionSummary(t.Context(), sessionports.SessionSummaryCommit{
+				CompletionEventID:      "completion:turn-" + strconv.Itoa(index),
+				SessionID:              "asn_summary_cas",
+				ExpectedVersion:        0,
+				ExpectedSourceSequence: 0,
+				NextSourceSequence:     1,
+				Summary: sessionmodel.AssistantSessionContextSummary{
 					SummaryID:      "summary-cas",
 					Text:           "candidate " + strconv.Itoa(index),
 					FromTurnID:     "turn-1",
@@ -413,9 +482,9 @@ func TestSessionSummaryCASRejectsConcurrentAndDuplicateSource(t *testing.T) {
 					TurnCount:      1,
 					ConfirmedSlots: map[string]string{},
 				},
-				now,
-			)
-			results <- swapped
+				UpdatedAt: now,
+			})
+			results <- commit.Applied
 		}()
 	}
 	successes := 0
@@ -427,13 +496,13 @@ func TestSessionSummaryCASRejectsConcurrentAndDuplicateSource(t *testing.T) {
 	if successes != 1 {
 		t.Fatalf("concurrent CAS successes=%d, want 1", successes)
 	}
-	replayed, err := store.CompareAndSwapSessionSummary(
-		t.Context(),
-		"asn_summary_cas",
-		0,
-		0,
-		1,
-		assistant.AssistantSessionContextSummary{
+	replayed, err := store.CommitSessionSummary(t.Context(), sessionports.SessionSummaryCommit{
+		CompletionEventID:      "completion:turn-duplicate",
+		SessionID:              "asn_summary_cas",
+		ExpectedVersion:        0,
+		ExpectedSourceSequence: 0,
+		NextSourceSequence:     1,
+		Summary: sessionmodel.AssistantSessionContextSummary{
 			SummaryID:      "summary-cas",
 			Text:           "duplicate",
 			FromTurnID:     "turn-1",
@@ -441,9 +510,9 @@ func TestSessionSummaryCASRejectsConcurrentAndDuplicateSource(t *testing.T) {
 			TurnCount:      1,
 			ConfirmedSlots: map[string]string{},
 		},
-		now,
-	)
-	if err != nil || replayed {
+		UpdatedAt: now,
+	})
+	if err != nil || !replayed.Conflict {
 		t.Fatalf("duplicate source CAS replayed=%v err=%v", replayed, err)
 	}
 	persisted, found, err := store.GetSession(t.Context(), "asn_summary_cas")
@@ -456,7 +525,7 @@ func TestSessionSummaryCASRejectsConcurrentAndDuplicateSource(t *testing.T) {
 
 // spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/context-assembly-slot-filling/spec.md#gwt-002
 func TestGroupMentionChannelExcludesPrivateLongTermMemory(t *testing.T) {
-	sessionFacts, longTermFacts, err := (channelPreferenceReader{}).ResolveActiveSnapshots(
+	sessionPreferences, longTermPreferences, err := (channelPreferenceReader{}).ResolveActiveSnapshots(
 		t.Context(),
 		"persona-channel",
 		"group-channel-session",
@@ -465,25 +534,25 @@ func TestGroupMentionChannelExcludesPrivateLongTermMemory(t *testing.T) {
 		t.Fatalf("ResolveActiveSnapshots(): %v", err)
 	}
 	group := assistant.AssistantTurn{
-		TurnID:                 "execution:group-channel-run",
-		SessionID:              "group-channel-session",
-		UserID:                 "persona-channel",
-		TurnType:               "proactive",
-		Status:                 "running",
-		Input:                  assistant.AssistantTurnInput{Text: "群里有人问杭州天气"},
-		Trigger:                assistant.AssistantTurnTrigger{Type: "chat_assistant_mentioned", MessageID: "message-channel"},
-		SessionPreferenceFacts: sessionFacts,
-		CreatedAt:              time.Now().UTC(),
+		TurnID:             "execution:group-channel-run",
+		SessionID:          "group-channel-session",
+		UserID:             "persona-channel",
+		TurnType:           "proactive",
+		Status:             "running",
+		Input:              assistant.AssistantTurnInput{Text: "群里有人问杭州天气"},
+		Trigger:            assistant.AssistantTurnTrigger{Type: "chat_assistant_mentioned", MessageID: "message-channel"},
+		SessionPreferences: sessionPreferences,
+		CreatedAt:          time.Now().UTC(),
 	}
-	if len(longTermFacts) != 1 {
-		t.Fatalf("reader fixture lost private memory: %#v", longTermFacts)
+	if len(longTermPreferences) != 1 {
+		t.Fatalf("reader fixture lost private memory: %#v", longTermPreferences)
 	}
-	if len(group.LongTermPreferenceFacts) != 0 {
-		t.Fatalf("group turn leaked private memory: %#v", group.LongTermPreferenceFacts)
+	if len(group.LongTermPreferences) != 0 {
+		t.Fatalf("group turn leaked private memory: %#v", group.LongTermPreferences)
 	}
 	prompt := prompting.FormatModelPreferencesForPrompt(
-		group.SessionPreferenceFacts,
-		group.LongTermPreferenceFacts,
+		group.SessionPreferences,
+		group.LongTermPreferences,
 	)
 	if strings.Contains(prompt, "使用简体中文回答") {
 		t.Fatalf("group prompt leaked private long-term memory: %q", prompt)
@@ -501,26 +570,26 @@ func TestSharedSurfacePhysicallyRemovesPersonalPreferencesBeforeModelUse(t *test
 		SurfaceID:   "conversation-channel",
 		PersonaID:   "persona-channel",
 	}
-	turn.SessionPreferenceFacts = []preferencemodel.Snapshot{{
+	turn.SessionPreferences = []preferencemodel.AssistantPreferenceSnapshot{{
 		PreferenceID: "session-private", Value: "只推荐高价酒店",
 	}}
-	turn.LongTermPreferenceFacts = []preferencemodel.Snapshot{{
+	turn.LongTermPreferences = []preferencemodel.AssistantPreferenceSnapshot{{
 		PreferenceID: "memory-private", Value: "家庭住址是私密信息",
 	}}
 	_, failure, err := loop.RunTurn(t.Context(), turn)
 	if err != nil || failure != nil {
 		t.Fatalf("RunTurn() failure=%+v err=%v", failure, err)
 	}
-	if len(model.sessionFacts) == 0 || len(model.longTermFacts) == 0 {
+	if len(model.sessionPreferences) == 0 || len(model.longTermPreferences) == 0 {
 		t.Fatal("model was not invoked")
 	}
-	for index := range model.sessionFacts {
-		if len(model.sessionFacts[index]) != 0 || len(model.longTermFacts[index]) != 0 {
+	for index := range model.sessionPreferences {
+		if len(model.sessionPreferences[index]) != 0 || len(model.longTermPreferences[index]) != 0 {
 			t.Fatalf(
 				"shared model call %d leaked session=%#v longTerm=%#v",
 				index,
-				model.sessionFacts[index],
-				model.longTermFacts[index],
+				model.sessionPreferences[index],
+				model.longTermPreferences[index],
 			)
 		}
 	}
@@ -531,20 +600,50 @@ func TestSharedSurfaceAllowsInternalDomainContextWithoutBecomingPublic(t *testin
 	model := &contextAssemblyRecordingModel{}
 	loop := contextAssemblyLoop(t, model)
 	now := time.Now().UTC()
+	sourceDigest := canonicalContextFixtureDigest(struct {
+		TripID         string `json:"tripId"`
+		RevisionNumber int64  `json:"revisionNumber"`
+	}{TripID: "trip-1", RevisionNumber: 2})
+	descriptor, err := readermodel.NewDescriptor(readermodel.Descriptor{
+		DescriptorID:        "travel.trip_context",
+		ResolverRef:         "trip.current_context",
+		OwnerService:        "travel-service",
+		OwnerOperationRefs:  []string{"travel.trip_timeline_view.GetTripTimeline"},
+		InputSchemaRef:      "travel.GetTripTimelineQuery",
+		OutputSchemaRef:     "assistant.TravelContextSegment",
+		ObjectTypeRefs:      []string{"travel.TripTimelineView"},
+		AcceptedSourceKinds: []string{"domain"},
+		Authority:           assistantgenerated.AssistantContextAuthorityDomainCanonical,
+		Sensitivity:         assistantgenerated.AssistantContextSensitivityInternal,
+		SurfaceKinds: []readermodel.SurfaceKind{
+			readermodel.SurfacePersonal,
+			readermodel.SurfaceShared,
+		},
+		ArtifactPolicy: readermodel.ArtifactInlineOrStored,
+		CitationPolicy: readermodel.CitationEntityReference,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := readerresource.NewCatalog([]readermodel.Descriptor{descriptor})
+	if err != nil {
+		t.Fatal(err)
+	}
 	registry, err := skillcontext.NewResolverRegistry(
+		catalog,
 		skillcontext.RegisteredResolver{
-			ResolverRef: "trip.current_context",
+			ResolverRef: descriptor.ResolverRef,
 			Resolver: sharedContextResolverFunc(func(skillcontext.ResolveRequest) (skillcontext.ResolvedContext, error) {
 				return skillcontext.ResolvedContext{
 					Kind:        "domain",
-					SourceRef:   "travel.TripTimelineView:trip-1@sha256:shared",
+					SourceRef:   "travel.TripTimelineView:trip-1@" + sourceDigest,
 					Authority:   assistantgenerated.AssistantContextAuthorityDomainCanonical,
 					Sensitivity: assistantgenerated.AssistantContextSensitivityInternal,
 					CapturedAt:  now,
 					TokenCost:   32,
 					Value: map[string]any{
 						"tripId":       "trip-1",
-						"sourceDigest": "sha256:shared",
+						"sourceDigest": sourceDigest,
 					},
 				}, nil
 			}),
@@ -579,10 +678,42 @@ func TestSharedSurfaceAllowsInternalDomainContextWithoutBecomingPublic(t *testin
 	if len(model.assemblies) == 0 || model.assemblies[0] == nil {
 		t.Fatal("model did not receive shared context assembly")
 	}
-	snapshot, ok := model.assemblies[0].ContextEnvelope["skillContextSnapshot"].(skillcontext.Snapshot)
-	if !ok || len(snapshot.Segments) != 1 ||
+	snapshot := model.assemblies[0].SkillContextSnapshot
+	if snapshot == nil || len(snapshot.Segments) != 1 ||
 		snapshot.Segments[0].Sensitivity != assistantgenerated.AssistantContextSensitivityInternal ||
 		snapshot.Segments[0].Value["tripId"] != "trip-1" {
 		t.Fatalf("shared internal Trip context was rejected or widened: %#v", snapshot)
+	}
+	prompt, err := contextassembly.FormatForPrompt(model.assemblies[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"context[trip_context]",
+		`"tripId":"trip-1"`,
+		"authority=domain_canonical",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("model prompt missing %q: %s", want, prompt)
+		}
+	}
+}
+
+// spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/context-assembly-slot-filling/spec.md#gwt-001
+func TestSkillContextPromptFailsClosedWhenCanonicalValueCannotBeEncoded(t *testing.T) {
+	_, err := contextassembly.FormatForPrompt(&contextassembly.AssemblyResult{
+		SkillContextSnapshot: &skillcontext.Snapshot{
+			SnapshotID: "context-invalid",
+			Segments: []skillcontext.Segment{{
+				SegmentID: "segment-invalid",
+				SlotID:    "trip_context",
+				Value: map[string]any{
+					"invalid": func() {},
+				},
+			}},
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "segment-invalid") {
+		t.Fatalf("FormatForPrompt() error=%v, want segment-scoped encoding failure", err)
 	}
 }

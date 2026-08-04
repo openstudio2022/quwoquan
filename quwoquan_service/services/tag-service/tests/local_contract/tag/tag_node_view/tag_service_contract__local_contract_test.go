@@ -147,8 +147,8 @@ func TestListDimensionsUsesActiveTaxonomyProjection(t *testing.T) {
 				ReleaseID:       "release-current",
 				LifecycleStatus: "active",
 			},
-			"Topic/legacy": {
-				TagRef:          "Topic/legacy",
+			"Topic/retired": {
+				TagRef:          "Topic/retired",
 				Group:           "Topic",
 				NodeKind:        "dimension",
 				Label:           "旧维度",
@@ -175,7 +175,7 @@ func TestListDimensionsUsesActiveTaxonomyProjection(t *testing.T) {
 	}
 }
 
-func TestValidateTagRefsAcceptsOnlyCurrentActiveLeaves(t *testing.T) {
+func TestValidateTagRefsAcceptsOnlyActiveLeaves(t *testing.T) {
 	nodes := map[string]*model.TagNode{
 		"Topic": {
 			TagRef: "Topic", ReleaseID: "release-current", LifecycleStatus: "active",

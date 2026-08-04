@@ -6,6 +6,7 @@ kind: shared_wire_contract
 fields:
   - { name: surfaceId, type: string, required: true }
   - { name: supportedNodeKinds, type: list<string>, default: [] }
+  - { name: supportedActionIntents, type: list<string>, default: [] }
   - { name: viewportClass, type: string, default: compact }
   - { name: platform, type: string, required: true }
   - { name: theme, type: string, default: system }

@@ -4,35 +4,19 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Mapping
 
-from core.data_issue import (
-    DataIssueCode, DataIssueError, DataIssueStage,
-    DataIssueLane,
-    DataRecoveryAction,
-    data_issue,
-)
+from core.data_issue import DataIssueCode, DataIssueError, DataIssueLane, DataIssueStage, DataRecoveryAction, data_issue
 from core.paths import execution_source_unit_dir
 from core.article_commercial_policy import article_commercial_closure_enabled
 from content.execution import store
 from content.post.article.evidence_text import clean_source_markdown, score_source_markdown
-from content.source.source_unit import (
-    find_source_unit_raw_snapshot,
-    write_source_unit,
-)
-from content.source.source_inputs import (
-    manual_body_note,
-    source_frontmatter,
-)
+from content.source.source_unit import find_source_unit_raw_snapshot, write_source_unit
+from content.source.source_inputs import manual_body_note, source_frontmatter
 from content.source.fetch_payload import fetch_source_payload
 from content.source.handler_fetch_images import prepare_entity_images
 from content.source.contracts import MediaProvenance
 
 from content.source.handler_plan import _write_download_progress
-from content.source.handler_images import (
-    _cached_source_quality_if_better,
-    _find_source_unit_by_plan_key,
-    _image_lane_source_unit_dirs,
-    _move_rejected_source_unit,
-)
+from content.source.handler_images import _cached_source_quality_if_better, _find_source_unit_by_plan_key, _image_lane_source_unit_dirs, _move_rejected_source_unit
 from content.source.image_download import _download_source_unit_images
 from content.source.handler_fetch_media import EntityMediaClosureInput, close_entity_media
 from content.source.handler_fetch_setup import prepare_entity_fetch_plan
@@ -47,11 +31,7 @@ from content.source.handler_fetch_contract import (
     require_source_candidate_admission,
     source_fetch_failure_issue as _source_fetch_failure_issue,
 )
-from content.homepage.quality_policy import (
-    homepage_body_char_minimum,
-    homepage_fact_count_minimum,
-    homepage_fact_char_minimum,
-)
+from content.homepage.quality_policy import homepage_body_char_minimum, homepage_fact_char_minimum, homepage_fact_count_minimum
 
 
 def _fetch_download_entity(
@@ -96,7 +76,6 @@ def _fetch_download_entity(
     written_rejected_source_dirs: set[Path] = set()
     image_lane_selected = plan.image_lane_selected
     homepage_media_selected = plan.homepage_media_selected
-    video_lane_selected = plan.video_lane_selected
     sourced_video_candidates = plan.sourced_video_candidates
     sourced_video_evidence = plan.sourced_video_evidence
     sourced_video_failure = plan.sourced_video_failure
@@ -104,11 +83,6 @@ def _fetch_download_entity(
         evidence_path.parent
         for evidence_path in sourced_video_evidence
     )
-    # Page-owned homepage media are enumerated evidence, not a search pool:
-    # process the complete list before applying the independent image-work
-    # budget. A page image must end in download, explicit policy exclusion, or
-    # a typed hard failure; it must never disappear because an unrelated image
-    # work filled a quota first.
     image_specs = plan.image_specs
     _write_download_progress(
         execution_id,
@@ -133,7 +107,7 @@ def _fetch_download_entity(
             entity_count=entity_count,
             sources=0,
             images=0,
-            message="direct video admission failed; retained frame sequence will be evaluated",
+            message="direct video admission failed; target will be marked unavailable",
             lane="video",
             plannedVideos=len(sourced_video_candidates),
             admittedVideos=0,
@@ -150,11 +124,9 @@ def _fetch_download_entity(
         image_specs=image_specs,
         image_lane_selected=image_lane_selected,
         homepage_media_selected=homepage_media_selected,
-        video_lane_selected=video_lane_selected,
     )
     image_manifest = image_result.image_manifest
     image_rights_issues = image_result.rights_issues
-    video_rights_issues = image_result.video_rights_issues
     image_quality_issues = image_result.quality_issues
     rejected_by_category = dict(image_result.rejected_by_category)
     pending_images = image_result.pending_images
@@ -163,13 +135,8 @@ def _fetch_download_entity(
     required_image_work_images = image_result.required_image_work_images
     planned_homepage_source_images = image_result.planned_homepage_source_images
     required_homepage_media = image_result.required_homepage_media
-    required_video_frames = image_result.required_video_frames
     required_images = image_result.required_images
-    if sourced_video_evidence:
-        required_images = max(0, required_images - required_video_frames)
-        required_video_frames = 0
 
-    # 同实体源级去重：canonical URL 归一后重复的候选直接 Reject（跨源站消重）。
     seen_canonical_urls: set[str] = set()
     kept_source_homepage_images = 0
 
@@ -177,7 +144,11 @@ def _fetch_download_entity(
         try:
             require_source_candidate_admission(
                 source,
-                require_commercial_article_binding=commercial_article_closure,
+                require_commercial_article_binding=(
+                    commercial_article_closure
+                    and str(source.get("researchLane") or "") == "article"
+                    and str(source.get("sourceRole") or "") == "base"
+                ),
             )
         except ValueError as exc:
             raise DataIssueError(
@@ -216,15 +187,14 @@ def _fetch_download_entity(
         rendered_text = ""
         raw_format = ""
         fetch_runtime: dict[str, Any] = {}
-        # 统一结构化 IR（wiki wikitext / baike HTML 前端产物；None = 该源无结构前端）。
         source_layout: dict[str, Any] | None = None
         source_fetch_issue = None
-        # RC3：本次抓取的同源内联 <img> 清单（与 source_md 的 source-inline 占位同序）。
         inline_images: list = []
         try:
             fetched = fetch_source_payload(
                 source["url"],
                 source=source,
+                entity_id=entity_id,
             )
             html_bytes = fetched["htmlBytes"]
             status_code = fetched["statusCode"]
@@ -296,7 +266,6 @@ def _fetch_download_entity(
                 flush=True,
             )
 
-        # 同实体 canonical URL 消重：同一 URL 归一后第二次出现直接 Reject。
         canonical_url = _canonicalize_source_url(str(source.get("url") or ""))
         if canonical_url and canonical_url in seen_canonical_urls:
             quality_value = "Reject"
@@ -305,9 +274,6 @@ def _fetch_download_entity(
         elif canonical_url:
             seen_canonical_urls.add(canonical_url)
 
-        # Homepage fetch and source gates share one base-draft admission rule.
-        # A frozen source must never pass planning then be rejected by a second,
-        # divergent fact-count or title-matching implementation here.
         homepage_fact_count: int | None = None
         if (
             quality_value != "Reject"
@@ -330,9 +296,6 @@ def _fetch_download_entity(
                 quality_score = 0
                 quality_reasons.append(homepage_admission.issue_code.value)
 
-        # factual_reference_only 来源（百度/搜狗/今日头条百科）事实化压缩：
-        # >2000 字压至约 50%，1000-2000 轻度，<=1000 不压；
-        # 结果进 source.clean.md，账目进 quality。
         compression_note: dict = {}
         if quality_value != "Reject" and _requires_factual_compression(source):
             from core.factual_compression import factual_compress_text
@@ -383,14 +346,11 @@ def _fetch_download_entity(
                 cached_quality = None
             else:
                 source_md = (unit / "source.md").read_text(encoding="utf-8")
-                # 缓存命中：复用既有已绑定的来源 source.md/资产，不再用本次 fetch 的
-                # 内联清单二次注入（否则会重复下载并与已绑定占位错位）。
                 inline_images = []
                 clean_path = unit / "source.clean.md"
                 clean_md = clean_path.read_text(encoding="utf-8") if clean_path.is_file() else ""
                 page_path = find_source_unit_raw_snapshot(unit)
                 html_bytes = page_path.read_bytes() if page_path else None
-                # 复用既有原始快照格式，避免缓存恢复后又写错扩展名。
                 raw_format = (
                     "mediawiki_api_json"
                     if page_path is not None and page_path.name == "page.raw.json"
@@ -404,7 +364,6 @@ def _fetch_download_entity(
                     flush=True,
                 )
                 quality = {**cached_quality, "retainedFromCache": True}
-        # P3：检测来源页是否含内联视频（文章类据此弃稿，不把视频强行图文化）。
         from content.source.html_text import html_has_inline_video
 
         page_has_video = False
@@ -600,15 +559,12 @@ def _fetch_download_entity(
         written_rejected_source_dirs=frozenset(written_rejected_source_dirs),
         selected_lanes=None if selected_lanes is None else frozenset(selected_lanes),
         image_rights_issues=tuple(image_rights_issues),
-        video_rights_issues=tuple(video_rights_issues),
         image_quality_issues=tuple(image_quality_issues),
         rejected_by_category=rejected_by_category,
         image_lane_selected=image_lane_selected,
         homepage_media_selected=homepage_media_selected,
-        video_lane_selected=video_lane_selected,
         required_image_work_images=required_image_work_images,
         required_homepage_media=required_homepage_media,
-        required_video_frames=required_video_frames,
         required_images=required_images,
         planned_homepage_source_images=planned_homepage_source_images,
         kept_source_homepage_images=kept_source_homepage_images,

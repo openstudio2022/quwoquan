@@ -65,7 +65,7 @@ void main() {
       expect(queue.first['type'], equals('dislike'));
     });
 
-    test('impression payload no longer carries legacy feedPosition key', () {
+    test('impression payload rejects retired feedPosition key', () {
       ContentBehaviorTracker.trackImpression('post1', 'impressed');
       final event = ContentBehaviorTracker.pendingQueue.first;
       expect(

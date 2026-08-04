@@ -10,7 +10,8 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     as contracts;
 import 'package:test/test.dart';
 
-import '../../../../support/cloud_services/repository_mock_reexports.dart';
+import '../../../../support/cloud_services/object_doubles/user/alpha_b1_identity_facets.dart';
+import '../../../../support/cloud_services/object_doubles/user/profile/alpha_user_profile_repository.dart';
 import '../../../../support/fakes/test_persona_facets.dart';
 
 const _fixtureCurrentUserId = 'fixture_user_current';
@@ -111,7 +112,7 @@ void main() {
       expect(resolved.scanStatus, 'accepted');
       await expectLater(
         query.resolveProfileQrToken(token: ''),
-        throwsA(isA<Exception>()),
+        throwsArgumentError,
       );
     });
   });

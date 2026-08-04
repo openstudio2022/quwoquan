@@ -3,8 +3,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/application/user/persona/persona_query.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/active_persona_context_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/persona/persona_management_item_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -43,21 +41,24 @@ class _JourneyUserRepository implements PersonaQuery {
   @override
   Future<ActivePersonaContextViewData> getActivePersonaContext() async {
     final active = store.persona(store.activePersonaId);
-    return ActivePersonaContextViewData.fromActivePersonaContextWire(
-      ActivePersonaContextWireDto.fromMap(<String, dynamic>{
-        'ownerUserId': 'owner_persona',
-        'personaId': active['personaId'],
-        'subjectType': 'persona',
-        'displayName': active['displayName'],
-        'avatarUrl': active['avatarUrl'],
-        'avatarVersion': active['avatarVersion'],
-        'personaContextVersion': 'ctx_${store.revision}',
-        'personaSnapshotVersion': store.revision,
-        'sourceSurfaceId': 'journey.persona_management',
-        'explicitOverride':
+    return ActivePersonaContextViewData.fromWire(
+      contracts.ActivePersonaContextView(
+        ownerUserId: 'owner_persona',
+        personaId: active['personaId'].toString(),
+        subjectType: contracts.ProfileOwnerKind.persona,
+        displayName: active['displayName'].toString(),
+        avatarUrl: active['avatarUrl']?.toString(),
+        avatarVersion: active['avatarVersion'] as int? ?? 0,
+        isPrimary: active['isPrimary'] == true,
+        isolationLevel: _isolationLevel(active['isolationLevel']),
+        profileVisibility: _profileVisibility(active['profileVisibility']),
+        contextVersion: store.revision,
+        personaSnapshotVersion: store.revision,
+        sourceSurfaceId: 'journey.persona_management',
+        explicitOverride:
             !(active['inheritsProfileFromOwner'] as bool? ?? false),
-        'isPrimary': active['isPrimary'] == true,
-      }),
+        switchedAt: DateTime.utc(2026, 6, 21, 12),
+      ),
     );
   }
 
@@ -98,12 +99,8 @@ class _JourneyUserRepository implements PersonaQuery {
   Future<PersonaManagementSummaryViewData> getPersonaManagementSummary() async {
     return PersonaManagementSummaryViewData(
       items: store.items
-          .map(
-            (item) =>
-                PersonaManagementItemViewData.fromPersonaManagementItemWire(
-                  PersonaManagementItemWireDto.fromMap(item),
-                ),
-          )
+          .map(_personaManagementItemView)
+          .map(PersonaManagementItemViewData.fromWire)
           .toList(growable: false),
       quota: PersonaManagementQuotaViewData(
         maxPersonas: 5,
@@ -116,13 +113,60 @@ class _JourneyUserRepository implements PersonaQuery {
   @override
   Future<List<PersonaManagementItemViewData>> listPersonas() async {
     return store.items
-        .map(
-          (item) => PersonaManagementItemViewData.fromPersonaManagementItemWire(
-            PersonaManagementItemWireDto.fromMap(item),
-          ),
-        )
+        .map(_personaManagementItemView)
+        .map(PersonaManagementItemViewData.fromWire)
         .toList(growable: false);
   }
+}
+
+contracts.PersonaManagementItemView _personaManagementItemView(
+  Map<String, dynamic> item,
+) {
+  return contracts.PersonaManagementItemView(
+    personaId: item['personaId'].toString(),
+    displayName: item['displayName'].toString(),
+    userHandle: item['userHandle']?.toString(),
+    avatarUrl: item['avatarUrl']?.toString(),
+    isolationLevel: _isolationLevel(item['isolationLevel']),
+    isPrimary: item['isPrimary'] == true,
+    isActive: item['isActive'] == true,
+    status: _personaStatus(item['status']),
+    retiredAt: _dateTime(item['retiredAt']),
+    inheritsProfileFromOwner: item['inheritsProfileFromOwner'] as bool? ?? true,
+    overriddenProfileFields: (item['overriddenProfileFields'] as List<Object?>?)
+        ?.map((field) => field.toString())
+        .toList(growable: false),
+    lastProfileSyncAt: _dateTime(item['lastProfileSyncAt']),
+    lastProfileSyncSource: item['lastProfileSyncSource']?.toString(),
+    profileVisibility: _profileVisibility(item['profileVisibility']),
+    updatedAt: _dateTime(item['updatedAt']) ?? DateTime.utc(2026, 6, 21, 12),
+    lastActivatedAt: _dateTime(item['lastActivatedAt']),
+  );
+}
+
+contracts.IsolationLevel _isolationLevel(Object? value) => switch (value) {
+  'semi' => contracts.IsolationLevel.semi,
+  'strict' => contracts.IsolationLevel.strict,
+  _ => contracts.IsolationLevel.open,
+};
+
+contracts.ProfileVisibility _profileVisibility(Object? value) =>
+    switch (value) {
+      'friends' => contracts.ProfileVisibility.friends,
+      'private' => contracts.ProfileVisibility.privateProfile,
+      _ => contracts.ProfileVisibility.public,
+    };
+
+contracts.PersonaStatus _personaStatus(Object? value) => switch (value) {
+  'inactive' => contracts.PersonaStatus.inactive,
+  'retired' => contracts.PersonaStatus.retired,
+  _ => contracts.PersonaStatus.active,
+};
+
+DateTime? _dateTime(Object? value) {
+  if (value is DateTime) return value;
+  if (value is String && value.isNotEmpty) return DateTime.parse(value);
+  return null;
 }
 
 class _JourneyPersonaCommandWriter
@@ -132,7 +176,7 @@ class _JourneyPersonaCommandWriter
   final _JourneyPersonaStore store;
 
   @override
-  Future<contracts.PersonaManagementItem> createPersona(
+  Future<contracts.PersonaManagementItemView> createPersona(
     contracts.CreatePersonaCommand command,
   ) async {
     final created = <String, dynamic>{
@@ -152,11 +196,11 @@ class _JourneyPersonaCommandWriter
     };
     store.items.add(created);
     store.revision++;
-    return contracts.decodePersonaManagementItem(created);
+    return _personaManagementItemView(created);
   }
 
   @override
-  Future<contracts.PersonaManagementItem> updatePersona(
+  Future<contracts.PersonaManagementItemView> updatePersona(
     contracts.UpdatePersonaCommand command,
   ) async {
     final target = store.persona(command.personaId);
@@ -174,7 +218,7 @@ class _JourneyPersonaCommandWriter
     target['overriddenProfileFields'] = changedFields;
     target['updatedAt'] = DateTime.utc(2026, 6, 21, 12).toIso8601String();
     store.revision++;
-    return contracts.decodePersonaManagementItem(target);
+    return _personaManagementItemView(target);
   }
 
   @override
@@ -215,7 +259,7 @@ class _JourneyPersonaCommandWriter
   }
 
   @override
-  Future<contracts.PersonaLifecycleGuard> retirePersona(
+  Future<contracts.PersonaLifecycleGuardView> retirePersona(
     contracts.RetirePersonaCommand command,
   ) async {
     final target = store.persona(command.personaId);
@@ -229,17 +273,17 @@ class _JourneyPersonaCommandWriter
     target['retiredAt'] = DateTime.utc(2026, 6, 21, 12).toIso8601String();
     target['isActive'] = false;
     store.revision++;
-    return contracts.PersonaLifecycleGuard(
+    return contracts.PersonaLifecycleGuardView(
       personaId: command.personaId,
-      requestedAction: 'retire',
+      requestedAction: contracts.PersonaLifecycleAction.retire,
       allowed: true,
-      reason: 'allowed',
+      reason: contracts.PersonaLifecycleGuardReason.allowed,
       requiresSuccessor: false,
     );
   }
 
   @override
-  Future<contracts.ActivePersonaContext> activatePersona(
+  Future<contracts.ActivePersonaContextView> activatePersona(
     contracts.ActivatePersonaCommand command,
   ) async {
     final target = store.persona(command.personaId);
@@ -250,15 +294,20 @@ class _JourneyPersonaCommandWriter
       item['isActive'] = item['personaId'] == command.personaId;
     }
     store.revision++;
-    return contracts.ActivePersonaContext(
+    return contracts.ActivePersonaContextView(
       ownerUserId: 'owner_persona',
       personaId: command.personaId,
-      isolationLevel: 'open',
-      profileVisibility: 'public',
+      subjectType: contracts.ProfileOwnerKind.persona,
+      displayName: target['displayName'].toString(),
+      avatarUrl: target['avatarUrl']?.toString(),
+      avatarVersion: target['avatarVersion'] as int? ?? 0,
+      isPrimary: target['isPrimary'] == true,
+      isolationLevel: _isolationLevel(target['isolationLevel']),
+      profileVisibility: _profileVisibility(target['profileVisibility']),
       contextVersion: store.revision,
       personaSnapshotVersion: store.revision,
       explicitOverride: true,
-      switchedAt: DateTime.utc(2026, 6, 21, 12).toIso8601String(),
+      switchedAt: DateTime.utc(2026, 6, 21, 12),
     );
   }
 }

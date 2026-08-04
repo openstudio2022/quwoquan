@@ -5,7 +5,7 @@ void main() {
   test('profile interaction queries encode the canonical persona path key', () {
     final query = ContentProfileInteractionPageQuery(
       personaId: 'persona-1',
-      type: ContentProfileInteractionType.comment,
+      type: InteractionActivityType.comment,
       cursor: 'cursor-1',
       limit: 9,
     );
@@ -37,7 +37,7 @@ void main() {
           AppendContentProfileInteractionReadFactCommand(
             personaId: 'persona-1',
             activityId: 'activity-1',
-            state: ContentProfileInteractionReadState.read,
+            state: ProfileInteractionReadState.read,
           ),
         );
 

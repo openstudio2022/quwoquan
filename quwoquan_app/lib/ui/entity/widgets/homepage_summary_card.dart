@@ -1,5 +1,5 @@
 import 'package:flutter/cupertino.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
+import 'package:quwoquan_app/application/entity/homepage_view_data.dart';
 import 'package:quwoquan_app/components/media/app_media_image.dart';
 import 'package:quwoquan_app/components/object_page/object_meta_chip.dart';
 import 'package:quwoquan_app/components/object_page/profile_ios_components.dart';

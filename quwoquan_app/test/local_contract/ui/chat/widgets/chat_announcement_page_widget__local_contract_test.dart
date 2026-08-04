@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -35,7 +35,10 @@ Widget _scopedApp({ChatRepository? mock}) {
               ),
             ),
           ),
-          GoRoute(path: '/chat/:id/settings', builder: (_, _) => const SizedBox()),
+          GoRoute(
+            path: '/chat/:id/settings',
+            builder: (_, _) => const SizedBox(),
+          ),
         ],
       ),
     ),
@@ -73,16 +76,16 @@ void main() {
         find.byKey(const ValueKey('chat_announcement_publish_button')),
       );
       await tester.pumpAndSettle();
-      expect(find.text(ChatText.groupAnnouncementPublishConfirm), findsOneWidget);
+      expect(
+        find.text(ChatText.groupAnnouncementPublishConfirm),
+        findsOneWidget,
+      );
 
       await tester.tap(find.text(ChatText.groupAnnouncementPublish).last);
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
-      expect(
-        repo.published,
-        contains(('fixture_conv_group', '周六线下面基，老地方集合')),
-      );
+      expect(repo.published, contains(('fixture_conv_group', '周六线下面基，老地方集合')));
       // 消化发布成功 toast 的自动消失 timer。
       await tester.pump(const Duration(seconds: 4));
     });
@@ -143,7 +146,7 @@ class _RecordingAnnouncementRepository extends MockChatRepository {
 /// 当前用户为普通成员：公告只读。
 class _MemberRoleAnnouncementRepository extends MockChatRepository {
   @override
-  Future<List<ChatConversationMemberDto>> listMembers({
+  Future<List<ConversationMemberListRow>> listMembers({
     required String conversationId,
     String? cursor,
     int limit = 20,
@@ -151,8 +154,9 @@ class _MemberRoleAnnouncementRepository extends MockChatRepository {
     String? sort,
   }) async {
     return [
-      ChatConversationMemberDto(
+      ConversationMemberListRow(
         userId: chatCurrentUserProfileId(),
+        userHandle: chatCurrentUserProfileId(),
         displayName: '我',
         avatarUrl: '',
         role: 'member',
@@ -160,8 +164,9 @@ class _MemberRoleAnnouncementRepository extends MockChatRepository {
         joinedAt: null,
         isCurrentUser: true,
       ),
-      ChatConversationMemberDto(
+      ConversationMemberListRow(
         userId: 'fixture_user_other_owner',
+        userHandle: 'fixture_user_other_owner',
         displayName: '群主',
         avatarUrl: '',
         role: 'owner',

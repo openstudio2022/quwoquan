@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -29,8 +30,73 @@ type requestLibrarySpec struct {
 }
 
 type requestModelSpec struct {
-	Name   string
-	Fields []fieldDef
+	Name           string
+	Fields         []fieldDef
+	ValidationKind string
+	DerivedSource  string
+	DerivedSHA256  string
+}
+
+const (
+	requestValidationProductOpsEventRecord = "product_ops_event_record"
+	requestValidationRuntimeLogRecord      = "runtime_log_record"
+)
+
+type runtimeObservabilityEnvelope struct {
+	Required            []string `yaml:"required"`
+	Optional            []string `yaml:"optional"`
+	ResourceRequired    []string `yaml:"resource_required"`
+	ResourceOptional    []string `yaml:"resource_optional"`
+	CorrelationOptional []string `yaml:"correlation_optional"`
+}
+
+type runtimeObservabilityKindFields struct {
+	Required []string `yaml:"required"`
+}
+
+type runtimeObservabilityLimits struct {
+	MaxBatchItems           int `yaml:"max_batch_items"`
+	MaxMessageBytes         int `yaml:"max_message_bytes"`
+	MaxAttributes           int `yaml:"max_attributes"`
+	MaxAttributeKeyLength   int `yaml:"max_attribute_key_length"`
+	MaxAttributeValueLength int `yaml:"max_attribute_value_length"`
+}
+
+type runtimeObservabilitySignal struct {
+	ID                 string   `yaml:"id"`
+	LogKind            string   `yaml:"log_kind"`
+	AttributeAllowlist []string `yaml:"attribute_allowlist"`
+	CorrelationKeys    []string `yaml:"correlation_keys"`
+}
+
+type runtimeObservabilityContract struct {
+	Schema         string                                    `yaml:"schema"`
+	LogKinds       []string                                  `yaml:"log_kinds"`
+	SeverityLevels []string                                  `yaml:"severity_levels"`
+	Envelope       runtimeObservabilityEnvelope              `yaml:"envelope"`
+	KindFields     map[string]runtimeObservabilityKindFields `yaml:"kind_fields"`
+	Limits         runtimeObservabilityLimits                `yaml:"limits"`
+	Signals        []runtimeObservabilitySignal              `yaml:"signals"`
+}
+
+type productOpsTypedExtensionsContract struct {
+	Catalog            string `yaml:"catalog"`
+	Discriminator      string `yaml:"discriminator"`
+	DefinitionsKey     string `yaml:"definitions_key"`
+	RequiredByEventKey string `yaml:"required_by_event_key"`
+	OptionalByEventKey string `yaml:"optional_by_event_key"`
+	WireEncoding       string `yaml:"wire_encoding"`
+	UnknownFieldPolicy string `yaml:"unknown_field_policy"`
+}
+
+type productOpsDerivedTypeDef struct {
+	DerivedFrom string     `yaml:"derived_from"`
+	Fields      []fieldDef `yaml:"fields"`
+}
+
+type productOpsIngestFieldsContract struct {
+	Types           map[string]productOpsDerivedTypeDef `yaml:"types"`
+	TypedExtensions productOpsTypedExtensionsContract   `yaml:"typed_extensions"`
 }
 
 type requestOperationSpec struct {
@@ -489,6 +555,20 @@ func loadOperationRequestModel(
 		}
 		entities[name] = sharedEntity
 	}
+	validationKinds := map[string]string{}
+	derivedSources := map[string]string{}
+	derivedDigests := map[string]string{}
+	if err := includeProductOpsIngestRequestTypes(
+		operation,
+		fieldsPath,
+		document,
+		entities,
+		validationKinds,
+		derivedSources,
+		derivedDigests,
+	); err != nil {
+		return requestModelSpec{}, nil, err
+	}
 	entity, exists := entities[requestType]
 	if !exists && strings.TrimSpace(document.Entity) == requestType && document.Fields != nil {
 		entity = entityDef{Fields: append([]fieldDef(nil), document.Fields...)}
@@ -503,15 +583,28 @@ func loadOperationRequestModel(
 		)
 	}
 	root := requestModelSpec{
-		Name:   requestType,
-		Fields: append([]fieldDef(nil), entity.Fields...),
+		Name:           requestType,
+		Fields:         append([]fieldDef(nil), entity.Fields...),
+		ValidationKind: validationKinds[requestType],
+		DerivedSource:  derivedSources[requestType],
+		DerivedSHA256:  derivedDigests[requestType],
 	}
 	dependencies := map[string]requestModelSpec{}
 	visiting := map[string]bool{requestType: true}
 	var collect func(requestModelSpec) error
 	collect = func(model requestModelSpec) error {
 		for _, field := range model.Fields {
-			typeName := strings.TrimPrefix(strings.TrimSpace(field.Type), "[]")
+			dartType, _, typeErr := requestFieldDartType(field)
+			if typeErr != nil {
+				return fmt.Errorf(
+					"%s request value object %s.%s: %w",
+					operation.CanonicalOperationID,
+					model.Name,
+					field.Name,
+					typeErr,
+				)
+			}
+			typeName := requestDartModelBaseType(dartType)
 			dependencyEntity, found := entities[typeName]
 			if !found || typeName == requestType {
 				continue
@@ -527,8 +620,11 @@ func loadOperationRequestModel(
 				continue
 			}
 			dependency := requestModelSpec{
-				Name:   typeName,
-				Fields: append([]fieldDef(nil), dependencyEntity.Fields...),
+				Name:           typeName,
+				Fields:         append([]fieldDef(nil), dependencyEntity.Fields...),
+				ValidationKind: validationKinds[typeName],
+				DerivedSource:  derivedSources[typeName],
+				DerivedSHA256:  derivedDigests[typeName],
 			}
 			dependencies[typeName] = dependency
 			visiting[typeName] = true
@@ -543,6 +639,244 @@ func loadOperationRequestModel(
 		return requestModelSpec{}, nil, err
 	}
 	return root, dependencies, nil
+}
+
+func includeProductOpsIngestRequestTypes(
+	operation appExposedOperation,
+	fieldsPath string,
+	document fieldsFile,
+	entities map[string]entityDef,
+	validationKinds map[string]string,
+	derivedSources map[string]string,
+	derivedDigests map[string]string,
+) error {
+	fieldsSourcePath := filepath.Join(activeMetadataRoot, filepath.FromSlash(fieldsPath))
+	var ingestContract productOpsIngestFieldsContract
+	if err := decodeMetadataDocument(fieldsSourcePath, &ingestContract); err != nil {
+		return fmt.Errorf("%s load typed ingest contract: %w", operation.CanonicalOperationID, err)
+	}
+	switch operation.CanonicalOperationID {
+	case "ops.event_record.ReportEventBatch":
+		typed := ingestContract.TypedExtensions
+		if typed.Catalog != "event_catalog.yaml" ||
+			typed.Discriminator != "eventType" ||
+			typed.DefinitionsKey != "extension_fields" ||
+			typed.RequiredByEventKey != "required_extensions" ||
+			typed.OptionalByEventKey != "optional_extensions" ||
+			typed.WireEncoding != "flattened" ||
+			typed.UnknownFieldPolicy != "reject" {
+			return fmt.Errorf(
+				"%s requires flattened discriminator-bound typed_extensions with reject unknown-field policy",
+				operation.CanonicalOperationID,
+			)
+		}
+		var catalog telemetryEventCatalogFile
+		catalogPath := filepath.Join(
+			filepath.Dir(fieldsSourcePath),
+			"event_catalog.yaml",
+		)
+		if err := decodeMetadataDocument(catalogPath, &catalog); err != nil {
+			return fmt.Errorf("%s load event catalog: %w", operation.CanonicalOperationID, err)
+		}
+		if len(document.Fields) == 0 || len(catalog.ExtensionFields) == 0 {
+			return fmt.Errorf("%s requires EventRecord envelope and typed extensions", operation.CanonicalOperationID)
+		}
+		fields := append([]fieldDef(nil), document.Fields...)
+		names := make([]string, 0, len(catalog.ExtensionFields))
+		for name := range catalog.ExtensionFields {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			extension := catalog.ExtensionFields[name]
+			fieldType := map[string]string{
+				"string":      "string",
+				"int":         "int",
+				"double":      "double",
+				"bool":        "bool",
+				"string_list": "[]string",
+			}[extension.Type]
+			if fieldType == "" {
+				return fmt.Errorf(
+					"%s event extension %s has unsupported type %s",
+					operation.CanonicalOperationID,
+					name,
+					extension.Type,
+				)
+			}
+			constraints := []string{"NULLABLE"}
+			if extension.Minimum != nil {
+				constraints = append(constraints, fmt.Sprintf("MIN_%d", *extension.Minimum))
+			}
+			if extension.Maximum != nil {
+				constraints = append(constraints, fmt.Sprintf("MAX_%d", *extension.Maximum))
+			}
+			if extension.MaxLength > 0 {
+				constraints = append(constraints, fmt.Sprintf("MAX_LENGTH_%d", extension.MaxLength))
+			}
+			if extension.MaxItems > 0 {
+				constraints = append(constraints, fmt.Sprintf("MAX_ITEMS_%d", extension.MaxItems))
+			}
+			fields = append(fields, fieldDef{
+				Name:        name,
+				Source:      "event_catalog.extension_fields." + name,
+				Type:        fieldType,
+				Constraints: constraints,
+			})
+		}
+		entities["EventRecord"] = entityDef{Fields: fields}
+		validationKinds["EventRecord"] = requestValidationProductOpsEventRecord
+		derivedSources["EventRecord"] = "product_ops/event_record/event_catalog.yaml"
+		digest, err := metadataDocumentSHA256(catalogPath)
+		if err != nil {
+			return fmt.Errorf("%s hash event catalog: %w", operation.CanonicalOperationID, err)
+		}
+		derivedDigests["EventRecord"] = digest
+	case "ops.event_record.ReportRuntimeLogBatch":
+		marker, exists := ingestContract.Types["RuntimeLogRecordWire"]
+		if !exists || marker.DerivedFrom != "_shared/runtime_observability.yaml#envelope" ||
+			len(marker.Fields) != 0 {
+			return fmt.Errorf(
+				"%s RuntimeLogRecordWire must be the explicit empty derived marker for _shared/runtime_observability.yaml#envelope",
+				operation.CanonicalOperationID,
+			)
+		}
+		var catalog runtimeObservabilityContract
+		catalogPath := filepath.Join(
+			activeMetadataRoot,
+			"_shared",
+			"runtime_observability.yaml",
+		)
+		if err := decodeMetadataDocument(catalogPath, &catalog); err != nil {
+			return fmt.Errorf("%s load runtime observability contract: %w", operation.CanonicalOperationID, err)
+		}
+		derived, err := runtimeLogRequestEntities(catalog)
+		if err != nil {
+			return fmt.Errorf("%s: %w", operation.CanonicalOperationID, err)
+		}
+		for name, entity := range derived {
+			entities[name] = entity
+		}
+		validationKinds["RuntimeLogRecordWire"] = requestValidationRuntimeLogRecord
+		derivedSources["RuntimeLogRecordWire"] = "_shared/runtime_observability.yaml#envelope"
+		digest, err := metadataDocumentSHA256(catalogPath)
+		if err != nil {
+			return fmt.Errorf("%s hash runtime observability contract: %w", operation.CanonicalOperationID, err)
+		}
+		derivedDigests["RuntimeLogRecordWire"] = digest
+	}
+	return nil
+}
+
+func metadataDocumentSHA256(path string) (string, error) {
+	payload, err := readMetadataDocument(path)
+	if err != nil {
+		return "", err
+	}
+	digest := sha256.Sum256(payload)
+	return fmt.Sprintf("%x", digest[:]), nil
+}
+
+func runtimeLogRequestEntities(
+	catalog runtimeObservabilityContract,
+) (map[string]entityDef, error) {
+	if strings.TrimSpace(catalog.Schema) == "" || len(catalog.Signals) == 0 {
+		return nil, fmt.Errorf("runtime_observability.yaml has no schema or signals")
+	}
+	resource := make([]fieldDef, 0, len(catalog.Envelope.ResourceRequired)+len(catalog.Envelope.ResourceOptional))
+	for _, name := range catalog.Envelope.ResourceRequired {
+		resource = append(resource, runtimeLogStringField(name, false))
+	}
+	for _, name := range catalog.Envelope.ResourceOptional {
+		resource = append(resource, runtimeLogStringField(name, true))
+	}
+	correlation := make([]fieldDef, 0, len(catalog.Envelope.CorrelationOptional))
+	for _, name := range catalog.Envelope.CorrelationOptional {
+		correlation = append(correlation, runtimeLogStringField(name, true))
+	}
+	attributeNames := map[string]struct{}{}
+	for _, signal := range catalog.Signals {
+		for _, name := range signal.AttributeAllowlist {
+			attributeNames[name] = struct{}{}
+		}
+	}
+	attributes := make([]fieldDef, 0, len(attributeNames))
+	orderedAttributes := make([]string, 0, len(attributeNames))
+	for name := range attributeNames {
+		orderedAttributes = append(orderedAttributes, name)
+	}
+	sort.Strings(orderedAttributes)
+	for _, name := range orderedAttributes {
+		field := runtimeLogStringField(name, true)
+		if catalog.Limits.MaxAttributeValueLength > 0 {
+			field.Constraints = append(
+				field.Constraints,
+				fmt.Sprintf("MAX_LENGTH_%d", catalog.Limits.MaxAttributeValueLength),
+			)
+		}
+		attributes = append(attributes, field)
+	}
+	record := []fieldDef{
+		{Name: "schema", Source: "runtime_observability.schema", Type: "string", Constraints: []string{"NOT_BLANK"}},
+		{Name: "recordId", Source: "runtime_observability.envelope.recordId", Type: "string", Constraints: []string{"NULLABLE"}},
+		{Name: "occurredAt", Source: "runtime_observability.envelope.occurredAt", Type: "timestamp", Constraints: []string{"NOT_NULL"}, ClientNormalization: "utc"},
+		{Name: "observedAt", Source: "runtime_observability.envelope.observedAt", Type: "timestamp", Constraints: []string{"NOT_NULL"}, ClientNormalization: "utc"},
+		{Name: "logKind", Source: "runtime_observability.envelope.logKind", Type: "string", Constraints: []string{"NOT_BLANK"}},
+		{Name: "severity", Source: "runtime_observability.envelope.severity", Type: "string", Constraints: []string{"NOT_BLANK"}},
+		{Name: "signal", Source: "runtime_observability.envelope.signal", Type: "string", Constraints: []string{"NOT_BLANK"}},
+		{Name: "message", Source: "runtime_observability.envelope.message", Type: "string", Constraints: []string{"NOT_NULL"}},
+		{Name: "resource", Source: "runtime_observability.envelope.resource", Type: "RuntimeLogResourceWire", Constraints: []string{"NOT_NULL"}},
+		{Name: "correlation", Source: "runtime_observability.envelope.correlation", Type: "RuntimeLogCorrelationWire", Constraints: []string{"NULLABLE"}},
+	}
+	optionalKinds := map[string]string{
+		"step": "string", "event": "string", "result": "string", "method": "string",
+		"route": "string", "status": "string", "durationMs": "int", "action": "string",
+		"target": "string", "errorCode": "string", "fingerprint": "string",
+	}
+	for _, name := range catalog.Envelope.Optional {
+		if name == "recordId" || name == "correlation" || name == "attributes" {
+			continue
+		}
+		fieldType := optionalKinds[name]
+		if fieldType == "" {
+			return nil, fmt.Errorf("runtime observability optional field %s has no typed wire mapping", name)
+		}
+		record = append(record, fieldDef{
+			Name:        name,
+			Source:      "runtime_observability.envelope." + name,
+			Type:        fieldType,
+			Constraints: []string{"NULLABLE"},
+		})
+	}
+	record = append(record, fieldDef{
+		Name:        "attributes",
+		Source:      "runtime_observability.envelope.attributes",
+		Type:        "RuntimeLogAttributesWire",
+		Constraints: []string{"NULLABLE"},
+	})
+	return map[string]entityDef{
+		"RuntimeLogRecordWire":      {Fields: record},
+		"RuntimeLogResourceWire":    {Fields: resource},
+		"RuntimeLogCorrelationWire": {Fields: correlation},
+		"RuntimeLogAttributesWire":  {Fields: attributes},
+	}, nil
+}
+
+func runtimeLogStringField(name string, nullable bool) fieldDef {
+	constraints := []string{"NOT_BLANK"}
+	if nullable {
+		constraints = []string{"NULLABLE"}
+	}
+	field := fieldDef{
+		Name:        strings.ReplaceAll(name, ".", "Version"),
+		Source:      "runtime_observability." + name,
+		Type:        "string",
+		Constraints: constraints,
+	}
+	if field.Name != name {
+		field.ClientWireName = name
+	}
+	return field
 }
 
 func loadCanonicalSharedValueTypes(
@@ -692,8 +1026,11 @@ func projectClientRequestModel(
 		}
 	}
 	projected := requestModelSpec{
-		Name:   model.Name,
-		Fields: make([]fieldDef, 0, len(model.Fields)),
+		Name:           model.Name,
+		Fields:         make([]fieldDef, 0, len(model.Fields)),
+		ValidationKind: model.ValidationKind,
+		DerivedSource:  model.DerivedSource,
+		DerivedSHA256:  model.DerivedSHA256,
 	}
 	for _, field := range model.Fields {
 		if _, isInjected := injected[strings.TrimSpace(field.Name)]; isInjected {
@@ -826,7 +1163,7 @@ func validateRequestBodyConstants(
 }
 
 func requestModelFingerprint(model requestModelSpec) string {
-	var values []string
+	values := []string{model.ValidationKind, model.DerivedSource, model.DerivedSHA256}
 	for _, field := range model.Fields {
 		values = append(values, strings.Join([]string{
 			field.Name,
@@ -888,6 +1225,11 @@ func renderOperationRequestPart(
 	partOfURI string,
 	enumValues map[string][]string,
 ) (string, error) {
+	reachableLibrary, err := requestLibraryWithReachableModels(library)
+	if err != nil {
+		return "", err
+	}
+	library = reachableLibrary
 	var output strings.Builder
 	output.WriteString("// Code generated from the accepted ContractGraph. DO NOT EDIT.\n")
 	output.WriteString("// ContractGraph SHA256: ")
@@ -1014,6 +1356,82 @@ func renderOperationRequestPart(
 		}
 	}
 	return output.String(), nil
+}
+
+func requestLibraryWithReachableModels(
+	library requestLibrarySpec,
+) (requestLibrarySpec, error) {
+	// Model-only renderer tests intentionally omit operations. Production
+	// libraries always have operation roots and are filtered below.
+	if len(library.Operations) == 0 {
+		return library, nil
+	}
+	reachable := make(map[string]struct{}, len(library.Models))
+	visiting := map[string]struct{}{}
+	var visit func(string) error
+	visit = func(name string) error {
+		if _, exists := reachable[name]; exists {
+			return nil
+		}
+		model, exists := library.Models[name]
+		if !exists {
+			return fmt.Errorf(
+				"%s request model %s is absent from generated library",
+				library.OwnerImport,
+				name,
+			)
+		}
+		if _, cyclic := visiting[name]; cyclic {
+			return fmt.Errorf(
+				"%s request client type cycle includes %s",
+				library.OwnerImport,
+				name,
+			)
+		}
+		visiting[name] = struct{}{}
+		for _, field := range model.Fields {
+			dartType, _, err := requestFieldDartType(field)
+			if err != nil {
+				return fmt.Errorf("%s.%s: %w", name, field.Name, err)
+			}
+			dependencyName := requestDartModelBaseType(dartType)
+			if dependencyName == "" {
+				continue
+			}
+			if _, provided := library.ProvidedModels[dependencyName]; provided {
+				continue
+			}
+			if _, local := library.Models[dependencyName]; !local {
+				continue
+			}
+			if err := visit(dependencyName); err != nil {
+				return err
+			}
+		}
+		delete(visiting, name)
+		reachable[name] = struct{}{}
+		return nil
+	}
+	for _, operation := range library.Operations {
+		if err := visit(strings.TrimSpace(operation.RequestType)); err != nil {
+			return requestLibrarySpec{}, err
+		}
+	}
+	filtered := library
+	filtered.Models = make(map[string]requestModelSpec, len(reachable))
+	for name := range reachable {
+		filtered.Models[name] = library.Models[name]
+	}
+	return filtered, nil
+}
+
+func requestDartModelBaseType(value string) string {
+	value = strings.TrimSuffix(strings.TrimSpace(value), "?")
+	for strings.HasPrefix(value, "List<") && strings.HasSuffix(value, ">") {
+		value = strings.TrimSuffix(strings.TrimPrefix(value, "List<"), ">")
+		value = strings.TrimSuffix(strings.TrimSpace(value), "?")
+	}
+	return value
 }
 
 func writeGeneratedRequestWireDecoderHelpers(
@@ -1198,6 +1616,14 @@ func renderRequestModel(
 	model requestModelSpec,
 	enumValues map[string][]string,
 ) error {
+	if model.DerivedSource != "" {
+		fmt.Fprintf(
+			output,
+			"// Derived from %s; source SHA256: %s.\n",
+			model.DerivedSource,
+			model.DerivedSHA256,
+		)
+	}
 	fmt.Fprintf(output, "final class %s {\n", model.Name)
 	if len(model.Fields) == 0 {
 		fmt.Fprintf(output, "  const %s();\n", model.Name)
@@ -1229,6 +1655,9 @@ func renderRequestModel(
 		model,
 		enumValues,
 	); err != nil {
+		return err
+	}
+	if err := renderDerivedRequestModelValidation(&validation, model); err != nil {
 		return err
 	}
 	constSafe := allInitializersAreConstSafe && validation.Len() == 0
@@ -1366,6 +1795,211 @@ func renderRequestModel(
 	output.WriteString("  };\n")
 	output.WriteString("}\n\n")
 	return nil
+}
+
+func renderDerivedRequestModelValidation(
+	output *strings.Builder,
+	model requestModelSpec,
+) error {
+	switch model.ValidationKind {
+	case "":
+		return nil
+	case requestValidationProductOpsEventRecord:
+		var catalog telemetryEventCatalogFile
+		path := filepath.Join(
+			activeMetadataRoot,
+			"ops",
+			"product_ops",
+			"event_record",
+			"event_catalog.yaml",
+		)
+		if err := decodeMetadataDocument(path, &catalog); err != nil {
+			return fmt.Errorf("%s load event catalog validation: %w", model.Name, err)
+		}
+		renderProductOpsEventRecordValidation(output, catalog)
+		return nil
+	case requestValidationRuntimeLogRecord:
+		var catalog runtimeObservabilityContract
+		path := filepath.Join(activeMetadataRoot, "_shared", "runtime_observability.yaml")
+		if err := decodeMetadataDocument(path, &catalog); err != nil {
+			return fmt.Errorf("%s load runtime observability validation: %w", model.Name, err)
+		}
+		renderRuntimeLogRecordValidation(output, catalog)
+		return nil
+	default:
+		return fmt.Errorf("%s has unknown derived request validation %q", model.Name, model.ValidationKind)
+	}
+}
+
+func renderProductOpsEventRecordValidation(
+	output *strings.Builder,
+	catalog telemetryEventCatalogFile,
+) {
+	output.WriteString("    final definition = switch (this.eventType) {\n")
+	for _, event := range catalog.Events {
+		allowed := append([]string(nil), event.RequiredExtensions...)
+		allowed = append(allowed, event.OptionalExtensions...)
+		allowed = append(allowed, catalog.ContextExtensions...)
+		allowed = sortedUniqueStrings(allowed)
+		required := sortedUniqueStrings(event.RequiredExtensions)
+		fmt.Fprintf(
+			output,
+			"      %q => (logType: %q, required: const <String>{%s}, allowed: const <String>{%s}),\n",
+			event.EventType,
+			event.LogType,
+			quotedDartValues(required),
+			quotedDartValues(allowed),
+		)
+	}
+	output.WriteString("      _ => throw ArgumentError.value(this.eventType, 'eventType', 'unknown canonical event'),\n")
+	output.WriteString("    };\n")
+	output.WriteString("    if (this.logType != definition.logType) {\n")
+	output.WriteString("      throw ArgumentError.value(this.logType, 'logType', 'does not match eventType');\n")
+	output.WriteString("    }\n")
+	output.WriteString("    final presentExtensions = <String>{\n")
+	extensionNames := make([]string, 0, len(catalog.ExtensionFields))
+	for name := range catalog.ExtensionFields {
+		extensionNames = append(extensionNames, name)
+	}
+	sort.Strings(extensionNames)
+	for _, name := range extensionNames {
+		fmt.Fprintf(output, "      if (this.%s != null) %q,\n", name, name)
+	}
+	output.WriteString("    };\n")
+	output.WriteString("    if (!definition.required.every(presentExtensions.contains)) {\n")
+	output.WriteString("      throw ArgumentError.value(presentExtensions, 'extensions', 'missing required event extension');\n")
+	output.WriteString("    }\n")
+	output.WriteString("    if (!presentExtensions.every(definition.allowed.contains)) {\n")
+	output.WriteString("      throw ArgumentError.value(presentExtensions, 'extensions', 'event contains forbidden extension');\n")
+	output.WriteString("    }\n")
+	for _, name := range extensionNames {
+		extension := catalog.ExtensionFields[name]
+		if len(extension.Enum) > 0 {
+			fmt.Fprintf(
+				output,
+				"    if (this.%s != null && !const <String>{%s}.contains(this.%s)) {\n",
+				name,
+				quotedDartValues(extension.Enum),
+				name,
+			)
+			fmt.Fprintf(
+				output,
+				"      throw ArgumentError.value(this.%s, %q, 'unsupported event extension value');\n",
+				name,
+				name,
+			)
+			output.WriteString("    }\n")
+		}
+		if extension.Type == "string_list" && extension.ItemMaxLength > 0 {
+			fmt.Fprintf(
+				output,
+				"    if (this.%s?.any((value) => value.length > %d) == true) {\n",
+				name,
+				extension.ItemMaxLength,
+			)
+			fmt.Fprintf(
+				output,
+				"      throw ArgumentError.value(this.%s, %q, 'event extension item is too long');\n",
+				name,
+				name,
+			)
+			output.WriteString("    }\n")
+		}
+	}
+}
+
+func renderRuntimeLogRecordValidation(
+	output *strings.Builder,
+	catalog runtimeObservabilityContract,
+) {
+	fmt.Fprintf(output, "    if (this.schema != %q) {\n", catalog.Schema)
+	output.WriteString("      throw ArgumentError.value(this.schema, 'schema', 'unsupported runtime log schema');\n")
+	output.WriteString("    }\n")
+	fmt.Fprintf(
+		output,
+		"    if (!const <String>{%s}.contains(this.logKind)) {\n",
+		quotedDartValues(catalog.LogKinds),
+	)
+	output.WriteString("      throw ArgumentError.value(this.logKind, 'logKind', 'unsupported runtime log kind');\n")
+	output.WriteString("    }\n")
+	fmt.Fprintf(
+		output,
+		"    if (!const <String>{%s}.contains(this.severity)) {\n",
+		quotedDartValues(catalog.SeverityLevels),
+	)
+	output.WriteString("      throw ArgumentError.value(this.severity, 'severity', 'unsupported runtime log severity');\n")
+	output.WriteString("    }\n")
+	output.WriteString("    final signalPolicy = switch (this.signal) {\n")
+	for _, signal := range catalog.Signals {
+		fmt.Fprintf(
+			output,
+			"      %q => (logKind: %q, attributes: const <String>{%s}, correlation: const <String>{%s}),\n",
+			signal.ID,
+			signal.LogKind,
+			quotedDartValues(sortedUniqueStrings(signal.AttributeAllowlist)),
+			quotedDartValues(sortedUniqueStrings(signal.CorrelationKeys)),
+		)
+	}
+	output.WriteString("      _ => throw ArgumentError.value(this.signal, 'signal', 'unknown runtime log signal'),\n")
+	output.WriteString("    };\n")
+	output.WriteString("    if (signalPolicy.logKind != this.logKind) {\n")
+	output.WriteString("      throw ArgumentError.value(this.signal, 'signal', 'does not match logKind');\n")
+	output.WriteString("    }\n")
+	output.WriteString("    final attributeKeys = this.attributes?.toWire().keys ?? const <String>[];\n")
+	output.WriteString("    if (!attributeKeys.every(signalPolicy.attributes.contains)) {\n")
+	output.WriteString("      throw ArgumentError.value(attributeKeys, 'attributes', 'contains fields outside signal policy');\n")
+	output.WriteString("    }\n")
+	output.WriteString("    final correlationKeys = this.correlation?.toWire().keys ?? const <String>[];\n")
+	output.WriteString("    if (!correlationKeys.every(signalPolicy.correlation.contains)) {\n")
+	output.WriteString("      throw ArgumentError.value(correlationKeys, 'correlation', 'contains fields outside signal policy');\n")
+	output.WriteString("    }\n")
+	output.WriteString("    final presentKindFields = <String>{\n")
+	optionalNames := []string{"step", "event", "result", "method", "route", "status", "durationMs", "action", "target", "errorCode"}
+	for _, name := range optionalNames {
+		fmt.Fprintf(output, "      if (this.%s != null) %q,\n", name, name)
+	}
+	output.WriteString("    };\n")
+	output.WriteString("    final requiredKindFields = switch (this.logKind) {\n")
+	for _, kind := range catalog.LogKinds {
+		fmt.Fprintf(
+			output,
+			"      %q => const <String>{%s},\n",
+			kind,
+			quotedDartValues(sortedUniqueStrings(catalog.KindFields[kind].Required)),
+		)
+	}
+	output.WriteString("      _ => const <String>{},\n")
+	output.WriteString("    };\n")
+	output.WriteString("    if (!requiredKindFields.every(presentKindFields.contains)) {\n")
+	output.WriteString("      throw ArgumentError.value(presentKindFields, 'logKind', 'missing required runtime log fields');\n")
+	output.WriteString("    }\n")
+	if catalog.Limits.MaxAttributes > 0 {
+		fmt.Fprintf(
+			output,
+			"    if (attributeKeys.length > %d) {\n",
+			catalog.Limits.MaxAttributes,
+		)
+		output.WriteString("      throw ArgumentError.value(attributeKeys.length, 'attributes', 'too many runtime log attributes');\n")
+		output.WriteString("    }\n")
+	}
+}
+
+func sortedUniqueStrings(values []string) []string {
+	seen := make(map[string]struct{}, len(values))
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	sort.Strings(result)
+	return result
 }
 
 func requestModelSupportsWireDecoder(model requestModelSpec) bool {
@@ -2340,10 +2974,10 @@ func requestFieldWireExpression(
 		strings.HasPrefix(baseDartType, "Map<"):
 		result = nonNullAccess
 	default:
-		// Non-scalar request dependencies are emitted into the same generated
-		// library and own one canonical toJson encoder. Requiring a per-field
-		// client_wire marker would duplicate type information already carried
-		// by the request_entity graph.
+		// Non-scalar request dependencies either remain in this generated
+		// library or are package-owned value objects selected by client_dart_type.
+		// Both own one canonical toWire encoder, so a per-field marker would
+		// duplicate type information already carried by the request graph.
 		result = nonNullAccess + ".toWire()"
 	}
 	if stringPosition &&

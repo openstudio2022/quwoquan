@@ -423,6 +423,15 @@ class _PersonalAssistantSessionBody extends ConsumerWidget {
                                 );
                               }
                             : null,
+                        presentationMediaUrlResolver:
+                            row is AssistantAnswerTranscriptRow
+                            ? ref
+                                  .read(
+                                    personalAssistantStreamControllerProvider
+                                        .notifier,
+                                  )
+                                  .resolvePresentationMedia
+                            : null,
                         onPresentationFallback: isAssistantMessage
                             ? ref
                                   .read(

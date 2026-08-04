@@ -19,7 +19,7 @@ class _CircleEditSettingsPageState
   late final TextEditingController _rulesController;
   late final TextEditingController _welcomeMessageController;
   late final TextEditingController _tagsController;
-  late final CircleDto _seedCircle;
+  late final Circle? _seedCircle;
   late CircleEditSettingsTab _activeTab;
   late CircleVisibility _visibility;
   late CircleJoinPolicy _joinPolicy;
@@ -27,7 +27,7 @@ class _CircleEditSettingsPageState
   String? _coverSourceOverride;
   String? _avatarSourceOverride;
   late bool _autoSyncChat;
-  late List<CircleSectionConfigDto> _sections;
+  late List<CircleSectionEditValue> _sections;
   bool _isSaving = false;
   Map<String, CircleCategoryTabConfigDto> _categoryLabelsFromRepo = {};
 
@@ -42,47 +42,51 @@ class _CircleEditSettingsPageState
   void initState() {
     super.initState();
     _pageEnteredAt = DateTime.now();
-    final circle = widget.initialCircle ?? _buildDraftCircle();
+    final circle = widget.initialCircle;
     _seedCircle = circle;
-    _nameController = TextEditingController(text: circle.name);
+    _nameController = TextEditingController(text: circle?.name ?? '');
     _descriptionController = TextEditingController(
-      text: circle.description ?? '',
+      text: circle?.description ?? '',
     );
-    _rulesController = TextEditingController(text: circle.rulesText ?? '');
+    _rulesController = TextEditingController(text: circle?.rulesText ?? '');
     _welcomeMessageController = TextEditingController(
-      text: circle.welcomeMessage ?? '',
+      text: circle?.welcomeMessage ?? '',
     );
-    _tagsController = TextEditingController(text: circle.tags.join(' '));
+    _tagsController = TextEditingController(
+      text: (circle?.tags ?? const <String>[]).join(' '),
+    );
     _activeTab = widget.initialTab;
-    _visibility = circle.visibility;
-    _joinPolicy = circle.joinPolicy;
+    _visibility = circle?.visibility ?? CircleVisibility.public;
+    _joinPolicy = circle?.joinPolicy ?? CircleJoinPolicy.open;
     _categoryId =
-        circle.category ?? (_isCreateMode ? _categoryIds.first : null);
-    _autoSyncChat = circle.autoSyncChat;
+        circle?.category ?? (_isCreateMode ? _categoryIds.first : null);
+    _autoSyncChat = circle?.autoSyncChat ?? true;
     // 默认板块与 metadata ui_config circle_sections 闭集一致（works/members/chat/storage）。
-    _sections = circle.sectionConfig.isNotEmpty
-        ? (circle.sectionConfig
-              .map((section) => section.copyWith())
+    final sectionConfig =
+        circle?.sectionConfig ?? const <CircleSectionConfig>[];
+    _sections = sectionConfig.isNotEmpty
+        ? (sectionConfig
+              .map(CircleSectionEditValue.fromWire)
               .toList(growable: true)
             ..sort((a, b) => a.order.compareTo(b.order)))
         : const [
-            CircleSectionConfigDto(
-              sectionType: 'works',
+            CircleSectionEditValue(
+              sectionType: CircleSectionType.works,
               visible: true,
               order: 0,
             ),
-            CircleSectionConfigDto(
-              sectionType: 'members',
+            CircleSectionEditValue(
+              sectionType: CircleSectionType.members,
               visible: true,
               order: 1,
             ),
-            CircleSectionConfigDto(
-              sectionType: 'chat',
+            CircleSectionEditValue(
+              sectionType: CircleSectionType.chat,
               visible: true,
               order: 2,
             ),
-            CircleSectionConfigDto(
-              sectionType: 'storage',
+            CircleSectionEditValue(
+              sectionType: CircleSectionType.storage,
               visible: true,
               order: 3,
             ),
@@ -137,32 +141,10 @@ class _CircleEditSettingsPageState
     super.dispose();
   }
 
-  CircleDto _buildDraftCircle() {
-    final now = DateTime.now();
-    return CircleDto(
-      id: '',
-      name: '',
-      description: '',
-      ownerId: '',
-      category: _categoryIds.first,
-      visibility: CircleVisibility.public,
-      joinPolicy: CircleJoinPolicy.open,
-      autoSyncChat: true,
-      sectionConfig: const [
-        CircleSectionConfigDto(sectionType: 'works', visible: true, order: 0),
-        CircleSectionConfigDto(sectionType: 'members', visible: true, order: 1),
-        CircleSectionConfigDto(sectionType: 'chat', visible: true, order: 2),
-        CircleSectionConfigDto(sectionType: 'storage', visible: true, order: 3),
-      ],
-      createdAt: now,
-      updatedAt: now,
-    );
-  }
-
-  String get _initialCoverSource => (_seedCircle.coverUrl ?? '').trim();
+  String get _initialCoverSource => (_seedCircle?.coverUrl ?? '').trim();
 
   String get _initialAvatarSource {
-    final raw = (widget.initialAvatarUrl ?? _seedCircle.coverUrl ?? '').trim();
+    final raw = (widget.initialAvatarUrl ?? _seedCircle?.iconUrl ?? '').trim();
     return raw;
   }
 
@@ -220,8 +202,8 @@ class _CircleEditSettingsPageState
         .toList(growable: false);
   }
 
-  String _sectionTitle(String type) {
-    return circleSectionLabel(type);
+  String _sectionTitle(CircleSectionType type) {
+    return circleSectionLabel(type.wireName);
   }
 
   String _visibilityDescription(CircleVisibility value) => switch (value) {
@@ -678,7 +660,7 @@ class _CircleEditSettingsPageState
                           child: _CircleEditSettingsPageStateHelpers(this)
                               ._buildSwitchTile(
                                 icon: circleSectionIcon(
-                                  entry.value.sectionType,
+                                  entry.value.sectionType.wireName,
                                 ),
                                 title: _sectionTitle(entry.value.sectionType),
                                 subtitle: CommunityText.circleSectionVisible,

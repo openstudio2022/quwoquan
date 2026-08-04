@@ -655,10 +655,9 @@ class DevUpTest(unittest.TestCase):
             'LOCAL_GAMMA_PROCESS_ROOT="${QWQ_OUTPUT_ROOT}/env/${QWQ_LOCAL_RELEASE_ENV}/local/${QWQ_LOCAL_RELEASE_TARGET}/process"',
             gamma_script,
         )
-        self.assertIn(
-            'LOCAL_GAMMA_STACK_STATUS_REPORT="${LOCAL_GAMMA_PROCESS_ROOT}/stack_status.json"',
-            gamma_script,
-        )
+        self.assertIn("startup_attempt_receipt.py", gamma_script)
+        self.assertNotIn("LOCAL_GAMMA_STACK_STATUS_REPORT", gamma_script)
+        self.assertNotIn("stack_status.json", gamma_script)
         self.assertIn('-v "${LOCAL_GAMMA_CADDY_DATA_VOLUME}:/data" \\', gamma_script)
         self.assertIn('-v "${LOCAL_GAMMA_CADDY_CONFIG_VOLUME}:/config" \\', gamma_script)
         self.assertIn(

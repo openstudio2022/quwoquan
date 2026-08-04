@@ -145,7 +145,7 @@ def _finalize_existing_managed_author_outputs(ctx: ExecutionContext, state: Exec
                 ref,
                 run_id=outcome.run_id or str(meta.get("agentRunId") or ""),
                 agent_id=outcome.agent_id or meta.get("agentId"),
-                model=str(meta.get("model") or ctx.model or ""),
+                model=str(ctx.model or ""),
             ):
                 finalized += 1
             continue
@@ -175,7 +175,7 @@ def _finalize_existing_managed_author_outputs(ctx: ExecutionContext, state: Exec
                     "ref": ref,
                     "generator": "image_evidence_pack",
                     "status": "completed",
-                    "model": meta.get("model") or ctx.model,
+                    "model": ctx.model,
                     "agentRunId": outcome.run_id or meta.get("agentRunId"),
                     "agentId": outcome.agent_id or meta.get("agentId"),
                     "citedSourcePaths": [str(item) for item in cited_paths],
@@ -212,7 +212,7 @@ def _finalize_existing_managed_author_outputs(ctx: ExecutionContext, state: Exec
                 "ref": ref,
                 "generator": "agent",
                 "status": "completed",
-                "model": meta.get("model") or ctx.model,
+                "model": ctx.model,
                 "agentRunId": outcome.run_id or meta.get("agentRunId"),
                 "agentId": outcome.agent_id or meta.get("agentId"),
                 "citedSourcePaths": [str(item) for item in cited_paths],

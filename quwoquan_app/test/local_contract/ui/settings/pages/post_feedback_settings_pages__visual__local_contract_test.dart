@@ -32,23 +32,23 @@ void main() {
     await _setPhoneSurface(tester);
     // 固定为跨年历史日期，避免运行时钟跨过相对时间阈值后污染 golden。
     final now = DateTime.utc(2024, 7, 20);
-    final query = AlphaContentReportQueryAdapter(<ContentMyReportItem>[
-      ContentMyReportItem(
+    final query = AlphaContentReportQueryAdapter(<MyReportItemSlice>[
+      MyReportItemSlice(
         id: 'report-1',
-        targetType: ContentReportTargetType.post,
+        targetType: ReportTargetType.post,
         targetId: 'post-1',
-        reason: ContentReportReason.spam,
+        reason: ReportReason.spam,
         description: '重复营销内容',
-        status: ContentReportStatus.reviewing,
+        status: ReportStatus.reviewing,
         createdAt: now,
         updatedAt: now,
       ),
-      ContentMyReportItem(
+      MyReportItemSlice(
         id: 'report-2',
-        targetType: ContentReportTargetType.user,
+        targetType: ReportTargetType.user,
         targetId: 'user-2',
-        reason: ContentReportReason.harassment,
-        status: ContentReportStatus.dismissed,
+        reason: ReportReason.harassment,
+        status: ReportStatus.dismissed,
         createdAt: now,
         updatedAt: now,
         resolvedAt: now,

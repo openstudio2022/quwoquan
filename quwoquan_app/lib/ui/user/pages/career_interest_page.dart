@@ -507,10 +507,14 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
           category: UiErrorCategory.pageLoad,
           scope: UiErrorScope.page,
         ),
-        onAction: (action) async {
+        onRecovery: (action) async {
           if (action.type == UiErrorActionType.retry) {
             await _load();
+            return _loadError == null
+                ? UiRecoveryOutcome.recovered
+                : UiRecoveryOutcome.stillBlocked;
           }
+          return UiRecoveryOutcome.cancelled;
         },
       );
     }

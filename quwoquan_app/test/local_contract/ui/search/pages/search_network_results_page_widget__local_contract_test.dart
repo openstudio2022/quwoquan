@@ -7,7 +7,6 @@ import 'package:quwoquan_app/application/search/search_operation_ports.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.dart';
@@ -1396,7 +1395,7 @@ class _IntersectionContractSearchRepository implements SearchRepository {
           'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800',
       authorDisplayName: '骑行小林',
       connectionState: 'intersection_lead',
-      intersectionReason: IntersectionReason(
+      intersectionReason: CanonicalSearchIntersectionReason(
         primaryText: '你关注的小林也在拍这里',
         dimension: 'sharedFollowees',
         intersectionClass: 'fact',

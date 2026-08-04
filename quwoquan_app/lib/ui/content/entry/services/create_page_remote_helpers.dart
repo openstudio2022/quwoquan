@@ -817,18 +817,6 @@ String _videoCoverStrategyForPayload(CreateEditorState state) {
   return state.videoCoverTimeMs > 0 ? 'manual' : 'first_frame';
 }
 
-List<CreateDraft> decodeCreateDraftsList(Object? decoded) {
-  if (decoded is! List) {
-    return const <CreateDraft>[];
-  }
-  return decoded
-      .whereType<Map>()
-      .map(
-        (entry) => CreateDraft.fromStorageMap(Map<String, dynamic>.from(entry)),
-      )
-      .toList(growable: false);
-}
-
 SubmitContentPostPublicationCommand
 submitContentPostPublicationCommandFromPreparedPayload(
   Map<String, Object?> payload, {

@@ -39,7 +39,7 @@ func TestMarkVisitedCommandValidation(t *testing.T) {
 		{"missing subject", "ps_1", "homepage", "", "req-1"},
 		{"missing clientRequestId", "ps_1", "homepage", "home_1", ""},
 		{"invalid subjectType", "ps_1", "post", "post_1", "req-1"},
-		{"legacy user subjectType", "ps_1", "user", "ps_2", "req-1"},
+		{"retired user subjectType", "ps_1", "user", "ps_2", "req-1"},
 	}
 	for _, tc := range invalid {
 		if _, err := visitmodel.NewMarkVisitedCommand(

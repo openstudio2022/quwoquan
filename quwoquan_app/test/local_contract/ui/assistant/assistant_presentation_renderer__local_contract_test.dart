@@ -144,6 +144,91 @@ void main() {
     expect(find.text('不安全路线'), findsNothing);
     expect(reasons, <String>['invalid_route_map']);
   });
+
+  testWidgets('comparison_table 由共享 capability catalog 原生渲染', (tester) async {
+    final document = _travelDocument(
+      nodes: <AssistantPresentationNodeWire>[
+        const AssistantPresentationNodeWire(
+          nodeId: 'root',
+          kind: AssistantPresentationNodeKind.comparisonTable,
+          title: '酒店比较',
+          data: <String, dynamic>{
+            'columns': <String>['酒店', '距离'],
+            'rows': <Map<String, String>>[
+              <String, String>{'酒店': '西湖边', '距离': '步行 5 分钟'},
+            ],
+          },
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(_host(document));
+    await tester.pump();
+
+    expect(find.text('酒店比较'), findsOneWidget);
+    expect(find.text('西湖边'), findsOneWidget);
+    expect(find.text('步行 5 分钟'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('offline renderer 对媒体与确认动作统一 fail-closed', (tester) async {
+    final actionReasons = <String>[];
+    final actionDocument = _travelDocument(
+      nodes: <AssistantPresentationNodeWire>[
+        const AssistantPresentationNodeWire(
+          nodeId: 'root',
+          kind: AssistantPresentationNodeKind.confirmationCard,
+          title: '离线确认',
+          action: AssistantActionIntentWire(
+            intentId: 'offline_action',
+            operation: 'ContinueAssistantToolUse',
+            objectTypeRef: 'assistant_tool_use',
+            objectId: 'tool_offline',
+            payload: <String, dynamic>{'decision': 'approved'},
+            requiresConfirmation: true,
+          ),
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      _host(
+        actionDocument,
+        offline: true,
+        onAction: (_) {},
+        onFallback: (reason, _) => actionReasons.add(reason),
+      ),
+    );
+    await tester.pump();
+    expect(actionReasons, <String>['unsupported_node']);
+    expect(find.text('离线确认'), findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+
+    final mediaReasons = <String>[];
+    final mediaDocument = _travelDocument(
+      nodes: <AssistantPresentationNodeWire>[
+        const AssistantPresentationNodeWire(
+          nodeId: 'root',
+          kind: AssistantPresentationNodeKind.media,
+          media: AssistantPresentationMediaRefWire(
+            mediaAssetId: 'media-west-lake',
+            alt: '西湖',
+            provenanceRef: 'source-west-lake',
+          ),
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      _host(
+        mediaDocument,
+        offline: true,
+        mediaUrlResolver: (_) async => 'https://media.test/west-lake.jpg',
+        onFallback: (reason, _) => mediaReasons.add(reason),
+      ),
+    );
+    await tester.pump();
+    expect(mediaReasons, <String>['unsupported_node']);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 Map<String, dynamic> _routeMapData() => <String, dynamic>{
@@ -204,7 +289,9 @@ Widget _host(
   AssistantPresentationDocumentWire document, {
   TextScaler textScaler = TextScaler.noScaling,
   AssistantPresentationActionHandler? onAction,
+  AssistantPresentationMediaUrlResolver? mediaUrlResolver,
   AssistantPresentationFallbackObserver? onFallback,
+  bool offline = false,
 }) {
   return MaterialApp(
     home: MediaQuery(
@@ -219,7 +306,9 @@ Widget _host(
           textColor: Colors.black,
           markdownBuilder: Text.new,
           onAction: onAction,
+          mediaUrlResolver: mediaUrlResolver,
           onFallback: onFallback,
+          offline: offline,
         ),
       ),
     ),

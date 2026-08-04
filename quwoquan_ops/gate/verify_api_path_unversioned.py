@@ -14,7 +14,10 @@ import re
 import sys
 from pathlib import Path
 
+import yaml
+
 ROOT = Path(__file__).resolve().parents[2]
+PROVIDER_ENDPOINT_CONTRACT_ROOT = ROOT / "quwoquan_ops/external"
 
 VERSIONED_API = re.compile(
     r"(?:^|[\s\"'`(=\[])/(?:internal/|callbacks/)?v[0-9]+/"
@@ -31,8 +34,8 @@ THIRD_PARTY = re.compile(
 THIRD_PARTY_PATH = re.compile(
     r"""["'`]/v[0-9]+/(?:geocode|place|direction|weather|distance)/"""
 )
-EXTERNAL_PROVIDER_PATH = re.compile(
-    r"""["'`]/v[0-9]+/(?:chat/completions(?:["'`]|$)|projects/)"""
+FCM_PROVIDER_PATH = re.compile(
+    r"""["'`]/v[0-9]+/projects/"""
 )
 GO_MODULE = re.compile(r"github\.com/.+/v[0-9]+")
 SCHEMA_IDENTITY = re.compile(
@@ -111,7 +114,123 @@ def should_skip_path(path: Path) -> bool:
     return False
 
 
-def line_is_excluded(line: str) -> bool:
+def load_external_provider_versioned_paths(
+    contract_root: Path = PROVIDER_ENDPOINT_CONTRACT_ROOT,
+) -> frozenset[str]:
+    """Load exact provider-owned paths from canonical endpoint contracts."""
+    return frozenset(load_external_provider_path_authorities(contract_root))
+
+
+def load_external_provider_path_authorities(
+    contract_root: Path = PROVIDER_ENDPOINT_CONTRACT_ROOT,
+) -> dict[str, str]:
+    """Map each exact provider path to the authority role that owns it."""
+    authorities: dict[str, str] = {}
+    for contract_path in sorted(contract_root.glob("*/contract/endpoints.yaml")):
+        payload = yaml.safe_load(contract_path.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict):
+            raise RuntimeError(f"{contract_path}: endpoint contract must be a mapping")
+        if payload.get("schema") != "provider-endpoint-contract":
+            raise RuntimeError(f"{contract_path}: unsupported endpoint contract schema")
+        role = str(payload.get("role") or "").strip()
+        if not role:
+            raise RuntimeError(f"{contract_path}: role must be non-empty")
+        for group_name in ("endpoints", "protectedEndpoints"):
+            group = payload.get(group_name)
+            if group is None:
+                continue
+            if not isinstance(group, dict):
+                raise RuntimeError(f"{contract_path}: {group_name} must be a mapping")
+            for endpoint_name, descriptor in group.items():
+                if not isinstance(descriptor, dict):
+                    raise RuntimeError(
+                        f"{contract_path}: {endpoint_name} endpoint must be a mapping"
+                    )
+                path = str(descriptor.get("path") or "").strip()
+                if not path:
+                    continue
+                if not path.startswith("/") or "//" in path or ".." in path:
+                    raise RuntimeError(
+                        f"{contract_path}: {endpoint_name} has an unsafe endpoint path"
+                    )
+                if VERSIONED_API.search(f'"{path}"'):
+                    prior = authorities.get(path)
+                    if prior is not None and prior != role:
+                        raise RuntimeError(
+                            f"{contract_path}: {path} is owned by both {prior} and {role}"
+                        )
+                    authorities[path] = role
+    return authorities
+
+
+def _references_exact_path(line: str, path: str) -> bool:
+    return re.search(
+        re.escape(path) + r'''(?=["'`\s,)\]}]|$)''',
+        line,
+    ) is not None
+
+
+def _provider_reference_is_authority_scoped(
+    relative_path: str,
+    line: str,
+    role: str,
+) -> bool:
+    """Permit provider paths only inside provider-facing authority boundaries."""
+    rel = relative_path.replace("\\", "/")
+    rel_lower = rel.lower()
+    line_lower = line.lower()
+    if not rel:
+        return False
+    if rel.startswith(f"quwoquan_ops/external/{role}/"):
+        return True
+    if rel.startswith("quwoquan_ops/cli/"):
+        return "provider" in rel_lower or "provider" in line_lower or "sms" in rel_lower
+    if rel.startswith("quwoquan_ops/tests/"):
+        return "provider" in rel_lower or role in line_lower
+    if rel.startswith("specs/feature-tree/"):
+        return "provider" in line_lower or "替代 provider" in line_lower
+    if rel.startswith("quwoquan_service/services/"):
+        if "/contracts/" in rel or "/adapters/inbound/" in rel:
+            return False
+        if "/infrastructure/provider/" in rel or "/adapters/outbound/" in rel:
+            return True
+        if "/tests/" in rel:
+            return (
+                "provider" in rel_lower
+                or "provider" in line_lower
+                or "external_interaction" in rel_lower
+                or "sms" in rel_lower
+            )
+    return False
+
+
+def _third_party_path_is_authority_scoped(relative_path: str, line: str) -> bool:
+    rel = relative_path.replace("\\", "/")
+    rel_lower = rel.lower()
+    line_lower = line.lower()
+    if rel.startswith("quwoquan_ops/external/"):
+        return True
+    if rel.startswith("quwoquan_ops/cli/") or rel.startswith("quwoquan_ops/tests/"):
+        return "provider" in rel_lower or "provider" in line_lower
+    if not rel.startswith("quwoquan_service/services/"):
+        return False
+    if "/contracts/" in rel or "/adapters/inbound/" in rel:
+        return False
+    if "/infrastructure/provider/" in rel or "/adapters/outbound/" in rel:
+        return True
+    return "/tests/" in rel and (
+        "provider" in rel_lower
+        or "provider" in line_lower
+        or "external_integration" in rel_lower
+    )
+
+
+def line_is_excluded(
+    line: str,
+    *,
+    relative_path: str = "",
+    external_provider_authorities: dict[str, str] | None = None,
+) -> bool:
     stripped = line.strip()
     if not stripped or stripped.startswith("#") or stripped.startswith("//"):
         return True
@@ -124,10 +243,22 @@ def line_is_excluded(line: str) -> bool:
     if (
         THIRD_PARTY.search(line)
         or GO_MODULE.search(line)
-        or THIRD_PARTY_PATH.search(line)
-        or EXTERNAL_PROVIDER_PATH.search(line)
     ):
         return True
+    if (
+        THIRD_PARTY_PATH.search(line) or FCM_PROVIDER_PATH.search(line)
+    ) and _third_party_path_is_authority_scoped(relative_path, line):
+        return True
+    provider_authorities = (
+        load_external_provider_path_authorities()
+        if external_provider_authorities is None
+        else external_provider_authorities
+    )
+    for path, role in provider_authorities.items():
+        if not _references_exact_path(line, path):
+            continue
+        if _provider_reference_is_authority_scoped(relative_path, line, role):
+            return True
     if SCHEMA_IDENTITY.search(line):
         return True
     if "versioned API path is forbidden" in line or "media object keys may contain" in line:
@@ -163,6 +294,14 @@ def iter_files() -> list[Path]:
 
 def main() -> int:
     failures: list[str] = []
+    try:
+        external_provider_authorities = load_external_provider_path_authorities()
+    except (OSError, RuntimeError, yaml.YAMLError) as error:
+        print(
+            f"[verify_api_path_unversioned] GATE_BLOCK: {error}",
+            file=sys.stderr,
+        )
+        return 1
     for path in iter_files():
         try:
             text = path.read_text(encoding="utf-8")
@@ -170,7 +309,11 @@ def main() -> int:
             continue
         rel = path.relative_to(ROOT).as_posix()
         for lineno, line in enumerate(text.splitlines(), start=1):
-            if line_is_excluded(line):
+            if line_is_excluded(
+                line,
+                relative_path=rel,
+                external_provider_authorities=external_provider_authorities,
+            ):
                 continue
             if VERSIONED_API.search(line):
                 failures.append(f"{rel}:{lineno}: versioned API path is forbidden: {line.strip()}")

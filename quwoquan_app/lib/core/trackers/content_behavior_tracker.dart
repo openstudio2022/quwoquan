@@ -138,7 +138,7 @@ class ContentBehaviorTracker {
     _add(
       BehaviorEvent(
         contentId: contentId,
-        action: BehaviorAction.impression,
+        action: BehaviorEventType.impression,
         state: 'visible',
         contentType: contentType,
         tags: tags,
@@ -197,7 +197,7 @@ class ContentBehaviorTracker {
     _add(
       BehaviorEvent(
         contentId: contentId,
-        action: BehaviorAction.impression,
+        action: BehaviorEventType.impression,
         state: 'impressed',
         contentType: contentType,
         tags: tags,
@@ -238,7 +238,7 @@ class ContentBehaviorTracker {
     _add(
       BehaviorEvent(
         contentId: contentId,
-        action: BehaviorAction.dwell,
+        action: BehaviorEventType.dwell,
         state: 'dwell',
         contentType: contentType,
         tags: tags,
@@ -278,7 +278,7 @@ class ContentBehaviorTracker {
     _add(
       BehaviorEvent(
         contentId: contentId,
-        action: BehaviorAction.click,
+        action: BehaviorEventType.click,
         state: 'click',
         contentType: contentType,
         tags: tags,
@@ -330,7 +330,7 @@ class ContentBehaviorTracker {
     _add(
       BehaviorEvent(
         contentId: contentId,
-        action: BehaviorAction.tagClick,
+        action: BehaviorEventType.tagClick,
         state: 'interaction',
         contentType: contentType,
         authorId: authorId,
@@ -371,7 +371,7 @@ class ContentBehaviorTracker {
     _add(
       BehaviorEvent(
         contentId: contentId ?? '',
-        action: BehaviorAction.intersectionExpand,
+        action: BehaviorEventType.intersectionExpand,
         state: 'interaction',
         referralSource: referralSource,
         sourceSurface: surfaceId,
@@ -401,7 +401,7 @@ class ContentBehaviorTracker {
     _add(
       BehaviorEvent(
         contentId: contentId,
-        action: BehaviorAction.dislike,
+        action: BehaviorEventType.dislike,
         state: 'negative',
         contentType: contentType,
         tags: tags,
@@ -435,7 +435,7 @@ class ContentBehaviorTracker {
     _add(
       BehaviorEvent(
         contentId: contentId,
-        action: BehaviorAction.undoDislike,
+        action: BehaviorEventType.undoDislike,
         state: 'interaction',
         contentType: contentType,
         authorId: authorId,
@@ -471,7 +471,7 @@ class ContentBehaviorTracker {
     _add(
       BehaviorEvent(
         contentId: contentId,
-        action: BehaviorAction.hideAuthor,
+        action: BehaviorEventType.hideAuthor,
         state: 'negative',
         contentType: contentType,
         tags: tags,
@@ -508,7 +508,7 @@ class ContentBehaviorTracker {
     _add(
       BehaviorEvent(
         contentId: contentId,
-        action: BehaviorAction.hideContentType,
+        action: BehaviorEventType.hideContentType,
         state: 'negative',
         contentType: normalizedType,
         tags: tags,
@@ -542,7 +542,7 @@ class ContentBehaviorTracker {
     _add(
       BehaviorEvent(
         contentId: contentId,
-        action: BehaviorAction.share,
+        action: BehaviorEventType.share,
         state: 'interaction',
         contentType: contentType,
         tags: tags,
@@ -576,7 +576,7 @@ class ContentBehaviorTracker {
     _add(
       BehaviorEvent(
         contentId: contentId,
-        action: BehaviorAction.skip,
+        action: BehaviorEventType.skip,
         state: 'negative',
         contentType: contentType,
         tags: tags,
@@ -610,7 +610,7 @@ class ContentBehaviorTracker {
     _add(
       BehaviorEvent(
         contentId: authorId,
-        action: BehaviorAction.follow,
+        action: BehaviorEventType.follow,
         state: 'interaction',
         authorId: authorId,
         feedRequestId: feedRequestId,
@@ -638,7 +638,7 @@ class ContentBehaviorTracker {
     _add(
       BehaviorEvent(
         contentId: circleId,
-        action: BehaviorAction.joinCircle,
+        action: BehaviorEventType.joinCircle,
         state: 'interaction',
         feedRequestId: feedRequestId,
         referralSource: referralSource,
@@ -665,7 +665,7 @@ class ContentBehaviorTracker {
     _add(
       BehaviorEvent(
         contentId: authorId,
-        action: BehaviorAction.addContact,
+        action: BehaviorEventType.addContact,
         state: 'interaction',
         authorId: authorId,
         feedRequestId: feedRequestId,
@@ -693,7 +693,7 @@ class ContentBehaviorTracker {
     _add(
       BehaviorEvent(
         contentId: '',
-        action: BehaviorAction.assistantInterest,
+        action: BehaviorEventType.assistantInterest,
         state: 'interaction',
         tags: normalized,
       ),
@@ -724,7 +724,7 @@ class ContentBehaviorTracker {
     _add(
       BehaviorEvent(
         contentId: '',
-        action: BehaviorAction.intersectionFeedback,
+        action: BehaviorEventType.intersectionFeedback,
         state: 'negative',
         subjectId: normalizedSubject,
         feedbackKind: normalizedKind,
@@ -754,7 +754,7 @@ class ContentBehaviorTracker {
   }) {
     _trackWishlistIntent(
       objectId,
-      action: BehaviorAction.wishlistAdd,
+      action: BehaviorEventType.wishlistAdd,
       objectKind: objectKind,
       displayName: displayName,
       sourceSurface: sourceSurface,
@@ -779,7 +779,7 @@ class ContentBehaviorTracker {
   }) {
     _trackWishlistIntent(
       objectId,
-      action: BehaviorAction.wishlistRemove,
+      action: BehaviorEventType.wishlistRemove,
       objectKind: objectKind,
       sourceSurface: sourceSurface,
       feedRequestId: feedRequestId,
@@ -814,7 +814,7 @@ class ContentBehaviorTracker {
     _add(
       BehaviorEvent(
         contentId: normalizedContentId,
-        action: BehaviorAction.contentDepth,
+        action: BehaviorEventType.contentDepth,
         state: 'works_image_pageflip_motion',
         contentType: contentType,
         sourceSurface: 'works_immersive_viewer',
@@ -838,7 +838,7 @@ class ContentBehaviorTracker {
 
   void _trackWishlistIntent(
     String objectId, {
-    required BehaviorAction action,
+    required BehaviorEventType action,
     required String objectKind,
     String? displayName,
     String? sourceSurface,
@@ -857,10 +857,9 @@ class ContentBehaviorTracker {
       BehaviorEvent(
         contentId: normalizedObjectId,
         action: action,
-        state: action == BehaviorAction.wishlistRemove
+        state: action == BehaviorEventType.wishlistRemove
             ? 'negative'
             : 'interaction',
-        contentType: normalizedObjectKind,
         objectId: normalizedObjectId,
         objectKind: normalizedObjectKind,
         displayName: displayName?.trim(),

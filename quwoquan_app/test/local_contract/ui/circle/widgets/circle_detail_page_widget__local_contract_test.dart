@@ -32,7 +32,7 @@ final class _CircleMembershipQueryTestDouble implements CircleMembershipQuery {
     version: 1,
     circleId: query.circleId,
     personaId: 'fixture_member',
-    role: CircleMembershipRole.member,
+    role: CircleMemberRole.member,
     state: CircleMembershipState.active,
     joinedAt: DateTime.utc(2026, 7, 1),
     leftAt: null,
@@ -50,7 +50,7 @@ final class _CircleMembershipQueryTestDouble implements CircleMembershipQuery {
   @override
   Future<PersonaCirclePageSlice> listPersonaCircles(
     PersonaCircleListQuery query,
-  ) async => const PersonaCirclePageSlice(items: <PersonaCircleSummary>[]);
+  ) async => const PersonaCirclePageSlice(items: <PersonaCircleSlice>[]);
 }
 
 Widget _scopedApp({
@@ -134,14 +134,14 @@ void main() {
       await tester.pump();
       expect(
         authenticatedWriter.commands.map((command) => command.eventType),
-        contains(CircleBehaviorEventType.impression),
+        contains(BehaviorEventType.impression),
       );
 
       await tester.pumpWidget(const SizedBox());
       await tester.pump();
       expect(
         authenticatedWriter.commands.map((command) => command.eventType),
-        contains(CircleBehaviorEventType.dwell),
+        contains(BehaviorEventType.dwell),
       );
       expect(
         authenticatedWriter.commands.map((command) => command.circleId).toSet(),

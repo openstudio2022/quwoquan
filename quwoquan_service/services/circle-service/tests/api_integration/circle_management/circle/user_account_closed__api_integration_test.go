@@ -118,7 +118,7 @@ func TestUserAccountClosedRealProjectionNormalReplayAndConflict(
 	); !errors.Is(err, application.ErrUserAccountRestrictionProjectionConflict) {
 		t.Fatalf("same-version Circle restriction conflict err=%v", err)
 	}
-	// Closure also erases legacy rows from the superseded generic adapter.
+	// Closure also erases retired rows from the superseded generic adapter.
 	if _, err := mongoDB.Collection("circle_user_account_restrictions").InsertOne(
 		ctx,
 		bson.M{
@@ -131,7 +131,7 @@ func TestUserAccountClosedRealProjectionNormalReplayAndConflict(
 	if _, err := mongoDB.Collection("circle_user_account_restriction_inbox").InsertOne(
 		ctx,
 		bson.M{
-			"_id": "event-legacy-suspend-circle-9", "accountId": "account-closed",
+			"_id": "event-retired-suspend-circle-9", "accountId": "account-closed",
 			"accountVersion": int64(9),
 		},
 	); err != nil {

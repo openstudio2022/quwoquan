@@ -23,7 +23,7 @@ final class AlphaCircleMembershipFacet
       version: (existing?.version ?? 0) + 1,
       circleId: command.circleId,
       personaId: 'alpha_persona',
-      role: CircleMembershipRole.member,
+      role: CircleMemberRole.member,
       state: CircleMembershipState.active,
       joinedAt: now,
       leftAt: null,
@@ -164,7 +164,7 @@ final class AlphaCircleMembershipFacet
   @override
   Future<PersonaCirclePageSlice> listPersonaCircles(
     PersonaCircleListQuery query,
-  ) async => const PersonaCirclePageSlice(items: <PersonaCircleSummary>[]);
+  ) async => const PersonaCirclePageSlice(items: <PersonaCircleSlice>[]);
 
   CircleMembershipCommandResult _result(
     CircleMembershipSlice membership, {

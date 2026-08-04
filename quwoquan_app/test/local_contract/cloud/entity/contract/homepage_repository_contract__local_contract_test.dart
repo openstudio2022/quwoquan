@@ -1,4 +1,4 @@
-/// L1a Entity/Homepage：Mock DTO 形状 + Remote review 请求体与 canonical request entity 对齐
+/// Entity/Homepage：App ViewData 与 Remote command 均以 canonical generated contract 为边界。
 library;
 
 import 'dart:convert';
@@ -10,11 +10,10 @@ import 'package:quwoquan_app/cloud/entity/generated/entity_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_api_metadata.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_homepage/homepage_introduction.g.dart';
+import 'package:quwoquan_app/application/entity/homepage_view_data.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
-    show HomepageObjectPageBundleQuery;
+    show HomepageIntroduction, HomepageObjectPageBundleQuery;
 import '../../../../support/cloud_services/homepage_alpha_test_adapter.dart';
 import '../../../../support/cloud_services/repository_mock_reexports.dart'
     show AlphaHomepageFacet;
@@ -23,7 +22,7 @@ import '../../../../support/homepage_remote_test_support.dart';
 
 void main() {
   test('HomepageRelatedGroupSummary 只接受 canonical circleId 与证据快照', () {
-    final group = HomepageRelatedGroupSummary.fromMap(<String, dynamic>{
+    final group = HomepageRelatedGroupSummary.fromWire(<String, Object?>{
       'circleId': 'fixture_circle_photo',
       'name': '契约摄影社',
       'memberCount': 128,
@@ -37,35 +36,38 @@ void main() {
     expect(group.ownerDisplayNameSnapshot, '契约摄影社主理人');
     expect(group.evidenceSnapshotId, isNotEmpty);
 
-    final unscoped = HomepageRelatedGroupSummary.fromMap(<String, dynamic>{
-      'id': 'unscoped_circle_alias',
-      'name': '旧别名',
-    });
-    expect(unscoped.circleId, isEmpty);
+    expect(
+      () => HomepageRelatedGroupSummary.fromWire(<String, Object?>{
+        'id': 'unscoped_circle_alias',
+        'name': '旧别名',
+      }),
+      throwsFormatException,
+    );
   });
 
   test('HomepageIntroduction 只解码公开来源，不保留内部 sourceRefs', () {
-    final introduction = HomepageIntroduction.fromMap(<String, dynamic>{
+    final canonical = <String, Object?>{
       'homepageId': 'homepage_sight_west_lake',
       'displayName': '西湖',
       'homepageType': 'sight',
       'summary': '摘要',
-      'sections': <dynamic>[],
-      'relatedObjects': <dynamic>[],
-      'primarySource': <String, dynamic>{
-        'sourceKind': 'wikipedia',
-        'sourceUrl': 'https://zh.wikipedia.org/wiki/西湖',
-        'title': '西湖',
-        'policyRevision': 'encyclopedia-primary',
-      },
+      'sections': <Object?>[],
+      'relatedObjects': <Object?>[],
       'sourceUrls': <String>['https://zh.wikipedia.org/wiki/西湖'],
-      'sourceRefs': <String>['internal/source/unit-1'],
-    });
-    expect(introduction.primarySource?.sourceKind, 'wikipedia');
+      'updatedAt': '2026-07-17T00:00:00Z',
+    };
+    final introduction = HomepageIntroduction.fromWire(canonical);
     expect(introduction.sourceUrls, <String>[
       'https://zh.wikipedia.org/wiki/西湖',
     ]);
-    expect(introduction.toMap().containsKey('sourceRefs'), isFalse);
+    expect(introduction.toWire().containsKey('sourceRefs'), isFalse);
+    expect(
+      () => HomepageIntroduction.fromWire(<String, Object?>{
+        ...canonical,
+        'sourceRefs': <String>['internal/source/unit-1'],
+      }),
+      throwsFormatException,
+    );
   });
 
   test('CloudResponseDecoder.mapList 读取 groups 列表', () {

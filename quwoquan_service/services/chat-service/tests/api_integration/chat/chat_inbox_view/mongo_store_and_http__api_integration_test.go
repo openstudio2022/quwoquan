@@ -135,7 +135,7 @@ func TestChatInboxViewHTTPUsesTrustedPersonaAndOpaqueCursor(t *testing.T) {
 		t.Fatalf("typed inbox HTTP drifted: status=%d body=%s err=%v", response.Code, response.Body.String(), err)
 	}
 
-	invalid := httptest.NewRequest(http.MethodGet, "/chat/inbox?cursor=legacy-offset", nil)
+	invalid := httptest.NewRequest(http.MethodGet, "/chat/inbox?cursor=invalid-offset", nil)
 	invalid = invalid.WithContext(request.Context())
 	invalidResponse := httptest.NewRecorder()
 	mux.ServeHTTP(invalidResponse, invalid)

@@ -1,0 +1,209 @@
+# Manual producer for executed Provider evidence. The production environment
+# approval protects real Prod Remote health/switch/rollback assertions. This
+# workflow never publishes source-only conformance metadata as release evidence.
+name: 06. Provider Release Evidence
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Exact reviewed main commit SHA
+        required: true
+      component_evidence_ref:
+        description: Exact component-ready ReleaseEvidenceManifest OCI ref
+        required: true
+      release_attestation:
+        description: Canonical commercial Data release attestation path on runner
+        required: false
+        default: ''
+      rollback_release_attestation:
+        description: Canonical rollback Data release attestation path on runner
+        required: false
+        default: ''
+      alpha_nonprod_data_evidence:
+        description: Alpha nonprod data evidence path on runner
+        required: false
+        default: ''
+      beta_nonprod_data_evidence:
+        description: Beta nonprod data evidence path on runner
+        required: false
+        default: ''
+      gamma_nonprod_data_evidence:
+        description: Gamma nonprod data evidence path on runner
+        required: false
+        default: ''
+      ios_simulator_device:
+        description: Dedicated iOS Simulator device id
+        required: false
+        default: ''
+      android_emulator_device:
+        description: Dedicated Android Emulator device id
+        required: false
+        default: ''
+      android_physical_device:
+        description: Dedicated Android physical device id
+        required: false
+        default: ''
+
+concurrency:
+  group: provider-release-evidence
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  QWQ_OUTPUT_ROOT: ${{ github.workspace }}/.qwq_output
+
+jobs:
+  provider_release_evidence:
+    name: Execute and publish Provider release evidence
+    runs-on: [self-hosted, macOS, ARM64, mobile-stack]
+    environment: production
+    timeout-minutes: 240
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      evidence_ref: ${{ steps.identity.outputs.ref }}
+      evidence_digest: ${{ steps.bundle.outputs.digest }}
+      expected_image_digest: ${{ steps.package.outputs.expected_image_digest }}
+      evidence_count: ${{ steps.package.outputs.evidence_count }}
+    env:
+      RELEASE_ATTESTATION: ${{ inputs.release_attestation || vars.NIGHTLY_COMMERCIAL_RELEASE_ATTESTATION }}
+      ROLLBACK_RELEASE_ATTESTATION: ${{ inputs.rollback_release_attestation || vars.NIGHTLY_ROLLBACK_RELEASE_ATTESTATION }}
+      ALPHA_NONPROD_DATA_EVIDENCE: ${{ inputs.alpha_nonprod_data_evidence || vars.PROVIDER_ALPHA_NONPROD_DATA_EVIDENCE }}
+      BETA_NONPROD_DATA_EVIDENCE: ${{ inputs.beta_nonprod_data_evidence || vars.PROVIDER_BETA_NONPROD_DATA_EVIDENCE }}
+      GAMMA_NONPROD_DATA_EVIDENCE: ${{ inputs.gamma_nonprod_data_evidence || vars.PROVIDER_GAMMA_NONPROD_DATA_EVIDENCE }}
+      IOS_SIMULATOR_DEVICE: ${{ inputs.ios_simulator_device || vars.PROVIDER_IOS_SIMULATOR_DEVICE }}
+      ANDROID_EMULATOR_DEVICE: ${{ inputs.android_emulator_device || vars.PROVIDER_ANDROID_EMULATOR_DEVICE }}
+      ANDROID_PHYSICAL_DEVICE: ${{ inputs.android_physical_device || vars.PROVIDER_ANDROID_PHYSICAL_DEVICE }}
+      QWQ_PROVIDER_CONFORMANCE_ATTESTATION_KEY: ${{ secrets.QWQ_PROVIDER_CONFORMANCE_ATTESTATION_KEY }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.source_sha }}
+      - name: Require exact reviewed main source
+        run: |
+          set -euo pipefail
+          SOURCE_SHA="$(git rev-parse HEAD)"
+          git fetch --no-tags origin main
+          if [[ "$SOURCE_SHA" != "${{ inputs.source_sha }}" ]] || \
+             [[ ! "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || \
+             ! git merge-base --is-ancestor "$SOURCE_SHA" origin/main; then
+            echo "::error::GATE_BLOCK: Provider evidence source must be an exact commit reachable from main"
+            exit 2
+          fi
+      - name: Require live matrix inputs and attestation authority
+        run: |
+          set -euo pipefail
+          for path in \
+            "$RELEASE_ATTESTATION" \
+            "$ROLLBACK_RELEASE_ATTESTATION" \
+            "$ALPHA_NONPROD_DATA_EVIDENCE" \
+            "$BETA_NONPROD_DATA_EVIDENCE" \
+            "$GAMMA_NONPROD_DATA_EVIDENCE"; do
+            if [[ -z "$path" || ! -s "$path" ]]; then
+              echo "::error::GATE_BLOCK: Provider release evidence requires every attestation/data evidence path"
+              exit 2
+            fi
+          done
+          for device in \
+            "$IOS_SIMULATOR_DEVICE" \
+            "$ANDROID_EMULATOR_DEVICE" \
+            "$ANDROID_PHYSICAL_DEVICE"; do
+            if [[ -z "$device" ]]; then
+              echo "::error::GATE_BLOCK: Provider release evidence requires all three dedicated device ids"
+              exit 2
+            fi
+          done
+          if [[ -z "$QWQ_PROVIDER_CONFORMANCE_ATTESTATION_KEY" ]]; then
+            echo "::error::GATE_BLOCK: QWQ_PROVIDER_CONFORMANCE_ATTESTATION_KEY is required"
+            exit 2
+          fi
+      - name: Login immutable evidence registry
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Materialize exact component-ready evidence
+        env:
+          COMPONENT_EVIDENCE_REF: ${{ inputs.component_evidence_ref }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$COMPONENT_EVIDENCE_REF" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error::GATE_BLOCK: component evidence must be an exact immutable GHCR ref"
+            exit 2
+          fi
+          python3 quwoquan_ops/cli/prod/fetch_mainline_release_artifact.py \
+            --ref "$COMPONENT_EVIDENCE_REF" \
+            --output-dir "$QWQ_OUTPUT_ROOT/env/repo/runs/provider-release/component"
+      - id: component
+        name: Bind Provider execution to component image set
+        run: |
+          python3 quwoquan_ops/ci/provider_release_evidence.py identity \
+            --component-manifest "$QWQ_OUTPUT_ROOT/env/repo/runs/provider-release/component/manifest.json" \
+            --component-evidence-ref "${{ inputs.component_evidence_ref }}" \
+            --github-output "$GITHUB_OUTPUT"
+      - name: Execute canonical Alpha/Beta/Gamma stackctl matrix
+        run: |
+          set -euo pipefail
+          python3 quwoquan_ops/cli/stackctl.py matrix \
+            --profile local-env-gate \
+            --targets alpha-local,beta-local,gamma-local \
+            --release-attestation "$RELEASE_ATTESTATION" \
+            --rollback-release-attestation "$ROLLBACK_RELEASE_ATTESTATION" \
+            --nonprod-data-evidence "alpha-local=$ALPHA_NONPROD_DATA_EVIDENCE" \
+            --nonprod-data-evidence "beta-local=$BETA_NONPROD_DATA_EVIDENCE" \
+            --nonprod-data-evidence "gamma-local=$GAMMA_NONPROD_DATA_EVIDENCE" \
+            --ios-simulator-device "$IOS_SIMULATOR_DEVICE" \
+            --android-emulator-device "$ANDROID_EMULATOR_DEVICE" \
+            --android-physical-device "$ANDROID_PHYSICAL_DEVICE" \
+            --report-dir "$QWQ_OUTPUT_ROOT/env/repo/runs/provider-release/nonprod-matrix"
+      - name: Execute real Prod Remote Provider release cells
+        run: |
+          python3 quwoquan_ops/ci/provider_release_evidence.py execute-prod \
+            --component-manifest "$QWQ_OUTPUT_ROOT/env/repo/runs/provider-release/component/manifest.json" \
+            --component-evidence-ref "${{ inputs.component_evidence_ref }}" \
+            --report-dir "$QWQ_OUTPUT_ROOT/env/prod/runs/provider-release"
+      - id: package
+        name: Package only validated executed Provider evidence
+        run: |
+          python3 quwoquan_ops/ci/provider_release_evidence.py package \
+            --component-manifest "$QWQ_OUTPUT_ROOT/env/repo/runs/provider-release/component/manifest.json" \
+            --component-evidence-ref "${{ inputs.component_evidence_ref }}" \
+            --output-dir "$QWQ_OUTPUT_ROOT/env/repo/runs/provider-release/oci" \
+            --github-output "$GITHUB_OUTPUT"
+      - name: Setup Buildx for immutable evidence
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+        with:
+          version: v0.35.0
+          cache-binary: false
+          clean: false
+      - id: bundle
+        name: Publish executed Provider evidence OCI
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25
+        with:
+          context: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/runs/provider-release/oci
+          file: ${{ github.workspace }}/quwoquan_ops/ci/app_candidate_evidence.Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ghcr.io/${{ github.repository }}/provider-evidence:${{ github.run_id }}-${{ github.run_attempt }}
+          sbom: true
+          provenance: mode=max
+      - id: identity
+        name: Record exact executed Provider evidence ref
+        run: |
+          set -euo pipefail
+          DIGEST="${{ steps.bundle.outputs.digest }}"
+          [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          REF="ghcr.io/${{ github.repository }}/provider-evidence@$DIGEST"
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
+          {
+            echo "## Executed Provider release evidence"
+            echo "- ref: \`$REF\`"
+            echo "- candidate image digest: \`${{ steps.package.outputs.expected_image_digest }}\`"
+            echo "- executed evidence files: \`${{ steps.package.outputs.evidence_count }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

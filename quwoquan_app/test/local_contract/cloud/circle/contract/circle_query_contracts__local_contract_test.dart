@@ -69,19 +69,8 @@ void main() {
     });
 
     test('decodes detail, search and stats into typed slices', () {
-      final detail = decodeCircleProjection(<String, Object?>{
-        'id': 'circle-1',
-        'name': '城市露营',
-        'ownerId': 'persona-1',
-        'memberCount': 12,
-        'tags': <Object?>['户外', '周末'],
-        'status': 'active',
-        'visibility': 'public',
-        'joinPolicy': 'open',
-        'kind': 'interest',
-        'displaySubjectType': 'circle',
-      });
-      final search = decodeCircleSearchResultSlice(<String, Object?>{
+      final detail = Circle.fromWire(_circleWire());
+      final search = CircleSearchResultView.fromWire(<String, Object?>{
         'items': <Object?>[
           <String, Object?>{
             'circleId': 'circle-1',
@@ -99,17 +88,22 @@ void main() {
         ],
         'cursor': 'next',
       });
-      final stats = decodeCircleStatsSlice(<String, Object?>{
+      final stats = CircleStatsWire.fromWire(<String, Object?>{
+        'circleId': 'circle-1',
         'memberCount': 12,
         'postCount': 3,
+        'discussionCount': 2,
         'weeklyActiveCount': 8,
+        'likeCount': 5,
+        'storageUsedBytes': 1024,
+        'storageQuotaBytes': 4096,
       });
 
-      expect(detail.circleId, 'circle-1');
+      expect(detail.id, 'circle-1');
       expect(detail.tags, <String>['户外', '周末']);
-      expect(search.items.single.name, '城市露营');
-      expect(search.facetBuckets.single.facetCount, 1);
-      expect(search.nextCursor, 'next');
+      expect(search.items!.single.name, '城市露营');
+      expect(search.facetBuckets!.single.facetCount, 1);
+      expect(search.cursor, 'next');
       expect(stats.weeklyActiveCount, 8);
     });
 
@@ -117,32 +111,25 @@ void main() {
       final feed = decodeCircleFeedPageSlice(<String, Object?>{
         'items': <Object?>[
           <String, Object?>{
-            'circleId': 'circle-1',
-            'placementId': 'placement-1',
-            'postId': 'post-1',
-            'contentType': 'video',
+            ..._feedItemWire(contentType: 'video'),
             'title': '周末营地',
             'featured': true,
           },
         ],
         'cursor': null,
       });
-      final impact = decodeCircleImpactSlice(<String, Object?>{
+      final impact = CircleImpactSummary.fromWire(<String, Object?>{
         'circleId': 'circle-1',
         'total': 1,
         'items': <Object?>[
           <String, Object?>{
-            'helpType': 'connection',
-            'action': 'visit',
-            'count': 1,
-            'primaryText': '帮助一位同好找到营地',
-            'impactId': 'impact-1',
+            ..._impactItemWire(),
           },
         ],
       });
 
-      expect(feed.items.single.post.postId, 'post-1');
-      expect(feed.items.single.post.contentType, 'video');
+      expect(feed.items.single.postId, 'post-1');
+      expect(feed.items.single.contentType, 'video');
       expect(feed.items.single.circleId, 'circle-1');
       expect(feed.items.single.featured, isTrue);
       expect(impact.total, 1);
@@ -152,31 +139,17 @@ void main() {
     test('decodes aggregate discovery feed into circles and typed posts', () {
       final feed = decodeCircleDiscoveryFeedPageSlice(<String, Object?>{
         'circles': <Object?>[
-          <String, Object?>{
-            'id': 'circle-1',
-            'name': '城市露营',
-            'ownerId': 'persona-1',
-            'status': 'active',
-            'visibility': 'public',
-            'joinPolicy': 'open',
-            'kind': 'interest',
-            'displaySubjectType': 'circle',
-          },
+          _circleWire(),
         ],
         'items': <Object?>[
-          <String, Object?>{
-            'circleId': 'circle-1',
-            'placementId': 'placement-1',
-            'postId': 'post-1',
-            'contentType': 'image',
-          },
+          _feedItemWire(contentType: 'image'),
         ],
         'cursor': 'next',
       });
 
-      expect(feed.circles.single.circleId, 'circle-1');
-      expect(feed.items.single.post.postId, 'post-1');
-      expect(feed.nextCursor, 'next');
+      expect(feed.circles.single.id, 'circle-1');
+      expect(feed.items.single.postId, 'post-1');
+      expect(feed.cursor, 'next');
     });
 
     test('rejects feed items without required placementId', () {
@@ -195,3 +168,57 @@ void main() {
     });
   });
 }
+
+Map<String, Object?> _circleWire() => <String, Object?>{
+  'id': 'circle-1',
+  'name': '城市露营',
+  'ownerId': 'persona-1',
+  'memberCount': 12,
+  'postCount': 3,
+  'weeklyActiveCount': 8,
+  'version': 1,
+  'tags': <Object?>['户外', '周末'],
+  'status': 'active',
+  'visibility': 'public',
+  'joinPolicy': 'open',
+  'kind': 'interest',
+  'displaySubjectType': 'circle',
+  'followEnabled': true,
+  'autoSyncChat': true,
+  'storageUsedBytes': 1024,
+  'storageQuotaBytes': 4096,
+  'createdAt': '2026-08-01T00:00:00Z',
+  'updatedAt': '2026-08-01T00:00:00Z',
+};
+
+Map<String, Object?> _feedItemWire({required String contentType}) =>
+    <String, Object?>{
+      'circleId': 'circle-1',
+      'placementId': 'placement-1',
+      'postId': 'post-1',
+      'contentType': contentType,
+      'authorVerified': false,
+      'likeCount': 0,
+      'commentCount': 0,
+      'shareCount': 0,
+      'pinned': false,
+      'featured': false,
+    };
+
+Map<String, Object?> _impactItemWire() => <String, Object?>{
+  'helpType': 'connection',
+  'action': 'visit',
+  'intersectionDimension': 'interest',
+  'tagRef': 'tag:camping',
+  'source': 'circle_activity',
+  'count': 1,
+  'primaryText': '帮助一位同好找到营地',
+  'subtitleText': '城市露营',
+  'impactId': 'impact-1',
+  'primarySpans': <Object?>[],
+  'sampleVisuals': <Object?>[],
+  'actionHints': <Object?>[],
+  'evidenceSnapshotId': 'evidence-1',
+  'countObjectKind': 'circle',
+  'iconKey': 'connection',
+};

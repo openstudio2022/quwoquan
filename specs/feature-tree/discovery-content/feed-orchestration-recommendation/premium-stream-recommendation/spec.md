@@ -18,11 +18,11 @@
 - premium preset、质量分和交集融合排序。
 - 精品解释标题与 primaryText-only 呈现。
 - product-ops 全局精品池写入前置：global scope、质量准入、审计、过期、回滚和下架剔除。
-- P1d-2 content-service 精品池投影读取、PremiumPoolSource 场景门控、premium_pool recall path 和统一过滤。
+- `RecommendationCandidateIndexView` 消费精品池事件、`RankedRecommendationWindow` 以 `premium_pool` recall path 统一过滤和排序，Content 只对返回的 Post ID 做当前权限 hydration 与交付。
 
 ### Out of Scope
 
-- 未经 content-service 投影读取验收的 PremiumPoolSource 上线启用。
+- 未经 recommendation-service 候选投影重建、排序窗口和 Content 当前权限 hydration 验收的精品召回上线启用。
 - 同步 scorer 调用。
 - 深排平台、双塔 ANN、IPS/Thompson。
 - 第二套标签、实体、解释或 App 本地精品列表。
@@ -32,27 +32,27 @@
 <a id="req-001"></a>
 ### REQ-001 精品流式体验路由与解释契约
 
-- 精品流必须统一路由、排序与解释；全局精品必须先经 product-ops 写入，未启用 PremiumPoolSource 时不得返回伪精品结果。
+- 精品流必须统一路由、排序与解释；全局精品必须先经 product-ops 写入并由 Recommendation 消费 typed event，候选投影或排序窗口未闭合时不得返回伪精品结果。
 - premium_stream/similar 首刷必须读取当前环境 canonical active release snapshot；健康零 active release 或同 release eligible playable-video 计数为零时返回 canonical 成功空结果，依赖读取/绑定/硬过滤/召回/scorer/hydration 故障返回 `CONTENT.SYSTEM.required_dependency_unavailable`。任何成功空态都不能替代发布门要求的当前 release 非空可播放视频精品。
 
 <a id="req-002"></a>
 ### REQ-002 精品池全局召回读路径闭环
 
-- product-ops 写入、回滚、过期、下架状态可投影到 content-service 推荐读模型。
-- PremiumPoolSource 不同步调用 product-ops、质量模型、数据工程任务或 /score。
+- product-ops 写入、回滚、过期、下架状态经 typed event 投影到 recommendation-service 拥有的 `RecommendationCandidateIndexView`。
+- Recommendation 的精品候选读路径不同步调用 product-ops、质量模型、数据工程任务或 `/score`。
 - premium_pool 候选与其他召回源共享负反馈、下架、过期、频控、near-dup、作者屏蔽和类型屏蔽过滤。
-- disable_premium_pool_source 回滚开关生效时，精品流退回 premium preset + 通用候选，不退回圈内精选。
+- 精品候选策略回滚时，精品流只能使用当前 canonical policy 允许的通用候选，不得切换到圈内精选或 Content 本地排序副轨。
 - premium_pool 分桶进入 replay、AB、看板和告警归因。
 
 <a id="req-003"></a>
-### REQ-003 product-ops 全局精品池必须投影到 content-service 推荐读模型；PremiumPoolSource 只读该投影并以 RecallPath=premium_pool 进入 Engine，读路径不得同步调用 product-ops、质量模型、数据工程任务或 /score
+### REQ-003 product-ops 全局精品池必须投影到 RecommendationCandidateIndexView，并由 RankedRecommendationWindow 以 RecallPath=premium_pool 统一排序
 
-- product-ops 全局精品池必须投影到 content-service 推荐读模型；`PremiumPoolSource` 只读该投影并以 `RecallPath=premium_pool` 进入 Engine，读路径不得同步调用 product-ops、质量模型、数据工程任务或 `/score`。
-- PremiumPoolSource 启用前必须证明 product-ops 全局 featured/质量准入、审计、过期、回滚和下架剔除，并完成 content-service 投影读取。
-- `premium_pool` 候选必须与其他召回源共享负反馈、下架、过期、频控、near-dup、作者屏蔽和类型屏蔽过滤；回滚开关 `disable_premium_pool_source` 生效时精品流退回 premium preset + 通用候选，不退回圈内精选。
+- product-ops 全局精品池必须经 `PremiumPoolEntry` typed event 投影到 recommendation-service 拥有的 `RecommendationCandidateIndexView`；`RankedRecommendationWindow` 只读本服务候选投影并以 `RecallPath=premium_pool` 进入统一过滤与排序，不得同步调用 product-ops、质量模型、数据工程任务或 `/score`。
+- 精品召回启用前必须证明 product-ops 全局质量准入、审计、过期、回滚和下架剔除，并完成 Recommendation 候选投影重建、排序窗口与 Content hydration 验收。
+- `premium_pool` 候选必须与其他召回源共享负反馈、下架、过期、频控、near-dup、作者屏蔽和类型屏蔽过滤；回滚后只能使用当前 canonical policy 允许的通用候选，不退回圈内精选或 Content 本地排序。
 - `rm_premium_pool` 无 eligible 投影、投影过期、回滚、下架或质量准入失败时必须 fail closed，不能退回圈内 featured、普通 `Post.Featured` 或 App 本地列表。
 - `rm_premium_pool` 读取链健康且首刷确实无 eligible 候选时返回 canonical 成功空结果；投影读取、资格判定或同 release hydration 链异常仍 fail closed。
-- active supply 的 premium playable-video 计数必须复用 PremiumPoolSource 的 global/active/eligible/approved/quality/expiry/takedown 资格谓词，并进一步证明同一内容 ID 在 `rm_discovery_feed` 与 `posts` 均属于当前 `qwq_data` release、active lifecycle；`posts` 必须是 published/public/approved 的 `work + video` 且具有非空 video URL 与正时长。
+- active supply 的 premium playable-video 计数必须复用 Recommendation 候选投影的 global/active/eligible/approved/quality/expiry/takedown 资格谓词，并进一步证明同一内容 ID 在 Recommendation 候选索引与 Content 权威 Post 中均属于当前 `qwq_data` release 与 active lifecycle；Post 必须是 published/public/approved 的 `work + video` 且具有非空 video URL 与正时长。
 
 ## 4. 契约引用
 
@@ -74,9 +74,9 @@
 ### GWT-002 精品池全局召回读路径闭环
 
 - GIVEN product-ops 已写入 global scope、qualityAdmission=approved、未过期且未下架的精品条目。
-- GIVEN content-service 拥有内容 published/approved/visible 与推荐质量分投影。
+- GIVEN recommendation-service 已消费精品池事件并重建候选投影，Content 拥有 Post 当前 published/approved/visible 事实。
 - WHEN 用户进入 premium_stream/similar 精品流。
-- THEN content-service 只读本地精品池推荐投影，装配 RecallPath=premium_pool 候选并交给 Engine 统一过滤、排序和曝光治理。
+- THEN recommendation-service 从本地 `RecommendationCandidateIndexView` 装配 `RecallPath=premium_pool` 候选并交给 `RankedRecommendationWindow` 统一过滤和排序；Content 只对返回 Post ID 做当前权限 hydration、页面交付和交付曝光事实回传。
 - AND 健康零 eligible 视频返回 canonical 成功空结果；依赖异常返回 canonical failure 及闭集 `failureStage`。商业准出另行强制至少一条通过 release-bound supply、负反馈/隐藏/拉黑、published/safety、playable-video 与 same-release hydration 检查的当前 canonical release 视频。
 
 ## 6. 依赖
@@ -93,7 +93,7 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：路由、排序、解释、product-ops 全局精品写入前置和未启用 PremiumPoolSource 的边界均可测试。
+- 影响或价值：仍缺同一真实候选下路由、排序、解释、product-ops 准入和失效恢复的组合 `api_integration / user_acceptance` 证据；已有直接 `spec_ref` 锁定发布模式下非空精品供给与空结果信封。
 - 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效
 
 <a id="open-002"></a>
@@ -102,5 +102,5 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：product-ops 写入、回滚、过期、下架状态可投影到 content-service 推荐读模型。
+- 影响或价值：仍缺真实 event stream 上的写入、回滚、过期、下架重建对账，以及 `RankedRecommendationWindow` 到 Content hydration/交付的组合 `api_integration / user_acceptance` 证据；Recommendation 已有 `PremiumPoolEntry` durable consumer 与候选投影的本地合同证据。
 - 完成判定：`GWT-002` 对应行为满足且真实测试 `spec_ref` 有效

@@ -13,13 +13,15 @@
 ### In Scope
 
 - main 后单一受控 promotion 主链、OCI `ReleaseEvidenceManifest` 归档与不可提升预验证
-- prod-hosted ACK single-cluster + modular-monolith-first + 独立 Deployment + 托管数据面
+- prod-hosted ssh-hosted + rootless Podman 单一执行面，modular-monolith-first 工作负载图谱，托管数据面
+- 同一 `prod-hosted` 内 `cluster member × deployment instance × replica` 可重复部署与聚合 CAS
 - Strangler split-ready 拆分与契约不变
 - gamma-local 与 prod-hosted 工作负载图谱同构
 
 ### Out of Scope
 
 - 新增 beta-hosted / prod-gray 等额外环境名
+- 恢复 Kubernetes / ACK / `PROD_KUBECONFIG` / `kubectl` 作为第二发布执行面
 - 多业务容器共享 Pod / sidecar 承载领域职责 / 集群内自建数据库 StatefulSet 默认
 
 ## 3. Journey / Scenario 贡献
@@ -53,13 +55,17 @@
 - `gray-initial -> carry-on -> full` 之间的健康检查、只读集成探针、SLO gate 与 rollback 可验证；Provider、SFU、真实数据、观测和灾备证据未齐时不得启动正式 apply。
 
 <a id="req-002"></a>
-### REQ-002 ACK 集群部署形态（modular-monolith-first + split-ready）SIT
+### REQ-002 prod-hosted ssh-hosted 部署形态（modular-monolith-first + split-ready）SIT
 
-- `prod-hosted` 首发形态由各第一方服务自治 workload、external 实时/媒体 workload 和平台装配共同组成；不存在组合业务 `seed-box`，无 sidecar 承载领域职责。
-- 三层正交边界成立：领域服务=逻辑真相源，Deployment=部署单元，单 ACK 集群+共享节点池=物理资源；对外稳定标识是 Service 而非 Deployment。
+- `prod-hosted` 唯一执行后端是 `ssh-hosted` + 平面隔离 Linux 账号 + rootless Podman/compose/user systemd；禁止恢复 K8s/ACK/`kubectl`/`PROD_KUBECONFIG` 第二执行面。
+- 首发形态由各第一方服务自治 workload、external 实时/媒体 workload 和平台装配共同组成；不存在组合业务 `seed-box`，无 sidecar 承载领域职责。
+- 三层正交边界成立：领域服务是逻辑真相源，compose project / systemd unit 是部署单元，`cluster member`（SSH 主机）是物理执行面。
+- `prevalidate` / `gray` / `prod` 是同一 hosted 目标内的 deployment instance，不是环境枚举。
+- 拓扑真相源为 `quwoquan_ops/environments/prod/access-isolation.yaml` 的 `management.hosts` + `deploymentInstances.*.replicas`；单 member / 单 replica 是默认兼容形态，扩容只追加 host 与 co-located replica placement。
+- 正式 rollout 必须对每个 `hostId × plane × replicaId` 产出独立 runtime receipt，并由 service-plane hosted ledger 做聚合 CAS；任一成员缺失、失败或 digest 漂移不得推进 stage / 写入 `full` 成功事实。
 - 数据面采用固定小规格存算分离单主（PolarDB PostgreSQL / Tair / MongoDB 单主，不依赖 Serverless）+ 同 VPC 私网 + ExternalName/DSN 抽象 + Secret 注入；每域只连归属存储，无硬编码连接、无跨域直连。
 - Strangler 拆分前后，域级 API / route / Service 名 / 端侧配置 / 数据面归属完全不变。
-- `gamma-local` 与 `prod-hosted` 工作负载图谱（含数据面 Service 名/DSN 变量）同构；`stackctl` / workflow / ACK root 对同一 topology 解释一致。
+- `gamma-local` 与 `prod-hosted` 工作负载图谱（含数据面 Service 名/DSN 变量）同构；`stackctl` / workflow / topology resolver 对同一 workload 图谱解释一致。
 
 <a id="req-003"></a>
 ### REQ-003 统一验证 profile：`quwoquan_ops/environments/gamma/validation_suites.json` 统一定义 `pr_light / manual_full / nightly_full / release_candidate / mainline_auto_prod`
@@ -102,15 +108,17 @@
 - THEN 权威计时包含 runner 排队与矩阵长尾，600 秒软目标、1800 秒硬门和 1500 秒晋级截止均可验证。
 
 <a id="sit-002"></a>
-### SIT-002 ACK 集群部署形态（modular-monolith-first + split-ready）SIT
+### SIT-002 prod-hosted ssh-hosted 部署形态（modular-monolith-first + split-ready）SIT
 
-- GIVEN 执行“ACK 集群部署形态（modular monolith first + split ready）”所需的身份、输入与上游事实均有效。
-- WHEN 参与者发起“ACK 集群部署形态（modular monolith first + split ready）”对应动作。
+- GIVEN 执行“prod-hosted ssh-hosted 部署形态（modular monolith first + split ready）”所需的身份、输入与上游事实均有效。
+- WHEN 参与者发起“prod-hosted ssh-hosted 部署形态（modular monolith first + split ready）”对应动作。
 - THEN `prod-hosted` 从服务自治部署入口扫描装配第一方 workload，实时/媒体 external workload 独立归 Ops，且不存在组合业务 `seed-box` 或承载领域职责的 sidecar。
-- THEN 三层正交边界成立：领域服务=逻辑真相源，Deployment=部署单元，单 ACK 集群+共享节点池=物理资源；对外稳定标识是 Service 而非 Deployment。
+- THEN 执行面仅为 SSH + rootless Podman；`stackctl prod-hosted-plan` / `deploy_to_prod.sh` 按 `host × deployment instance × replica` 迭代，单 host 默认仍可解析。
+- THEN 每个 placement 有独立 remote root / compose project / systemd unit / config ACK identity；gray 与 prod placement 共置匹配以便本机 gray router handoff。
+- THEN 正式 ledger commit 的 `postChecks` 覆盖全部期望 placement；部分成功不得聚合 CAS。
 - THEN 数据面采用固定小规格存算分离单主（PolarDB PostgreSQL / Tair / MongoDB 单主，不依赖 Serverless）+ 同 VPC 私网 + ExternalName/DSN 抽象 + Secret 注入；每域只连归属存储，无硬编码连接、无跨域直连。
 - THEN Strangler 拆分前后，域级 API / route / Service 名 / 端侧配置 / 数据面归属完全不变。
-- THEN `gamma-local` 与 `prod-hosted` 工作负载图谱（含数据面 Service 名/DSN 变量）同构；`stackctl` / workflow / ACK root 对同一 topology 解释一致。
+- THEN `gamma-local` 与 `prod-hosted` 工作负载图谱（含数据面 Service 名/DSN 变量）同构；`stackctl` / workflow / topology resolver 对同一 workload 图谱解释一致。
 
 ## 8. 开放事项
 
@@ -125,11 +133,11 @@
 - 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效
 
 <a id="open-002"></a>
-### OPEN-002 ACK 集群部署形态（modular-monolith-first + split-ready）SIT
+### OPEN-002 prod-hosted 多 member 真实远端放量
 
-- 类型：`capability_gap`
+- 类型：`external_blocker`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`。
-- 目标：`prod-hosted` 的每个第一方 workload 都有唯一服务 owner，可独立构建、验证、发布和回滚，且无组合业务 `seed-box`。
-- 完成判定：`SIT-002` 对应行为满足且真实测试 `spec_ref` 有效
+- 影响或价值：仓内已具备多 host/replica plan、渲染 identity、部署迭代与聚合 CAS 合同；真实第二台 ECS、平面 SSH 凭据与一次完整 `gray-initial → carry-on → full` 仍缺。
+- 目标：在声明 ≥2 个 `management.hosts` 与匹配 replica placement 的前提下，用真实 SSH 完成多 member 发布、逐 host receipt 与 ledger 聚合 CAS。
+- 完成判定：`SIT-002` 对应 live 行为满足且真实测试 `spec_ref` 有效

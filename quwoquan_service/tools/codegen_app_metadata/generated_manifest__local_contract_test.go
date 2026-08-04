@@ -8,7 +8,7 @@ import (
 
 func TestGeneratedManifestRetiresOnlyUntrackedGeneratedOutputs(t *testing.T) {
 	appRoot := t.TempDir()
-	beginGeneratedManifest(appRoot, "canonical-graph")
+	beginGeneratedManifestForTest(t, appRoot, "canonical-graph")
 	generatedRoot := filepath.Join(
 		appRoot,
 		"lib",
@@ -45,4 +45,17 @@ func TestGeneratedManifestRetiresOnlyUntrackedGeneratedOutputs(t *testing.T) {
 	if _, err := os.Stat(stale); !os.IsNotExist(err) {
 		t.Fatalf("stale generated output still exists: %v", err)
 	}
+}
+
+func beginGeneratedManifestForTest(t *testing.T, appRoot, graphSHA256 string) {
+	t.Helper()
+	previousRoot := generatedManifestAppRoot
+	previousGraph := generatedManifestGraph
+	previousOutputs := generatedManifestOutputs
+	beginGeneratedManifest(appRoot, graphSHA256)
+	t.Cleanup(func() {
+		generatedManifestAppRoot = previousRoot
+		generatedManifestGraph = previousGraph
+		generatedManifestOutputs = previousOutputs
+	})
 }

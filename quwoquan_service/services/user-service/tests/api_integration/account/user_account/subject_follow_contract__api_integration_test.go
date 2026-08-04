@@ -67,12 +67,12 @@ func TestSubjectFollow_FullChain(t *testing.T) {
 	}
 
 	var (
-		receiptPersonaID       string
-		receiptJSONPersonaID   string
-		receiptHasLegacyTop    bool
-		receiptHasLegacyNested bool
-		receiptTopKeyCount     int
-		receiptFollowKeyCount  int
+		receiptPersonaID        string
+		receiptJSONPersonaID    string
+		receiptHasRetiredTop    bool
+		receiptHasRetiredNested bool
+		receiptTopKeyCount      int
+		receiptFollowKeyCount   int
 	)
 	if err := pgPool.QueryRow(ctx, `
 		SELECT persona_id,
@@ -87,33 +87,33 @@ func TestSubjectFollow_FullChain(t *testing.T) {
 	).Scan(
 		&receiptPersonaID,
 		&receiptJSONPersonaID,
-		&receiptHasLegacyTop,
-		&receiptHasLegacyNested,
+		&receiptHasRetiredTop,
+		&receiptHasRetiredNested,
 		&receiptTopKeyCount,
 		&receiptFollowKeyCount,
 	); err != nil {
 		t.Fatalf("query subject follow receipt: %v", err)
 	}
 	if receiptPersonaID != "ps_sf_1" || receiptJSONPersonaID != "ps_sf_1" ||
-		receiptHasLegacyTop || receiptHasLegacyNested ||
+		receiptHasRetiredTop || receiptHasRetiredNested ||
 		receiptTopKeyCount != 4 || receiptFollowKeyCount != 8 {
 		t.Fatalf(
-			"subject follow receipt is not canonical: persona=%q jsonPersona=%q legacyTop=%t legacyNested=%t topKeys=%d followKeys=%d",
+			"subject follow receipt is not canonical: persona=%q jsonPersona=%q retiredTop=%t retiredNested=%t topKeys=%d followKeys=%d",
 			receiptPersonaID,
 			receiptJSONPersonaID,
-			receiptHasLegacyTop,
-			receiptHasLegacyNested,
+			receiptHasRetiredTop,
+			receiptHasRetiredNested,
 			receiptTopKeyCount,
 			receiptFollowKeyCount,
 		)
 	}
 
 	var (
-		outboxEventName     string
-		outboxAggregateID   string
-		outboxVersion       int64
-		outboxPersonaID     string
-		outboxHasLegacyName bool
+		outboxEventName      string
+		outboxAggregateID    string
+		outboxVersion        int64
+		outboxPersonaID      string
+		outboxHasRetiredName bool
 	)
 	if err := pgPool.QueryRow(ctx, `
 		SELECT event_name, aggregate_id, aggregate_version,
@@ -126,20 +126,20 @@ func TestSubjectFollow_FullChain(t *testing.T) {
 		&outboxAggregateID,
 		&outboxVersion,
 		&outboxPersonaID,
-		&outboxHasLegacyName,
+		&outboxHasRetiredName,
 	); err != nil {
 		t.Fatalf("query subject follow outbox: %v", err)
 	}
 	if outboxEventName != "SubjectFollowStateChanged" ||
 		outboxAggregateID != aggregateID || outboxVersion != 1 ||
-		outboxPersonaID != "ps_sf_1" || outboxHasLegacyName {
+		outboxPersonaID != "ps_sf_1" || outboxHasRetiredName {
 		t.Fatalf(
-			"subject follow outbox is not canonical: event=%q aggregate=%q version=%d persona=%q legacy=%t",
+			"subject follow outbox is not canonical: event=%q aggregate=%q version=%d persona=%q retired=%t",
 			outboxEventName,
 			outboxAggregateID,
 			outboxVersion,
 			outboxPersonaID,
-			outboxHasLegacyName,
+			outboxHasRetiredName,
 		)
 	}
 
@@ -445,7 +445,7 @@ func TestSubjectFollow_RejectsNonCanonicalReceiptWithoutMutation(t *testing.T) {
 	)
 
 	const idempotencyKey = "subject-follow-noncanonical-receipt"
-	legacyReceipt := mustJSON(t, map[string]any{
+	noncanonicalReceipt := mustJSON(t, map[string]any{
 		"Follow": map[string]any{
 			"ID":          "sf_noncanonical_receipt",
 			"PersonaID":   "ps_sf_receipt_reject",
@@ -469,7 +469,7 @@ func TestSubjectFollow_RejectsNonCanonicalReceiptWithoutMutation(t *testing.T) {
 			'ps_sf_receipt_reject', $1, 'FollowSubject',
 			'sf_noncanonical_receipt', 1, $2::jsonb
 		)
-	`, idempotencyKey, legacyReceipt); err != nil {
+	`, idempotencyKey, noncanonicalReceipt); err != nil {
 		t.Fatalf("seed non-canonical subject follow receipt: %v", err)
 	}
 

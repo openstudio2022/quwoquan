@@ -212,7 +212,7 @@ func TestCircleGroupBindingIsUniquelyPersistedAcrossReplay(t *testing.T) {
 	}
 }
 
-func TestEnsureIndexesCreatesCurrentCircleGroupIndexIdempotently(t *testing.T) {
+func TestEnsureIndexesCreatesCanonicalCircleGroupIndexIdempotently(t *testing.T) {
 	ctx := context.Background()
 	upgradeDB := mongoClient.Database("chat_circle_group_index_upgrade")
 	t.Cleanup(func() {
@@ -283,7 +283,7 @@ func TestEnsureIndexesFailsClosedForDuplicateCircleGroupBindings(t *testing.T) {
 	}
 }
 
-func TestEnsureIndexesConvergesUnderConcurrentCurrentAssembly(t *testing.T) {
+func TestEnsureIndexesConvergesUnderConcurrentCanonicalAssembly(t *testing.T) {
 	ctx := context.Background()
 	upgradeDB := mongoClient.Database("chat_circle_group_index_concurrent")
 	t.Cleanup(func() {

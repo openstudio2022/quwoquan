@@ -96,7 +96,7 @@ void main() {
       final result = await completed.future.timeout(const Duration(seconds: 5));
 
       final init = media.initCommands.single;
-      expect(init.mediaType, ContentMediaType.video);
+      expect(init.mediaType, MediaType.video);
       expect(init.mimeType, 'video/mp4');
       expect(init.fileSize, bytes.length);
       expect(init.expectedSha256, '${sha256.convert(bytes)}');

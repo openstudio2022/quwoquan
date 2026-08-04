@@ -146,13 +146,14 @@ def _commons_images(
                 return images
     return images
 
-def _commons_images_for_titles(
+def commons_images_for_titles(
     titles: list[str],
     *,
     entity_id: str,
     entity_aliases: list[str] | tuple[str, ...] = (),
     limit: int = 8,
     collection_page_url: str = "",
+    require_metadata_entity_match: bool = True,
 ) -> list[dict[str, Any]]:
     normalized: list[str] = []
     seen_titles: set[str] = set()
@@ -207,7 +208,7 @@ def _commons_images_for_titles(
             ((meta.get("ImageDescription") or {}).get("value") or "")
             or str(page.get("title") or "")
         )
-        if entity_id and not _text_mentions_entity(
+        if require_metadata_entity_match and entity_id and not _text_mentions_entity(
             description,
             entity_id,
             entity_aliases=entity_aliases,
@@ -272,7 +273,7 @@ def _commons_category_images(
     rows = ((data.get("query") or {}).get("categorymembers") or [])
     titles = [str(row.get("title") or "") for row in rows if isinstance(row, dict)]
     page_url = f"https://commons.wikimedia.org/wiki/{urllib.parse.quote(title.replace(' ', '_'))}"
-    return _commons_images_for_titles(
+    return commons_images_for_titles(
         titles,
         entity_id=entity_id,
         entity_aliases=entity_aliases,
@@ -289,7 +290,7 @@ def _wikidata_commons_images(
 ) -> list[dict[str, Any]]:
     claims = _wikidata_claims(qid)
     titles = _claim_string_values(claims, "P18")
-    images = _commons_images_for_titles(
+    images = commons_images_for_titles(
         titles,
         entity_id=entity_id,
         entity_aliases=entity_aliases,

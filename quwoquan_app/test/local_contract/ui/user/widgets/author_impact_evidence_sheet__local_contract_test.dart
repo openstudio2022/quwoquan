@@ -7,14 +7,10 @@ library;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_evidence_item.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_evidence_page.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_item.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_visual.g.dart';
 import 'package:quwoquan_app/components/object_page/intersection_visual_cluster.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/ui/user/widgets/author_impact_evidence.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import '../../../../support/fixtures/author_impact_fixtures.dart';
 
 AuthorImpactItem _item({List<IntersectionVisual> samples = const []}) {
@@ -125,6 +121,7 @@ void main() {
               'e0',
               '有人收藏了《城市夜骑指南》',
               target: IntersectionTarget(
+                objectType: 'post',
                 objectId: 'post_9',
                 objectKind: 'place',
                 routeId: 'homepageDetail',
@@ -223,8 +220,10 @@ void main() {
               samples: <IntersectionVisual>[
                 IntersectionVisual(
                   assetKind: 'avatar',
+                  imageUrl: '',
                   displayName: '阿岚',
                   target: IntersectionTarget(
+                    objectType: 'user',
                     objectId: 'u_alan',
                     objectKind: 'person',
                     routeId: 'userProfile',

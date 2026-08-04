@@ -109,7 +109,11 @@ case "$WORKLOAD" in
     if [[ "${QWQ_DEBUG_SMS_SUBSTITUTE_ENABLED:-false}" == "true" ]]; then
       debug_sms_profile=",debug-sms-substitute"
     fi
-    export COMPOSE_PROFILES="${COMPOSE_PROFILES:+${COMPOSE_PROFILES},}commercial-observability,assistant-runtime,edge-media${debug_sms_profile}"
+    debug_provider_profile=""
+    if [[ "${QWQ_DEBUG_PROVIDER_SUBSTITUTE_ENABLED:-false}" == "true" ]]; then
+      debug_provider_profile=",debug-provider-substitute"
+    fi
+    export COMPOSE_PROFILES="${COMPOSE_PROFILES:+${COMPOSE_PROFILES},}commercial-observability,assistant-runtime,edge-media${debug_sms_profile}${debug_provider_profile}"
     ;;
   *)
     echo "[local-gamma] FAIL: QWQ_WORKLOAD must be content-release, content-commercial or full" >&2
@@ -184,6 +188,9 @@ else
   COMPOSE_FILES+=("$ROOT/quwoquan_service/control-plane/platform-ops/deploy/compose.yaml")
   if [[ "${QWQ_DEBUG_SMS_SUBSTITUTE_ENABLED:-false}" == "true" ]]; then
     COMPOSE_FILES+=("$ROOT/quwoquan_ops/external/sms-provider-substitute/deploy/compose.yaml")
+  fi
+  if [[ "${QWQ_DEBUG_PROVIDER_SUBSTITUTE_ENABLED:-false}" == "true" ]]; then
+    COMPOSE_FILES+=("$ROOT/quwoquan_ops/external/provider-protocol-substitute/deploy/compose.yaml")
   fi
 fi
 if [[ "$WORKLOAD" == "full" || "$WORKLOAD" == "content-commercial" ]]; then
@@ -360,7 +367,6 @@ if [[ -n "${QWQ_LOCAL_MANAGED_CA_FILE:-}" ]]; then
 fi
 LOCAL_GAMMA_MODEL_CACHE_ROOT="${LOCAL_GAMMA_CACHE_ROOT}/model"
 LOCAL_GAMMA_PORTAL_ROOT="${LOCAL_GAMMA_PORTAL_ROOT:-${QWQ_DEPLOY_WORK_ROOT}/${QWQ_LOCAL_RELEASE_TARGET}/build/ops-portal}"
-LOCAL_GAMMA_STACK_STATUS_REPORT="${LOCAL_GAMMA_PROCESS_ROOT}/stack_status.json"
 STAGE="${STAGE:-$QWQ_LOCAL_RELEASE_ENV}"
 LOCAL_GAMMA_APP_ENV="${LOCAL_GAMMA_APP_ENV:-}"
 CONFIG_SOURCE_ENV="${CONFIG_SOURCE_ENV:-}"
@@ -453,16 +459,23 @@ export LOCAL_GAMMA_GO_BOOKWORM_IMAGE="${LOCAL_GAMMA_GO_BOOKWORM_IMAGE:-$(library
 export LOCAL_GAMMA_CADDY_IMAGE="${LOCAL_GAMMA_CADDY_IMAGE:-$(library_image caddy:2.8.4-alpine)}"
 export LOCAL_GAMMA_MINIO_IMAGE="${LOCAL_GAMMA_MINIO_IMAGE:-minio/minio:RELEASE.2025-04-22T22-12-26Z}"
 export LOCAL_GAMMA_MINIO_MC_IMAGE="${LOCAL_GAMMA_MINIO_MC_IMAGE:-minio/mc:RELEASE.2025-03-12T17-29-24Z}"
+# Product Ops compose 通过 env 插值绑定本地 ES；缺省会让 log-sink 启动失败。
+export PRODUCT_OPS_ELASTICSEARCH_ENDPOINT="${PRODUCT_OPS_ELASTICSEARCH_ENDPOINT:-http://elasticsearch:9200}"
+
 # ES 镜像来自 elastic 官方 registry（非 docker.io/library），不经 library_image 前缀。
-export LOCAL_GAMMA_ELASTICSEARCH_IMAGE="${LOCAL_GAMMA_ELASTICSEARCH_IMAGE:-docker.elastic.co/elasticsearch/elasticsearch@sha256:f455c50fb82017dae23878c1b12fb2188dfb984723d62db2c5bd0c1f78e246f0}"
+# Compose 通过 export_service_compose_environment 消费为 QWQ_COMPOSE_ELASTICSEARCH_IMAGE。
+# arm64 必须钉平台 manifest，禁止回落到 amd64-only digest（会在 Docker Desktop 上 ~1s exited）。
 case "$(uname -m)" in
   arm64|aarch64)
+    export LOCAL_GAMMA_ELASTICSEARCH_IMAGE="${LOCAL_GAMMA_ELASTICSEARCH_IMAGE:-docker.elastic.co/elasticsearch/elasticsearch@sha256:5af05323c9bfc52fcee63a47c682412a6ef5955ac85966f045a68ba8623db2e1}"
     # Apple Silicon 的 Colima/VZ 会向 bundled JDK 报告 guest 无法执行的
     # SVE；ES CLI bootstrap 与运行时都必须在 Elasticsearch 启动前禁用它。
     export LOCAL_GAMMA_ELASTICSEARCH_CLI_JAVA_OPTS="${LOCAL_GAMMA_ELASTICSEARCH_CLI_JAVA_OPTS:--XX:UseSVE=0}"
     export LOCAL_GAMMA_ELASTICSEARCH_JAVA_OPTS="${LOCAL_GAMMA_ELASTICSEARCH_JAVA_OPTS:--XX:UseSVE=0 -Xms512m -Xmx512m}"
     ;;
   *)
+    # ES 8.13.4 multi-arch index digest（amd64+arm64）；非 arm 主机由 Docker 选原生层。
+    export LOCAL_GAMMA_ELASTICSEARCH_IMAGE="${LOCAL_GAMMA_ELASTICSEARCH_IMAGE:-docker.elastic.co/elasticsearch/elasticsearch@sha256:dfd318b417be1356d9c7fdd6a5577c8a45553ac9d34354929a416c69c85daa9f}"
     export LOCAL_GAMMA_ELASTICSEARCH_CLI_JAVA_OPTS="${LOCAL_GAMMA_ELASTICSEARCH_CLI_JAVA_OPTS:-}"
     export LOCAL_GAMMA_ELASTICSEARCH_JAVA_OPTS="${LOCAL_GAMMA_ELASTICSEARCH_JAVA_OPTS:--Xms512m -Xmx512m}"
     ;;
@@ -516,7 +529,6 @@ purge_rebuildable_state=0
 print_env=0
 down=0
 tunnel_pid_file="${LOCAL_GAMMA_PROCESS_ROOT}/colima-tunnels.pids"
-stack_report="${LOCAL_GAMMA_STACK_STATUS_REPORT}"
 gamma_proxy_ensure_attempts=0
 compose_up_timed_out=0
 compose_build_timed_out=0
@@ -671,9 +683,18 @@ start_colima_tunnels_if_needed() {
   local http_port="${LOCAL_GAMMA_HTTP_PORT:-19000}"
   local product_ops_port="${LOCAL_GAMMA_PRODUCT_OPS_PORT:-19010}"
   local media_edge_port="${LOCAL_GAMMA_MEDIA_EDGE_PORT:-19100}"
-  # user-service 直连健康探针（wait_local_gamma_host_ready）使用 user_port，必须同步开隧道，
-  # 否则 colima 下 host 无法直达 user-service 发布端口，host 就绪探测会卡死。
+  # Direct service health probes (stackctl up + ship content-import readiness)
+  # need Colima tunnels; otherwise host curl to 127.0.0.1:<service-port> fails.
   local user_port="${LOCAL_GAMMA_USER_PORT:-19210}"
+  local product_ops_service_port="${LOCAL_GAMMA_PRODUCT_OPS_SERVICE_PORT:-19250}"
+  local content_port="${LOCAL_GAMMA_CONTENT_PORT:-19220}"
+  local entity_port="${LOCAL_GAMMA_ENTITY_PORT:-19290}"
+  local recommendation_port="${LOCAL_GAMMA_REC_MODEL_PORT:-19240}"
+  # Data CLI ship import uses host-side Postgres/Mongo/Redis/ES topology ports.
+  local postgres_port="${LOCAL_GAMMA_POSTGRES_PORT:-19400}"
+  local mongo_port="${LOCAL_GAMMA_MONGO_PORT:-19410}"
+  local redis_port="${LOCAL_GAMMA_REDIS_PORT:-19420}"
+  local elasticsearch_port="${LOCAL_GAMMA_ES_PORT:-${QWQ_COMPOSE_ELASTICSEARCH_PORT:-19430}}"
   local ssh_config="${QWQ_DEPLOY_WORK_ROOT}/${QWQ_LOCAL_RELEASE_TARGET}/runtime/colima-ssh-config"
   mkdir -p \
     "${LOCAL_GAMMA_PROCESS_ROOT}" \
@@ -684,7 +705,20 @@ start_colima_tunnels_if_needed() {
   stop_colima_tunnels
   colima ssh-config > "$ssh_config"
   : > "$tunnel_pid_file"
-  for port in "$http_port" "$product_ops_port" "$media_edge_port" "$user_port"; do
+  for port in \
+    "$http_port" \
+    "$product_ops_port" \
+    "$media_edge_port" \
+    "$user_port" \
+    "$product_ops_service_port" \
+    "$content_port" \
+    "$entity_port" \
+    "$recommendation_port" \
+    "$postgres_port" \
+    "$mongo_port" \
+    "$redis_port" \
+    "$elasticsearch_port"
+  do
     if host_port_open "$port"; then
       continue
     fi
@@ -1344,6 +1378,7 @@ compose_build_services=(
   circle-service
   integration-service
   notification-service
+  travel-service
 )
 if [[ "$PRODUCT_OPS_REQUIRED" != "1" ]]; then
   filtered_build_services=()
@@ -1700,6 +1735,8 @@ if [[ "$podman_compose" == "1" ]]; then
     -e MONGODB_URI=mongodb://mongodb:27017 -e MONGODB_DATABASE=quwoquan_user \
     -e TAG_MONGO_URI=mongodb://mongodb:27017 -e TAG_MONGO_DATABASE=quwoquan_tag \
     -e REDIS_ADDR=redis:6379 \
+    -e USER_CARRIER_ONE_TAP_SUBSTITUTE_ENDPOINT \
+    -e USER_FEDERATED_IDENTITY_SUBSTITUTE_ENDPOINT \
     -e ALIYUN_DYPNS_ENDPOINT \
     -e ALIYUN_DYPNS_ACCESS_KEY_ID \
     -e ALIYUN_DYPNS_ACCESS_KEY_SECRET \
@@ -1730,9 +1767,10 @@ if [[ "$podman_compose" == "1" ]]; then
     -e CONFIG_ROOT=/etc/qwq-config -e CONFIG_VERSION="$CONFIG_VERSION" \
     -e IMAGE_VERSION="$LOCAL_GAMMA_IMAGE_VERSION" -e INTEGRATION_SERVICE_ADDR=:18086 \
     -e INTEGRATION_MONGO_URI=mongodb://mongodb:27017 -e INTEGRATION_MONGO_DATABASE=quwoquan_integration \
-    -e INTEGRATION_PUSH_ENABLED=true \
     -e INTEGRATION_SMS_ENDPOINT \
     -e INTEGRATION_SMS_TOKEN \
+    -e INTEGRATION_PUSH_SUBSTITUTE_ENDPOINT \
+    -e INTEGRATION_LOCATION_FIXTURE_BASE_URL \
     -e OTP_CODE_REF_KEYS_JSON \
     -e INTEGRATION_SERVICE_MTLS_CA_FILE \
     -e INTEGRATION_SERVICE_MTLS_CLIENT_CERT_FILE \
@@ -2156,14 +2194,59 @@ wait_local_gamma_host_ready() {
     sleep 2
   done
   echo "[local-gamma] FAIL: host cannot reach required Remote service health probes within ${HOST_READY_TIMEOUT_SECONDS}s" >&2
-  curl -fsS "https://${gw_host}:${gw_port}/healthz" >&2 || true
-  gamma_product_ops_ready >&2 || true
-  curl -fsS "https://${media_host}:${media_edge_port}/healthz" >&2 || true
-  curl -fsS "https://${video_host}:${media_edge_port}/healthz" >&2 || true
+  probe_one() {
+    local name="$1"
+    shift
+    local body=""
+    if body="$("$@" 2>/dev/null)"; then
+      echo "[local-gamma] probe ${name}: OK ${body}" >&2
+      return 0
+    fi
+    echo "[local-gamma] probe ${name}: FAIL" >&2
+    return 1
+  }
+  probe_one gateway curl -fsS "https://${gw_host}:${gw_port}/healthz" || true
+  if [[ "$PRODUCT_OPS_REQUIRED" == "1" ]]; then
+    probe_one product-ops-public curl -fsS "${PRODUCT_OPS_BASE_URL%/}/healthz" || true
+  else
+    echo "[local-gamma] probe product-ops-public: SKIP" >&2
+  fi
+  probe_one media-image curl -fsS "https://${media_host}:${media_edge_port}/healthz" || true
+  probe_one media-video curl -fsS "https://${video_host}:${media_edge_port}/healthz" || true
+  if [[ "$PRODUCT_OPS_REQUIRED" == "1" ]]; then
+    probe_one product-ops-service curl -fsS "http://127.0.0.1:${po_port}/healthz" || true
+  else
+    echo "[local-gamma] probe product-ops-service: SKIP" >&2
+  fi
+  if [[ "$WORKLOAD" == "content-release" || "$WORKLOAD" == "content-commercial" ]]; then
+    echo "[local-gamma] probe platform-ops-service: SKIP" >&2
+  else
+    probe_one platform-ops-service curl -fsS "http://127.0.0.1:${LOCAL_GAMMA_PLATFORM_OPS_SERVICE_PORT:-19260}/healthz" || true
+  fi
+  probe_one user-service curl -fsS "http://127.0.0.1:${user_port}/healthz" || true
+  if [[ "$WORKLOAD" == "content-release" || "$WORKLOAD" == "content-commercial" ]]; then
+    echo "[local-gamma] probe integration/notification/tag: SKIP" >&2
+  else
+    probe_one integration-service curl -fsS "http://127.0.0.1:${integration_port}/healthz" || true
+    probe_one notification-service curl -fsS "http://127.0.0.1:${notification_port}/healthz" || true
+    probe_one tag-service curl -fsS "http://127.0.0.1:${tag_port}/healthz" || true
+  fi
   docker compose -p "$LOCAL_GAMMA_COMPOSE_PROJECT_NAME" "${COMPOSE_FILE_ARGS[@]}" ps >&2 || true
-  curl -fsS "http://127.0.0.1:${integration_port}/healthz" >&2 || true
-  curl -fsS "http://127.0.0.1:${notification_port}/healthz" >&2 || true
-  docker compose -p "$LOCAL_GAMMA_COMPOSE_PROJECT_NAME" "${COMPOSE_FILE_ARGS[@]}" logs --tail 80 gamma-proxy api-edge content-service entity-service product-ops-service platform-ops-service user-service integration-service notification-service >&2 || true
+  # Dump failed-first-party services before transactional teardown so deep
+  # /readyz and crash exits remain inspectable in the up receipt.
+  docker compose -p "$LOCAL_GAMMA_COMPOSE_PROJECT_NAME" "${COMPOSE_FILE_ARGS[@]}" logs --tail 120 \
+    gamma-proxy api-edge content-service entity-service product-ops-service platform-ops-service \
+    user-service integration-service notification-service search-service travel-service assistant-service \
+    chat-service recommendation-service realtime-gateway rtc-service tag-service >&2 || true
+  for svc in search-service travel-service assistant-service user-service integration-service notification-service tag-service platform-ops-service product-ops-service; do
+    cname=$(docker compose -p "$LOCAL_GAMMA_COMPOSE_PROJECT_NAME" "${COMPOSE_FILE_ARGS[@]}" ps -q "$svc" 2>/dev/null | head -1 || true)
+    if [[ -n "$cname" ]]; then
+      echo "[local-gamma] inspect Health ${svc}:" >&2
+      docker inspect --format 'status={{.State.Status}} health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}} exit={{.State.ExitCode}}' "$cname" >&2 || true
+      docker inspect --format '{{json .State.Health}}' "$cname" >&2 || true
+      docker inspect --format 'networks={{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}} bindings={{json .HostConfig.PortBindings}} published={{json .NetworkSettings.Ports}}' "$cname" >&2 || true
+    fi
+  done
   return 1
 }
 wait_local_gamma_host_ready
@@ -2175,70 +2258,6 @@ echo "[local-gamma] FilterCatalog release is an explicit post-start release gate
 
 echo "[local-gamma] immutable release activation owns business data and search projections; no environment seed path is available"
 
-PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 - "$stack_report" "${QWQ_RELEASE_CANDIDATE_DIGEST:-}" "$CONFIG_VERSION" "$IMAGE_VERSION" "$STAGE" "$LOCAL_GAMMA_APP_ENV" "$CONFIG_SOURCE_ENV" "$GATEWAY_BASE_URL" "$PRODUCT_OPS_BASE_URL" "$MEDIA_IMAGE_BASE_URL" "$restarted_from_previous" "$WORKLOAD" <<'PY'
-import json
-import os
-import sys
-from datetime import datetime, timezone
-from pathlib import Path
-
-from quwoquan_ops.cli.lib.immutable_image_composition import (
-    first_party_service_names,
-    immutable_image_digest,
-    local_release_image_environment_key,
-)
-
-(
-    report_path,
-    candidate_digest,
-    configuration_digest,
-    image_transport_tag,
-    stage,
-    runtime_env,
-    config_env,
-    gateway,
-    product_ops,
-    media,
-    restarted,
-    workload,
-) = sys.argv[1:13]
-image_refs = {
-    service: os.environ[local_release_image_environment_key(service)]
-    for service in first_party_service_names()
-}
-derived_image_version = immutable_image_digest(image_refs)
-if derived_image_version != image_transport_tag:
-    raise SystemExit(
-        "[local-release] GATE_BLOCK: runtime receipt image composition drifted"
-    )
-payload = {
-    "status": "passed",
-    "workload": workload,
-    "serviceMode": "single-stack",
-    "restartedFromPrevious": restarted == "1",
-    "stage": stage,
-    "candidateDigest": candidate_digest or None,
-    "configurationDigest": configuration_digest,
-    "imageTransportTag": image_transport_tag,
-    "imageComposition": {
-        "imageVersion": derived_image_version,
-        "images": {
-            service: {"ref": ref}
-            for service, ref in sorted(image_refs.items())
-        },
-    },
-    "composeProject": os.environ["LOCAL_GAMMA_COMPOSE_PROJECT_NAME"],
-    "runtimeEnv": runtime_env,
-    "configEnv": config_env,
-    "gatewayBaseUrl": gateway,
-    "productOpsBaseUrl": product_ops,
-    "mediaEdgeBaseUrl": media,
-    "generatedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-}
-path = Path(report_path)
-path.parent.mkdir(parents=True, exist_ok=True)
-path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-PY
 write_startup_attempt running
 STARTUP_ATTEMPT_RUNNING=1
 

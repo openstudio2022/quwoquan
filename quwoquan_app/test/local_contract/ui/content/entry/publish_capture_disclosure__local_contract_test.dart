@@ -37,11 +37,11 @@ void main() {
     });
 
     test('早于本能力的草稿缺少该键时按默认全开恢复', () {
-      final legacy = PublishSettings.fromMap(<String, dynamic>{
+      final missingDisclosure = PublishSettings.fromMap(<String, dynamic>{
         'visibility': 'public',
       });
 
-      expect(legacy.captureDisclosure, kDefaultCaptureDisclosure);
+      expect(missingDisclosure.captureDisclosure, kDefaultCaptureDisclosure);
     });
 
     test('未知分组值被丢弃而不是让整份草稿失败', () {

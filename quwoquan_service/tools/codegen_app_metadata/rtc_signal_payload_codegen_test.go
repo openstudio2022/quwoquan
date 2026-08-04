@@ -36,7 +36,14 @@ func TestRtcSignalPayloadGeneration_containsAllEventPayloadClasses(t *testing.T)
 	if !strings.Contains(out, "parseRtcWsPayload") {
 		t.Error("missing parseRtcWsPayload")
 	}
-	if !strings.Contains(out, "RtcWsUnknownPayload") {
-		t.Error("missing RtcWsUnknownPayload")
+	if strings.Contains(out, "RtcWsUnknownPayload") {
+		t.Error("unknown RTC realtime payload fallback must not be generated")
+	}
+	if !strings.Contains(out, "throw FormatException('Unsupported RTC realtime event type: $wireType')") {
+		t.Error("unknown RTC realtime event types must fail closed")
+	}
+	if !strings.Contains(out, "_rtcRequireExactFields(payload") ||
+		!strings.Contains(out, "contains unknown fields") {
+		t.Error("RTC realtime payload decoders must reject unknown fields")
 	}
 }

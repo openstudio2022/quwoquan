@@ -14,13 +14,12 @@ import (
 	externalgenerated "quwoquan_service/services/integration-service/generated/external_integration/external_interaction"
 	httpadapter "quwoquan_service/services/integration-service/internal/external_integration/external_interaction/adapters/inbound/http"
 	"quwoquan_service/services/integration-service/internal/external_integration/external_interaction/application"
-	pushapp "quwoquan_service/services/integration-service/internal/external_integration/push_delivery/application"
 )
 
 // TestExternalInteractionControlPlaneReadsCanonicalMongoFacts proves that the
 // first-party query and operator routes read and mutate the same Mongo facts
-// used by the reliable-task runtime. The local recorder is only the external
-// Provider substitute; MongoDB and the HTTP/application/store path are real.
+// used by the reliable-task runtime. The test-local Provider only satisfies
+// construction; MongoDB and the HTTP/application/store path are real.
 func TestExternalInteractionControlPlaneReadsCanonicalMongoFacts(t *testing.T) {
 	resetReliableTaskCollections(t)
 	ctx := context.Background()
@@ -32,11 +31,11 @@ func TestExternalInteractionControlPlaneReadsCanonicalMongoFacts(t *testing.T) {
 	service, err := application.NewExternalInteractionService(
 		runtimeStore,
 		map[string]reliabletask.ExternalProvider{
-			pushapp.PushProviderLocalRecorder: pushapp.LocalRecorderPushProvider{},
+			controlPlaneTestProviderName: controlPlaneTestProvider{},
 		},
 		map[string]reliabletask.ProviderPolicy{
 			reliabletask.ExternalInteractionOperationPush: {
-				Providers:   []string{pushapp.PushProviderLocalRecorder},
+				Providers:   []string{controlPlaneTestProviderName},
 				Timeout:     time.Second,
 				RetryPolicy: reliabletask.RetryPolicy{MaxAttempts: 1},
 			},
@@ -96,7 +95,7 @@ func TestExternalInteractionControlPlaneReadsCanonicalMongoFacts(t *testing.T) {
 		RequestID:             requestID,
 		TaskID:                task.TaskID,
 		Operation:             reliabletask.ExternalInteractionOperationPush,
-		Provider:              pushapp.PushProviderLocalRecorder,
+		Provider:              controlPlaneTestProviderName,
 		ProviderRequestDigest: reliabletask.ProviderRequestDigest("provider-request-control-plane-001"),
 		Status:                reliabletask.ExternalInteractionStatusFailed,
 		NormalizedError:       "provider rejected control-plane fixture",
@@ -255,4 +254,20 @@ func assertSingleExternalInteractionItem(
 	if !ok || item[field] != want {
 		t.Fatalf("unexpected item field %s: item=%#v want=%#v", field, items[0], want)
 	}
+}
+
+const controlPlaneTestProviderName = "control_plane_test_provider"
+
+type controlPlaneTestProvider struct{}
+
+func (controlPlaneTestProvider) Send(
+	_ context.Context,
+	request reliabletask.ExternalInteractionRequest,
+	_ reliabletask.ReliableAsyncTask,
+) (reliabletask.ExternalInteractionResult, error) {
+	return reliabletask.ExternalInteractionResult{
+		RequestID: request.RequestID,
+		Operation: request.Operation,
+		Status:    reliabletask.ExternalInteractionStatusSentUnconfirmed,
+	}, nil
 }

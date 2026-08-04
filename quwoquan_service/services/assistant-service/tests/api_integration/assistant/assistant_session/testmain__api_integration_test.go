@@ -28,7 +28,6 @@ import (
 	learningmodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/domain/model"
 	learningpersistence "quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/infrastructure/persistence"
 	learningprojection "quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/infrastructure/projection"
-	preferencefact "quwoquan_service/services/assistant-service/internal/assistant/assistant_preference/application"
 	preferencepersistence "quwoquan_service/services/assistant-service/internal/assistant/assistant_preference/infrastructure/persistence"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
 	runpersistence "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/infrastructure"
@@ -36,6 +35,7 @@ import (
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/persistence"
 	turnviewapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_turn_view/application"
 	turnviewpersistence "quwoquan_service/services/assistant-service/internal/assistant/assistant_turn_view/infrastructure/persistence"
+	catalogapplication "quwoquan_service/services/assistant-service/internal/assistant/skill_catalog/application"
 	consentapplication "quwoquan_service/services/assistant-service/internal/assistant/skill_consent/application"
 	consentmodel "quwoquan_service/services/assistant-service/internal/assistant/skill_consent/domain/model"
 	consentpersistence "quwoquan_service/services/assistant-service/internal/assistant/skill_consent/infrastructure/persistence"
@@ -226,21 +226,36 @@ func initializeIntegrationStores(ctx context.Context) {
 	}
 	integrationRunCommands = runruntime.NewCommandService(
 		integrationRunRepository,
-		runruntime.SessionAuthorizerFunc(func(
+		runruntime.SessionResolverFunc(func(
 			context.Context,
 			string,
 			string,
-		) error {
-			return nil
+		) (runruntime.SessionContinuity, error) {
+			return runruntime.SessionContinuity{}, nil
 		}),
 		testSkillPackageIdentityResolver(),
 		runruntime.StartAccessPolicyFunc(func(
 			ctx context.Context,
 			request runruntime.StartAccessRequest,
 		) error {
+			manifest, found, manifestErr := catalogapplication.ResolveRuntimeManifest(
+				ctx,
+				integrationConsentSkillCatalog{},
+				request.SkillID,
+			)
+			if manifestErr != nil || !found {
+				return runruntime.ErrSkillPackageUnavailable
+			}
 			consentErr := consentapplication.NewQueryFacade(
 				integrationConsentStore,
-			).Require(ctx, request.AccountID, request.SkillID)
+			).Require(
+				ctx,
+				request.AccountID,
+				request.SkillID,
+				catalogapplication.RequiredContextConsentScopes(
+					manifest.ContextProfile,
+				),
+			)
 			switch {
 			case errors.Is(consentErr, consentmodel.ErrConsentRequired):
 				return runerrors.AppErrorFromSkillConsentRequired(
@@ -256,7 +271,7 @@ func initializeIntegrationStores(ctx context.Context) {
 		}),
 		time.Now,
 		nil,
-		integrationRunPolicyResolver(),
+		runruntime.WithPolicyResolver(integrationRunPolicyResolver()),
 	)
 	integrationTurnViewStore = turnviewpersistence.NewMongoStore(integrationMongoDB)
 	if err := integrationTurnViewStore.EnsureIndexes(ctx); err != nil {
@@ -318,13 +333,9 @@ func integrationRunPolicyResolver() runruntime.PolicyResolver {
 
 func newIntegrationAssistantService(opts ...orchestration.AssistantServiceOption) *orchestration.AssistantService {
 	baseOptions := []orchestration.AssistantServiceOption{
-		orchestration.WithLearningProjectionReader(integrationLearningProjector),
 		orchestration.WithSkillSubscriptionStore(integrationSubscriptionStore),
 		orchestration.WithSessionStore(integrationSessionStore),
 		orchestration.WithRunCommandService(integrationRunCommands),
-		orchestration.WithPreferenceSnapshotReader(
-			preferencefact.NewQueryFacade(integrationPreferenceStore),
-		),
 	}
 	baseOptions = append(baseOptions, opts...)
 	return orchestration.NewAssistantService(
@@ -334,35 +345,39 @@ func newIntegrationAssistantService(opts ...orchestration.AssistantServiceOption
 	)
 }
 
-func integrationRunTerminalLearningRelay(ownerID string) *runruntime.TerminalLearningRelay {
+func integrationRunTerminalRelay(ownerID string) *runruntime.TerminalRunRelay {
 	learningFacts := learningapplication.NewService(
 		integrationLearningFactStore,
 		runpersistence.NewMongoRunOwnerReader(integrationMongoDB),
 		nil,
 	)
-	return runruntime.NewTerminalLearningRelay(
+	return runruntime.NewTerminalRunRelay(
 		integrationRunRepository,
-		runruntime.ServiceScorecardAppenderFunc(func(
+		[]runruntime.TerminalEventHandler{runruntime.TerminalEventHandlerFunc(func(
 			ctx context.Context,
-			command runruntime.ServiceScorecardCommand,
+			event runruntime.TerminalEvent,
 		) error {
+			value := 0.0
+			if event.Outcome == "completed" {
+				value = 1.0
+			}
 			_, err := learningFacts.AppendServiceFact(
 				ctx,
 				learningmodel.AppendCommand{
-					EventID:          command.EventID,
+					EventID:          "turn:" + event.RunID + ":completion",
 					FactType:         learningmodel.FactTypeServiceScorecard,
-					AssistantTurnID:  command.AssistantRunID,
+					AssistantTurnID:  event.RunID,
 					ReferralSource:   "service",
-					DomainID:         command.DomainID,
-					MetricID:         command.MetricID,
-					MetricValue:      command.MetricValue,
-					MetricSource:     command.MetricSource,
+					DomainID:         event.DomainID,
+					MetricID:         "turn_completion",
+					MetricValue:      value,
+					MetricSource:     "service_auto",
 					TrainingEligible: false,
-					OccurredAt:       command.OccurredAt,
+					OccurredAt:       event.OccurredAt,
 				},
 			)
 			return err
-		}),
+		})},
 		ownerID,
 		time.Second,
 		128,
@@ -389,6 +404,7 @@ func resetIntegrationState(t *testing.T) {
 
 	for _, collection := range []string{
 		"assistant_sessions",
+		"assistant_session_summary_receipts",
 		"assistant_runs",
 		"assistant_run_events",
 		"assistant_run_command_receipts",
@@ -439,6 +455,7 @@ func TestAssistantStorageTopologyMigrationsAndIndexes(t *testing.T) {
 	assertMongoIndex(t, "assistant_preferences", "uq_assistant_preference_identity")
 	assertMongoIndex(t, "assistant_run_events", "uq_run_events_run_seq")
 	assertMongoIndex(t, "assistant_run_terminal_outbox", "idx_run_terminal_outbox_pending")
+	assertMongoIndex(t, "assistant_session_summary_receipts", "uq_session_summary_source_sequence")
 	assertMongoIndex(t, "assistant_learning_facts", "uq_assistant_learning_fact_sequence")
 	assertMongoIndex(t, "assistant_learning_facts", "idx_assistant_learning_fact_turn")
 	assertMongoIndex(t, "rm_assistant_learning_projection", "idx_assistant_learning_projection_owner_updated")
@@ -462,8 +479,8 @@ func TestAssistantStorageTopologyMigrationsAndIndexes(t *testing.T) {
 		ctx,
 		"storage-topology-command",
 		"account-storage-topology",
-		"personal_content_access",
-		[]string{"read_own_content"},
+		"travel_companion",
+		[]string{"travel.trip.read"},
 	)
 	if err != nil || result.Consent == nil {
 		t.Fatalf("grant Postgres consent result=%+v error=%v", result, err)
@@ -474,7 +491,7 @@ func TestAssistantStorageTopologyMigrationsAndIndexes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list Postgres consents: %v", err)
 	}
-	if len(consents) != 1 || consents[0].SkillID != "personal_content_access" {
+	if len(consents) != 1 || consents[0].SkillID != "travel_companion" {
 		t.Fatalf("Postgres consents=%+v", consents)
 	}
 	for _, table := range []string{

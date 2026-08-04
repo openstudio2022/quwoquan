@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	assistantgenerated "quwoquan_service/services/assistant-service/generated/assistant/assistant_session"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/ports"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/orchestration"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/ports"
 )
 
 func TestModelTierRoutingIsDeterministicPerStageAndProblemClass(t *testing.T) {

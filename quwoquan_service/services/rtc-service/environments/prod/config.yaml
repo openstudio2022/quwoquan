@@ -10,15 +10,7 @@ overrides:
 secretRefs:
   sys.rtc-service.mongodb.uri: MONGO_URI
 externalBindings:
-  runtime.message.transport:
-    state: enabled
   rtc.room.transport:
     state: enabled
     adapter: infra.livekit_sfu
     endpointRef: environment_binding:rtc.livekit
-    endpointEnvs:
-      connection: RTC_MEDIA_CONNECTION_URL
-    secretRefs:
-    - RTC_MEDIA_API_KEY
-    - RTC_MEDIA_API_SECRET
-    timeoutMs: 10000

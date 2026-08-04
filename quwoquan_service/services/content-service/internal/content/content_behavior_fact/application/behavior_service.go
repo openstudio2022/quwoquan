@@ -23,12 +23,14 @@ type BehaviorEventInput struct {
 	ClientEventID string `json:"clientEventId"`
 	OccurredAt    string `json:"occurredAt"`
 	State         string `json:"state"`
-	UserID        string `json:"userId"`
+	UserID        string `json:"-"`
 	// PersonaID 只由 HTTP verified principal 注入，禁止客户端通过行为 payload 伪造。
-	PersonaID     string `json:"-"`
-	DeviceActorID string `json:"deviceActorId"`
-	SessionID     string `json:"sessionId"`
-	FeedSessionID string `json:"feedSessionId"`
+	PersonaID         string `json:"-"`
+	DeviceActorID     string `json:"-"`
+	SessionID         string `json:"-"`
+	FeedSessionID     string `json:"feedSessionId"`
+	PlaybackSessionID string `json:"playbackSessionId"`
+	PageVisitID       string `json:"pageVisitId"`
 	// TaxonomyReleaseID 是 onboarding_interest 目录与 taxonomy snapshot 的
 	// 唯一不可变发布身份；其他行为忽略。
 	TaxonomyReleaseID string `json:"taxonomyReleaseId"`
@@ -78,6 +80,21 @@ type BehaviorEventInput struct {
 	// 二者驱动 IntersectionService 写 rec:ineg 交集负反馈冷却集（Feed 命中即过滤，不再推荐）。
 	SubjectID    string `json:"subjectId"`
 	FeedbackKind string `json:"feedbackKind"`
+	// 作品图片书翻页舒适度事实；nullable pointer 保留 false/0 与字段缺失的区别。
+	MotionDirection string `json:"direction"`
+	MotionProfile   string `json:"motionProfile"`
+	SettleMS        *int   `json:"settleMs"`
+	ReducedMotion   *bool  `json:"reducedMotion"`
+	Committed       *bool  `json:"committed"`
+}
+
+// BatchReceipt is the successful command outcome. AcceptedCount is the number
+// of events that crossed the idempotency boundary in this invocation;
+// ReplayedCount is the number already accepted by the same canonical event
+// identity. A successful receipt always accounts for every input event.
+type BatchReceipt struct {
+	AcceptedCount int `json:"acceptedCount"`
+	ReplayedCount int `json:"replayedCount"`
 }
 
 // IntersectionFeedbackSink 接收交集负反馈，驱动交集主体（subject）跨会话冷却（rec:ineg）。
@@ -187,7 +204,25 @@ func NewBehaviorService(hotPath rtrec.SignalProcessor, store postports.DetailRea
 	return svc
 }
 
-func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEventInput) error {
+func (s *BehaviorService) ProcessBatch(
+	ctx context.Context,
+	events []BehaviorEventInput,
+) (BatchReceipt, error) {
+	receipt := BatchReceipt{}
+	if err := s.processBatch(ctx, events, &receipt); err != nil {
+		return BatchReceipt{}, err
+	}
+	if receipt.AcceptedCount+receipt.ReplayedCount != len(events) {
+		return BatchReceipt{}, errors.New("behavior batch receipt does not account for every input event")
+	}
+	return receipt, nil
+}
+
+func (s *BehaviorService) processBatch(
+	ctx context.Context,
+	events []BehaviorEventInput,
+	receipt *BatchReceipt,
+) error {
 	if len(events) == 0 {
 		return rterr.NewInvalidArgument(rterr.ModuleContent, "events 不能为空", "empty behavior events")
 	}
@@ -196,6 +231,7 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 		return err
 	}
 	if replayed {
+		receipt.ReplayedCount = len(events)
 		return nil
 	}
 	onboardingTagRefs, err := s.preflightOnboardingInterestBatch(ctx, events)
@@ -261,6 +297,20 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 				return rterr.NewInvalidArgument(rterr.ModuleContent, "feedbackKind 非法", "intersection_feedback requires feedbackKind in registry.feedbackKinds")
 			}
 		}
+		if strings.TrimSpace(eventInput.State) == "works_image_pageflip_motion" {
+			direction := strings.TrimSpace(eventInput.MotionDirection)
+			profile := strings.TrimSpace(eventInput.MotionProfile)
+			if (direction != "forward" && direction != "back") ||
+				(profile != "comfort_curl" && profile != "reduced_motion") ||
+				eventInput.SettleMS == nil || *eventInput.SettleMS < 0 ||
+				eventInput.ReducedMotion == nil || eventInput.Committed == nil {
+				return rterr.NewInvalidArgument(
+					rterr.ModuleContent,
+					"翻页动作证据不完整",
+					"works_image_pageflip_motion requires canonical direction, profile, settleMs, reducedMotion and committed",
+				)
+			}
+		}
 		duration := eventInput.Duration
 		tags := eventInput.Tags
 		if action == "onboarding_interest" {
@@ -322,11 +372,11 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 			return rterr.NewInvalidArgument(rterr.ModuleContent, "contentType 必填", "hide_content_type requires contentType")
 		}
 		if action == "effective_play" {
-			if strings.TrimSpace(eventInput.SessionID) == "" {
+			if strings.TrimSpace(eventInput.PlaybackSessionID) == "" {
 				return rterr.NewInvalidArgument(
 					rterr.ModuleContent,
 					"播放会话标识缺失",
-					"effective_play requires sessionId",
+					"effective_play requires playbackSessionId",
 				)
 			}
 			if strings.TrimSpace(eventInput.State) != "foreground_visible_playing" {
@@ -358,7 +408,7 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 		feedPos := eventInput.Position
 		if action == "effective_play" {
 			clientEventID = strings.Join(
-				[]string{"effective_play", userID, eventInput.SessionID, contentID},
+				[]string{"effective_play", userID, eventInput.PlaybackSessionID, contentID},
 				":",
 			)
 		}
@@ -370,6 +420,8 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 			DeviceActorID:          strings.TrimSpace(eventInput.DeviceActorID),
 			SessionID:              strings.TrimSpace(eventInput.SessionID),
 			FeedSessionID:          strings.TrimSpace(eventInput.FeedSessionID),
+			PlaybackSessionID:      strings.TrimSpace(eventInput.PlaybackSessionID),
+			PageVisitID:            strings.TrimSpace(eventInput.PageVisitID),
 			ContentID:              contentID,
 			Action:                 action,
 			ContentType:            contentType,
@@ -397,6 +449,11 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 			IntersectionClass:      strings.TrimSpace(eventInput.IntersectionClass),
 			IntersectionSourceRef:  strings.TrimSpace(eventInput.IntersectionSourceRef),
 			IntersectionEvidenceID: strings.TrimSpace(eventInput.IntersectionEvidenceID),
+			MotionDirection:        strings.TrimSpace(eventInput.MotionDirection),
+			MotionProfile:          strings.TrimSpace(eventInput.MotionProfile),
+			SettleMS:               eventInput.SettleMS,
+			ReducedMotion:          eventInput.ReducedMotion,
+			Committed:              eventInput.Committed,
 		}
 		if s.feedbackIngestor != nil {
 			accepted, err := s.feedbackIngestor.AcceptEvent(ctx, signal)
@@ -406,6 +463,7 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 			}
 			if !accepted {
 				rtrec.RecordBehaviorIngestDropped("duplicate_client_event")
+				receipt.ReplayedCount++
 				continue
 			}
 		}
@@ -439,6 +497,7 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 			batchFeedSessionID = strings.TrimSpace(eventInput.FeedSessionID)
 		}
 	}
+	receipt.AcceptedCount = len(signals)
 	if err := s.hotPath.ProcessSignalBatch(ctx, signals); err != nil {
 		return err
 	}
@@ -458,7 +517,11 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 				State:                  sig.State,
 				UserID:                 sig.UserID,
 				DeviceActorID:          sig.DeviceActorID,
+				PersonaID:              strings.TrimSpace(acceptedInputs[i].PersonaID),
 				SessionID:              sig.SessionID,
+				FeedSessionID:          sig.FeedSessionID,
+				PlaybackSessionID:      sig.PlaybackSessionID,
+				PageVisitID:            sig.PageVisitID,
 				ContentID:              sig.ContentID,
 				Action:                 sig.Action,
 				ContentType:            sig.ContentType,
@@ -491,6 +554,13 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 				IntersectionClass:      sig.IntersectionClass,
 				IntersectionSourceRef:  strings.TrimSpace(acceptedInputs[i].IntersectionSourceRef),
 				IntersectionEvidenceID: strings.TrimSpace(acceptedInputs[i].IntersectionEvidenceID),
+				SubjectID:              strings.TrimSpace(acceptedInputs[i].SubjectID),
+				FeedbackKind:           strings.TrimSpace(acceptedInputs[i].FeedbackKind),
+				MotionDirection:        sig.MotionDirection,
+				MotionProfile:          sig.MotionProfile,
+				SettleMS:               sig.SettleMS,
+				ReducedMotion:          sig.ReducedMotion,
+				Committed:              sig.Committed,
 				OccurredAt:             eventOccurredAt.Format(time.RFC3339),
 				CreatedAt:              eventOccurredAt,
 			}

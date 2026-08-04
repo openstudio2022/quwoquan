@@ -186,6 +186,71 @@ def _require_binding_runtime_material(
         )
 
 
+def preflight_environment_matrix(
+    *,
+    environment: str,
+    registry: Mapping[str, Any],
+    compiled: Mapping[str, Any],
+    sources: Mapping[tuple[str, str, str], Mapping[str, Any]],
+) -> str:
+    """Fail the complete environment matrix before emitting any partial evidence."""
+    issues: list[str] = []
+    try:
+        image_digest = provider_conformance.candidate_image_digest(
+            environment,
+            registry=registry,
+        )
+    except ValueError as exc:
+        image_digest = ""
+        issues.append(str(exc))
+    if not os.environ.get(
+        "QWQ_PROVIDER_CONFORMANCE_ATTESTATION_KEY",
+        "",
+    ).strip():
+        issues.append("QWQ_PROVIDER_CONFORMANCE_ATTESTATION_KEY is required")
+    selected = (compiled.get("selectedBindings") or {}).get(environment)
+    if not isinstance(selected, Mapping):
+        issues.append(f"compiled provider binding receipt has no {environment} environment")
+    else:
+        for capability_id, binding in sorted(selected.items()):
+            if not isinstance(binding, Mapping):
+                issues.append(f"{environment}/{capability_id} selected Binding is invalid")
+                continue
+            if not governance.requires_provider_conformance(binding):
+                continue
+            adapter_id = str(binding.get("adapter_id") or "")
+            if binding.get("state") != "enabled" or not adapter_id:
+                issues.append(
+                    f"{environment}/{capability_id} has no enabled selected adapter"
+                )
+                continue
+            try:
+                _require_binding_runtime_material(
+                    binding,
+                    environment=environment,
+                    layer="api_integration",
+                )
+            except ValueError as exc:
+                issues.append(str(exc))
+            for layer in provider_conformance.LAYERS:
+                if (
+                    provider_conformance.source_for_cell(
+                        capability_id=str(capability_id),
+                        adapter_id=adapter_id,
+                        layer=layer,
+                        sources=sources,
+                    )
+                    is None
+                ):
+                    issues.append(
+                        f"{environment}/{capability_id}/{layer} has no "
+                        "self-describing executable source"
+                    )
+    if issues:
+        raise ValueError("; ".join(dict.fromkeys(issues)))
+    return image_digest
+
+
 def _execute_cell(
     args: argparse.Namespace,
     *,
@@ -276,6 +341,11 @@ def _execute_cell(
             f"{capability_id} Binding is not enabled in {args.environment}; "
             "a blocked Binding cannot emit Provider Conformance evidence"
         )
+    if not governance.requires_provider_conformance(binding):
+        raise ValueError(
+            f"{capability_id} uses a first-party authority Binding and is outside "
+            "Provider Conformance"
+        )
     _require_binding_runtime_material(
         binding,
         environment=args.environment,
@@ -352,6 +422,12 @@ def _execute_cell(
     }
     result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, env=environment)
     if result.returncode != 0:
+        stderr_tail = (result.stderr or "")[-4000:]
+        stdout_tail = (result.stdout or "")[-2000:]
+        if stdout_tail.strip():
+            print(stdout_tail, file=sys.stderr)
+        if stderr_tail.strip():
+            print(stderr_tail, file=sys.stderr)
         raise ValueError(
             f"source-declared command failed for target {source['target']} (exit {result.returncode}); "
             "no Provider Conformance evidence was emitted"

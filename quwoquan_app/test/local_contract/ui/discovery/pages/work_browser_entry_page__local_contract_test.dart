@@ -16,6 +16,7 @@ import 'package:quwoquan_app/cloud/services/content/content_repository_contract.
     show ContentPostDetailReader, contentPostDeleteIdempotencyKey;
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
+import 'package:quwoquan_app/core/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
@@ -27,6 +28,13 @@ import '../../../../support/cloud_services/content_facet_overrides.dart';
 import '../../../../support/cloud_services/content/mock_content_repository.dart';
 
 void main() {
+  final mediaEndpoints = MediaEndpointConfig(
+    avatarBaseUrl: 'https://example.com/media/avatar',
+    imageBaseUrl: 'https://example.com/media/image',
+    videoBaseUrl: 'https://example.com/media/video',
+    attachmentBaseUrl: 'https://example.com',
+  );
+
   Future<String> firstReadablePostId(MockContentRepository repo) async {
     for (final category in <String>['article', 'photo', 'video', 'moment']) {
       final posts = await repo.listDiscoveryFeed(category: category, limit: 8);
@@ -154,7 +162,10 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [...mockContentFacetOverrides(repo)],
+        overrides: <Override>[
+          ...mockContentFacetOverrides(repo),
+          mediaEndpointConfigProvider.overrideWithValue(mediaEndpoints),
+        ],
         child: ScreenUtilInit(
           designSize: const Size(375, 812),
           builder: (context, _) => MaterialApp(
@@ -253,9 +264,10 @@ void main() {
       expect(errorState.semantic.primaryAction?.type, UiErrorActionType.retry);
       expect(reader.calls, 1);
 
-      await errorState.onAction!(
+      final outcome = await errorState.onRecovery!(
         const UiErrorAction(type: UiErrorActionType.retry, label: '重试'),
       );
+      expect(outcome, UiRecoveryOutcome.recovered);
       await tester.pumpAndSettle();
 
       expect(reader.calls, greaterThanOrEqualTo(2));

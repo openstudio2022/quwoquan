@@ -14,6 +14,7 @@ import (
 	"quwoquan_service/runtime/otpseal"
 	"quwoquan_service/runtime/reliabletask"
 	"quwoquan_service/services/integration-service/internal/external_integration/external_interaction/infrastructure/provider"
+	integrationsupport "quwoquan_service/services/integration-service/tests/support"
 )
 
 type memoryOTPReferenceStore struct {
@@ -109,7 +110,7 @@ func TestHTTPExternalProviderNormalizesAcceptedSMSResponse(t *testing.T) {
 			Env:            "gamma",
 			IdempotencyKey: "sms-idempotency-001",
 			PayloadRef:     "challenge:001",
-			PayloadDigest:  "sha256:digest",
+			PayloadDigest:  integrationsupport.CanonicalTestSHA256("challenge:001"),
 			Sensitivity:    "secret",
 			ExpiresAt:      expiresAt,
 			Payload: map[string]string{
@@ -160,8 +161,10 @@ func TestHTTPExternalProviderNormalizesRemoteFailure(t *testing.T) {
 			ExpiresAt:      expiresAt,
 			Payload: map[string]string{
 				"challengeId": "challenge-503",
-				"phoneHash":   "sha256:phone",
-				"templateId":  "sms_otp_login",
+				"phoneHash": integrationsupport.CanonicalTestSHA256(
+					"+8618013813909",
+				),
+				"templateId": "sms_otp_login",
 			},
 		},
 		reliabletask.ReliableAsyncTask{TaskID: "task-503"},

@@ -111,7 +111,13 @@ class MongoCandidateRanker:
         limit: int,
     ) -> RankingResult:
         now = self._now().astimezone(timezone.utc)
-        assignment = self._experiments.assign(subject_id, now=now)
+        # RankedWindowSubjectID uses '\x00' as an internal namespace separator.
+        # ExperimentAssignmentObserved crosses into Product Ops Postgres text
+        # columns, so bucketing/publish must use a wire-safe subject identity.
+        assignment = self._experiments.assign(
+            subject_id.replace("\x00", ":"),
+            now=now,
+        )
         normalized_scenario = scenario.strip()
         if normalized_scenario not in {
             "content_feed",

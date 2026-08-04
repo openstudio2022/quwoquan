@@ -4,12 +4,12 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	. "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/modelprovider"
+	. "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/infrastructure/modelprovider"
 	"strings"
 	"testing"
 	"time"
 
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/ports"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/ports"
 )
 
 func TestClientStreamsTypedModelCompletion(t *testing.T) {

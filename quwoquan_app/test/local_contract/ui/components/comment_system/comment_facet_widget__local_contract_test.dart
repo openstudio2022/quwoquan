@@ -18,7 +18,7 @@ import '../../../../support/cloud_services/test_content_comment_facet.dart';
 void main() {
   testWidgets('Comment modal 只消费 typed Facet 投影', (tester) async {
     final comments = TestContentCommentFacet(
-      items: <ContentCommentListItem>[
+      items: <CommentListItem>[
         testCommentItem(
           id: 'comment-1',
           postId: 'post-1',
@@ -61,8 +61,8 @@ void main() {
 
     expect(find.byType(AppSectionErrorState), findsOneWidget);
     expect(find.byType(AppSectionErrorCard), findsNothing);
-    expect(find.text(SearchText.recoveryReloadLaterTitle), findsOneWidget);
-    expect(find.text(SearchText.recoveryReloadLaterMessage), findsOneWidget);
+    expect(find.text(SearchText.recoveryInvalidContentTitle), findsOneWidget);
+    expect(find.text(SearchText.recoveryInvalidContentMessage), findsOneWidget);
     expect(find.text(SearchText.reload), findsOneWidget);
 
     comments.failure = null;
@@ -103,7 +103,7 @@ void main() {
   testWidgets('Comment provider 不跨会话容器复用静态快照', (tester) async {
     const postId = 'post-session-isolation';
     final firstComments = TestContentCommentFacet(
-      items: <ContentCommentListItem>[
+      items: <CommentListItem>[
         testCommentItem(
           id: 'first-session-comment',
           postId: postId,
@@ -139,7 +139,7 @@ void main() {
     await tester.pump();
 
     final secondComments = TestContentCommentFacet(
-      items: <ContentCommentListItem>[
+      items: <CommentListItem>[
         testCommentItem(
           id: 'second-session-comment',
           postId: postId,
@@ -169,7 +169,7 @@ void main() {
 
   testWidgets('点赞经 typed reaction command 并用结果更新页态', (tester) async {
     final comments = TestContentCommentFacet(
-      items: <ContentCommentListItem>[
+      items: <CommentListItem>[
         testCommentItem(
           id: 'comment-like',
           postId: 'post-like',
@@ -192,7 +192,7 @@ void main() {
     expect(comments.reactionCalls, 1);
     expect(
       comments.lastReactionCommand?.reaction,
-      ContentCommentReactionValue.like,
+      CommentReactionType.like,
     );
     expect(find.byIcon(CupertinoIcons.heart_fill), findsOneWidget);
   });
@@ -209,7 +209,7 @@ void main() {
 
   testWidgets('置顶操作经 typed 命名命令执行', (tester) async {
     final comments = TestContentCommentFacet(
-      items: <ContentCommentListItem>[
+      items: <CommentListItem>[
         testCommentItem(
           id: 'comment-pin',
           postId: 'post-pin',
@@ -243,7 +243,7 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     final comments = TestContentCommentFacet(
-      items: <ContentCommentListItem>[
+      items: <CommentListItem>[
         testCommentItem(
           id: 'comment-accessibility',
           postId: 'post-accessibility',
@@ -253,7 +253,7 @@ void main() {
           isAuthor: true,
           authorLiked: true,
           authorIpLocation: '新疆维吾尔自治区',
-          viewerRelation: ContentCommentViewerRelation.friend,
+          viewerRelation: CommentViewerRelation.friend,
         ),
       ],
     );
@@ -308,11 +308,11 @@ Future<void> testCommentReplyPreviewUsesConfig(WidgetTester tester) async {
     postId: 'post-reply-config',
     content: '一级评论',
     replyCount: 2,
-    replyPreview: <ContentCommentListItem>[firstReply],
+    replyPreview: <CommentListItem>[firstReply],
     replyNextCursor: '1',
   );
   final comments = TestContentCommentFacet(
-    items: <ContentCommentListItem>[root, firstReply, secondReply],
+    items: <CommentListItem>[root, firstReply, secondReply],
   );
 
   await tester.pumpWidget(
@@ -334,14 +334,14 @@ Future<void> testCommentReplyPreviewUsesConfig(WidgetTester tester) async {
 /// mock.yaml dart_func: testCommentReactionThreeStateWidget
 Future<void> testCommentReactionThreeStateWidget(WidgetTester tester) async {
   final comments = TestContentCommentFacet(
-    items: <ContentCommentListItem>[
+    items: <CommentListItem>[
       testCommentItem(
         id: 'comment-reaction-three-state',
         postId: 'post-reaction-three-state',
         content: '已赞评论',
         likeCount: 3,
         dislikeCount: 1,
-        viewerReaction: ContentCommentReactionValue.like,
+        viewerReaction: CommentReactionType.like,
       ),
     ],
   );
@@ -364,11 +364,11 @@ Future<void> testCommentReactionThreeStateWidget(WidgetTester tester) async {
   expect(comments.reactionCalls, 1);
   expect(
     comments.lastReactionCommand?.reaction,
-    ContentCommentReactionValue.dislike,
+    CommentReactionType.dislike,
   );
   expect(
     comments.items.single.viewerReaction,
-    ContentCommentReactionValue.dislike,
+    CommentReactionType.dislike,
   );
   expect(comments.items.single.likeCount, 2);
   expect(comments.items.single.dislikeCount, 2);

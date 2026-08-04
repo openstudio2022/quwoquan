@@ -170,4 +170,4 @@ enums:
   SkillPackageReleaseStatus:
     values: [staged, active, retired]
   SkillPackageAssetKind:
-    values: [manifest, catalog, activation, input, context, capability, orchestration, trigger, memory, presentation, evaluation, prompt, replay]
+    values: [manifest, catalog, activation, input, input_schema, context, capability, orchestration, trigger, memory, presentation, presentation_template, evaluation, prompt, replay]

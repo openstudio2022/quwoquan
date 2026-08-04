@@ -61,16 +61,23 @@ def require_environment_readiness(
     release_id: str = "",
     verify_run_id: str = "",
     manifest_digest: str = "",
+    lifecycle_exit_ref: str = "",
 ) -> ShipReadinessReceipt | None:
     release_id = str(release_id or "").strip()
     verify_run_id = str(verify_run_id or "").strip()
     manifest_digest = str(manifest_digest or "").strip()
+    lifecycle_exit_ref = str(lifecycle_exit_ref or "").strip()
     if phase in {ShipReadinessPhase.CONSUMER, ShipReadinessPhase.COMMERCIAL} and (
         not release_id or not verify_run_id or not manifest_digest
     ):
         raise SystemExit(
             f"[ship] GATE_BLOCK {environment.value}/{phase.value}: "
             "releaseId, verifyRunId and manifestDigest are required"
+        )
+    if phase is ShipReadinessPhase.COMMERCIAL and not lifecycle_exit_ref:
+        raise SystemExit(
+            f"[ship] GATE_BLOCK {environment.value}/{phase.value}: "
+            "lifecycleExitRef is required"
         )
     command = [
         sys.executable,
@@ -107,6 +114,8 @@ def require_environment_readiness(
         )
         if verify_run_id:
             command.extend(["--verify-run-id", verify_run_id])
+        if lifecycle_exit_ref:
+            command.extend(["--lifecycle-exit-ref", lifecycle_exit_ref])
     completed = subprocess.run(
         command,
         cwd=REPO_ROOT,

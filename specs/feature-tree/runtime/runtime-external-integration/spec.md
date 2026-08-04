@@ -55,9 +55,11 @@
 <a id="req-002"></a>
 ### REQ-002 构建期 Binding、显式装配与逐能力 readiness
 
- - 对象 `operations.yaml` 的 external dependency、服务本地环境 Binding、派生
-   receipt/descriptor、SBOM 与 acceptance 双向一致；不得维护全局 registry、binding
-   file 或 conformance manifest。
+- 对象 `operations.yaml` 的 external dependency/`adapterContracts` 唯一拥有 typed
+  Port、endpoint env roles、required secret refs、默认 timeout 与 conformance；
+  服务本地环境 Binding 只选择 state/adapter/endpointRef，consumer descriptor
+  从 capability-use 派生。派生 receipt/descriptor、SBOM 与 acceptance 双向一致；
+  不得维护全局 registry、binding file 或 conformance manifest。
 - BindingCompiler 只在构建/门禁阶段运行；运行时不扫描 metadata 或按字符串动态选厂。
 - content embedding、user one-tap/social、integration location/SMS/Push、assistant model、RTC room 与四环境 Elasticsearch Log sink 各自产出 root-scoped checked-in descriptor，并由对应 composition entrypoint fail-closed 消费。
 - runtime.message.transport 使用唯一 Redis Adapter Binding；其所有实际 producer/ consumer root 共享同一环境选择、各自产出 descriptor 并在 publisher/consumer 构造前 preflight Redis scene。任何 root 直接构造未校验 transport、静默跳过 consumer 或把 Pub/Sub 当作 durable delivery 均为阻断。
@@ -72,7 +74,7 @@
 
 - 公共 suite 覆盖 success、validation、auth、network/DNS、timeout、throttle、retry、 idempotency、redaction 与 observability；能力专项 profile 覆盖本能力协议语义。
 - Alpha/Beta/Gamma 各自执行 local_contract、api_integration、user_acceptance；环境不是 第四测试目录层。
-- local_contract 对 Binding 选中的 Adapter 运行离线协议/故障 harness；Alpha/Beta/Gamma api_integration 连接 integration-service 独立内部协议端点或真实本地 LiveKit，Prod hosted receipt 连接生产厂商租户。
+- local_contract 对 Binding 选中的 Adapter 运行离线协议/故障 harness；Alpha/Beta/Gamma api_integration 连接 Ops 外置独立 protocol substitute、SMS substitute 或真实本地 LiveKit，Prod hosted receipt 连接生产厂商租户。
 - runtime.message.transport 的 user_acceptance 只能以 production Remote composition 的 原生设备 chat @ assistant journey 取证，并受 stackctl 解析的 endpoint、CI 注入的 auth 和环境 seed 约束；未登记该 harness 时必须输出 PROVIDER.CONFORMANCE.REMOTE_CHAT_ASSISTANT_UAT_HARNESS_REQUIRED 并 GATE_BLOCK， 不得用 memory Redis、fixture consumer、UI mock 或 Provider override 生成 passed。
 - 每格报告含当前 commit/image/config/ContractGraph/Adapter digest、断言/skip、网络边界、 数据 digest、acceptance refs 与 logs/traces/metrics 引用。
 - NOT_RUN、required skip、零断言、dry-run、旧 digest、缺观测或缺清理回执均阻断。
@@ -89,7 +91,9 @@
 
 - Provider 配置、环境 Binding、schema、policy、endpoint/secret 值、渲染 `.env`、 证书和 TLS 状态均不进入 `.qwq_output`。
 - 输出根 `.qwq_output` 只含可删除重建的 runs/observability/process/cache 分类产物
-- deploy payload、渲染配置、Caddy、TLS 与 env 文件写入 `QWQ_DEPLOY_WORK_ROOT/<target>/`
+- deploy payload、渲染配置、Caddy、TLS 与 capability-scoped Secret Bundle 写入
+  `QWQ_DEPLOY_WORK_ROOT/<target>/`；`stackctl provider-config validate|render|diff`
+  只返回 digest 与缺失 key，禁止输出值。
 - process 不含 config/PKI，evidence 只含 ref/digest 和脱敏状态。
 - 删除 `.qwq_output` 后可仅凭版本控制真相源和显式外部依赖重建。
 
@@ -98,7 +102,7 @@
 
 - `runtime_shared_adapter` 由多个静态组合根共同消费；每个 composition root 必须引用同一公开 Port 与 Adapter 契约，禁止复制实现。
 - **Alpha / Beta / Gamma** required 验收必须绑定环境声明的 `protocol_fixture/local_*` Port 对等 Adapter，`state: enabled`；禁止运行时 fallback、App/UI Mock、生产租户凭据或未经 Binding 的 override。
-- **Gamma（gamma-local 拓扑）** 同时运行 production Remote composition、完整第一方拓扑、integration-service 内部协议替代端点、真实本地 LiveKit、黑盒 API 与真机 Journey；不得改变 canonical typed Port。
+- **Gamma（gamma-local 拓扑）** 同时运行 production Remote composition、完整第一方拓扑、Ops 外置独立 protocol/SMS substitute、真实本地 LiveKit、黑盒 API 与真机 Journey；第一方服务制品不包含 substitute 实现，且不得改变 canonical typed Port。
 - **Prod（含 gray）** 只允许真实厂商 Adapter 与生产租户，禁止 fixture/mock/fake/local_* 替代 Adapter；Prod hosted rollout receipt 独立绑定 Prod config/topology，不能由 Gamma receipt 替代。
 - Alpha/Beta/Gamma 的 canonical Port、assertionIds 与 ContractGraph 必须一致，Provider receipt 必须绑定同一候选且禁止 UI 假绿。
 - Prod 缺正式凭据时 fail-closed 并 GATE_BLOCK；不得用 Alpha/Beta/Gamma sandbox/nonprod receipt 冒充 Prod hosted readiness。
@@ -130,9 +134,11 @@
 
 - GIVEN 执行“构建期 Binding、显式装配与逐能力 readiness”所需的身份、输入与上游事实均有效。
 - WHEN 参与者发起“构建期 Binding、显式装配与逐能力 readiness”对应动作。
- - THEN 对象 `operations.yaml` 的 external dependency、服务本地环境 Binding、派生
-   receipt/descriptor、SBOM 与 acceptance 双向一致；不得维护全局 registry、binding
-   file 或 conformance manifest。
+- THEN 对象 `operations.yaml` 的 external dependency/`adapterContracts` 唯一拥有
+  typed Port、endpoint env roles、required secret refs、默认 timeout 与
+  conformance；服务本地环境 Binding 只选择 state/adapter/endpointRef，consumer
+  descriptor 从 capability-use 派生；不得维护全局 registry、binding file 或
+  conformance manifest。
 - THEN BindingCompiler 只在构建/门禁阶段运行；运行时不扫描 metadata 或按字符串动态选厂。
 - THEN content embedding、user one-tap/social、integration location/SMS/Push、assistant model、RTC room 与四环境 Elasticsearch Log sink 各自产出 root-scoped checked-in descriptor，并由对应 composition entrypoint fail-closed 消费。
 - THEN runtime.message.transport 使用唯一 Redis Adapter Binding；其所有实际 producer/ consumer root 共享同一环境选择、各自产出 descriptor 并在 publisher/consumer 构造前 preflight Redis scene。任何 root 直接构造未校验 transport、静默跳过 consumer 或把 Pub/Sub 当作 durable delivery 均为阻断。
@@ -149,7 +155,7 @@
 - WHEN 参与者发起“Provider 公共/专项 Conformance 与 Alpha/Beta/Gamma 九格证据”对应动作。
 - THEN 公共 suite 覆盖 success、validation、auth、network/DNS、timeout、throttle、retry、 idempotency、redaction 与 observability；能力专项 profile 覆盖本能力协议语义。
 - THEN Alpha/Beta/Gamma 各自执行 local_contract、api_integration、user_acceptance；环境不是 第四测试目录层。
-- THEN local_contract 对 Binding 选中的 Adapter 运行离线协议/故障 harness；Alpha/Beta/Gamma api_integration 连接受管内部协议端点或真实本地 LiveKit，Prod hosted receipt 连接生产厂商租户。
+- THEN local_contract 对 Binding 选中的 Adapter 运行离线协议/故障 harness；Alpha/Beta/Gamma api_integration 连接 Ops 外置独立 protocol/SMS substitute 或真实本地 LiveKit，Prod hosted receipt 连接生产厂商租户。
 - THEN runtime.message.transport 的 user_acceptance 只能以 production Remote composition 的 原生设备 chat @ assistant journey 取证，并受 stackctl 解析的 endpoint、CI 注入的 auth 和环境 seed 约束；未登记该 harness 时必须输出 PROVIDER.CONFORMANCE.REMOTE_CHAT_ASSISTANT_UAT_HARNESS_REQUIRED 并 GATE_BLOCK， 不得用 memory Redis、fixture consumer、UI mock 或 Provider override 生成 passed。
 - THEN 每格报告含当前 commit/image/config/ContractGraph/Adapter digest、断言/skip、网络边界、 数据 digest、acceptance refs 与 logs/traces/metrics 引用。
 - THEN NOT_RUN、required skip、零断言、dry-run、旧 digest、缺观测或缺清理回执均阻断。
@@ -170,7 +176,8 @@
 - WHEN 参与者发起“输出目录、Secret 与 evidence 隔离”对应动作。
 - THEN Provider 配置、环境 Binding、schema、policy、endpoint/secret 值、渲染 `.env`、 证书和 TLS 状态均不进入 `.qwq_output`。
 - THEN 输出根 `.qwq_output` 只含可删除重建的 runs/observability/process/cache 分类产物
-- AND deploy payload、渲染配置、Caddy、TLS 与 env 文件写入 `QWQ_DEPLOY_WORK_ROOT/<target>/`
+- AND deploy payload、渲染配置、Caddy、TLS 与 capability-scoped Secret Bundle
+  写入 `QWQ_DEPLOY_WORK_ROOT/<target>/`，Provider 配置命令只回显 digest/缺失 key。
 - AND process 不含 config/PKI，evidence 只含 ref/digest 和脱敏状态。
 - THEN 删除 `.qwq_output` 后可仅凭版本控制真相源和显式外部依赖重建。
 
@@ -193,9 +200,8 @@
 - 优先级：`P1`
 - 准出影响：`track`
 - 影响或价值：尚缺实现或直接 `spec_ref`。
-- 目标：对象 `operations.yaml` 的 external dependency、服务本地环境 Binding、派生
-  receipt/descriptor、SBOM 与 acceptance 双向一致，且不存在全局 registry、binding
-  file 或 conformance manifest。
+- 目标：对象 adapter contract、服务本地选择、派生 receipt/descriptor、SBOM 与
+  acceptance 双向一致；真实 Provider readiness evidence 尚未执行齐全。
 - 完成判定：`SIT-002` 对应行为满足且真实测试 `spec_ref` 有效
 
 <a id="open-003"></a>

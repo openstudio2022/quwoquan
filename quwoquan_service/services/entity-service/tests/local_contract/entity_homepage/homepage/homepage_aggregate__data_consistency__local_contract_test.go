@@ -51,12 +51,12 @@ func TestHomepageAggregateStableIdentityRestoreAndCASVersion(t *testing.T) {
 	}
 
 	snapshot := aggregate.Snapshot()
-	snapshot.ID = "homepage_legacy_original"
+	snapshot.ID = "homepage_retired_original"
 	restored, err := homepagemodel.Restore(snapshot)
 	if err != nil {
-		t.Fatalf("restore legacy id: %v", err)
+		t.Fatalf("restore retired id: %v", err)
 	}
-	if restored.ID() != "homepage_legacy_original" {
+	if restored.ID() != "homepage_retired_original" {
 		t.Fatalf("restore must preserve stored id, got %q", restored.ID())
 	}
 	snapshotType := reflect.TypeOf(restored.Snapshot())

@@ -20,14 +20,12 @@ void main() {
       CreateProfileUpdateProposalCommand(
         personaId: 'persona-1',
         proposalId: 'proposal-1',
-        source: ProfileUpdateProposalSource.assistant,
+        source: ProposalSource.assistant,
         reason: 'assistant evidence',
         evidenceRefs: const <String>['assistant-run:run-1'],
         impactScope: const <String>['avatarMediaAssetId', 'displayName'],
-        changes: ProfileChangeSet(
-          displayName: 'new name',
-          avatarMediaAssetId: 'asset-1',
-        ),
+        displayName: 'new name',
+        avatarMediaAssetId: 'asset-1',
       ),
     );
 
@@ -76,8 +74,8 @@ void main() {
       ),
     );
 
-    expect(page.items.single.status, ProfileUpdateProposalStatus.pending);
-    expect(page.items.single.changes.displayName, 'new name');
+    expect(page.items.single.status, ProposalStatus.pending);
+    expect(page.items.single.displayName, 'new name');
     expect(page.items.single.reason, 'assistant evidence');
     expect(page.nextCursor, 'cursor-2');
     expect(executor.queryParameters, <String, String>{
@@ -113,7 +111,7 @@ void main() {
       RollbackProfileUpdateProposalCommand(proposalId: 'proposal-1'),
     );
 
-    expect(result.status, ProfileUpdateProposalStatus.rolledBack);
+    expect(result.status, ProposalStatus.rolledBack);
     expect(executor.pathParameters, <String, String>{'id': 'proposal-1'});
     expect(executor.body, isNull);
     expect(
@@ -122,17 +120,24 @@ void main() {
     );
   });
 
-  test('ProfileUpdateProposal contract rejects legacy dynamic aliases', () {
-    expect(() => ProfileChangeSet(), throwsArgumentError);
+  test('ProfileUpdateProposal contract rejects retired dynamic aliases', () {
     expect(
-      () => ProfileChangeSet(isolationLevel: 'legacy'),
-      throwsArgumentError,
+      () => CreateProfileUpdateProposalCommand.fromWire(<String, Object?>{
+        'personaId': 'persona-1',
+        'proposalId': 'proposal-1',
+        'source': 'assistant',
+        'reason': 'assistant evidence',
+        'evidenceRefs': <String>['assistant-run:run-1'],
+        'impactScope': <String>['displayName'],
+        'changes': <String, Object?>{'displayName': 'retired nested value'},
+      }),
+      throwsFormatException,
     );
     expect(
       () => decodeProfileUpdateProposalView(
         _proposalView()
           ..remove('personaId')
-          ..['legacyPersonaId'] = 'legacy-persona',
+          ..['retiredPersonaId'] = 'retired-persona',
       ),
       throwsFormatException,
     );
@@ -141,16 +146,15 @@ void main() {
         ..._commandResult(),
         'status': 'rolled_back',
       }).status,
-      ProfileUpdateProposalStatus.rolledBack,
+      ProposalStatus.rolledBack,
     );
-    expect(
-      () => decodeProfileUpdateProposalView(
-        _proposalView()
-          ..['displayName'] = null
-          ..['bio'] = null,
-      ),
-      throwsFormatException,
+    final nullableChanges = decodeProfileUpdateProposalView(
+      _proposalView()
+        ..['displayName'] = null
+        ..['bio'] = null,
     );
+    expect(nullableChanges.displayName, isNull);
+    expect(nullableChanges.bio, isNull);
     expect(
       () => decodeProfileUpdateProposalView(<Object?, Object?>{
         1: 'non-string-key',

@@ -106,7 +106,7 @@ void main() {
           maxParticipants: 2,
         ),
       );
-      final callId = initiated.session.callId;
+      final callId = initiated.session.id;
       expect(callId, isNotEmpty);
       expect(initiated.session.callType, CallType.video);
       expect(initiated.session.status, CallStatus.ringing);
@@ -117,7 +117,7 @@ void main() {
         RtcListCallsQuery(limit: 10),
       );
       expect(
-        callerHistory.items.any((session) => session.callId == callId),
+        callerHistory.items.any((session) => session.id == callId),
         isTrue,
       );
 
@@ -135,7 +135,7 @@ void main() {
       final answered = await _callee.lifecycle.answerCall(
         RtcCallIdCommand(callId: callId),
       );
-      expect(answered.session.callId, callId);
+      expect(answered.session.id, callId);
       expect(answered.session.status, CallStatus.connecting);
       expect(answered.mediaAccess.accessToken, isNotEmpty);
 
@@ -145,9 +145,9 @@ void main() {
       final calleeJoin = await _callee.participants.joinCall(
         RtcCallIdCommand(callId: callId),
       );
-      expect(callerJoin.session.callId, callId);
+      expect(callerJoin.session.id, callId);
       expect(callerJoin.mediaAccess.accessToken, isNotEmpty);
-      expect(calleeJoin.session.callId, callId);
+      expect(calleeJoin.session.id, callId);
       expect(calleeJoin.mediaAccess.accessToken, isNotEmpty);
 
       await _caller.participants.reportMediaConnected(
@@ -163,7 +163,7 @@ void main() {
         RtcToggleMuteCommand(callId: callId, muted: true),
       );
       expect(
-        muted.participants.any(
+        (muted.participants ?? const <CallParticipant>[]).any(
           (participant) =>
               participant.userId == _caller.personaId && participant.isMuted,
         ),
@@ -338,7 +338,7 @@ final class _GammaRtcActor {
     sourceSurfaceId: AppUiSurfaces.userProfile.id,
   );
 
-  Future<RelationshipCapabilityResult> getRelationshipCapability(
+  Future<RelationshipCapabilityView> getRelationshipCapability(
     String targetPersonaId,
   ) => relationshipCapability.getRelationshipCapability(
     GetRelationshipCapabilityQuery(targetPersonaId: targetPersonaId),

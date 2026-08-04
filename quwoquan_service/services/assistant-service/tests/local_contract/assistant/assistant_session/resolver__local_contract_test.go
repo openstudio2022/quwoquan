@@ -1,7 +1,7 @@
 package local_contract
 
 import (
-	. "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/providerbinding"
+	. "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/infrastructure/providerbinding"
 	"strings"
 	"testing"
 

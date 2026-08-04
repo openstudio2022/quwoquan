@@ -142,9 +142,9 @@ func Run() {
 			"manifestDigest": releaseBinding.ManifestDigest,
 			"mode":           *mode,
 			"deletePolicy":   *deletePolicy,
-			"counts":         bson.M{"postsLoaded": len(posts)},
-			"postBindings":   postBindings,
-			"auditEvents":    []string{"DataReleasePrepared"},
+			"counts":       ImportLoadedCounts(len(posts), len(desired.DesiredRefs.Entities)),
+			"postBindings": postBindings,
+			"auditEvents":  []string{"DataReleasePrepared"},
 		})
 		return
 	}
@@ -199,6 +199,10 @@ func Run() {
 	}); err != nil {
 		log.Fatalf("upsert release state: %v", err)
 	}
+	activeCounts := ImportLoadedCounts(len(posts), len(desired.DesiredRefs.Entities))
+	activeCounts["postsUpserted"] = np
+	activeCounts["postsRemoved"] = tp
+	activeCounts["candidateEventsPublished"] = candidateEvents
 	if err := WriteImportReport(*reportPath, bson.M{
 		"schema":         "quwoquan.content_import_report",
 		"status":         "active",
@@ -208,15 +212,10 @@ func Run() {
 		"manifestDigest": opts.ManifestDigest,
 		"mode":           opts.Mode,
 		"deletePolicy":   opts.DeletePolicy,
-		"counts": bson.M{
-			"postsLoaded":              len(posts),
-			"postsUpserted":            np,
-			"postsRemoved":             tp,
-			"candidateEventsPublished": candidateEvents,
-		},
-		"postBindings": postBindings,
-		"auditEvents":  []string{"DataReleasePrepared", "DataReleaseActivated"},
-		"generatedAt":  now,
+		"counts":         activeCounts,
+		"postBindings":   postBindings,
+		"auditEvents":    []string{"DataReleasePrepared", "DataReleaseActivated"},
+		"generatedAt":    now,
 	}); err != nil {
 		log.Fatalf("write import report: %v", err)
 	}
@@ -1096,9 +1095,26 @@ func UpsertReleaseState(ctx context.Context, coll *mongo.Collection, env string,
 	return err
 }
 
+// ImportLoadedCounts always emits schema-required loaded counters, including
+// zero values. JSON consumers reject reports that omit entitiesLoaded=0.
+func ImportLoadedCounts(postsLoaded, entitiesLoaded int) bson.M {
+	return bson.M{
+		"postsLoaded":    postsLoaded,
+		"entitiesLoaded": entitiesLoaded,
+	}
+}
+
 func WriteImportReport(path string, report bson.M) error {
 	if path == "" {
 		return nil
+	}
+	if counts, ok := report["counts"].(bson.M); ok {
+		if _, exists := counts["postsLoaded"]; !exists {
+			counts["postsLoaded"] = 0
+		}
+		if _, exists := counts["entitiesLoaded"]; !exists {
+			counts["entitiesLoaded"] = 0
+		}
 	}
 	raw, err := json.MarshalIndent(report, "", "  ")
 	if err != nil {

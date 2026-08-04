@@ -115,7 +115,7 @@ func normalize(input Release, requireReleaseDigest bool) (Release, error) {
 		return Release{}, ErrInvalidArgument
 	}
 	templates := append([]Template(nil), input.Templates...)
-	templateIDs := make(map[string]struct{}, len(templates))
+	templatesByID := make(map[string]Template, len(templates))
 	for index := range templates {
 		template := &templates[index]
 		template.TemplateID = strings.TrimSpace(template.TemplateID)
@@ -134,12 +134,12 @@ func normalize(input Release, requireReleaseDigest bool) (Release, error) {
 		); parseErr != nil {
 			return Release{}, ErrInvalidArgument
 		}
-		if _, duplicate := templateIDs[template.TemplateID]; duplicate {
+		if _, duplicate := templatesByID[template.TemplateID]; duplicate {
 			return Release{}, ErrInvalidArgument
 		}
-		templateIDs[template.TemplateID] = struct{}{}
+		templatesByID[template.TemplateID] = *template
 	}
-	if _, ok := templateIDs[input.DefaultTemplateID]; !ok {
+	if _, ok := templatesByID[input.DefaultTemplateID]; !ok {
 		return Release{}, ErrInvalidArgument
 	}
 	sort.Slice(templates, func(i, j int) bool {
@@ -159,7 +159,12 @@ func normalize(input Release, requireReleaseDigest bool) (Release, error) {
 			(rule.DomainID == "" && rule.SkillID == "") {
 			return Release{}, ErrInvalidArgument
 		}
-		if _, ok := templateIDs[rule.TemplateID]; !ok {
+		template, ok := templatesByID[rule.TemplateID]
+		if !ok {
+			return Release{}, ErrInvalidArgument
+		}
+		if (rule.SkillID != "" && rule.SkillID != template.SkillID) ||
+			(rule.DomainID != "" && rule.DomainID != template.DomainID) {
 			return Release{}, ErrInvalidArgument
 		}
 		if _, duplicate := ruleIDs[rule.RuleID]; duplicate {

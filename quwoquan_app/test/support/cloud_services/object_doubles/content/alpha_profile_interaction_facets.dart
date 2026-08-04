@@ -23,17 +23,17 @@ final class AlphaProfileInteractionFacet
       <String, ProfileInteractionReadFactAck>{};
 
   @override
-  Future<ContentProfileInteractionPage> listActivities(
+  Future<ProfileInteractionActivityPageSlice> listActivities(
     ContentProfileInteractionPageQuery query, {
-    required ContentProfileInteractionDirection direction,
+    required InteractionDirection direction,
   }) async {
     final matching =
         _rows
             .where(
               (row) =>
                   row.ownerPersonaId == query.personaId &&
-                  row.activity.direction == direction.wireName &&
-                  row.activity.activityType == query.type.wireName,
+                  row.activity.direction == direction &&
+                  row.activity.activityType == query.type,
             )
             .toList(growable: false)
           ..sort(
@@ -55,8 +55,10 @@ final class AlphaProfileInteractionFacet
     final page = start >= matching.length
         ? const <_AlphaProfileActivityRow>[]
         : matching.sublist(start, end);
-    return ContentProfileInteractionPage(
-      items: page.map((row) => row.activity),
+    return ProfileInteractionActivityPageSlice(
+      items: List<ProfileInteractionActivityView>.unmodifiable(
+        page.map((row) => row.activity),
+      ),
       nextCursor: end < matching.length && page.isNotEmpty
           ? page.last.activity.activityId
           : null,
@@ -71,8 +73,7 @@ final class AlphaProfileInteractionFacet
     final rowIndex = _rows.indexWhere(
       (row) =>
           row.ownerPersonaId == command.personaId &&
-          row.activity.direction ==
-              ContentProfileInteractionDirection.received.wireName &&
+          row.activity.direction == InteractionDirection.received &&
           row.activity.activityId == command.activityId,
     );
     if (rowIndex < 0) {
@@ -97,7 +98,7 @@ final class AlphaProfileInteractionFacet
     final ack = ProfileInteractionReadFactAck(
       factId: factId,
       activityId: command.activityId,
-      state: command.state.wireName,
+      state: command.state,
       occurredAt: occurredAt,
       replayed: false,
     );
@@ -163,22 +164,41 @@ final class AlphaProfileInteractionFacet
     );
     return _AlphaProfileActivityRow(
       ownerPersonaId: ownerPersonaID,
-      activity: ContentProfileInteractionActivity(
+      activity: ProfileInteractionActivityView(
+        ownerPersonaId: ownerPersonaID,
         activityId: activityID,
-        activityType: _text(raw['activityType'], fallback: 'share'),
-        direction: direction,
+        activityType: InteractionActivityType.fromWire(
+          _text(raw['activityType'], fallback: 'share'),
+          'profileShareInteractions.activityType',
+        ),
+        direction: InteractionDirection.fromWire(
+          direction,
+          'profileShareInteractions.direction',
+        ),
+        sourceType: 'profile_share_interaction_seed',
+        sourceEventId: activityID,
+        sourceVersion: 1,
+        viewerReactionVersion: 0,
+        targetVersion: 0,
+        active: true,
+        commentKind: 'none',
+        viewerReaction: CommentReactionType.none,
         actorPersonaId: actorID,
         actorDisplayName: actorName,
         actorAvatarUrl: _text(raw['actorAvatarUrl']),
+        actorAvatarVersion: 0,
         counterpartPersonaId: counterpartID,
         counterpartDisplayName: counterpartName,
         counterpartAvatarUrl: _text(raw['counterpartAvatarUrl']),
         targetPersonaId: targetPersonaID,
         targetContentId: targetContentID,
         targetContentType: switch (previewKind) {
-          'video' => 'video',
-          'image' => 'image',
-          _ => targetKind == 'discussion' ? 'text' : 'article',
+          'video' => ContentType.video,
+          'image' => ContentType.image,
+          _ =>
+            targetKind == 'discussion'
+                ? ContentType.micro
+                : ContentType.article,
         },
         targetContentSummary: _text(raw['targetContentSummary']),
         targetKind: targetKind,
@@ -189,6 +209,7 @@ final class AlphaProfileInteractionFacet
         displayAvatarUrl: direction == 'sent'
             ? _text(raw['counterpartAvatarUrl'])
             : _text(raw['actorAvatarUrl']),
+        displayAvatarVersion: 0,
         displayUserRouteId: 'userProfile',
         primaryText: direction == 'sent' ? '你转发了TA的记录' : '转发了你的记录',
         contextText: _text(raw['shareText']),
@@ -219,18 +240,25 @@ final class _AlphaProfileActivityRow {
   });
 
   final String ownerPersonaId;
-  final ContentProfileInteractionActivity activity;
+  final ProfileInteractionActivityView activity;
 }
 
-ContentProfileInteractionActivity _withReadState(
-  ContentProfileInteractionActivity activity, {
-  required ContentProfileInteractionReadState state,
+ProfileInteractionActivityView _withReadState(
+  ProfileInteractionActivityView activity, {
+  required ProfileInteractionReadState state,
   required DateTime occurredAt,
 }) {
-  return ContentProfileInteractionActivity(
+  return ProfileInteractionActivityView(
+    ownerPersonaId: activity.ownerPersonaId,
     activityId: activity.activityId,
     activityType: activity.activityType,
     direction: activity.direction,
+    sourceType: activity.sourceType,
+    sourceEventId: activity.sourceEventId,
+    sourceVersion: activity.sourceVersion,
+    viewerReactionVersion: activity.viewerReactionVersion,
+    targetVersion: activity.targetVersion,
+    active: activity.active,
     commentKind: activity.commentKind,
     commentId: activity.commentId,
     parentCommentId: activity.parentCommentId,
@@ -270,7 +298,7 @@ ContentProfileInteractionActivity _withReadState(
     createdAt: activity.createdAt,
     occurredAt: activity.occurredAt,
     seenAt: activity.seenAt ?? occurredAt,
-    readAt: state == ContentProfileInteractionReadState.read
+    readAt: state == ProfileInteractionReadState.read
         ? (activity.readAt ?? occurredAt)
         : activity.readAt,
   );

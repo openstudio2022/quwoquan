@@ -14,6 +14,7 @@ import 'package:quwoquan_app/core/platform/platform_providers.dart';
 import 'package:quwoquan_app/core/platform/push_endpoint_gateway.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import '../../../support/cloud_services/object_doubles/rtc/rtc_contract_test_builders.dart';
 
 void main() {
   // ──────────────────────────────────────────────────────────────────
@@ -168,7 +169,7 @@ void main() {
     coordinator.start('user-current');
     final signals = container.read(rtcSignalEventBusProvider);
 
-    signals.emit(<String, dynamic>{
+    signals.emitCanonicalFixture(<String, dynamic>{
       'type': 'call.ringing',
       'callId': '11111111-1111-4111-8111-111111111111',
       'actorId': 'user-caller',
@@ -191,7 +192,7 @@ void main() {
     await Future<void>.delayed(Duration.zero);
     expect(callKit.showIncomingCount, 1);
 
-    signals.emit(<String, dynamic>{
+    signals.emitCanonicalFixture(<String, dynamic>{
       'type': 'call.ended',
       'callId': '22222222-2222-4222-8222-222222222222',
       'payload': <String, dynamic>{
@@ -204,7 +205,7 @@ void main() {
       '22222222-2222-4222-8222-222222222222',
     ]);
 
-    signals.emit(<String, dynamic>{
+    signals.emitCanonicalFixture(<String, dynamic>{
       'type': 'call.ringing',
       'callId': '22222222-2222-4222-8222-222222222222',
       'actorId': 'user-caller',
@@ -226,7 +227,7 @@ void main() {
     await Future<void>.delayed(Duration.zero);
     expect(callKit.showIncomingCount, 1);
 
-    signals.emit(<String, dynamic>{
+    signals.emitCanonicalFixture(<String, dynamic>{
       'type': 'call.ended',
       'callId': '11111111-1111-4111-8111-111111111111',
       'payload': <String, dynamic>{
@@ -341,8 +342,9 @@ final class _FixedCallQuery implements CallQuery {
   @override
   Future<CallSession> getCall(RtcGetCallQuery query) async {
     final timestamp = DateTime.utc(2026, 7, 20);
-    return CallSession(
-      callId: callId,
+    return buildCallSessionContract(
+      id: callId,
+      callType: CallType.audio,
       status: status,
       initiatorId: 'user-caller',
       roomId: 'room-$callId',
@@ -385,4 +387,20 @@ final class _PendingNativeBridge implements IncomingCallNativeBridge {
 
   @override
   Future<void> setFlutterReady(bool ready) async {}
+}
+
+extension on RtcSignalEventBus {
+  void emitCanonicalFixture(Map<String, dynamic> event) {
+    final payload = Map<String, Object?>.from(
+      event['payload'] as Map<String, dynamic>,
+    );
+    emit(
+      RealtimeEventEnvelope.fromWire(<String, Object?>{
+        'type': event['type'],
+        if (payload['eventId'] != null) 'eventId': payload['eventId'],
+        'occurredAt': '2026-08-04T10:00:00Z',
+        'payload': payload,
+      }),
+    );
+  }
 }

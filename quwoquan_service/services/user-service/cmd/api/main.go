@@ -61,6 +61,7 @@ import (
 	"quwoquan_service/services/user-service/internal/account/user_account/infrastructure/projection"
 	useraccountprojection "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/projection"
 	"quwoquan_service/services/user-service/internal/account/user_account/infrastructure/searchindex"
+	usersyncstream "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/syncstream"
 	usercache "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/user/cache"
 	userobservability "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/user/observability"
 	userpersistence "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/user/persistence"
@@ -315,7 +316,9 @@ func main() {
 			mongoCleanupProjector,
 		)
 	}
-	userSyncService := runtimesync.NewService(redisClient, redisRouter.Scene("realtime"))
+	userSyncService := usersyncstream.NewRuntimeUserSyncStream(
+		runtimesync.NewService(redisClient, redisRouter.Scene("realtime")),
+	)
 
 	// 7. Services
 	var regionTagResolver application.RegionTagResolver = application.PathRegionTagResolver{}

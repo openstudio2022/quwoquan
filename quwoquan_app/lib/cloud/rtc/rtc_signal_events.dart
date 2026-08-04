@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/rtc/rtc_signal_payloads.g.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// rtc 通话事件（经 realtime 单通道 rt:rtc:user:{userId} 下发）。
 /// 事件 envelope：{type, callId, actorId, payload}，type 与
@@ -11,7 +11,7 @@ class RtcSignalEvent {
   final String callId;
   final String? actorId;
 
-  /// 已按 `events.yaml` / [parseRtcWsPayload] 解析；未知 `type` 为 [RtcWsUnknownPayload]。
+  /// 已由共享 [RealtimeEventEnvelope] tagged union 按 `events.yaml` 解析。
   final RtcWsPayload payload;
 
   const RtcSignalEvent({
@@ -21,19 +21,13 @@ class RtcSignalEvent {
     required this.payload,
   });
 
-  factory RtcSignalEvent.fromJson(Map<String, dynamic> json) {
-    final p = json['payload'];
-    final payloadMap = p is Map<String, dynamic>
-        ? p
-        : p is Map
-        ? Map<String, dynamic>.from(p)
-        : <String, dynamic>{};
-    final type = json['type'] as String? ?? '';
+  factory RtcSignalEvent.fromEnvelope(RtcRealtimeEventEnvelope envelope) {
+    final payload = envelope.payload;
     return RtcSignalEvent(
-      type: type,
-      callId: json['callId'] as String? ?? '',
-      actorId: json['actorId'] as String?,
-      payload: parseRtcWsPayload(wireType: type, payload: payloadMap),
+      type: envelope.wireType,
+      callId: _rtcPayloadCallId(payload),
+      actorId: _rtcPayloadActorId(payload),
+      payload: payload,
     );
   }
 }
@@ -61,8 +55,13 @@ class RtcSignalEventBus {
   Stream<RtcSignalEvent> get callAnswered =>
       events.where((e) => e.payload is RtcCallAnsweredWsPayload);
 
-  void emit(Map<String, dynamic> json) {
-    _events.add(RtcSignalEvent.fromJson(json));
+  void emit(RealtimeEventEnvelope envelope) {
+    if (envelope is! RtcRealtimeEventEnvelope) {
+      throw FormatException(
+        'RTC event bus requires RtcRealtimeEventEnvelope, got ${envelope.wireType}',
+      );
+    }
+    _events.add(RtcSignalEvent.fromEnvelope(envelope));
   }
 
   void dispose() {
@@ -75,3 +74,26 @@ final rtcSignalEventBusProvider = Provider<RtcSignalEventBus>((ref) {
   ref.onDispose(bus.dispose);
   return bus;
 });
+
+String _rtcPayloadCallId(RtcWsPayload payload) => switch (payload) {
+  RtcCallInitiatedWsPayload(:final data) => data.callId ?? '',
+  RtcCallRingingWsPayload(:final data) => data.callId ?? '',
+  RtcCallAnsweredWsPayload(:final data) => data.callId ?? '',
+  RtcCallConnectedWsPayload(:final data) => data.callId ?? '',
+  RtcCallEndedWsPayload(:final data) => data.callId ?? '',
+  RtcParticipantJoinedWsPayload(:final data) => data.callId ?? '',
+  RtcParticipantLeftWsPayload(:final data) => data.callId ?? '',
+  RtcScreenShareStartedWsPayload(:final data) => data.callId ?? '',
+  RtcScreenShareStoppedWsPayload(:final data) => data.callId ?? '',
+};
+
+String? _rtcPayloadActorId(RtcWsPayload payload) => switch (payload) {
+  RtcCallInitiatedWsPayload(:final data) => data.initiatorId,
+  RtcCallAnsweredWsPayload(:final data) => data.userId,
+  RtcCallConnectedWsPayload(:final data) => data.userId,
+  RtcParticipantJoinedWsPayload(:final data) => data.userId,
+  RtcParticipantLeftWsPayload(:final data) => data.userId,
+  RtcScreenShareStartedWsPayload(:final data) => data.userId,
+  RtcScreenShareStoppedWsPayload(:final data) => data.userId,
+  RtcCallRingingWsPayload() || RtcCallEndedWsPayload() => null,
+};

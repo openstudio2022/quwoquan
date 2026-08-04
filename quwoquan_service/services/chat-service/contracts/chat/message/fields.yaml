@@ -347,6 +347,70 @@ value_objects:
         api_exposure: read_write
         ops_exposure: read
 types:
+  MessageSentEventPayload:
+    description: MessageSent 事务 outbox 的完整不可变载荷；不复用可变 Message 聚合 wire。
+    fields:
+      - name: messageId
+        type: string
+        constraints: [NOT_BLANK]
+      - name: conversationId
+        type: string
+        constraints: [NOT_BLANK]
+      - name: seq
+        type: int64
+        constraints: [NOT_NULL, POSITIVE]
+      - name: clientMsgId
+        type: string
+        constraints: [NOT_BLANK]
+      - name: senderId
+        type: string
+        constraints: [NOT_BLANK]
+      - name: type
+        type: enum
+        enum_ref: MessageType
+        constraints: [NOT_NULL]
+      - name: content
+        type: string
+        constraints: [NULLABLE]
+      - name: mediaAssetId
+        type: string
+        constraints: [NULLABLE]
+      - name: card
+        type: MessageCard
+        constraints: [NULLABLE]
+      - name: replyToMessageId
+        type: string
+        constraints: [NULLABLE]
+      - name: mentions
+        type: '[]string'
+        constraints: [NULLABLE, MAX_ITEMS_50]
+      - name: personaContextVersion
+        type: int
+        constraints: [NULLABLE, POSITIVE]
+      - name: senderDisplayNameSnapshot
+        type: string
+        constraints: [NULLABLE]
+      - name: senderAvatarUrlSnapshot
+        type: string
+        constraints: [NULLABLE]
+      - name: timestamp
+        type: timestamp
+        constraints: [NOT_NULL]
+  MessageRecalledEventPayload:
+    description: MessageRecalled 事务 outbox 的完整不可变载荷。
+    fields:
+      - name: messageId
+        type: string
+        constraints: [NOT_BLANK]
+      - name: conversationId
+        type: string
+        constraints: [NOT_BLANK]
+      - name: seq
+        type: int64
+        constraints: [NOT_NULL, POSITIVE]
+      - name: recalledAt
+        type: timestamp
+        constraints: [NOT_NULL]
   ChatSendAssistantDeliveryMessageCommand:
     fields:
       - name: conversationId

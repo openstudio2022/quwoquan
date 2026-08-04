@@ -88,6 +88,30 @@ def validate_port_manifest(manifest: dict[str, Any]) -> list[str]:
             )
         if slot % 10 != 0:
             issues.append(f"{role_name}: slotOffset must end with 0")
+        endpoint_values = {
+            "serviceHost": role.get("serviceHost"),
+            "containerPort": role.get("containerPort"),
+            "scheme": role.get("scheme"),
+        }
+        if any(value is not None for value in endpoint_values.values()):
+            missing = [
+                key
+                for key, value in endpoint_values.items()
+                if value is None or (isinstance(value, str) and not value.strip())
+            ]
+            if missing:
+                issues.append(
+                    f"{role_name}: internal endpoint metadata is incomplete: {missing}"
+                )
+            if (
+                not isinstance(endpoint_values["containerPort"], int)
+                or not 0 < endpoint_values["containerPort"] < 65536
+            ):
+                issues.append(
+                    f"{role_name}: containerPort must be an integer in 1..65535"
+                )
+            if endpoint_values["scheme"] not in {"http", "https"}:
+                issues.append(f"{role_name}: scheme must be http or https")
 
     for profile_name in REQUIRED_PROFILES:
         profile = profiles.get(profile_name)
@@ -145,3 +169,17 @@ def profile_ports(manifest: dict[str, Any], profile_name: str) -> dict[str, int]
         role_name: canonical_port(manifest, profile_name, role_name)
         for role_name in manifest.get("roles", {})
     }
+
+
+def internal_role_base_url(manifest: dict[str, Any], role_name: str) -> str:
+    role = manifest.get("roles", {}).get(role_name)
+    if not isinstance(role, dict):
+        raise ValueError(f"local topology role is unavailable: {role_name}")
+    host = str(role.get("serviceHost") or "").strip()
+    scheme = str(role.get("scheme") or "").strip()
+    port = role.get("containerPort")
+    if not host or scheme not in {"http", "https"} or not isinstance(port, int):
+        raise ValueError(
+            f"local topology role has no complete internal endpoint: {role_name}"
+        )
+    return f"{scheme}://{host}:{port}"

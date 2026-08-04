@@ -122,6 +122,14 @@ fields:
     ops_exposure: read
     role: authoritative_state
 types:
+  ConversationUserSettingsChangedEventPayload:
+    description: 当前用户的会话级静音与置顶状态变化后供端侧定点刷新 owner projection 的 canonical 实时载荷。
+    fields:
+      - {name: conversationId, type: string, constraints: [NOT_BLANK]}
+      - {name: userId, type: string, constraints: [NOT_BLANK]}
+      - {name: muted, type: bool, constraints: [NOT_NULL]}
+      - {name: pinned, type: bool, constraints: [NOT_NULL]}
+      - {name: updatedAt, type: timestamp, constraints: [NOT_NULL]}
   ChatMarkConversationMessageReadCommand:
     fields:
       - name: conversationId

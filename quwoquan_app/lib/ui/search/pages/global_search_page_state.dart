@@ -4,10 +4,6 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
   late final TextEditingController _controller;
   late final FocusNode _focusNode;
   _SearchHomeTab _activeHomeTab = _SearchHomeTab.guess;
-  late final DateTime _pageEnteredAt;
-  bool _didTrackPageImpression = false;
-  ContentBehaviorTracker? _behaviorTracker;
-  String? _feedRequestIdAtEnter;
 
   SearchCoordinator get _coordinator =>
       ref.read(searchCoordinatorProvider(widget.launchContext).notifier);
@@ -22,7 +18,6 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
   @override
   void initState() {
     super.initState();
-    _pageEnteredAt = DateTime.now();
     _controller = TextEditingController(
       text: widget.launchContext.prefilledQuery,
     );
@@ -32,51 +27,14 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
         return;
       }
       _focusNode.requestFocus();
-      _trackPageImpressionIfNeeded();
     });
   }
 
   @override
   void dispose() {
-    _trackPageDwell();
     _controller.dispose();
     _focusNode.dispose();
     super.dispose();
-  }
-
-  void _trackPageImpressionIfNeeded() {
-    if (_didTrackPageImpression) {
-      return;
-    }
-    _didTrackPageImpression = true;
-    _behaviorTracker = ref.read(contentBehaviorTrackerProvider);
-    _feedRequestIdAtEnter = ref
-        .read(feedSessionProvider.notifier)
-        .currentFeedRequestId;
-    _behaviorTracker!.trackImpression(
-      'global_search',
-      contentType: 'search_page',
-      referralSource: ReferralSource.search,
-      feedRequestId: _feedRequestIdAtEnter,
-      tags: <String>[widget.launchContext.entrySurfaceId],
-    );
-  }
-
-  void _trackPageDwell() {
-    final tracker = _behaviorTracker;
-    if (tracker == null) {
-      return;
-    }
-    final elapsedSeconds =
-        DateTime.now().difference(_pageEnteredAt).inMilliseconds / 1000.0;
-    tracker.trackDwell(
-      'global_search',
-      durationSeconds: elapsedSeconds,
-      contentType: 'search_page',
-      referralSource: ReferralSource.search,
-      feedRequestId: _feedRequestIdAtEnter,
-      tags: <String>[widget.launchContext.entrySurfaceId],
-    );
   }
 
   @override

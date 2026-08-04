@@ -26,7 +26,7 @@ class ContactDiscoveryMatchView {
       avatarUrl: result.avatarUrl,
       avatarVersion: result.avatarVersion,
       region: result.region,
-      relationshipCapability: RelationshipCapabilityDto.fromWire(
+      relationshipCapability: RelationshipCapabilityViewData.fromWire(
         result.relationshipCapability,
       ),
     );
@@ -39,12 +39,12 @@ class ContactDiscoveryMatchView {
   final String? avatarUrl;
   final int avatarVersion;
   final String? region;
-  final RelationshipCapabilityDto relationshipCapability;
+  final RelationshipCapabilityViewData relationshipCapability;
 }
 
 /// 一次通讯录匹配的结果视图（POST initiate / GET latest 同构）。
 ///
-/// `matches` 是富化投影（[ContactDiscoveryMatchWireDto]）：回显发起者自己上传的
+/// `matches` 是富化投影（[ContactDiscoveryMatchResult]）：回显发起者自己上传的
 /// `hashedPhone`（用于把命中映射回本机联系人姓名）+ 精简 profile + viewer 维度的
 /// `relationshipCapability`（驱动「添加 / 已添加」按钮）。`matchedPersonaIds` 是
 /// 隐私基线（即使富化失败也保证返回）。对方手机号原文端云均不出现。
@@ -71,9 +71,7 @@ class ContactDiscoveryResultView {
     matches: <ContactDiscoveryMatchView>[],
   );
 
-  factory ContactDiscoveryResultView.fromWire(
-    ContactDiscoveryResult result,
-  ) {
+  factory ContactDiscoveryResultView.fromWire(ContactDiscoveryResult result) {
     return ContactDiscoveryResultView(
       id: result.id,
       status: result.status.wireName,

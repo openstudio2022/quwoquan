@@ -4,7 +4,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 void main() {
   group('Chat contact typed contracts', () {
     test('contact identity only accepts canonical userId and userHandle', () {
-      final page = decodeChatContactPageSlice(<String, Object?>{
+      final page = decodeContactPageSlice(<String, Object?>{
         'items': <Object?>[
           <String, Object?>{
             'userId': 'persona-42',
@@ -15,6 +15,11 @@ void main() {
             'metFrom': '',
             'lastInteraction': '',
             'relationState': 'mutual',
+            'conversationId': 'conversation-1',
+            'conversationType': 'direct',
+            'subtitle': '',
+            'highlightText': '',
+            'matchedField': '',
             'source': 'follow',
             'isStarred': false,
           },
@@ -24,7 +29,7 @@ void main() {
       expect(page.items.single.userId, 'persona-42');
       expect(page.items.single.userHandle, 'alice_public');
       expect(
-        () => decodeChatContactPageSlice(<String, Object?>{
+        () => decodeContactPageSlice(<String, Object?>{
           'items': <Object?>[
             <String, Object?>{
               'contactId': 'persona-42',
@@ -36,6 +41,11 @@ void main() {
               'metFrom': '',
               'lastInteraction': '',
               'relationState': 'mutual',
+              'conversationId': 'conversation-1',
+              'conversationType': 'direct',
+              'subtitle': '',
+              'highlightText': '',
+              'matchedField': '',
               'source': 'follow',
               'isStarred': false,
             },
@@ -57,7 +67,7 @@ void main() {
     });
 
     test('strictly decodes canonical selectable group page', () {
-      final page = decodeChatSelectableGroupConversationPageSlice(
+      final page = decodeSelectableGroupConversationPageSlice(
         <String, Object?>{
           'items': <Object?>[
             <String, Object?>{
@@ -76,7 +86,7 @@ void main() {
       expect(page.items.single.friendMemberCount, 2);
       expect(page.nextCursor, 'opaque-next');
       expect(
-        () => decodeChatSelectableGroupConversationPageSlice(<String, Object?>{
+        () => decodeSelectableGroupConversationPageSlice(<String, Object?>{
           'items': <Object?>[],
           'cursor': 'retired',
         }),

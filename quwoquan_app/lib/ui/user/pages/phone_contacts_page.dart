@@ -373,10 +373,14 @@ class _PhoneContactsPageState extends ConsumerState<PhoneContactsPage> {
             category: UiErrorCategory.pageLoad,
             scope: UiErrorScope.page,
           ),
-          onAction: (action) async {
+          onRecovery: (action) async {
             if (action.type == UiErrorActionType.retry) {
               await _requestAndLoad();
+              return _rawError == null
+                  ? UiRecoveryOutcome.recovered
+                  : UiRecoveryOutcome.stillBlocked;
             }
+            return UiRecoveryOutcome.cancelled;
           },
         );
     }

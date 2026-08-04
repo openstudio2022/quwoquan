@@ -3,7 +3,6 @@ import "package:quwoquan_cloud_contracts/generated/chat_contracts.dart";
 import 'package:flutter/cupertino.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/cloud/chat/models/chat_contact_tab_row_dtos.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
     show ReferralSource;
 import 'package:quwoquan_app/core/media/avatar_image_url.dart';
@@ -113,34 +112,6 @@ class ChatContactsRow {
       conversationId: (dto.conversationId?.isNotEmpty ?? false)
           ? dto.conversationId
           : null,
-    );
-  }
-
-  factory ChatContactsRow.fromContactTabCircleDto(
-    ChatContactTabCircleRowDto d,
-  ) {
-    return ChatContactsRow(
-      kind: ChatContactsRowKind.circle,
-      id: d.circleId,
-      displayName: d.displayName,
-      avatarUrl: resolveAvatarImageUrl(d.avatarUrl),
-      subtitle: d.subtitle,
-      source: 'circle',
-      circleId: d.circleId.isNotEmpty ? d.circleId : null,
-    );
-  }
-
-  factory ChatContactsRow.fromContactTabFunGroupDto(
-    ChatContactTabFunGroupRowDto d,
-  ) {
-    return ChatContactsRow(
-      kind: ChatContactsRowKind.group,
-      id: d.conversationId,
-      displayName: d.displayName,
-      avatarUrl: resolveAvatarImageUrl(d.avatarUrl),
-      subtitle: d.subtitle,
-      source: 'group',
-      conversationId: d.conversationId.isNotEmpty ? d.conversationId : null,
     );
   }
 

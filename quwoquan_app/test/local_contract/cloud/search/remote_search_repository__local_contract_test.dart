@@ -61,8 +61,8 @@ void main() {
         ]),
       );
       expect(
-        response.hits.any((hit) => hit.payload is SearchHitPayloadWireMap),
-        isFalse,
+        response.hits.every((hit) => hit.payload is! SearchHitPayloadEmpty),
+        isTrue,
       );
     },
   );

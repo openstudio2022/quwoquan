@@ -6,7 +6,7 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 ///
 /// 确保 codegen 输出与 ui_config.yaml 元数据一致。
 void main() {
-  group('ContentUIConfig — home_channels contract (V1-B/V1-H)', () {
+  group('ContentUIConfig — home_channels contract', () {
     // 频道是运营资产：端 meta 默认（发布自带 fallback），云侧可远程覆盖。
     // 本组锁定首发四频道默认集与有限模板类型，防止默认频道回归漂移。
     test('home_channels — exactly 7 default channels', () {

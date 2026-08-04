@@ -37,6 +37,10 @@ func newServerMux(service *productService, healthChecker *health.Checker) *http.
 		recordTelemetryIngestMetrics,
 		recordAppExperienceEvents,
 	).Register(mux)
+	eventrecordhttp.NewStartupTelemetryHandler(
+		service.telemetry,
+		recordStartupTelemetryMetrics,
+	).Register(mux)
 	mux.HandleFunc("/ops/runtime-logs", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			writeRuntimeNotFound(w, r)
@@ -57,13 +61,6 @@ func newServerMux(service *productService, healthChecker *health.Checker) *http.
 			return
 		}
 		service.handleGetRuntimeLogDrilldown(w, r)
-	})
-	mux.HandleFunc("/ops/startup-events", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			writeRuntimeNotFound(w, r)
-			return
-		}
-		service.handleReportStartupEventBatch(w, r)
 	})
 	mux.HandleFunc("/ops/internal/runtime-logs:ingest", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {

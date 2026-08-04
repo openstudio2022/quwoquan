@@ -11,7 +11,14 @@ from quwoquan_ops.cli.lib.local_provider_credentials import (
 
 def _material(environment: str) -> dict[str, str]:
     _, secret_keys = _required_material_for_environment(environment)
-    return {key: f"target-scoped-{key.lower()}" for key in secret_keys}
+    values = {key: f"target-scoped-{key.lower()}" for key in secret_keys}
+    values["SMS_SUBSTITUTE_OPERATOR_TOKEN"] = (
+        "target-scoped-sms-substitute-operator-token"
+    )
+    values["PROVIDER_SUBSTITUTE_OPERATOR_TOKEN"] = (
+        "target-scoped-provider-protocol-operator-token"
+    )
+    return values
 
 
 class LocalProviderCredentialsSecurityLocalContractTest(unittest.TestCase):
@@ -20,14 +27,27 @@ class LocalProviderCredentialsSecurityLocalContractTest(unittest.TestCase):
         self.assertEqual(endpoint_keys, frozenset({"RTC_MEDIA_CONNECTION_URL"}))
         self.assertEqual(
             secret_keys,
-            frozenset({"RTC_MEDIA_API_KEY", "RTC_MEDIA_API_SECRET"}),
+            frozenset(
+                {
+                    "INTEGRATION_SMS_TOKEN",
+                    "RTC_MEDIA_API_KEY",
+                    "RTC_MEDIA_API_SECRET",
+                }
+            ),
         )
 
     def test_nonprod_provider_input_is_only_target_scoped_livekit_material(self) -> None:
         endpoint_keys, secret_keys = _required_material_for_environment("beta")
 
         self.assertEqual(endpoint_keys, {"RTC_MEDIA_CONNECTION_URL"})
-        self.assertEqual(secret_keys, {"RTC_MEDIA_API_KEY", "RTC_MEDIA_API_SECRET"})
+        self.assertEqual(
+            secret_keys,
+            {
+                "INTEGRATION_SMS_TOKEN",
+                "RTC_MEDIA_API_KEY",
+                "RTC_MEDIA_API_SECRET",
+            },
+        )
 
     def test_loader_projects_only_canonical_internal_endpoints(self) -> None:
         values = load_nonprod_provider_environment(
@@ -37,15 +57,19 @@ class LocalProviderCredentialsSecurityLocalContractTest(unittest.TestCase):
         )
         self.assertEqual(
             values["CONTENT_EMBEDDING_ENDPOINT"],
-            "http://integration-service:18089/v1/embeddings",
+            "https://provider-protocol-substitute:18089/v1/embeddings",
         )
         self.assertEqual(
             values["ASSISTANT_MODEL_COMPLETION_URL"],
-            "http://integration-service:18089/v1/chat/completions",
+            "https://provider-protocol-substitute:18089/v1/chat/completions",
         )
         self.assertEqual(
             values["RTC_MEDIA_CONNECTION_URL"],
             "http://livekit-sfu:7880",
+        )
+        self.assertNotEqual(
+            values["PROVIDER_SUBSTITUTE_OPERATOR_TOKEN"],
+            values["SMS_SUBSTITUTE_OPERATOR_TOKEN"],
         )
 
     def test_missing_material_fails_closed_without_exposing_values(self) -> None:

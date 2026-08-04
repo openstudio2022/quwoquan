@@ -1,48 +1,19 @@
 part of 'app_providers.dart';
 
-final cloudClientContextProvider = Provider<CloudClientContextProvider>((ref) {
-  return const AppCloudClientContextProvider();
-});
-
-final cloudRuntimeEnvironmentProvider = Provider<CloudRuntimeEnvironment>((
-  ref,
-) {
-  return CloudRuntimeEnvironment.fromCompileTime();
-});
-
-final generatedCloudOperationClientProvider =
-    Provider<GeneratedCloudOperationClient>((ref) {
-      final clientContext = ref.watch(cloudClientContextProvider);
-      return buildGeneratedCloudOperationClient(
-        httpClient: ref.watch(cloudHttpClientProvider),
-        clientContextProvider: clientContext,
-        environment: ref.watch(cloudRuntimeEnvironmentProvider),
-        telemetrySink: AppCloudOperationTelemetrySink(
-          clientContextProvider: clientContext,
-        ),
-      );
-    });
-
-/// 登录 bootstrap 专用 generated client：永不读取、等待或附加既有 bearer。
-final unauthenticatedGeneratedCloudOperationClientProvider =
-    Provider<GeneratedCloudOperationClient>((ref) {
-      final clientContext = ref.watch(cloudClientContextProvider);
-      return buildGeneratedCloudOperationClient(
-        httpClient: ref.watch(unauthenticatedCloudHttpClientProvider),
-        clientContextProvider: clientContext,
-        environment: ref.watch(cloudRuntimeEnvironmentProvider),
-        telemetrySink: AppCloudOperationTelemetrySink(
-          clientContextProvider: clientContext,
-        ),
-      );
-    });
-
 /// VisitRecord typed append 写面：production Remote-only（08 Mock 隔离），
 /// alpha/test 经 ProviderScope override 注入替身。
 final opsVisitAppendWriterProvider = Provider<OpsVisitAppendWriter>((ref) {
-  return AppProductionComposition.httpAdapter<OpsVisitAppendWriter>(
-    AppProductionHttpAdapter.opsVisitAppend,
-    httpClient: ref.watch(cloudHttpClientProvider),
+  return AppProductionComposition.generatedAdapter<OpsVisitAppendWriter>(
+    AppProductionAdapter.opsVisitAppend,
+    client: ref.watch(generatedCloudOperationClientProvider),
+    invocationContext:
+        (String clientPageId, {required String idempotencyKey}) =>
+            _locationInvocationContext(
+              ref,
+              surface: AppUiSurfaces.appShell,
+              clientPageId: clientPageId,
+              idempotencyKey: idempotencyKey,
+            ),
   );
 });
 

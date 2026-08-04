@@ -173,10 +173,12 @@ class _ContactConfirmPageState extends ConsumerState<ContactConfirmPage> {
                 category: UiErrorCategory.pageLoad,
                 scope: UiErrorScope.page,
               ),
-              onAction: (action) async {
+              onRecovery: (action) async {
                 if (action.type == UiErrorActionType.retry) {
                   _reload();
+                  return UiRecoveryOutcome.superseded;
                 }
+                return UiRecoveryOutcome.cancelled;
               },
             );
           }
@@ -261,7 +263,7 @@ class _ConfirmData {
   const _ConfirmData({required this.profile, required this.capability});
 
   final PersonaProfileViewData profile;
-  final RelationshipCapabilityDto capability;
+  final RelationshipCapabilityViewData capability;
 }
 
 class _Avatar extends StatelessWidget {

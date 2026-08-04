@@ -5,8 +5,8 @@ import (
 	"context"
 	"testing"
 
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/ports"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/orchestration"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/ports"
 )
 
 type recordingTierBackend struct {

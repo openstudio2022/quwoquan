@@ -150,13 +150,15 @@ type eventsDocument struct {
 
 type domainEvent struct {
 	Name          string   `yaml:"name"`
+	ClientWsType  string   `yaml:"client_ws_type"`
 	Description   string   `yaml:"description"`
 	PayloadEntity string   `yaml:"payload_entity"`
 	PayloadFields []string `yaml:"payload_fields"`
 }
 
 type sharedTypesDocument struct {
-	Enums map[string][]string `yaml:"enums"`
+	Types map[string]domainEntityDocument `yaml:"types"`
+	Enums map[string][]string             `yaml:"enums"`
 }
 
 type domainTemplateData struct {
@@ -193,7 +195,8 @@ type domainFieldData struct {
 }
 
 type domainEventData struct {
-	Name string
+	Name         string
+	ClientWsType string
 }
 
 func (generator *DomainGenerator) buildTemplateData(
@@ -226,7 +229,11 @@ func (generator *DomainGenerator) buildTemplateData(
 	for name, member := range fields.Members {
 		fields.Entities[name] = member
 	}
-	referencedValueObjects := includeReferencedOwnedTypes(&fields)
+	sharedTypes, err := generator.sharedValueTypes()
+	if err != nil {
+		return domainTemplateData{}, err
+	}
+	referencedValueObjects := includeReferencedOwnedTypes(&fields, sharedTypes)
 
 	data := domainTemplateData{
 		PackageName:     strings.ToLower(aggregateName),
@@ -308,7 +315,10 @@ func (generator *DomainGenerator) buildTemplateData(
 		for _, event := range events.Events {
 			data.Events = append(
 				data.Events,
-				domainEventData{Name: event.Name},
+				domainEventData{
+					Name:         event.Name,
+					ClientWsType: strings.TrimSpace(event.ClientWsType),
+				},
 			)
 		}
 	}
@@ -320,7 +330,15 @@ func (generator *DomainGenerator) buildTemplateData(
 // vocabulary used by transport codegen; object_ref identifies the named type
 // when the wire shape is `object`. Unreachable request/response DTOs stay out of
 // domain packages.
-func includeReferencedOwnedTypes(fields *fieldsDocument) map[string]struct{} {
+//
+// sharedTypes carries `_shared/types.yaml` `types:` so a cross-service value
+// object keeps a single wire owner there instead of being copied into every
+// consuming object's fields.yaml. Resolution order is local-first, mirroring how
+// collectEnumTypes resolves shared enums.
+func includeReferencedOwnedTypes(
+	fields *fieldsDocument,
+	sharedTypes map[string]domainEntityDocument,
+) map[string]struct{} {
 	result := make(map[string]struct{})
 	for {
 		changed := false
@@ -338,6 +356,9 @@ func includeReferencedOwnedTypes(fields *fieldsDocument) map[string]struct{} {
 					valueObject, exists = fields.Types[candidate]
 				}
 				if !exists {
+					valueObject, exists = sharedTypes[candidate]
+				}
+				if !exists {
 					continue
 				}
 				if _, included := result[candidate]; included {
@@ -352,6 +373,25 @@ func includeReferencedOwnedTypes(fields *fieldsDocument) map[string]struct{} {
 			return result
 		}
 	}
+}
+
+// sharedValueTypes returns the `types:` roster from _shared/types.yaml, the
+// single wire owner for cross-service value objects.
+func (generator *DomainGenerator) sharedValueTypes() (
+	map[string]domainEntityDocument,
+	error,
+) {
+	if generator.source == nil {
+		return nil, nil
+	}
+	if !generator.source.Has("_shared/types.yaml") {
+		return nil, nil
+	}
+	var shared sharedTypesDocument
+	if err := generator.source.Decode("_shared/types.yaml", &shared); err != nil {
+		return nil, fmt.Errorf("decode _shared/types.yaml: %w", err)
+	}
+	return shared.Types, nil
 }
 
 func (generator *DomainGenerator) registeredBusinessEntities(object ast.Object, fieldsPath string) (map[string]struct{}, error) {
@@ -627,4 +667,11 @@ const (
 {{- end}}
 )
 {{end}}
+// ClientRealtimeWireTypes contains only events explicitly exposed by
+// client_ws_type. Server-only domain events never enter realtime client fanout.
+var ClientRealtimeWireTypes = map[string]string{
+{{- range .Events}}{{if .ClientWsType}}
+	{{.Name}}: "{{.ClientWsType}}",
+{{- end}}{{end}}
+}
 `

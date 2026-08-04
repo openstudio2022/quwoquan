@@ -11,6 +11,12 @@ type Reader interface {
 	ListActiveConsents(context.Context, string) ([]model.Consent, error)
 }
 
+// ActivityReader exposes only the immutable consent event envelope required
+// by the owner-scoped Skill activity federation.
+type ActivityReader interface {
+	ListSkillConsentEvents(context.Context, string, string, int) ([]model.Event, error)
+}
+
 // Store 只由 SkillConsent command/query facade 持有。
 type Store interface {
 	Reader

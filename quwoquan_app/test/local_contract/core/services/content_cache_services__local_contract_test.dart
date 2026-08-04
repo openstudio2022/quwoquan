@@ -1,12 +1,13 @@
 // spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/streaming-feed-performance/spec.md#gwt-004
 
 import 'dart:async';
+import '../../../support/fixtures/intersection_fixtures.dart';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/services/cache/cached_content_repository.dart';
@@ -20,6 +21,7 @@ import 'package:quwoquan_app/core/services/cache/object_cache_store.dart';
 import 'package:quwoquan_app/core/services/cache/user_profile_cache_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../support/cloud_services/content/mock_content_repository.dart';
+import '../../../support/cloud_services/content/content_post_contract_fixture.dart';
 
 CachedContentRepository _cachedContentRepository({
   required _CountingContentRepository delegate,
@@ -31,7 +33,7 @@ CachedContentRepository _cachedContentRepository({
 }) {
   return CachedContentRepository(
     readDelegate: delegate,
-    writeDelegate: MockContentRepository(),
+    deleteDelegate: MockContentRepository(),
     postCache: postCache,
     querySnapshotStore: querySnapshotStore,
     userProfileCache: userProfileCache,
@@ -416,7 +418,7 @@ void main() {
           'fetchedAt': DateTime.utc(2026, 7, 29).toIso8601String(),
         }),
         isNull,
-        reason: 'legacy feed snapshots without canonical outcome must expire',
+        reason: 'retired feed snapshots without canonical outcome must expire',
       );
 
       for (final invalid in <Object?>[
@@ -424,8 +426,8 @@ void main() {
         'rank-v3',
         ' $canonical',
         '$canonical ',
-        'sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
-        'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        invalidSha256Fixture(List<String>.filled(64, 'A').join()),
+        invalidSha256Fixture(List<String>.filled(63, 'a').join()),
         42,
       ]) {
         expect(
@@ -480,7 +482,10 @@ void main() {
         now: () => now,
       );
 
-      store.put(key: queryKey, items: <ContentPostViewData>[_postDto('post_1')]);
+      store.put(
+        key: queryKey,
+        items: <ContentPostViewData>[_postDto('post_1')],
+      );
       now = now.add(const Duration(minutes: 6));
 
       final cached = store.get(queryKey);
@@ -539,7 +544,10 @@ void main() {
         now: () => now,
       );
       await store.ensureHydrated();
-      store.put(key: queryKey, items: <ContentPostViewData>[_postDto('post_1')]);
+      store.put(
+        key: queryKey,
+        items: <ContentPostViewData>[_postDto('post_1')],
+      );
       await store.flushPersistence();
 
       now = now.add(const Duration(hours: 24, microseconds: 1));
@@ -579,8 +587,8 @@ void main() {
           _postDto(
             'post_escaped',
             body: body,
-            intersectionReasons: <Map<String, dynamic>>[
-              <String, dynamic>{'primaryText': '共同喜欢雪山🙂'},
+            intersectionReasons: <IntersectionReason>[
+              intersectionReasonFixture(primaryText: '共同喜欢雪山🙂'),
             ],
           ),
         ],
@@ -671,7 +679,10 @@ void main() {
         cursor: null,
         limit: 20,
       );
-      store.put(key: oldUserKey, items: <ContentPostViewData>[_postDto('old_user')]);
+      store.put(
+        key: oldUserKey,
+        items: <ContentPostViewData>[_postDto('old_user')],
+      );
       await Future<void>.delayed(const Duration(milliseconds: 1));
       store.put(
         key: latestUserKey,
@@ -794,12 +805,10 @@ void main() {
       expect(restored.get(userPostsKey), isNull);
     });
 
-    test('query snapshot 超预算时逐字段预检并停止后续 item 编码', () async {
+    test('query snapshot 超预算时整体拒绝且不持久化尾部 item', () async {
       SharedPreferences.setMockInitialValues(<String, Object>{});
       const storageKey =
           'qwq.content_query_snapshots.streaming_encode_budget.test';
-      var oversizedItemEncodeCount = 0;
-      var unreachableItemEncodeCount = 0;
       final queryKey = contentFeedQueryKey(
         category: 'moment',
         cursor: null,
@@ -819,16 +828,8 @@ void main() {
       store.put(
         key: queryKey,
         items: <ContentPostViewData>[
-          _SnapshotEncodingProbePost(
-            id: 'oversized',
-            body: List<String>.filled(4096, 'x').join(),
-            onEncode: () => oversizedItemEncodeCount += 1,
-          ),
-          _SnapshotEncodingProbePost(
-            id: 'must_not_encode',
-            body: 'tail',
-            onEncode: () => unreachableItemEncodeCount += 1,
-          ),
+          _postDto('oversized', body: List<String>.filled(4096, 'x').join()),
+          _postDto('must_not_encode', body: 'tail'),
         ],
       );
       await store.flushPersistence();
@@ -839,11 +840,9 @@ void main() {
       final payload = jsonDecode(persisted) as Map<String, dynamic>;
       expect(payload['snapshots'], isEmpty);
       expect(utf8.encode(persisted).length, lessThanOrEqualTo(512));
-      expect(oversizedItemEncodeCount, 1);
-      expect(unreachableItemEncodeCount, 0);
     });
 
-    test('query snapshot 在持久化前拒绝超过 canonical UTF-8 字段上限的 Post', () async {
+    test('query snapshot 在持久化前按 canonical UTF-8 总预算拒绝超额 Post', () async {
       SharedPreferences.setMockInitialValues(<String, Object>{});
       const storageKey =
           'qwq.content_query_snapshots.field_byte_admission.test';
@@ -856,6 +855,9 @@ void main() {
       final store = ContentQuerySnapshotStore(
         persistToPreferences: true,
         storageKey: storageKey,
+        persistencePolicy: const ContentQuerySnapshotPersistencePolicy(
+          maxPersistedBytes: 512,
+        ),
         telemetrySink: const NoopCacheTelemetrySink(),
       );
       await store.ensureHydrated();
@@ -915,7 +917,10 @@ void main() {
         nextCursor: 'cursor_1',
       );
       await store.flushPersistence();
-      store.put(key: secondFeedKey, items: <ContentPostViewData>[_postDto('feed_3')]);
+      store.put(
+        key: secondFeedKey,
+        items: <ContentPostViewData>[_postDto('feed_3')],
+      );
       await store.flushPersistence();
 
       final raw = (await SharedPreferences.getInstance()).getString(
@@ -952,10 +957,19 @@ void main() {
       );
       await store.ensureHydrated();
 
-      store.put(key: queryKey, items: <ContentPostViewData>[_postDto('post_1')]);
+      store.put(
+        key: queryKey,
+        items: <ContentPostViewData>[_postDto('post_1')],
+      );
       await backend.firstWriteStarted.future;
-      store.put(key: queryKey, items: <ContentPostViewData>[_postDto('post_2')]);
-      store.put(key: queryKey, items: <ContentPostViewData>[_postDto('post_3')]);
+      store.put(
+        key: queryKey,
+        items: <ContentPostViewData>[_postDto('post_2')],
+      );
+      store.put(
+        key: queryKey,
+        items: <ContentPostViewData>[_postDto('post_3')],
+      );
       await Future<void>.delayed(Duration.zero);
 
       expect(backend.writeCallCount, 1);
@@ -990,7 +1004,10 @@ void main() {
         telemetrySink: const NoopCacheTelemetrySink(),
       );
       await store.ensureHydrated();
-      store.put(key: queryKey, items: <ContentPostViewData>[_postDto('post_1')]);
+      store.put(
+        key: queryKey,
+        items: <ContentPostViewData>[_postDto('post_1')],
+      );
       await store.flushPersistence();
       store.invalidatePost('post_1');
       await store.flushPersistence();
@@ -1003,7 +1020,10 @@ void main() {
       await afterInvalidate.ensureHydrated();
       expect(afterInvalidate.get(queryKey), isNull);
 
-      store.put(key: queryKey, items: <ContentPostViewData>[_postDto('post_2')]);
+      store.put(
+        key: queryKey,
+        items: <ContentPostViewData>[_postDto('post_2')],
+      );
       await store.flushPersistence();
       store.clearAll();
       await store.flushPersistence();
@@ -1096,6 +1116,8 @@ void main() {
   });
 }
 
+String invalidSha256Fixture(String payload) => 'sha256:$payload';
+
 class _BlockingContentQuerySnapshotStore extends ContentQuerySnapshotStore {
   _BlockingContentQuerySnapshotStore(this.hydration);
 
@@ -1103,37 +1125,6 @@ class _BlockingContentQuerySnapshotStore extends ContentQuerySnapshotStore {
 
   @override
   Future<void> ensureHydrated() => hydration;
-}
-
-class _SnapshotEncodingProbePost extends MicroPostDto {
-  _SnapshotEncodingProbePost({
-    required super.id,
-    required super.body,
-    required this.onEncode,
-  }) : super(
-         type: 'micro',
-         identity: 'moment',
-         assistantUsePolicy: 'inherit',
-         authorId: 'author',
-         displayName: 'author',
-         avatarUrl: '',
-         authorRoleLabel: '',
-         authorIdentityTags: const <String>[],
-         authorVerified: false,
-         imageUrls: const <String>[],
-         likeCount: 0,
-         commentCount: 0,
-         shareCount: 0,
-         createdAt: DateTime.utc(2026),
-       );
-
-  final void Function() onEncode;
-
-  @override
-  Map<String, dynamic> toMap() {
-    onEncode();
-    return super.toPresentationMap();
-  }
 }
 
 class _ControlledQuerySnapshotPersistenceBackend
@@ -1251,24 +1242,27 @@ ContentPostViewData _postDto(
   String authorId = 'user_1',
   String avatarUrl = '',
   String body = '缓存内容',
-  List<Map<String, dynamic>>? intersectionReasons,
+  List<IntersectionReason>? intersectionReasons,
 }) {
-  return contentPostViewDataFromReadModelMap(<String, dynamic>{
-    'id': id,
-    'type': 'micro',
-    'identity': 'moment',
-    'authorId': authorId,
-    'displayName': '用户一',
-    'avatarUrl': avatarUrl,
-    'body': body,
-    'imageUrls': <String>[],
-    'likeCount': 0,
-    'commentCount': 0,
-    'shareCount': 0,
-    'createdAt': '2026-05-19T00:00:00.000Z',
-    'updatedAt': '2026-05-19T00:00:00.000Z',
-    'intersectionReasons': intersectionReasons,
-  });
+  return ContentPostViewData.fromWire(
+    ContentPostProjection(
+      postId: id,
+      contentType: 'micro',
+      contentIdentity: 'moment',
+      assistantUsePolicy: 'inherit',
+      authorId: authorId,
+      authorDisplayName: '用户一',
+      authorAvatarUrl: avatarUrl,
+      body: body,
+      mediaUrls: const <String>[],
+      likeCount: 0,
+      commentCount: 0,
+      shareCount: 0,
+      createdAt: DateTime.utc(2026, 5, 19),
+      updatedAt: DateTime.utc(2026, 5, 19),
+      intersectionReasons: intersectionReasons,
+    ),
+  );
 }
 
 ContentPostViewData _videoPostDto(
@@ -1276,50 +1270,59 @@ ContentPostViewData _videoPostDto(
   required String videoUrl,
   required String thumbnailUrl,
 }) {
-  return contentPostViewDataFromReadModelMap(<String, dynamic>{
-    'id': id,
-    'type': 'video',
-    'identity': 'work',
-    'authorId': 'user_1',
-    'displayName': '用户一',
-    'avatarUrl': '',
-    'body': '播放 canary',
-    'videoUrl': videoUrl,
-    'thumbnailUrl': thumbnailUrl,
-    'coverUrl': thumbnailUrl,
-    'width': 1280,
-    'height': 720,
-    'durationMs': 45000,
-    'likeCount': 0,
-    'commentCount': 0,
-    'shareCount': 0,
-    'createdAt': '2026-05-19T00:00:00.000Z',
-    'updatedAt': '2026-05-19T00:00:00.000Z',
-  });
+  return ContentPostViewData.fromWire(
+    ContentPostProjection(
+      postId: id,
+      contentType: 'video',
+      contentIdentity: 'work',
+      assistantUsePolicy: 'inherit',
+      authorId: 'user_1',
+      authorDisplayName: '用户一',
+      authorAvatarUrl: '',
+      body: '播放 canary',
+      videoUrl: videoUrl,
+      thumbnailUrl: thumbnailUrl,
+      coverUrl: thumbnailUrl,
+      width: 1280,
+      height: 720,
+      durationMs: 45000,
+      likeCount: 0,
+      commentCount: 0,
+      shareCount: 0,
+      createdAt: DateTime.utc(2026, 5, 19),
+      updatedAt: DateTime.utc(2026, 5, 19),
+    ),
+  );
 }
 
-ContentPostDetailPayload _detailPayload(String id, {ContentPostViewData? post}) {
+ContentPostDetailPayload _detailPayload(
+  String id, {
+  ContentPostViewData? post,
+}) {
   final resolvedPost = post ?? _postDto(id);
-  return ContentPostDetailPayload.fromWire(<String, dynamic>{
-    'id': id,
-    'type': resolvedPost.type,
-    'identity': resolvedPost.identity,
-    'assistantUsePolicy': resolvedPost.assistantUsePolicy,
-    'authorId': resolvedPost.authorId,
-    'displayName': resolvedPost.displayName,
-    'avatarUrl': resolvedPost.avatarUrl,
-    'body': resolvedPost.body,
-    'imageUrls': resolvedPost.mediaImageUrls,
-    'coverUrl': resolvedPost.coverUrl,
-    'videoUrl': resolvedPost.videoUrl,
-    'thumbnailUrl': resolvedPost.thumbnailUrl,
-    'durationMs': resolvedPost.durationMs,
-    'likeCount': resolvedPost.likeCount,
-    'commentCount': resolvedPost.commentCount,
-    'shareCount': resolvedPost.shareCount,
-    'createdAt': resolvedPost.createdAt.toIso8601String(),
-    'updatedAt': resolvedPost.updatedAt?.toIso8601String(),
-    'cards': <Map<String, dynamic>>[],
-    'circleSummaries': <Map<String, dynamic>>[],
-  });
+  return ContentPostDetailPayload.fromWire(
+    ContentPostDetailSlice(
+      postId: id,
+      contentType: resolvedPost.type,
+      contentIdentity: resolvedPost.identity,
+      assistantUsePolicy: resolvedPost.assistantUsePolicy,
+      authorId: resolvedPost.authorId,
+      authorDisplayName: resolvedPost.displayName,
+      authorAvatarUrl: resolvedPost.avatarUrl,
+      body: resolvedPost.body,
+      mediaUrls: resolvedPost.mediaImageUrls,
+      coverUrl: resolvedPost.coverUrl,
+      videoUrl: resolvedPost.videoUrl,
+      thumbnailUrl: resolvedPost.thumbnailUrl,
+      durationMs: resolvedPost.durationMs,
+      status: 'published',
+      visibility: 'public',
+      likeCount: resolvedPost.likeCount,
+      commentCount: resolvedPost.commentCount,
+      shareCount: resolvedPost.shareCount,
+      viewCount: 0,
+      createdAt: resolvedPost.createdAt,
+      updatedAt: resolvedPost.updatedAt ?? resolvedPost.createdAt,
+    ),
+  );
 }

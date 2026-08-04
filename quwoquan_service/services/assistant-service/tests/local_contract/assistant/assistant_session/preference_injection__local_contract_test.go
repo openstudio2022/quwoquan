@@ -3,36 +3,36 @@ package local_contract
 
 import (
 	"context"
-	prompting "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/prompting"
+	prompting "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/prompting"
 	"strings"
 	"testing"
 
 	preferencemodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_preference/domain/model"
 	runapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/orchestration"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
 	rundomain "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/ports"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/ports"
 	assistantruntest "quwoquan_service/services/assistant-service/tests/support/assistantrun"
 )
 
 type assistantSessionPreferenceInjectionPreferenceSnapshotReader struct {
-	sessionBySession map[string][]preferencemodel.Snapshot
-	longTerm         []preferencemodel.Snapshot
+	sessionBySession map[string][]preferencemodel.AssistantPreferenceSnapshot
+	longTerm         []preferencemodel.AssistantPreferenceSnapshot
 }
 
 func (r *assistantSessionPreferenceInjectionPreferenceSnapshotReader) ResolveActiveSnapshots(
 	_ context.Context,
 	_ string,
 	sessionID string,
-) ([]preferencemodel.Snapshot, []preferencemodel.Snapshot, error) {
+) ([]preferencemodel.AssistantPreferenceSnapshot, []preferencemodel.AssistantPreferenceSnapshot, error) {
 	return r.sessionBySession[sessionID], r.longTerm, nil
 }
 
 func TestCreateTurnSnapshotsPreferencesWithoutMutatingQuestion(t *testing.T) {
 	preferences := &assistantSessionPreferenceInjectionPreferenceSnapshotReader{
-		sessionBySession: map[string][]preferencemodel.Snapshot{},
-		longTerm: []preferencemodel.Snapshot{
+		sessionBySession: map[string][]preferencemodel.AssistantPreferenceSnapshot{},
+		longTerm: []preferencemodel.AssistantPreferenceSnapshot{
 			{
 				PreferenceID: "apf_long_term",
 				Scope:        preferencemodel.ScopeLongTerm,
@@ -45,12 +45,14 @@ func TestCreateTurnSnapshotsPreferencesWithoutMutatingQuestion(t *testing.T) {
 	runtime := assistantruntest.NewMemoryRuntime()
 	commands := runruntime.NewCommandService(
 		runtime,
-		runruntime.SessionAuthorizerFunc(func(context.Context, string, string) error { return nil }),
+		runruntime.SessionResolverFunc(func(context.Context, string, string) (runruntime.SessionContinuity, error) {
+			return runruntime.SessionContinuity{}, nil
+		}),
 		testSkillPackageIdentityResolver(),
 		runruntime.AllowAllStartAccessPolicy{},
 		nil,
 		nil,
-		testRunPolicyResolver(),
+		runruntime.WithPolicyResolver(testRunPolicyResolver()),
 	)
 	useCases := runapplication.NewUseCases(
 		commands,
@@ -58,7 +60,7 @@ func TestCreateTurnSnapshotsPreferencesWithoutMutatingQuestion(t *testing.T) {
 	)
 	const sessionA = "session-preference-a"
 	const sessionB = "session-preference-b"
-	preferences.sessionBySession[sessionA] = []preferencemodel.Snapshot{
+	preferences.sessionBySession[sessionA] = []preferencemodel.AssistantPreferenceSnapshot{
 		{
 			PreferenceID: "apf_session_a",
 			Scope:        preferencemodel.ScopeSession,
@@ -88,13 +90,13 @@ func TestCreateTurnSnapshotsPreferencesWithoutMutatingQuestion(t *testing.T) {
 	if runA.InputText != question {
 		t.Fatalf("run A question mutated: %q", runA.InputText)
 	}
-	if len(runA.SessionPreferenceFacts) != 1 ||
-		runA.SessionPreferenceFacts[0].Value != "concise" {
-		t.Fatalf("run A session preferences = %#v", runA.SessionPreferenceFacts)
+	if len(runA.SessionPreferences) != 1 ||
+		runA.SessionPreferences[0].Value != "concise" {
+		t.Fatalf("run A session preferences = %#v", runA.SessionPreferences)
 	}
-	if len(runA.LongTermPreferenceFacts) != 1 ||
-		runA.LongTermPreferenceFacts[0].Value != "warm" {
-		t.Fatalf("run A long-term preferences = %#v", runA.LongTermPreferenceFacts)
+	if len(runA.LongTermPreferences) != 1 ||
+		runA.LongTermPreferences[0].Value != "warm" {
+		t.Fatalf("run A long-term preferences = %#v", runA.LongTermPreferences)
 	}
 	runB, err := useCases.Start(
 		t.Context(),
@@ -116,28 +118,28 @@ func TestCreateTurnSnapshotsPreferencesWithoutMutatingQuestion(t *testing.T) {
 	if runB.InputText != question {
 		t.Fatalf("run B question mutated: %q", runB.InputText)
 	}
-	if len(runB.SessionPreferenceFacts) != 0 {
+	if len(runB.SessionPreferences) != 0 {
 		t.Fatalf(
 			"session B inherited session A session preference: %#v",
-			runB.SessionPreferenceFacts,
+			runB.SessionPreferences,
 		)
 	}
-	if len(runB.LongTermPreferenceFacts) != 1 ||
-		runB.LongTermPreferenceFacts[0].Value != "warm" {
-		t.Fatalf("run B long-term preferences = %#v", runB.LongTermPreferenceFacts)
+	if len(runB.LongTermPreferences) != 1 ||
+		runB.LongTermPreferences[0].Value != "warm" {
+		t.Fatalf("run B long-term preferences = %#v", runB.LongTermPreferences)
 	}
 }
 
 func TestFormatModelPreferencesSessionOverridesLongTerm(t *testing.T) {
 	prompt := prompting.FormatModelPreferencesForPrompt(
-		[]preferencemodel.Snapshot{
+		[]preferencemodel.AssistantPreferenceSnapshot{
 			{
 				Scope: preferencemodel.ScopeSession,
 				Kind:  preferencemodel.KindReplyLength,
 				Value: "concise",
 			},
 		},
-		[]preferencemodel.Snapshot{
+		[]preferencemodel.AssistantPreferenceSnapshot{
 			{
 				Scope: preferencemodel.ScopeLongTerm,
 				Kind:  preferencemodel.KindReplyLength,
@@ -199,7 +201,7 @@ func TestProviderBackedModelRequestSeparatesPreferencesFromOriginalQuestion(t *t
 			ProblemClass:    "general",
 			SearchIntensity: "medium",
 			Observation:     map[string]any{},
-			SessionPreferenceFacts: []preferencemodel.Snapshot{
+			SessionPreferences: []preferencemodel.AssistantPreferenceSnapshot{
 				{
 					Scope: preferencemodel.ScopeSession,
 					Kind:  preferencemodel.KindReplyLength,

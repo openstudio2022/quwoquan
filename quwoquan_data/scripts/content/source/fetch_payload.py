@@ -216,6 +216,7 @@ def fetch_source_payload(
     *,
     source: Mapping[str, Any] | None = None,
     include_page_images: bool = True,
+    entity_id: str = "",
 ) -> dict:
     """抓取原文但不落盘，返回 {url, statusCode, htmlBytes, text, sha256}。
 
@@ -301,13 +302,35 @@ def fetch_source_payload(
                 )
             )
         body = bundle.raw.encode("utf-8")
+        inline_images: list[dict[str, Any]] = []
+        if include_page_images and "wikivoyage" in host:
+            from content.source.research.image_search_providers import (
+                commons_images_for_titles,
+            )
+
+            page_images = commons_images_for_titles(
+                list(bundle.rendered_image_titles),
+                entity_id=entity_id,
+                entity_aliases=(),
+                limit=12,
+                collection_page_url=url,
+                require_metadata_entity_match=False,
+            )
+            inline_images = [
+                {
+                    **image,
+                    "src": image["url"],
+                    "placeholderId": f"source-inline-{index:03d}",
+                }
+                for index, image in enumerate(page_images, start=1)
+            ]
         return {
             "url": url,
             "statusCode": 200,
             "htmlBytes": body,
             "text": text[:50000],
             "renderedText": bundle.rendered_text,
-            "inlineImages": [],
+            "inlineImages": inline_images,
             "layout": layout,
             "sha256": hashlib.sha256(body).hexdigest(),
             "runtime": {

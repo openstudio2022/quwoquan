@@ -1,10 +1,9 @@
 import 'package:test/test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
-import 'package:quwoquan_app/cloud/runtime/models/post_engagement_counters.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
 import 'package:quwoquan_app/cloud/services/content/content_read_model_projection.dart';
-import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
-import '../../../../support/cloud_services/repository_mock_reexports.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import '../../../../support/cloud_services/content/mock_content_repository.dart';
+import '../../../../support/cloud_services/object_doubles/object_scenario_seed_reader.dart';
 
 void main() {
   group('Content facets — 常规契约', () {
@@ -248,39 +247,19 @@ void main() {
 
     test('getAppConfig 返回 feature flags 与 gray release 结构', () async {
       final config = await repo.getAppConfig();
-      final content = config.wireRoot['content'];
-      expect(content, isA<Map>());
-      final contentMap = Map<String, dynamic>.from(content! as Map);
-      final featureFlags = contentMap['feature_flags'] as Map<String, dynamic>?;
-      final grayRelease = contentMap['gray_release'] as Map<String, dynamic>?;
-
-      expect(featureFlags, isNotNull);
+      expect(config.content.featureFlags.enableCreateActionEntry, isTrue);
+      expect(config.content.featureFlags.enableUnifiedCreateEditor, isTrue);
+      expect(config.content.featureFlags.enableIdentityBasedSurfaces, isTrue);
+      expect(config.content.featureFlags.enableIdentityShareTemplate, isTrue);
+      expect(config.content.featureFlags.enableArticleBookReader, isTrue);
+      expect(config.content.featureFlags.enableArticlePageCurl, isTrue);
       expect(
-        featureFlags?.keys,
-        containsAll(<String>[
-          'enable_create_action_entry',
-          'enable_unified_create_editor',
-          'enable_identity_based_surfaces',
-          'enable_identity_share_template',
-          'enable_article_book_reader',
-          'enable_article_page_curl',
-          'enable_assistant_content_identity_index',
-        ]),
+        config.content.featureFlags.enableAssistantContentIdentityIndex,
+        isTrue,
       );
-      expect(grayRelease, isNotNull);
-      expect(grayRelease?['experiment_bucket'], isA<String>());
-      expect(grayRelease?['current_stage'], isA<String>());
-      expect(grayRelease?['canary_matrix'], isA<List<dynamic>>());
-
-      final parsed = config.clientParsed;
-      expect(
-        parsed.featureFlagOverrides['enable_article_book_reader'],
-        isA<bool>(),
-      );
-      expect(parsed.grayRelease.experimentBucket, isNotEmpty);
-      expect(parsed.grayRelease.currentStage, isNotEmpty);
-      expect(parsed.grayRelease.canaryMatrix, isNotEmpty);
-      expect(parsed.clientStateSyncMap, isA<Map<String, dynamic>>());
+      expect(config.content.grayRelease.experimentBucket, isNotEmpty);
+      expect(config.content.grayRelease.currentStage, isNotEmpty);
+      expect(config.content.grayRelease.canaryMatrix, isNotEmpty);
     });
 
     test('listUserPosts 支持按 identity 过滤', () async {
@@ -315,43 +294,29 @@ void main() {
       expect(article.post.isArticleLike, isTrue);
     });
 
-    test('reportBehaviors 不崩溃', () async {
-      await repo.reportBehaviors(events: []);
-    });
-
-    test('reportBehaviors 非空 ContentBehaviorBatchEventDto 不崩溃', () async {
-      await repo.reportBehaviors(
-        events: <ContentBehaviorBatchEventDto>[
-          ContentBehaviorBatchEventDto.canonical(
-            contentId: 'p1',
-            eventType: 'impression',
-            timestamp: DateTime.now().toUtc().toIso8601String(),
-            durationMs: 12,
-          ),
-        ],
-      );
-    });
-
-    test('ContentMediaAssetWireDto 解析 derivatives 与 moderationStatus', () {
-      final dto = ContentMediaAssetWireDto.fromMap({
-        'id': 'm1',
+    test('MediaAssetSlice 仅接受 canonical typed wire', () {
+      final asset = MediaAssetSlice.fromWire(<String, Object?>{
+        'assetId': 'm1',
+        'version': 1,
+        'mediaType': 'image',
+        'mimeType': 'image/jpeg',
+        'fileSize': 1024,
         'status': 'ready',
-        'derivatives': <Map<String, dynamic>>[
-          <String, dynamic>{'url': 'https://cdn.example/w200', 'width': 200},
-        ],
-        'moderationStatus': 'approved',
-        'errorCode': 'none',
+        'accessPolicy': 'public',
+        'imageWidth': 200,
+        'imageHeight': 100,
+        'cdnUrl': 'https://cdn.example/m1.jpg',
       });
-      expect(dto.derivatives, isNotNull);
-      expect(dto.derivatives!.length, 1);
-      expect(dto.derivatives!.first['url'], 'https://cdn.example/w200');
-      expect(dto.moderationStatus, 'approved');
-      expect(dto.errorCode, 'none');
-    });
-
-    test('getCounters 返回计数器', () async {
-      final counters = await repo.getCounters(postId: 'test');
-      expect(counters, isA<PostEngagementCounters>());
+      expect(asset.assetId, 'm1');
+      expect(asset.status, MediaAssetStatus.ready);
+      expect(asset.cdnUrl, Uri.parse('https://cdn.example/m1.jpg'));
+      expect(
+        () => MediaAssetSlice.fromWire(<String, Object?>{
+          ...asset.toWire(),
+          'moderationStatus': 'approved',
+        }),
+        throwsFormatException,
+      );
     });
   });
 
@@ -370,10 +335,6 @@ void main() {
     test('listDiscoveryFeed 空 category 不崩溃', () async {
       final posts = await repo.listDiscoveryFeed(category: '');
       expect(posts, isList);
-    });
-
-    test('reportBehaviors 空事件列表不崩溃', () async {
-      await repo.reportBehaviors(events: []);
     });
   });
 }

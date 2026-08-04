@@ -7,9 +7,9 @@ import '../generated/assistant/skill_subscription.g.dart';
 
 export '../generated/assistant/assistant_api_responses.g.dart';
 export '../generated/assistant/assistant_runtime_failure.g.dart';
-export '../generated/assistant/assistant_run_envelope.g.dart';
 export '../generated/assistant/assistant_stream_event.g.dart';
 export '../generated/assistant/assistant_runtime_enums.g.dart';
+export '../generated/assistant/assistant_run.g.dart';
 export '../generated/assistant/assistant_session.g.dart';
 export '../generated/assistant/skill_subscription.g.dart';
 

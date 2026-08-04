@@ -1,17 +1,22 @@
+// spec_ref: specs/feature-tree/assistant-run-learning/run-stream-policy/policy-template-routing/spec.md#gwt-001
 package assistant_policy_rollout_test
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"gopkg.in/yaml.v3"
 
 	releaseresource "quwoquan_service/services/assistant-service/internal/assistant/assistant_policy_release/infrastructure/resource"
+	rolloutmodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_policy_rollout/domain/model"
 	rolloutresource "quwoquan_service/services/assistant-service/internal/assistant/assistant_policy_rollout/infrastructure/resource"
+	"quwoquan_service/services/assistant-service/tests/support/skillfixture"
 )
 
 func TestPolicyPublisherRejectsAlphaAndMissingResourceRoot(t *testing.T) {
@@ -172,6 +177,81 @@ func TestAutonomousWebPolicyCandidateIsImmutableAndPairConsistent(t *testing.T) 
 	}
 }
 
+func TestTravelCompanionPolicyCandidateIsImmutableAndRollbackSafe(t *testing.T) {
+	t.Parallel()
+	resourceRoot := filepath.Join(policyPublicationServiceRoot(), "resources", "policies")
+	const currentDigest = "6579402860644c0273747b33c23962cff013caec0839407afbe7dffdcc50f8e7"
+	current, err := releaseresource.LoadReleaseArtifact(
+		resourceRoot,
+		"assistant/assistant-default/releases/"+currentDigest+".json",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rollout, err := loadRolloutArtifact(
+		resourceRoot,
+		"assistant/assistant-default/rollouts/revision-4.json",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	previousRollout, err := loadRolloutArtifact(
+		resourceRoot,
+		"assistant/assistant-default/rollouts/revision-3.json",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rollout.ExpectedRevision != 3 ||
+		len(rollout.Assignments) != 1 ||
+		rollout.Assignments[0].ReleaseDigest != current.Release.ReleaseDigest {
+		t.Fatalf("release=%+v rollout=%+v", current, rollout)
+	}
+	if len(previousRollout.Assignments) != 1 {
+		t.Fatalf("previous rollout=%+v", previousRollout)
+	}
+	previousDigest := previousRollout.Assignments[0].ReleaseDigest
+	if _, err := releaseresource.LoadReleaseArtifact(
+		resourceRoot,
+		"assistant/assistant-default/releases/"+previousDigest+".json",
+	); err != nil {
+		t.Fatalf("previous rollback release must remain a valid immutable artifact: %v", err)
+	}
+
+	previous := rolloutmodel.Rollout{
+		PolicyID:          previousRollout.PolicyID,
+		Revision:          3,
+		Status:            "active",
+		BucketDefinitions: previousRollout.BucketDefinitions,
+		Assignments:       previousRollout.Assignments,
+	}
+	activated, err := rolloutmodel.Activate(
+		&previous,
+		rollout.PolicyID,
+		rollout.ExpectedRevision,
+		rollout.BucketDefinitions,
+		rollout.Assignments,
+		rollout.ActivatedBy,
+		time.Unix(1, 0),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rolledBack, err := rolloutmodel.Rollback(
+		activated,
+		4,
+		"service:assistant-policy-publisher",
+		time.Unix(2, 0),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rolledBack.Assignments) != 1 ||
+		rolledBack.Assignments[0].ReleaseDigest != previousDigest {
+		t.Fatalf("rollback=%+v want previous release %s", rolledBack, previousDigest)
+	}
+}
+
 func TestEveryNonAlphaEnvironmentReferencesValidPolicyArtifacts(t *testing.T) {
 	t.Parallel()
 	type environmentConfig struct {
@@ -179,6 +259,15 @@ func TestEveryNonAlphaEnvironmentReferencesValidPolicyArtifacts(t *testing.T) {
 	}
 	serviceRoot := policyPublicationServiceRoot()
 	resourceRoot := filepath.Join(serviceRoot, "resources", "policies")
+	const currentDigest = "6579402860644c0273747b33c23962cff013caec0839407afbe7dffdcc50f8e7"
+	manifests, err := skillfixture.Load()
+	if err != nil {
+		t.Fatalf("load active Skill package fixture: %v", err)
+	}
+	activeSkillIDs := make(map[string]bool, len(manifests))
+	for _, manifest := range manifests {
+		activeSkillIDs[manifest.SkillID] = true
+	}
 	for _, environment := range []string{"beta", "gamma", "prod"} {
 		contents, err := os.ReadFile(filepath.Join(
 			serviceRoot,
@@ -203,8 +292,96 @@ func TestEveryNonAlphaEnvironmentReferencesValidPolicyArtifacts(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s rollout artifact: %v", environment, err)
 		}
-		if rollout.PolicyID != release.Release.PolicyID {
-			t.Fatalf("%s artifact policy mismatch", environment)
+		if release.Release.ReleaseDigest != currentDigest ||
+			rollout.PolicyID != release.Release.PolicyID ||
+			rollout.ExpectedRevision != 3 ||
+			len(rollout.Assignments) != 1 ||
+			rollout.Assignments[0].ReleaseDigest != release.Release.ReleaseDigest {
+			t.Fatalf("%s active artifact pair mismatch: release=%+v rollout=%+v", environment, release, rollout)
+		}
+		travelTemplates := 0
+		for _, template := range release.Release.Templates {
+			if !activeSkillIDs[template.SkillID] {
+				t.Fatalf("%s policy template %q references skill %q absent from active package", environment, template.TemplateID, template.SkillID)
+			}
+			if template.SkillID == "travel_planning" || template.SkillID == "travel_transport" {
+				t.Fatalf("%s active policy retains retired travel skill %q", environment, template.SkillID)
+			}
+			if template.DomainID == "travel" {
+				travelTemplates++
+				if template.SkillID != "travel_companion" || template.TemplateID != "travel-companion" {
+					t.Fatalf("%s travel template=%+v want canonical travel_companion", environment, template)
+				}
+			}
+		}
+		if travelTemplates != 1 {
+			t.Fatalf("%s travel template count=%d want 1", environment, travelTemplates)
+		}
+		job, err := os.ReadFile(filepath.Join(
+			serviceRoot,
+			"environments",
+			environment,
+			"deploy",
+			"policy-publish-job.yaml",
+		))
+		if err != nil {
+			t.Fatalf("read %s policy publish Job: %v", environment, err)
+		}
+		if !strings.Contains(string(job), "assistant-default/"+currentDigest) ||
+			!strings.Contains(string(job), "assistant-policy-publish-202608041") {
+			t.Fatalf("%s policy publish Job is not bound to the current immutable candidate", environment)
+		}
+	}
+}
+
+func TestTravelEvaluationReplayUsesCanonicalSkillIdentity(t *testing.T) {
+	t.Parallel()
+	raw, err := os.ReadFile(filepath.Join(
+		policyPublicationServiceRoot(),
+		"tests",
+		"support",
+		"contract_fixtures",
+		"scenarios",
+		"assistant_skill_eval_scenarios.json",
+	))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var replay struct {
+		Scenarios []struct {
+			ID                 string `json:"id"`
+			SkillID            string `json:"skillId"`
+			DomainID           string `json:"domainId"`
+			QualityStandardRef string `json:"qualityStandardRef"`
+		} `json:"scenarios"`
+		QualityStandards map[string]json.RawMessage `json:"qualityStandards"`
+	}
+	if err := json.Unmarshal(raw, &replay); err != nil {
+		t.Fatal(err)
+	}
+	travelCases := 0
+	for _, scenario := range replay.Scenarios {
+		if scenario.SkillID == "travel_planning" || scenario.SkillID == "travel_transport" {
+			t.Fatalf("replay %q retains retired travel skill %q", scenario.ID, scenario.SkillID)
+		}
+		if scenario.DomainID != "travel" {
+			continue
+		}
+		travelCases++
+		if scenario.SkillID != "travel_companion" ||
+			scenario.QualityStandardRef != "travel_companion" {
+			t.Fatalf("travel replay=%+v want canonical travel_companion identity", scenario)
+		}
+		if _, ok := replay.QualityStandards[scenario.QualityStandardRef]; !ok {
+			t.Fatalf("travel replay %q references missing quality standard %q", scenario.ID, scenario.QualityStandardRef)
+		}
+	}
+	if travelCases < 2 {
+		t.Fatalf("travel replay cases=%d want planning and transport coverage", travelCases)
+	}
+	for _, retired := range []string{"travel_planning", "travel_transport"} {
+		if _, ok := replay.QualityStandards[retired]; ok {
+			t.Fatalf("retired quality standard %q remains active", retired)
 		}
 	}
 }

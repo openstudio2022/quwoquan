@@ -175,6 +175,7 @@ func (s *MemberService) RemoveAssistant(ctx context.Context, req RemoveAssistant
 			ConversationID: req.ConversationId,
 			ActorID:        req.RemovedBy,
 			Payload: map[string]any{
+				"conversationId":     req.ConversationId,
 				"memberId":           assistant.ID,
 				"userId":             assistant.UserId,
 				"memberType":         assistant.MemberType,

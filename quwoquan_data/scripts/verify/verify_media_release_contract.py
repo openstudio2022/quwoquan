@@ -33,8 +33,8 @@ def _release_import_roots() -> tuple[Path, Path, Path]:
         services
         / "user-service"
         / "internal"
-        / "account"
-        / "user_account"
+        / "profile_projection"
+        / "creator_runtime_profile"
         / "infrastructure"
         / "releaseimport",
     )
@@ -89,6 +89,25 @@ def _required_markers() -> dict[Path, tuple[str, ...]]:
         data / "content" / "release" / "canonical" / "gate.py": (
             "posterAssetId",
             "environment URL field",
+        ),
+        data / "content" / "post" / "video" / "materialize.py": (
+            "render_sourced_video_package",
+            '"sourced_video_transcode"',
+        ),
+        data / "content" / "execution" / "controller" / "content_plan_video.py": (
+            "_sourced_videos",
+            '"sourceVideo"',
+        ),
+        ROOT / "quwoquan_data" / "schema" / "content" / "compose.schema.json": (
+            '"sourceMode": { "const": "sourced_video" }',
+            '"sourceVideo"',
+        ),
+        ROOT
+        / "quwoquan_data"
+        / "schema"
+        / "content"
+        / "content_plan_packet.schema.json": (
+            '"sourceVideo"',
         ),
         data / "core" / "media_asset_url.py": (
             "is_cas_media_object_key",
@@ -186,6 +205,49 @@ def _contract_violations() -> list[str]:
                 violations.append(f"{relative}: forbidden mediaBaseURL + private objectKey projection")
             if '"--media-base-url"' in source:
                 violations.append(f"{relative}: generic media base URL is retired")
+            for retired_video_route in (
+                "rights_cleared_image_sequence",
+                "render_video_work_package",
+                "VideoSourceFrameEvidence",
+            ):
+                if retired_video_route in source:
+                    violations.append(
+                        f"{relative}: retired video frame route "
+                        f"{retired_video_route!r}"
+                    )
+
+    retired_video_package = (
+        ROOT
+        / "quwoquan_data"
+        / "scripts"
+        / "content"
+        / "post"
+        / "video"
+        / "package.py"
+    )
+    if retired_video_package.exists():
+        violations.append(
+            f"{retired_video_package.relative_to(ROOT)}: "
+            "retired image-sequence video package still exists"
+        )
+    for schema_path in (
+        ROOT / "quwoquan_data" / "schema" / "content" / "compose.schema.json",
+        ROOT
+        / "quwoquan_data"
+        / "schema"
+        / "content"
+        / "content_plan_packet.schema.json",
+    ):
+        source = _read(schema_path)
+        for retired_field in (
+            '"sourceFrames"',
+            '"rights_cleared_image_sequence"',
+        ):
+            if retired_field in source:
+                violations.append(
+                    f"{schema_path.relative_to(ROOT)}: retired video frame "
+                    f"schema route {retired_field}"
+                )
 
     for base in _release_import_roots():
         for path in sorted(base.rglob("*.go")):

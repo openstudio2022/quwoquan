@@ -85,6 +85,7 @@ class ProdColdStartRenderContractTest(unittest.TestCase):
             config_version="sha256:" + "a" * 64,
             versioned_image=False,
             instance="prod",
+            replica_id="r0",
             config_root="/runtime/config-root",
             media_root="/runtime/media",
             legal_root="/runtime/legal",

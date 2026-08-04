@@ -38,6 +38,9 @@ final class ConversationViewData {
       title: _optional(source.title),
       avatarUrl: _optional(source.avatarUrl),
       groupAvatarVersion: source.groupAvatarVersion,
+      groupAvatarSourceHash: source.groupAvatarSourceHash == null
+          ? null
+          : _optional(source.groupAvatarSourceHash!),
       creatorId: source.creatorId,
       circleId: _optional(source.circleId),
       circleGroupId: _optional(source.circleGroupId),

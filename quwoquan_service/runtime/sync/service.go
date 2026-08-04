@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"quwoquan_service/runtime/clientrealtime"
 	rtredis "quwoquan_service/runtime/redis"
 )
 
@@ -37,6 +38,11 @@ type PullResponse struct {
 type BatchAppendResult struct {
 	Patches       []Patch  `json:"patches"`
 	FailedUserIDs []string `json:"failedUserIds"`
+}
+
+type userSyncHintEventPayload struct {
+	UserID        string `json:"userId"`
+	LatestSyncSeq int64  `json:"latestSyncSeq"`
 }
 
 type Option func(*Service)
@@ -124,11 +130,14 @@ func (s *Service) AppendPatch(
 		return Patch{}, fmt.Errorf("store sync patch: %w", err)
 	}
 	if s.realtime != nil {
-		fanoutErr := s.realtime.Publish(ctx, s.userChannel(userID), string(mustJSON(map[string]any{
-			"type":          "sync_hint",
-			"userId":        userID,
-			"latestSyncSeq": seq,
-		})))
+		hint, marshalErr := clientrealtime.MarshalClientRealtimeEventEnvelope(
+			"sync_hint", "", patch.OccurredAt,
+			userSyncHintEventPayload{UserID: userID, LatestSyncSeq: seq},
+		)
+		fanoutErr := marshalErr
+		if fanoutErr == nil {
+			fanoutErr = s.realtime.Publish(ctx, s.userChannel(userID), string(hint))
+		}
 		s.metrics.RecordPatchFanout(fanoutErr)
 	}
 	s.metrics.RecordAppend(1)
@@ -186,11 +195,14 @@ func (s *Service) AppendPatchBatch(
 	}
 	if s.realtime != nil {
 		for _, patch := range patches {
-			fanoutErr := s.realtime.Publish(ctx, s.userChannel(patch.UserID), string(mustJSON(map[string]any{
-				"type":          "sync_hint",
-				"userId":        patch.UserID,
-				"latestSyncSeq": patch.SyncSeq,
-			})))
+			hint, marshalErr := clientrealtime.MarshalClientRealtimeEventEnvelope(
+				"sync_hint", "", patch.OccurredAt,
+				userSyncHintEventPayload{UserID: patch.UserID, LatestSyncSeq: patch.SyncSeq},
+			)
+			fanoutErr := marshalErr
+			if fanoutErr == nil {
+				fanoutErr = s.realtime.Publish(ctx, s.userChannel(patch.UserID), string(hint))
+			}
 			s.metrics.RecordPatchFanout(fanoutErr)
 		}
 	}

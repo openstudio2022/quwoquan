@@ -24,7 +24,7 @@ final class AlphaSubjectFollowFacet implements SubjectFollowCommandWriter {
       personaId: _activePersonaId,
       subjectType: command.subjectType,
       subjectId: command.subjectId,
-      state: 'following',
+      state: SubjectFollowState.following,
       idempotentReplay: replayed,
       updatedAt: DateTime.now().toUtc(),
     );
@@ -40,7 +40,7 @@ final class AlphaSubjectFollowFacet implements SubjectFollowCommandWriter {
       personaId: _activePersonaId,
       subjectType: command.subjectType,
       subjectId: command.subjectId,
-      state: 'unfollowed',
+      state: SubjectFollowState.unfollowed,
       idempotentReplay: !removed,
       updatedAt: DateTime.now().toUtc(),
     );

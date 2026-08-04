@@ -4,6 +4,9 @@ package local_contract
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -51,6 +54,11 @@ func TestExternalInteractionResultConsumerDedupesOwnedReceiptAndKeepsDigestOnly(
 	if err != nil {
 		t.Fatalf("consumer: %v", err)
 	}
+	providerRequestDigest := canonicalFixtureDigest(
+		"attempt-1",
+		"incoming-call-request-1",
+		"apns_voip",
+	)
 	fields := map[string]string{
 		"eventType":             "ExternalInteractionResultReported",
 		"eventId":               "attempt-1",
@@ -59,7 +67,7 @@ func TestExternalInteractionResultConsumerDedupesOwnedReceiptAndKeepsDigestOnly(
 		"operation":             "push_delivery.send",
 		"status":                "sent_unconfirmed",
 		"provider":              "apns_voip",
-		"providerRequestDigest": "sha256:provider-request",
+		"providerRequestDigest": providerRequestDigest,
 		"recoveryAction":        "none",
 		"occurredAt":            time.Now().UTC().Format(time.RFC3339Nano),
 	}
@@ -77,7 +85,7 @@ func TestExternalInteractionResultConsumerDedupesOwnedReceiptAndKeepsDigestOnly(
 		t.Fatalf("owned receipts=%d want=1", len(projection.byAttempt))
 	}
 	receipt := projection.byAttempt["attempt-1"]
-	if receipt.ProviderRequestDigest != "sha256:provider-request" {
+	if receipt.ProviderRequestDigest != providerRequestDigest {
 		t.Fatalf("provider digest drifted: %#v", receipt)
 	}
 }
@@ -101,16 +109,20 @@ func TestExternalInteractionResultConsumerRejectsTerminalDeliveryClaim(t *testin
 		t.Fatalf("consumer: %v", err)
 	}
 	if _, err := redis.XAdd(ctx, streamadapter.ExternalInteractionResultStream, map[string]string{
-		"eventType":             "ExternalInteractionResultReported",
-		"eventId":               "attempt-terminal-claim",
-		"attemptId":             "attempt-terminal-claim",
-		"requestId":             "incoming-call-request-terminal",
-		"operation":             "push_delivery.send",
-		"status":                "delivered",
-		"provider":              "apns_voip",
-		"providerRequestDigest": "sha256:provider-request",
-		"recoveryAction":        "none",
-		"occurredAt":            time.Now().UTC().Format(time.RFC3339Nano),
+		"eventType": "ExternalInteractionResultReported",
+		"eventId":   "attempt-terminal-claim",
+		"attemptId": "attempt-terminal-claim",
+		"requestId": "incoming-call-request-terminal",
+		"operation": "push_delivery.send",
+		"status":    "delivered",
+		"provider":  "apns_voip",
+		"providerRequestDigest": canonicalFixtureDigest(
+			"attempt-terminal-claim",
+			"incoming-call-request-terminal",
+			"apns_voip",
+		),
+		"recoveryAction": "none",
+		"occurredAt":     time.Now().UTC().Format(time.RFC3339Nano),
 	}); err != nil {
 		t.Fatalf("append terminal claim: %v", err)
 	}
@@ -122,6 +134,15 @@ func TestExternalInteractionResultConsumerRejectsTerminalDeliveryClaim(t *testin
 	if len(projection.byAttempt) != 0 {
 		t.Fatalf("terminal delivery claim reached projection: %#v", projection.byAttempt)
 	}
+}
+
+func canonicalFixtureDigest(parts ...string) string {
+	normalized := make([]string, 0, len(parts))
+	for _, part := range parts {
+		normalized = append(normalized, strings.TrimSpace(part))
+	}
+	sum := sha256.Sum256([]byte(strings.Join(normalized, "\x00")))
+	return "sha256:" + hex.EncodeToString(sum[:])
 }
 
 func TestExternalInteractionResultConsumerHoldsAndReleasesPersistedDeadLetter(t *testing.T) {

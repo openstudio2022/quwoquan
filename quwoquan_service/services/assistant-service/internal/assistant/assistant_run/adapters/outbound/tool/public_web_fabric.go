@@ -3,10 +3,11 @@ package tool
 import (
 	"context"
 	"errors"
+	"sort"
 	"strings"
 
 	publicweb "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/publicweb"
-	toolpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/tool"
+	toolpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/tool"
 )
 
 // DurableRequest is the production boundary used by an AssistantRun worker.
@@ -63,17 +64,28 @@ func (f *PublicWebFabric) Execute(
 		return DurableResult{}, canonicalPublicWebFailure(publicweb.ErrInvalidTarget)
 	}
 	input := cloneMap(request.Input)
-	input["runId"] = strings.TrimSpace(request.RunID)
-	switch strings.TrimSpace(request.ToolName) {
-	case "web_search", "web_open":
-		input["skillId"] = strings.TrimSpace(request.SkillID)
-	case "web_find":
-		delete(input, "skillId")
-	default:
+	toolName := strings.TrimSpace(request.ToolName)
+	if _, supported := f.handlers[toolName]; !supported {
 		return DurableResult{}, errors.New("unsupported public web tool")
 	}
+	metadata, found := f.registry.Metadata(toolName)
+	if !found {
+		return DurableResult{}, errors.New("unsupported public web tool")
+	}
+	for _, field := range metadata.ServerInjectedInputs {
+		switch strings.TrimSpace(field) {
+		case "runId":
+			input[field] = strings.TrimSpace(request.RunID)
+		case "skillId":
+			input[field] = strings.TrimSpace(request.SkillID)
+		default:
+			return DurableResult{}, errors.New(
+				"unsupported public web server-injected input",
+			)
+		}
+	}
 	result, err := f.registry.Execute(ctx, toolpkg.Request{
-		ToolName: strings.TrimSpace(request.ToolName),
+		ToolName: toolName,
 		Input:    input,
 		History:  append([]string{}, request.History...),
 	})
@@ -93,7 +105,12 @@ func (f *PublicWebFabric) RegisterInto(registry *toolpkg.Registry) {
 	if f == nil || registry == nil {
 		panic("public web fabric registry is required")
 	}
-	for _, toolName := range []string{"web_search", "web_open", "web_find"} {
+	toolNames := make([]string, 0, len(f.handlers))
+	for toolName := range f.handlers {
+		toolNames = append(toolNames, toolName)
+	}
+	sort.Strings(toolNames)
+	for _, toolName := range toolNames {
 		metadata, ok := f.registry.Metadata(toolName)
 		if !ok {
 			panic("public web fabric metadata is incomplete")

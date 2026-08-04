@@ -10,7 +10,7 @@ import (
 
 	rterr "quwoquan_service/runtime/errors"
 	rtredis "quwoquan_service/runtime/redis"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
+	assistant "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/model"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/persistence"
 	skillconsenttest "quwoquan_service/services/assistant-service/tests/support/skillconsent"
 )

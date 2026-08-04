@@ -16,7 +16,7 @@
 - [`feedback-ingestion-sampling`](./feedback-ingestion-sampling/spec.md)：统一上报通道 `BehaviorReporter`：单一出口，消除双通道重复上报与 behaviors/ops 双写。
 - [`interest-onboarding-prior`](./interest-onboarding-prior/spec.md)：定义“兴趣引导先验”的可观察主路径、失败语义及父能力交接。
 - [`personalized-ranking`](./personalized-ranking/spec.md)：定义“个性化排序”的可观察主路径、失败语义及父能力交接。
-- [`premium-stream-recommendation`](./premium-stream-recommendation/spec.md)：路由、排序、解释、product-ops 全局精品写入前置和未启用 PremiumPoolSource 的边界均可测试。
+- [`premium-stream-recommendation`](./premium-stream-recommendation/spec.md)：product-ops 精品准入、Recommendation 候选投影/排序窗口与 Content 权限 hydration/交付的边界可组合验收。
 - [`quality-score-cold-start`](./quality-score-cold-start/spec.md)：在缺少用户行为时以内容质量分和受控先验排序，并在反馈到达后逐步让位于个性化信号。
 - [`ranking-calibration`](./ranking-calibration/spec.md)：以点击、完成和负反馈校准排序分，使预测分与真实结果在声明窗口内对齐。
 - [`realtime-feed-baseline`](./realtime-feed-baseline/spec.md)：统一 sessionId / feedRequestId 归因。

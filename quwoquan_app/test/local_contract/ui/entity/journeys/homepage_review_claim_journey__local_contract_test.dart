@@ -7,19 +7,21 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_homepage/homepage_introduction.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
+import 'package:quwoquan_app/application/entity/homepage_view_data.dart';
 import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
 import '../../../../support/cloud_services/homepage_alpha_test_adapter.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository_contract.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_claim_page.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_detail_page.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show
         CloudOperationCancellationSignal,
         EntityWishlistState,
+        HomepageClaimRequestView,
+        HomepageIntroduction,
         HomepageReviewListQuery;
 import '../../../../support/cloud_services/repository_mock_reexports.dart';
 
@@ -62,6 +64,12 @@ void main() {
     );
     const wishlistStateReader = _NoWishlistStateReader();
     final telemetry = RecordingAppTelemetryRecorder();
+    final behaviorRepository = MockBehaviorRepository();
+    final behaviorTracker = ContentBehaviorTracker(
+      reporter: behaviorRepository,
+      enablePeriodicFlush: false,
+    );
+    addTearDown(behaviorTracker.dispose);
     final router = GoRouter(
       initialLocation: AppRoutePaths.homepageDetail(id: _homepageId),
       routes: <RouteBase>[
@@ -112,6 +120,8 @@ void main() {
           ),
           homepageReviewQueryProvider.overrideWithValue(reviews),
           homepageReviewCommandWriterProvider.overrideWithValue(reviews),
+          behaviorRepositoryProvider.overrideWithValue(behaviorRepository),
+          contentBehaviorTrackerProvider.overrideWithValue(behaviorTracker),
           appTelemetryReporterProvider.overrideWithValue(telemetry),
         ],
         child: MaterialApp.router(routerConfig: router),
@@ -120,7 +130,16 @@ void main() {
     await tester.pumpAndSettle();
 
     // Given：真实详情页已加载 canonical 主页。
-    expect(find.textContaining('西湖'), findsWidgets);
+    final renderedTexts = tester
+        .widgetList<Text>(find.byType(Text))
+        .map((widget) => widget.data)
+        .whereType<String>()
+        .toList(growable: false);
+    expect(
+      renderedTexts.any((text) => text.contains('西湖')),
+      isTrue,
+      reason: 'rendered texts: $renderedTexts',
+    );
 
     // When：切到口碑子页并完成评价。
     final opinion = find.byKey(
@@ -187,7 +206,7 @@ final class _JourneyHomepageRepository extends MockHomepageRepository {
   HomepageClaimRequestDraft? lastClaimDraft;
 
   @override
-  Future<HomepageClaimRequestRecord> createHomepageClaimRequest({
+  Future<HomepageClaimRequestView> createHomepageClaimRequest({
     required String homepageId,
     required HomepageClaimRequestDraft draft,
   }) async {

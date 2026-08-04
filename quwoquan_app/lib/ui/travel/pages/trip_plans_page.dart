@@ -86,12 +86,7 @@ final class _TripPlansPageState extends ConsumerState<TripPlansPage> {
           category: UiErrorCategory.pageLoad,
           scope: UiErrorScope.page,
         ),
-        onAction: (action) async {
-          if (action.type == UiErrorActionType.retry ||
-              action.type == UiErrorActionType.resubmit) {
-            await _reload();
-          }
-        },
+        onRecovery: _recoverDirectory,
       );
     }
 
@@ -173,6 +168,20 @@ final class _TripPlansPageState extends ConsumerState<TripPlansPage> {
       _loading = true;
     });
     await _reload();
+  }
+
+  Future<UiRecoveryOutcome> _recoverDirectory(UiErrorAction action) async {
+    if (action.type != UiErrorActionType.retry &&
+        action.type != UiErrorActionType.resubmit) {
+      return UiRecoveryOutcome.cancelled;
+    }
+    await _reload();
+    if (!mounted) {
+      return UiRecoveryOutcome.superseded;
+    }
+    return _initialError == null
+        ? UiRecoveryOutcome.recovered
+        : UiRecoveryOutcome.stillBlocked;
   }
 
   Future<void> _reload() async {

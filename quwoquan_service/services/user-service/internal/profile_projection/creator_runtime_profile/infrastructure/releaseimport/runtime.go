@@ -503,9 +503,85 @@ func verifyCreatorProfileReadback(
 }
 
 func removeAbsentUsers(ctx context.Context, pool *pgxpool.Pool, authorIDs []string) (int, error) {
-	tag, err := pool.Exec(ctx, "DELETE FROM user_profiles WHERE identity_origin='content_release' AND NOT (user_id = ANY($1))", authorIDs)
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("begin absent release user cleanup: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	userRows, err := tx.Query(ctx, `
+SELECT user_id
+FROM user_profiles
+WHERE identity_origin = 'content_release'
+  AND NOT (user_id = ANY($1))
+`, authorIDs)
+	if err != nil {
+		return 0, fmt.Errorf("list absent release users: %w", err)
+	}
+	userIDs := make([]string, 0)
+	for userRows.Next() {
+		var userID string
+		if scanErr := userRows.Scan(&userID); scanErr != nil {
+			userRows.Close()
+			return 0, fmt.Errorf("scan absent release user: %w", scanErr)
+		}
+		userIDs = append(userIDs, userID)
+	}
+	userRows.Close()
+	if err := userRows.Err(); err != nil {
+		return 0, fmt.Errorf("iterate absent release users: %w", err)
+	}
+
+	aggregateIDs := append([]string(nil), userIDs...)
+	if len(userIDs) > 0 {
+		personaRows, err := tx.Query(ctx, `
+SELECT persona_id
+FROM personas
+WHERE user_id = ANY($1)
+`, userIDs)
+		if err != nil {
+			return 0, fmt.Errorf("list absent release personas: %w", err)
+		}
+		for personaRows.Next() {
+			var personaID string
+			if scanErr := personaRows.Scan(&personaID); scanErr != nil {
+				personaRows.Close()
+				return 0, fmt.Errorf("scan absent release persona: %w", scanErr)
+			}
+			aggregateIDs = append(aggregateIDs, personaID)
+		}
+		personaRows.Close()
+		if err := personaRows.Err(); err != nil {
+			return 0, fmt.Errorf("iterate absent release personas: %w", err)
+		}
+	}
+
+	if len(aggregateIDs) > 0 {
+		if _, err := tx.Exec(ctx,
+			`DELETE FROM personas_command_receipts WHERE aggregate_id = ANY($1)`,
+			aggregateIDs,
+		); err != nil {
+			return 0, fmt.Errorf("remove absent release persona receipts: %w", err)
+		}
+		if _, err := tx.Exec(ctx,
+			`DELETE FROM personas_outbox WHERE aggregate_id = ANY($1)`,
+			aggregateIDs,
+		); err != nil {
+			return 0, fmt.Errorf("remove absent release persona outbox: %w", err)
+		}
+	}
+
+	tag, err := tx.Exec(ctx,
+		`DELETE FROM user_profiles
+WHERE identity_origin = 'content_release'
+  AND NOT (user_id = ANY($1))`,
+		authorIDs,
+	)
 	if err != nil {
 		return 0, fmt.Errorf("remove absent release users: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return 0, fmt.Errorf("commit absent release user cleanup: %w", err)
 	}
 	return int(tag.RowsAffected()), nil
 }

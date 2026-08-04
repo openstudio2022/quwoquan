@@ -80,7 +80,7 @@ func TestAccountAppealIntakeRejectsNonCanonicalCrossDomainIdentifiers(t *testing
 		t.Fatal("path separator was accepted in intakeRef")
 	}
 	if model.CanonicalOwnerAccountID("account-1") {
-		t.Fatal("legacy/noncanonical accountId was accepted")
+		t.Fatal("retired/noncanonical accountId was accepted")
 	}
 	if model.CanonicalAppealCaseID("appeal-1\r\nInjected: true") {
 		t.Fatal("header delimiter was accepted in caseId")

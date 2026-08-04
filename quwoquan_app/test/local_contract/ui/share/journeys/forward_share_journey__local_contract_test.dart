@@ -3,9 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/contact_home_row_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
+import 'package:quwoquan_app/cloud/services/chat/chat_view_data.dart';
 import '../../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_edit_models.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
@@ -91,7 +90,7 @@ void main() {
     expect(repository.lastConversationId, 'conv_2');
     expect(repository.lastType, 'card');
     expect(repository.lastContent, '发给你看看');
-    expect(repository.lastCard?.kind, 'profile_qr');
+    expect(repository.lastCard?.kind, MessageCardKind.profileQr);
     expect(repository.lastCard?.attributes, isNotEmpty);
   });
 
@@ -99,10 +98,11 @@ void main() {
     final repository = _ForwardJourneyChatRepository();
     final template = ContentShareTemplateBuilder.build(
       surfaceView: ContentSurfaceViewMapper.fromDto(
-        MicroPostDto(
+        ContentPostViewData(
           id: 'post_share_journey',
           type: 'micro',
           identity: 'moment',
+          displayFormat: 'note',
           assistantUsePolicy: 'inherit',
           authorId: 'author_share_journey',
           displayName: '旅程作者',
@@ -166,7 +166,7 @@ void main() {
     expect(repository.lastConversationId, 'conv_1');
     expect(repository.lastType, 'card');
     expect(repository.lastContent, '群里一起看看');
-    expect(repository.lastCard?.kind, 'content_post');
+    expect(repository.lastCard?.kind, MessageCardKind.contentPost);
     expect(
       repository.lastCard?.attributes
           .where((attribute) => attribute.name == 'postId')
@@ -180,10 +180,11 @@ void main() {
     final repository = _ForwardJourneyChatRepository();
     final template = ContentShareTemplateBuilder.build(
       surfaceView: ContentSurfaceViewMapper.fromDto(
-        MicroPostDto(
+        ContentPostViewData(
           id: 'post_share_auth_resume',
           type: 'micro',
           identity: 'moment',
+          displayFormat: 'note',
           assistantUsePolicy: 'inherit',
           authorId: 'author_share_auth_resume',
           displayName: '续接作者',
@@ -290,12 +291,12 @@ class _ForwardJourneyChatRepository extends MockChatRepository {
   MessageCard? get lastCard => writer.lastCommand?.card;
 
   @override
-  Future<List<ChatInboxDto>> listConversations({
+  Future<List<ChatInboxViewData>> listConversations({
     String? cursor,
     int limit = 500,
   }) async {
     final base = DateTime.utc(2026, 6, 27, 12);
-    return List<ChatInboxDto>.generate(
+    return List<ChatInboxViewData>.generate(
       3,
       (index) => chatInboxFixture(
         id: 'conv_$index',
@@ -308,12 +309,12 @@ class _ForwardJourneyChatRepository extends MockChatRepository {
   }
 
   @override
-  Future<List<ContactHomeRowDto>> listContactHome({
+  Future<List<ContactHomeRow>> listContactHome({
     String filter = 'all',
     String? cursor,
     int limit = 500,
   }) async {
-    return <ContactHomeRowDto>[];
+    return <ContactHomeRow>[];
   }
 }
 

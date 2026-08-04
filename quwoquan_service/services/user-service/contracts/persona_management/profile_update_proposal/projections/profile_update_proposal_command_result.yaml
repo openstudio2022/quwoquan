@@ -10,6 +10,7 @@ fields:
 - name: version
   type: int
 - name: status
-  type: string
+  type: enum
+  enum_ref: ProposalStatus
 - name: replayed
   type: bool

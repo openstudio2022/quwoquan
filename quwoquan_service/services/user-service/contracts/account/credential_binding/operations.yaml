@@ -198,6 +198,7 @@ api_routes:
       anonymous_policy: allow
       visibility: private
     response_entity: AuthSessionGrant
+    response_entity_ref: user.AccountSession
     response_body: AuthSessionGrant
     response_body_kind: object
     request_entity: CompleteFederatedPhoneBindingCommand

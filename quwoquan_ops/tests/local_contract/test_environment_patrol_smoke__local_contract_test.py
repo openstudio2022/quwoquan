@@ -1312,6 +1312,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         }
         with mock.patch.dict(os.environ, environment, clear=False):
             path = smoke._create_patrol_secret_define_file(args)
+            provider_secrets = smoke._provider_uat_secret_values()
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
             self.assertEqual(
@@ -1322,6 +1323,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
                 payload["QWQ_PROVIDER_UAT_LOCATION_EXPECTED_TEXT"],
                 "天安门",
             )
+            self.assertEqual(provider_secrets, ("天安门", "天安门"))
         finally:
             path.unlink(missing_ok=True)
 

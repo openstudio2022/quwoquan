@@ -179,6 +179,7 @@ func TestCheckAccountSecurityAuthority_VerifiesScopedReadinessWithoutSubject(t *
 		"service:api-edge",
 		"service:search-service",
 		"service:tag-service",
+		"service:travel-service",
 	} {
 		t.Run(servicePrincipal, func(t *testing.T) {
 			response := doRequest(

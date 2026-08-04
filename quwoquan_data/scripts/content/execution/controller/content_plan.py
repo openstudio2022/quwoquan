@@ -335,9 +335,14 @@ def _auto_content_plan(ctx: ExecutionContext, active_spec: Mapping[str, Any]) ->
                 rejects.reject_article("source_ref_reused", str(candidate["sourceId"]))
                 continue
             refs, shas, collections, asset_refs = _article_asset_claims(ctx, root, candidate)
-            if not asset_refs:
-                rejects.warn_article_image("no_publishable_source_asset", str(candidate["sourceId"]))
-            elif _claims_conflict(
+            if len(asset_refs) < 2:
+                rejects.reject_article(
+                    "same_source_cover_body_missing",
+                    str(candidate["sourceId"]),
+                    "article requires at least two publishable images from its base source unit",
+                )
+                continue
+            if _claims_conflict(
                 refs,
                 shas,
                 collections,
@@ -345,8 +350,11 @@ def _auto_content_plan(ctx: ExecutionContext, active_spec: Mapping[str, Any]) ->
                 claimed_shas=used_asset_shas,
                 claimed_collections=used_collection_ids,
             ):
-                rejects.warn_article_image("source_asset_reused", str(candidate["sourceId"]))
-                refs, shas, collections, asset_refs = [], [], [], []
+                rejects.reject_article(
+                    "source_asset_reused",
+                    str(candidate["sourceId"]),
+                )
+                continue
             claimed_candidate = dict(candidate)
             claimed_candidate["assetRefs"] = asset_refs
             picked_articles.append(claimed_candidate)

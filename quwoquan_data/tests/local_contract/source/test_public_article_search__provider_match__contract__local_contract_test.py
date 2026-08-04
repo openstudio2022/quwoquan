@@ -13,6 +13,7 @@ from content.source.research import auto_plan_article
 from content.source.research import article_frontier_profile
 from content.source.research import article_frontier_robots
 from content.source.research.public_search import (
+    FileDailyPageBudget,
     InMemoryDailyPageBudget,
     canonicalize_article_url,
     discover_article_source_frontier,
@@ -25,6 +26,23 @@ SPEC_REF = (
     "specs/feature-tree/runtime/runtime-data-engineering/"
     "article-commercial-scale-closure/spec.md#gwt-001"
 )
+
+
+def test_file_daily_budget_resolves_current_disposable_root(
+    monkeypatch,
+    tmp_path,
+):
+    from core import paths
+
+    monkeypatch.setattr(paths, "DATA_LOCAL_ROOT", tmp_path)
+    budget = FileDailyPageBudget()
+
+    assert budget.reserve(
+        "frontier_test",
+        day="2026-08-03",
+        max_pages_per_day=1,
+    ).allowed
+    assert (tmp_path / "article-source-frontier" / "2026-08-03.json").is_file()
 TERMS_URL = "https://terms.example.test/article"
 
 
@@ -623,8 +641,6 @@ def test_article_plan_mainline_retains_frontier_evidence(
         homepage_sources=[],
         required_article_bases=1,
         article_commercial_mode=True,
-        commons=[],
-        openverse=[],
         force=True,
     )
 

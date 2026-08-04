@@ -36,9 +36,11 @@ func (s *AuthService) SendOtp(
 		attribute.String("source.operation", strings.TrimSpace(sourceOperation)))
 	defer func() { rtobs.EndSpan(span, err) }()
 
-	normalized := normalizePhoneCredentialKey(phone)
-	if len(normalized) < 5 {
-		return nil, generated.AppErrorFromInvalidArgument("phone required")
+	normalized, validPhone := canonicalE164Phone(phone)
+	if !validPhone {
+		return nil, generated.AppErrorFromInvalidArgument(
+			"phone must use canonical E.164 format",
+		)
 	}
 	if s.otp == nil {
 		return nil, generated.AppErrorFromInternalError("otp store unavailable")
@@ -77,7 +79,7 @@ func (s *AuthService) SendOtp(
 	}
 	allowed, retryAfter, err := s.otp.AllowSend(ctx, normalized)
 	if err != nil {
-		return nil, generated.AppErrorFromInternalError(fmt.Sprintf("otp allow-send: %v", err))
+		return nil, generated.AppErrorFromInternalError("otp rate-limit store failed")
 	}
 	if !allowed {
 		return nil, challengegenerated.AppErrorFromOtpRateLimited("otp send throttled").
@@ -94,7 +96,7 @@ func (s *AuthService) SendOtp(
 	expiresAt := time.Now().UTC().Add(time.Duration(otpCodeExpirySeconds) * time.Second)
 	canonicalChallengeID := "otp_ch_" + strings.TrimRight(challengeID, "=")
 	destinationHash := hashOTPPhone(normalized)
-	idempotencyScope := normalized
+	idempotencyScope := destinationHash
 	if bindingTicketRef != "" {
 		idempotencyScope += ":" + bindingTicketRef
 	}
@@ -117,7 +119,7 @@ func (s *AuthService) SendOtp(
 		},
 	)
 	if err != nil {
-		return nil, generated.AppErrorFromInternalError(fmt.Sprintf("otp challenge save: %v", err))
+		return nil, generated.AppErrorFromInternalError("otp challenge save failed")
 	}
 	canonicalChallengeID = challengeResult.Challenge.ID
 	requestID := stableOTPRequestID(canonicalChallengeID)
@@ -167,7 +169,9 @@ func (s *AuthService) SendOtp(
 			ctx,
 			challengeapp.CancelChallengeCommand{ChallengeID: canonicalChallengeID},
 		)
-		return nil, challengegenerated.AppErrorFromOtpProviderFailed(fmt.Sprintf("otp integration submit: %v", err))
+		return nil, challengegenerated.AppErrorFromOtpProviderFailed(
+			"otp integration submit failed",
+		)
 	}
 	return result, nil
 }
@@ -251,9 +255,11 @@ func (s *AuthService) LoginWithPhone(
 	agreementVersion string,
 	privacyVersion string,
 ) (*sessionapp.AuthSessionGrant, error) {
-	normalized := normalizePhoneCredentialKey(phone)
-	if len(normalized) < 5 {
-		return nil, generated.AppErrorFromInvalidArgument("phone required")
+	normalized, validPhone := canonicalE164Phone(phone)
+	if !validPhone {
+		return nil, generated.AppErrorFromInvalidArgument(
+			"phone must use canonical E.164 format",
+		)
 	}
 	if strings.TrimSpace(agreementVersion) == "" || strings.TrimSpace(privacyVersion) == "" {
 		return nil, sessiongenerated.AppErrorFromConsentRequired("agreementVersion and privacyVersion required")

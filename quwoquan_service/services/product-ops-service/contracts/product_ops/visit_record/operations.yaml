@@ -26,6 +26,14 @@ api_routes:
     retry_mode: idempotent
     max_attempts: 2
     idempotency: required
+  request_entity: RecordVisitRequest
+  request_body_kind: object
+  request_bindings:
+    injected:
+    - name: Idempotency-Key
+      field: idempotencyKey
+  response_entity: RecordVisitReceipt
+  response_body_kind: object
   error_codes:
   - OPS.USER.visit_invalid_argument
   - OPS.USER.visit_idempotency_conflict

@@ -36,6 +36,8 @@ SOURCE_TITLE_MIN_CHARS = 4
 
 SOURCE_TITLE_MAX_CHARS = 40
 
+_SHORT_CJK_METADATA_TITLE_RE = re.compile(r"^[\u3400-\u9fff]{2,3}$")
+
 _TITLE_PLATFORM_SUFFIX_RE = re.compile(
     r"[\s_\|｜·–—\-]+("
     r"携程(攻略社区|旅行|旅游)?|马蜂窝|去哪儿(网|旅行)?|途牛(旅游网)?|同程(旅行|旅游)?|"
@@ -116,11 +118,23 @@ def _first_document_title_line(body: str) -> str:
     return ""
 
 
-def _usable_source_title(raw: str, *, source_id: str) -> str:
+def _usable_source_title(
+    raw: str,
+    *,
+    source_id: str,
+    allow_short_cjk_metadata: bool = False,
+) -> str:
     candidate = _clean_source_title(raw)
     if _looks_like_source_id(candidate, source_id=source_id):
         return ""
-    if len(re.sub(r"\s+", "", candidate)) < SOURCE_TITLE_MIN_CHARS:
+    compact = re.sub(r"\s+", "", candidate)
+    if (
+        len(compact) < SOURCE_TITLE_MIN_CHARS
+        and not (
+            allow_short_cjk_metadata
+            and _SHORT_CJK_METADATA_TITLE_RE.fullmatch(compact)
+        )
+    ):
         return ""
     return candidate
 
@@ -134,7 +148,11 @@ def extract_source_title(execution_id: str, base_source_ref: str | None) -> str:
         return ""
     meta = base_source_unit_meta(execution_id, base_source_ref)
     source_id = str(meta.get("sourceId") or "").strip()
-    candidate = _usable_source_title(str(meta.get("title") or ""), source_id=source_id)
+    candidate = _usable_source_title(
+        str(meta.get("title") or ""),
+        source_id=source_id,
+        allow_short_cjk_metadata=True,
+    )
     if candidate:
         return candidate
     body = load_base_draft_text(execution_id, base_source_ref)

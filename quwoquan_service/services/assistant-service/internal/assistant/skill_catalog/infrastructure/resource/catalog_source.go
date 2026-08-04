@@ -14,8 +14,9 @@ import (
 	"sort"
 	"strings"
 
-	skillpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/skill"
+	"quwoquan_service/services/assistant-service/internal/assistant/skill_catalog/application/catalogprojection"
 	"quwoquan_service/services/assistant-service/internal/assistant/skill_catalog/domain/model"
+	skillpkg "quwoquan_service/services/assistant-service/internal/assistant/skill_package_release/application/packageasset"
 )
 
 const (
@@ -113,6 +114,9 @@ func (builder *SourceBuilder) Compile(ctx context.Context) (SourceBundle, error)
 			return SourceBundle{}, fmt.Errorf("resolve Skill source digest %q: %w", resolved.SkillID, err)
 		}
 		resolvedManifests = append(resolvedManifests, resolved)
+	}
+	if err := profiles.ValidateManifestReferences(manifests); err != nil {
+		return SourceBundle{}, fmt.Errorf("validate Skill profile references: %w", err)
 	}
 	sort.Slice(manifests, func(left, right int) bool {
 		return manifests[left].SkillID < manifests[right].SkillID
@@ -236,6 +240,9 @@ func (builder *SourceBuilder) ListCatalogItems(ctx context.Context) ([]model.Ite
 	}
 	items := make([]model.Item, 0, len(bundle.ResolvedManifests))
 	for _, manifest := range bundle.ResolvedManifests {
+		if manifest.CatalogProfile.Visibility == skillpkg.CatalogVisibilityHidden {
+			continue
+		}
 		schemaRef := strings.TrimSpace(manifest.InputProfile.ConfigurationSchemaRef)
 		schema, found := bundle.InputSchemaAssets[schemaRef]
 		if !found {
@@ -246,39 +253,27 @@ func (builder *SourceBuilder) ListCatalogItems(ctx context.Context) ([]model.Ite
 			)
 		}
 		schemaSum := sha256.Sum256(schema)
-		consentScopes := map[string]struct{}{}
-		for _, requirement := range manifest.ContextProfile.Requirements {
-			for _, rawScope := range requirement.ConsentScopes {
-				scope := strings.TrimSpace(rawScope)
-				if scope != "" {
-					consentScopes[scope] = struct{}{}
+		item, listed, err := catalogprojection.Project(catalogprojection.Input{
+			Manifest:                  manifest,
+			ConfigurationSchemaDigest: "sha256:" + hex.EncodeToString(schemaSum[:]),
+			ConfigurationSchema:       append(json.RawMessage(nil), schema...),
+			LoadTemplate: func(skillID string, templateID string) ([]byte, bool, error) {
+				for _, owner := range []string{skillID, "quwoquan.official"} {
+					assetID := "presentation_template:" + owner + ":" + templateID
+					raw, found := bundle.PresentationTemplateAssets[assetID]
+					if found {
+						return append([]byte(nil), raw...), true, nil
+					}
 				}
-			}
-		}
-		requiredConsentScopes := make([]string, 0, len(consentScopes))
-		for scope := range consentScopes {
-			requiredConsentScopes = append(requiredConsentScopes, scope)
-		}
-		sort.Strings(requiredConsentScopes)
-		items = append(items, model.Item{
-			SkillID:                     manifest.SkillID,
-			DisplayName:                 manifest.DisplayName,
-			Description:                 manifest.CatalogProfile.ValueDescription,
-			Category:                    manifest.DomainID,
-			RequiresConsent:             len(requiredConsentScopes) > 0,
-			RequiredConsentScopes:       requiredConsentScopes,
-			IconHint:                    manifest.CatalogProfile.IconToken,
-			CoverMediaRef:               manifest.CatalogProfile.CoverMediaRef,
-			TargetUsers:                 append([]string{}, manifest.CatalogProfile.TargetUsers...),
-			DataUseSummary:              manifest.CatalogProfile.DataUseSummary,
-			ExampleRefs:                 append([]string{}, manifest.CatalogProfile.ExampleRefs...),
-			ActivationMode:              manifest.ActivationProfile.Mode,
-			AllowedSurfaceKinds:         append([]string{}, manifest.ActivationProfile.AllowedSurfaceKinds...),
-			ConfigurationSchemaDigest:   "sha256:" + hex.EncodeToString(schemaSum[:]),
-			ConfigurationSchema:         append(json.RawMessage(nil), schema...),
-			SetupTemplateRef:            manifest.InputProfile.SetupTemplateRef,
-			ConfigurationRequiredFields: append([]string{}, manifest.InputProfile.RequiredFields...),
+				return nil, false, nil
+			},
 		})
+		if err != nil {
+			return nil, err
+		}
+		if listed {
+			items = append(items, item)
+		}
 	}
 	return items, nil
 }
@@ -379,27 +374,19 @@ func skillSourceRoot(explicit string) (string, error) {
 		}
 		return "", fmt.Errorf("explicit Skill source root is not a directory: %s", explicit)
 	}
-	if configured := strings.TrimSpace(os.Getenv("ASSISTANT_SKILL_SOURCE_ROOT")); configured != "" {
-		if info, err := os.Stat(configured); err == nil && info.IsDir() {
-			return configured, nil
-		}
-		return "", fmt.Errorf("ASSISTANT_SKILL_SOURCE_ROOT is not a directory: %s", configured)
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		return "", fmt.Errorf("resolve canonical assistant Skill source root")
 	}
-	candidates := []string{
-		filepath.Join("resources", "skills", "assistant", "assistant_session"),
-		filepath.Join("quwoquan_service", "services", "assistant-service", "resources", "skills", "assistant", "assistant_session"),
-		filepath.Join("services", "assistant-service", "resources", "skills", "assistant", "assistant_session"),
+	canonical := filepath.Clean(filepath.Join(
+		filepath.Dir(file), "..", "..", "..", "..", "..",
+		"resources", "skill_packages", "official",
+	))
+	if info, err := os.Stat(canonical); err == nil && info.IsDir() {
+		return canonical, nil
 	}
-	if _, file, _, ok := runtime.Caller(0); ok {
-		candidates = append(candidates, filepath.Join(
-			filepath.Dir(file), "..", "..", "..", "..", "..",
-			"resources", "skills", "assistant", "assistant_session",
-		))
-	}
-	for _, candidate := range candidates {
-		if info, err := os.Stat(candidate); err == nil && info.IsDir() {
-			return candidate, nil
-		}
-	}
-	return "", fmt.Errorf("assistant Skill source root not found")
+	return "", fmt.Errorf(
+		"canonical assistant Skill source root is not a directory: %s",
+		canonical,
+	)
 }

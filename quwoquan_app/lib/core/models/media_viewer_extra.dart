@@ -1,4 +1,5 @@
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
+import 'package:quwoquan_app/cloud/services/content/content_read_model_projection.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
 
@@ -23,9 +24,9 @@ class MediaViewerPostWireRow {
     bool isLiked = false,
     bool isFollowingAuthor = false,
   }) {
-    final wire = Map<String, dynamic>.from(post.toPresentationMap())
-      ..['postId'] = post.id
-      ..['contentType'] = post.type
+    final wire = Map<String, dynamic>.from(
+      contentPostProjectionFromViewData(post).toWire(),
+    )
       ..['likeCount'] = likeCount ?? post.likeCount
       ..['commentCount'] = commentCount ?? post.commentCount
       ..['shareCount'] = shareCount ?? post.shareCount

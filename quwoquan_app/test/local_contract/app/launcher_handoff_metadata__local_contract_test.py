@@ -214,12 +214,12 @@ class LauncherHandoffMetadataContractTest(unittest.TestCase):
         contract = load_launch_manifest_contract()
         handoff = _build_handoff("prod", "prod-hosted")
         del handoff["publicWebBaseUrl"]
-        handoff["legacyLaunchIdentity"] = "forbidden"
+        handoff["retiredLaunchIdentity"] = "forbidden"
 
         issues = validate_handoff_against_metadata(handoff, contract)
         self.assertIn("handoff.publicWebBaseUrl is required", issues)
         self.assertIn(
-            "handoff.legacyLaunchIdentity is not declared by metadata",
+            "handoff.retiredLaunchIdentity is not declared by metadata",
             issues,
         )
 

@@ -61,6 +61,28 @@ void main() {
     expect(response.failure.transportStatus, 404);
   });
 
+  test(
+    'response ignores retired message alias and emits debugMessage only',
+    () {
+      final response = RuntimeErrorResponse.fromJson(<String, dynamic>{
+        'code': 'CONTENT.SYSTEM.storage_failed',
+        'origin': 'system',
+        'kind': 'internal',
+        'nature': 'bug',
+        'message': 'retired diagnostic alias',
+        'location': <String, dynamic>{
+          'businessObject': 'post',
+          'functionModule': 'repository',
+        },
+        'context': <String, dynamic>{'attributes': <Object>[]},
+      });
+
+      expect(response.debugMessage, isEmpty);
+      expect(response.toJson(), isNot(contains('message')));
+      expect(response.toJson(), containsPair('debugMessage', ''));
+    },
+  );
+
   test('missing context defaults to empty attributes', () {
     final response = RuntimeErrorResponse.fromJson(<String, dynamic>{
       'code': 'CLOUD.SYSTEM.unknown_error',

@@ -107,20 +107,20 @@ func TestSendMessageTypedCardRejectsRemovedMapAndRoundTrips(t *testing.T) {
 	if removed["code"] != "CHAT.USER.message_invalid" {
 		t.Fatalf("removed cardPayload must be rejected: %#v", removed)
 	}
-	for _, legacyKind := range []string{"profileQr", "post", "userProfile", "entityProfile"} {
-		legacy := doPost(
+	for _, retiredKind := range []string{"profileQr", "post", "userProfile", "entityProfile"} {
+		response := doPost(
 			t,
 			"/chat/conversations/"+convID+"/messages",
 			fmt.Sprintf(
-				`{"type":"card","clientMsgId":"legacy-%s","card":{"kind":%q,"title":"legacy"}}`,
-				legacyKind,
-				legacyKind,
+				`{"type":"card","clientMsgId":"retired-%s","card":{"kind":%q,"title":"retired"}}`,
+				retiredKind,
+				retiredKind,
 			),
 			"user_test_001",
 			http.StatusBadRequest,
 		)
-		if legacy["code"] != "CHAT.USER.message_invalid" {
-			t.Fatalf("legacy card kind %q must be rejected: %#v", legacyKind, legacy)
+		if response["code"] != "CHAT.USER.message_invalid" {
+			t.Fatalf("retired card kind %q must be rejected: %#v", retiredKind, response)
 		}
 	}
 
@@ -259,7 +259,7 @@ func TestListMessages(t *testing.T) {
 	if !ok || nextBeforeSeq <= 0 {
 		t.Fatalf("first message page must expose nextBeforeSeq: %#v", firstPage)
 	}
-	if _, legacyCursorPresent := firstPage["cursor"]; legacyCursorPresent {
+	if _, retiredCursorPresent := firstPage["cursor"]; retiredCursorPresent {
 		t.Fatalf("message page must not emit retired cursor: %#v", firstPage)
 	}
 	code, secondPage := doGet(

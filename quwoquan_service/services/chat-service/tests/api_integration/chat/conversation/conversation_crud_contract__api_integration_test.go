@@ -63,7 +63,7 @@ func TestListConversations(t *testing.T) {
 	if !ok || nextCursor == "" {
 		t.Fatalf("first page must return nextCursor, got %#v", result)
 	}
-	if _, legacyCursorPresent := result["cursor"]; legacyCursorPresent {
+	if _, retiredCursorPresent := result["cursor"]; retiredCursorPresent {
 		t.Fatalf("response must not emit retired cursor key: %#v", result)
 	}
 

@@ -49,9 +49,9 @@ class ProdDeployContractTest(unittest.TestCase):
             {
                 "DRY_RUN": "false",
                 "ROLLOUT_STAGE": "gray-initial",
-                "IMAGE_VERSION": "img-test",
-                "PREVIOUS_IMAGE_VERSION": "img-previous",
-                "CONFIG_VERSION": "cfg-test",
+                "IMAGE_TRANSPORT_TAG": "transport-test",
+                "PREVIOUS_IMAGE_TRANSPORT_TAG": "transport-previous",
+                "CANDIDATE_DIGEST": "sha256:" + ("b" * 64),
                 "SERVICE": "service-plane",
             }
         )
@@ -109,9 +109,12 @@ class ProdDeployContractTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         # 预览必须给出 service plane 的 SSH 发布计划与灰度命名空间。
         self.assertIn("prod-service-svc", result.stdout)
-        self.assertIn("quwoquan-service-gray", result.stdout)
+        self.assertIn("quwoquan-service-gray-r0", result.stdout)
         self.assertIn("prod-edge-svc", result.stdout)
-        self.assertIn("quwoquan-edge-gray", result.stdout)
+        self.assertIn("quwoquan-edge-gray-r0", result.stdout)
+        self.assertIn("replica=r0/1", result.stdout)
+        self.assertIn("host=prod-host-01", result.stdout)
+        self.assertIn("/instances/gray/r0", result.stdout)
         self.assertIn(
             "credential_root='/home/prod-service-svc/credentials'",
             result.stdout,

@@ -225,8 +225,24 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
     def test_gamma_elasticsearch_uses_native_architecture_with_arm_sve_guard(self) -> None:
         compose = PRODUCT_OPS_LOCAL_ES_COMPOSE_FILE.read_text(encoding="utf-8")
         script = START_SCRIPT.read_text(encoding="utf-8")
+        multi_arch_index = (
+            "docker.elastic.co/elasticsearch/elasticsearch@"
+            "sha256:dfd318b417be1356d9c7fdd6a5577c8a45553ac9d34354929a416c69c85daa9f"
+        )
+        arm64_manifest = (
+            "docker.elastic.co/elasticsearch/elasticsearch@"
+            "sha256:5af05323c9bfc52fcee63a47c682412a6ef5955ac85966f045a68ba8623db2e1"
+        )
+        amd64_only_manifest = (
+            "sha256:f455c50fb82017dae23878c1b12fb2188dfb984723d62db2c5bd0c1f78e246f0"
+        )
 
         self.assertNotIn("platform: linux/amd64", compose)
+        self.assertIn(
+            'image: "${QWQ_COMPOSE_ELASTICSEARCH_IMAGE:-' + multi_arch_index + '}"',
+            compose,
+        )
+        self.assertNotIn(amd64_only_manifest, compose)
         self.assertIn(
             "CLI_JAVA_OPTS: \"${QWQ_COMPOSE_ELASTICSEARCH_CLI_JAVA_OPTS:-}\"",
             compose,
@@ -237,6 +253,9 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
         )
         self.assertIn('case "$(uname -m)" in', script)
         self.assertIn("arm64|aarch64)", script)
+        self.assertIn(arm64_manifest, script)
+        self.assertIn(multi_arch_index, script)
+        self.assertNotIn(amd64_only_manifest, script)
         self.assertIn(
             'LOCAL_GAMMA_ELASTICSEARCH_CLI_JAVA_OPTS:--XX:UseSVE=0',
             script,
@@ -246,6 +265,10 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
             script,
         )
         self.assertNotIn("--platform=linux/amd64", script)
+        self.assertIn(
+            "QWQ_COMPOSE_${source_name#LOCAL_GAMMA_}",
+            script,
+        )
 
     def test_gamma_runtime_applies_service_owned_content_overlay_after_base(self) -> None:
         compose_files = gamma_compose_files(ROOT)
@@ -305,6 +328,24 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
         self.assertIn(
             "sys.recommendation-service.redis.rec.addr: redis:6379",
             gamma_config,
+        )
+
+    def test_recommendation_healthcheck_has_socket_timeout_and_single_worker_default(
+        self,
+    ) -> None:
+        service_block = service_compose("recommendation-service")
+
+        self.assertIn(
+            'QWQ_COMPOSE_REC_MODEL_WORKERS:-1}',
+            service_block,
+        )
+        self.assertIn(
+            "urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)",
+            service_block,
+        )
+        self.assertNotIn(
+            "urllib.request.urlopen('http://127.0.0.1:8000/health')\" || exit 1",
+            service_block,
         )
 
     def test_user_service_compose_injects_protected_nonprod_provider_material(self) -> None:
@@ -415,6 +456,7 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
         )
         self.assertIn("compose_build_services+=(realtime-gateway)", start_script)
         self.assertIn("compose_build_services+=(rtc-service)", start_script)
+        self.assertIn("\n  travel-service\n", start_script)
         self.assertIn(
             "commercial-observability,assistant-runtime,edge-media",
             start_script,
@@ -640,12 +682,36 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
         self.assertNotIn("seed_tag_service_data", start_script)
         self.assertNotIn("ENABLE_FIXTURE_SEEDS", start_script)
 
+    def test_host_probe_services_attach_edge_publish_network(self) -> None:
+        """default is internal:true; host/Colima probes need the edge bridge."""
+        gamma_compose = COMPOSE_FILE.read_text(encoding="utf-8")
+        self.assertIn("internal: true", gamma_compose)
+        self.assertIn("\n  edge:\n", gamma_compose)
+        marker = (
+            "# Host/Colima readiness probes hit these published ports through the edge"
+        )
+        self.assertIn(marker, gamma_compose)
+        block = gamma_compose[gamma_compose.index(marker) : gamma_compose.index("\nnetworks:")]
+        for service in (
+            "user-service",
+            "product-ops-service",
+            "platform-ops-service",
+            "integration-service",
+            "notification-service",
+            "tag-service",
+        ):
+            self.assertIn(f"  {service}:\n    networks:\n      - default\n      - edge", block)
+
     def test_product_ops_receives_local_elasticsearch_endpoint(self) -> None:
         service_block = service_compose("product-ops-service")
         start_script = START_SCRIPT.read_text(encoding="utf-8")
 
         key = "PRODUCT_OPS_ELASTICSEARCH_ENDPOINT"
         self.assertIn(f'{key}: "${{{key}:-}}"', service_block)
+        self.assertIn(
+            f'export {key}="${{{key}:-http://elasticsearch:9200}}"',
+            start_script,
+        )
         self.assertIn(
             "product-ops-service/deploy/local-elasticsearch.compose.yaml",
             start_script,

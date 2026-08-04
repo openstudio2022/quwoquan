@@ -17,13 +17,6 @@ class ContentCanaryStage {
 
   final String stage;
   final int rolloutPercent;
-
-  factory ContentCanaryStage.fromMap(Map<String, dynamic> map) {
-    return ContentCanaryStage(
-      stage: (map['stage'] ?? '').toString().trim(),
-      rolloutPercent: (map['rolloutPercent'] as num?)?.toInt() ?? 0,
-    );
-  }
 }
 
 class ContentRuntimeConfigState {
@@ -58,28 +51,15 @@ class ContentRuntimeConfigState {
   bool isEnabled(String flag) => featureFlags[flag] ?? false;
 
   factory ContentRuntimeConfigState.fromAppConfig(
-    Map<String, dynamic> config, {
+    ContentAppConfig config, {
     required ContentRuntimeConfigState fallback,
-  }) {
-    return ContentRuntimeConfigState.fromClientParsed(
-      ContentAppConfigClientParsed.fromRootMap(config),
-      fallback: fallback,
-    );
-  }
-
-  factory ContentRuntimeConfigState.fromClientParsed(
-    ContentAppConfigClientParsed parsed, {
-    required ContentRuntimeConfigState fallback,
-    List<HomeChannelConfig>? homeChannelsOverride,
-    IntersectionDisplayConfig? intersectionDisplayOverride,
-    CommentRemoteConfig? commentOverride,
     AppRemoteConfigSnapshot? snapshot,
   }) {
     final mergedFlags = <String, bool>{
       ...fallback.featureFlags,
-      ...parsed.featureFlagOverrides,
+      ..._featureFlagOverrides(config.featureFlags),
     };
-    final gray = parsed.grayRelease;
+    final gray = config.grayRelease;
     final rawStages = gray.canaryMatrix
         .map(
           (w) => ContentCanaryStage(
@@ -99,16 +79,66 @@ class ContentRuntimeConfigState {
           ? fallback.currentCanaryStage
           : currentCanaryStage,
       canaryStages: rawStages.isEmpty ? fallback.canaryStages : rawStages,
-      clientStateSync: ClientStateSyncConfig.fromMap(
-        parsed.clientStateSyncMap,
+      clientStateSync: _clientStateSyncConfig(
+        config.clientStateSync,
         fallback: fallback.clientStateSync,
       ),
-      comment: commentOverride ?? fallback.comment,
+      comment: CommentRemoteConfig.fromAppConfig(
+        config,
+        fallback: fallback.comment,
+      ),
       configHash: snapshot?.configHash ?? fallback.configHash,
       source: snapshot?.source ?? fallback.source,
-      homeChannels: homeChannelsOverride ?? fallback.homeChannels,
-      intersectionDisplay:
-          intersectionDisplayOverride ?? fallback.intersectionDisplay,
+      homeChannels:
+          HomeChannelsRemoteOverride.fromAppConfig(config) ??
+          fallback.homeChannels,
+      intersectionDisplay: IntersectionDisplayConfig.fromAppConfig(config),
+    );
+  }
+
+  static Map<String, bool> _featureFlagOverrides(
+    ContentAppConfigFeatureFlags flags,
+  ) {
+    return <String, bool>{
+      'enable_create_action_entry': ?flags.enableCreateActionEntry,
+      'enable_unified_create_editor': ?flags.enableUnifiedCreateEditor,
+      'enable_identity_based_surfaces': ?flags.enableIdentityBasedSurfaces,
+      'enable_identity_share_template': ?flags.enableIdentityShareTemplate,
+      'enable_article_distribution_profiles':
+          ?flags.enableArticleDistributionProfiles,
+      'enable_article_book_reader': ?flags.enableArticleBookReader,
+      'enable_article_page_curl': ?flags.enableArticlePageCurl,
+      'enable_shared_video_timeline': ?flags.enableSharedVideoTimeline,
+      'enable_video_timeline_preview': ?flags.enableVideoTimelinePreview,
+      'enable_hls_cmaf_abr': ?flags.enableHlsCmafAbr,
+      'enable_assistant_content_identity_index':
+          ?flags.enableAssistantContentIdentityIndex,
+      'enable_helper_read': ?flags.enableHelperRead,
+      'enable_share_to_circle': ?flags.enableShareToCircle,
+      'show_view_count': ?flags.showViewCount,
+    };
+  }
+
+  static ClientStateSyncConfig _clientStateSyncConfig(
+    ContentAppConfigClientStateSync? config, {
+    required ClientStateSyncConfig fallback,
+  }) {
+    if (config == null) return fallback;
+    return ClientStateSyncConfig(
+      flushDelay: Duration(
+        seconds: config.flushDelaySec ?? fallback.flushDelay.inSeconds,
+      ),
+      retryDelay: Duration(
+        seconds: config.retryDelaySec ?? fallback.retryDelay.inSeconds,
+      ),
+      maxBatchSize: config.maxBatchSize ?? fallback.maxBatchSize,
+      maxPendingAge: Duration(
+        seconds: config.maxPendingAgeSec ?? fallback.maxPendingAge.inSeconds,
+      ),
+      flushOnForegroundResume:
+          config.flushOnForegroundResume ?? fallback.flushOnForegroundResume,
+      flushOnNetworkRecovered:
+          config.flushOnNetworkRecovered ?? fallback.flushOnNetworkRecovered,
     );
   }
 }
@@ -225,25 +255,15 @@ class AppRemoteConfigNotifier extends Notifier<AppRemoteConfigState> {
     AppRemoteConfigSnapshot snapshot, {
     required ContentRuntimeConfigState fallback,
   }) {
-    final channelsOverride = HomeChannelsRemoteOverride.fromAppConfigRoot(
-      snapshot.wireRoot,
-    );
-    final intersectionDisplay = IntersectionDisplayConfig.fromAppConfigRoot(
-      snapshot.wireRoot,
-    );
-    final comment = CommentRemoteConfig.fromAppConfigRoot(snapshot.wireRoot);
-    return ContentRuntimeConfigState.fromClientParsed(
-      snapshot.contentWire.clientParsed,
+    return ContentRuntimeConfigState.fromAppConfig(
+      snapshot.content,
       fallback: fallback,
-      homeChannelsOverride: channelsOverride,
-      intersectionDisplayOverride: intersectionDisplay,
-      commentOverride: comment,
       snapshot: snapshot,
     );
   }
 
   bool _shouldActivateImmediately(AppRemoteConfigSnapshot snapshot) {
-    return snapshot.activationPolicy['default'] == 'immediate';
+    return snapshot.defaultActivation == 'immediate';
   }
 }
 

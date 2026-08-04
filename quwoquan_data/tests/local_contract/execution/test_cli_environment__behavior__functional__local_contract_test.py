@@ -387,6 +387,72 @@ def test_compact_preflight_evidence_preserves_reliabletask_fleet_receipt() -> No
     }
 
 
+def test_env_ready_does_not_repeat_runtime_child_fleet_reconciliation(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        preflight_handler,
+        "prepare_data_runtime_cache",
+        lambda **_kwargs: {
+            "ready": True,
+            "python": sys.executable,
+            "missing": [],
+        },
+    )
+    monkeypatch.setattr(
+        preflight_handler,
+        "_preflight_in_python",
+        lambda _args, _python: {
+            "ready": True,
+            "issues": [],
+            "runtime": {"ready": True, "resolvedPython": sys.executable},
+            "cursorApiKey": {
+                "source": "key_file",
+                "present": True,
+                "valid": True,
+                "issues": [],
+            },
+            "network": {"checked": False, "ready": True, "issues": []},
+            "cursorStartup": {"checked": False, "ready": True},
+            "reliableTaskFleet": {
+                "checked": True,
+                "ready": True,
+                "target": "beta-local",
+                "mongo": True,
+                "redis": True,
+                "issues": [],
+            },
+        },
+    )
+    repeated: list[bool] = []
+    monkeypatch.setattr(
+        preflight_handler,
+        "_apply_reliabletask_fleet_gate",
+        lambda *_args, **_kwargs: repeated.append(True),
+    )
+    args = argparse.Namespace(
+        python=None,
+        requirements=None,
+        json=True,
+        no_cursor_key=False,
+        no_network=True,
+        endpoint=None,
+        timeout_seconds=5.0,
+        no_cursor_startup=True,
+        cursor_startup=False,
+        model="auto",
+        runtime="local",
+        startup_timeout_seconds=30.0,
+        report_out=None,
+        require_reliabletask_fleet=True,
+        workspace_smoke=False,
+        soak=0,
+    )
+
+    assert preflight_handler.handle_ready(args) is None
+    assert repeated == []
+
+
 def test_preflight_evidence_rejects_retired_data_local_branch(monkeypatch, tmp_path):
     data_root = tmp_path / "data"
     tasks_root = data_root / "tasks"

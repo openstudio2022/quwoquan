@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
-
 /// compile-time 业务环境配置缺失或非法。
 ///
 /// 该异常只承载脱敏的 define 键集合，不承载 URL、token 或原始异常文本。
@@ -35,6 +33,7 @@ class CloudRuntimeConfig {
   static Map<String, String> _nativeLaunchIdentity = const <String, String>{};
   static List<String> _nativeRuntimeDriftKeys = const <String>[];
   static bool _nativeRuntimePackageHydrated = false;
+  static bool _enforceNativeLaunchBinding = true;
 
   static String _runtimeValue(String key, String compiledValue) {
     // 任一 compile-time runtime define 存在时，整包只能来自 compile-time；
@@ -270,7 +269,10 @@ class CloudRuntimeConfig {
     'QWQ_APP_LAUNCH_MODE': _compiledLaunchMode,
   };
 
-  static void hydrateFromNativeRuntimePackage(Map<String, String> values) {
+  static void hydrateFromNativeRuntimePackage(
+    Map<String, String> values, {
+    bool enforceNativeLaunchBinding = true,
+  }) {
     const contentBindingKeys = <String>{
       'contentReleaseId',
       'contentManifestDigest',
@@ -299,7 +301,9 @@ class CloudRuntimeConfig {
           entry.key: entry.value.trim(),
     });
     _nativeRuntimePackageHydrated = true;
-    _nativeRuntimeDriftKeys = shouldLoadNativeRuntimePackage || kIsWeb
+    _enforceNativeLaunchBinding = enforceNativeLaunchBinding;
+    _nativeRuntimeDriftKeys =
+        shouldLoadNativeRuntimePackage || !enforceNativeLaunchBinding
         ? const <String>[]
         : List<String>.unmodifiable(
             _nativeRuntimeAllowedKeys.where(
@@ -315,6 +319,7 @@ class CloudRuntimeConfig {
     _nativeLaunchIdentity = const <String, String>{};
     _nativeRuntimeDriftKeys = const <String>[];
     _nativeRuntimePackageHydrated = false;
+    _enforceNativeLaunchBinding = true;
   }
 
   static String get contentReleaseId =>
@@ -339,7 +344,7 @@ class CloudRuntimeConfig {
   }
 
   static bool get requiresReleaseBoundContent =>
-      !kIsWeb &&
+      _enforceNativeLaunchBinding &&
       (launchMode == 'direct_flutter_run' ||
           launchMode == 'canonical_launcher');
 

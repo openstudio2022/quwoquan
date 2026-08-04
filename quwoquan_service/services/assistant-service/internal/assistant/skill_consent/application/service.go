@@ -8,12 +8,9 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 
 	rtobs "quwoquan_service/runtime/observability"
-	catalogmodel "quwoquan_service/services/assistant-service/internal/assistant/skill_catalog/domain/model"
 	"quwoquan_service/services/assistant-service/internal/assistant/skill_consent/domain/model"
 	"quwoquan_service/services/assistant-service/internal/assistant/skill_consent/domain/ports"
 )
-
-const SkillPersonalContentAccess = catalogmodel.PersonalContentAccessSkillID
 
 type CommandFacade struct {
 	store ports.Store
@@ -103,9 +100,19 @@ func (facade *CommandFacade) Revoke(
 func (facade *QueryFacade) Require(
 	ctx context.Context,
 	accountID, skillID string,
+	requiredScopes []string,
 ) error {
-	if strings.TrimSpace(skillID) != SkillPersonalContentAccess {
+	requiredScopes, valid := canonicalRequiredScopes(requiredScopes)
+	if !valid {
+		return model.ErrConsentRequired
+	}
+	if len(requiredScopes) == 0 {
 		return nil
+	}
+	accountID = strings.TrimSpace(accountID)
+	skillID = strings.TrimSpace(skillID)
+	if accountID == "" || skillID == "" {
+		return model.ErrConsentRequired
 	}
 	consents, err := facade.List(ctx, accountID)
 	if err != nil {
@@ -113,9 +120,42 @@ func (facade *QueryFacade) Require(
 	}
 	for _, consent := range consents {
 		if consent.IsGranted() &&
-			strings.TrimSpace(consent.SkillID) == strings.TrimSpace(skillID) {
+			strings.TrimSpace(consent.SkillID) == skillID &&
+			consentCoversScopes(consent.GrantedScopes, requiredScopes) {
 			return nil
 		}
 	}
 	return model.ErrConsentRequired
+}
+
+func canonicalRequiredScopes(values []string) ([]string, bool) {
+	seen := make(map[string]struct{}, len(values))
+	result := make([]string, 0, len(values))
+	for _, raw := range values {
+		value := strings.TrimSpace(raw)
+		if value == "" {
+			return nil, false
+		}
+		if _, duplicate := seen[value]; duplicate {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	return result, true
+}
+
+func consentCoversScopes(grantedScopes, requiredScopes []string) bool {
+	granted := make(map[string]struct{}, len(grantedScopes))
+	for _, raw := range grantedScopes {
+		if value := strings.TrimSpace(raw); value != "" {
+			granted[value] = struct{}{}
+		}
+	}
+	for _, required := range requiredScopes {
+		if _, found := granted[required]; !found {
+			return false
+		}
+	}
+	return true
 }

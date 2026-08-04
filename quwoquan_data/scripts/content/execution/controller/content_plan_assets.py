@@ -57,10 +57,13 @@ def article_asset_claims(
     root: Path,
     candidate: Mapping[str, Any],
 ) -> tuple[list[str], list[str], list[str], list[str]]:
-    """Reserve the first publishable image bound to an article source unit."""
+    """Reserve every publishable image bound to one article source unit."""
     source_dir = candidate.get("sourceDir")
     if not isinstance(source_dir, Path):
         return [], [], [], []
+    refs: list[str] = []
+    shas: list[str] = []
+    collection_ids: list[str] = []
     for row in candidate.get("rows") or []:
         if not isinstance(row, Mapping):
             continue
@@ -75,13 +78,14 @@ def article_asset_claims(
         verdict = _assess_content_plan_publish_image(asset_path, ctx)
         if verdict.blocks_image_publish:
             continue
-        return (
-            [ref],
-            [sha] if sha else [],
-            [collection_id] if collection_id else [],
-            [ref],
-        )
-    return [], [], [], []
+        refs.append(ref)
+        if sha:
+            shas.append(sha)
+        if collection_id:
+            collection_ids.append(collection_id)
+    if len(refs) < 2:
+        return [], [], [], []
+    return refs, shas, collection_ids, refs
 
 
 def claims_conflict(

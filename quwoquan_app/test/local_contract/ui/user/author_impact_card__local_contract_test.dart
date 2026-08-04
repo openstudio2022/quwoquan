@@ -4,11 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_item.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_summary.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_visual.g.dart';
 import 'package:quwoquan_app/components/object_page/interactive_intersection_text.dart';
 import 'package:quwoquan_app/components/object_page/intersection_visual_cluster.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
@@ -18,6 +13,7 @@ import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/ui/user/widgets/author_impact_card.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import '../../../support/cloud_services/repository_mock_reexports.dart';
 import '../../../support/fixtures/author_impact_fixtures.dart';
 
@@ -306,8 +302,10 @@ void main() {
             sampleVisuals: <IntersectionVisual>[
               IntersectionVisual(
                 assetKind: 'avatar',
+                imageUrl: '',
                 displayName: '阿岚',
                 target: IntersectionTarget(
+                  objectType: 'user',
                   objectId: 'u_alan',
                   objectKind: 'person',
                   routeId: 'userProfile',

@@ -17,6 +17,15 @@ fields:
     ops_exposure: read
     role: append_only_fact
     reference: true
+  - name: userId
+    type: string
+    constraints: [NOT_NULL]
+    classification: PII
+    log_policy: hash
+    api_exposure: none
+    ops_exposure: read
+    role: append_only_fact
+    description: 由可信 principal 派生的业务 actor id；与 clientEventId 共同构成幂等事实身份，公共 payload 不得写入。
   - name: deviceActorId
     type: string
     constraints: [NULLABLE]
@@ -43,13 +52,72 @@ fields:
     role: append_only_fact
     reference: true
   - name: action
-    type: string
+    type: enum
+    enum_ref: BehaviorEventType
     constraints: [NOT_NULL]
     classification: INTERNAL
     log_policy: allow
     api_exposure: write
     ops_exposure: read
     role: append_only_fact
+  - name: state
+    type: string
+    constraints: [NULLABLE]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: write
+    ops_exposure: read
+    role: append_only_fact
+  - name: contentType
+    type: enum
+    enum_ref: ContentType
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: write
+    ops_exposure: read
+    role: append_only_fact
+  - name: tagRefs
+    type: '[]string'
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: metadata_only
+    api_exposure: write
+    ops_exposure: read
+    role: append_only_fact
+  - name: duration
+    type: float64
+    constraints: [NULLABLE]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: write
+    ops_exposure: read
+    role: append_only_fact
+  - name: authorId
+    type: string
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: write
+    ops_exposure: read
+    role: append_only_fact
+    reference: true
+  - {name: objectId, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read, role: append_only_fact}
+  - {name: objectKind, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read, role: append_only_fact}
+  - {name: displayName, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: redacted, api_exposure: write, ops_exposure: read, role: append_only_fact}
+  - {name: sourceSurface, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read, role: append_only_fact}
+  - {name: taxonomyReleaseId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: write, ops_exposure: read, role: append_only_fact}
+  - {name: referralSource, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read, role: append_only_fact}
+  - {name: engagementDepth, type: int, constraints: [NULLABLE, MIN_0], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read, role: append_only_fact}
+  - {name: consumedRatio, type: float64, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read, role: append_only_fact}
+  - {name: totalUnits, type: int, constraints: [NULLABLE, MIN_0], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read, role: append_only_fact}
+  - {name: effectivePlayMs, type: int, constraints: [NULLABLE, MIN_0], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read, role: append_only_fact}
+  - {name: feedSessionId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: write, ops_exposure: read, role: append_only_fact}
+  - {name: playbackSessionId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: write, ops_exposure: read, role: append_only_fact}
+  - {name: entityRefs, type: '[]string', constraints: [NULLABLE], classification: PUBLIC, log_policy: metadata_only, api_exposure: write, ops_exposure: read, role: append_only_fact}
+  - {name: pageVisitId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: write, ops_exposure: read, role: append_only_fact}
+  - {name: position, type: int, constraints: [NULLABLE, MIN_0], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read, role: append_only_fact}
+  - {name: commentLength, type: int, constraints: [NULLABLE, MIN_0], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read, role: append_only_fact}
   - name: impactHelpType
     type: string
     constraints: [NULLABLE]
@@ -64,6 +132,131 @@ fields:
     constraints: [NULLABLE]
     classification: INTERNAL
     log_policy: hash
+    api_exposure: write
+    ops_exposure: read
+    role: append_only_fact
+  - name: channelId
+    type: string
+    constraints: [NULLABLE]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: write
+    ops_exposure: read
+    role: append_only_fact
+  - name: policyDigest
+    type: string
+    constraints: [NULLABLE]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: write
+    ops_exposure: read
+    role: append_only_fact
+    description: 仅接受 canonical sha256 内容摘要，用于 feed 策略归因。
+  - name: recallPath
+    type: string
+    constraints: [NULLABLE]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: write
+    ops_exposure: read
+    role: append_only_fact
+  - name: contentVertical
+    type: string
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: write
+    ops_exposure: read
+    role: append_only_fact
+  - name: supplySource
+    type: string
+    constraints: [NULLABLE]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: write
+    ops_exposure: read
+    role: append_only_fact
+  - name: intersectionId
+    type: string
+    constraints: [NULLABLE]
+    classification: INTERNAL
+    log_policy: hash
+    api_exposure: write
+    ops_exposure: read
+    role: append_only_fact
+  - name: intersectionDimension
+    type: enum
+    enum_ref: IntersectionDimension
+    constraints: [NULLABLE]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: write
+    ops_exposure: read
+    role: append_only_fact
+  - name: intersectionClass
+    type: string
+    constraints: [NULLABLE]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: write
+    ops_exposure: read
+    role: append_only_fact
+  - name: intersectionSourceRef
+    type: string
+    constraints: [NULLABLE]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: write
+    ops_exposure: read
+    role: append_only_fact
+  - name: intersectionEvidenceId
+    type: string
+    constraints: [NULLABLE]
+    classification: INTERNAL
+    log_policy: hash
+    api_exposure: write
+    ops_exposure: read
+    role: append_only_fact
+  - {name: intersectionTagRefs, type: '[]string', constraints: [NULLABLE], classification: INTERNAL, log_policy: metadata_only, api_exposure: write, ops_exposure: read, role: append_only_fact}
+  - {name: subjectId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: write, ops_exposure: read, role: append_only_fact}
+  - {name: feedbackKind, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read, role: append_only_fact}
+  - name: direction
+    type: string
+    constraints: [NULLABLE]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: write
+    ops_exposure: read
+    role: append_only_fact
+  - name: motionProfile
+    type: string
+    constraints: [NULLABLE]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: write
+    ops_exposure: read
+    role: append_only_fact
+  - name: settleMs
+    type: int
+    constraints: [NULLABLE, MIN_0]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: write
+    ops_exposure: read
+    role: append_only_fact
+  - name: reducedMotion
+    type: bool
+    constraints: [NULLABLE]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: write
+    ops_exposure: read
+    role: append_only_fact
+  - name: committed
+    type: bool
+    constraints: [NULLABLE]
+    classification: INTERNAL
+    log_policy: allow
     api_exposure: write
     ops_exposure: read
     role: append_only_fact
@@ -84,17 +277,76 @@ fields:
     ops_exposure: read
     role: append_only_fact
 types:
-  ReportContentBehaviorsRequest:
-    description: 批量行为命令；每项结构由 behaviors.yaml 的 wire_schema 定义。
+  ContentBehaviorEventWire:
+    description: ContentBehaviorFact 唯一公共写入 wire；主体与 session 由可信 Runtime Context 注入，不属于本类型。
+    fields:
+      - {name: clientEventId, type: string, constraints: [NOT_BLANK], classification: INTERNAL, log_policy: hash, api_exposure: write, ops_exposure: read}
+      - {name: occurredAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+      - {name: contentId, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+      - {name: action, type: enum, enum_ref: BehaviorEventType, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+      - {name: state, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+      - {name: contentType, type: enum, enum_ref: ContentType, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+      - {name: objectId, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+      - {name: objectKind, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+      - {name: displayName, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: redacted, api_exposure: write, ops_exposure: read}
+      - {name: sourceSurface, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+      - {name: tagRefs, type: '[]string', constraints: [NULLABLE], classification: PUBLIC, log_policy: metadata_only, api_exposure: write, ops_exposure: read}
+      - {name: duration, type: float64, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+      - {name: feedRequestId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: write, ops_exposure: read}
+      - {name: position, type: int, constraints: [NULLABLE, MIN_0], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+      - {name: channelId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+      - {name: policyDigest, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+      - {name: recallPath, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+      - {name: contentVertical, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+      - {name: supplySource, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+      - {name: commentLength, type: int, constraints: [NULLABLE, MIN_0], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+      - {name: authorId, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+      - {name: referralSource, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+      - {name: engagementDepth, type: int, constraints: [NULLABLE, MIN_0], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+      - {name: consumedRatio, type: float64, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+      - {name: totalUnits, type: int, constraints: [NULLABLE, MIN_0], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+      - {name: effectivePlayMs, type: int, constraints: [NULLABLE, MIN_0], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+      - {name: feedSessionId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: write, ops_exposure: read}
+      - {name: playbackSessionId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: write, ops_exposure: read}
+      - {name: entityRefs, type: '[]string', constraints: [NULLABLE], classification: PUBLIC, log_policy: metadata_only, api_exposure: write, ops_exposure: read}
+      - {name: pageVisitId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: write, ops_exposure: read}
+      - {name: intersectionDimension, type: enum, enum_ref: IntersectionDimension, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+      - {name: intersectionSourceRef, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+      - {name: intersectionTagRefs, type: '[]string', constraints: [NULLABLE], classification: INTERNAL, log_policy: metadata_only, api_exposure: write, ops_exposure: read}
+      - {name: intersectionId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: write, ops_exposure: read}
+      - {name: intersectionClass, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+      - {name: intersectionEvidenceId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: write, ops_exposure: read}
+      - {name: subjectId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: write, ops_exposure: read}
+      - {name: feedbackKind, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+      - {name: taxonomyReleaseId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: write, ops_exposure: read}
+      - {name: direction, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+      - {name: motionProfile, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+      - {name: settleMs, type: int, constraints: [NULLABLE, MIN_0], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+      - {name: reducedMotion, type: bool, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+      - {name: committed, type: bool, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+  ReportContentBehaviorsCommand:
     fields:
       - name: events
-        type: '[]object'
+        type: '[]ContentBehaviorEventWire'
         constraints: [NOT_NULL, MIN_ITEMS_1]
         classification: SENSITIVE
         log_policy: metadata_only
         api_exposure: write
         ops_exposure: read
-  ReportContentBehaviorsCommand:
+  ContentBehaviorReportReceipt:
+    description: ContentBehaviorFact 批量上报的真实幂等回执；acceptedCount 与 replayedCount 之和等于成功请求的事件数。
     fields:
-      - name: events
-        type: '[]object'
+      - name: acceptedCount
+        type: int
+        constraints: [NOT_NULL, MIN_0]
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: replayedCount
+        type: int
+        constraints: [NOT_NULL, MIN_0]
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read

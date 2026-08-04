@@ -237,6 +237,9 @@ def verify_release_consumers(
                 release_id=release_id,
                 verify_run_id=run_id,
                 manifest_digest=payload_digest(release),
+                lifecycle_exit_ref=str(
+                    getattr(args, "lifecycle_exit_ref", "") or ""
+                ).strip(),
             )
         except SystemExit as exc:
             readiness_error = RuntimeError(str(exc))

@@ -103,6 +103,8 @@ const (
 
 	HomepageTypeUniversity HomepageType = "university"
 
+	HomepageTypeSchool HomepageType = "school"
+
 	HomepageTypeTravelPhoto HomepageType = "travel_photo"
 
 	HomepageTypeMuseum HomepageType = "museum"

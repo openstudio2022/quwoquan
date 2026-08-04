@@ -54,54 +54,54 @@ func TestAssistantPreferencePersistsOwnerScopedLifecycle(t *testing.T) {
 	if created.Code != http.StatusOK {
 		t.Fatalf("create status=%d body=%s", created.Code, created.Body.String())
 	}
-	var fact preferencemodel.Fact
-	if err := json.Unmarshal(created.Body.Bytes(), &fact); err != nil {
+	var preference preferencemodel.AssistantPreference
+	if err := json.Unmarshal(created.Body.Bytes(), &preference); err != nil {
 		t.Fatalf("decode preference: %v", err)
 	}
-	if fact.PreferenceID == "" || fact.UserID != "preference-owner" || fact.Status != preferencemodel.StatusActive || fact.Version != 1 {
-		t.Fatalf("unexpected preference: %+v", fact)
+	if preference.PreferenceID == "" || preference.UserID != "preference-owner" || preference.Status != preferencemodel.StatusActive || preference.Version != 1 {
+		t.Fatalf("unexpected preference: %+v", preference)
 	}
 	count, err := runtime.Database.Collection("assistant_preferences").CountDocuments(startupCtx, bson.M{"userId": "preference-owner"})
 	if err != nil || count != 1 {
 		t.Fatalf("preference count=%d err=%v", count, err)
 	}
 
-	foreign := preferenceRequest(t, mux, http.MethodPost, "/assistant/preferences/"+fact.PreferenceID+"/revoke", "preference-other", nil)
+	foreign := preferenceRequest(t, mux, http.MethodPost, "/assistant/preferences/"+preference.PreferenceID+"/revoke", "preference-other", nil)
 	if foreign.Code != http.StatusNotFound {
 		t.Fatalf("foreign revoke status=%d body=%s", foreign.Code, foreign.Body.String())
 	}
-	revoked := preferenceRequest(t, mux, http.MethodPost, "/assistant/preferences/"+fact.PreferenceID+"/revoke", "preference-owner", nil)
+	revoked := preferenceRequest(t, mux, http.MethodPost, "/assistant/preferences/"+preference.PreferenceID+"/revoke", "preference-owner", nil)
 	if revoked.Code != http.StatusOK {
 		t.Fatalf("revoke status=%d body=%s", revoked.Code, revoked.Body.String())
 	}
-	var revokedFact preferencemodel.Fact
-	if err := json.Unmarshal(revoked.Body.Bytes(), &revokedFact); err != nil {
+	var revokedPreference preferencemodel.AssistantPreference
+	if err := json.Unmarshal(revoked.Body.Bytes(), &revokedPreference); err != nil {
 		t.Fatalf("decode revoked preference: %v", err)
 	}
-	if revokedFact.Status != preferencemodel.StatusRevoked || revokedFact.Version != 2 || revokedFact.RevocationDeadline == nil {
-		t.Fatalf("unexpected revoked preference: %+v", revokedFact)
+	if revokedPreference.Status != preferencemodel.StatusRevoked || revokedPreference.Version != 2 || revokedPreference.RevocationDeadline == nil {
+		t.Fatalf("unexpected revoked preference: %+v", revokedPreference)
 	}
-	restored := preferenceRequest(t, mux, http.MethodPost, "/assistant/preferences/"+fact.PreferenceID+"/restore", "preference-owner", nil)
+	restored := preferenceRequest(t, mux, http.MethodPost, "/assistant/preferences/"+preference.PreferenceID+"/restore", "preference-owner", nil)
 	if restored.Code != http.StatusOK {
 		t.Fatalf("restore status=%d body=%s", restored.Code, restored.Body.String())
 	}
-	var restoredFact preferencemodel.Fact
-	if err := json.Unmarshal(restored.Body.Bytes(), &restoredFact); err != nil {
+	var restoredPreference preferencemodel.AssistantPreference
+	if err := json.Unmarshal(restored.Body.Bytes(), &restoredPreference); err != nil {
 		t.Fatalf("decode restored preference: %v", err)
 	}
-	if restoredFact.Status != preferencemodel.StatusActive || restoredFact.Version != 3 || restoredFact.RevokedAt != nil || restoredFact.RevocationDeadline != nil {
-		t.Fatalf("unexpected restored preference: %+v", restoredFact)
+	if restoredPreference.Status != preferencemodel.StatusActive || restoredPreference.Version != 3 || restoredPreference.RevokedAt != nil || restoredPreference.RevocationDeadline != nil {
+		t.Fatalf("unexpected restored preference: %+v", restoredPreference)
 	}
 
 	listed := preferenceRequest(t, mux, http.MethodGet, "/assistant/preferences?scope=long_term", "preference-owner", nil)
 	if listed.Code != http.StatusOK {
 		t.Fatalf("list status=%d body=%s", listed.Code, listed.Body.String())
 	}
-	var view preferenceapplication.PreferenceFactListView
+	var view preferenceapplication.AssistantPreferenceListView
 	if err := json.Unmarshal(listed.Body.Bytes(), &view); err != nil {
 		t.Fatalf("decode preference list: %v", err)
 	}
-	if len(view.Items) != 1 || view.Items[0].PreferenceID != fact.PreferenceID || view.Items[0].Version != 3 {
+	if len(view.Items) != 1 || view.Items[0].PreferenceID != preference.PreferenceID || view.Items[0].Version != 3 {
 		t.Fatalf("unexpected preference list: %+v", view.Items)
 	}
 }

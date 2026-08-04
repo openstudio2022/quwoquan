@@ -12,9 +12,9 @@ import (
 	releaseresource "quwoquan_service/services/assistant-service/internal/assistant/assistant_policy_release/infrastructure/resource"
 	rolloutapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_policy_rollout/application"
 	rolloutmodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_policy_rollout/domain/model"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
-	skillpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/skill"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/orchestration"
+	assistant "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/model"
+	skillpkg "quwoquan_service/services/assistant-service/internal/assistant/skill_package_release/application/packageasset"
 	"quwoquan_service/services/assistant-service/tests/support/skillfixture"
 )
 
@@ -85,6 +85,46 @@ func TestScopedSkillSelectionFailsClosedWhenNoCandidateIsEligible(t *testing.T) 
 		if !errors.Is(err, orchestration.ErrNoEligibleSkill) {
 			t.Fatalf("candidates=%v selection=%+v error=%v", candidates, selection, err)
 		}
+	}
+}
+
+func TestPublishedPolicyUsesOnlyActivePackageSkillIdentities(t *testing.T) {
+	service, candidates := publishedPolicyRolloutService(t)
+	manifests, err := skillfixture.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	activeSkillIDs := make(map[string]bool, len(manifests))
+	for _, manifest := range manifests {
+		activeSkillIDs[manifest.SkillID] = true
+	}
+	seenTravelCompanion := false
+	for _, skillID := range candidates {
+		if !activeSkillIDs[skillID] {
+			t.Fatalf("published policy references skill %q absent from active package", skillID)
+		}
+		if skillID == "travel_planning" || skillID == "travel_transport" {
+			t.Fatalf("published policy retains retired travel skill %q", skillID)
+		}
+		seenTravelCompanion = seenTravelCompanion || skillID == "travel_companion"
+	}
+	if !seenTravelCompanion {
+		t.Fatalf("published policy candidates=%v miss travel_companion", candidates)
+	}
+	selection, err := service.ResolveFrozenSelection(
+		t.Context(),
+		"assistant-default",
+		"persona-routing",
+		"travel_companion",
+		"travel",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if selection.RuleID != "travel-companion" ||
+		selection.Template.TemplateID != "travel-companion" ||
+		selection.Template.SkillID != "travel_companion" {
+		t.Fatalf("selection=%+v want canonical travel_companion route", selection)
 	}
 }
 

@@ -1,78 +1,18 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as developer;
-import 'dart:io';
-import 'dart:math' as math;
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/widgets.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:quwoquan_app/application/content/onboarding/interest_onboarding.dart';
-import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
-import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/context/actor_queue_partition.dart';
-import 'package:quwoquan_app/infrastructure/local/actor_queue/actor_queue_storage.dart';
-import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_request_page_ids.g.dart';
-import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
+import 'package:quwoquan_app/infrastructure/local/actor_queue/actor_queue_storage.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-/// Behavior action types aligned with behaviors.yaml.
-///
-/// Wire values use snake_case to match Go-side `supportedBehaviorActions`.
-enum BehaviorAction {
-  impression('impression'),
-  click('click'),
-  intersectionExpand('intersection_expand'),
-  dwell('dwell'),
-  like('like'),
-  share('share'),
-  dislike('dislike'),
-  undoDislike('undo_dislike'),
-  hideAuthor('hide_author'),
-  hideContentType('hide_content_type'),
-  report('report'),
-  skip('skip'),
-  comment('comment'),
-  follow('follow'),
-  authorView('author_view'),
-  entityPageView('entity_page_view'),
-  tagClick('tag_click'),
-  playProgress('play_progress'),
-  effectivePlay('effective_play'),
-  contentDepth('content_depth'),
-  // 交集转化三类行动（S6）：关注人 follow / 进圈子 join_circle / 加联系人 add_contact，
-  // 独立 BehaviorAction 以拆分交集转化漏斗。
-  joinCircle('join_circle'),
-  addContact('add_contact'),
-  // 小艺对话浮现兴趣回流（P3）：payload 仅带 tagRefs，不绑定具体 post。
-  assistantInterest('assistant_interest'),
-  // 新用户首启兴趣采集（W11 interest-onboarding-prior）：四维标签选择写入
-  // 推荐先验，payload 仅带 tagRefs，不绑定具体 post。
-  onboardingInterest('onboarding_interest'),
-  // 交集条目负反馈（F 推荐与交集配对差异化）：不绑定具体 post，
-  // subjectId 为交集主体对象、feedbackKind ∈ registry.feedbackKinds 闭集
-  // （notInterested/dismiss/rejectGreeting/leaveCircle），驱动云侧 rec:ineg 冷却过滤。
-  intersectionFeedback('intersection_feedback'),
-  // 显式「想去 / 收藏 / 计划去」是 coWishlistedEntity 的真实意图源。
-  // 统一走 BehaviorRepository，不新增并行 API。
-  wishlistAdd('wishlist_add'),
-  wishlistRemove('wishlist_remove');
-
-  const BehaviorAction(this.wireValue);
-
-  final String wireValue;
-
-  static final Map<String, BehaviorAction> _byWire = {
-    for (final v in values) v.wireValue: v,
-  };
-
-  /// Parse from wire-format string; returns null for unknown values.
-  static BehaviorAction? fromWireValue(String? wire) =>
-      wire == null ? null : _byWire[wire];
-}
+export 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show BehaviorEventType;
 
 /// Referral source indicating how the user arrived at the content.
 enum ReferralSource {
@@ -164,7 +104,8 @@ class BehaviorEvent {
     this.consumedRatio,
     this.totalUnits,
     this.effectivePlayMs,
-    this.sessionId,
+    this.playbackSessionId,
+    this.feedSessionId,
     this.entityRefs,
     this.pageVisitId,
     this.intersectionDimension,
@@ -191,7 +132,7 @@ class BehaviorEvent {
   }
 
   final String contentId;
-  final BehaviorAction action;
+  final BehaviorEventType action;
 
   /// Client-generated idempotency key. Remote service de-duplicates by this id.
   final String? clientEventId;
@@ -265,8 +206,11 @@ class BehaviorEvent {
   /// 前台、可见、非 buffering/seek 的实际播放累计候选。
   final int? effectivePlayMs;
 
-  /// 播放器会话标识；有效播放按 session + contentId 幂等。
-  final String? sessionId;
+  /// 播放器会话标识；只用于有效播放幂等，不承担 App trace 会话语义。
+  final String? playbackSessionId;
+
+  /// 推荐 feed 拉取会话；Repository 在提交或持久化前注入到每个事件。
+  final String? feedSessionId;
 
   /// Entity references from the content (for interest propagation)
   final List<String>? entityRefs;
@@ -313,10 +257,14 @@ class BehaviorEvent {
   final bool? reducedMotion;
   final bool? committed;
 
-  Map<String, dynamic> toJson() {
+  /// App 自有离线补传队列的持久化形状；不是 Cloud request encoder。
+  ///
+  /// 真正出站只能经 [toWire] 构造 generated request entity，禁止调用方把
+  /// 此 Map 直接交给 transport。
+  Map<String, dynamic> toStorageJson() {
     final payload = <String, dynamic>{
       'contentId': contentId,
-      'action': action.wireValue,
+      'action': action.wireName,
       if (state != null && state!.isNotEmpty) 'state': state,
       if (contentType != null && contentType!.isNotEmpty)
         'contentType': contentType,
@@ -346,7 +294,10 @@ class BehaviorEvent {
       if (consumedRatio != null) 'consumedRatio': consumedRatio,
       if (totalUnits != null) 'totalUnits': totalUnits,
       if (effectivePlayMs != null) 'effectivePlayMs': effectivePlayMs,
-      if (sessionId != null && sessionId!.isNotEmpty) 'sessionId': sessionId,
+      if (playbackSessionId != null && playbackSessionId!.isNotEmpty)
+        'playbackSessionId': playbackSessionId,
+      if (feedSessionId != null && feedSessionId!.isNotEmpty)
+        'feedSessionId': feedSessionId,
       if (entityRefs != null && entityRefs!.isNotEmpty)
         'entityRefs': entityRefs,
       if (pageVisitId != null && pageVisitId!.isNotEmpty)
@@ -377,15 +328,135 @@ class BehaviorEvent {
       if (committed != null) 'committed': committed,
       'occurredAt': occurredAt.toIso8601String(),
     };
-    final explicitID = clientEventId?.trim() ?? '';
-    payload['clientEventId'] = explicitID.isNotEmpty
-        ? explicitID
-        : _derivedClientEventId(payload);
+    payload['clientEventId'] = _resolvedClientEventId(payload);
     return payload;
+  }
+
+  ContentBehaviorEventWire toWire() {
+    final storagePayload = toStorageJson();
+    final rawContentType = contentType?.trim();
+    final rawIntersectionDimension = intersectionDimension?.trim();
+    return ContentBehaviorEventWire(
+      clientEventId: storagePayload['clientEventId']! as String,
+      occurredAt: occurredAt,
+      contentId: contentId,
+      action: action,
+      state: state,
+      contentType: rawContentType == null || rawContentType.isEmpty
+          ? null
+          : ContentType.fromWire(
+              rawContentType,
+              'ContentBehaviorEventWire.contentType',
+            ),
+      objectId: objectId,
+      objectKind: objectKind,
+      displayName: displayName,
+      sourceSurface: sourceSurface,
+      tagRefs: tags,
+      duration: duration,
+      feedRequestId: feedRequestId,
+      position: position,
+      channelId: channelId,
+      policyDigest: policyDigest,
+      recallPath: recallPath,
+      contentVertical: contentVertical,
+      supplySource: supplySource,
+      commentLength: commentLength,
+      authorId: authorId,
+      referralSource: referralSource?.value,
+      engagementDepth: engagementDepth,
+      consumedRatio: consumedRatio,
+      totalUnits: totalUnits,
+      effectivePlayMs: effectivePlayMs,
+      feedSessionId: feedSessionId,
+      playbackSessionId: playbackSessionId,
+      entityRefs: entityRefs,
+      pageVisitId: pageVisitId,
+      intersectionDimension:
+          rawIntersectionDimension == null || rawIntersectionDimension.isEmpty
+          ? null
+          : IntersectionDimension.fromWire(
+              rawIntersectionDimension,
+              'ContentBehaviorEventWire.intersectionDimension',
+            ),
+      intersectionSourceRef: intersectionSourceRef,
+      intersectionTagRefs: intersectionTagRefs,
+      intersectionId: intersectionId,
+      intersectionClass: intersectionClass,
+      intersectionEvidenceId: intersectionEvidenceId,
+      subjectId: subjectId,
+      feedbackKind: feedbackKind,
+      taxonomyReleaseId: taxonomyReleaseId,
+      direction: motionDirection,
+      motionProfile: motionProfile,
+      settleMs: settleMs,
+      reducedMotion: reducedMotion,
+      committed: committed,
+    );
+  }
+
+  String _resolvedClientEventId(Map<String, dynamic> storagePayload) {
+    final explicitID = clientEventId?.trim() ?? '';
+    return explicitID.isNotEmpty
+        ? explicitID
+        : _derivedClientEventId(storagePayload);
   }
 
   String _derivedClientEventId(Map<String, dynamic> payload) =>
       'evt_${sha256.convert(utf8.encode(jsonEncode(payload))).toString()}';
+
+  BehaviorEvent withFeedSessionId(String value) {
+    final normalized = value.trim();
+    if (normalized.isEmpty || feedSessionId == normalized) {
+      return this;
+    }
+    return BehaviorEvent(
+      contentId: contentId,
+      action: action,
+      clientEventId: clientEventId,
+      occurredAt: occurredAt,
+      state: state,
+      contentType: contentType,
+      objectId: objectId,
+      objectKind: objectKind,
+      displayName: displayName,
+      sourceSurface: sourceSurface,
+      tags: tags,
+      duration: duration,
+      feedRequestId: feedRequestId,
+      position: position,
+      channelId: channelId,
+      policyDigest: policyDigest,
+      recallPath: recallPath,
+      contentVertical: contentVertical,
+      supplySource: supplySource,
+      commentLength: commentLength,
+      authorId: authorId,
+      referralSource: referralSource,
+      engagementDepth: engagementDepth,
+      consumedRatio: consumedRatio,
+      totalUnits: totalUnits,
+      effectivePlayMs: effectivePlayMs,
+      playbackSessionId: playbackSessionId,
+      feedSessionId: normalized,
+      entityRefs: entityRefs,
+      pageVisitId: pageVisitId,
+      intersectionDimension: intersectionDimension,
+      intersectionSourceRef: intersectionSourceRef,
+      intersectionTagRefs: intersectionTagRefs,
+      intersectionId: intersectionId,
+      intersectionClass: intersectionClass,
+      intersectionEvidenceId: intersectionEvidenceId,
+      subjectId: subjectId,
+      feedbackKind: feedbackKind,
+      taxonomyReleaseId: taxonomyReleaseId,
+      motionDirection: motionDirection,
+      motionProfile: motionProfile,
+      settleMs: settleMs,
+      reducedMotion: reducedMotion,
+      committed: committed,
+    );
+  }
 }
 
 /// 推荐反馈唯一网络出口。Tracker 只依赖本端口，不直接依赖存储/HTTP Repository。
@@ -393,10 +464,7 @@ abstract interface class BehaviorReporter {
   Future<void> reportEvents({required List<BehaviorEvent> events});
 }
 
-/// Behavior Repository (三层模式: Abstract → Mock → Remote)
-///
-/// 端侧行为上报，对接云侧 POST /content/behaviors。
-/// sessionId 通过 CloudRequestHeaders 自动注入。
+/// 行为耐久队列端口；云端命令只能委托 generated writer。
 abstract class BehaviorRepository implements BehaviorReporter {
   @override
   Future<void> reportEvents({required List<BehaviorEvent> events});
@@ -412,7 +480,7 @@ abstract class BehaviorRepository implements BehaviorReporter {
 
   Future<void> reportSingle({
     required String contentId,
-    required BehaviorAction action,
+    required BehaviorEventType action,
     List<String>? tags,
     double? duration,
     String? contentType,
@@ -449,44 +517,25 @@ abstract class BehaviorRepository implements BehaviorReporter {
   }
 }
 
-/// Remote 实现：对接云侧 POST /content/behaviors。
+/// 端侧耐久队列；唯一云端出口是 generated [ContentBehaviorCommandWriter]。
 const String kBehaviorPendingQueueBoxName = 'behavior_pending_queue';
-const int _maxRetries = 3;
-const int _gzipThreshold = 512;
 
 class RemoteBehaviorRepository extends BehaviorRepository
     with WidgetsBindingObserver {
   RemoteBehaviorRepository({
-    required this._httpClient,
-    String? baseUrl,
+    required this._writer,
     this._feedSessionIdProvider,
     required this._queuePartition,
     ActorQueueStorage? queueStorage,
-  }) : _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim(),
-       _queueStorage = queueStorage ?? ActorQueueStorage() {
+  }) : _queueStorage = queueStorage ?? ActorQueueStorage() {
     _bindLifecycle();
   }
 
-  final CloudHttpClient _httpClient;
-  final String _baseUrl;
+  final ContentBehaviorCommandWriter _writer;
   final String Function()? _feedSessionIdProvider;
   final ActorQueuePartition _queuePartition;
   final ActorQueueStorage _queueStorage;
-  final Map<Timer, Completer<void>> _retryWaits = <Timer, Completer<void>>{};
   bool _disposed = false;
-
-  // ── 双 sessionId 语义（军规 R23 收敛说明）──────────────────────────────
-  // 端侧存在两个不同语义、不可混用的会话标识，上报 body 同时携带：
-  //   1) sessionId      = CloudRequestHeaders.sessionId（AppTraceContextStore，App 生命周期级、
-  //                       跨服务链路追踪，同时进 X-Client-Session-Id 头）。粒度：整个 App 会话。
-  //   2) feedSessionId  = FeedSessionProvider 的 30 分钟滚动 UUID。粒度：推荐 feed 拉取会话，
-  //                       用于把同一刷流会话内的曝光/点击/停留归因到同一次推荐请求。
-  // 关系：feedSessionId ⊂ sessionId 时间轴（一个 App 会话可包含多个 feed 会话）。
-  // 推荐 HotPath 归因用 feedSessionId + feedRequestId；跨服务 trace 用 sessionId。
-  // 二者名称相近但不等价，禁止互相替代（既往割裂点见 R23）。
-
-  /// Canonical session ID for cross-service tracing (matches HTTP header).
-  String get _resolvedSessionId => CloudRequestHeaders.sessionId;
 
   /// Feed-scoped session for recommendation attribution (30min rolling UUID).
   String get _resolvedFeedSessionId => _feedSessionIdProvider?.call() ?? '';
@@ -511,21 +560,12 @@ class RemoteBehaviorRepository extends BehaviorRepository
   void dispose() {
     if (_disposed) return;
     _disposed = true;
-    for (final entry in _retryWaits.entries.toList(growable: false)) {
-      entry.key.cancel();
-      if (!entry.value.isCompleted) {
-        entry.value.complete();
-      }
-    }
-    _retryWaits.clear();
     try {
       WidgetsBinding.instance.removeObserver(this);
     } catch (_) {
       /* best-effort: 未成功注册时移除观察者会抛错，可安全忽略 */
     }
   }
-
-  Uri _uri(String path) => Uri.parse('$_baseUrl$path');
 
   Future<Box<String>?> _ensureQueueBox() async {
     return _queueStorage.open(_queuePartition, kBehaviorPendingQueueBoxName);
@@ -538,28 +578,23 @@ class RemoteBehaviorRepository extends BehaviorRepository
   @override
   Future<void> reportEvents({required List<BehaviorEvent> events}) async {
     if (_disposed || events.isEmpty) return;
-
-    final uri = _uri(ContentApiMetadata.reportBehaviorsPath);
-    final feedSid = _resolvedFeedSessionId;
-    final body = <String, dynamic>{
-      'sessionId': _resolvedSessionId,
-      if (feedSid.isNotEmpty) 'feedSessionId': feedSid,
-      'events': events.map((e) => e.toJson()).toList(),
-    };
+    final enriched = _withCurrentFeedSession(events);
 
     try {
       await _flushPending();
-      await _postBehaviorBatch(uri, body);
+      await _send(enriched);
     } on CloudException catch (e) {
       if (_shouldEnqueueBehaviorFailure(e)) {
-        await _enqueue(events);
+        await _enqueue(enriched);
+        return;
       }
+      rethrow;
     } catch (_) {
       developer.log(
         'behavior reportEvents failed; enqueuing actor-scoped batch',
         name: 'BehaviorRepository',
       );
-      await _enqueue(events);
+      await _enqueue(enriched);
     }
   }
 
@@ -583,23 +618,17 @@ class RemoteBehaviorRepository extends BehaviorRepository
         'onboarding taxonomyReleaseId and tagRefs are required',
       );
     }
-    final feedSessionId = _resolvedFeedSessionId;
-    await _postBehaviorBatch(
-      _uri(ContentApiMetadata.reportBehaviorsPath),
-      <String, dynamic>{
-        'sessionId': _resolvedSessionId,
-        if (feedSessionId.isNotEmpty) 'feedSessionId': feedSessionId,
-        'events': <Map<String, dynamic>>[
-          BehaviorEvent(
-            contentId: '',
-            action: BehaviorAction.onboardingInterest,
-            clientEventId: clientEventId,
-            taxonomyReleaseId: releaseID,
-            sourceSurface: 'interest_onboarding',
-            tags: tags,
-          ).toJson(),
-        ],
-      },
+    await _send(
+      _withCurrentFeedSession(<BehaviorEvent>[
+        BehaviorEvent(
+          contentId: '',
+          action: BehaviorEventType.onboardingInterest,
+          clientEventId: clientEventId,
+          taxonomyReleaseId: releaseID,
+          sourceSurface: 'interest_onboarding',
+          tags: tags,
+        ),
+      ]),
     );
   }
 
@@ -632,22 +661,15 @@ class RemoteBehaviorRepository extends BehaviorRepository
           );
           continue;
         }
-        final sessionId = (envelope['sessionId'] ?? '').toString();
-        final feedSessionId = (envelope['feedSessionId'] ?? '').toString();
         final eventsList = (envelope['events'] as List?) ?? <dynamic>[];
         final events = eventsList
             .whereType<Map>()
-            .map((item) => _behaviorEventFromJson(item.cast<String, dynamic>()))
+            .map(
+              (item) =>
+                  _behaviorEventFromStorageJson(item.cast<String, dynamic>()),
+            )
             .toList(growable: false);
-        final uri = _uri(ContentApiMetadata.reportBehaviorsPath);
-        final body = <String, dynamic>{
-          'sessionId': sessionId,
-          if (feedSessionId.isNotEmpty) 'feedSessionId': feedSessionId,
-          'events': events
-              .map((event) => event.toJson())
-              .toList(growable: false),
-        };
-        await _postBehaviorBatch(uri, body);
+        await _send(events);
         await box.delete(key);
         consecutiveFailures = 0;
       } on CloudException catch (e) {
@@ -692,12 +714,12 @@ class RemoteBehaviorRepository extends BehaviorRepository
       return;
     }
     final key = DateTime.now().microsecondsSinceEpoch.toString();
-    final feedSid = _resolvedFeedSessionId;
+    final enriched = _withCurrentFeedSession(events);
     final envelope = <String, dynamic>{
       'actorPartitionKey': _queuePartition.key,
-      'sessionId': _resolvedSessionId,
-      if (feedSid.isNotEmpty) 'feedSessionId': feedSid,
-      'events': events.map((event) => event.toJson()).toList(growable: false),
+      'events': enriched
+          .map((event) => event.toStorageJson())
+          .toList(growable: false),
     };
     await box.put(key, jsonEncode(envelope));
     const maxBacklog = 200;
@@ -725,97 +747,23 @@ class RemoteBehaviorRepository extends BehaviorRepository
     }
   }
 
-  Future<void> _postBehaviorBatch(Uri uri, Map<String, dynamic> body) async {
-    if (_disposed) return;
-    final jsonStr = jsonEncode(body);
-    final headers = CloudRequestHeaders.withOwnerPersonaContext(
-      CloudRequestHeaders.forPage(ContentRequestPageIds.reportBehaviors),
-      ownerUserId: _queuePartition.accountId,
-      personaId: _queuePartition.personaId,
+  List<BehaviorEvent> _withCurrentFeedSession(List<BehaviorEvent> events) {
+    final feedSessionId = _resolvedFeedSessionId;
+    if (feedSessionId.trim().isEmpty) {
+      return List<BehaviorEvent>.unmodifiable(events);
+    }
+    return List<BehaviorEvent>.unmodifiable(
+      events.map((event) => event.withFeedSessionId(feedSessionId)),
     );
-    if (_queuePartition.deviceId.isNotEmpty) {
-      headers['X-Client-Device-Actor-Id'] = _queuePartition.deviceId;
-    }
-    // ReportBehaviors is an idempotent command at the Gateway boundary. The
-    // event-level clientEventId remains the business deduplication identity;
-    // this deterministic batch key makes every transport retry satisfy the
-    // operation contract without introducing a second persisted receipt.
-    headers['Idempotency-Key'] = _behaviorBatchIdempotencyKey(body);
-
-    final useGzip = jsonStr.length > _gzipThreshold;
-    List<int> payload;
-    if (useGzip) {
-      payload = gzip.encode(utf8.encode(jsonStr));
-      headers['Content-Encoding'] = 'gzip';
-      headers['Content-Type'] = 'application/json';
-    } else {
-      payload = utf8.encode(jsonStr);
-      headers['Content-Type'] = 'application/json';
-    }
-
-    for (var attempt = 0; attempt <= _maxRetries; attempt++) {
-      if (_disposed) return;
-      try {
-        final response = await _httpClient.postBytes(
-          uri,
-          headers: headers,
-          body: payload,
-        );
-        if (response.statusCode >= 200 && response.statusCode < 300) return;
-        if (response.statusCode >= 500) {
-          developer.log(
-            'behavior POST 5xx: ${response.statusCode} (attempt ${attempt + 1}/${_maxRetries + 1})',
-            name: 'BehaviorRepository',
-          );
-        }
-        throw CloudErrorMapper.fromStatusCode(
-          response.statusCode,
-          body: response.body,
-          requestPath: uri.path,
-        );
-      } catch (e) {
-        if (_disposed) return;
-        final cloudError = e is CloudException
-            ? e
-            : CloudErrorMapper.fromException(e, requestPath: uri.path);
-        if (!_shouldRetryBehaviorFailure(cloudError) ||
-            attempt == _maxRetries) {
-          throw cloudError;
-        }
-      }
-      final delayMs = math.min(1000 * math.pow(2, attempt).toInt(), 8000);
-      await _waitBeforeRetry(Duration(milliseconds: delayMs));
-    }
   }
 
-  String _behaviorBatchIdempotencyKey(Map<String, dynamic> body) {
-    final eventIds = <String>[
-      for (final event in body['events'] as List? ?? const <Object?>[])
-        if (event is Map &&
-            (event['clientEventId'] ?? '').toString().trim().isNotEmpty)
-          (event['clientEventId'] ?? '').toString().trim(),
-    ];
-    // The internal callers construct valid events. Hash the full encoded body
-    // only as a defensive fallback for a malformed restored queue envelope, so
-    // the request still reaches the server's canonical validation boundary.
-    final material = eventIds.isEmpty
-        ? jsonEncode(body)
-        : eventIds.join('\u{001F}');
-    return 'behavior-batch-${sha256.convert(utf8.encode(material))}';
-  }
-
-  Future<void> _waitBeforeRetry(Duration duration) {
-    if (_disposed) return Future<void>.value();
-    final completer = Completer<void>();
-    late final Timer timer;
-    timer = Timer(duration, () {
-      _retryWaits.remove(timer);
-      if (!completer.isCompleted) {
-        completer.complete();
-      }
-    });
-    _retryWaits[timer] = completer;
-    return completer.future;
+  Future<void> _send(List<BehaviorEvent> events) {
+    if (_disposed || events.isEmpty) return Future<void>.value();
+    return _writer.reportBehaviors(
+      ReportContentBehaviorsCommand(
+        events: events.map((event) => event.toWire()).toList(growable: false),
+      ),
+    );
   }
 
   bool _shouldRetryBehaviorFailure(CloudException error) {
@@ -827,10 +775,57 @@ class RemoteBehaviorRepository extends BehaviorRepository
     return _shouldRetryBehaviorFailure(error);
   }
 
-  BehaviorEvent _behaviorEventFromJson(Map<String, dynamic> json) {
-    // 旧 catalogVersion 队列事件必须 fail-closed，不得在恢复时忽略或双读。
-    if (json.containsKey('catalogVersion')) {
-      throw const FormatException('retired onboarding catalog identity');
+  BehaviorEvent _behaviorEventFromStorageJson(Map<String, dynamic> json) {
+    const canonicalFields = <String>{
+      'contentId',
+      'action',
+      'clientEventId',
+      'occurredAt',
+      'state',
+      'contentType',
+      'objectId',
+      'objectKind',
+      'displayName',
+      'sourceSurface',
+      'tagRefs',
+      'duration',
+      'feedRequestId',
+      'position',
+      'channelId',
+      'policyDigest',
+      'recallPath',
+      'contentVertical',
+      'supplySource',
+      'commentLength',
+      'authorId',
+      'referralSource',
+      'engagementDepth',
+      'consumedRatio',
+      'totalUnits',
+      'effectivePlayMs',
+      'playbackSessionId',
+      'feedSessionId',
+      'entityRefs',
+      'pageVisitId',
+      'intersectionDimension',
+      'intersectionSourceRef',
+      'intersectionTagRefs',
+      'intersectionId',
+      'intersectionClass',
+      'intersectionEvidenceId',
+      'subjectId',
+      'feedbackKind',
+      'taxonomyReleaseId',
+      'direction',
+      'motionProfile',
+      'settleMs',
+      'reducedMotion',
+      'committed',
+    };
+    if (json.keys.any((field) => !canonicalFields.contains(field))) {
+      throw const FormatException(
+        'behavior queue event contains an unknown field',
+      );
     }
     final rawPolicyDigest = json['policyDigest'];
     if (rawPolicyDigest != null && rawPolicyDigest is! String) {
@@ -843,17 +838,17 @@ class RemoteBehaviorRepository extends BehaviorRepository
     final occurredAt = DateTime.tryParse(
       (json['occurredAt'] ?? '').toString(),
     )?.toUtc();
-    final action = BehaviorAction.fromWireValue(
-      (json['action'] ?? '').toString(),
+    final action = BehaviorEventType.fromWire(
+      json['action'],
+      'BehaviorEvent.action',
     );
     final actionIsContentless =
-        action == BehaviorAction.assistantInterest ||
-        action == BehaviorAction.onboardingInterest ||
-        action == BehaviorAction.intersectionFeedback ||
-        action == BehaviorAction.wishlistAdd ||
-        action == BehaviorAction.wishlistRemove;
+        action == BehaviorEventType.assistantInterest ||
+        action == BehaviorEventType.onboardingInterest ||
+        action == BehaviorEventType.intersectionFeedback ||
+        action == BehaviorEventType.wishlistAdd ||
+        action == BehaviorEventType.wishlistRemove;
     if ((contentId.isEmpty && !actionIsContentless) ||
-        action == null ||
         clientEventId.isEmpty ||
         occurredAt == null) {
       throw const FormatException('invalid behavior queue event');
@@ -882,7 +877,8 @@ class RemoteBehaviorRepository extends BehaviorRepository
       consumedRatio: (json['consumedRatio'] as num?)?.toDouble(),
       totalUnits: (json['totalUnits'] as num?)?.toInt(),
       effectivePlayMs: (json['effectivePlayMs'] as num?)?.toInt(),
-      sessionId: json['sessionId'] as String?,
+      playbackSessionId: json['playbackSessionId'] as String?,
+      feedSessionId: json['feedSessionId'] as String?,
       entityRefs: (json['entityRefs'] as List?)
           ?.map((item) => item.toString())
           .toList(),

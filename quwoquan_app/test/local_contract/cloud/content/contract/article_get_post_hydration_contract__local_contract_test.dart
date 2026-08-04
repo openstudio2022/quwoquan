@@ -5,12 +5,12 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/cloud/runtime/config/cloud_runtime_environment.dart';
+import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/context/cloud_client_context.dart';
 import 'package:quwoquan_app/cloud/runtime/executor/cloud_operation_client_factory.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/runtime/observability/cloud_operation_telemetry.dart';
 import 'package:quwoquan_app/cloud/services/content/remote/post_reader_remote.dart';
-import 'package:quwoquan_app/cloud/services/content/feed_item_discovery_wire_map.dart';
 import '../../../../support/cloud_services/content/content_mock_data.dart';
 import 'package:quwoquan_app/ui/content/models/article_detail_view.dart';
 import 'package:quwoquan_app/ui/content/services/post_view_projection.dart';
@@ -18,8 +18,21 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import '../../../../support/cloud_services/content/mock_content_repository.dart';
 
 void main() {
+  setUp(() {
+    CloudRuntimeConfig.hydrateFromNativeRuntimePackage(
+      const <String, String>{
+        'MEDIA_AVATAR_CDN_BASE_URL': 'https://media.example.com/avatar',
+        'MEDIA_IMAGE_CDN_BASE_URL': 'https://media.example.com/image',
+        'MEDIA_VIDEO_CDN_BASE_URL': 'https://media.example.com/video',
+      },
+      enforceNativeLaunchBinding: false,
+    );
+  });
+
+  tearDown(CloudRuntimeConfig.clearNativeRuntimePackageForTest);
+
   group('Article getPost hydration contract', () {
-    test('Mock getPost 暴露 ContentPostDetailWireDto 文章扩展字段', () async {
+    test('Mock getPost 暴露 canonical ContentPostDetailPayload 文章扩展字段', () async {
       final mockRepo = MockContentRepository();
       final detail = await mockRepo.getPost(postId: 'web-dev');
       expect(detail.detailWire.articleTemplate, isNotNull);
@@ -29,20 +42,11 @@ void main() {
     });
 
     test('Mock getPost 与 Remote getPost 投射结果保持一致', () async {
-      final dtoFixture = ContentMockData.discoveryArticleData.firstWhere((
-        item,
-      ) {
-        final digest = item.articleMarkdownDigest;
-        return digest != null && digest.isNotEmpty;
-      });
-      final postId =
-          dtoFixture.toDiscoveryWireMap()['id']?.toString() ??
-          'article_contract_post';
+      final dtoFixture = ContentMockData.discoveryArticleData.first;
+      final postId = dtoFixture.id;
       final mockRepo = MockContentRepository();
       final mockDetail = await mockRepo.getPost(postId: postId);
-      final rawFixture = _getPostResponseFromAppProjection(
-        mockDetail.mergedArticleWireMap,
-      );
+      final rawFixture = mockDetail.detailWire.toWire();
       final remoteRepo = RemoteContentPostReaderAdapter(
         client: buildGeneratedCloudOperationClient(
           httpClient: CloudHttpClient(
@@ -122,21 +126,23 @@ void main() {
 
     test('summary snapshot 在 hydration 后切到 canonical articleMarkdown', () {
       const summaryRaw = <String, dynamic>{
-        'id': 'article_hydration_switch',
-        'type': 'article',
+        'postId': 'article_hydration_switch',
+        'contentType': 'article',
+        'contentIdentity': 'work',
         'authorId': 'writer_1',
-        'displayName': '水合作者',
-        'avatarUrl': 'https://example.com/avatar.jpg',
+        'authorDisplayName': '水合作者',
+        'authorAvatarUrl': 'https://example.com/avatar.jpg',
         'title': '分发标题',
         'body': '分发摘要正文',
         'coverUrl': 'https://example.com/cover.jpg',
       };
       const hydratedRaw = <String, dynamic>{
-        'id': 'article_hydration_switch',
-        'type': 'article',
+        'postId': 'article_hydration_switch',
+        'contentType': 'article',
+        'contentIdentity': 'work',
         'authorId': 'writer_1',
-        'displayName': '水合作者',
-        'avatarUrl': 'https://example.com/avatar.jpg',
+        'authorDisplayName': '水合作者',
+        'authorAvatarUrl': 'https://example.com/avatar.jpg',
         'title': '分发标题',
         'body': '分发摘要正文',
         'coverUrl': 'https://example.com/cover.jpg',
@@ -165,27 +171,6 @@ void main() {
       expect(after.document.body, contains('水合后正文第一段'));
     });
   });
-}
-
-Map<String, dynamic> _getPostResponseFromAppProjection(
-  Map<String, dynamic> projection,
-) {
-  final response = Map<String, dynamic>.from(projection);
-  response
-    ..remove('id')
-    ..remove('type')
-    ..remove('identity')
-    ..remove('displayName')
-    ..remove('avatarUrl')
-    ..addAll(<String, dynamic>{
-      'postId': projection['id'],
-      'contentType': projection['type'],
-      'contentIdentity': projection['identity'],
-      'authorDisplayName': projection['displayName'],
-      'authorAvatarUrl': projection['avatarUrl'],
-      'status': projection['status'] ?? 'published',
-    });
-  return response;
 }
 
 final class _ArticleTestClientContext implements CloudClientContextProvider {

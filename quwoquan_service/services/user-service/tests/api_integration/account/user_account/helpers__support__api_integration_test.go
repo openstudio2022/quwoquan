@@ -61,8 +61,8 @@ func doRequest(t *testing.T, method, path string, body string, headers map[strin
 
 var helperRequestSequence atomic.Int64
 
-// requestOtpCode 发送一次 OTP；测试仅从进程外 provider contract probe 读取投递内容，
-// API response 永远不暴露验证码。
+// requestOtpCode 发送一次 OTP；测试仅通过 local-capture protected readback 读取投递内容，
+// API response 永远不暴露验证码，也不允许从 argv/内存旁路取码。
 func requestOtpCode(t *testing.T, phone string) string {
 	t.Helper()
 	rec := doRequest(t, "POST", "/auth/otp/send", `{"phone":"`+phone+`","deviceId":"ios-test","platform":"ios","appVersion":"1.0.0","sourceOperation":"test"}`, nil)
@@ -73,9 +73,18 @@ func requestOtpCode(t *testing.T, phone string) string {
 	if _, leaked := body["debugCode"]; leaked {
 		t.Fatalf("send otp response leaked debugCode: %#v", body)
 	}
-	code := externalInteractionRuntime.client.OTPCode(phone)
-	if code == "" {
-		t.Fatalf("send otp: provider contract probe did not observe delivery, got %#v", body)
+	if strings.Contains(rec.Body.String(), phone) {
+		t.Fatalf("send otp response leaked phone: %s", rec.Body.String())
+	}
+	if externalInteractionRuntime == nil || externalInteractionRuntime.captureBridge == nil {
+		t.Fatal("local capture bridge is not initialized")
+	}
+	code, err := externalInteractionRuntime.captureBridge.readOTP(phone)
+	if err != nil {
+		t.Fatalf("send otp: protected readback failed: %v body=%#v", err, body)
+	}
+	if strings.Contains(rec.Body.String(), code) {
+		t.Fatalf("send otp response leaked OTP: %s", rec.Body.String())
 	}
 	return code
 }

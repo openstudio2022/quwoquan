@@ -73,16 +73,24 @@ func generateDomainOperationContracts(
 	if err := externalizeCanonicalDomainModels(specs); err != nil {
 		return nil, err
 	}
+	if err := externalizeSharedDomainModels(specs); err != nil {
+		return nil, err
+	}
 	owners = owners[:0]
 	for owner := range specs {
 		owners = append(owners, owner)
 	}
 	sort.Strings(owners)
 	for _, owner := range owners {
-		spec := specs[owner]
-		if err := finalizeDomainOperationContractSpec(spec); err != nil {
+		if err := finalizeDomainOperationContractSpec(specs[owner]); err != nil {
 			return nil, err
 		}
+	}
+	if err := externalizeSharedDomainEnums(specs, appDir); err != nil {
+		return nil, err
+	}
+	for _, owner := range owners {
+		spec := specs[owner]
 		content, err := renderDomainOperationContract(*spec)
 		if err != nil {
 			return nil, err
@@ -102,6 +110,219 @@ func generateDomainOperationContracts(
 		}
 	}
 	return provided, nil
+}
+
+const sharedDomainOperationEnumsImport = "../generated/shared_operation_enums.g.dart"
+
+const sharedDomainOperationTypesImport = "../generated/shared_operation_types.g.dart"
+
+const sharedRealtimeEventCatalogImport = "../generated/realtime/realtime_event_catalog.g.dart"
+
+func loadCanonicalSharedValueModels() (map[string]requestModelSpec, error) {
+	if activeMetadataSource == nil {
+		return nil, fmt.Errorf("ContractGraph is not initialized")
+	}
+	const ownerPath = "_shared/types.yaml"
+	if !activeMetadataSource.Has(ownerPath) {
+		return nil, fmt.Errorf("canonical shared value owner %s is missing", ownerPath)
+	}
+	var document fieldsFile
+	if err := activeMetadataSource.Decode(ownerPath, &document); err != nil {
+		return nil, fmt.Errorf("decode canonical shared value owner %s: %w", ownerPath, err)
+	}
+	result := make(map[string]requestModelSpec, len(document.Types))
+	for name, definition := range document.Types {
+		if len(definition.Fields) == 0 {
+			continue
+		}
+		result[name] = requestModelSpec{
+			Name:   name,
+			Fields: append([]fieldDef(nil), definition.Fields...),
+		}
+	}
+	return result, nil
+}
+
+// externalizeSharedDomainModels gives a cross-domain value object one Dart
+// owner only when _shared/types.yaml owns the concept and every domain model is
+// byte-shape equivalent to that canonical definition. Identical local names
+// without a shared source owner fail closed instead of being merged by chance.
+func externalizeSharedDomainModels(
+	specs map[string]*domainOperationContractSpec,
+) error {
+	canonical, err := loadCanonicalSharedValueModels()
+	if err != nil {
+		return err
+	}
+	ownersByModel := map[string][]string{}
+	for owner, spec := range specs {
+		for name := range spec.Models {
+			ownersByModel[name] = append(ownersByModel[name], owner)
+		}
+	}
+	sharedModels := map[string]requestModelSpec{}
+	for name, owners := range ownersByModel {
+		if len(owners) < 2 {
+			continue
+		}
+		canonicalModel, exists := canonical[name]
+		if !exists {
+			return fmt.Errorf(
+				"cross-domain response model %s has no canonical _shared/types.yaml owner",
+				name,
+			)
+		}
+		canonicalFingerprint := responseModelFingerprint(canonicalModel)
+		sort.Strings(owners)
+		for _, owner := range owners {
+			model := specs[owner].Models[name]
+			if responseModelFingerprint(model) != canonicalFingerprint {
+				return fmt.Errorf(
+					"cross-domain response model %s in %s conflicts with canonical _shared/types.yaml",
+					name,
+					owner,
+				)
+			}
+		}
+		sharedModels[name] = canonicalModel
+		for _, owner := range owners {
+			spec := specs[owner]
+			spec.ExternalImports[sharedDomainOperationTypesImport] = struct{}{}
+			spec.ExternalExports[sharedDomainOperationTypesImport] = struct{}{}
+			delete(spec.Models, name)
+		}
+	}
+	if len(sharedModels) == 0 {
+		return nil
+	}
+	specs[sharedDomainOperationTypesImport] = &domainOperationContractSpec{
+		Domain:                   "shared",
+		OwnerImport:              sharedDomainOperationTypesImport,
+		Models:                   sharedModels,
+		ResponseEntities:         map[string]struct{}{},
+		ExternalResponseEntities: map[string]struct{}{},
+		ExternalImports:          map[string]struct{}{},
+		ExternalExports:          map[string]struct{}{},
+		EnumMembers:              map[string][]canonicalRequestEnumMember{},
+	}
+	return nil
+}
+
+func loadCanonicalSharedEnumValues() (map[string][]string, error) {
+	if activeMetadataSource == nil {
+		return nil, fmt.Errorf("ContractGraph is not initialized")
+	}
+	const ownerPath = "_shared/types.yaml"
+	if !activeMetadataSource.Has(ownerPath) {
+		return nil, fmt.Errorf("canonical shared enum owner %s is missing", ownerPath)
+	}
+	var document struct {
+		Enums any `yaml:"enums"`
+	}
+	if err := activeMetadataSource.Decode(ownerPath, &document); err != nil {
+		return nil, fmt.Errorf("decode canonical shared enum owner %s: %w", ownerPath, err)
+	}
+	result := map[string][]string{}
+	for name, raw := range normalizeRequestEnumCatalog(document.Enums) {
+		values := normalizeRequestEnumValues(raw)
+		if len(values) == 0 {
+			continue
+		}
+		result[name] = values
+	}
+	return result, nil
+}
+
+// externalizeSharedDomainEnums gives every enum used by more than one domain
+// one generated Dart owner, but only when _shared/types.yaml owns that enum.
+// Matching local names are never treated as proof of shared semantics.
+// Re-exporting the same generated library from each domain keeps the public
+// barrel unambiguous without renaming or duplicating the business concept.
+func externalizeSharedDomainEnums(
+	specs map[string]*domainOperationContractSpec,
+	appDir string,
+) error {
+	canonicalSharedEnums, err := loadCanonicalSharedEnumValues()
+	if err != nil {
+		return err
+	}
+	type enumOwner struct {
+		owner   string
+		members []canonicalRequestEnumMember
+	}
+	ownersByEnum := map[string][]enumOwner{}
+	for owner, spec := range specs {
+		for name, members := range spec.EnumMembers {
+			ownersByEnum[name] = append(ownersByEnum[name], enumOwner{
+				owner:   owner,
+				members: members,
+			})
+		}
+	}
+
+	shared := map[string][]canonicalRequestEnumMember{}
+	for name, enumOwners := range ownersByEnum {
+		if len(enumOwners) < 2 {
+			continue
+		}
+		canonicalValues, canonical := canonicalSharedEnums[name]
+		if !canonical {
+			return fmt.Errorf(
+				"cross-domain enum %s has no canonical _shared/types.yaml owner",
+				name,
+			)
+		}
+		sort.Slice(enumOwners, func(left, right int) bool {
+			return enumOwners[left].owner < enumOwners[right].owner
+		})
+		fingerprint := domainEnumFingerprint(enumOwners[0].members)
+		for _, candidate := range enumOwners[1:] {
+			if domainEnumFingerprint(candidate.members) != fingerprint {
+				return fmt.Errorf(
+					"shared enum %s has conflicting domain member mappings",
+					name,
+				)
+			}
+		}
+		if domainEnumWireFingerprint(enumOwners[0].members) !=
+			strings.Join(canonicalValues, "\x00") {
+			return fmt.Errorf(
+				"shared enum %s does not match canonical _shared/types.yaml values",
+				name,
+			)
+		}
+		shared[name] = enumOwners[0].members
+		for _, enumOwner := range enumOwners {
+			spec := specs[enumOwner.owner]
+			spec.ExternalImports[sharedDomainOperationEnumsImport] = struct{}{}
+			spec.ExternalExports[sharedDomainOperationEnumsImport] = struct{}{}
+			delete(spec.EnumMembers, name)
+		}
+	}
+
+	var output strings.Builder
+	output.WriteString("// Code generated from canonical cross-domain enums. DO NOT EDIT.\n")
+	output.WriteString("// ContractGraph SHA256: ")
+	output.WriteString(activeContractSHA256)
+	output.WriteString("\n\nlibrary;\n\n")
+	names := make([]string, 0, len(shared))
+	for name := range shared {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		renderDomainWireEnum(&output, name, shared[name])
+	}
+	writeFile(filepath.Join(
+		appDir,
+		"packages",
+		"quwoquan_cloud_contracts",
+		"lib",
+		"src",
+		"generated",
+		"shared_operation_enums.g.dart",
+	), output.String())
+	return nil
 }
 
 func generatedDomainOperationOwnerImport(domain string) string {
@@ -218,6 +439,11 @@ func loadDomainOperationContractSpec(
 				return domainOperationContractSpec{}, err
 			}
 			for _, dependency := range dependencies {
+				if externalImport := generatedExternalResponseValueImport(dependency.Name); externalImport != "" {
+					spec.ExternalImports[externalImport] = struct{}{}
+					spec.ExternalExports[externalImport] = struct{}{}
+					continue
+				}
 				if err := mergeDomainResponseModel(spec.Models, dependency); err != nil {
 					return domainOperationContractSpec{}, err
 				}
@@ -339,6 +565,9 @@ func finalizeDomainOperationContractSpec(
 }
 
 func generatedExternalResponseImport(domain, responseType string) string {
+	if strings.TrimSpace(responseType) == "RealtimeEventEnvelope" {
+		return sharedRealtimeEventCatalogImport
+	}
 	if strings.TrimSpace(domain) == "search" &&
 		strings.TrimSpace(responseType) == "SearchResponseView" {
 		return "../generated/search/search_response_view.g.dart"
@@ -346,12 +575,16 @@ func generatedExternalResponseImport(domain, responseType string) string {
 	return ""
 }
 
+func generatedExternalResponseValueImport(responseType string) string {
+	if strings.TrimSpace(responseType) == "RealtimeEventEnvelope" {
+		return sharedRealtimeEventCatalogImport
+	}
+	return ""
+}
+
 func generatedExternalEnumImport(domain, enumRef string) string {
 	domain = strings.TrimSpace(domain)
 	enumRef = strings.TrimSpace(enumRef)
-	if domain == "entity" && enumRef == "HomepageType" {
-		return "../generated/homepage_type.g.dart"
-	}
 	if domain != "search" {
 		return ""
 	}
@@ -777,6 +1010,14 @@ func domainEnumFingerprint(values []canonicalRequestEnumMember) string {
 	return strings.Join(parts, ",")
 }
 
+func domainEnumWireFingerprint(values []canonicalRequestEnumMember) string {
+	parts := make([]string, 0, len(values))
+	for _, value := range values {
+		parts = append(parts, value.WireValue)
+	}
+	return strings.Join(parts, "\x00")
+}
+
 func renderDomainOperationContract(
 	spec domainOperationContractSpec,
 ) (string, error) {
@@ -1092,6 +1333,21 @@ func responseFieldDecodeExpression(
 	case "timestamp", "datetime", "date":
 		return "_requiredTimestamp(" + access + ", " + path + ")", nil
 	case "int", "int32", "int64", "long":
+		minimum, maximum, err := responseIntegerBounds(field)
+		if err != nil {
+			return "", err
+		}
+		if maximum != nil || (minimum != nil && *minimum > 1) {
+			arguments := ""
+			if minimum != nil {
+				arguments += fmt.Sprintf(", min: %d", *minimum)
+			}
+			if maximum != nil {
+				arguments += fmt.Sprintf(", max: %d", *maximum)
+			}
+			return "_requiredBoundedInt(" + access + ", " + path +
+				arguments + ")", nil
+		}
 		if hasRequestConstraint(field, "NON_NEGATIVE") {
 			return "_requiredNonNegativeInt(" + access + ", " + path + ")", nil
 		}
@@ -1138,6 +1394,73 @@ func responseFieldDecodeExpression(
 		return metaType + ".fromWire(_requiredObject(" + access + ", " +
 			path + "), " + path + ")", nil
 	}
+}
+
+func responseIntegerBounds(field fieldDef) (*int, *int, error) {
+	var minimum *int
+	var maximum *int
+	for _, raw := range field.Constraints {
+		constraint := strings.TrimSpace(raw)
+		switch {
+		case constraint == "NON_NEGATIVE":
+			minimum = stricterMinimum(minimum, 0)
+		case constraint == "POSITIVE" || constraint == "MIN_1":
+			minimum = stricterMinimum(minimum, 1)
+		case strings.HasPrefix(constraint, "MIN_"):
+			value, err := strconv.Atoi(strings.TrimPrefix(constraint, "MIN_"))
+			if err != nil {
+				return nil, nil, fmt.Errorf(
+					"field %s has invalid integer constraint %q",
+					field.Name,
+					constraint,
+				)
+			}
+			minimum = stricterMinimum(minimum, value)
+		case strings.HasPrefix(constraint, "MAX_"):
+			value, err := strconv.Atoi(strings.TrimPrefix(constraint, "MAX_"))
+			if err != nil {
+				return nil, nil, fmt.Errorf(
+					"field %s has invalid integer constraint %q",
+					field.Name,
+					constraint,
+				)
+			}
+			maximum = stricterMaximum(maximum, value)
+		}
+	}
+	if minimum != nil && maximum != nil && *minimum > *maximum {
+		return nil, nil, fmt.Errorf(
+			"field %s has impossible integer bounds %d..%d",
+			field.Name,
+			*minimum,
+			*maximum,
+		)
+	}
+	return minimum, maximum, nil
+}
+
+func stricterMinimum(current *int, candidate int) *int {
+	if current != nil && *current >= candidate {
+		return current
+	}
+	value := candidate
+	return &value
+}
+
+func stricterMaximum(current *int, candidate int) *int {
+	if current != nil && *current <= candidate {
+		return current
+	}
+	value := candidate
+	return &value
+}
+
+func responseIntegerUsesBoundedDecoder(field fieldDef) bool {
+	minimum, maximum, err := responseIntegerBounds(field)
+	if err != nil {
+		return false
+	}
+	return maximum != nil || (minimum != nil && *minimum > 1)
 }
 
 func responseConstraintsWithoutNullable(values []string) []string {
@@ -1220,6 +1543,10 @@ func renderDomainDecoderHelpers(
 			used["timestamp"] = true
 		case "int", "int32", "int64", "long":
 			used["int"] = true
+			if responseIntegerUsesBoundedDecoder(field) {
+				used["boundedInt"] = true
+				break
+			}
 			if hasRequestConstraint(field, "NON_NEGATIVE") {
 				used["nonNegativeInt"] = true
 			}
@@ -1345,6 +1672,26 @@ int _requiredPositiveInt(Object? value, String path) {
   final result = _requiredInt(value, path);
   if (result < 1) {
     throw FormatException('$path must be positive');
+  }
+  return result;
+}
+`)
+	}
+
+	if used["boundedInt"] {
+		output.WriteString(`
+int _requiredBoundedInt(
+  Object? value,
+  String path, {
+  int? min,
+  int? max,
+}) {
+  final result = _requiredInt(value, path);
+  if (min != null && result < min) {
+    throw FormatException('$path must be at least $min');
+  }
+  if (max != null && result > max) {
+    throw FormatException('$path must not exceed $max');
   }
   return result;
 }

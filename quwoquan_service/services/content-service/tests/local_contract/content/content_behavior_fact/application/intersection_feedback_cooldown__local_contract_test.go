@@ -151,8 +151,15 @@ func TestBehaviorBatchIntersectionFeedbackWritesCooldownAndFiltersFeed(t *testin
 	}))
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
-	if rec.Code != http.StatusNoContent {
-		t.Fatalf("behavior feedback expected 204, got %d: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("behavior feedback expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var receipt behaviorapp.BatchReceipt
+	if err := json.Unmarshal(rec.Body.Bytes(), &receipt); err != nil {
+		t.Fatalf("decode behavior feedback receipt: %v", err)
+	}
+	if receipt.AcceptedCount != 1 || receipt.ReplayedCount != 0 {
+		t.Fatalf("behavior feedback receipt=%+v", receipt)
 	}
 
 	after, err := intersectionService.Feed(ctx, viewerID, "recommend", 10)

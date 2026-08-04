@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_message_card_attribute_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_message_card_dto.g.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/rtc_call_log_bubble.dart';
+import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
 
 void main() {
   test('CallEnded card derives video duration summary', () {
@@ -38,9 +37,9 @@ void main() {
     expect(presentation.summary, CallText.callSummaryNoAnswer);
   });
 
-  test('missing enum attributes and legacy EndReason aliases fail closed', () {
+  test('missing enum attributes and retired EndReason aliases fail closed', () {
     expect(() => RtcCallLogPresentation.fromCard(null), throwsFormatException);
-    for (final legacy in <String>[
+    for (final retired in <String>[
       'completed',
       'busy',
       'initiator_hangup',
@@ -48,23 +47,21 @@ void main() {
       'unknown',
     ]) {
       expect(
-        () => RtcCallLogPresentation.fromCard(_card(endReason: legacy)),
+        () => RtcCallLogPresentation.fromCard(_card(endReason: retired)),
         throwsFormatException,
       );
     }
   });
 }
 
-ChatMessageCardDto _card({
-  int durationMs = 65000,
-  String endReason = 'normal',
-}) => ChatMessageCardDto(
-  kind: 'rtc_call_log',
-  title: '',
-  attributes: <ChatMessageCardAttributeDto>[
-    ChatMessageCardAttributeDto(name: 'callId', value: 'call-1'),
-    ChatMessageCardAttributeDto(name: 'callType', value: 'video'),
-    ChatMessageCardAttributeDto(name: 'endReason', value: endReason),
-    ChatMessageCardAttributeDto(name: 'durationMs', value: '$durationMs'),
-  ],
-);
+MessageCard _card({int durationMs = 65000, String endReason = 'normal'}) =>
+    MessageCard(
+      kind: MessageCardKind.rtcCallLog,
+      title: '',
+      attributes: <MessageCardAttribute>[
+        MessageCardAttribute(name: 'callId', value: 'call-1'),
+        MessageCardAttribute(name: 'callType', value: 'video'),
+        MessageCardAttribute(name: 'endReason', value: endReason),
+        MessageCardAttribute(name: 'durationMs', value: '$durationMs'),
+      ],
+    );

@@ -20,7 +20,7 @@
 - 对象契约位于 `services/<service>/contracts/<context>/<object>`；服务唯一 domain 位于 `contracts/domain.yaml`。
 - 人工实现位于 `internal/<context>/<object>/<layer>`；生成代码位于 `generated/<context>/<object>`，禁止生成物藏在 `internal`。
 - 配置有效值由 `config/schema.yaml` 默认值与 `environments/<env>/config.yaml` 差异合成。
-- 公共 migration/template/policy/skill/static/model 位于 `resources/`；环境只选择 Data release、artifact digest 与 Provider binding，非生产交易数据由公开 command/event 在候选验证期产生。
+- 公共 migration/template/policy/static/model 位于 `resources/`。Skill package 的受控发布源码固定为 `resources/skill_packages/official`，已构建且供运行时按 active release digest 读取的 immutable asset 固定为 `resources/skills/packages/official`；两者必须是互不链接的物理根，禁止运行时扫描源码或保留 fallback。环境只选择 Data release、artifact digest 与 Provider binding，非生产交易数据由公开 command/event 在候选验证期产生。
 - 部署有效清单由 `deploy/base` 与 `environments/<env>/deploy` 合成；镜像 digest、配置摘要和资源摘要在 package 阶段注入。
 - Ops 四环境目录只引用各服务同名环境入口以及 external/platform workload，是可执行装配而非注册表。
 

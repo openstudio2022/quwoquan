@@ -201,10 +201,16 @@ final class AlphaCanonicalSearchFacet implements CanonicalSearchQueryFacet {
       final contentIdentity = _optionalText(post['contentIdentity']);
       final content = CanonicalSearchContentHit(
         postId: postID,
-        contentType: ContentType.fromWire(contentType),
+        contentType: ContentType.fromWire(
+          contentType,
+          'AlphaCanonicalSearchFacet.contentType',
+        ),
         contentIdentity: contentIdentity == null
             ? null
-            : ContentIdentity.fromWire(contentIdentity),
+            : ContentIdentity.fromWire(
+                contentIdentity,
+                'AlphaCanonicalSearchFacet.contentIdentity',
+              ),
         title: title.isEmpty ? postID : title,
         summary: _optionalText(post['summary']),
         coverUrl: _optionalText(post['coverUrl']),

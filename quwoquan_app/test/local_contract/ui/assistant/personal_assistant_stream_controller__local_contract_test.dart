@@ -980,8 +980,8 @@ void main() {
           items
               .where((item) => item.skillId == 'stock_sentinel')
               .single
-              .subscription,
-          isNull,
+              .subscriptions,
+          isEmpty,
         );
 
         await repository.createSkillSubscription(
@@ -997,7 +997,11 @@ void main() {
             .where((item) => item.skillId == 'stock_sentinel')
             .single;
         expect(stock.enabled, isTrue);
-        expect(stock.subscription?.status, SkillSubscriptionStatus.active);
+        expect(stock.subscriptions, hasLength(1));
+        expect(
+          stock.subscriptions.single.status,
+          SkillSubscriptionStatus.active,
+        );
       },
     );
 
@@ -1193,7 +1197,7 @@ void main() {
       await container.read(contentBehaviorTrackerProvider).flush();
 
       final interest = behaviorRepo.recorded
-          .where((e) => e.action == BehaviorAction.assistantInterest)
+          .where((e) => e.action == BehaviorEventType.assistantInterest)
           .toList();
       expect(interest, hasLength(1));
       expect(interest.single.tags, equals(<String>['Topic/旅行', 'Topic/景区']));

@@ -10,7 +10,7 @@ import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  late FilterCatalogSnapshot validSnapshot;
+  late FilterCatalogSlice validSnapshot;
 
   setUpAll(() async {
     validSnapshot = await const AssetFilterCatalogBootstrapReader().read();
@@ -155,11 +155,11 @@ FilterCatalogCoordinator _coordinator({
 final class _FakeRemote implements ContentFilterCatalogQuery {
   const _FakeRemote({this.snapshot, this.error});
 
-  final FilterCatalogSnapshot? snapshot;
+  final FilterCatalogSlice? snapshot;
   final Object? error;
 
   @override
-  Future<FilterCatalogSnapshot> getActiveFilterCatalog() async {
+  Future<FilterCatalogSlice> getActiveFilterCatalog() async {
     final failure = error;
     if (failure != null) throw failure;
     return snapshot!;
@@ -169,11 +169,11 @@ final class _FakeRemote implements ContentFilterCatalogQuery {
 final class _FakeBootstrap implements FilterCatalogBootstrapReader {
   const _FakeBootstrap({this.snapshot, this.error});
 
-  final FilterCatalogSnapshot? snapshot;
+  final FilterCatalogSlice? snapshot;
   final Object? error;
 
   @override
-  Future<FilterCatalogSnapshot> read() async {
+  Future<FilterCatalogSlice> read() async {
     final failure = error;
     if (failure != null) throw failure;
     return snapshot!;
@@ -181,23 +181,21 @@ final class _FakeBootstrap implements FilterCatalogBootstrapReader {
 }
 
 final class _MemoryVerifiedStore implements VerifiedFilterCatalogStore {
-  _MemoryVerifiedStore({
-    FilterCatalogSnapshot? snapshot,
-    this.failWrites = false,
-  }) : _entry = snapshot == null
-           ? null
-           : VerifiedFilterCatalogCacheEntry(
-               snapshot: snapshot,
-               verifiedAt: DateTime.utc(2026),
-             );
+  _MemoryVerifiedStore({FilterCatalogSlice? snapshot, this.failWrites = false})
+    : _entry = snapshot == null
+          ? null
+          : VerifiedFilterCatalogCacheEntry(
+              snapshot: snapshot,
+              verifiedAt: DateTime.utc(2026),
+            );
 
   VerifiedFilterCatalogCacheEntry? _entry;
   final bool failWrites;
   int clearCount = 0;
 
-  FilterCatalogSnapshot? get snapshot => _entry?.snapshot;
+  FilterCatalogSlice? get snapshot => _entry?.snapshot;
 
-  set snapshot(FilterCatalogSnapshot? value) {
+  set snapshot(FilterCatalogSlice? value) {
     _entry = value == null
         ? null
         : VerifiedFilterCatalogCacheEntry(
@@ -216,7 +214,7 @@ final class _MemoryVerifiedStore implements VerifiedFilterCatalogStore {
   Future<VerifiedFilterCatalogCacheEntry?> read() async => _entry;
 
   @override
-  Future<void> write(FilterCatalogSnapshot value) async {
+  Future<void> write(FilterCatalogSlice value) async {
     if (failWrites) throw StateError('cache unavailable');
     _entry = VerifiedFilterCatalogCacheEntry(
       snapshot: value,
@@ -240,11 +238,11 @@ final class _RecordingObserver implements FilterCatalogResolutionObserver {
   }
 }
 
-FilterCatalogSnapshot _withDigest(
-  FilterCatalogSnapshot source,
+FilterCatalogSlice _withDigest(
+  FilterCatalogSlice source,
   String canonicalDigest,
 ) {
-  return FilterCatalogSnapshot(
+  return FilterCatalogSlice(
     releaseId: source.releaseId,
     canonicalDigest: canonicalDigest,
     status: source.status,

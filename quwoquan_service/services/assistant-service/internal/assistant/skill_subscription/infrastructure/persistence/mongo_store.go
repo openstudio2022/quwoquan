@@ -55,6 +55,7 @@ type outboxDocument struct {
 func (s *MongoStore) EnsureIndexes(ctx context.Context) error {
 	indexes := []mongo.IndexModel{
 		{Keys: bson.D{{Key: "owner.ownerId", Value: 1}, {Key: "status", Value: 1}, {Key: "updatedAt", Value: -1}}, Options: options.Index().SetName("idx_skill_subscriptions_owner_status")},
+		{Keys: bson.D{{Key: "owner.ownerId", Value: 1}, {Key: "skillId", Value: 1}, {Key: "updatedAt", Value: -1}, {Key: "_id", Value: 1}}, Options: options.Index().SetName("idx_skill_subscriptions_owner_skill")},
 		{Keys: bson.D{{Key: "status", Value: 1}, {Key: "updatedAt", Value: -1}}, Options: options.Index().SetName("idx_skill_subscriptions_status_updated")},
 		{Keys: bson.D{{Key: "status", Value: 1}, {Key: "trigger.type", Value: 1}}, Options: options.Index().SetName("idx_skill_subscriptions_trigger")},
 		{Keys: bson.D{{Key: "status", Value: 1}, {Key: "deliveryState.nextAttemptAt", Value: 1}, {Key: "updatedAt", Value: 1}, {Key: "_id", Value: 1}}, Options: options.Index().SetName("idx_skill_subscriptions_delivery")},
@@ -76,6 +77,15 @@ func (s *MongoStore) EnsureIndexes(ctx context.Context) error {
 		{
 			Keys:    bson.D{{Key: "publishedAt", Value: 1}, {Key: "occurredAt", Value: 1}},
 			Options: options.Index().SetName("idx_skill_subscription_outbox_pending"),
+		},
+		{
+			Keys: bson.D{
+				{Key: "payload.owner.ownerId", Value: 1},
+				{Key: "payload.skillId", Value: 1},
+				{Key: "occurredAt", Value: -1},
+				{Key: "_id", Value: -1},
+			},
+			Options: options.Index().SetName("idx_skill_subscription_outbox_activity"),
 		},
 	}); err != nil {
 		return fmt.Errorf("create skill subscription outbox indexes: %w", err)
@@ -186,6 +196,100 @@ func (s *MongoStore) ListSkillSubscriptions(ctx context.Context, userID, status 
 		return nil, rterr.NewUnavailable(rterr.ModuleAssistant, "解析订阅失败", err.Error())
 	}
 	return items, nil
+}
+
+func (s *MongoStore) ListSkillSubscriptionsBySkill(
+	ctx context.Context,
+	ownerID string,
+	skillID string,
+	createdBefore time.Time,
+	limit int,
+) ([]skillmodel.SkillSubscription, error) {
+	ownerID = strings.TrimSpace(ownerID)
+	skillID = strings.TrimSpace(skillID)
+	createdBefore = createdBefore.UTC()
+	if ownerID == "" || skillID == "" || createdBefore.IsZero() {
+		return nil, skillmodel.ErrInvalidArgument
+	}
+	if limit <= 0 || limit > 1001 {
+		limit = 1001
+	}
+	cursor, err := s.coll.Find(
+		ctx,
+		bson.M{
+			"owner.ownerId": ownerID,
+			"skillId":       skillID,
+			"status":        bson.M{"$ne": skillmodel.SkillSubscriptionStatusArchived},
+			"createdAt":     bson.M{"$lte": createdBefore},
+		},
+		options.Find().
+			SetSort(bson.D{{Key: "updatedAt", Value: -1}, {Key: "_id", Value: 1}}).
+			SetLimit(int64(limit)),
+	)
+	if err != nil {
+		return nil, unavailable("list subscriptions by skill", err)
+	}
+	defer cursor.Close(ctx)
+	items := []skillmodel.SkillSubscription{}
+	if err := cursor.All(ctx, &items); err != nil {
+		return nil, unavailable("decode subscriptions by skill", err)
+	}
+	return items, nil
+}
+
+func (s *MongoStore) ListSkillSubscriptionActivities(
+	ctx context.Context,
+	ownerID string,
+	skillID string,
+	limit int,
+) ([]skillmodel.ActivityEvent, error) {
+	ownerID = strings.TrimSpace(ownerID)
+	skillID = strings.TrimSpace(skillID)
+	if ownerID == "" || skillID == "" {
+		return nil, skillmodel.ErrInvalidArgument
+	}
+	if limit <= 0 || limit > 100 {
+		limit = 100
+	}
+	cursor, err := s.outbox.Find(
+		ctx,
+		bson.M{
+			"payload.owner.ownerId": ownerID,
+			"payload.skillId":       skillID,
+		},
+		options.Find().
+			SetSort(bson.D{{Key: "occurredAt", Value: -1}, {Key: "_id", Value: -1}}).
+			SetLimit(int64(limit)),
+	)
+	if err != nil {
+		return nil, unavailable("list subscription activity", err)
+	}
+	defer cursor.Close(ctx)
+	documents := []outboxDocument{}
+	if err := cursor.All(ctx, &documents); err != nil {
+		return nil, unavailable("decode subscription activity", err)
+	}
+	events := make([]skillmodel.ActivityEvent, 0, len(documents))
+	for _, document := range documents {
+		if document.Payload.Owner.OwnerID != ownerID || document.Payload.SkillID != skillID {
+			return nil, unavailable(
+				"validate subscription activity",
+				errors.New("stored subscription event violates owner boundary"),
+			)
+		}
+		events = append(events, skillmodel.ActivityEvent{
+			EventID:        document.ID,
+			EventType:      document.EventType,
+			SubscriptionID: document.SubscriptionID,
+			OwnerID:        ownerID,
+			SkillID:        skillID,
+			Status:         document.Payload.Status,
+			Version:        document.AggregateVersion,
+			FailureCode:    document.Payload.DeliveryState.LastErrorCode,
+			OccurredAt:     document.OccurredAt.UTC(),
+		})
+	}
+	return events, nil
 }
 
 func (s *MongoStore) ListActiveSkillSubscriptionsForDelivery(

@@ -3,11 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_homepage/homepage_introduction.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_homepage/homepage_introduction_asset.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_homepage/homepage_introduction_section.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_homepage/homepage_introduction_timeline_item.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_homepage/homepage_source.g.dart';
 import 'package:quwoquan_app/components/media/app_media_image.dart';
 import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
@@ -15,7 +10,13 @@ import 'package:quwoquan_app/ui/entity/models/homepage_route_models.dart';
 import 'package:quwoquan_app/ui/entity/models/homepage_tab.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_introduction_page.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
-    show CloudOperationCancellationSignal;
+    show
+        CloudOperationCancellationSignal,
+        HomepageIntroduction,
+        HomepageIntroductionAsset,
+        HomepageIntroductionSection,
+        HomepageIntroductionTimelineItem,
+        HomepageSource;
 
 class _IntroRepository implements HomepageIntroductionRepository {
   _IntroRepository(this.introduction, {this.shouldThrow = false});
@@ -63,10 +64,13 @@ void main() {
               kind: 'overview',
               title: '概况',
               bodyMarkdown: '西湖景区位于杭州。',
+              assets: const [],
+              timelineItems: const [],
             ),
             HomepageIntroductionSection(
               kind: 'timeline',
               title: '时间线',
+              assets: const [],
               timelineItems: <HomepageIntroductionTimelineItem>[
                 HomepageIntroductionTimelineItem(
                   dateLabel: '今天',
@@ -79,9 +83,15 @@ void main() {
             sourceKind: 'wikipedia',
             sourceUrl: 'https://zh.wikipedia.org/wiki/西湖',
             title: '西湖',
+            fetchedAt: '2026-06-12T00:00:00Z',
+            snapshotHash:
+                'sha256:760672367557300130bdf88db43b01f07917475ae4f60ff0b9be95aa78d7e2f1',
             policyRevision: 'encyclopedia-primary',
+            sourceUseMode: 'primary_reference',
           ),
+          relatedObjects: const [],
           sourceUrls: const <String>['https://zh.wikipedia.org/wiki/西湖'],
+          updatedAt: '2026-06-12T00:00:00Z',
         ),
       ),
     );
@@ -139,6 +149,7 @@ void main() {
                   role: 'inline',
                 ),
               ],
+              timelineItems: const [],
             ),
             HomepageIntroductionSection(
               kind: 'relatedImages',
@@ -155,8 +166,12 @@ void main() {
                   role: 'related',
                 ),
               ],
+              timelineItems: const [],
             ),
           ],
+          relatedObjects: const [],
+          sourceUrls: const [],
+          updatedAt: '2026-06-12T00:00:00Z',
         ),
       ),
     );
@@ -193,6 +208,9 @@ void main() {
           homepageType: 'place',
           summary: '',
           sections: const <HomepageIntroductionSection>[],
+          relatedObjects: const [],
+          sourceUrls: const [],
+          updatedAt: '2026-06-12T00:00:00Z',
         ),
       ),
     );
@@ -219,8 +237,13 @@ void main() {
           kind: 'overview',
           title: '概况',
           bodyMarkdown: '西湖景区位于杭州。',
+          assets: const [],
+          timelineItems: const [],
         ),
       ],
+      relatedObjects: const [],
+      sourceUrls: const [],
+      updatedAt: '2026-06-12T00:00:00Z',
     );
     final cases = <(String, HomepageDetailTabTarget)>[
       (ObjectHomepageText.objectIntroReturnRecord, HomepageDetailTabTarget.record),

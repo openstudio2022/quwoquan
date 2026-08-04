@@ -2,12 +2,11 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/chat/models/chat_conversation_timestamp_dto.dart';
 import 'package:quwoquan_app/cloud/chat/models/conversation_dto.dart';
-import 'package:quwoquan_app/cloud/chat/models/sync_response.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
+import 'package:quwoquan_app/cloud/chat/models/message_sync_view_data.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import '../../../support/cloud_services/chat_repository_mock.dart';
+import 'package:quwoquan_app/cloud/services/chat/chat_view_data.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_record.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_service.dart';
@@ -17,6 +16,7 @@ import 'package:quwoquan_app/core/services/cache/local_chat_search_contact_recor
 import 'package:quwoquan_app/core/services/cache/local_chat_search_store.dart';
 import 'package:quwoquan_app/core/services/cache/local_chat_search_sync_service.dart';
 import 'package:quwoquan_app/core/services/cache/local_search_namespace.dart';
+import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
 
 import '../../../support/sqflite_ffi_test_support.dart';
 
@@ -360,7 +360,7 @@ class _CountingChatRepository extends MockChatRepository {
   int listContactsCalls = 0;
 
   @override
-  Future<CursorPage<ChatContactRowDto>> listContacts({
+  Future<CursorPage<ChatContactRowViewData>> listContacts({
     String? cursor,
     int limit = 20,
   }) async {
@@ -383,7 +383,7 @@ class _FlakyChatRepository extends MockChatRepository {
   bool _shouldFail = true;
 
   @override
-  Future<CursorPage<ChatContactRowDto>> listContacts({
+  Future<CursorPage<ChatContactRowViewData>> listContacts({
     String? cursor,
     int limit = 20,
   }) async {
@@ -402,46 +402,49 @@ class _StableChatRepository extends MockChatRepository {
   @override
   Future<ConversationViewData> getConversation(String id) async {
     getConversationCalls += 1;
-    return ConversationViewData.fromMap(<String, dynamic>{
-      'id': id,
-      'title': '摄影讨论组',
-      'type': 'group',
-      'creatorId': 'creator',
-      'maxSeq': 0,
-      'memberCount': 2,
-      'maxGroupSize': 1000,
-      'receiptEnabled': true,
-      'lastMessageType': 'text',
-      'messageCount': 0,
-      'status': 'active',
-      'createdAt': '2026-03-27T10:00:00.000Z',
-      'updatedAt': '2026-03-27T10:00:00.000Z',
-      'lastMessagePreview': '',
-    });
+    final timestamp = DateTime.utc(2026, 3, 27, 10);
+    return ConversationViewData(
+      id: id,
+      title: '摄影讨论组',
+      type: 'group',
+      creatorId: 'creator',
+      maxSeq: 0,
+      memberCount: 2,
+      maxGroupSize: 1000,
+      receiptEnabled: true,
+      lastMessageType: MessageType.text,
+      messageCount: 0,
+      status: 'active',
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      lastMessagePreview: '',
+    );
   }
 
   @override
-  Future<SyncResponse> syncMessages({
+  Future<ChatMessageSyncViewData> syncMessages({
     required String conversationId,
     required int lastSeq,
     int limit = 200,
   }) async {
-    return const SyncResponse(messages: [], hasMore: false);
+    return const ChatMessageSyncViewData(messages: [], hasMore: false);
   }
 }
 
 class _EmptyTimelineChatRepository extends MockChatRepository {
   @override
-  Future<CursorPage<ChatContactRowDto>> listContacts({
+  Future<CursorPage<ChatContactRowViewData>> listContacts({
     String? cursor,
     int limit = 20,
   }) async {
-    return const CursorPage<ChatContactRowDto>(items: <ChatContactRowDto>[]);
+    return const CursorPage<ChatContactRowViewData>(
+      items: <ChatContactRowViewData>[],
+    );
   }
 
   @override
-  Future<List<ChatConversationTimestampDto>> getConversationTimestamps() async {
-    return const <ChatConversationTimestampDto>[];
+  Future<List<ChatConversationTimestamp>> getConversationTimestamps() async {
+    return const <ChatConversationTimestamp>[];
   }
 }
 
@@ -450,17 +453,17 @@ class _PagedContactsChatRepository extends MockChatRepository {
   final List<int> requestedLimits = <int>[];
 
   @override
-  Future<CursorPage<ChatContactRowDto>> listContacts({
+  Future<CursorPage<ChatContactRowViewData>> listContacts({
     String? cursor,
     int limit = 20,
   }) async {
     requestedCursors.add(cursor);
     requestedLimits.add(limit);
     return switch (cursor) {
-      null => CursorPage<ChatContactRowDto>(
-        items: List<ChatContactRowDto>.generate(
+      null => CursorPage<ChatContactRowViewData>(
+        items: List<ChatContactRowViewData>.generate(
           100,
-          (index) => ChatContactRowDto(
+          (index) => ChatContactRowViewData(
             userId: 'friend-$index',
             userHandle: 'friend_handle_$index',
             displayName: 'friend $index',
@@ -475,9 +478,9 @@ class _PagedContactsChatRepository extends MockChatRepository {
         ),
         nextCursor: 'contacts-2',
       ),
-      'contacts-2' => CursorPage<ChatContactRowDto>(
-        items: <ChatContactRowDto>[
-          ChatContactRowDto(
+      'contacts-2' => CursorPage<ChatContactRowViewData>(
+        items: <ChatContactRowViewData>[
+          ChatContactRowViewData(
             userId: 'survivor-contact',
             userHandle: 'survivor_handle',
             displayName: 'survivor',
@@ -496,7 +499,7 @@ class _PagedContactsChatRepository extends MockChatRepository {
   }
 
   @override
-  Future<List<ChatConversationTimestampDto>> getConversationTimestamps() async {
-    return const <ChatConversationTimestampDto>[];
+  Future<List<ChatConversationTimestamp>> getConversationTimestamps() async {
+    return const <ChatConversationTimestamp>[];
   }
 }

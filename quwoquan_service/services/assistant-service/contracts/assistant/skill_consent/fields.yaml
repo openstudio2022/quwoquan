@@ -63,7 +63,7 @@ fields:
   role: authoritative_state
 - name: granted
   source: revokedAt IS NULL
-  type: boolean
+  type: bool
   constraints:
   - NOT_NULL
   classification: PUBLIC

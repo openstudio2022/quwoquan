@@ -51,7 +51,7 @@ class ImpactTimeline extends ConsumerWidget {
             error: error,
             title: ContentText.profileImpactUnavailableTitle,
           ),
-          onAction: (action) async {
+          onRecovery: (action) async {
             if (action.type == UiErrorActionType.retry ||
                 action.type == UiErrorActionType.resubmit) {
               ref.invalidate(
@@ -60,7 +60,9 @@ class ImpactTimeline extends ConsumerWidget {
                   surface: AppUiSurfaces.myIntersections,
                 )),
               );
+              return UiRecoveryOutcome.superseded;
             }
+            return UiRecoveryOutcome.cancelled;
           },
         );
       },

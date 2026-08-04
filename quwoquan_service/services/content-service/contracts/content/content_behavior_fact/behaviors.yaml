@@ -159,7 +159,7 @@ behavior_events:
   batch_route: POST /content/behaviors
   dart_method: trackImpression
   payload_fields:
-  - postId
+  - contentId
   - state
   - contentType
   - intersectionId
@@ -193,7 +193,7 @@ behavior_events:
   batch_route: POST /content/behaviors
   dart_method: trackDwell
   payload_fields:
-  - postId
+  - contentId
   - duration
   - contentType
   ml_signal: strong_positive_if_gt_10s
@@ -210,7 +210,7 @@ behavior_events:
   batch_route: POST /content/behaviors
   dart_method: trackClick
   payload_fields:
-  - postId
+  - contentId
   - contentType
   - intersectionId
   - intersectionDimension
@@ -254,7 +254,7 @@ behavior_events:
   batch_route: POST /content/behaviors
   dart_method: trackDislike
   payload_fields:
-  - postId
+  - contentId
   - contentType
   - authorId
   ml_signal: explicit_negative
@@ -266,7 +266,7 @@ behavior_events:
   batch_route: POST /content/behaviors
   dart_method: trackUndoDislike
   payload_fields:
-  - postId
+  - contentId
   - contentType
   - authorId
   ml_signal: neutral_compensation
@@ -283,7 +283,7 @@ behavior_events:
   batch_route: POST /content/behaviors
   dart_method: trackHideAuthor
   payload_fields:
-  - postId
+  - contentId
   - authorId
   - contentType
   ml_signal: explicit_negative
@@ -295,7 +295,7 @@ behavior_events:
   batch_route: POST /content/behaviors
   dart_method: trackHideContentType
   payload_fields:
-  - postId
+  - contentId
   - contentType
   ml_signal: explicit_negative
   signal_weight: -4.0
@@ -384,7 +384,7 @@ behavior_events:
   batch_route: POST /content/behaviors
   dart_method: trackShare
   payload_fields:
-  - postId
+  - contentId
   - contentType
   - shareTarget
   ml_signal: strong_positive
@@ -396,7 +396,7 @@ behavior_events:
     '
 - type: like
   description: 点赞（由 intent layer 处理，不走 BehaviorTracker）
-  dedicated_route: POST /content/content/posts/{postId}/like
+  dedicated_route: POST /content/posts/{postId}/like
   dart_method: null
   ml_signal: explicit_positive
   signal_weight: 2.0
@@ -421,10 +421,10 @@ behavior_events:
     不因专用路由而断链。
 
     '
-  dedicated_route: POST /content/content/posts/{postId}/comments
+  dedicated_route: POST /content/posts/{postId}/comments
   dart_method: null
   payload_fields:
-  - postId
+  - contentId
   - contentType
   - commentLength
   ml_signal: very_strong_positive
@@ -462,7 +462,7 @@ behavior_events:
   batch_route: POST /content/behaviors
   dart_method: trackSkip
   payload_fields:
-  - postId
+  - contentId
   - contentType
   ml_signal: weak_negative
   signal_weight: -0.3
@@ -473,7 +473,7 @@ behavior_events:
   batch_route: POST /content/behaviors
   dart_method: trackFollow
   payload_fields:
-  - postId
+  - contentId
   - authorId
   - intersectionDimension
   - intersectionSourceRef
@@ -518,7 +518,7 @@ behavior_events:
   batch_route: POST /content/behaviors
   dart_method: trackAddContact
   payload_fields:
-  - postId
+  - contentId
   - authorId
   - intersectionDimension
   - intersectionSourceRef
@@ -532,7 +532,7 @@ behavior_events:
   batch_route: POST /content/behaviors
   dart_method: trackAuthorView
   payload_fields:
-  - postId
+  - contentId
   - authorId
   - entityRefs
   ml_signal: moderate_positive
@@ -565,7 +565,7 @@ behavior_events:
   batch_route: POST /content/behaviors
   dart_method: trackTagClick
   payload_fields:
-  - postId
+  - contentId
   - tagRefs
   ml_signal: moderate_positive
   signal_weight: 1.8
@@ -576,15 +576,25 @@ behavior_events:
   batch_route: POST /content/behaviors
   dart_method: null
   payload_fields:
-  - postId
+  - contentId
   - engagementDepth
   - consumedRatio
   - totalUnits
+  - state
+  - direction
+  - motionProfile
+  - settleMs
+  - reducedMotion
+  - committed
   ml_signal: depth_proportional
   signal_weight: 1.0
   notes: '由 ContentEngagementTracker 在退出时自动生成，不需要独立 dart_method。
 
     engagementDepth 为 L0-L4 归一化等级，consumedRatio 为原始消费比例。
+
+    state=works_image_pageflip_motion 时使用同一 content_depth action，并强制携带 direction、
+
+    motionProfile、settleMs、reducedMotion、committed 五项不可变舒适度证据。
 
     '
 - type: play_progress
@@ -594,7 +604,7 @@ behavior_events:
   batch_route: POST /content/behaviors
   dart_method: trackPlayProgress
   payload_fields:
-  - postId
+  - contentId
   - consumedRatio
   - totalUnits
   ml_signal: observational_only
@@ -617,14 +627,14 @@ behavior_events:
   batch_route: POST /content/behaviors
   dart_method: trackEffectivePlay
   payload_fields:
-  - postId
+  - contentId
   - effectivePlayMs
   - consumedRatio
   - totalUnits
   - state
   ml_signal: qualified_positive
   signal_weight: 1.0
-  notes: '每个 playback session + postId 最多接受一次。effectivePlayMs 是前台、可见、实际播放的
+  notes: '每个 playbackSessionId + contentId 最多接受一次。effectivePlayMs 是前台、可见、实际播放的
 
     累计候选，不是 wall-clock dwell；consumedRatio 不能单独作为准入证据。服务端 policy
 
@@ -645,7 +655,7 @@ behavior_events:
   signal_weight: 1.6
   notes: '由小艺（assistant）每轮对话产出的 diagnostics.emergedTags 合成上报，
 
-    payload 只带 tagRefs（路径制标签），不绑定 postId；
+    payload 只带 tagRefs（路径制标签），不绑定 contentId；
 
     经 ProcessBatch → RecommendFeatureProjector 进 rm_recommend_feature 的 tagInteraction。
 
@@ -667,7 +677,7 @@ behavior_events:
     发布的路径制 tagRef，用户声明字段由 user/account/user_account/fields.yaml 的
 
     interestTags 统一定义）合成上报。payload 只带唯一不可变发布身份 taxonomyReleaseId
-    与 tagRefs（路径制标签），不绑定 postId（与
+    与 tagRefs（路径制标签），不绑定 contentId（与
 
     assistant_interest 同为 contentId 豁免事件）；经 ProcessBatch → HotPath
 

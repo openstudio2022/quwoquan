@@ -4,8 +4,8 @@ import 'dart:async';
 
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_metadata.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/services/cache/cache_read_result.dart';
@@ -16,10 +16,10 @@ import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 class CachedContentRepository
-    implements ContentReadRepository, ContentWriteRepository {
+    implements ContentReadRepository, ContentPostDeleteCommandWriter {
   CachedContentRepository({
     required ContentReadRepository readDelegate,
-    required ContentWriteRepository writeDelegate,
+    required ContentPostDeleteCommandWriter deleteDelegate,
     required PostObjectCacheService postCache,
     required ContentQuerySnapshotStore querySnapshotStore,
     UserProfileCacheService? userProfileCache,
@@ -27,7 +27,7 @@ class CachedContentRepository
     Future<void> Function(String avatarUrl)? avatarPreloader,
     CacheTelemetrySink telemetrySink = const DeveloperLogCacheTelemetrySink(),
   }) : _readDelegate = readDelegate,
-       _writeDelegate = writeDelegate,
+       _deleteDelegate = deleteDelegate,
        _postCache = postCache,
        _querySnapshotStore = querySnapshotStore,
        _userProfileCache = userProfileCache,
@@ -37,7 +37,7 @@ class CachedContentRepository
            avatarPreloader ?? AppImageCacheController.preloadAvatar;
 
   final ContentReadRepository _readDelegate;
-  final ContentWriteRepository _writeDelegate;
+  final ContentPostDeleteCommandWriter _deleteDelegate;
   final PostObjectCacheService _postCache;
   final ContentQuerySnapshotStore _querySnapshotStore;
   final UserProfileCacheService? _userProfileCache;
@@ -325,17 +325,18 @@ class CachedContentRepository
   }
 
   @override
-  Future<void> deletePost({
+  Future<PostDeletionReceipt> deletePost({
     required String postId,
     required String idempotencyKey,
   }) async {
-    await _writeDelegate.deletePost(
+    final receipt = await _deleteDelegate.deletePost(
       postId: postId,
       idempotencyKey: idempotencyKey,
     );
     _postCache.removePost(postId);
     _querySnapshotStore.invalidatePost(postId);
     await _querySnapshotStore.flushPersistence();
+    return receipt;
   }
 
   @override

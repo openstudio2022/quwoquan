@@ -12,13 +12,13 @@ import (
 	"strings"
 	"testing"
 
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/orchestration"
 	presentation "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/presentation"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
-	skillpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/skill"
 	catalogmodel "quwoquan_service/services/assistant-service/internal/assistant/skill_catalog/domain/model"
 	activerelease "quwoquan_service/services/assistant-service/internal/assistant/skill_catalog/infrastructure/activerelease"
 	resourcebuilder "quwoquan_service/services/assistant-service/internal/assistant/skill_catalog/infrastructure/resource"
 	packageapplication "quwoquan_service/services/assistant-service/internal/assistant/skill_package_release/application"
+	skillpkg "quwoquan_service/services/assistant-service/internal/assistant/skill_package_release/application/packageasset"
 	packagemodel "quwoquan_service/services/assistant-service/internal/assistant/skill_package_release/domain/model"
 	"quwoquan_service/services/assistant-service/tests/support/skillfixture"
 )
@@ -160,11 +160,14 @@ func TestCatalogReadsActiveImmutablePackageOnEveryRequest(t *testing.T) {
 	}
 	if first.PackageID != activerelease.OfficialPackageID ||
 		first.ReleaseDigest != resolved.Release.ReleaseDigest ||
-		len(first.Manifests) == 0 || len(items) != len(first.Manifests) {
+		len(first.Manifests) == 0 || len(items) == 0 {
 		t.Fatalf("active catalog snapshot mismatch: %+v items=%d", first, len(items))
 	}
-	if !hasSkill(items, "fallback_general_search") {
-		t.Fatalf("active package catalog misses fallback_general_search")
+	if hasSkill(items, "fallback_general_search") {
+		t.Fatalf("internal fallback routing Skill must remain hidden from product catalog")
+	}
+	if !hasSkill(items, "travel_companion") {
+		t.Fatalf("active package catalog misses product-complete travel_companion")
 	}
 	var travel catalogmodel.Item
 	for _, item := range items {
@@ -177,17 +180,37 @@ func TestCatalogReadsActiveImmutablePackageOnEveryRequest(t *testing.T) {
 		travel.PackageID != resolved.Release.PackageID ||
 		travel.ReleaseDigest != resolved.Release.ReleaseDigest ||
 		len(travel.ConfigurationSchema) == 0 ||
-		len(travel.RequiredConsentScopes) != 2 ||
-		travel.RequiredConsentScopes[0] != "assistant.memory.preferences.read" ||
-		travel.RequiredConsentScopes[1] != "travel.trip.read" ||
+		travel.RequiresConsent || len(travel.RequiredConsentScopes) != 0 ||
 		travel.SetupTemplateRef != "assistant.skill.setup.travel_companion" ||
 		travel.ActivationMode != "hybrid" ||
-		travel.CoverMediaRef == "" ||
-		len(travel.TargetUsers) == 0 ||
-		len(travel.ExampleRefs) == 0 ||
-		len(travel.AllowedSurfaceKinds) != 3 {
+		travel.DomainID != "travel" ||
+		travel.CatalogGroup.ID != "travel" ||
+		travel.CatalogGroup.DisplayText == "" ||
+		len(travel.TargetAudiences) != 6 ||
+		!hasSemanticLabel(travel.ConsentScopeLabels, "assistant.memory.preferences.read") ||
+		!hasSemanticLabel(travel.ConsentScopeLabels, "assistant.learning.feedback_context.read") ||
+		!hasSemanticLabel(travel.ConsentScopeLabels, "travel.trip.read") ||
+		len(travel.Examples) != 3 ||
+		len(travel.SurfaceKinds) != 3 {
 		t.Fatalf("active package catalog metadata is incomplete: %+v", travel)
 	}
+	for _, example := range travel.Examples {
+		if !strings.HasPrefix(example.PresentationTemplateRef, "assistant.answer.default@sha256:") ||
+			!strings.HasPrefix(example.PresentationTemplateDigest, "sha256:") {
+			t.Fatalf("active package example is not digest-qualified: %+v", example)
+		}
+	}
+	if len(items) != 1 {
+		t.Fatalf("only product-complete listed Skills may enter catalog: ids=%v", catalogSkillIDs(items))
+	}
+}
+
+func catalogSkillIDs(items []catalogmodel.Item) []string {
+	ids := make([]string, 0, len(items))
+	for _, item := range items {
+		ids = append(ids, item.SkillID)
+	}
+	return ids
 }
 
 func TestCatalogFailsClosedWithoutActivePackageResolver(t *testing.T) {
@@ -290,17 +313,17 @@ func TestPromptResolverReadsOnlyFrozenPackageAssets(t *testing.T) {
 
 func buildActiveCatalogFixture(t *testing.T) packageapplication.ResolvedRelease {
 	t.Helper()
-	root := filepath.Join(assistantServiceRoot(t), "resources", "skills", "assistant", "assistant_session")
+	sourceRoot := filepath.Join(assistantServiceRoot(t), "resources", "skill_packages", "official")
 	manifests, err := skillfixture.Load()
 	if err != nil {
 		t.Fatalf("load build-time Skill assets: %v", err)
 	}
-	bundle, err := resourcebuilder.NewSourceBuilderAt(root).Compile(t.Context())
+	bundle, err := resourcebuilder.NewSourceBuilderAt(sourceRoot).Compile(t.Context())
 	if err != nil {
 		t.Fatalf("compile build-time profile assets: %v", err)
 	}
 	profiles := bundle.Profiles
-	replayRaw, err := os.ReadFile(filepath.Join(root, "replay_corpus.json"))
+	replayRaw, err := os.ReadFile(filepath.Join(sourceRoot, "replay_corpus.json"))
 	if err != nil {
 		t.Fatalf("read build-time replay corpus: %v", err)
 	}

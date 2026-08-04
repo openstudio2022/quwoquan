@@ -11,6 +11,20 @@ import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../support/assistant_remote_test_support.dart';
+import '../../../support/canonical_digest_fixture.dart';
+
+const _configurationSchema = <String, Object?>{
+  'type': 'object',
+  'additionalProperties': false,
+  'properties': <String, Object?>{
+    'pace': <String, Object?>{
+      'type': 'string',
+      'enum': <String>['relaxed', 'balanced'],
+    },
+  },
+};
+
+final _configurationSchemaDigest = canonicalFixtureSha256(_configurationSchema);
 
 void main() {
   test('SkillUserSetting generated adapter owns list/get/put wire', () async {
@@ -53,7 +67,7 @@ void main() {
       skillId: 'travel_companion',
       status: SkillUserSettingStatus.disabled,
       configurationData: const <String, Object?>{'pace': 'relaxed'},
-      configurationSchemaDigest: 'sha256:schema',
+      configurationSchemaDigest: _configurationSchemaDigest,
       memoryPolicy: SkillMemoryPolicy.confirmBeforeSave,
       connectorConnectionRefs: const <String>['calendar:primary'],
       expectedRevision: 1,
@@ -72,7 +86,7 @@ void main() {
     expect(jsonDecode(requests.last.body), <String, Object?>{
       'status': 'disabled',
       'configurationData': <String, Object?>{'pace': 'relaxed'},
-      'configurationSchemaDigest': 'sha256:schema',
+      'configurationSchemaDigest': _configurationSchemaDigest,
       'memoryPolicy': 'confirm_before_save',
       'connectorConnectionRefs': <String>['calendar:primary'],
       'expectedRevision': 1,
@@ -90,7 +104,7 @@ Map<String, Object?> _settingResponse({
     'skillId': 'travel_companion',
     'status': status,
     'configurationData': <String, Object?>{'pace': 'relaxed'},
-    'configurationSchemaDigest': 'sha256:schema',
+    'configurationSchemaDigest': _configurationSchemaDigest,
     'memoryPolicy': 'confirm_before_save',
     'connectorConnectionRefs': <String>['calendar:primary'],
     'revision': revision,

@@ -336,7 +336,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/AssistantRunEnvelope'
+                                $ref: '#/components/schemas/AssistantRunEnvelopeWire'
                 default:
                     description: Runtime failure
                     content:
@@ -374,7 +374,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/AssistantRunEnvelope'
+                                $ref: '#/components/schemas/AssistantRunEnvelopeWire'
                 default:
                     description: Runtime failure
                     content:
@@ -456,7 +456,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/AssistantRunEnvelope'
+                                $ref: '#/components/schemas/AssistantRunEnvelopeWire'
                 default:
                     description: Runtime failure
                     content:
@@ -494,7 +494,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/AssistantRunEnvelope'
+                                $ref: '#/components/schemas/AssistantRunEnvelopeWire'
                 default:
                     description: Runtime failure
                     content:
@@ -538,7 +538,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/AssistantRunEnvelope'
+                                $ref: '#/components/schemas/AssistantRunEnvelopeWire'
                 default:
                     description: Runtime failure
                     content:
@@ -587,7 +587,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/AssistantRunEnvelope'
+                                $ref: '#/components/schemas/AssistantRunEnvelopeWire'
                 default:
                     description: Runtime failure
                     content:
@@ -663,7 +663,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/AssistantSession'
+                                $ref: '#/components/schemas/AssistantSessionWire'
                 default:
                     description: Runtime failure
                     content:
@@ -696,7 +696,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/AssistantSession'
+                                $ref: '#/components/schemas/AssistantSessionWire'
                 default:
                     description: Runtime failure
                     content:
@@ -740,7 +740,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/AssistantRunEnvelope'
+                                $ref: '#/components/schemas/AssistantRunEnvelopeWire'
                 default:
                     description: Runtime failure
                     content:
@@ -784,6 +784,83 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/AssistantTurnListView'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /assistant/skill-data-control-requests/{requestId}:
+        get:
+            operationId: GetSkillDataControlRequest
+            x-contract-operation-id: assistant.skill_data_control_request.GetSkillDataControlRequest
+            x-object-id: assistant.skill_data_control_request
+            x-actor: account
+            x-application:
+                kind: query
+                facet: SkillDataControlRequestQueryFacade
+                method: getRequest
+                reader: SkillDataControlRequestReader
+                slice: SkillDataControlRequest
+            parameters:
+                - name: requestId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SkillDataControlRequest'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /assistant/skill-data-control-requests/{requestId}/confirm:
+        post:
+            operationId: ConfirmSkillDataControlRequest
+            x-contract-operation-id: assistant.skill_data_control_request.ConfirmSkillDataControlRequest
+            x-object-id: assistant.skill_data_control_request
+            x-actor: account
+            x-application:
+                kind: command
+                facet: SkillDataControlRequestCommandFacade
+                method: confirmRequest
+                aggregateOwner: SkillDataControlRequest
+            parameters:
+                - name: requestId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ConfirmSkillDataControlRequestCommand'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SkillDataControlMutationReceipt'
                 default:
                     description: Runtime failure
                     content:
@@ -978,7 +1055,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/SkillSubscription'
+                                $ref: '#/components/schemas/SkillSubscriptionWire'
                 default:
                     description: Runtime failure
                     content:
@@ -1011,7 +1088,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/SkillSubscription'
+                                $ref: '#/components/schemas/SkillSubscriptionWire'
                 default:
                     description: Runtime failure
                     content:
@@ -1055,7 +1132,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/SkillSubscription'
+                                $ref: '#/components/schemas/SkillSubscriptionWire'
                 default:
                     description: Runtime failure
                     content:
@@ -1122,6 +1199,49 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/AssistantSkillCatalogItemDetailView'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /assistant/skills/{skillId}/activities:
+        get:
+            operationId: ListSkillActivities
+            x-contract-operation-id: assistant.skill_activity_view.ListSkillActivities
+            x-object-id: assistant.skill_activity_view
+            x-actor: account
+            x-application:
+                kind: query
+                facet: SkillActivityViewQueryFacade
+                method: listActivities
+                reader: SkillActivityViewReader
+                slice: SkillActivitySlice
+            parameters:
+                - name: skillId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: cursor
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SkillActivitySlice'
                 default:
                     description: Runtime failure
                     content:
@@ -1203,6 +1323,50 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/RevokeSkillConsentReceipt'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /assistant/skills/{skillId}/data-control-requests:
+        post:
+            operationId: CreateSkillDataControlRequest
+            x-contract-operation-id: assistant.skill_data_control_request.CreateSkillDataControlRequest
+            x-object-id: assistant.skill_data_control_request
+            x-actor: account
+            x-application:
+                kind: command
+                facet: SkillDataControlRequestCommandFacade
+                method: createRequest
+                aggregateOwner: SkillDataControlRequest
+            parameters:
+                - name: skillId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CreateSkillDataControlRequestCommand'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SkillDataControlMutationReceipt'
                 default:
                     description: Runtime failure
                     content:
@@ -1317,6 +1481,72 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/AssistantTaskSlice'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/assistant/domain-readers:
+        get:
+            operationId: ListDomainReaderDescriptors
+            x-contract-operation-id: assistant.domain_reader_descriptor.ListDomainReaderDescriptors
+            x-object-id: assistant.domain_reader_descriptor
+            x-actor: none
+            x-application:
+                kind: query
+                facet: DomainReaderDescriptorQueryFacade
+                method: listDescriptors
+                reader: DomainReaderDescriptorReader
+                slice: DomainReaderDescriptorListSlice
+            parameters:
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/DomainReaderDescriptorListSlice'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/assistant/domain-readers/{descriptorId}:
+        get:
+            operationId: GetDomainReaderDescriptor
+            x-contract-operation-id: assistant.domain_reader_descriptor.GetDomainReaderDescriptor
+            x-object-id: assistant.domain_reader_descriptor
+            x-actor: none
+            x-application:
+                kind: query
+                facet: DomainReaderDescriptorQueryFacade
+                method: getDescriptor
+                reader: DomainReaderDescriptorReader
+                slice: DomainReaderDescriptor
+            parameters:
+                - name: descriptorId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/DomainReaderDescriptor'
                 default:
                     description: Runtime failure
                     content:
@@ -1717,20 +1947,20 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: AssistantPreferenceListView
             x-contract-placeholder: true
-        AssistantRunEnvelope:
+        AssistantRunEnvelopeWire:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: AssistantRunEnvelope
-            x-contract-placeholder: true
-        AssistantSession:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: AssistantSession
+            x-contract-entity: AssistantRunEnvelopeWire
             x-contract-placeholder: true
         AssistantSessionListView:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: AssistantSessionListView
+            x-contract-placeholder: true
+        AssistantSessionWire:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: AssistantSessionWire
             x-contract-placeholder: true
         AssistantSkillCatalogItemDetailView:
             type: object
@@ -1767,10 +1997,30 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: AssistantTurnListView
             x-contract-placeholder: true
+        ConfirmSkillDataControlRequestCommand:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ConfirmSkillDataControlRequestCommand
+            x-contract-placeholder: true
         CreateAssistantSkillSubscriptionCommand:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: CreateAssistantSkillSubscriptionCommand
+            x-contract-placeholder: true
+        CreateSkillDataControlRequestCommand:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: CreateSkillDataControlRequestCommand
+            x-contract-placeholder: true
+        DomainReaderDescriptor:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: DomainReaderDescriptor
+            x-contract-placeholder: true
+        DomainReaderDescriptorListSlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: DomainReaderDescriptorListSlice
             x-contract-placeholder: true
         GrantSkillConsentReceipt:
             type: object
@@ -1822,10 +2072,25 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: SetAssistantPreferenceRequest
             x-contract-placeholder: true
+        SkillActivitySlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: SkillActivitySlice
+            x-contract-placeholder: true
         SkillConsentListSlice:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: SkillConsentListSlice
+            x-contract-placeholder: true
+        SkillDataControlMutationReceipt:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: SkillDataControlMutationReceipt
+            x-contract-placeholder: true
+        SkillDataControlRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: SkillDataControlRequest
             x-contract-placeholder: true
         SkillPackageActivation:
             type: object
@@ -1836,11 +2101,6 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: SkillPackageRelease
-            x-contract-placeholder: true
-        SkillSubscription:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: SkillSubscription
             x-contract-placeholder: true
         SkillSubscriptionCronTickRequest:
             type: object
@@ -1856,6 +2116,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: SkillSubscriptionListView
+            x-contract-placeholder: true
+        SkillSubscriptionWire:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: SkillSubscriptionWire
             x-contract-placeholder: true
         SkillSurfacePlacement:
             type: object

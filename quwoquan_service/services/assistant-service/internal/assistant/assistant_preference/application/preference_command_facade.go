@@ -1,4 +1,4 @@
-package preferencefact
+package preferenceapplication
 
 import (
 	"context"
@@ -59,7 +59,7 @@ func NewCommandFacade(
 func (f *CommandFacade) SetPreference(
 	ctx context.Context,
 	command SetPreferenceCommand,
-) (_ preferencemodel.Fact, err error) {
+) (_ preferencemodel.AssistantPreference, err error) {
 	ctx, span := rtobs.StartBusinessSpan(
 		ctx,
 		"assistant.SetAssistantPreference",
@@ -70,7 +70,7 @@ func (f *CommandFacade) SetPreference(
 
 	userID := strings.TrimSpace(command.UserID)
 	if userID == "" {
-		return preferencemodel.Fact{}, preferenceInvalidArgument("missing trusted persona")
+		return preferencemodel.AssistantPreference{}, preferenceInvalidArgument("missing trusted persona")
 	}
 	scope, sessionID, kind, value, sourceType, sourceSessionID, normalizeErr :=
 		preferencemodel.Normalize(
@@ -83,11 +83,11 @@ func (f *CommandFacade) SetPreference(
 			command.Confirmed,
 		)
 	if normalizeErr != nil {
-		return preferencemodel.Fact{}, preferenceInvalidArgument(normalizeErr.Error())
+		return preferencemodel.AssistantPreference{}, preferenceInvalidArgument(normalizeErr.Error())
 	}
 	if scope == preferencemodel.ScopeSession {
 		if f == nil || f.sessions == nil {
-			return preferencemodel.Fact{}, preferenceStorageUnavailable(
+			return preferencemodel.AssistantPreference{}, preferenceStorageUnavailable(
 				"assistant session owner reader is not configured",
 			)
 		}
@@ -97,16 +97,16 @@ func (f *CommandFacade) SetPreference(
 			sessionID,
 		)
 		if ownerErr != nil {
-			return preferencemodel.Fact{}, preferenceStorageUnavailable(ownerErr.Error())
+			return preferencemodel.AssistantPreference{}, preferenceStorageUnavailable(ownerErr.Error())
 		}
 		if !owned {
-			return preferencemodel.Fact{}, preferenceNotFound()
+			return preferencemodel.AssistantPreference{}, preferenceNotFound()
 		}
 	}
-	if preferencemodel.IsFactualKind(kind) &&
+	if preferencemodel.RequiresExplicitConfirmation(kind) &&
 		sourceType == preferencemodel.SourceSessionConfirmed {
 		if f == nil || f.sessions == nil {
-			return preferencemodel.Fact{}, preferenceStorageUnavailable(
+			return preferencemodel.AssistantPreference{}, preferenceStorageUnavailable(
 				"assistant session owner reader is not configured",
 			)
 		}
@@ -116,27 +116,27 @@ func (f *CommandFacade) SetPreference(
 			sourceSessionID,
 		)
 		if ownerErr != nil {
-			return preferencemodel.Fact{}, preferenceStorageUnavailable(ownerErr.Error())
+			return preferencemodel.AssistantPreference{}, preferenceStorageUnavailable(ownerErr.Error())
 		}
 		if !owned {
-			return preferencemodel.Fact{}, preferenceNotFound()
+			return preferencemodel.AssistantPreference{}, preferenceNotFound()
 		}
 	}
 	if f == nil || f.store == nil {
-		return preferencemodel.Fact{}, preferenceStorageUnavailable(
+		return preferencemodel.AssistantPreference{}, preferenceStorageUnavailable(
 			"assistant preference store is not configured",
 		)
 	}
 	preferenceID, generateErr := rtid.Generate(rtid.PrefixAssistantPreference)
 	if generateErr != nil {
-		return preferencemodel.Fact{}, preferenceStorageUnavailable(generateErr.Error())
+		return preferencemodel.AssistantPreference{}, preferenceStorageUnavailable(generateErr.Error())
 	}
 	now := f.now()
 	var confirmedAt *time.Time
-	if preferencemodel.IsFactualKind(kind) {
+	if preferencemodel.RequiresExplicitConfirmation(kind) {
 		confirmedAt = &now
 	}
-	fact, storeErr := f.store.Upsert(ctx, preferenceports.UpsertInput{
+	preference, storeErr := f.store.Upsert(ctx, preferenceports.UpsertInput{
 		PreferenceID:    preferenceID,
 		UserID:          userID,
 		Scope:           scope,
@@ -149,16 +149,16 @@ func (f *CommandFacade) SetPreference(
 		Now:             now,
 	})
 	if storeErr != nil {
-		return preferencemodel.Fact{}, preferenceStorageUnavailable(storeErr.Error())
+		return preferencemodel.AssistantPreference{}, preferenceStorageUnavailable(storeErr.Error())
 	}
-	return fact, nil
+	return preference, nil
 }
 
 func (f *CommandFacade) RevokePreference(
 	ctx context.Context,
 	userID string,
 	preferenceID string,
-) (_ preferencemodel.Fact, err error) {
+) (_ preferencemodel.AssistantPreference, err error) {
 	ctx, span := rtobs.StartBusinessSpan(ctx, "assistant.RevokeAssistantPreference")
 	defer func() { rtobs.EndSpan(span, err) }()
 
@@ -174,7 +174,7 @@ func (f *CommandFacade) RestorePreference(
 	ctx context.Context,
 	userID string,
 	preferenceID string,
-) (_ preferencemodel.Fact, err error) {
+) (_ preferencemodel.AssistantPreference, err error) {
 	ctx, span := rtobs.StartBusinessSpan(ctx, "assistant.RestoreAssistantPreference")
 	defer func() { rtobs.EndSpan(span, err) }()
 
@@ -191,22 +191,22 @@ func (f *CommandFacade) updatePreferenceStatus(
 	userID string,
 	preferenceID string,
 	target preferencemodel.Status,
-) (preferencemodel.Fact, error) {
+) (preferencemodel.AssistantPreference, error) {
 	if userID == "" || preferenceID == "" {
-		return preferencemodel.Fact{}, preferenceNotFound()
+		return preferencemodel.AssistantPreference{}, preferenceNotFound()
 	}
 	if f == nil || f.store == nil {
-		return preferencemodel.Fact{}, preferenceStorageUnavailable(
+		return preferencemodel.AssistantPreference{}, preferenceStorageUnavailable(
 			"assistant preference store is not configured",
 		)
 	}
 	for attempt := 0; attempt < 2; attempt++ {
 		current, found, getErr := f.store.GetOwned(ctx, userID, preferenceID)
 		if getErr != nil {
-			return preferencemodel.Fact{}, preferenceStorageUnavailable(getErr.Error())
+			return preferencemodel.AssistantPreference{}, preferenceStorageUnavailable(getErr.Error())
 		}
 		if !found {
-			return preferencemodel.Fact{}, preferenceNotFound()
+			return preferencemodel.AssistantPreference{}, preferenceNotFound()
 		}
 		if current.Status == target {
 			return current, nil
@@ -224,7 +224,7 @@ func (f *CommandFacade) updatePreferenceStatus(
 			if current.Status != preferencemodel.StatusRevoked ||
 				current.RevocationDeadline == nil ||
 				!now.Before(*current.RevocationDeadline) {
-				return preferencemodel.Fact{}, preferenceRestoreExpired()
+				return preferencemodel.AssistantPreference{}, preferenceRestoreExpired()
 			}
 		}
 		updated, matched, updateErr := f.store.UpdateStatus(
@@ -235,13 +235,13 @@ func (f *CommandFacade) updatePreferenceStatus(
 			update,
 		)
 		if updateErr != nil {
-			return preferencemodel.Fact{}, preferenceStorageUnavailable(updateErr.Error())
+			return preferencemodel.AssistantPreference{}, preferenceStorageUnavailable(updateErr.Error())
 		}
 		if matched {
 			return updated, nil
 		}
 	}
-	return preferencemodel.Fact{}, preferenceStorageUnavailable(
+	return preferencemodel.AssistantPreference{}, preferenceStorageUnavailable(
 		"assistant preference optimistic concurrency exhausted",
 	)
 }

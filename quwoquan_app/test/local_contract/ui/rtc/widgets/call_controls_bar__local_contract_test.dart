@@ -7,6 +7,7 @@ import 'package:quwoquan_app/ui/rtc/models/call_state.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/call_controls_bar.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import '../../../../support/cloud_services/object_doubles/rtc/rtc_contract_test_builders.dart';
 
 Widget _buildBar({
   CallType callType = CallType.video,
@@ -230,8 +231,8 @@ final class _ScreenShareCallSessionNotifier extends CallSessionNotifier {
   CallSessionState build() {
     final now = DateTime.utc(2026, 7, 20);
     return CallSessionState(
-      session: CallSession(
-        callId: 'call-controls',
+      session: buildCallSessionContract(
+        id: 'call-controls',
         callType: CallType.video,
         status: CallStatus.inCall,
         initiatorId: 'user-a',

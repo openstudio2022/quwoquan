@@ -37,9 +37,25 @@ func TestListSkillsContractIsSingleTrackPrivateAccountReader(t *testing.T) {
 	root := assistantServiceRoot(t)
 	var document struct {
 		APIRoutes []struct {
-			Operation  string   `yaml:"operation"`
-			Actor      string   `yaml:"actor"`
-			Errors     []string `yaml:"error_codes"`
+			Operation       string   `yaml:"operation"`
+			Actor           string   `yaml:"actor"`
+			RequestEntity   string   `yaml:"request_entity"`
+			ResponseEntity  string   `yaml:"response_entity"`
+			Errors          []string `yaml:"error_codes"`
+			RequestBindings struct {
+				Path []struct {
+					Name  string `yaml:"name"`
+					Field string `yaml:"field"`
+				} `yaml:"path"`
+				Query []struct {
+					Name  string `yaml:"name"`
+					Field string `yaml:"field"`
+				} `yaml:"query"`
+				Injected []struct {
+					Name  string `yaml:"name"`
+					Field string `yaml:"field"`
+				} `yaml:"injected"`
+			} `yaml:"request_bindings"`
 			Commercial struct {
 				Status string `yaml:"status"`
 			} `yaml:"commercial"`
@@ -102,11 +118,25 @@ func TestListSkillsContractIsSingleTrackPrivateAccountReader(t *testing.T) {
 		}
 	}
 	if detailRoute.Operation != "GetSkillCatalogItem" ||
+		detailRoute.RequestEntity != "GetSkillCatalogItemQuery" ||
+		detailRoute.ResponseEntity != "AssistantSkillCatalogItemDetailView" ||
 		detailRoute.Commercial.Status != "ready" ||
 		detailRoute.Authorization.OwnershipPolicy != "requester_self" ||
 		detailRoute.Security.AnonymousPolicy != "deny" ||
 		!contains(detailRoute.Errors, "ASSISTANT.USER.skill_catalog_not_found") {
 		t.Fatalf("GetSkillCatalogItem contract drifted: %+v", detailRoute)
+	}
+	if len(detailRoute.RequestBindings.Path) != 1 ||
+		detailRoute.RequestBindings.Path[0].Name != "skillId" ||
+		detailRoute.RequestBindings.Path[0].Field != "skillId" ||
+		len(detailRoute.RequestBindings.Query) != 0 ||
+		len(detailRoute.RequestBindings.Injected) != 1 ||
+		detailRoute.RequestBindings.Injected[0].Name != "accountId" ||
+		detailRoute.RequestBindings.Injected[0].Field != "accountId" {
+		t.Fatalf(
+			"GetSkillCatalogItem request binding drifted: %+v",
+			detailRoute.RequestBindings,
+		)
 	}
 
 	for _, oldFile := range []string{
@@ -121,6 +151,72 @@ func TestListSkillsContractIsSingleTrackPrivateAccountReader(t *testing.T) {
 			strings.Contains(oldPayload, "AssistantSkillCatalogListView") {
 			t.Fatalf("legacy SkillCatalog ownership remains in %s", oldFile)
 		}
+	}
+}
+
+func TestGetSkillCatalogItemDomainClassificationIsResponseOwned(t *testing.T) {
+	t.Parallel()
+
+	root := assistantServiceRoot(t)
+	var fieldsDocument struct {
+		Types map[string]struct {
+			Fields []struct {
+				Name        string   `yaml:"name"`
+				Source      string   `yaml:"source"`
+				Constraints []string `yaml:"constraints"`
+			} `yaml:"fields"`
+		} `yaml:"types"`
+	}
+	fieldsPayload := readFile(t, filepath.Join(
+		root, "contracts", "assistant", "skill_catalog", "fields.yaml",
+	))
+	if err := yaml.Unmarshal(fieldsPayload, &fieldsDocument); err != nil {
+		t.Fatalf("parse SkillCatalog fields: %v", err)
+	}
+	queryFields := fieldsDocument.Types["GetSkillCatalogItemQuery"].Fields
+	if len(queryFields) != 2 || queryFields[0].Name != "skillId" ||
+		queryFields[1].Name != "accountId" {
+		t.Fatalf(
+			"GetSkillCatalogItemQuery fields=%+v, want skillId/accountId only",
+			queryFields,
+		)
+	}
+	itemFields := fieldsDocument.Types["AssistantSkillCatalogItemView"].Fields
+	domainFieldFound := false
+	for _, field := range itemFields {
+		if field.Name != "domainId" {
+			continue
+		}
+		domainFieldFound = field.Source == "domainId" &&
+			contains(field.Constraints, "NOT_NULL")
+	}
+	if !domainFieldFound {
+		t.Fatalf(
+			"AssistantSkillCatalogItemView must own required domainId: %+v",
+			itemFields,
+		)
+	}
+
+	var objectDocument struct {
+		Identity struct {
+			Fields []string `yaml:"fields"`
+		} `yaml:"identity"`
+		LocalIdentityReasons map[string]string `yaml:"local_identity_reasons"`
+	}
+	objectPayload := readFile(t, filepath.Join(
+		root, "contracts", "assistant", "skill_catalog", "object.yaml",
+	))
+	if err := yaml.Unmarshal(objectPayload, &objectDocument); err != nil {
+		t.Fatalf("parse SkillCatalog object: %v", err)
+	}
+	if len(objectDocument.Identity.Fields) != 1 ||
+		objectDocument.Identity.Fields[0] != "skillId" ||
+		strings.TrimSpace(objectDocument.LocalIdentityReasons["domainId"]) == "" {
+		t.Fatalf(
+			"SkillCatalog identity/domain classification drifted: %+v/%+v",
+			objectDocument.Identity.Fields,
+			objectDocument.LocalIdentityReasons,
+		)
 	}
 }
 
@@ -195,6 +291,7 @@ func TestGetSkillCatalogItemProgressivelyDisclosesActivePackageSchema(t *testing
 	t.Parallel()
 	items := []model.Item{{
 		SkillID:             "travel_companion",
+		DomainID:            "travel",
 		DisplayName:         "贴身旅行管家",
 		ConfigurationSchema: []byte(`{"type":"object","additionalProperties":false}`),
 	}}
@@ -208,6 +305,7 @@ func TestGetSkillCatalogItemProgressivelyDisclosesActivePackageSchema(t *testing
 		},
 	)
 	if err != nil || detail.Item.SkillID != "travel_companion" ||
+		detail.Item.DomainID != "travel" ||
 		len(detail.ConfigurationSchema) == 0 {
 		t.Fatalf("GetSkillCatalogItem detail=%+v err=%v", detail, err)
 	}
@@ -221,9 +319,9 @@ func TestGetSkillCatalogItemProgressivelyDisclosesActivePackageSchema(t *testing
 func TestListSkillsDoesNotMixAccountConsentIntoCatalog(t *testing.T) {
 	t.Parallel()
 	items := []model.Item{{
-		SkillID:         model.PersonalContentAccessSkillID,
-		DisplayName:     "个人内容访问",
-		Description:     "允许读取个人内容。",
+		SkillID:         "travel_companion",
+		DisplayName:     "贴身旅行管家",
+		Description:     "读取用户明确授权的旅行上下文。",
 		RequiresConsent: true,
 	}}
 	service := application.NewQueryService(catalogSourceStub{items: items})
@@ -242,7 +340,7 @@ func TestListSkillsDoesNotMixAccountConsentIntoCatalog(t *testing.T) {
 	}
 	if owner.Items[0].SkillID != foreign.Items[0].SkillID ||
 		owner.Items[0].Description != foreign.Items[0].Description ||
-		owner.Items[0].Description != "允许读取个人内容。" {
+		owner.Items[0].Description != "读取用户明确授权的旅行上下文。" {
 		t.Fatalf("catalog mixed account state: owner=%+v foreign=%+v", owner.Items[0], foreign.Items[0])
 	}
 }
@@ -252,19 +350,25 @@ func TestBuildSourceContainsOnlyDeclaredManifests(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read canonical SkillCatalog source: %v", err)
 	}
-	if !hasSkill(items, "fallback_general_search") {
-		t.Fatal("build source misses fallback_general_search")
+	if hasSkill(items, "fallback_general_search") {
+		t.Fatal("internal fallback routing Skill escaped the listed product catalog")
+	}
+	if !hasSkill(items, "travel_companion") {
+		t.Fatal("build source misses listed travel_companion")
 	}
 	for _, item := range items {
 		if item.SkillID == "travel_companion" &&
 			(item.ConfigurationSchemaDigest == "" ||
 				len(item.ConfigurationSchema) == 0 ||
-				item.SetupTemplateRef == "" || item.ActivationMode != "hybrid") {
+				item.SetupTemplateRef == "" || item.ActivationMode != "hybrid" ||
+				item.RequiresConsent || len(item.RequiredConsentScopes) != 0 ||
+				!hasSemanticLabel(item.ConsentScopeLabels, "assistant.memory.preferences.read") ||
+				!hasSemanticLabel(item.ConsentScopeLabels, "assistant.learning.feedback_context.read") ||
+				!hasSemanticLabel(item.ConsentScopeLabels, "travel.trip.read")) {
 			t.Fatalf("build source catalog metadata is incomplete: %+v", item)
 		}
 	}
 	for _, invented := range []string{
-		model.PersonalContentAccessSkillID,
 		"assistant_learning",
 		"assistant_navigation",
 	} {
@@ -315,6 +419,15 @@ func contains(values []string, wanted string) bool {
 func hasSkill(items []model.Item, skillID string) bool {
 	for _, item := range items {
 		if item.SkillID == skillID {
+			return true
+		}
+	}
+	return false
+}
+
+func hasSemanticLabel(values []model.SemanticLabel, wanted string) bool {
+	for _, value := range values {
+		if value.ID == wanted {
 			return true
 		}
 	}

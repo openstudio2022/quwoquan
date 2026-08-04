@@ -153,6 +153,9 @@ def bind_packaged_image_composition(
         if include_local_release_aliases:
             target[local_release_image_environment_key(service)] = ref
     target["QWQ_COMPOSE_IMAGE_VERSION"] = digest
+    # Compose image tags cannot embed a second colon; keep the full digest for
+    # in-container IMAGE_VERSION metadata and expose a tag-safe hex form.
+    target["QWQ_COMPOSE_IMAGE_TAG"] = digest.removeprefix("sha256:")
     if include_local_release_aliases:
         target["LOCAL_GAMMA_IMAGE_VERSION"] = digest
     return {"digest": digest, "images": refs}

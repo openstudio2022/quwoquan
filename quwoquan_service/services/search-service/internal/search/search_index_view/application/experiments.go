@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -113,7 +114,9 @@ func (e *Experiments) Assign(ctx context.Context, subjectKey string) (string, er
 		ExperimentID: policy.ID, ExperimentRevision: policy.Revision,
 		SubjectKey: strings.TrimSpace(subjectKey), Variant: bucket, AssignedAt: now,
 	}); err != nil {
-		return "", fmt.Errorf("publish search experiment assignment: %w", err)
+		// Assignment observation is best-effort: Redis thrash must not fail search.
+		slog.WarnContext(ctx, "search experiment assignment publish degraded",
+			slog.String("experimentId", policy.ID), slog.String("variant", bucket), slog.String("err", err.Error()))
 	}
 	return bucket, nil
 }

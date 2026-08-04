@@ -140,6 +140,10 @@
             }
           },
           "responseEntity": { "type": "string", "minLength": 1 },
+          "responseEntityRef": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*\\.[A-Z][A-Za-z0-9]*$"
+          },
           "responseBody": { "type": "string", "minLength": 1 },
           "responseBodyKind": { "type": "string", "minLength": 1 },
           "sourcePath": { "type": "string", "minLength": 1 },

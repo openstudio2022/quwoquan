@@ -57,8 +57,10 @@
 - 端侧每次启动必须显式绑定 `device-id` 或等价唯一设备选择结果。
 - 端侧实例记录只用于诊断与 stop/list，不得演化为服务端多套编排。
 - 环境矩阵、业务数据清单与 runbook 明确“端侧可多实例、本机商业 runtime 串行单套”的统一口径。
-- 开发者一键启动统一入口为 `python3 quwoquan_ops/cli/stackctl.py up --env <env> [--device-id <id>]`。
-- `make dev-up ENV=<env> [DEVICE_ID=<id>]` 只是 `stackctl up --env` 的 Makefile 薄包装，不得演化出第二套启动逻辑。
+- `stackctl up` 只消费已激活的不可变候选；开发者冷/热一键会话统一由 `stackctl dev-session` 编排 package、full up、health 与可选 App handoff，App launcher 不得反向拥有环境生命周期。
+- `stackctl dev-session --all-nonprod` 必须按 Alpha→Beta→Gamma 串行执行，任一 target 失败即停止后续阶段并保留已完成回执；Makefile 只能是该命令的薄包装。
+- full runtime 已健康运行时，`content-release/content-commercial` 任务必须复用它且不得改写 full startup receipt；无 full runtime 的独立 bounded workload 才拥有自己的启动与停止事实。
+- bounded workload 正常、失败或取消后必须恢复进入前 runtime 状态；恢复失败保留 partial/typed blocker，禁止把原本健康的 full runtime 写成 stopped。
 
 <a id="req-003"></a>
 ### REQ-003 真实计时与隔离证据
@@ -71,6 +73,7 @@
   非空结果命中当前 immutable release，禁止仅凭 HTTP 2xx 或空 `items` 判绿。
 - Docker 与 Podman 都必须从 target 派生 project/network/container/volume 名称；
   cleanup 只能作用于当前 receipt 绑定资源。
+- 同一 target 的重复 `dev-session` 在候选、release、配置和健康身份一致时必须走热复用，不重复 package 或 compose up；任一 identity 漂移必须 fail-closed。
 
 ## 4. 契约引用
 
@@ -90,6 +93,7 @@
   runtime receipt、release receipt 与 report 互不相同，候选 baselineId 相同。
 - THEN 每段使用真实 phase 时长和唯一 report 目录，Feed 证据命中当前 release，最终结果
   只在所有 live 子报告身份一致且成功时为 passed。
+- THEN `dev-session --all-nonprod` 复用同一串行资源合同；重复执行健康 target 不改变 runtime 事实，bounded content 任务结束后 full receipt 仍为 running。
 - AND 任一启动、清理、证据或身份失败返回 canonical `GATE_BLOCK`，完成 partial teardown，
   不覆盖旧报告、不继续下一个 target、不产生伪成功事实。
 

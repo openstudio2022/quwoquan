@@ -1,4 +1,6 @@
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show CommentStatus;
 
 /// Comment 对象的测试端强类型 Facet。
 ///
@@ -6,12 +8,12 @@ import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 /// path、operation id、Map body 或字符串反应值。
 class TestContentCommentFacet implements ContentCommentFacet {
   TestContentCommentFacet({
-    List<ContentCommentListItem> items = const <ContentCommentListItem>[],
+    List<CommentListItem> items = const <CommentListItem>[],
     this.actorId = 'test_persona',
-  }) : items = List<ContentCommentListItem>.of(items);
+  }) : items = List<CommentListItem>.of(items);
 
   final String actorId;
-  List<ContentCommentListItem> items;
+  List<CommentListItem> items;
   Object? failure;
   int queryCalls = 0;
   int createCalls = 0;
@@ -29,7 +31,7 @@ class TestContentCommentFacet implements ContentCommentFacet {
     required String postId,
     String? cursor,
     int limit = 20,
-    ContentCommentSort sort = ContentCommentSort.hot,
+    CommentSort sort = CommentSort.hot,
   }) async {
     _throwIfConfigured();
     queryCalls++;
@@ -39,7 +41,7 @@ class TestContentCommentFacet implements ContentCommentFacet {
             (item) =>
                 item.postId == postId &&
                 item.parentCommentId == null &&
-                item.status == ContentCommentStatus.active,
+                item.status == CommentStatus.active,
           )
           .toList(growable: false),
       cursor: cursor,
@@ -63,7 +65,7 @@ class TestContentCommentFacet implements ContentCommentFacet {
             (item) =>
                 item.postId == postId &&
                 item.parentCommentId == commentId &&
-                item.status == ContentCommentStatus.active,
+                item.status == CommentStatus.active,
           )
           .toList(growable: false),
       cursor: cursor,
@@ -89,8 +91,8 @@ class TestContentCommentFacet implements ContentCommentFacet {
           .where(
             (item) =>
                 item.authorId == actorId &&
-                (item.status == ContentCommentStatus.active ||
-                    item.status == ContentCommentStatus.hidden),
+                (item.status == CommentStatus.active ||
+                    item.status == CommentStatus.hidden),
           )
           .toList(growable: false),
       cursor: cursor,
@@ -113,7 +115,7 @@ class TestContentCommentFacet implements ContentCommentFacet {
     queryCalls++;
     final page = _page(
       items
-          .where((item) => item.status == ContentCommentStatus.active)
+          .where((item) => item.status == CommentStatus.active)
           .toList(growable: false),
       cursor: cursor,
       limit: limit,
@@ -127,7 +129,7 @@ class TestContentCommentFacet implements ContentCommentFacet {
   }
 
   @override
-  Future<ContentCommentCommandResult> createComment(
+  Future<CommentCommandResult> createComment(
     CreateContentCommentCommand command,
   ) async {
     _throwIfConfigured();
@@ -159,30 +161,31 @@ class TestContentCommentFacet implements ContentCommentFacet {
       canDelete: true,
       canReport: false,
     );
-    items = <ContentCommentListItem>[created, ...items];
-    return ContentCommentCommandResult(
+    items = <CommentListItem>[created, ...items];
+    return CommentCommandResult(
       id: id,
       version: 1,
-      status: ContentCommentStatus.active,
+      status: CommentStatus.active,
       replayed: false,
     );
   }
 
   @override
-  Future<ContentCommentCommandResult> deleteComment(
+  Future<CommentCommandResult> deleteComment(
     DeleteContentCommentCommand command,
   ) async {
     _throwIfConfigured();
     deleteCalls++;
     lastDeleteCommand = command;
     final current = _required(command.commentId);
-    final deleted = current.copyWith(
+    final deleted = _copyComment(
+      current,
       version: current.version + 1,
-      status: ContentCommentStatus.deleted,
+      status: CommentStatus.deleted,
       deletedAt: () => DateTime.now().toUtc(),
     );
     _replace(deleted);
-    return ContentCommentCommandResult(
+    return CommentCommandResult(
       id: deleted.id,
       version: deleted.version,
       status: deleted.status,
@@ -191,22 +194,23 @@ class TestContentCommentFacet implements ContentCommentFacet {
   }
 
   @override
-  Future<ContentCommentCommandResult> pinComment(
+  Future<CommentCommandResult> pinComment(
     ChangeContentCommentPinCommand command,
   ) => _changePin(command, true);
 
   @override
-  Future<ContentCommentCommandResult> unpinComment(
+  Future<CommentCommandResult> unpinComment(
     ChangeContentCommentPinCommand command,
   ) => _changePin(command, false);
 
   @override
-  Future<ContentCommentCommandResult> bindAttachments(
+  Future<CommentCommandResult> bindAttachments(
     BindContentCommentAttachmentsCommand command,
   ) async {
     _throwIfConfigured();
     final current = _required(command.commentId);
-    final updated = current.copyWith(
+    final updated = _copyComment(
+      current,
       version: current.version + 1,
       attachmentMediaIds: command.attachmentMediaIds,
       attachments: command.attachmentMediaIds
@@ -223,7 +227,7 @@ class TestContentCommentFacet implements ContentCommentFacet {
           .toList(growable: false),
     );
     _replace(updated);
-    return ContentCommentCommandResult(
+    return CommentCommandResult(
       id: updated.id,
       version: updated.version,
       status: updated.status,
@@ -242,17 +246,18 @@ class TestContentCommentFacet implements ContentCommentFacet {
     if (current == null) throw StateError('comment not found');
     var likeCount = current.likeCount;
     var dislikeCount = current.dislikeCount;
-    if (current.viewerReaction == ContentCommentReactionValue.like) {
+    if (current.viewerReaction == CommentReactionType.like) {
       likeCount--;
-    } else if (current.viewerReaction == ContentCommentReactionValue.dislike) {
+    } else if (current.viewerReaction == CommentReactionType.dislike) {
       dislikeCount--;
     }
-    if (command.reaction == ContentCommentReactionValue.like) {
+    if (command.reaction == CommentReactionType.like) {
       likeCount++;
-    } else if (command.reaction == ContentCommentReactionValue.dislike) {
+    } else if (command.reaction == CommentReactionType.dislike) {
       dislikeCount++;
     }
-    final updated = current.copyWith(
+    final updated = _copyComment(
+      current,
       likeCount: likeCount.clamp(0, 1 << 31).toInt(),
       dislikeCount: dislikeCount.clamp(0, 1 << 31).toInt(),
       viewerReaction: command.reaction,
@@ -269,7 +274,7 @@ class TestContentCommentFacet implements ContentCommentFacet {
     );
   }
 
-  Future<ContentCommentCommandResult> _changePin(
+  Future<CommentCommandResult> _changePin(
     ChangeContentCommentPinCommand command,
     bool pinned,
   ) async {
@@ -277,13 +282,14 @@ class TestContentCommentFacet implements ContentCommentFacet {
     pinCalls++;
     lastPinCommand = command;
     final current = _required(command.commentId);
-    final updated = current.copyWith(
+    final updated = _copyComment(
+      current,
       version: current.version + 1,
       isPinned: pinned,
       pinnedAt: () => pinned ? DateTime.now().toUtc() : null,
     );
     _replace(updated);
-    return ContentCommentCommandResult(
+    return CommentCommandResult(
       id: updated.id,
       version: updated.version,
       status: updated.status,
@@ -292,16 +298,12 @@ class TestContentCommentFacet implements ContentCommentFacet {
   }
 
   CommentPageSlice _page(
-    List<ContentCommentListItem> values, {
+    List<CommentListItem> values, {
     required String? cursor,
     required int limit,
-    required int Function(
-      ContentCommentListItem left,
-      ContentCommentListItem right,
-    )
-    compare,
+    required int Function(CommentListItem left, CommentListItem right) compare,
   }) {
-    final ordered = List<ContentCommentListItem>.of(values)..sort(compare);
+    final ordered = List<CommentListItem>.of(values)..sort(compare);
     final offset = int.tryParse(cursor ?? '') ?? 0;
     final start = offset.clamp(0, ordered.length).toInt();
     final end = (start + limit).clamp(0, ordered.length).toInt();
@@ -313,9 +315,9 @@ class TestContentCommentFacet implements ContentCommentFacet {
   }
 
   static int _compareRootComments(
-    ContentCommentListItem left,
-    ContentCommentListItem right,
-    ContentCommentSort sort,
+    CommentListItem left,
+    CommentListItem right,
+    CommentSort sort,
   ) {
     if (left.isPinned != right.isPinned) return left.isPinned ? -1 : 1;
     if (left.isPinned) {
@@ -325,7 +327,7 @@ class TestContentCommentFacet implements ContentCommentFacet {
       );
       if (pinnedOrder != 0) return pinnedOrder;
     }
-    if (sort == ContentCommentSort.hot) {
+    if (sort == CommentSort.hot) {
       final leftScore =
           left.likeCount - left.dislikeCount + 2 * left.replyCount;
       final rightScore =
@@ -336,19 +338,13 @@ class TestContentCommentFacet implements ContentCommentFacet {
     return _compareLatest(left, right);
   }
 
-  static int _compareLatest(
-    ContentCommentListItem left,
-    ContentCommentListItem right,
-  ) {
+  static int _compareLatest(CommentListItem left, CommentListItem right) {
     final createdOrder = right.createdAt.compareTo(left.createdAt);
     if (createdOrder != 0) return createdOrder;
     return right.id.compareTo(left.id);
   }
 
-  static int _compareReplies(
-    ContentCommentListItem left,
-    ContentCommentListItem right,
-  ) {
+  static int _compareReplies(CommentListItem left, CommentListItem right) {
     final createdOrder = left.createdAt.compareTo(right.createdAt);
     if (createdOrder != 0) return createdOrder;
     return left.id.compareTo(right.id);
@@ -361,7 +357,7 @@ class TestContentCommentFacet implements ContentCommentFacet {
     return right.compareTo(left);
   }
 
-  ContentCommentListItem? _find(String id) {
+  CommentListItem? _find(String id) {
     for (final item in items) {
       if (item.id == id) return item;
       for (final reply in item.replyPreview) {
@@ -371,17 +367,18 @@ class TestContentCommentFacet implements ContentCommentFacet {
     return null;
   }
 
-  ContentCommentListItem _required(String id) {
+  CommentListItem _required(String id) {
     final current = _find(id);
     if (current == null) throw StateError('comment not found');
     return current;
   }
 
-  void _replace(ContentCommentListItem updated) {
+  void _replace(CommentListItem updated) {
     items = items
         .map((item) {
           if (item.id == updated.id) return updated;
-          return item.copyWith(
+          return _copyComment(
+            item,
             replyPreview: item.replyPreview
                 .map((reply) => reply.id == updated.id ? updated : reply)
                 .toList(growable: false),
@@ -396,7 +393,7 @@ class TestContentCommentFacet implements ContentCommentFacet {
   }
 }
 
-ContentCommentListItem testCommentItem({
+CommentListItem testCommentItem({
   required String id,
   String postId = 'post_1',
   String authorId = 'test_persona',
@@ -409,21 +406,20 @@ ContentCommentListItem testCommentItem({
   String? replyToUserId,
   String? parentCommentId,
   List<String> attachmentMediaIds = const <String>[],
-  List<CommentAttachmentSlice> attachments =
-      const <CommentAttachmentSlice>[],
-  List<ContentCommentMention> mentions = const <ContentCommentMention>[],
-  ContentCommentStatus status = ContentCommentStatus.active,
+  List<CommentAttachmentSlice> attachments = const <CommentAttachmentSlice>[],
+  List<CommentMention> mentions = const <CommentMention>[],
+  CommentStatus status = CommentStatus.active,
   bool isPinned = false,
   DateTime? pinnedAt,
   DateTime? createdAt,
   DateTime? updatedAt,
   DateTime? deletedAt,
   int replyCount = 0,
-  List<ContentCommentListItem> replyPreview = const <ContentCommentListItem>[],
+  List<CommentListItem> replyPreview = const <CommentListItem>[],
   String? replyNextCursor,
   int likeCount = 0,
   int dislikeCount = 0,
-  ContentCommentReactionValue viewerReaction = ContentCommentReactionValue.none,
+  CommentReactionType viewerReaction = CommentReactionType.none,
   bool isAuthor = false,
   bool canDelete = false,
   bool canReply = true,
@@ -431,17 +427,16 @@ ContentCommentListItem testCommentItem({
   bool canPin = false,
   String? authorIpLocation,
   bool authorLiked = false,
-  ContentCommentViewerRelation viewerRelation =
-      ContentCommentViewerRelation.none,
+  CommentViewerRelation viewerRelation = CommentViewerRelation.none,
 }) {
   final timestamp = createdAt ?? DateTime.utc(2026, 7, 14, 8);
-  return ContentCommentListItem(
+  return CommentListItem(
     id: id,
     version: version,
     postId: postId,
     authorId: authorId,
     authorDisplayNameSnapshot: authorDisplayNameSnapshot,
-    authorAvatarUrlSnapshot: authorAvatarUrlSnapshot,
+    authorAvatarUrlSnapshot: _optionalUri(authorAvatarUrlSnapshot),
     personaContextVersion: personaContextVersion,
     content: content,
     replyToCommentId: replyToCommentId,
@@ -474,4 +469,64 @@ ContentCommentListItem testCommentItem({
     authorLiked: authorLiked,
     viewerRelation: viewerRelation,
   );
+}
+
+CommentListItem _copyComment(
+  CommentListItem current, {
+  int? version,
+  CommentStatus? status,
+  DateTime? Function()? deletedAt,
+  List<String>? attachmentMediaIds,
+  List<CommentAttachmentSlice>? attachments,
+  bool? isPinned,
+  DateTime? Function()? pinnedAt,
+  int? likeCount,
+  int? dislikeCount,
+  CommentReactionType? viewerReaction,
+  List<CommentListItem>? replyPreview,
+}) {
+  return CommentListItem(
+    id: current.id,
+    version: version ?? current.version,
+    postId: current.postId,
+    authorId: current.authorId,
+    authorDisplayNameSnapshot: current.authorDisplayNameSnapshot,
+    authorAvatarUrlSnapshot: current.authorAvatarUrlSnapshot,
+    personaContextVersion: current.personaContextVersion,
+    content: current.content,
+    replyToCommentId: current.replyToCommentId,
+    replyToUserId: current.replyToUserId,
+    parentCommentId: current.parentCommentId,
+    attachmentMediaIds: attachmentMediaIds ?? current.attachmentMediaIds,
+    attachments: attachments ?? current.attachments,
+    mentions: current.mentions,
+    assistantMentioned: current.assistantMentioned,
+    assistantReplySource: current.assistantReplySource,
+    assistantCorrectionStatus: current.assistantCorrectionStatus,
+    authorIpLocation: current.authorIpLocation,
+    status: status ?? current.status,
+    isPinned: isPinned ?? current.isPinned,
+    pinnedAt: pinnedAt == null ? current.pinnedAt : pinnedAt(),
+    createdAt: current.createdAt,
+    updatedAt: current.updatedAt,
+    deletedAt: deletedAt == null ? current.deletedAt : deletedAt(),
+    replyCount: current.replyCount,
+    replyPreview: replyPreview ?? current.replyPreview,
+    replyNextCursor: current.replyNextCursor,
+    likeCount: likeCount ?? current.likeCount,
+    dislikeCount: dislikeCount ?? current.dislikeCount,
+    viewerReaction: viewerReaction ?? current.viewerReaction,
+    authorLiked: current.authorLiked,
+    viewerRelation: current.viewerRelation,
+    isAuthor: current.isAuthor,
+    canDelete: current.canDelete,
+    canReply: current.canReply,
+    canReport: current.canReport,
+    canPin: current.canPin,
+  );
+}
+
+Uri? _optionalUri(String? raw) {
+  final value = raw?.trim() ?? '';
+  return value.isEmpty ? null : Uri.parse(value);
 }

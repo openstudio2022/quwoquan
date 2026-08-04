@@ -186,7 +186,7 @@ def verify_posts(
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         if str(manifest.get("contentType") or manifest.get("carrier") or "") != "video":
             continue
-        from content.post.video.package import validate_video_work_package
+        from content.post.video.validation import validate_video_work_package
 
         issues.extend(
             f"{post_dir}: {issue}" for issue in validate_video_work_package(post_dir)

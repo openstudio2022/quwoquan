@@ -4,11 +4,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
+import 'package:quwoquan_app/application/entity/homepage_view_data.dart';
 import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
 import '../../../../support/cloud_services/homepage_alpha_test_adapter.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_status_report_page.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show HomepageStatusReportView;
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 import '../../../../support/recording_app_telemetry_recorder.dart';
@@ -228,7 +230,7 @@ class _StatusRepository extends MockHomepageRepository {
   HomepageStatusReportDraft? lastDraft;
 
   @override
-  Future<HomepageStatusReportRecord> createHomepageStatusReport({
+  Future<HomepageStatusReportView> createHomepageStatusReport({
     required String homepageId,
     required HomepageStatusReportDraft draft,
   }) async {

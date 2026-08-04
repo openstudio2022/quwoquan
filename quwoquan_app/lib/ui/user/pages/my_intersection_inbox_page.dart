@@ -282,11 +282,15 @@ class _MyIntersectionInboxPageState
       return <Widget>[
         AppPageErrorState(
           semantic: _resolvePageErrorSemantic(state.rawError!),
-          onAction: (action) async {
+          onRecovery: (action) async {
             if (action.type == UiErrorActionType.retry ||
                 action.type == UiErrorActionType.resubmit) {
               await _load();
+              return ref.read(myIntersectionListProvider).rawError == null
+                  ? UiRecoveryOutcome.recovered
+                  : UiRecoveryOutcome.stillBlocked;
             }
+            return UiRecoveryOutcome.cancelled;
           },
         ),
       ];

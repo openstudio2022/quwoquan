@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 9816b2b7d9fedea34ad78dd719fc16fdf3e982073304d7f50f7a8ea4064f6b7f
+// ContractGraph SHA256: 93359367b8614f01bb5e1c51e37af383332b01f117cc1c6cf39e4fdf838e49d2
 
 part of '../../../assistant/assistant_operation_contracts.g.dart';
 
@@ -910,6 +910,7 @@ final class AssistantSurfaceCapabilities {
   AssistantSurfaceCapabilities({
     required String surfaceId,
     required List<String> supportedNodeKinds,
+    required List<String> supportedActionIntents,
     required String viewportClass,
     required String platform,
     required String theme,
@@ -918,6 +919,7 @@ final class AssistantSurfaceCapabilities {
     required bool offline,
   }) : surfaceId = surfaceId,
        supportedNodeKinds = List.unmodifiable(supportedNodeKinds),
+       supportedActionIntents = List.unmodifiable(supportedActionIntents),
        viewportClass = viewportClass,
        platform = platform,
        theme = theme,
@@ -928,6 +930,7 @@ final class AssistantSurfaceCapabilities {
 
   final String surfaceId;
   final List<String> supportedNodeKinds;
+  final List<String> supportedActionIntents;
   final String viewportClass;
   final String platform;
   final String theme;
@@ -936,10 +939,11 @@ final class AssistantSurfaceCapabilities {
   final bool offline;
 
   factory AssistantSurfaceCapabilities.fromWire(Map<String, Object?> map, [String path = "AssistantSurfaceCapabilities"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"surfaceId", "supportedNodeKinds", "viewportClass", "platform", "theme", "textScale", "reducedMotion", "offline"}, path);
+    _generatedRequestRejectUnknownFields(map, const <String>{"surfaceId", "supportedNodeKinds", "supportedActionIntents", "viewportClass", "platform", "theme", "textScale", "reducedMotion", "offline"}, path);
     return AssistantSurfaceCapabilities(
       surfaceId: _generatedRequestString(map["surfaceId"], '$path.surfaceId'),
       supportedNodeKinds: List<String>.unmodifiable(_generatedRequestList(map["supportedNodeKinds"], '$path.supportedNodeKinds').asMap().entries.map((entry) => _generatedRequestString(entry.value, '$path.supportedNodeKinds' + '[${entry.key}]'))),
+      supportedActionIntents: List<String>.unmodifiable(_generatedRequestList(map["supportedActionIntents"], '$path.supportedActionIntents').asMap().entries.map((entry) => _generatedRequestString(entry.value, '$path.supportedActionIntents' + '[${entry.key}]'))),
       viewportClass: _generatedRequestString(map["viewportClass"], '$path.viewportClass'),
       platform: _generatedRequestString(map["platform"], '$path.platform'),
       theme: _generatedRequestString(map["theme"], '$path.theme'),
@@ -952,6 +956,7 @@ final class AssistantSurfaceCapabilities {
   Map<String, Object?> toWire() => <String, Object?>{
     "surfaceId": this.surfaceId,
     "supportedNodeKinds": this.supportedNodeKinds.map((value) => value).toList(growable: false),
+    "supportedActionIntents": this.supportedActionIntents.map((value) => value).toList(growable: false),
     "viewportClass": this.viewportClass,
     "platform": this.platform,
     "theme": this.theme,
@@ -1028,6 +1033,42 @@ final class AssistantUserActionGroundingView {
   };
 }
 
+final class ConfirmSkillDataControlRequestCommand {
+  ConfirmSkillDataControlRequestCommand({
+    required String requestId,
+    required int expectedRevision,
+    required bool confirmed,
+  }) : requestId = requestId,
+       expectedRevision = expectedRevision,
+       confirmed = confirmed {
+    if (this.requestId.isEmpty) {
+      throw ArgumentError.value(this.requestId, "requestId", 'must not be blank');
+    }
+    if (this.expectedRevision <= 0) {
+      throw ArgumentError.value(this.expectedRevision, "expectedRevision", "must be positive");
+    }
+  }
+
+  final String requestId;
+  final int expectedRevision;
+  final bool confirmed;
+
+  factory ConfirmSkillDataControlRequestCommand.fromWire(Map<String, Object?> map, [String path = "ConfirmSkillDataControlRequestCommand"]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{"requestId", "expectedRevision", "confirmed"}, path);
+    return ConfirmSkillDataControlRequestCommand(
+      requestId: _generatedRequestString(map["requestId"], '$path.requestId'),
+      expectedRevision: _generatedRequestInt(map["expectedRevision"], '$path.expectedRevision'),
+      confirmed: _generatedRequestBool(map["confirmed"], '$path.confirmed'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "requestId": this.requestId,
+    "expectedRevision": this.expectedRevision,
+    "confirmed": this.confirmed,
+  };
+}
+
 final class CreateAssistantSkillSubscriptionCommand {
   CreateAssistantSkillSubscriptionCommand({
     required String skillId,
@@ -1063,14 +1104,55 @@ final class CreateAssistantSkillSubscriptionCommand {
   final SkillSubscriptionDestinationWire destination;
   final String clientRequestId;
 
+  factory CreateAssistantSkillSubscriptionCommand.fromWire(Map<String, Object?> map, [String path = "CreateAssistantSkillSubscriptionCommand"]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{"skillId", "domainId", "tagRefs", "searchQueryPlan", "trigger", "destination", "clientRequestId"}, path);
+    return CreateAssistantSkillSubscriptionCommand(
+      skillId: _generatedRequestString(map["skillId"], '$path.skillId'),
+      domainId: _generatedRequestString(map["domainId"], '$path.domainId'),
+      tagRefs: map.containsKey("tagRefs") ? List<String>.unmodifiable(_generatedRequestList(map["tagRefs"], '$path.tagRefs').asMap().entries.map((entry) => _generatedRequestString(entry.value, '$path.tagRefs' + '[${entry.key}]'))) : const <String>[],
+      searchQueryPlan: SkillSubscriptionSearchQueryPlanWire.fromWire(_generatedRequestObject(map["searchQueryPlan"], '$path.searchQueryPlan'), '$path.searchQueryPlan'),
+      trigger: SkillSubscriptionTriggerWire.fromWire(_generatedRequestObject(map["trigger"], '$path.trigger'), '$path.trigger'),
+      destination: SkillSubscriptionDestinationWire.fromWire(_generatedRequestObject(map["destination"], '$path.destination'), '$path.destination'),
+      clientRequestId: _generatedRequestString(map["clientRequestId"], '$path.clientRequestId'),
+    );
+  }
+
   Map<String, Object?> toWire() => <String, Object?>{
     "skillId": this.skillId,
     "domainId": this.domainId,
     "tagRefs": this.tagRefs.map((value) => value).toList(growable: false),
-    "searchQueryPlan": this.searchQueryPlan.toJson(),
-    "trigger": this.trigger.toJson(),
-    "destination": this.destination.toJson(),
+    "searchQueryPlan": this.searchQueryPlan.toWire(),
+    "trigger": this.trigger.toWire(),
+    "destination": this.destination.toWire(),
     "clientRequestId": this.clientRequestId,
+  };
+}
+
+final class CreateSkillDataControlRequestCommand {
+  CreateSkillDataControlRequestCommand({
+    required String skillId,
+    required List<SkillDataControlAction> requestedActions,
+  }) : skillId = skillId,
+       requestedActions = List.unmodifiable(requestedActions) {
+    if (this.skillId.isEmpty) {
+      throw ArgumentError.value(this.skillId, "skillId", 'must not be blank');
+    }
+  }
+
+  final String skillId;
+  final List<SkillDataControlAction> requestedActions;
+
+  factory CreateSkillDataControlRequestCommand.fromWire(Map<String, Object?> map, [String path = "CreateSkillDataControlRequestCommand"]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{"skillId", "requestedActions"}, path);
+    return CreateSkillDataControlRequestCommand(
+      skillId: _generatedRequestString(map["skillId"], '$path.skillId'),
+      requestedActions: List<SkillDataControlAction>.unmodifiable(_generatedRequestList(map["requestedActions"], '$path.requestedActions').asMap().entries.map((entry) => switch (entry.value) { "hide_activity_history" => SkillDataControlAction.hideActivityHistory, "revoke_consent" => SkillDataControlAction.revokeConsent, "archive_subscriptions" => SkillDataControlAction.archiveSubscriptions, _ => throw FormatException('$path.requestedActions' + '[${entry.key}]' + ' has an invalid enum value'), })),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "skillId": this.skillId,
+    "requestedActions": this.requestedActions.map((value) => value.wireName).toList(growable: false),
   };
 }
 
@@ -1090,6 +1172,29 @@ final class GetSkillCatalogItemQuery {
 
   Map<String, Object?> toWire() => <String, Object?>{
     "skillId": this.skillId,
+  };
+}
+
+final class GetSkillDataControlRequestQuery {
+  GetSkillDataControlRequestQuery({
+    required String requestId,
+  }) : requestId = requestId {
+    if (this.requestId.isEmpty) {
+      throw ArgumentError.value(this.requestId, "requestId", 'must not be blank');
+    }
+  }
+
+  final String requestId;
+
+  factory GetSkillDataControlRequestQuery.fromWire(Map<String, Object?> map, [String path = "GetSkillDataControlRequestQuery"]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{"requestId"}, path);
+    return GetSkillDataControlRequestQuery(
+      requestId: _generatedRequestString(map["requestId"], '$path.requestId'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "requestId": this.requestId,
   };
 }
 
@@ -1194,6 +1299,45 @@ final class ListAssistantTasksQuery {
   Map<String, Object?> toWire() => <String, Object?>{
     if (this.limit != null) "limit": this.limit!,
     if (this.status != null) "status": this.status!,
+  };
+}
+
+final class ListSkillActivitiesQuery {
+  ListSkillActivitiesQuery({
+    required String skillId,
+    String? cursor,
+    int? limit,
+  }) : skillId = skillId,
+       cursor = cursor,
+       limit = limit {
+    if (this.skillId.isEmpty) {
+      throw ArgumentError.value(this.skillId, "skillId", 'must not be blank');
+    }
+    if (this.limit != null && this.limit! <= 0) {
+      throw ArgumentError.value(this.limit, "limit", "must be positive");
+    }
+    if (this.limit != null && this.limit! > 100) {
+      throw ArgumentError.value(this.limit, "limit", "must not exceed 100");
+    }
+  }
+
+  final String skillId;
+  final String? cursor;
+  final int? limit;
+
+  factory ListSkillActivitiesQuery.fromWire(Map<String, Object?> map, [String path = "ListSkillActivitiesQuery"]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{"skillId", "cursor", "limit"}, path);
+    return ListSkillActivitiesQuery(
+      skillId: _generatedRequestString(map["skillId"], '$path.skillId'),
+      cursor: map["cursor"] == null ? null : _generatedRequestString(map["cursor"], '$path.cursor'),
+      limit: map["limit"] == null ? null : _generatedRequestInt(map["limit"], '$path.limit'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "skillId": this.skillId,
+    if (this.cursor != null) "cursor": this.cursor!,
+    if (this.limit != null) "limit": this.limit!,
   };
 }
 
@@ -1490,99 +1634,6 @@ final class SetAssistantPreferenceRequest {
   };
 }
 
-final class SkillSubscriptionDestination {
-  const SkillSubscriptionDestination({
-    required SkillSubscriptionDestinationType destinationType,
-    required String destinationId,
-    int? maxPerDay,
-    int? cooldownMinutes,
-    String? quietHoursPolicy,
-  }) : destinationType = destinationType,
-       destinationId = destinationId,
-       maxPerDay = maxPerDay,
-       cooldownMinutes = cooldownMinutes,
-       quietHoursPolicy = quietHoursPolicy;
-
-  final SkillSubscriptionDestinationType destinationType;
-  final String destinationId;
-  final int? maxPerDay;
-  final int? cooldownMinutes;
-  final String? quietHoursPolicy;
-
-  factory SkillSubscriptionDestination.fromWire(Map<String, Object?> map, [String path = "SkillSubscriptionDestination"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"destinationType", "destinationId", "maxPerDay", "cooldownMinutes", "quietHoursPolicy"}, path);
-    return SkillSubscriptionDestination(
-      destinationType: switch (map["destinationType"]) { "user" => SkillSubscriptionDestinationType.user, "chat_conversation" => SkillSubscriptionDestinationType.chatConversation, _ => throw FormatException('$path.destinationType' + ' has an invalid enum value'), },
-      destinationId: _generatedRequestString(map["destinationId"], '$path.destinationId'),
-      maxPerDay: map["maxPerDay"] == null ? null : _generatedRequestInt(map["maxPerDay"], '$path.maxPerDay'),
-      cooldownMinutes: map["cooldownMinutes"] == null ? null : _generatedRequestInt(map["cooldownMinutes"], '$path.cooldownMinutes'),
-      quietHoursPolicy: map["quietHoursPolicy"] == null ? null : _generatedRequestString(map["quietHoursPolicy"], '$path.quietHoursPolicy'),
-    );
-  }
-
-  Map<String, Object?> toWire() => <String, Object?>{
-    "destinationType": this.destinationType.wireName,
-    "destinationId": this.destinationId,
-    if (this.maxPerDay != null) "maxPerDay": this.maxPerDay!,
-    if (this.cooldownMinutes != null) "cooldownMinutes": this.cooldownMinutes!,
-    if (this.quietHoursPolicy != null) "quietHoursPolicy": this.quietHoursPolicy!,
-  };
-}
-
-final class SkillSubscriptionSearchQueryPlan {
-  SkillSubscriptionSearchQueryPlan({
-    required String rawText,
-    required List<String> queries,
-  }) : rawText = rawText,
-       queries = List.unmodifiable(queries) {
-  }
-
-  final String rawText;
-  final List<String> queries;
-
-  factory SkillSubscriptionSearchQueryPlan.fromWire(Map<String, Object?> map, [String path = "SkillSubscriptionSearchQueryPlan"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"rawText", "queries"}, path);
-    return SkillSubscriptionSearchQueryPlan(
-      rawText: _generatedRequestString(map["rawText"], '$path.rawText'),
-      queries: List<String>.unmodifiable(_generatedRequestList(map["queries"], '$path.queries').asMap().entries.map((entry) => _generatedRequestString(entry.value, '$path.queries' + '[${entry.key}]'))),
-    );
-  }
-
-  Map<String, Object?> toWire() => <String, Object?>{
-    "rawText": this.rawText,
-    "queries": this.queries.map((value) => value).toList(growable: false),
-  };
-}
-
-final class SkillSubscriptionTrigger {
-  const SkillSubscriptionTrigger({
-    required String type,
-    required String cron,
-    required String timezone,
-  }) : type = type,
-       cron = cron,
-       timezone = timezone;
-
-  final String type;
-  final String cron;
-  final String timezone;
-
-  factory SkillSubscriptionTrigger.fromWire(Map<String, Object?> map, [String path = "SkillSubscriptionTrigger"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"type", "cron", "timezone"}, path);
-    return SkillSubscriptionTrigger(
-      type: _generatedRequestString(map["type"], '$path.type'),
-      cron: _generatedRequestString(map["cron"], '$path.cron'),
-      timezone: _generatedRequestString(map["timezone"], '$path.timezone'),
-    );
-  }
-
-  Map<String, Object?> toWire() => <String, Object?>{
-    "type": this.type,
-    "cron": this.cron,
-    "timezone": this.timezone,
-  };
-}
-
 final class UpdateAssistantSkillSubscriptionStatusCommand {
   UpdateAssistantSkillSubscriptionStatusCommand({
     required String subscriptionId,
@@ -1839,6 +1890,18 @@ CloudOperationRequestPayload encodeAssistantPageContextReportPageContextGenerate
   );
 }
 
+CloudOperationRequestPayload encodeAssistantSkillActivityViewListSkillActivitiesGeneratedRequest(ListSkillActivitiesQuery request) {
+  return CloudOperationRequestPayload(
+    pathParameters: <String, String>{
+      "skillId": request.skillId,
+    },
+    queryParameters: <String, String>{
+      if (request.cursor != null) "cursor": request.cursor!,
+      if (request.limit != null) "limit": (request.limit!).toString(),
+    },
+  );
+}
+
 CloudOperationRequestPayload encodeAssistantSkillCatalogGetSkillCatalogItemGeneratedRequest(GetSkillCatalogItemQuery request) {
   return CloudOperationRequestPayload(
     pathParameters: <String, String>{
@@ -1879,15 +1942,46 @@ CloudOperationRequestPayload encodeAssistantSkillConsentRevokeSkillConsentGenera
   );
 }
 
+CloudOperationRequestPayload encodeAssistantSkillDataControlRequestConfirmSkillDataControlRequestGeneratedRequest(ConfirmSkillDataControlRequestCommand request) {
+  return CloudOperationRequestPayload(
+    pathParameters: <String, String>{
+      "requestId": request.requestId,
+    },
+    body: <String, Object?>{
+      "expectedRevision": request.expectedRevision,
+      "confirmed": request.confirmed,
+    },
+  );
+}
+
+CloudOperationRequestPayload encodeAssistantSkillDataControlRequestCreateSkillDataControlRequestGeneratedRequest(CreateSkillDataControlRequestCommand request) {
+  return CloudOperationRequestPayload(
+    pathParameters: <String, String>{
+      "skillId": request.skillId,
+    },
+    body: <String, Object?>{
+      "requestedActions": request.requestedActions.map((value) => value.wireName).toList(growable: false),
+    },
+  );
+}
+
+CloudOperationRequestPayload encodeAssistantSkillDataControlRequestGetSkillDataControlRequestGeneratedRequest(GetSkillDataControlRequestQuery request) {
+  return CloudOperationRequestPayload(
+    pathParameters: <String, String>{
+      "requestId": request.requestId,
+    },
+  );
+}
+
 CloudOperationRequestPayload encodeAssistantSkillSubscriptionCreateSkillSubscriptionGeneratedRequest(CreateAssistantSkillSubscriptionCommand request) {
   return CloudOperationRequestPayload(
     body: <String, Object?>{
       "skillId": request.skillId,
       "domainId": request.domainId,
       "tagRefs": request.tagRefs.map((value) => value).toList(growable: false),
-      "searchQueryPlan": request.searchQueryPlan.toJson(),
-      "trigger": request.trigger.toJson(),
-      "destination": request.destination.toJson(),
+      "searchQueryPlan": request.searchQueryPlan.toWire(),
+      "trigger": request.trigger.toWire(),
+      "destination": request.destination.toWire(),
       "clientRequestId": request.clientRequestId,
     },
   );

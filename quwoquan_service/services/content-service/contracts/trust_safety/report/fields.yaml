@@ -162,6 +162,13 @@ state_machine:
         - resolved
         - dismissed
 types:
+  ReportCommandResult:
+    description: Report 命令提交后的版本化结果；replayed 明确当前响应是否来自同一幂等命令的持久回执。
+    fields:
+      - {name: id, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: version, type: int, constraints: [NOT_NULL, MIN_1], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: status, type: enum, enum_ref: ReportStatus, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: replayed, type: bool, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
   MyReportItemSlice:
     description: Reporter-visible lifecycle projection for one Report.
     fields:

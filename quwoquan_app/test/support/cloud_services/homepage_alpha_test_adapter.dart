@@ -1,9 +1,8 @@
-import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_homepage/homepage_introduction.g.dart';
 import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
-    show CloudOperationCancellationSignal;
+    show CloudOperationCancellationSignal, HomepageIntroduction;
 
-import 'repository_mock_reexports.dart';
+import 'object_doubles/entity/alpha_homepage_facets.dart';
 
 /// local_contract 与 widget 测试使用的 App DTO 投影壳。
 ///

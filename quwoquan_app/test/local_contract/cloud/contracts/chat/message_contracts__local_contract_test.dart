@@ -67,7 +67,7 @@ void main() {
           content: '查看分享',
           clientMsgId: 'client-card-1',
           card: MessageCard(
-            kind: 'content_post',
+            kind: MessageCardKind.contentPost,
             title: '城市漫步',
             objectRef: MessageCardObjectRef(
               objectTypeRef: 'post',
@@ -100,16 +100,22 @@ void main() {
           type: 'text',
           content: 'removed',
           clientMsgId: 'client-card-removed',
-          card: MessageCard(kind: 'content_post', title: 'removed'),
+          card: const MessageCard(
+            kind: MessageCardKind.contentPost,
+            title: 'removed',
+            attributes: <MessageCardAttribute>[],
+          ),
         ),
         throwsArgumentError,
       );
       expect(
-        () => MessageCard(
-          kind: 'content_post',
-          title: 'missing object ref',
-        ),
-        throwsArgumentError,
+        () => MessageCard.fromWire(<String, Object?>{
+          'kind': 'content_post',
+          'title': 'legacy alias',
+          'postId': 'post_001',
+          'attributes': <Object?>[],
+        }),
+        throwsFormatException,
       );
     });
 
@@ -150,7 +156,7 @@ void main() {
           limit: 20,
         ),
       );
-      final page = decodeChatMessagePageSlice(<String, Object?>{
+      final page = decodeMessagePageSlice(<String, Object?>{
         'items': <Object?>[
           <String, Object?>{
             'id': 'message-41',
@@ -180,7 +186,7 @@ void main() {
       expect(page.items.single.content, '你好');
       expect(page.nextBeforeSeq, 41);
       expect(
-        () => decodeChatMessagePageSlice(<String, Object?>{
+        () => decodeMessagePageSlice(<String, Object?>{
           'items': <Object?>[],
           'cursor': 'retired',
         }),

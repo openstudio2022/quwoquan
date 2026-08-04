@@ -11,7 +11,9 @@ from redis.exceptions import ResponseError
 
 from internal.recommendation.recommendation_feedback_fact.application.appender import (
     Appender,
-    FeedbackFact,
+)
+from internal.recommendation.recommendation_feedback_fact.domain.fact import (
+    RecommendationFeedbackFact,
 )
 
 
@@ -203,7 +205,7 @@ class ContentBehaviorConsumer:
             action = str(event.payload.get("action") or "").strip()
             value = event.payload.get("duration") if action in {"dwell", "play"} else 1.0
             feedback, _created = self._appender.append(
-                FeedbackFact(
+                RecommendationFeedbackFact(
                     feedback_id=feedback_id,
                     source_event_id=event.event_id,
                     exposure_id=exposure.exposure_id,

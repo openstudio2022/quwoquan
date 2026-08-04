@@ -53,7 +53,7 @@ func TestConversationUserStateHTTPUsesTrustedPersonaAndStrictWire(t *testing.T) 
 	invalid := httptest.NewRequest(
 		http.MethodPatch,
 		"/chat/conversations/conversation-1/settings",
-		strings.NewReader(`{"muted":true,"legacyMuted":true}`),
+		strings.NewReader(`{"muted":true,"retiredMuted":true}`),
 	)
 	invalidResponse := httptest.NewRecorder()
 	routes.ServeHTTP(invalidResponse, invalid)

@@ -436,6 +436,24 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "int"
     },
     {
+      "default": "http://integration-service:18086",
+      "key": "sys.assistant-service.integration_service.base_url",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": 1200,
+      "key": "sys.assistant-service.integration_service.timeout_ms",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
       "default": false,
       "key": "sys.assistant-service.model.native_tool_calling",
       "reload": "restart",
@@ -1509,33 +1527,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "int"
     },
     {
-      "default": 134217728,
-      "key": "sys.content-service.feed.ranked_window_maximum_live_bytes_per_shard",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "int"
-    },
-    {
-      "default": 128,
-      "key": "sys.content-service.feed.ranked_window_maximum_live_records_per_shard",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "int"
-    },
-    {
-      "default": 256,
-      "key": "sys.content-service.feed.ranked_window_quota_shard_count",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "int"
-    },
-    {
       "default": "2026-07-09",
       "key": "sys.content-service.ip_location.data_version",
       "reload": "restart",
@@ -2492,147 +2483,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "scope": "workload",
       "sensitive": false,
       "type": "int"
-    },
-    {
-      "default": "",
-      "key": "sys.integration-service.integration.external_interaction.push.apns.environment",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "key": "sys.integration-service.integration.external_interaction.push.apns.key_file",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": true,
-      "type": "string"
-    },
-    {
-      "default": "",
-      "key": "sys.integration-service.integration.external_interaction.push.apns.key_id",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "default": "",
-      "key": "sys.integration-service.integration.external_interaction.push.apns.team_id",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "default": "",
-      "key": "sys.integration-service.integration.external_interaction.push.apns.topic",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "default": true,
-      "key": "sys.integration-service.integration.external_interaction.push.enabled",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "bool"
-    },
-    {
-      "default": "",
-      "key": "sys.integration-service.integration.external_interaction.push.fcm.project_id",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "key": "sys.integration-service.integration.external_interaction.push.fcm.service_account_file",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": true,
-      "type": "string"
-    },
-    {
-      "default": "real",
-      "key": "sys.integration-service.integration.external_interaction.push.mode",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "default": 5000,
-      "key": "sys.integration-service.integration.external_interaction.push.timeout_ms",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "int"
-    },
-    {
-      "default": "",
-      "key": "sys.integration-service.integration.external_interaction.push.user_service_base_url",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "default": false,
-      "key": "sys.integration-service.integration.external_interaction.sms.enabled",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "bool"
-    },
-    {
-      "default": "",
-      "key": "sys.integration-service.integration.external_interaction.sms.endpoint",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "default": "aliyun_sms",
-      "key": "sys.integration-service.integration.external_interaction.sms.provider",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "default": 2000,
-      "key": "sys.integration-service.integration.external_interaction.sms.timeout_ms",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "int"
-    },
-    {
-      "key": "sys.integration-service.integration.external_interaction.sms.token",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": true,
-      "type": "string"
     },
     {
       "default": 30.6586,
@@ -3694,6 +3544,33 @@ _PLATFORM_CONFIG_JSON = r'''{
     },
     {
       "key": "sys.realtime-gateway.user_service.account_security.timeout_ms",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": 134217728,
+      "key": "sys.recommendation-service.ranked_window.maximum_live_bytes_per_shard",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": 128,
+      "key": "sys.recommendation-service.ranked_window.maximum_live_records_per_shard",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": 256,
+      "key": "sys.recommendation-service.ranked_window.quota_shard_count",
       "reload": "restart",
       "rollout": "progressive",
       "scope": "workload",

@@ -6,7 +6,7 @@ import (
 	publicwebtool "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/adapters/outbound/tool"
 	publicwebapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/publicweb"
 	publicwebpersistence "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/infrastructure/publicweb"
-	toolpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/tool"
+	toolpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/tool"
 )
 
 func buildPublicWebToolHandlers(

@@ -18,9 +18,9 @@ func TestNewLocationProviderBuildsOnlyTheEnvironmentSelectedAdapter(t *testing.T
 	if err != nil {
 		t.Fatalf("NewLocationProvider() error = %v", err)
 	}
-	if _, ok := resolved.(ProtocolFixtureLocationProvider); !ok {
+	if _, ok := resolved.(*BaiduClient); !ok {
 		t.Fatalf(
-			"gamma provider type = %T, want ProtocolFixtureLocationProvider",
+			"gamma provider type = %T, want external protocol *BaiduClient",
 			resolved,
 		)
 	}
@@ -44,7 +44,8 @@ func TestNewLocationProviderRejectsUnregisteredAdapterAndInsecureEndpoint(t *tes
 		t.Fatal("unregistered adapter must fail closed")
 	}
 
-	// Vendor adapters must reject non-HTTPS endpoints; protocol fixtures do not dial.
+	// Vendor adapters must reject non-HTTPS endpoints; nonprod protocol substitutes
+	// are allowed to use the isolated Compose network.
 	insecure := baseBinding
 	insecure.AdapterID = LocationAdapterBaiduID
 	insecure.Endpoints = map[string]string{"base": "http://map.example.test"}
@@ -69,6 +70,9 @@ func resolvedLocationBindingForTest(
 	endpoints := make(map[string]string, len(spec.EndpointEnvironmentKeys))
 	for role := range spec.EndpointEnvironmentKeys {
 		endpoints[role] = "https://map.example.test"
+	}
+	if spec.AdapterID == LocationAdapterProtocolFixtureID {
+		endpoints["base"] = "https://provider-protocol-substitute:18089/map"
 	}
 	secrets := make(map[string]string, len(spec.SecretEnvironmentKeys))
 	for _, environmentKey := range spec.SecretEnvironmentKeys {

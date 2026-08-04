@@ -66,6 +66,23 @@ class NonprodBusinessDataProvisioningContractTest(unittest.TestCase):
 
             self.assertTrue(any("protocol_fixture" in issue for issue in issues))
 
+    def test_deploy_allows_endpoint_key_for_independent_protocol_workload(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            deploy = root / (
+                "quwoquan_service/services/integration-service/"
+                "environments/gamma/deploy/compose.yaml"
+            )
+            deploy.parent.mkdir(parents=True)
+            deploy.write_text(
+                "INTEGRATION_LOCATION_FIXTURE_BASE_URL: http://provider-workload:8080\n",
+                encoding="utf-8",
+            )
+
+            self.assertEqual(scan_repository(root), [])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -152,17 +152,17 @@
       "qualityStandardRef": "finance_consumer"
     },
     {
-      "id": "skill_eval_travel_transport",
-      "title": "交通出行助手端云评测",
+      "id": "skill_eval_travel_companion_transport",
+      "title": "贴身旅行管家交通协同端云评测",
       "type": "assistant_turn",
-      "skillId": "travel_transport",
-      "domainId": "travel_transport",
+      "skillId": "travel_companion",
+      "domainId": "travel",
       "question": "明早从深圳北到广州塔，帮我规划高铁、地铁和路况缓冲。",
       "seedRefs": [
         "assistant_21_skill_eval"
       ],
       "expectedAnswerFragments": [
-        "交通出行助手",
+        "贴身旅行管家",
         "路线",
         "缓冲"
       ],
@@ -178,13 +178,13 @@
         "app_search"
       ],
       "alphaMockStream": {
-        "finalAnswer": "交通出行助手已生成路线建议：优先确认高铁班次，再衔接地铁到广州塔，并为早高峰路况预留缓冲时间。",
+        "finalAnswer": "贴身旅行管家已生成路线建议：优先确认高铁班次，再衔接地铁到广州塔，并为早高峰路况预留缓冲时间。",
         "toolName": "app_search",
         "toolSummary": "alpha mock 已返回高铁、地铁与路况衔接线索。"
       },
       "remoteExpectations": {
         "answerFragments": [
-          "交通出行助手",
+          "贴身旅行管家",
           "路线",
           "缓冲"
         ],
@@ -213,20 +213,20 @@
           "requiresSeedReset": true
         }
       },
-      "qualityStandardRef": "travel_transport"
+      "qualityStandardRef": "travel_companion"
     },
     {
-      "id": "skill_eval_travel_planning",
-      "title": "出行管家端云评测",
+      "id": "skill_eval_travel_companion_planning",
+      "title": "贴身旅行管家行程协同端云评测",
       "type": "assistant_turn",
-      "skillId": "travel_planning",
-      "domainId": "travel_planning",
+      "skillId": "travel_companion",
+      "domainId": "travel",
       "question": "周末杭州两日游，帮我规划景点、酒店区域和拥堵风险。",
       "seedRefs": [
         "assistant_21_skill_eval"
       ],
       "expectedAnswerFragments": [
-        "出行管家",
+        "贴身旅行管家",
         "景点",
         "拥堵"
       ],
@@ -242,13 +242,13 @@
         "web_search"
       ],
       "alphaMockStream": {
-        "finalAnswer": "出行管家已生成行程建议：杭州两日游可按西湖、灵隐寺和运河区域拆分，并结合酒店位置与景点拥堵调整顺序。",
+        "finalAnswer": "贴身旅行管家已生成行程建议：杭州两日游可按西湖、灵隐寺和运河区域拆分，并结合酒店位置与景点拥堵调整顺序。",
         "toolName": "web_search",
         "toolSummary": "alpha mock 已返回杭州景点、酒店区域与拥堵风险。"
       },
       "remoteExpectations": {
         "answerFragments": [
-          "出行管家",
+          "贴身旅行管家",
           "景点",
           "拥堵"
         ],
@@ -277,7 +277,7 @@
           "requiresSeedReset": true
         }
       },
-      "qualityStandardRef": "travel_planning"
+      "qualityStandardRef": "travel_companion"
     },
     {
       "id": "skill_eval_local_life",
@@ -1458,41 +1458,32 @@
         "标明更新时间"
       ]
     },
-    "travel_transport": {
+    "travel_companion": {
       "minimumTotalScore": 8.4,
       "mustCover": [
+        "天数和节奏",
+        "吃玩住行组合",
+        "同行角色与约束",
         "起终点",
         "时间窗",
         "路线方案",
         "换乘/时长/成本",
-        "缓冲和风险"
+        "天气/拥堵备选",
+        "缓冲和风险",
+        "可确认的计划或变更提案"
       ],
       "mustAvoid": [
         "只给单一路线且无备选",
         "忽略口岸/早晚高峰/末班车",
-        "伪造实时班次"
+        "伪造实时班次",
+        "流水账堆景点",
+        "忽略用户同行人和预算",
+        "把提案伪装为已执行"
       ],
       "authorityPolicy": [
         "官方交通/地图/铁路航班信息优先",
+        "文旅/景区官方与本地攻略交叉验证",
         "本地运营公告补充"
-      ]
-    },
-    "travel_planning": {
-      "minimumTotalScore": 8.4,
-      "mustCover": [
-        "天数和节奏",
-        "景点分组",
-        "住宿区域",
-        "天气/拥堵备选",
-        "行程取舍"
-      ],
-      "mustAvoid": [
-        "流水账堆景点",
-        "忽略用户同行人和预算",
-        "过度承诺开放时间"
-      ],
-      "authorityPolicy": [
-        "文旅/景区官方与本地攻略交叉验证"
       ]
     },
     "local_life": {

@@ -21,12 +21,12 @@ const (
 var nonHandleChars = regexp.MustCompile(`[^a-z0-9._]+`)
 
 type Input struct {
-	Personas        []CurrentPersona `json:"personas"`
-	ReservedHandles []string         `json:"reservedHandles,omitempty"`
-	PublicSamples   []PublicSample   `json:"publicSamples,omitempty"`
+	Personas        []PersonaMigrationSource `json:"personas"`
+	ReservedHandles []string                 `json:"reservedHandles,omitempty"`
+	PublicSamples   []PublicSample           `json:"publicSamples,omitempty"`
 }
 
-type CurrentPersona struct {
+type PersonaMigrationSource struct {
 	UserID            string   `json:"userId"`
 	PersonaID         string   `json:"personaId"`
 	Username          string   `json:"username,omitempty"`
@@ -259,7 +259,7 @@ type contactInfo struct {
 	Email string
 }
 
-func buildPrimaryContacts(personas []CurrentPersona) map[string]contactInfo {
+func buildPrimaryContacts(personas []PersonaMigrationSource) map[string]contactInfo {
 	contacts := make(map[string]contactInfo)
 	for _, persona := range personas {
 		if !persona.IsPrimary {
@@ -273,7 +273,7 @@ func buildPrimaryContacts(personas []CurrentPersona) map[string]contactInfo {
 	return contacts
 }
 
-func requestedHandle(persona CurrentPersona) string {
+func requestedHandle(persona PersonaMigrationSource) string {
 	for _, candidate := range []string{persona.Username, persona.Nickname, persona.PersonaID} {
 		if normalized := normalizeHandle(candidate); normalized != "" {
 			return normalized

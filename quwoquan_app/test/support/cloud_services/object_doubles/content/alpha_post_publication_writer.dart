@@ -4,11 +4,11 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 final class AlphaContentPostPublicationWriter
     implements ContentPostPublicationWriter {
   int _sequence = 0;
-  final Map<String, ContentPostPublicationReceipt> _receiptsByIntent =
-      <String, ContentPostPublicationReceipt>{};
+  final Map<String, PostPublicationReceipt> _receiptsByIntent =
+      <String, PostPublicationReceipt>{};
 
   @override
-  Future<ContentPostPublicationReceipt> submitPostPublication(
+  Future<PostPublicationReceipt> submitPostPublication(
     SubmitContentPostPublicationCommand command,
   ) async {
     final existing = _receiptsByIntent[command.publishIntentId];
@@ -18,7 +18,7 @@ final class AlphaContentPostPublicationWriter
       }
       return existing;
     }
-    final receipt = ContentPostPublicationReceipt(
+    final receipt = PostPublicationReceipt(
       publishIntentId: command.publishIntentId,
       localDraftId: command.localDraftId,
       postId: 'alpha_post_${++_sequence}',

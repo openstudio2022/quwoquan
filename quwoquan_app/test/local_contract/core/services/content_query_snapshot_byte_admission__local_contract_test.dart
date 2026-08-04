@@ -1,7 +1,8 @@
 // spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/streaming-feed-performance/spec.md#gwt-004
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
+import 'package:quwoquan_app/cloud/services/content/content_read_model_projection.dart';
 import 'package:quwoquan_app/core/services/cache/cache_telemetry_sink.dart';
 import 'package:quwoquan_app/core/services/cache/content_cache_services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -52,14 +53,14 @@ void main() {
 
 ContentPostViewData _post(String id, {required String authorId}) {
   return contentPostViewDataFromReadModelMap(<String, dynamic>{
-    'id': id,
-    'type': 'micro',
-    'identity': 'moment',
+    'postId': id,
+    'contentType': 'micro',
+    'contentIdentity': 'moment',
     'authorId': authorId,
-    'displayName': '用户一',
-    'avatarUrl': '',
+    'authorDisplayName': '用户一',
+    'authorAvatarUrl': '',
     'body': '缓存内容',
-    'imageUrls': <String>[],
+    'mediaUrls': <String>[],
     'likeCount': 0,
     'commentCount': 0,
     'shareCount': 0,

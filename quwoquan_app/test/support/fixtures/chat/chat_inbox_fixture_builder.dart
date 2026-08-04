@@ -1,4 +1,4 @@
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
+import 'package:quwoquan_app/cloud/services/chat/chat_view_data.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 const String _defaultConversationAvatarUrl = '';
@@ -12,7 +12,7 @@ const bool _defaultMuted = false;
 const bool _defaultPinned = false;
 const String _defaultCircleId = '';
 
-ChatInboxDto chatInboxFixture({
+ChatInboxViewData chatInboxFixture({
   required String id,
   required String type,
   required String title,
@@ -28,7 +28,7 @@ ChatInboxDto chatInboxFixture({
   bool pinned = _defaultPinned,
   String circleId = _defaultCircleId,
 }) {
-  return ChatInboxDto(
+  return ChatInboxViewData(
     id: id,
     type: type,
     title: title,

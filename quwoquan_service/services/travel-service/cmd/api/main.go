@@ -432,22 +432,30 @@ func run() error {
 		operationsecurity.ForDomain("travel"),
 	)(routes)
 
-	health := rthealth.NewChecker()
-	health.Register("mongodb", func(checkCtx context.Context) error {
+	// Compose / k8s liveness stays shallow: process is up. Deep worker and
+	// authority probes belong on /readyz so a slow first outbox/projector scan
+	// cannot keep the container unhealthy for the full start_period window.
+	readiness := rthealth.NewChecker()
+	readiness.Register("mongodb", func(checkCtx context.Context) error {
 		return mongoClient.Ping(checkCtx, nil)
 	})
-	health.Register("redis", redisRouter.PingAll)
-	health.Register("travel-outbox-relay", func(context.Context) error {
+	readiness.Register("redis", redisRouter.PingAll)
+	readiness.Register("travel-outbox-relay", func(context.Context) error {
 		return outboxRelay.Healthy(15 * time.Second)
 	})
-	health.Register("travel-timeline-map-projector", func(context.Context) error {
+	readiness.Register("travel-timeline-map-projector", func(context.Context) error {
 		return projectionConsumer.Healthy(15 * time.Second)
 	})
-	health.Register("account-security-authority", func(checkCtx context.Context) error {
+	readiness.Register("account-security-authority", func(checkCtx context.Context) error {
 		return accountSecurityAuthority.CheckAccountSecurityAuthority(checkCtx)
 	})
 	root := http.NewServeMux()
-	root.HandleFunc("/healthz", health.Handler())
+	root.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	})
+	root.HandleFunc("/readyz", readiness.Handler())
 	root.Handle("/metrics", rtmetrics.Handler())
 	root.Handle("/", guarded)
 

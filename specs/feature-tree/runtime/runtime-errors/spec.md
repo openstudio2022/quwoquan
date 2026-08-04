@@ -54,6 +54,7 @@
 - 提供统一错误码、错误对象、响应封装与 HTTP/RPC 状态映射。
 - 每个 `errors.yaml` 条目必须以 `emitted_by` 声明真实发射 surface；只有 HTTP surface 强制 `http_status` 和对象内 operation 绑定，worker/consumer/player 等非 HTTP surface 禁止伪造 HTTP 状态。
 - 所有服务必须使用 runtime-errors 输出错误响应，禁止手写错误 JSON。
+- 错误响应只以 `debugMessage` 承载脱敏诊断，不保留 `message`、`user_message`、`reasonMessage` 或嵌套 `error.userMessage` 兼容解码轨。
 - 客户端可见域禁止保留 sentinel-only 错误生成路径；生成产物必须包含 `AppErrorFrom*`、`userMessage`、`.WithRecovery(...)`。
 - 端侧所有云侧错误必须保留 raw `code`、`userMessage` 与 `recovery` 前向兼容，同时对已生成的 `*ErrorCode` 提供统一 typed 消费入口；禁止只生成枚举而中央 mapper 不注册。
 - telemetry 自身失败必须可观测并保留队列，禁止 `catchError((_) {})` 或无上下文 `catch (_)` 静默吞掉异常上报失败。

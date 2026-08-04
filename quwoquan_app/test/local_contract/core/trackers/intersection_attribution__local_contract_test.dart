@@ -59,8 +59,8 @@ void main() {
 
     expect(repo.recorded, hasLength(1));
     final event = repo.recorded.single;
-    expect(event.action, BehaviorAction.impression);
-    final json = event.toJson();
+    expect(event.action, BehaviorEventType.impression);
+    final json = event.toStorageJson();
     for (final key in exposureAttributionKeys) {
       expect(json.containsKey(key), isTrue, reason: 'impression 缺少 $key');
     }
@@ -80,7 +80,7 @@ void main() {
     await tracker.flush();
 
     final impressions = repo.recorded
-        .where((e) => e.action == BehaviorAction.impression)
+        .where((e) => e.action == BehaviorEventType.impression)
         .toList(growable: false);
     expect(impressions, hasLength(1));
   });
@@ -101,8 +101,8 @@ void main() {
     await tracker.flush();
 
     final event = repo.recorded.single;
-    expect(event.action, BehaviorAction.click);
-    final json = event.toJson();
+    expect(event.action, BehaviorEventType.click);
+    final json = event.toStorageJson();
     for (final key in exposureAttributionKeys) {
       expect(json.containsKey(key), isTrue, reason: 'click 缺少 $key');
     }
@@ -137,28 +137,31 @@ void main() {
       await tracker.flush();
 
       final byAction = {for (final e in repo.recorded) e.action: e};
-      for (final action in <BehaviorAction>[
-        BehaviorAction.follow,
-        BehaviorAction.joinCircle,
-        BehaviorAction.addContact,
+      for (final action in <BehaviorEventType>[
+        BehaviorEventType.follow,
+        BehaviorEventType.joinCircle,
+        BehaviorEventType.addContact,
       ]) {
         final event = byAction[action];
         expect(event, isNotNull, reason: '缺少 $action 转化事件');
-        final json = event!.toJson();
+        final json = event!.toStorageJson();
         for (final key in conversionAttributionKeys) {
           expect(json.containsKey(key), isTrue, reason: '$action 缺少 $key');
         }
       }
       expect(
-        byAction[BehaviorAction.follow]!.toJson()['intersectionDimension'],
+        byAction[BehaviorEventType.follow]!
+            .toStorageJson()['intersectionDimension'],
         'relationship',
       );
       expect(
-        byAction[BehaviorAction.joinCircle]!.toJson()['intersectionSourceRef'],
+        byAction[BehaviorEventType.joinCircle]!
+            .toStorageJson()['intersectionSourceRef'],
         'sharedInterest',
       );
       expect(
-        byAction[BehaviorAction.addContact]!.toJson()['intersectionTagRefs'],
+        byAction[BehaviorEventType.addContact]!
+            .toStorageJson()['intersectionTagRefs'],
         <String>['tag/location/chengdu'],
       );
     },
@@ -180,9 +183,9 @@ void main() {
 
         expect(repo.recorded, hasLength(1));
         final event = repo.recorded.single;
-        expect(event.action, BehaviorAction.intersectionFeedback);
-        expect(event.action.wireValue, 'intersection_feedback');
-        final json = event.toJson();
+        expect(event.action, BehaviorEventType.intersectionFeedback);
+        expect(event.action.wireName, 'intersection_feedback');
+        final json = event.toStorageJson();
         // 不绑定 post：subjectId 承载对象。
         expect(json['subjectId'], 'u_lin');
         expect(json['feedbackKind'], 'notInterested');
@@ -202,7 +205,7 @@ void main() {
       await tracker.flush();
 
       final reported = repo.recorded
-          .where((e) => e.action == BehaviorAction.intersectionFeedback)
+          .where((e) => e.action == BehaviorEventType.intersectionFeedback)
           .map((e) => e.feedbackKind)
           .toSet();
       expect(reported, intersectionFeedbackKinds.toSet());
@@ -215,7 +218,7 @@ void main() {
 
       expect(
         repo.recorded.where(
-          (e) => e.action == BehaviorAction.intersectionFeedback,
+          (e) => e.action == BehaviorEventType.intersectionFeedback,
         ),
         isEmpty,
       );
@@ -227,7 +230,7 @@ void main() {
 
       expect(
         repo.recorded.where(
-          (e) => e.action == BehaviorAction.intersectionFeedback,
+          (e) => e.action == BehaviorEventType.intersectionFeedback,
         ),
         isEmpty,
       );

@@ -163,13 +163,13 @@ def _hydrate_mediawiki_same_source_images(
     source: Mapping[str, Any] | dict[str, Any],
     *,
     entity_id: str,
+    publish_media_mode: str | None = None,
 ) -> dict[str, Any]:
-    """Hydrate same-source image evidence for MediaWiki homepage sources.
+    """Hydrate same-source image evidence for a MediaWiki source.
 
-    Homepage lane only allows same-source images. When a candidate is a
-    MediaWiki page URL but arrives from reuse/registry without image evidence,
-    re-resolve the page title from the URL and fetch page-owned images from the
-    single MediaWiki truth source before the source enters the consumable content.execution.planning.
+    When a candidate arrives without image evidence, re-resolve its page title
+    and fetch page-owned images from the same MediaWiki truth source before the
+    source enters the consumable content plan.
     """
 
     row = dict(source)
@@ -178,6 +178,8 @@ def _hydrate_mediawiki_same_source_images(
         isinstance(item, dict) and str(item.get("url") or "").strip()
         for item in existing_images
     ):
+        if publish_media_mode:
+            row["publishMediaMode"] = publish_media_mode
         return row
     host, title = _mediawiki_title_from_url(str(row.get("url") or ""))
     if not host or not title:
@@ -208,6 +210,8 @@ def _hydrate_mediawiki_same_source_images(
         return row
     row["imageUrls"] = hydrated
     row["imageEvidenceMode"] = "same_source"
+    if publish_media_mode:
+        row["publishMediaMode"] = publish_media_mode
     return row
 
 def _accept_source(

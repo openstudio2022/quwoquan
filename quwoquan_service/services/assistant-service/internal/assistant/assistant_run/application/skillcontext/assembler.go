@@ -11,6 +11,7 @@ import (
 	"time"
 
 	generated "quwoquan_service/services/assistant-service/generated/assistant/assistant_session"
+	readermodel "quwoquan_service/services/assistant-service/internal/assistant/domain_reader_descriptor/domain/model"
 )
 
 type Assembler struct {
@@ -69,7 +70,7 @@ func (a *Assembler) Assemble(
 				continue
 			}
 		}
-		resolver, ok := a.registry.resolve(requirement.ResolverRef)
+		registered, descriptor, ok := a.registry.resolve(ctx, requirement.ResolverRef)
 		if !ok {
 			observeContextResolution("resolver_unavailable", request.Visibility)
 			if requirement.Required {
@@ -77,7 +78,25 @@ func (a *Assembler) Assemble(
 			}
 			continue
 		}
-		resolved, err := resolver.Resolve(ctx, ResolveRequest{
+		if err := descriptorAllowsRequirement(
+			descriptor,
+			requirement,
+		); err != nil {
+			return Snapshot{}, err
+		}
+		if !visibilityAllowed(descriptor.SurfaceKinds, request.Visibility) {
+			const reason = "domain reader is unavailable on this surface"
+			observeContextResolution("surface_rejected", request.Visibility)
+			observeContextPrivacyRejection(reason, request.Visibility)
+			if requirement.Required {
+				snapshot.Missing = append(
+					snapshot.Missing,
+					missing(requirement, reason),
+				)
+			}
+			continue
+		}
+		resolved, err := registered.Resolver.Resolve(ctx, ResolveRequest{
 			RunID:       request.RunID,
 			SkillID:     request.SkillID,
 			Requirement: requirement,
@@ -89,7 +108,13 @@ func (a *Assembler) Assemble(
 			}
 			continue
 		}
-		segment, err := a.segment(requirement, request, resolved, capturedAt)
+		segment, err := a.segment(
+			descriptor,
+			requirement,
+			request,
+			resolved,
+			capturedAt,
+		)
 		if err != nil {
 			observeContextResolution("policy_rejected", request.Visibility)
 			observeContextPrivacyRejection(err.Error(), request.Visibility)
@@ -130,6 +155,7 @@ func (a *Assembler) contextConsentAllowed(
 }
 
 func (a *Assembler) segment(
+	descriptor readermodel.Descriptor,
 	requirement Requirement,
 	request AssembleRequest,
 	resolved ResolvedContext,
@@ -138,7 +164,12 @@ func (a *Assembler) segment(
 	if strings.TrimSpace(resolved.Kind) == "" || strings.TrimSpace(resolved.SourceRef) == "" {
 		return Segment{}, ErrContextRejected
 	}
-	if !contains(requirement.AcceptedSourceKinds, resolved.Kind) || resolved.Authority != requirement.Authority {
+	if !contains(requirement.AcceptedSourceKinds, resolved.Kind) ||
+		resolved.Authority != requirement.Authority ||
+		resolved.Sensitivity != requirement.Sensitivity {
+		return Segment{}, ErrContextRejected
+	}
+	if !citationAllowed(descriptor, resolved.SourceRef) {
 		return Segment{}, ErrContextRejected
 	}
 	if resolved.CapturedAt.IsZero() || resolved.CapturedAt.After(now.Add(time.Minute)) {
@@ -157,7 +188,21 @@ func (a *Assembler) segment(
 	value := cloneValue(resolved.Value)
 	tokenCost := resolved.TokenCost
 	artifactRef := strings.TrimSpace(resolved.ArtifactRef)
-	if requirement.TokenBudget > 0 && tokenCost > requirement.TokenBudget {
+	if descriptor.ArtifactPolicy == readermodel.ArtifactStoredRequired {
+		if artifactRef == "" || strings.TrimSpace(resolved.Summary) == "" {
+			return Segment{}, ErrContextRejected
+		}
+		value = map[string]any{
+			"summary":     strings.TrimSpace(resolved.Summary),
+			"artifactRef": artifactRef,
+		}
+		if requirement.TokenBudget > 0 {
+			tokenCost = min(tokenCost, requirement.TokenBudget)
+		}
+	} else if requirement.TokenBudget > 0 && tokenCost > requirement.TokenBudget {
+		if descriptor.ArtifactPolicy == readermodel.ArtifactInlineBounded {
+			return Segment{}, ErrContextRejected
+		}
 		if artifactRef == "" || strings.TrimSpace(resolved.Summary) == "" {
 			return Segment{}, ErrContextRejected
 		}
@@ -172,19 +217,77 @@ func (a *Assembler) segment(
 		return Segment{}, ErrContextRejected
 	}
 	return Segment{
-		SegmentID:   "ctx_" + digest[:24],
-		SlotID:      requirement.SlotID,
-		Kind:        resolved.Kind,
-		SourceRef:   resolved.SourceRef,
-		Authority:   resolved.Authority,
-		Sensitivity: resolved.Sensitivity,
-		CapturedAt:  resolved.CapturedAt.UTC(),
-		ExpiresAt:   resolved.ExpiresAt.UTC(),
-		Digest:      digest,
-		TokenCost:   tokenCost,
-		Value:       value,
-		ArtifactRef: artifactRef,
+		SegmentID:        "ctx_" + digest[:24],
+		SlotID:           requirement.SlotID,
+		Kind:             resolved.Kind,
+		SourceRef:        resolved.SourceRef,
+		DescriptorID:     descriptor.DescriptorID,
+		DescriptorDigest: descriptor.DescriptorDigest,
+		Authority:        resolved.Authority,
+		Sensitivity:      resolved.Sensitivity,
+		CapturedAt:       resolved.CapturedAt.UTC(),
+		ExpiresAt:        resolved.ExpiresAt.UTC(),
+		Digest:           digest,
+		TokenCost:        tokenCost,
+		Value:            value,
+		ArtifactRef:      artifactRef,
 	}, nil
+}
+
+func citationAllowed(descriptor readermodel.Descriptor, sourceRef string) bool {
+	sourceRef = strings.TrimSpace(sourceRef)
+	switch descriptor.CitationPolicy {
+	case readermodel.CitationNone, readermodel.CitationSourceReference:
+		return sourceRef != ""
+	case readermodel.CitationEntityReference:
+		for _, objectTypeRef := range descriptor.ObjectTypeRefs {
+			prefix := strings.TrimSpace(objectTypeRef) + ":"
+			if !strings.HasPrefix(sourceRef, prefix) {
+				continue
+			}
+			lineage := strings.TrimPrefix(sourceRef, prefix)
+			marker := strings.LastIndex(lineage, "@sha256:")
+			return marker > 0 && strings.TrimSpace(lineage[:marker]) != "" &&
+				strings.TrimSpace(lineage[marker+len("@sha256:"):]) != ""
+		}
+		return false
+	default:
+		return false
+	}
+}
+
+func descriptorAllowsRequirement(
+	descriptor readermodel.Descriptor,
+	requirement Requirement,
+) error {
+	if descriptor.ResolverRef != strings.TrimSpace(requirement.ResolverRef) ||
+		descriptor.Authority != requirement.Authority ||
+		descriptor.Sensitivity != requirement.Sensitivity {
+		return ErrContextRejected
+	}
+	for _, kind := range requirement.AcceptedSourceKinds {
+		if !contains(descriptor.AcceptedSourceKinds, kind) {
+			return ErrContextRejected
+		}
+	}
+	maxFreshness := time.Duration(descriptor.MaxFreshnessSeconds) * time.Second
+	if maxFreshness > 0 &&
+		(requirement.Freshness <= 0 || requirement.Freshness > maxFreshness) {
+		return ErrContextRejected
+	}
+	return nil
+}
+
+func visibilityAllowed(
+	allowed []readermodel.SurfaceKind,
+	visibility DeliveryVisibility,
+) bool {
+	for _, candidate := range allowed {
+		if string(candidate) == string(visibility) {
+			return true
+		}
+	}
+	return false
 }
 
 func validateProfile(profile Profile) error {
@@ -278,7 +381,10 @@ func valueDigest(value map[string]any) (string, error) {
 func snapshotDigest(profile Profile, request AssembleRequest, snapshot Snapshot) string {
 	digests := make([]string, 0, len(snapshot.Segments))
 	for _, segment := range snapshot.Segments {
-		digests = append(digests, segment.Digest)
+		digests = append(
+			digests,
+			segment.DescriptorDigest+":"+segment.Digest,
+		)
 	}
 	sort.Strings(digests)
 	value := fmt.Sprintf("%s\x00%s\x00%s\x00%s", profile.AssetDigest, request.RunID, request.SkillID, strings.Join(digests, ","))

@@ -52,7 +52,7 @@ import 'package:quwoquan_app/ui/content/entry/services/publish_circle_services.d
 import 'package:quwoquan_app/ui/content/entry/widgets/article_editor.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/create_publish_result_sheet.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/create_publish_confirm_sheet.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
+import 'package:quwoquan_app/application/entity/homepage_view_data.dart';
 part 'create_page_state.dart';
 part 'create_page_state_helpers.dart';
 part 'create_page_state_chrome_helpers.dart';

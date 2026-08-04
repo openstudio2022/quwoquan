@@ -495,15 +495,17 @@ func main() {
 		}
 	}
 	rootMux := http.NewServeMux()
-	healthChecker := rthealth.NewChecker()
-	healthChecker.Register("account-security-authority", func(hctx context.Context) error {
+	// Compose liveness stays shallow. Worker / authority / ES readiness stays
+	// on /readyz so first-scan Healthy(15s) cannot keep the container unhealthy.
+	readiness := rthealth.NewChecker()
+	readiness.Register("account-security-authority", func(hctx context.Context) error {
 		return accountSecurityAuthority.CheckAccountSecurityAuthority(hctx)
 	})
 	if ping := built.HealthPing(); ping != nil {
-		healthChecker.Register("elasticsearch", ping)
+		readiness.Register("elasticsearch", ping)
 	}
 	if feedbackSignalRelay != nil {
-		healthChecker.Register(
+		readiness.Register(
 			"feedback-signal-relay",
 			func(hctx context.Context) error {
 				return feedbackSignalRelay.Healthy(
@@ -514,22 +516,27 @@ func main() {
 		)
 	}
 	if experimentPolicyConsumer != nil {
-		healthChecker.Register("experiment-policy-consumer", func(context.Context) error {
+		readiness.Register("experiment-policy-consumer", func(context.Context) error {
 			return experimentPolicyConsumer.Healthy(15 * time.Second)
 		})
 	}
-	healthChecker.Register("experiment-policy", func(context.Context) error {
+	readiness.Register("experiment-policy", func(context.Context) error {
 		return experiments.Healthy()
 	})
 	if accountClosureConsumer != nil {
-		healthChecker.Register(
+		readiness.Register(
 			"user-account-closed-consumer",
 			func(context.Context) error {
 				return accountClosureConsumer.Healthy(15 * time.Second)
 			},
 		)
 	}
-	rootMux.HandleFunc("/healthz", healthChecker.Handler())
+	rootMux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	})
+	rootMux.HandleFunc("/readyz", readiness.Handler())
 	rootMux.Handle("/metrics", rtmetrics.Handler())
 	rootMux.Handle(
 		"/",

@@ -10,13 +10,8 @@ abstract final class AssistantText {
   static const String assistantCommandPlan = '帮我排';
   static const String assistantActionNoRemind = '不再提醒';
   static const String assistantFeedbackSavedToMemory = '已加入记忆';
-  static const String assistantPrivacyPermissions = '隐私权限';
-  static const String assistantContentAccessPermission = '允许私助使用我的创作内容';
   static const String assistantSupportingCapabilities = '配套能力';
   static const String assistantSkillCenter = '技能中心';
-  static const String assistantContentAccessGranted = '已允许';
-  static const String assistantContentAccessNotGranted = '未允许';
-  static const String assistantConsentLoadFailedTitle = '隐私权限未同步';
   static const String assistantMemorySectionTitle = '偏好与记忆';
   static const String assistantMemoryEmpty = '暂无已保存的显式偏好';
   static const String assistantMemoryUntitled = '未命名偏好';
@@ -42,11 +37,6 @@ abstract final class AssistantText {
   static const String assistantSkillCenterOngoingTasksTitle = '进行中任务';
   static const String assistantSkillCenterNoOngoingTasks = '暂无进行中的任务';
   static const String assistantSkillCenterNoSubscribedSkills = '暂无已订阅技能';
-  static const String assistantSkillCategoryLife = '生活';
-  static const String assistantSkillCategoryWork = '工作';
-  static const String assistantSkillCategoryKnowledge = '知识与资讯';
-  static const String assistantSkillCategoryCreation = '创作';
-  static const String assistantSkillCategoryCompanion = '陪伴';
   static const String assistantSkillCategoryOther = '其他';
   static const String assistantSkillSubscribed = '已订阅';
   static const String assistantSkillPaused = '已暂停';
@@ -57,7 +47,34 @@ abstract final class AssistantText {
   static const String assistantSkillConsentGrant = '允许所需数据';
   static const String assistantSkillConsentRevoke = '撤回数据授权';
   static const String assistantSkillProactiveReminder = '主动提醒';
+  static const String assistantSkillProactiveAdd = '添加提醒';
   static const String assistantSkillProactiveNotConfigured = '未设置主动提醒';
+  static const String assistantSkillRequiredConsentScopes = '必要授权';
+  static const String assistantSkillOptionalConsentScopes = '可选授权';
+  static const String assistantSkillSetupPersonalization = '个性化设置';
+  static const String assistantSkillSetupTargetUsers = '适合谁';
+  static const String assistantSkillSetupSurfaces = '可使用位置';
+  static const String assistantSkillSetupDataUse = '数据使用';
+  static const String assistantSkillSetupSave = '保存设置';
+  static const String assistantSkillSetupRequiredFieldMarker = ' *';
+  static const String assistantSkillSetupListPlaceholder = '多项请用逗号分隔';
+  static const String assistantSkillSetupUnavailable = '设置暂不可用';
+  static const String assistantSkillSetupUnavailableDescription =
+      '当前 Skill package 没有提供此版本可安全渲染的设置定义。你仍可使用或停用该 Skill。';
+  static const String assistantSkillSetupSaveFailed = '设置没有保存，请稍后重试。';
+  static const String assistantSkillSubscriptionSetupTitle = '设置主动提醒';
+  static const String assistantSkillSubscriptionSetupDescription =
+      '小趣会按设定时间检查你关注的变化；静默时段、频控和最终投递仍由服务端策略控制。';
+  static const String assistantSkillSubscriptionTopicTitle = '提醒关注什么';
+  static const String assistantSkillSubscriptionTopicPlaceholder =
+      '例如：行程天气、交通变化和集合时间';
+  static const String assistantSkillSubscriptionTimeTitle = '每天检查时间';
+  static const String assistantSkillSubscriptionTimezoneLabel =
+      '北京时间（Asia/Shanghai）';
+  static const String assistantSkillSubscriptionEnable = '开启主动提醒';
+  static const String assistantSkillSubscriptionTopicRequired = '请填写要关注的变化';
+  static String assistantSkillSubscriptionDefaultTopic(String skillName) =>
+      '提醒我关注$skillName的重要变化和下一步';
   static const String assistantSkillPackageSkillCount = '个技能';
   static const String assistantSkillStatusPendingSync = '状态待同步';
   static const String assistantSkillDetailsAndSettings = '详情与设置';
@@ -78,13 +95,57 @@ abstract final class AssistantText {
   static const String assistantSkillDataControlDescription =
       '查看已授权的内容访问和已确认记忆，可随时撤销或忘记。';
   static const String assistantSkillDataControlAction = '管理权限与记忆';
+  static const String assistantSkillLifecycleAction = '活动与数据管理';
+  static const String assistantSkillLifecycleTitle = 'Skill 活动与数据';
+  static const String assistantSkillActivityTitle = '最近活动';
+  static const String assistantSkillActivityEmpty = '暂无活动记录';
+  static const String assistantSkillActivityRetry = '重试';
+  static const String assistantSkillDataControlChoiceTitle = '选择要执行的数据操作';
+  static const String assistantSkillDataControlHideActivity = '隐藏此 Skill 的活动历史';
+  static const String assistantSkillDataControlRevokeConsent =
+      '撤回此 Skill 的数据授权';
+  static const String assistantSkillDataControlArchiveSubscriptions =
+      '归档此 Skill 的主动提醒';
+  static const String assistantSkillDataControlCreate = '创建确认请求';
+  static const String assistantSkillDataControlConfirmTitle = '确认执行这些操作？';
+  static const String assistantSkillDataControlConfirmBody =
+      '操作只会作用于当前 Skill；执行前会以最新 revision 再次确认。';
+  static const String assistantSkillDataControlConfirm = '确认执行';
+  static const String assistantSkillDataControlCancel = '取消请求';
+  static const String assistantSkillDataControlPending = '等待确认';
+  static const String assistantSkillDataControlExecuting = '正在后台执行';
+  static const String assistantSkillDataControlCompleted = '已完成';
+  static const String assistantSkillDataControlCancelled = '已取消';
+  static const String assistantSkillDataControlFailed = '执行未完成';
+  static const String assistantSkillDataControlResume = '恢复处理';
+  static const String assistantSkillDataControlUnknownResultRetry =
+      '创建结果尚未确认，使用同一请求重试';
+  static const String assistantSkillActivityRunAccepted = '任务已接收';
+  static const String assistantSkillActivityRunOrienting = '正在理解目标';
+  static const String assistantSkillActivityRunPlanning = '正在规划';
+  static const String assistantSkillActivityRunExecuting = '正在执行';
+  static const String assistantSkillActivityRunObserving = '正在核对结果';
+  static const String assistantSkillActivityRunReflecting = '正在反思补充';
+  static const String assistantSkillActivityRunCheckpointing = '正在保存进度';
+  static const String assistantSkillActivityRunWaitingUser = '等待补充信息';
+  static const String assistantSkillActivityRunWaitingApproval = '等待确认';
+  static const String assistantSkillActivityRunWaitingExternal = '等待外部结果';
+  static const String assistantSkillActivityRunPaused = '任务已暂停';
+  static const String assistantSkillActivityRunSynthesizing = '正在整理结果';
+  static const String assistantSkillActivityRunVerifying = '正在完成验收';
+  static const String assistantSkillActivityRunCompleted = '任务已完成';
+  static const String assistantSkillActivityRunFailed = '任务未完成';
+  static const String assistantSkillActivityRunCancelled = '任务已取消';
+  static const String assistantSkillActivityConsentGranted = '已授予数据权限';
+  static const String assistantSkillActivityConsentRevoked = '已撤回数据权限';
+  static const String assistantSkillActivitySubscriptionActive = '主动提醒已启用';
+  static const String assistantSkillActivitySubscriptionPaused = '主动提醒已暂停';
+  static const String assistantSkillActivitySubscriptionArchived = '主动提醒已归档';
   static const String assistantTaskStatusPending = '待处理';
   static const String assistantTaskStatusInProgress = '进行中';
   static const String assistantTaskStatusCompleted = '已完成';
   static const String assistantTaskStatusCancelled = '已取消';
   static const String assistantTaskUntitled = '未命名任务';
-  static const String assistantSyncing = '同步中';
-  static const String assistantLoading = '加载中';
   static const String assistantFeedbackTaskDraftCreated = '已生成待办草案';
   static const String assistantFeedbackShareDraftCreated = '已生成分享草稿';
   static const String assistantFeedbackPlanCreated = '已生成安排建议';

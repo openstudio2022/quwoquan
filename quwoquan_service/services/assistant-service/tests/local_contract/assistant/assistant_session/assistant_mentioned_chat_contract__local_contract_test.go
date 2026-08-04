@@ -11,7 +11,8 @@ import (
 	rterr "quwoquan_service/runtime/errors"
 	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtredis "quwoquan_service/runtime/redis"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
+	runorchestration "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/orchestration"
+	sessionorchestration "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/chatclient"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/messaging"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/persistence"
@@ -94,20 +95,22 @@ func TestAssistantMentionedConsumerGroundsAndRepliesThroughChatHTTP(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	loop := orchestration.NewAgentLoop(
+	loop := runorchestration.NewAgentLoop(
 		proactiveSkillRuntime{},
-		orchestration.ReactRuntime{Model: proactiveFinalModel{}},
+		runorchestration.ReactRuntime{
+			Model: proactiveFinalModel{},
+			Tools: canonicalTestToolCoordinator(nil),
+		},
 		nil,
 	)
 	loop.Catalog = skillfixture.Loader{}
 	loop.PromptAssets = promptassets.MustResolver(t)
-	service := orchestration.NewAssistantService(
+	service := sessionorchestration.NewAssistantService(
 		skillconsenttest.NewMemoryStore(),
 		redis,
-		orchestration.WithSessionStore(persistence.NewMemorySessionStore()),
-		orchestration.WithAgentLoop(loop),
+		sessionorchestration.WithSessionStore(persistence.NewMemorySessionStore()),
 		canonicalRunTestOption(t, loop),
-		orchestration.WithChatGroundingClient(chatGrounding),
+		sessionorchestration.WithChatGroundingClient(chatGrounding),
 	)
 	transport, err := runtimemessaging.NewRedisMessageTransportForRoot(
 		"assistant-service-local-contract",

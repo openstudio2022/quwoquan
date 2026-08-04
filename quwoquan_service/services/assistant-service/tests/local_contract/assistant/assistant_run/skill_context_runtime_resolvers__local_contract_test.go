@@ -10,8 +10,9 @@ import (
 	preferencemodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_preference/domain/model"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
 	application "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/skillcontext"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/ports"
 	runtimecontext "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/infrastructure/skillcontext"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/ports"
+	readerresource "quwoquan_service/services/assistant-service/internal/assistant/domain_reader_descriptor/infrastructure/resource"
 	skillmodel "quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/domain/model"
 	subscriptionports "quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/domain/ports"
 )
@@ -66,7 +67,7 @@ func TestProductionSkillContextResolversAssembleTrustedProactiveSnapshot(t *test
 			"dedupeKey":         "delivery_1",
 			"deliveryPolicyRef": "inherit_user_setting",
 		},
-		SessionPreferenceFacts: []preferencemodel.Snapshot{{
+		SessionPreferences: []preferencemodel.AssistantPreferenceSnapshot{{
 			Kind:  preferencemodel.KindLanguage,
 			Value: "zh-CN",
 		}},
@@ -81,7 +82,16 @@ func TestProductionSkillContextResolversAssembleTrustedProactiveSnapshot(t *test
 		Destination: skillmodel.SkillSubscriptionDestination{DestinationType: "user"},
 		CreatedAt:   now.Add(-time.Hour),
 	}
+	descriptors, err := runtimecontext.RuntimeDescriptors()
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := readerresource.NewCatalog(descriptors)
+	if err != nil {
+		t.Fatal(err)
+	}
 	registry, err := runtimecontext.NewRuntimeRegistry(
+		catalog,
 		skillContextRunReaderStub{run: run},
 		skillContextSubscriptionStub{subscription: subscription},
 		skillContextInterestStub{},
@@ -90,8 +100,7 @@ func TestProductionSkillContextResolversAssembleTrustedProactiveSnapshot(t *test
 		t.Fatal(err)
 	}
 	profile := application.Profile{
-		ProfileID:   "context.proactive",
-		AssetDigest: "sha256:test",
+		ProfileID: "context.proactive",
 		Requirements: []application.Requirement{
 			{
 				SlotID: "trigger", Required: true, AcceptedSourceKinds: []string{"trigger"},
@@ -113,6 +122,7 @@ func TestProductionSkillContextResolversAssembleTrustedProactiveSnapshot(t *test
 			},
 		},
 	}
+	profile.AssetDigest = canonicalFixtureDigest(profile)
 	snapshot, err := application.NewAssembler(registry).Assemble(
 		context.Background(),
 		profile,

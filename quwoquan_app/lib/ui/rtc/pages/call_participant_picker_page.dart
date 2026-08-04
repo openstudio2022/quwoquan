@@ -317,11 +317,15 @@ class _CallParticipantPickerPageState
         child: _pageErrorSemantic != null && !_isLoading
             ? AppPageErrorState(
                 semantic: ensureRetryUiErrorSemantic(_pageErrorSemantic!),
-                onAction: (action) async {
+                onRecovery: (action) async {
                   if (action.type == UiErrorActionType.retry ||
                       action.type == UiErrorActionType.resubmit) {
                     await _loadContacts();
+                    return _pageErrorSemantic == null
+                        ? UiRecoveryOutcome.recovered
+                        : UiRecoveryOutcome.stillBlocked;
                   }
+                  return UiRecoveryOutcome.cancelled;
                 },
               )
             : Column(

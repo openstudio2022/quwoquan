@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
-	. "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/userprofile"
+	. "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/infrastructure/userprofile"
 	"testing"
 )
 

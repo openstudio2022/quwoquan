@@ -36,9 +36,9 @@ class TestAuthFacets
   Future<AlipayAuthorizationGrant> createAlipayAuthorizationRequest(
     CreateAlipayAuthorizationRequestCommand command,
   ) async {
-    return const AlipayAuthorizationGrant(
+    return AlipayAuthorizationGrant(
       authorizationPayload: 'test_alipay_authorization',
-      expiresAt: '2099-01-01T00:00:00Z',
+      expiresAt: DateTime.utc(2099),
     );
   }
 
@@ -69,8 +69,10 @@ class TestAuthFacets
   Future<FederatedLoginOutcome> loginWithWechat(
     LoginWithWechatCommand command,
   ) async {
-    return FederatedLoginOutcome.authenticated(
-      loginGrant(identityOrigin: 'wechat'),
+    return FederatedLoginOutcome(
+      status: FederatedLoginStatus.authenticated,
+      session: loginGrant(identityOrigin: 'wechat'),
+      expiresInSeconds: 0,
     );
   }
 
@@ -78,15 +80,19 @@ class TestAuthFacets
   Future<FederatedLoginOutcome> loginWithAlipay(
     LoginWithAlipayCommand command,
   ) async {
-    return FederatedLoginOutcome.authenticated(
-      loginGrant(identityOrigin: 'alipay'),
+    return FederatedLoginOutcome(
+      status: FederatedLoginStatus.authenticated,
+      session: loginGrant(identityOrigin: 'alipay'),
+      expiresInSeconds: 0,
     );
   }
 
   @override
   Future<FederatedLoginOutcome> loginWithQq(LoginWithQqCommand command) async {
-    return FederatedLoginOutcome.authenticated(
-      loginGrant(identityOrigin: 'qq'),
+    return FederatedLoginOutcome(
+      status: FederatedLoginStatus.authenticated,
+      session: loginGrant(identityOrigin: 'qq'),
+      expiresInSeconds: 0,
     );
   }
 
@@ -114,7 +120,7 @@ class TestAuthFacets
     BindPhoneCredentialCommand command,
   ) async {
     return CredentialBindingCommandResult(
-      credentialType: 'phone',
+      credentialType: CredentialType.phone,
       isActive: true,
       version: 1,
       idempotentReplay: false,
@@ -134,7 +140,7 @@ class TestAuthFacets
     BindCarrierPhoneCredentialCommand command,
   ) async {
     return CredentialBindingCommandResult(
-      credentialType: 'carrier_phone',
+      credentialType: CredentialType.carrierPhone,
       isActive: true,
       version: 1,
       idempotentReplay: false,
@@ -147,7 +153,10 @@ class TestAuthFacets
     UnbindCredentialCommand command,
   ) async {
     return CredentialBindingCommandResult(
-      credentialType: command.credentialType,
+      credentialType: CredentialType.fromWire(
+        command.credentialType,
+        'UnbindCredentialCommand.credentialType',
+      ),
       isActive: false,
       version: 2,
       idempotentReplay: false,
@@ -159,10 +168,10 @@ class TestAuthFacets
     ListCredentialsQuery query,
   ) async {
     return ListCredentialsSlice(
-      items: <CredentialBindingView>[
+      credentials: <CredentialBindingView>[
         CredentialBindingView(
           id: 'test_credential',
-          credentialType: 'phone',
+          credentialType: CredentialType.phone,
           displayLabel: '180****3909',
           isActive: true,
           boundAt: DateTime.utc(2026),

@@ -90,7 +90,7 @@ types:
     fields:
     - name: events
       source: events
-      type: '[]object'
+      type: '[]RealtimeEventEnvelope'
       constraints:
       - NOT_NULL
       classification: SENSITIVE
@@ -145,6 +145,27 @@ types:
       log_policy: hash
       api_exposure: none
       ops_exposure: drop
+  LongPollRequest:
+    description: LongPoll 的唯一客户端 query 实体；cursor 是设备持久的 Redis stream 坐标，timeout 只表示本次 hold 上限。
+    fields:
+    - name: timeout
+      source: timeout
+      type: int
+      constraints:
+      - NULLABLE
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: write
+      ops_exposure: none
+    - name: cursor
+      source: cursor
+      type: string
+      constraints:
+      - NULLABLE
+      classification: INTERNAL
+      log_policy: hash
+      api_exposure: write
+      ops_exposure: none
   RealtimeAccountClosureDeadLetterRecoveryRequest:
     description: operator 释放 Realtime 账号安全 terminal marker 的强类型命令；只接受 Redis source PEL 坐标。
     fields:

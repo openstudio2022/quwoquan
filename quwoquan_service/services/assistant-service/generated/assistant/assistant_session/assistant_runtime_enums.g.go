@@ -652,6 +652,217 @@ func ParseSkillUserSettingStatus(raw string) (SkillUserSettingStatus, error) {
 
 func (value SkillUserSettingStatus) WireName() string { return string(value) }
 
+type SkillDataControlRequestStatus string
+
+const (
+	SkillDataControlRequestStatusPendingConfirmation SkillDataControlRequestStatus = "pending_confirmation"
+	SkillDataControlRequestStatusExecuting SkillDataControlRequestStatus = "executing"
+	SkillDataControlRequestStatusCompleted SkillDataControlRequestStatus = "completed"
+	SkillDataControlRequestStatusCancelled SkillDataControlRequestStatus = "cancelled"
+	SkillDataControlRequestStatusFailed SkillDataControlRequestStatus = "failed"
+)
+
+func ParseSkillDataControlRequestStatus(raw string) (SkillDataControlRequestStatus, error) {
+	switch strings.TrimSpace(raw) {
+	case "pending_confirmation":
+		return SkillDataControlRequestStatusPendingConfirmation, nil
+	case "executing":
+		return SkillDataControlRequestStatusExecuting, nil
+	case "completed":
+		return SkillDataControlRequestStatusCompleted, nil
+	case "cancelled":
+		return SkillDataControlRequestStatusCancelled, nil
+	case "failed":
+		return SkillDataControlRequestStatusFailed, nil
+	default:
+		return "", fmt.Errorf("unknown SkillDataControlRequestStatus wire value %q", raw)
+	}
+}
+
+func (value SkillDataControlRequestStatus) WireName() string { return string(value) }
+
+type SkillDataControlAction string
+
+const (
+	SkillDataControlActionHideActivityHistory SkillDataControlAction = "hide_activity_history"
+	SkillDataControlActionRevokeConsent SkillDataControlAction = "revoke_consent"
+	SkillDataControlActionArchiveSubscriptions SkillDataControlAction = "archive_subscriptions"
+)
+
+func ParseSkillDataControlAction(raw string) (SkillDataControlAction, error) {
+	switch strings.TrimSpace(raw) {
+	case "hide_activity_history":
+		return SkillDataControlActionHideActivityHistory, nil
+	case "revoke_consent":
+		return SkillDataControlActionRevokeConsent, nil
+	case "archive_subscriptions":
+		return SkillDataControlActionArchiveSubscriptions, nil
+	default:
+		return "", fmt.Errorf("unknown SkillDataControlAction wire value %q", raw)
+	}
+}
+
+func (value SkillDataControlAction) WireName() string { return string(value) }
+
+type SkillActivityKind string
+
+const (
+	SkillActivityKindRun SkillActivityKind = "run"
+	SkillActivityKindConsent SkillActivityKind = "consent"
+	SkillActivityKindSubscription SkillActivityKind = "subscription"
+	SkillActivityKindDataControl SkillActivityKind = "data_control"
+)
+
+func ParseSkillActivityKind(raw string) (SkillActivityKind, error) {
+	switch strings.TrimSpace(raw) {
+	case "run":
+		return SkillActivityKindRun, nil
+	case "consent":
+		return SkillActivityKindConsent, nil
+	case "subscription":
+		return SkillActivityKindSubscription, nil
+	case "data_control":
+		return SkillActivityKindDataControl, nil
+	default:
+		return "", fmt.Errorf("unknown SkillActivityKind wire value %q", raw)
+	}
+}
+
+func (value SkillActivityKind) WireName() string { return string(value) }
+
+type SkillActivityRecoveryAction string
+
+const (
+	SkillActivityRecoveryActionRetryRun SkillActivityRecoveryAction = "retry_run"
+	SkillActivityRecoveryActionProvideInput SkillActivityRecoveryAction = "provide_input"
+	SkillActivityRecoveryActionReviewApproval SkillActivityRecoveryAction = "review_approval"
+	SkillActivityRecoveryActionResumeRun SkillActivityRecoveryAction = "resume_run"
+	SkillActivityRecoveryActionReviewConsent SkillActivityRecoveryAction = "review_consent"
+	SkillActivityRecoveryActionManageConsent SkillActivityRecoveryAction = "manage_consent"
+	SkillActivityRecoveryActionResumeSubscription SkillActivityRecoveryAction = "resume_subscription"
+	SkillActivityRecoveryActionManageSubscription SkillActivityRecoveryAction = "manage_subscription"
+	SkillActivityRecoveryActionRetryDataControl SkillActivityRecoveryAction = "retry_data_control"
+)
+
+func ParseSkillActivityRecoveryAction(raw string) (SkillActivityRecoveryAction, error) {
+	switch strings.TrimSpace(raw) {
+	case "retry_run":
+		return SkillActivityRecoveryActionRetryRun, nil
+	case "provide_input":
+		return SkillActivityRecoveryActionProvideInput, nil
+	case "review_approval":
+		return SkillActivityRecoveryActionReviewApproval, nil
+	case "resume_run":
+		return SkillActivityRecoveryActionResumeRun, nil
+	case "review_consent":
+		return SkillActivityRecoveryActionReviewConsent, nil
+	case "manage_consent":
+		return SkillActivityRecoveryActionManageConsent, nil
+	case "resume_subscription":
+		return SkillActivityRecoveryActionResumeSubscription, nil
+	case "manage_subscription":
+		return SkillActivityRecoveryActionManageSubscription, nil
+	case "retry_data_control":
+		return SkillActivityRecoveryActionRetryDataControl, nil
+	default:
+		return "", fmt.Errorf("unknown SkillActivityRecoveryAction wire value %q", raw)
+	}
+}
+
+func (value SkillActivityRecoveryAction) WireName() string { return string(value) }
+
+type SkillActivityDisplayKey string
+
+const (
+	SkillActivityDisplayKeyRunAccepted SkillActivityDisplayKey = "assistant.skill_activity.run.accepted"
+	SkillActivityDisplayKeyRunOrienting SkillActivityDisplayKey = "assistant.skill_activity.run.orienting"
+	SkillActivityDisplayKeyRunPlanning SkillActivityDisplayKey = "assistant.skill_activity.run.planning"
+	SkillActivityDisplayKeyRunExecuting SkillActivityDisplayKey = "assistant.skill_activity.run.executing"
+	SkillActivityDisplayKeyRunObserving SkillActivityDisplayKey = "assistant.skill_activity.run.observing"
+	SkillActivityDisplayKeyRunReflecting SkillActivityDisplayKey = "assistant.skill_activity.run.reflecting"
+	SkillActivityDisplayKeyRunCheckpointing SkillActivityDisplayKey = "assistant.skill_activity.run.checkpointing"
+	SkillActivityDisplayKeyRunWaitingUser SkillActivityDisplayKey = "assistant.skill_activity.run.waiting_user"
+	SkillActivityDisplayKeyRunWaitingApproval SkillActivityDisplayKey = "assistant.skill_activity.run.waiting_approval"
+	SkillActivityDisplayKeyRunWaitingExternal SkillActivityDisplayKey = "assistant.skill_activity.run.waiting_external"
+	SkillActivityDisplayKeyRunPaused SkillActivityDisplayKey = "assistant.skill_activity.run.paused"
+	SkillActivityDisplayKeyRunSynthesizing SkillActivityDisplayKey = "assistant.skill_activity.run.synthesizing"
+	SkillActivityDisplayKeyRunVerifying SkillActivityDisplayKey = "assistant.skill_activity.run.verifying"
+	SkillActivityDisplayKeyRunCompleted SkillActivityDisplayKey = "assistant.skill_activity.run.completed"
+	SkillActivityDisplayKeyRunFailed SkillActivityDisplayKey = "assistant.skill_activity.run.failed"
+	SkillActivityDisplayKeyRunCancelled SkillActivityDisplayKey = "assistant.skill_activity.run.cancelled"
+	SkillActivityDisplayKeyConsentGranted SkillActivityDisplayKey = "assistant.skill_activity.consent.granted"
+	SkillActivityDisplayKeyConsentRevoked SkillActivityDisplayKey = "assistant.skill_activity.consent.revoked"
+	SkillActivityDisplayKeySubscriptionActive SkillActivityDisplayKey = "assistant.skill_activity.subscription.active"
+	SkillActivityDisplayKeySubscriptionPaused SkillActivityDisplayKey = "assistant.skill_activity.subscription.paused"
+	SkillActivityDisplayKeySubscriptionArchived SkillActivityDisplayKey = "assistant.skill_activity.subscription.archived"
+	SkillActivityDisplayKeyDataControlPendingConfirmation SkillActivityDisplayKey = "assistant.skill_activity.data_control.pending_confirmation"
+	SkillActivityDisplayKeyDataControlExecuting SkillActivityDisplayKey = "assistant.skill_activity.data_control.executing"
+	SkillActivityDisplayKeyDataControlCompleted SkillActivityDisplayKey = "assistant.skill_activity.data_control.completed"
+	SkillActivityDisplayKeyDataControlCancelled SkillActivityDisplayKey = "assistant.skill_activity.data_control.cancelled"
+	SkillActivityDisplayKeyDataControlFailed SkillActivityDisplayKey = "assistant.skill_activity.data_control.failed"
+)
+
+func ParseSkillActivityDisplayKey(raw string) (SkillActivityDisplayKey, error) {
+	switch strings.TrimSpace(raw) {
+	case "assistant.skill_activity.run.accepted":
+		return SkillActivityDisplayKeyRunAccepted, nil
+	case "assistant.skill_activity.run.orienting":
+		return SkillActivityDisplayKeyRunOrienting, nil
+	case "assistant.skill_activity.run.planning":
+		return SkillActivityDisplayKeyRunPlanning, nil
+	case "assistant.skill_activity.run.executing":
+		return SkillActivityDisplayKeyRunExecuting, nil
+	case "assistant.skill_activity.run.observing":
+		return SkillActivityDisplayKeyRunObserving, nil
+	case "assistant.skill_activity.run.reflecting":
+		return SkillActivityDisplayKeyRunReflecting, nil
+	case "assistant.skill_activity.run.checkpointing":
+		return SkillActivityDisplayKeyRunCheckpointing, nil
+	case "assistant.skill_activity.run.waiting_user":
+		return SkillActivityDisplayKeyRunWaitingUser, nil
+	case "assistant.skill_activity.run.waiting_approval":
+		return SkillActivityDisplayKeyRunWaitingApproval, nil
+	case "assistant.skill_activity.run.waiting_external":
+		return SkillActivityDisplayKeyRunWaitingExternal, nil
+	case "assistant.skill_activity.run.paused":
+		return SkillActivityDisplayKeyRunPaused, nil
+	case "assistant.skill_activity.run.synthesizing":
+		return SkillActivityDisplayKeyRunSynthesizing, nil
+	case "assistant.skill_activity.run.verifying":
+		return SkillActivityDisplayKeyRunVerifying, nil
+	case "assistant.skill_activity.run.completed":
+		return SkillActivityDisplayKeyRunCompleted, nil
+	case "assistant.skill_activity.run.failed":
+		return SkillActivityDisplayKeyRunFailed, nil
+	case "assistant.skill_activity.run.cancelled":
+		return SkillActivityDisplayKeyRunCancelled, nil
+	case "assistant.skill_activity.consent.granted":
+		return SkillActivityDisplayKeyConsentGranted, nil
+	case "assistant.skill_activity.consent.revoked":
+		return SkillActivityDisplayKeyConsentRevoked, nil
+	case "assistant.skill_activity.subscription.active":
+		return SkillActivityDisplayKeySubscriptionActive, nil
+	case "assistant.skill_activity.subscription.paused":
+		return SkillActivityDisplayKeySubscriptionPaused, nil
+	case "assistant.skill_activity.subscription.archived":
+		return SkillActivityDisplayKeySubscriptionArchived, nil
+	case "assistant.skill_activity.data_control.pending_confirmation":
+		return SkillActivityDisplayKeyDataControlPendingConfirmation, nil
+	case "assistant.skill_activity.data_control.executing":
+		return SkillActivityDisplayKeyDataControlExecuting, nil
+	case "assistant.skill_activity.data_control.completed":
+		return SkillActivityDisplayKeyDataControlCompleted, nil
+	case "assistant.skill_activity.data_control.cancelled":
+		return SkillActivityDisplayKeyDataControlCancelled, nil
+	case "assistant.skill_activity.data_control.failed":
+		return SkillActivityDisplayKeyDataControlFailed, nil
+	default:
+		return "", fmt.Errorf("unknown SkillActivityDisplayKey wire value %q", raw)
+	}
+}
+
+func (value SkillActivityDisplayKey) WireName() string { return string(value) }
+
 type SkillMemoryPolicy string
 
 const (

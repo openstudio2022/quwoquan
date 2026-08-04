@@ -471,6 +471,10 @@ def build_execution_spec(
         # frontier; they may not fall back to uncontrolled platform sources.
         "articleCommercialClosure": carriers == ["article"],
     }
+    # 冻结当前正式分支与 commit，供 execution schema、重放与审计同源消费。
+    # detached campaign lane 仅可通过 execution_branch 的受控 frozen-mainline
+    # 环境回退解析分支，普通 detached 执行仍会在 schema/preflight fail-closed。
+    stamp_execution_branch(spec)
     spec["queuePolicy"] = {
         "backend": "reliabletask",
         "reliableTask": {

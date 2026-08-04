@@ -25,20 +25,16 @@ final class AlphaAccountSessionFacet implements AccountSessionCommandWriter {
   @override
   Future<FederatedLoginOutcome> loginWithWechat(
     LoginWithWechatCommand command,
-  ) async => FederatedLoginOutcome.authenticated(
-    _issueSession(identityOrigin: 'wechat'),
-  );
+  ) async => _authenticatedOutcome(identityOrigin: 'wechat');
 
   @override
   Future<FederatedLoginOutcome> loginWithAlipay(
     LoginWithAlipayCommand command,
-  ) async => FederatedLoginOutcome.authenticated(
-    _issueSession(identityOrigin: 'alipay'),
-  );
+  ) async => _authenticatedOutcome(identityOrigin: 'alipay');
 
   @override
   Future<FederatedLoginOutcome> loginWithQq(LoginWithQqCommand command) async =>
-      FederatedLoginOutcome.authenticated(_issueSession(identityOrigin: 'qq'));
+      _authenticatedOutcome(identityOrigin: 'qq');
 
   @override
   Future<AuthSessionGrant> loginOneTap(LoginOneTapCommand command) async =>
@@ -62,7 +58,7 @@ final class AlphaAccountSessionFacet implements AccountSessionCommandWriter {
   @override
   Future<TokenRefreshGrant> refreshToken(RefreshTokenCommand command) async {
     if (!_refreshTokens.remove(command.refreshToken)) {
-      throw const AccountSessionTokenExpiredException();
+      throw StateError('refresh token is expired or has already been consumed');
     }
     final sequence = ++_sequence;
     final refreshToken = 'alpha-refresh-$sequence';
@@ -112,6 +108,16 @@ final class AlphaAccountSessionFacet implements AccountSessionCommandWriter {
       accountHint: accountHint,
     );
   }
+
+  FederatedLoginOutcome _authenticatedOutcome({
+    required String identityOrigin,
+  }) {
+    return FederatedLoginOutcome(
+      status: FederatedLoginStatus.authenticated,
+      session: _issueSession(identityOrigin: identityOrigin),
+      expiresInSeconds: _sessionRememberTtlSeconds,
+    );
+  }
 }
 
 /// Alpha-only AuthenticationChallenge adapter。
@@ -140,7 +146,7 @@ final class AlphaAuthenticationChallengeFacet
     final sequence = ++_sequence;
     return AlipayAuthorizationGrant(
       authorizationPayload: 'alpha-alipay-authorization-$sequence',
-      expiresAt: DateTime.utc(2026, 12, 31).toIso8601String(),
+      expiresAt: DateTime.utc(2026, 12, 31),
     );
   }
 

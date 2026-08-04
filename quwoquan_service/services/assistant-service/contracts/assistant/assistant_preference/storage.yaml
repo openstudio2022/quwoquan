@@ -3,7 +3,7 @@ collections:
   assistant_preferences:
     entity: AssistantPreference
     role: authoritative
-    description: owner 结构化偏好事实真相源；自然身份由 userId+scope+sessionId+kind 唯一约束承载。
+    description: owner 结构化助手偏好真相源；自然身份由 userId+scope+sessionId+kind 唯一约束承载。
     indexes:
     - name: uq_assistant_preference_identity
       keys:

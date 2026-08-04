@@ -4,7 +4,9 @@ import pytest
 
 from internal.recommendation.recommendation_feedback_fact.application.appender import (
     Appender,
-    FeedbackFact,
+)
+from internal.recommendation.recommendation_feedback_fact.domain.fact import (
+    RecommendationFeedbackFact,
 )
 
 
@@ -36,9 +38,9 @@ class _Closures:
         return account_id in self.closed
 
 
-def _fact() -> FeedbackFact:
+def _fact() -> RecommendationFeedbackFact:
     now = datetime.now(timezone.utc)
-    return FeedbackFact(
+    return RecommendationFeedbackFact(
         feedback_id="feedback-001",
         source_event_id="behavior-001",
         exposure_id="exposure-001",

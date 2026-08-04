@@ -1,16 +1,11 @@
 import 'package:flutter/cupertino.dart';
+import '../../../../support/fixtures/intersection_fixtures.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_action_hint.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_dimension_tally.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_point.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_representative_actor.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_fact_items.dart';
 import 'package:quwoquan_app/components/object_page/intersection_entity.dart';
 import 'package:quwoquan_app/components/object_page/intersection_statement_row.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_card.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// T2：未知展示值可降级，但未登记 action dispatch 必须 fail-closed。
 ///
@@ -27,13 +22,13 @@ IntersectionReason _unregisteredReason({
   const unknownObjectType = 'orbital_station';
   const unknownIconKey = 'wormhole';
 
-  final objectTarget = IntersectionTarget(
+  final objectTarget = intersectionTargetFixture(
     objectType: unknownObjectType,
     objectId: 'obj_unknown_1',
     objectKind: unknownObjectKind,
     routeId: 'starshipDetail',
   );
-  return IntersectionReason(
+  return intersectionReasonFixture(
     intersectionId: 'ix_unknown_1',
     kind: unknownKind,
     source: unknownKind,
@@ -46,21 +41,25 @@ IntersectionReason _unregisteredReason({
     displayBinding: displayBinding,
     primaryText: '林清越也停靠过星港七号',
     primarySpans: <IntersectionTextSpan>[
-      IntersectionTextSpan(text: '林清越', role: 'actor'),
-      IntersectionTextSpan(text: '也停靠过', role: 'plain'),
-      IntersectionTextSpan(text: '星港七号', role: 'object', target: objectTarget),
+      intersectionTextSpanFixture(text: '林清越', role: 'actor'),
+      intersectionTextSpanFixture(text: '也停靠过', role: 'plain'),
+      intersectionTextSpanFixture(
+        text: '星港七号',
+        role: 'object',
+        target: objectTarget,
+      ),
     ],
     totalPointCount: 1,
     factPointCount: 1,
     dimensionPointSummary: <IntersectionDimensionTally>[
-      IntersectionDimensionTally(
+      intersectionDimensionTallyFixture(
         dimension: 'relationship',
         label: '关系',
         count: 1,
       ),
     ],
     intersectionPoints: <IntersectionPoint>[
-      IntersectionPoint(
+      intersectionPointFixture(
         pointId: 'p1',
         sourceRef: unknownKind,
         dimension: 'relationship',
@@ -70,7 +69,7 @@ IntersectionReason _unregisteredReason({
       ),
     ],
     actionHints: <IntersectionActionHint>[
-      IntersectionActionHint(
+      intersectionActionHintFixture(
         actionKey: 'dock_together',
         label: '一起停靠',
         dispatch: dispatch,
@@ -81,12 +80,12 @@ IntersectionReason _unregisteredReason({
     actorEvidenceTotalCount: 1,
     actorEvidenceCompleteness: 'complete',
     representativeActor: withRepresentative
-        ? IntersectionRepresentativeActor(
+        ? intersectionRepresentativeActorFixture(
             actorId: 'u_lin',
             displayName: '林清越',
             relationLabel: '同航线的人',
             privacyState: 'visible',
-            target: IntersectionTarget(
+            target: intersectionTargetFixture(
               objectType: 'user',
               objectId: 'u_lin',
               objectKind: 'person',
@@ -149,7 +148,7 @@ void main() {
       // 对象页把自身 objectType 经注册表 objectTypeBindings 收成 objectKind；未登记时
       // 得到空 objectKind / 空 routeId。宿主身份的判定必须回落到 objectId，
       // 而不是因为查表落空就把整张卡的 reason 全部判为不可展示。
-      final hostTarget = IntersectionTarget(
+      final hostTarget = intersectionTargetFixture(
         objectType: '',
         objectId: 'host_orbital_1',
         objectKind: '',

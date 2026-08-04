@@ -27,7 +27,7 @@ import (
 	learningprojection "quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/infrastructure/projection"
 	runpersistence "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/infrastructure"
 	assistanthttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/adapters/inbound/http"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
+	assistant "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/model"
 )
 
 func newLearningFactIntegrationHandler(t *testing.T) http.Handler {

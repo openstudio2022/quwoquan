@@ -21,7 +21,7 @@ func TestContentIntersectionReaderUsesInjectedPathAndSanitizesInternalEvidence(t
 			t.Error("delegated Authorization header is required")
 		}
 		if r.Header.Get("X-Client-User-Id") != "" {
-			t.Error("legacy client identity header must not be forwarded")
+			t.Error("retired client identity header must not be forwarded")
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"items": []map[string]any{{

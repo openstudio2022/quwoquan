@@ -8,7 +8,7 @@
 
 ## 1. 用户价值
 
-作为使用小趣助理的用户，我希望结构化偏好事实的即时注入、可见、遗忘和撤销恢复，从而获得连续、可控制且可追溯的助理结果。
+作为使用小趣助理的用户，我希望结构化助手偏好的即时注入、可见、遗忘和撤销恢复，从而获得连续、可控制且可追溯的助理结果。
 
 ## 2. 范围与非目标
 
@@ -22,7 +22,7 @@
 
 - vector memory
 - implicit personality inference
-- 事实型长期记忆与长会话压缩，归 [`long-term-memory-compaction`](../long-term-memory-compaction/spec.md)
+- 需用户显式确认的长期记忆与长会话压缩，归 [`long-term-memory-compaction`](../long-term-memory-compaction/spec.md)
 
 ## 3. 行为要求
 
@@ -34,7 +34,7 @@
 <a id="req-002"></a>
 ### REQ-002 用户遗忘偏好并撤销恢复
 
-- 用户遗忘偏好后，列表和运行时召回必须立即排除该事实；撤销窗口内恢复后重新纳入，非 owner 不可见。
+- 用户遗忘偏好后，列表和运行时召回必须立即排除该偏好；撤销窗口内恢复后重新纳入，非 owner 不可见。
 
 ## 4. 契约引用
 
@@ -54,10 +54,10 @@
 <a id="gwt-002"></a>
 ### GWT-002 用户遗忘偏好并撤销恢复
 
-- GIVEN 管理页展示 owner 的 active preference facts
-- WHEN 用户遗忘一个事实并在撤销窗口内恢复
-- THEN 遗忘后列表和运行时召回立即排除该事实
-- THEN 恢复后列表和运行时召回重新包含该事实
+- GIVEN 管理页展示 owner 的 active AssistantPreference
+- WHEN 用户遗忘一个助手偏好并在撤销窗口内恢复
+- THEN 遗忘后列表和运行时召回立即排除该偏好
+- THEN 恢复后列表和运行时召回重新包含该偏好
 - THEN 非 owner 始终得到 not-found
 
 ## 6. 依赖

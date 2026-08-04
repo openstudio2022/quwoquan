@@ -153,13 +153,17 @@ class _ProfileFootprintTabState extends ConsumerState<ProfileFootprintTab> {
     if (state.rawError != null) {
       return AppPageErrorState(
         semantic: _resolveErrorSemantic(state.rawError!),
-        onAction: (action) async {
+        onRecovery: (action) async {
           if (action.type == UiErrorActionType.retry ||
               action.type == UiErrorActionType.resubmit) {
             await ref
                 .read(myFootprintListProvider.notifier)
                 .load(type: _selectedType);
+            return ref.read(myFootprintListProvider).rawError == null
+                ? UiRecoveryOutcome.recovered
+                : UiRecoveryOutcome.stillBlocked;
           }
+          return UiRecoveryOutcome.cancelled;
         },
       );
     }

@@ -206,11 +206,11 @@ func TestPersonaActorSingleTrackMigrationPreservesGreetingJSONAndIsIdempotent(t 
 		t.Fatalf("isolate greeting migration fixtures: %v", err)
 	}
 
-	legacyRequesterKey, legacyTargetKey := retiredGreetingActorJSONKeys()
-	legacyReceipt := mustJSON(t, map[string]any{
+	retiredRequesterKey, retiredTargetKey := retiredGreetingActorJSONKeys()
+	retiredReceipt := mustJSON(t, map[string]any{
 		"id":                 "00000000-0000-0000-0000-000000000101",
-		legacyRequesterKey:   "persona-requester",
-		legacyTargetKey:      "persona-target",
+		retiredRequesterKey:  "persona-requester",
+		retiredTargetKey:     "persona-target",
 		"status":             "pending",
 		"requestMessage":     "你好，成都",
 		"source":             "profile",
@@ -227,10 +227,10 @@ func TestPersonaActorSingleTrackMigrationPreservesGreetingJSONAndIsIdempotent(t 
 		"nestedEvidence":     map[string]any{"attempt": 7, "accepted": false},
 		"unchangedReference": []any{"alpha", 42, nil},
 	})
-	legacyOutbox := mustJSON(t, map[string]any{
+	retiredOutbox := mustJSON(t, map[string]any{
 		"id":                           "00000000-0000-0000-0000-000000000201",
-		legacyRequesterKey:             "persona-requester",
-		legacyTargetKey:                "persona-target",
+		retiredRequesterKey:            "persona-requester",
+		retiredTargetKey:               "persona-target",
 		"source":                       "profile",
 		"targetAllowsStrangerGreeting": true,
 		"nestedEvidence":               map[string]any{"labels": []any{"一", "二"}},
@@ -253,8 +253,8 @@ func TestPersonaActorSingleTrackMigrationPreservesGreetingJSONAndIsIdempotent(t 
 			'greeting-json-migration-key', 'SendGreetingRequest',
 			'00000000-0000-0000-0000-000000000101', $1::jsonb, NOW()
 		)
-	`, legacyReceipt); err != nil {
-		t.Fatalf("seed legacy greeting receipt JSON: %v", err)
+	`, retiredReceipt); err != nil {
+		t.Fatalf("seed retired greeting receipt JSON: %v", err)
 	}
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO greeting_request_outbox (
@@ -264,7 +264,7 @@ func TestPersonaActorSingleTrackMigrationPreservesGreetingJSONAndIsIdempotent(t 
 			'00000000-0000-0000-0000-000000000201',
 			'GreetingRequestSent', $1::jsonb, NOW()
 		)
-	`, legacyOutbox); err != nil {
+	`, retiredOutbox); err != nil {
 		t.Fatalf("seed pending greeting outbox JSON: %v", err)
 	}
 	if _, err := tx.Exec(ctx, `
@@ -275,7 +275,7 @@ func TestPersonaActorSingleTrackMigrationPreservesGreetingJSONAndIsIdempotent(t 
 			'00000000-0000-0000-0000-000000000202',
 			'GreetingRequestSent', $1::jsonb, NOW(), NOW()
 		)
-	`, legacyOutbox); err != nil {
+	`, retiredOutbox); err != nil {
 		t.Fatalf("seed published greeting outbox history: %v", err)
 	}
 
@@ -290,7 +290,7 @@ func TestPersonaActorSingleTrackMigrationPreservesGreetingJSONAndIsIdempotent(t 
 		tx,
 		canonicalReceipt,
 		canonicalOutbox,
-		legacyOutbox,
+		retiredOutbox,
 	)
 	receiptAfterFirst, pendingAfterFirst, publishedAfterFirst :=
 		readGreetingMigrationJSON(t, ctx, tx)
@@ -304,7 +304,7 @@ func TestPersonaActorSingleTrackMigrationPreservesGreetingJSONAndIsIdempotent(t 
 		tx,
 		canonicalReceipt,
 		canonicalOutbox,
-		legacyOutbox,
+		retiredOutbox,
 	)
 	receiptAfterSecond, pendingAfterSecond, publishedAfterSecond :=
 		readGreetingMigrationJSON(t, ctx, tx)
@@ -324,10 +324,10 @@ func TestPersonaActorSingleTrackMigrationPreservesGreetingJSONAndIsIdempotent(t 
 }
 
 func TestPersonaActorSingleTrackMigrationRejectsAmbiguousGreetingJSON(t *testing.T) {
-	legacyRequesterKey, legacyTargetKey := retiredGreetingActorJSONKeys()
+	retiredRequesterKey, retiredTargetKey := retiredGreetingActorJSONKeys()
 	conflictingPayload := mustJSON(t, map[string]any{
-		legacyRequesterKey:   "persona-requester",
-		legacyTargetKey:      "persona-target",
+		retiredRequesterKey:  "persona-requester",
+		retiredTargetKey:     "persona-target",
 		"requesterPersonaId": "persona-requester",
 		"targetPersonaId":    "persona-target",
 	})
@@ -408,7 +408,7 @@ func TestSubjectFollowReceiptPersonaMigrationIsCanonicalAndIdempotent(t *testing
 	if _, err := tx.Exec(ctx, `DELETE FROM subject_follow_command_receipts`); err != nil {
 		t.Fatalf("isolate subject follow receipt fixtures: %v", err)
 	}
-	legacy := mustJSON(t, map[string]any{
+	retired := mustJSON(t, map[string]any{
 		"Follow": map[string]any{
 			"ID":          "sf_receipt_migration",
 			"PersonaID":   "persona-receipt-migration",
@@ -449,8 +449,8 @@ func TestSubjectFollowReceiptPersonaMigrationIsCanonicalAndIdempotent(t *testing
 			'FollowSubject',
 			'sf_receipt_migration', 3, $1::jsonb
 		)
-	`, legacy); err != nil {
-		t.Fatalf("seed legacy subject follow receipt: %v", err)
+	`, retired); err != nil {
+		t.Fatalf("seed retired subject follow receipt: %v", err)
 	}
 
 	migrationSQL := readSubjectFollowReceiptPersonaMigrationSQL(t)
@@ -621,7 +621,7 @@ func assertGreetingJSONMigrationState(
 	queryer greetingMigrationQueryer,
 	canonicalReceipt string,
 	canonicalPendingOutbox string,
-	legacyPublishedOutbox string,
+	retiredPublishedOutbox string,
 ) {
 	t.Helper()
 	assertJSONBMatches := func(query, expected string) {
@@ -648,7 +648,7 @@ func assertGreetingJSONMigrationState(
 		SELECT payload_json = $1::jsonb
 		FROM greeting_request_outbox
 		WHERE event_id = 'greeting-json-migration-published'
-	`, legacyPublishedOutbox)
+	`, retiredPublishedOutbox)
 }
 
 func readGreetingMigrationJSON(

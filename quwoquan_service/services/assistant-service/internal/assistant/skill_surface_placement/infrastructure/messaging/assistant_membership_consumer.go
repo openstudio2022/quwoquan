@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"sync"
 	"time"
 
 	runtimemessaging "quwoquan_service/runtime/messaging"
@@ -30,6 +31,11 @@ type AssistantMembershipConsumer struct {
 	projector AssistantMembershipProjector
 	consumer  string
 	logger    *slog.Logger
+	now       func() time.Time
+
+	healthMu           sync.RWMutex
+	lastSuccessfulPoll time.Time
+	lastFailure        error
 }
 
 func NewAssistantMembershipConsumer(
@@ -50,6 +56,7 @@ func NewAssistantMembershipConsumer(
 		projector: projector,
 		consumer:  consumer,
 		logger:    logger,
+		now:       time.Now,
 	}
 }
 
@@ -65,7 +72,12 @@ func (consumer *AssistantMembershipConsumer) EnsureGroup(ctx context.Context) er
 	)
 }
 
-func (consumer *AssistantMembershipConsumer) ProcessOnce(ctx context.Context) (int, error) {
+func (consumer *AssistantMembershipConsumer) ProcessOnce(
+	ctx context.Context,
+) (processed int, resultErr error) {
+	defer func() {
+		consumer.recordPoll(resultErr)
+	}()
 	if consumer == nil || consumer.transport == nil || consumer.projector == nil {
 		return 0, fmt.Errorf("assistant membership consumer not configured")
 	}
@@ -85,7 +97,6 @@ func (consumer *AssistantMembershipConsumer) ProcessOnce(ctx context.Context) (i
 	if err != nil {
 		return 0, err
 	}
-	processed := 0
 	for _, message := range messages {
 		dedupKey := assistantMembershipDedupKey(message)
 		claimed, claimErr := consumer.transport.ClaimDurableDelivery(
@@ -149,11 +160,38 @@ func (consumer *AssistantMembershipConsumer) ProcessOnce(ctx context.Context) (i
 	return processed, nil
 }
 
+func (consumer *AssistantMembershipConsumer) Healthy(
+	_ context.Context,
+	maxStaleness time.Duration,
+) error {
+	if consumer == nil {
+		return fmt.Errorf("assistant membership consumer is not configured")
+	}
+	if maxStaleness <= 0 {
+		maxStaleness = 10 * time.Second
+	}
+	consumer.healthMu.RLock()
+	lastSuccessfulPoll := consumer.lastSuccessfulPoll
+	lastFailure := consumer.lastFailure
+	consumer.healthMu.RUnlock()
+	if lastFailure != nil {
+		return lastFailure
+	}
+	if lastSuccessfulPoll.IsZero() {
+		return fmt.Errorf("assistant membership consumer has not completed a poll")
+	}
+	if consumer.now().UTC().Sub(lastSuccessfulPoll) > maxStaleness {
+		return fmt.Errorf("assistant membership consumer heartbeat is stale")
+	}
+	return nil
+}
+
 func (consumer *AssistantMembershipConsumer) Run(ctx context.Context, interval time.Duration) {
 	if interval <= 0 {
 		interval = 500 * time.Millisecond
 	}
 	if err := consumer.EnsureGroup(ctx); err != nil {
+		consumer.recordPoll(err)
 		consumer.logger.Error("assistant membership consumer ensure group failed", "err", err)
 		return
 	}
@@ -169,6 +207,20 @@ func (consumer *AssistantMembershipConsumer) Run(ctx context.Context, interval t
 		case <-ticker.C:
 		}
 	}
+}
+
+func (consumer *AssistantMembershipConsumer) recordPoll(err error) {
+	if consumer == nil {
+		return
+	}
+	consumer.healthMu.Lock()
+	defer consumer.healthMu.Unlock()
+	if err != nil {
+		consumer.lastFailure = err
+		return
+	}
+	consumer.lastSuccessfulPoll = consumer.now().UTC()
+	consumer.lastFailure = nil
 }
 
 func (consumer *AssistantMembershipConsumer) project(

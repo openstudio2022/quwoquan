@@ -383,6 +383,29 @@ fields:
     ops_exposure: read
     role: authoritative_state
 types:
+  ConversationRosterUpdatedEventPayload:
+    description: 会话 roster 或群资料变化后通知成员端定点重建 owner projection 的 canonical 实时载荷。
+    fields:
+      - {name: conversationId, type: string, constraints: [NOT_BLANK]}
+      - {name: membersRosterRevision, type: int64, constraints: [NOT_NULL]}
+      - {name: updatedAt, type: timestamp, constraints: [NOT_NULL]}
+      - {name: aspects, type: '[]string', constraints: [NOT_NULL]}
+  ConversationAvatarUpdatedEventPayload:
+    description: 群头像更新后供成员端失效缓存并经 owner query 重建的 canonical 实时载荷。
+    fields:
+      - {name: conversationId, type: string, constraints: [NOT_BLANK]}
+      - {name: avatarUrl, type: string, constraints: [NOT_BLANK]}
+      - {name: groupAvatarAssetId, type: string, constraints: [NOT_BLANK]}
+      - {name: groupAvatarVersion, type: int64, constraints: [NOT_NULL]}
+      - {name: groupAvatarSourceHash, type: string, constraints: [NOT_BLANK]}
+      - {name: updatedAt, type: timestamp, constraints: [NOT_NULL]}
+  ConversationDissolvedEventPayload:
+    description: 会话进入 dissolved 终态后令成员端清除入口和私有离线副本的 canonical 实时载荷。
+    fields:
+      - {name: conversationId, type: string, constraints: [NOT_BLANK]}
+      - {name: status, type: enum, enum_ref: ConversationStatus, constraints: [NOT_NULL]}
+      - {name: dissolvedBy, type: string, constraints: [NOT_BLANK]}
+      - {name: dissolvedAt, type: timestamp, constraints: [NOT_NULL]}
   GatheringConversationProjectionCommand:
     description: circle-service 提交的 Gathering 群会话创建事实；禁止客户端构造。
     fields:
@@ -395,33 +418,6 @@ types:
     fields:
       - {name: gatheringId, type: string, constraints: [NOT_BLANK]}
       - {name: conversationId, type: string, constraints: [NOT_BLANK]}
-  GreetingIntersectionSnapshot:
-    description: user-service 重解析并在 Greeting 升级时冻结的破冰交集依据
-    fields:
-      - name: intersectionId
-        type: string
-        constraints: [NOT_BLANK]
-      - name: evidenceId
-        type: string
-        constraints: [NOT_BLANK]
-      - name: sourceRef
-        type: string
-        constraints: [NOT_BLANK]
-      - name: objectTypeRef
-        type: string
-        constraints: [NOT_BLANK]
-      - name: objectId
-        type: string
-        constraints: [NOT_BLANK]
-      - name: primaryText
-        type: string
-        constraints: [NOT_BLANK]
-      - name: dimension
-        type: string
-        constraints: [NULLABLE]
-      - name: resolvedAt
-        type: timestamp
-        constraints: [NOT_NULL]
   ChatAccountClosureDeadLetterRecoveryRequest:
     description: operator 释放 Chat 注销清理 terminal marker 的强类型命令；只接受 Redis source PEL 坐标。
     fields:

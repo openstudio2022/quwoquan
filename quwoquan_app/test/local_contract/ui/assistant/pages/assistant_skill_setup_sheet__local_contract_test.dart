@@ -1,6 +1,7 @@
 // spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/skill-user-lifecycle/spec.md#gwt-001
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_skill_setup_schema.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_skill_setup_sheet.dart';
 
@@ -37,7 +38,22 @@ void main() {
           dataUseSummary: '只读取已授权的行程。',
           targetUserLabels: const <String>['旅行组织者'],
           surfaceLabels: const <String>['个人', '群聊'],
-          permissionLabels: const <String>['读取行程'],
+          requiredPermissionScopes:
+              const <AssistantSkillConsentScopePresentation>[
+                AssistantSkillConsentScopePresentation(
+                  displayText: '读取行程',
+                  description: '用于行程规划',
+                  granted: true,
+                ),
+              ],
+          optionalPermissionScopes:
+              const <AssistantSkillConsentScopePresentation>[
+                AssistantSkillConsentScopePresentation(
+                  displayText: '使用脱敏反馈摘要',
+                  description: '不读取原始文字',
+                  granted: false,
+                ),
+              ],
           schema: schema,
           initialConfiguration: const <String, Object?>{
             'pace': 'balanced',
@@ -51,6 +67,16 @@ void main() {
     expect(find.text('旅行偏好'), findsOneWidget);
     expect(find.text('均衡'), findsOneWidget);
     expect(find.text('unknown'), findsNothing);
+    expect(
+      find.text(AssistantText.assistantSkillRequiredConsentScopes),
+      findsOneWidget,
+    );
+    expect(
+      find.text(AssistantText.assistantSkillOptionalConsentScopes),
+      findsOneWidget,
+    );
+    expect(find.textContaining('读取行程'), findsOneWidget);
+    expect(find.textContaining('使用脱敏反馈摘要'), findsOneWidget);
     await tester.enterText(
       find.byKey(const ValueKey<String>('assistant_skill_setup_input_lead')),
       '30',
@@ -74,7 +100,8 @@ void main() {
           dataUseSummary: '',
           targetUserLabels: <String>[],
           surfaceLabels: <String>[],
-          permissionLabels: <String>[],
+          requiredPermissionScopes: <AssistantSkillConsentScopePresentation>[],
+          optionalPermissionScopes: <AssistantSkillConsentScopePresentation>[],
           schema: null,
           initialConfiguration: <String, Object?>{},
           onSave: null,
@@ -114,7 +141,10 @@ void main() {
           dataUseSummary: '',
           targetUserLabels: const <String>[],
           surfaceLabels: const <String>[],
-          permissionLabels: const <String>[],
+          requiredPermissionScopes:
+              const <AssistantSkillConsentScopePresentation>[],
+          optionalPermissionScopes:
+              const <AssistantSkillConsentScopePresentation>[],
           schema: schema,
           initialConfiguration: const <String, Object?>{},
           onSave: (_) async {},

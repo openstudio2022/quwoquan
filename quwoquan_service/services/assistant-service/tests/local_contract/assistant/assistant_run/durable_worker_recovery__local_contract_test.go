@@ -3,12 +3,14 @@ package assistant_run_test
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	generated "quwoquan_service/services/assistant-service/generated/assistant/assistant_session"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
+	assistantmodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/model"
 )
 
 func TestDurableWorkerPersistsTypedItemsAndVerifiedTerminalSnapshot(t *testing.T) {
@@ -41,15 +43,20 @@ func TestDurableWorkerPersistsTypedItemsAndVerifiedTerminalSnapshot(t *testing.T
 	}
 	if stored.State != generated.AssistantRunStateCompleted ||
 		stored.CompletedAt == nil ||
-		stored.TerminalSnapshot["answerText"] != "可回查答案" {
+		stored.TerminalSnapshot == nil ||
+		stored.TerminalSnapshot.AnswerText != "可回查答案" {
 		t.Fatalf("unexpected terminal run: %#v", stored)
 	}
-	selectedPolicy, ok := stored.TerminalSnapshot["selectedPolicyRef"].(map[string]any)
-	if !ok || selectedPolicy["releaseDigest"] != stored.FrozenPolicySelection.ReleaseDigest {
-		t.Fatalf("terminal selectedPolicyRef=%#v", selectedPolicy)
+	if stored.TerminalSnapshot.SelectedPolicyRef == nil ||
+		stored.TerminalSnapshot.SelectedPolicyRef.ReleaseDigest !=
+			stored.FrozenPolicySelection.ReleaseDigest {
+		t.Fatalf("terminal selectedPolicyRef=%#v", stored.TerminalSnapshot.SelectedPolicyRef)
 	}
-	if _, leaked := stored.TerminalSnapshot["presentationDocument"]; leaked {
-		t.Fatalf("terminal snapshot leaked presentation document: %#v", stored.TerminalSnapshot)
+	if len(stored.TerminalSnapshot.Processes) != 1 ||
+		stored.TerminalSnapshot.Processes[0].ProcessID != "process:web:1" ||
+		len(stored.TerminalSnapshot.Processes[0].AcceptedReferences) != 1 ||
+		stored.TerminalSnapshot.Processes[0].AcceptedReferences[0].SourceID != "source:web:1" {
+		t.Fatalf("terminal typed processes=%#v", stored.TerminalSnapshot.Processes)
 	}
 	presentation := stored.PresentationDocument
 	if presentation["revision"] != int64(2) ||
@@ -95,6 +102,12 @@ func TestDurableWorkerPersistsTypedItemsAndVerifiedTerminalSnapshot(t *testing.T
 			t.Fatalf("journal gap at %d: %#v", index, events)
 		}
 	}
+	completedEvent := events[len(events)-1]
+	terminalProcesses, ok := completedEvent.Payload["processes"].([]assistantmodel.AssistantRunVisibleProcess)
+	if !ok || len(terminalProcesses) != 1 ||
+		terminalProcesses[0].ProcessID != "process:web:1" {
+		t.Fatalf("terminal journal payload is not typed: %#v", completedEvent.Payload)
+	}
 	presentationEvents := []string{}
 	for _, event := range events {
 		if event.Kind == "presentation_snapshot" ||
@@ -106,6 +119,167 @@ func TestDurableWorkerPersistsTypedItemsAndVerifiedTerminalSnapshot(t *testing.T
 		presentationEvents[0] != "presentation_snapshot" ||
 		presentationEvents[1] != "presentation_commit" {
 		t.Fatalf("presentation event lifecycle=%v", presentationEvents)
+	}
+}
+
+func TestDurableWorkerPersistsModelDerivedTaskGraphPatches(t *testing.T) {
+	repository := newMemoryRunRepository()
+	queue := newMemoryWorkQueue()
+	run, err := workerCommandService(repository).Start(
+		context.Background(),
+		runruntime.StartCommand{
+			UserID:          "user-task-patch",
+			SessionID:       "session-task-patch",
+			ClientRequestID: "request-task-patch",
+			InputText:       "检索并综合证据",
+		},
+	)
+	if err != nil {
+		t.Fatalf("start run: %v", err)
+	}
+	queue.enqueue(run.RunID)
+	worker := runruntime.NewDurableWorker(
+		repository,
+		queue,
+		&taskGraphPatchRunExecutor{},
+		"worker-task-patch",
+	)
+	worked, err := worker.ProcessNext(context.Background())
+	if err != nil || !worked {
+		t.Fatalf("process run: worked=%t err=%v", worked, err)
+	}
+	stored, err := repository.Load(context.Background(), run.RunID)
+	if err != nil {
+		t.Fatalf("load run: %v", err)
+	}
+	if stored.State != generated.AssistantRunStateCompleted ||
+		len(stored.TaskGraph.Tasks) != 3 || !stored.TaskGraph.AllCompleted() {
+		t.Fatalf("dynamic task graph did not complete: %#v", stored.TaskGraph)
+	}
+	planTask := stored.TaskGraph.Tasks[1]
+	toolTask := stored.TaskGraph.Tasks[2]
+	if len(planTask.Dependencies) != 0 ||
+		len(toolTask.Dependencies) != 1 ||
+		toolTask.Dependencies[0] != planTask.TaskID {
+		t.Fatalf("dynamic dependency frontier=%#v", stored.TaskGraph.Tasks)
+	}
+	for _, item := range stored.Items {
+		if strings.Contains(item.ItemID, ":dynamic:") && item.TaskID == "task_root" {
+			t.Fatalf("dynamic process remained attached to task_root: %#v", item)
+		}
+	}
+}
+
+func TestDurableWorkerExecutesCumulativeGoalAfterSteerSafeBoundary(t *testing.T) {
+	repository := newMemoryRunRepository()
+	queue := newMemoryWorkQueue()
+	commands := workerCommandService(repository)
+	run, err := commands.Start(context.Background(), runruntime.StartCommand{
+		UserID:          "user-worker",
+		SessionID:       "session-worker",
+		ClientRequestID: "request-worker-steer-goal",
+		InputText:       "规划杭州一日游",
+	})
+	if err != nil {
+		t.Fatalf("start run: %v", err)
+	}
+	run, err = commands.Steer(
+		context.Background(),
+		"user-worker",
+		run.RunID,
+		"command-worker-steer-goal",
+		"只安排步行可达且适合雨天的地点",
+	)
+	if err != nil {
+		t.Fatalf("steer run: %v", err)
+	}
+	if run.GoalRevision != 2 || len(run.GoalHistory) != 1 {
+		t.Fatalf("steer was not applied at accepted safe boundary: %#v", run)
+	}
+
+	capturing := &goalCapturingRunExecutor{}
+	queue.enqueue(run.RunID)
+	worker := runruntime.NewDurableWorker(
+		repository,
+		queue,
+		capturing,
+		"worker-steered-goal",
+	)
+	worked, err := worker.ProcessNext(context.Background())
+	if err != nil || !worked {
+		t.Fatalf("process steered run: worked=%t err=%v", worked, err)
+	}
+	if capturing.request.Goal == "规划杭州一日游" ||
+		!strings.Contains(capturing.request.Goal, "规划杭州一日游") ||
+		!strings.Contains(
+			capturing.request.Goal,
+			"修订 2：只安排步行可达且适合雨天的地点",
+		) {
+		t.Fatalf("execution goal ignored applied steer: %q", capturing.request.Goal)
+	}
+	if len(capturing.request.GoalHistory) != 1 ||
+		capturing.request.GoalHistory[0].Instruction !=
+			"只安排步行可达且适合雨天的地点" {
+		t.Fatalf("execution goal history = %#v", capturing.request.GoalHistory)
+	}
+}
+
+func TestDurableWorkerReplansAfterSteerAtCompletedItemBoundary(t *testing.T) {
+	repository := newMemoryRunRepository()
+	queue := newMemoryWorkQueue()
+	commands := workerCommandService(repository)
+	run, err := commands.Start(context.Background(), runruntime.StartCommand{
+		UserID:          "user-boundary-steer",
+		SessionID:       "session-boundary-steer",
+		ClientRequestID: "request-boundary-steer",
+		InputText:       "规划杭州周末行程",
+	})
+	if err != nil {
+		t.Fatalf("start run: %v", err)
+	}
+	executor := &boundarySteeringRunExecutor{commands: commands}
+	queue.enqueue(run.RunID)
+	worker := runruntime.NewDurableWorker(
+		repository,
+		queue,
+		executor,
+		"worker-boundary-steer",
+	)
+	worked, err := worker.ProcessNext(context.Background())
+	if err != nil || !worked {
+		t.Fatalf("first process: worked=%t err=%v", worked, err)
+	}
+	steered, err := repository.Load(context.Background(), run.RunID)
+	if err != nil {
+		t.Fatalf("load steered run: %v", err)
+	}
+	if steered.State != generated.AssistantRunStateExecuting ||
+		steered.GoalRevision != 2 || len(steered.PendingSteer) != 0 {
+		t.Fatalf("steer did not cross durable boundary: %#v", steered)
+	}
+	planRevisionFound := false
+	for _, item := range steered.Items {
+		if item.ItemID == "plan:"+run.RunID+":goal:2" &&
+			item.Status == generated.AssistantRunItemStatusCompleted {
+			planRevisionFound = true
+		}
+	}
+	if !planRevisionFound {
+		t.Fatalf("goal revision plan audit item missing: %#v", steered.Items)
+	}
+	worked, err = worker.ProcessNext(context.Background())
+	if err != nil || !worked {
+		t.Fatalf("second process: worked=%t err=%v", worked, err)
+	}
+	if !strings.Contains(executor.lastRequest.Goal, "只保留步行可达地点") ||
+		executor.lastRequest.IdempotencyPrefix ==
+			"run:"+run.RunID+":goal:1" {
+		t.Fatalf("replanned request ignored revised goal: %#v", executor.lastRequest)
+	}
+	completed, err := repository.Load(context.Background(), run.RunID)
+	if err != nil || completed.State != generated.AssistantRunStateCompleted ||
+		!completed.TaskGraph.AllCompleted() {
+		t.Fatalf("replanned run did not complete: run=%#v err=%v", completed, err)
 	}
 }
 
@@ -274,18 +448,18 @@ func workerCommandService(
 ) *runruntime.CommandService {
 	return runruntime.NewCommandService(
 		repository,
-		runruntime.SessionAuthorizerFunc(func(
+		runruntime.SessionResolverFunc(func(
 			context.Context,
 			string,
 			string,
-		) error {
-			return nil
+		) (runruntime.SessionContinuity, error) {
+			return runruntime.SessionContinuity{}, nil
 		}),
 		testSkillPackageIdentityResolver(),
 		runruntime.AllowAllStartAccessPolicy{},
 		time.Now,
 		nil,
-		testPolicyResolver(),
+		runruntime.WithPolicyResolver(testPolicyResolver()),
 	)
 }
 
@@ -318,10 +492,40 @@ func (e *successfulRunExecutor) Execute(
 		return runruntime.ExecutionResult{}, err
 	}
 	return runruntime.ExecutionResult{
-		AnswerText:   "可回查答案",
-		Processes:    []map[string]any{},
-		ArtifactRefs: []string{"artifact:web:1"},
+		AnswerText: "可回查答案",
+		Processes: []assistantmodel.AssistantRunVisibleProcess{{
+			ProcessID:              "process:web:1",
+			Scope:                  "tool",
+			Stage:                  "searching",
+			ActionCode:             "invoke_tool",
+			Status:                 "completed",
+			Order:                  1,
+			Summary:                "公开证据已验证",
+			SearchedDocumentCount:  1,
+			ProcessedDocumentCount: 1,
+			AcceptedDocumentCount:  1,
+			AcceptedReferences: []assistantmodel.AssistantRunVisibleReference{{
+				SourceID: "source:web:1",
+				Title:    "公开证据",
+				Destination: assistantmodel.CitationDestination{
+					Kind: "public_web_source",
+					URL:  "https://example.com/evidence",
+				},
+				Source:  "example.com",
+				Snippet: "公开证据摘要",
+			}},
+		}},
+		ArtifactRefs: []string{
+			"artifact:web:1",
+			"assistant_run_item:answer:" + request.RunID,
+		},
 		EvidenceRefs: []string{"source:web:1"},
+		VerificationEvidence: []runruntime.VerificationEvidence{{
+			Requirement:  "answer_present",
+			Passed:       true,
+			ArtifactRefs: []string{"assistant_run_item:answer:" + request.RunID},
+			Summary:      "durable final answer item is present",
+		}},
 		Presentation: map[string]any{
 			"templateRef":       "assistant.answer.default@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 			"templateDigest":    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -334,9 +538,139 @@ func (e *successfulRunExecutor) Execute(
 			"fallbackPlainText": "可回查答案",
 			"committedAt":       "",
 		},
-		Verified:            true,
-		VerificationSummary: "证据与答案一致",
 	}, nil
+}
+
+type taskGraphPatchRunExecutor struct{}
+
+func (e *taskGraphPatchRunExecutor) Execute(
+	ctx context.Context,
+	request runruntime.ExecutionRequest,
+	emit func(runruntime.ExecutionItemUpdate) error,
+) (runruntime.ExecutionResult, error) {
+	planTaskID := request.IdempotencyPrefix + ":task:planning"
+	toolTaskID := request.IdempotencyPrefix + ":task:tool"
+	updates := []runruntime.ExecutionItemUpdate{
+		{
+			ItemID:  request.IdempotencyPrefix + ":dynamic:planning",
+			Kind:    generated.AssistantRunItemKindTask,
+			Status:  generated.AssistantRunItemStatusStarted,
+			TaskID:  planTaskID,
+			Summary: "形成执行计划",
+			Task: &runruntime.ExecutionTaskUpdate{
+				Goal:       "形成执行计划",
+				OwnerAgent: "manager",
+			},
+		},
+		{
+			ItemID:  request.IdempotencyPrefix + ":dynamic:planning",
+			Kind:    generated.AssistantRunItemKindTask,
+			Status:  generated.AssistantRunItemStatusCompleted,
+			TaskID:  planTaskID,
+			Summary: "执行计划已形成",
+			Task: &runruntime.ExecutionTaskUpdate{
+				Goal:       "形成执行计划",
+				OwnerAgent: "manager",
+			},
+		},
+		{
+			ItemID:  request.IdempotencyPrefix + ":dynamic:tool",
+			Kind:    generated.AssistantRunItemKindToolUse,
+			Status:  generated.AssistantRunItemStatusStarted,
+			TaskID:  toolTaskID,
+			Summary: "检索公开证据",
+			Task: &runruntime.ExecutionTaskUpdate{
+				Goal:         "检索公开证据",
+				Dependencies: []string{planTaskID},
+				OwnerAgent:   "manager",
+			},
+		},
+		{
+			ItemID:       request.IdempotencyPrefix + ":dynamic:tool",
+			Kind:         generated.AssistantRunItemKindToolUse,
+			Status:       generated.AssistantRunItemStatusCompleted,
+			TaskID:       toolTaskID,
+			Summary:      "公开证据已验证",
+			ArtifactRefs: []string{"artifact:web:dynamic"},
+			Task: &runruntime.ExecutionTaskUpdate{
+				Goal:         "检索公开证据",
+				Dependencies: []string{planTaskID},
+				OwnerAgent:   "manager",
+			},
+		},
+	}
+	for index, update := range updates {
+		if err := emit(update); err != nil {
+			return runruntime.ExecutionResult{}, err
+		}
+		// Worker retry/replay may deliver the same lifecycle edge more than
+		// once. The aggregate must treat an identical edge as idempotent.
+		if index < 2 {
+			if err := emit(update); err != nil {
+				return runruntime.ExecutionResult{}, err
+			}
+		}
+	}
+	return (&successfulRunExecutor{}).Execute(ctx, request, emit)
+}
+
+type boundarySteeringRunExecutor struct {
+	commands    *runruntime.CommandService
+	calls       int
+	lastRequest runruntime.ExecutionRequest
+}
+
+func (e *boundarySteeringRunExecutor) Execute(
+	ctx context.Context,
+	request runruntime.ExecutionRequest,
+	emit func(runruntime.ExecutionItemUpdate) error,
+) (runruntime.ExecutionResult, error) {
+	e.calls++
+	e.lastRequest = request
+	if e.calls > 1 {
+		return (&successfulRunExecutor{}).Execute(ctx, request, emit)
+	}
+	taskID := request.IdempotencyPrefix + ":task:planning"
+	itemID := request.IdempotencyPrefix + ":dynamic:steer-boundary"
+	task := &runruntime.ExecutionTaskUpdate{
+		Goal:       "形成初始行程计划",
+		OwnerAgent: "manager",
+	}
+	if err := emit(runruntime.ExecutionItemUpdate{
+		ItemID: itemID, Kind: generated.AssistantRunItemKindTask,
+		Status: generated.AssistantRunItemStatusStarted,
+		TaskID: taskID, Summary: "形成初始行程计划", Task: task,
+	}); err != nil {
+		return runruntime.ExecutionResult{}, err
+	}
+	if _, err := e.commands.Steer(
+		ctx,
+		request.UserID,
+		request.RunID,
+		"command-boundary-steer",
+		"只保留步行可达地点",
+	); err != nil {
+		return runruntime.ExecutionResult{}, err
+	}
+	err := emit(runruntime.ExecutionItemUpdate{
+		ItemID: itemID, Kind: generated.AssistantRunItemKindTask,
+		Status: generated.AssistantRunItemStatusCompleted,
+		TaskID: taskID, Summary: "初始计划阶段已完成", Task: task,
+	})
+	return runruntime.ExecutionResult{}, err
+}
+
+type goalCapturingRunExecutor struct {
+	request runruntime.ExecutionRequest
+}
+
+func (e *goalCapturingRunExecutor) Execute(
+	ctx context.Context,
+	request runruntime.ExecutionRequest,
+	emit func(runruntime.ExecutionItemUpdate) error,
+) (runruntime.ExecutionResult, error) {
+	e.request = request
+	return (&successfulRunExecutor{}).Execute(ctx, request, emit)
 }
 
 type blockingRunExecutor struct {

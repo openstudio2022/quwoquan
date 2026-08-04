@@ -15,7 +15,6 @@ import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
-import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
@@ -24,8 +23,9 @@ import 'package:quwoquan_app/l10n/l10n.dart';
 
 /// 私人助理管理页
 ///
-/// 隐私权限、只读记忆列表与技能中心入口均消费真实云端能力。
-/// 无后端支撑的本地假开关（性格/读聊天/位置/通知）已随 B8 阶段 3b 删除。
+/// 显式助手偏好与 Skill Center 入口均消费真实云端能力。
+/// Skill 授权由 Skill Center 按 active package 目录声明的
+/// requiredConsentScopes 统一管理，此页不维护按 Skill ID 特判的权限开关。
 class AssistantManagementPage extends ConsumerStatefulWidget {
   const AssistantManagementPage({super.key, required this.onBack});
 
@@ -65,7 +65,6 @@ class _AssistantManagementPageState
   @override
   Widget build(BuildContext context) {
     final isDark = ref.watch(isDarkProvider);
-    final contentAccessState = ref.watch(personalContentAccessProvider);
     final preferencesAsync = ref.watch(assistantPreferencesProvider);
     final fgPrimary = SettingsSemanticConstants.labelColor(isDark);
     final fgSecondary = SettingsSemanticConstants.secondaryColor(isDark);
@@ -84,63 +83,6 @@ class _AssistantManagementPageState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            SettingsInsetGroupedSection(
-              isDark: isDark,
-              header: AssistantText.assistantPrivacyPermissions,
-              child: Column(
-                children: [
-                  _buildPermissionRow(
-                    AssistantText.assistantContentAccessPermission,
-                    contentAccessState.granted,
-                    (value) {
-                      if (contentAccessState.isHydrating ||
-                          contentAccessState.isSyncing) {
-                        return;
-                      }
-                      unawaited(
-                        ref
-                            .read(personalContentAccessProvider.notifier)
-                            .setGranted(value),
-                      );
-                    },
-                    CupertinoIcons.lock_shield,
-                    enabled:
-                        !contentAccessState.isHydrating &&
-                        !contentAccessState.isSyncing,
-                    detail: contentAccessState.isSyncing
-                        ? AssistantText.assistantSyncing
-                        : (contentAccessState.isHydrating
-                              ? AssistantText.assistantLoading
-                              : (contentAccessState.granted
-                                    ? AssistantText
-                                          .assistantContentAccessGranted
-                                    : AssistantText
-                                          .assistantContentAccessNotGranted)),
-                  ),
-                  if ((contentAccessState.errorMessage ?? '').trim().isNotEmpty)
-                    AppSectionErrorCard(
-                      margin: EdgeInsets.fromLTRB(
-                        AppSpacing.md,
-                        AppSpacing.zero,
-                        AppSpacing.md,
-                        AppSpacing.interGroupSm,
-                      ),
-                      semantic: _consentErrorSemantic(
-                        contentAccessState.errorMessage!.trim(),
-                      ),
-                      onAction: (action) async {
-                        if (action.type == UiErrorActionType.retry ||
-                            action.type == UiErrorActionType.resubmit) {
-                          await ref
-                              .read(personalContentAccessProvider.notifier)
-                              .refresh();
-                        }
-                      },
-                    ),
-                ],
-              ),
-            ),
-            SizedBox(height: AppSpacing.interGroupXl),
             SettingsInsetGroupedSection(
               isDark: isDark,
               header: AssistantText.assistantMemorySectionTitle,
@@ -184,15 +126,6 @@ class _AssistantManagementPageState
           ],
         ),
       ),
-    );
-  }
-
-  UiErrorSemantic _consentErrorSemantic(String message) {
-    return AppUserRecoveryContract.semanticFor(
-      group: AppUserRecoveryGroup.reloadLater,
-      category: UiErrorCategory.sectionLoad,
-      scope: UiErrorScope.section,
-      presentation: UiErrorPresentation.sectionSoftCard,
     );
   }
 
@@ -468,7 +401,7 @@ class _AssistantManagementPageState
   }
 
   String _preferenceTitle(AssistantPreference preference) {
-    if (_isFactualMemory(preference.kind) &&
+    if (_requiresExplicitConfirmation(preference.kind) &&
         preference.value.trim().isNotEmpty) {
       return preference.value.trim();
     }
@@ -489,8 +422,8 @@ class _AssistantManagementPageState
         : AssistantText.assistantPreferenceLongTermScope;
     final updatedAt = _formattedPreferenceUpdatedAt(preference.updatedAt);
     return <String>[
-      if (_isFactualMemory(preference.kind))
-        _factualMemoryKindLabel(preference.kind),
+      if (_requiresExplicitConfirmation(preference.kind))
+        _confirmedPreferenceKindLabel(preference.kind),
       scope,
       _preferenceSourceLabel(preference.sourceType),
       if (updatedAt.isNotEmpty)
@@ -498,7 +431,7 @@ class _AssistantManagementPageState
     ].join(' · ');
   }
 
-  bool _isFactualMemory(AssistantPreferenceKind kind) {
+  bool _requiresExplicitConfirmation(AssistantPreferenceKind kind) {
     return switch (kind) {
       AssistantPreferenceKind.frequentLocations ||
       AssistantPreferenceKind.familyTerms ||
@@ -508,7 +441,7 @@ class _AssistantManagementPageState
     };
   }
 
-  String _factualMemoryKindLabel(AssistantPreferenceKind kind) {
+  String _confirmedPreferenceKindLabel(AssistantPreferenceKind kind) {
     return switch (kind) {
       AssistantPreferenceKind.frequentLocations =>
         AssistantText.assistantMemoryFrequentLocations,
@@ -554,7 +487,7 @@ class _AssistantManagementPageState
   ) async {
     await _runPreferenceMutation(
       () => ref
-          .read(assistantPreferenceFactFacetProvider)
+          .read(assistantPreferenceFacetProvider)
           .setAssistantPreference(
             scope: AssistantPreferenceScope.longTerm,
             kind: kind,
@@ -567,7 +500,7 @@ class _AssistantManagementPageState
   Future<void> _revokePreference(AssistantPreference preference) async {
     final revoked = await _runPreferenceMutation(
       () => ref
-          .read(assistantPreferenceFactFacetProvider)
+          .read(assistantPreferenceFacetProvider)
           .revokeAssistantPreference(preferenceId: preference.preferenceId),
     );
     if (revoked != null && mounted) {
@@ -578,7 +511,7 @@ class _AssistantManagementPageState
   Future<void> _restorePreference(AssistantPreference preference) async {
     final restored = await _runPreferenceMutation(
       () => ref
-          .read(assistantPreferenceFactFacetProvider)
+          .read(assistantPreferenceFacetProvider)
           .restoreAssistantPreference(preferenceId: preference.preferenceId),
     );
     if (restored != null && mounted) {
@@ -606,68 +539,5 @@ class _AssistantManagementPageState
         setState(() => _preferenceMutationInFlight = false);
       }
     }
-  }
-
-  Widget _buildPermissionRow(
-    String label,
-    bool value,
-    ValueChanged<bool> onChanged,
-    IconData icon, {
-    bool enabled = true,
-    String? detail,
-  }) {
-    final isDark = ref.watch(isDarkProvider);
-    final fgPrimary = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundPrimary,
-    );
-    final fgSecondary = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundSecondary,
-    );
-    return Padding(
-      padding: EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.interGroupSm,
-      ),
-      child: Row(
-        children: [
-          Icon(icon, size: AppSpacing.iconSmall, color: fgSecondary),
-          SizedBox(width: AppSpacing.interGroupSm),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: AppTypography.base,
-                    fontWeight: FontWeight.w700,
-                    color: fgPrimary,
-                  ),
-                ),
-                if (detail != null && detail.trim().isNotEmpty) ...[
-                  SizedBox(height: AppSpacing.two),
-                  Text(
-                    detail,
-                    style: TextStyle(
-                      fontSize: AppTypography.xsPlus,
-                      color: fgSecondary,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          CupertinoSwitch(
-            value: value,
-            onChanged: enabled ? onChanged : null,
-            activeTrackColor: SettingsSemanticConstants.switchActiveTrackColor,
-            inactiveTrackColor:
-                SettingsSemanticConstants.switchInactiveTrackColor(isDark),
-          ),
-        ],
-      ),
-    );
   }
 }

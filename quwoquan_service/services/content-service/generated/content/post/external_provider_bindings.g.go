@@ -21,7 +21,7 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 		"content.embedding.generation": {
 			State:       "enabled",
 			AdapterID:   "ext.embed.protocol_fixture",
-			EndpointRef: "local_topology:integration.nonprod_provider_substitute",
+			EndpointRef: "local_topology:provider-protocol-substitute",
 			EndpointEnvironmentKeys: map[string]string{
 				"endpoint": "CONTENT_EMBEDDING_ENDPOINT",
 			},
@@ -46,11 +46,16 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 			AdapterID:   "infra.minio.object_storage",
 			EndpointRef: "environment_binding:content.object_storage",
 			EndpointEnvironmentKeys: map[string]string{
-				"endpoint": "CONTENT_OSS_ENDPOINT",
+				"bucket":                  "CONTENT_OSS_BUCKET",
+				"endpoint":                "CONTENT_OSS_ENDPOINT",
+				"media_delivery_base_url": "CONTENT_MEDIA_DELIVERY_BASE_URL",
+				"media_upload":            "CONTENT_MEDIA_UPLOAD_BASE_URL",
+				"region":                  "CONTENT_OSS_REGION",
 			},
 			SecretEnvironmentKeys: []string{
 				"CONTENT_OSS_ACCESS_KEY_ID",
 				"CONTENT_OSS_ACCESS_KEY_SECRET",
+				"CONTENT_CDN_SIGN_KEY",
 			},
 			TimeoutMilliseconds: 5000,
 			RequiredRedisScenes: []string{},
@@ -60,7 +65,7 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 		"content.embedding.generation": {
 			State:       "enabled",
 			AdapterID:   "ext.embed.protocol_fixture",
-			EndpointRef: "local_topology:integration.nonprod_provider_substitute",
+			EndpointRef: "local_topology:provider-protocol-substitute",
 			EndpointEnvironmentKeys: map[string]string{
 				"endpoint": "CONTENT_EMBEDDING_ENDPOINT",
 			},
@@ -85,11 +90,16 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 			AdapterID:   "infra.minio.object_storage",
 			EndpointRef: "environment_binding:content.object_storage",
 			EndpointEnvironmentKeys: map[string]string{
-				"endpoint": "CONTENT_OSS_ENDPOINT",
+				"bucket":                  "CONTENT_OSS_BUCKET",
+				"endpoint":                "CONTENT_OSS_ENDPOINT",
+				"media_delivery_base_url": "CONTENT_MEDIA_DELIVERY_BASE_URL",
+				"media_upload":            "CONTENT_MEDIA_UPLOAD_BASE_URL",
+				"region":                  "CONTENT_OSS_REGION",
 			},
 			SecretEnvironmentKeys: []string{
 				"CONTENT_OSS_ACCESS_KEY_ID",
 				"CONTENT_OSS_ACCESS_KEY_SECRET",
+				"CONTENT_CDN_SIGN_KEY",
 			},
 			TimeoutMilliseconds: 5000,
 			RequiredRedisScenes: []string{},
@@ -99,7 +109,7 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 		"content.embedding.generation": {
 			State:       "enabled",
 			AdapterID:   "ext.embed.protocol_fixture",
-			EndpointRef: "local_topology:integration.nonprod_provider_substitute",
+			EndpointRef: "local_topology:provider-protocol-substitute",
 			EndpointEnvironmentKeys: map[string]string{
 				"endpoint": "CONTENT_EMBEDDING_ENDPOINT",
 			},

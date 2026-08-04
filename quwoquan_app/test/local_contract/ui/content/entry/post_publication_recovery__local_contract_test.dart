@@ -36,7 +36,7 @@ void main() {
     final command = SubmitContentPostPublicationCommand(
       publishIntentId: 'intent-recovery',
       localDraftId: 'draft-recovery',
-      contentType: ContentPostType.micro,
+      contentType: ContentType.micro,
       body: '只点击一次也能安全发布',
     );
 
@@ -106,7 +106,7 @@ void main() {
     final command = SubmitContentPostPublicationCommand(
       publishIntentId: 'intent-visible-recovery',
       localDraftId: 'draft-visible-recovery',
-      contentType: ContentPostType.micro,
+      contentType: ContentType.micro,
       body: '可见的待恢复发布任务',
     );
     await expectLater(
@@ -217,7 +217,7 @@ final class _OfflinePublicationWriter implements ContentPostPublicationWriter {
       <SubmitContentPostPublicationCommand>[];
 
   @override
-  Future<ContentPostPublicationReceipt> submitPostPublication(
+  Future<PostPublicationReceipt> submitPostPublication(
     SubmitContentPostPublicationCommand command,
   ) async {
     commands.add(command);

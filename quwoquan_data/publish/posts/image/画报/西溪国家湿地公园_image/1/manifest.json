@@ -1,1 +1,189 @@
-{"assetRefsRef":"asset.refs.json","assets":[{"alignmentEvidence":"图片说明与正文关联：西溪国家湿地公园入口","assetId":"西溪国家湿地公园_cover_西溪国家湿地公园入口_67_36beaec7","authorizationBasis":"","authorizationProof":"https://commons.wikimedia.org/wiki/File:%E8%A5%BF%E6%BA%AA%E5%9B%BD%E5%AE%B6%E6%B9%BF%E5%9C%B0%E5%85%AC%E5%9B%AD%E5%85%A5%E5%8F%A3_-_panoramio.jpg","caption":"西溪国家湿地公园入口","collectedAt":"","collectionPageUrl":"https://commons.wikimedia.org/wiki/File:%E8%A5%BF%E6%BA%AA%E5%9B%BD%E5%AE%B6%E6%B9%BF%E5%9C%B0%E5%85%AC%E5%9B%AD%E5%85%A5%E5%8F%A3_-_panoramio.jpg","creator":"江上清风1961","discoveryUrl":"","fileName":"西溪国家湿地公园_cover_西溪国家湿地公园入口_67_36beaec7.jpg","imageLayout":"gallery","kind":"image","license":"CC BY 3.0","licenseSnapshot":"","mimeType":"image/jpeg","objectKey":"media/objects/sha256/bb/01/bb010e93e5d0aa66846aaf13559ed6be37112e1de76c3be2f454b7f24b5a6f82.jpg","ocrScan":"","originalAssetUrl":"","perceptualHash":"82aad57f7d0bd280","pinUrl":"","repostAttribution":"","rightsAuditIssues":[],"rightsAuditStatus":"verified","sha256":"sha256:bb010e93e5d0aa66846aaf13559ed6be37112e1de76c3be2f454b7f24b5a6f82","sourceAssetRef":"sources/西溪国家湿地公园__image_collection__260e28f4/assets/001_西溪国家湿地公园_3.jpg","sourceAuthor":"","sourceCollectionId":"open_license_file:西溪国家湿地公园:httpscommonswikimediaorgwikifilee8a5bfe6baaae59bbde5aeb6e6b9:260e28f439","sourceRef":"sources/西溪国家湿地公园__image_collection__260e28f4/source.md","termsUrl":"https://creativecommons.org/licenses/by/3.0","usageScope":"","watermarkScan":""}],"authorId":"builtin_travel_landscape_photographer","authorQualitySignals":{"fatigueScore":0.2,"qualityScore":0.87,"riskTier":"low"},"authorizationProof":"https://commons.wikimedia.org/wiki/File:%E8%A5%BF%E6%BA%AA%E5%9B%BD%E5%AE%B6%E6%B9%BF%E5%9C%B0%E5%85%AC%E5%9B%AD%E5%85%A5%E5%8F%A3_-_panoramio.jpg","caption":"西溪国家湿地公园入口","carrier":"image","citedSourceRefs":["sources/西溪国家湿地公园__image_collection__260e28f4/source.md"],"collectionPageUrl":"https://commons.wikimedia.org/wiki/File:%E8%A5%BF%E6%BA%AA%E5%9B%BD%E5%AE%B6%E6%B9%BF%E5%9C%B0%E5%85%AC%E5%9B%AD%E5%85%A5%E5%8F%A3_-_panoramio.jpg","contentIdentity":"work","contentType":"image","createdAt":"2026-07-31T02:02:27.824632+00:00","creator":"江上清风1961","creatorArchetype":"landscape_photographer","creatorDisclosure":{"displayText":"平台虚拟创作者，内容由资料整理与 AI 辅助生成，经平台审核发布。","type":"platform_virtual_creator","visible":true},"creatorProfileDigest":"sha256:1840fca035b8e1d1692f44cf351b8f73f5a2e801b86d6203dd4fb76396eb605f","creatorProfileId":"qwq_creator_landscape_photographer_001","creatorRefsRef":"creator.refs.json","entityRefs":["/entity/地点/景区/西溪国家湿地公园"],"executionId":"20260731--travel-image-copy-ready--zhejiang-six--scale-017","experienceClaimMode":"visual_discovery","finalContentRef":"assets/西溪国家湿地公园_cover_西溪国家湿地公园入口_67_36beaec7.jpg","generator":"image_evidence_pack","generatorModel":null,"intersectionHints":[{"actionTargetId":"entity:景区:西溪国家湿地公园","actionType":"view_object","dimension":"content","source":"entityRef","tagRefs":[]},{"actionTargetId":"Topic/旅行/玩法/摄影旅拍","actionType":"join","dimension":"interest","source":"tagRef","tagRefs":["Topic/旅行/玩法/摄影旅拍"]},{"actionTargetId":"Format/内容载体/图文/图集","actionType":"join","dimension":"interest","source":"tagRef","tagRefs":["Format/内容载体/图文/图集"]}],"license":"CC BY 3.0","normalizedEntityRefs":["entity:景区:西溪国家湿地公园"],"publishAngle":"画报","publishLayout":"image","publishMediaMode":null,"publishSeq":1,"publishTitle":"","publishedAt":"2026-07-31T02:22:35.316416+00:00","reviewDecision":"approved","rightsRef":"rights.json","schema":"quwoquan_data.post_object","semanticMentions":[{"kind":"entity","location":"manifest","mentionId":"mention_2ce73413771f69726a650b62","occurrence":0,"sourceRef":"西溪国家湿地公园_image","status":"published","surface":"西溪国家湿地公园","targetRef":"/entity/地点/景区/西溪国家湿地公园"},{"kind":"tag","location":"manifest","mentionId":"mention_2d38c3159a1c6e5428fd6cf8","occurrence":0,"sourceRef":"西溪国家湿地公园_image","status":"published","surface":"摄影旅拍","targetRef":"Topic/旅行/玩法/摄影旅拍"},{"kind":"tag","location":"manifest","mentionId":"mention_34c2600dd58e7d8f55ee29d9","occurrence":0,"sourceRef":"西溪国家湿地公园_image","status":"published","surface":"图集","targetRef":"Format/内容载体/图文/图集"}],"sourceCatalogRef":"source_catalog.json","sourceCollectionId":"open_license_file:西溪国家湿地公园:httpscommonswikimediaorgwikifilee8a5bfe6baaae59bbde5aeb6e6b9:260e28f439","sourceDigest":{"algorithm":"sha256","digest":"sha256:f991fa9b0934d1e9772a0c1fafc1ec805f20b7a8e8b761cef90a9ad52026c2a8","inputs":["quwoquan_data/scripts","quwoquan_data/schema","quwoquan_data/control_plane","quwoquan_data/prompts","quwoquan_data/templates","quwoquan_data/verticals/travel","quwoquan_data/reference","quwoquan_data/requirements.txt","quwoquan_service/services/content-service/contracts/media/media_asset"]},"sourceTaskId":"20260731--travel-image-copy-ready--zhejiang-six--scale-017","sourceUrls":["https://commons.wikimedia.org/wiki/File:%E8%A5%BF%E6%BA%AA%E5%9B%BD%E5%AE%B6%E6%B9%BF%E5%9C%B0%E5%85%AC%E5%9B%AD%E5%85%A5%E5%8F%A3_-_panoramio.jpg"],"storySpine":{"beats":["西溪国家湿地公园入口"],"mustIncludeFacts":["西溪国家湿地公园 开放许可图片作品","图片来自同一授权来源集合（单一 source unit），禁止跨作者/页面/底稿混图"],"primaryEntity":"西溪国家湿地公园","routeEntities":["西溪国家湿地公园"]},"tagRefs":["Topic/旅行/玩法/摄影旅拍","Format/内容载体/图文/图集"],"tagRefsRef":"tag.refs.json","template":"journal","termsUrl":"https://creativecommons.org/licenses/by/3.0","title":"","topicId":"西溪国家湿地公园_image","updatedAt":"2026-07-31T02:04:27.281334+00:00","vertical":"travel"}
+{
+  "assetRefsRef": "asset.refs.json",
+  "assets": [
+    {
+      "alignmentEvidence": "图片说明与正文关联：西溪国家湿地公园入口",
+      "assetId": "西溪国家湿地公园_cover_西溪国家湿地公园入口_67_36beaec7",
+      "authorizationBasis": "",
+      "authorizationProof": "https://commons.wikimedia.org/wiki/File:%E8%A5%BF%E6%BA%AA%E5%9B%BD%E5%AE%B6%E6%B9%BF%E5%9C%B0%E5%85%AC%E5%9B%AD%E5%85%A5%E5%8F%A3_-_panoramio.jpg",
+      "caption": "西溪国家湿地公园入口",
+      "collectedAt": "",
+      "collectionPageUrl": "https://commons.wikimedia.org/wiki/File:%E8%A5%BF%E6%BA%AA%E5%9B%BD%E5%AE%B6%E6%B9%BF%E5%9C%B0%E5%85%AC%E5%9B%AD%E5%85%A5%E5%8F%A3_-_panoramio.jpg",
+      "creator": "江上清风1961",
+      "discoveryUrl": "",
+      "fileName": "西溪国家湿地公园_cover_西溪国家湿地公园入口_67_36beaec7.jpg",
+      "imageLayout": "gallery",
+      "kind": "image",
+      "license": "CC BY 3.0",
+      "licenseSnapshot": "",
+      "mimeType": "image/jpeg",
+      "objectKey": "media/objects/sha256/bb/01/bb010e93e5d0aa66846aaf13559ed6be37112e1de76c3be2f454b7f24b5a6f82.jpg",
+      "ocrScan": "",
+      "originalAssetUrl": "",
+      "perceptualHash": "82aad57f7d0bd280",
+      "pinUrl": "",
+      "repostAttribution": "",
+      "rightsAuditIssues": [],
+      "rightsAuditStatus": "verified",
+      "sha256": "sha256:bb010e93e5d0aa66846aaf13559ed6be37112e1de76c3be2f454b7f24b5a6f82",
+      "sourceAssetRef": "sources/西溪国家湿地公园__image_collection__260e28f4/assets/001_西溪国家湿地公园_3.jpg",
+      "sourceAuthor": "",
+      "sourceCollectionId": "open_license_file:西溪国家湿地公园:httpscommonswikimediaorgwikifilee8a5bfe6baaae59bbde5aeb6e6b9:260e28f439",
+      "sourceRef": "sources/西溪国家湿地公园__image_collection__260e28f4/source.md",
+      "termsUrl": "https://creativecommons.org/licenses/by/3.0",
+      "usageScope": "",
+      "watermarkScan": ""
+    }
+  ],
+  "authorId": "builtin_travel_landscape_photographer",
+  "authorQualitySignals": {
+    "fatigueScore": 0.2,
+    "qualityScore": 0.87,
+    "riskTier": "low"
+  },
+  "authorizationProof": "https://commons.wikimedia.org/wiki/File:%E8%A5%BF%E6%BA%AA%E5%9B%BD%E5%AE%B6%E6%B9%BF%E5%9C%B0%E5%85%AC%E5%9B%AD%E5%85%A5%E5%8F%A3_-_panoramio.jpg",
+  "caption": "西溪国家湿地公园入口",
+  "carrier": "image",
+  "citedSourceRefs": [
+    "sources/西溪国家湿地公园__image_collection__260e28f4/source.md"
+  ],
+  "collectionPageUrl": "https://commons.wikimedia.org/wiki/File:%E8%A5%BF%E6%BA%AA%E5%9B%BD%E5%AE%B6%E6%B9%BF%E5%9C%B0%E5%85%AC%E5%9B%AD%E5%85%A5%E5%8F%A3_-_panoramio.jpg",
+  "contentIdentity": "work",
+  "contentType": "image",
+  "createdAt": "2026-07-31T02:02:27.824632+00:00",
+  "creator": "江上清风1961",
+  "creatorArchetype": "landscape_photographer",
+  "creatorDisclosure": {
+    "displayText": "平台虚拟创作者，内容由资料整理与 AI 辅助生成，经平台审核发布。",
+    "type": "platform_virtual_creator",
+    "visible": true
+  },
+  "creatorProfileDigest": "sha256:1840fca035b8e1d1692f44cf351b8f73f5a2e801b86d6203dd4fb76396eb605f",
+  "creatorProfileId": "qwq_creator_landscape_photographer_001",
+  "creatorRefsRef": "creator.refs.json",
+  "entityRefs": [
+    "/entity/地点/景区/西溪国家湿地公园"
+  ],
+  "executionId": "20260731--travel-image-copy-ready--zhejiang-six--scale-017",
+  "experienceClaimMode": "visual_discovery",
+  "finalContentRef": "assets/西溪国家湿地公园_cover_西溪国家湿地公园入口_67_36beaec7.jpg",
+  "generator": "image_evidence_pack",
+  "generatorModel": null,
+  "intersectionHints": [
+    {
+      "actionTargetId": "entity:景区:西溪国家湿地公园",
+      "actionType": "view_object",
+      "dimension": "content",
+      "source": "entityRef",
+      "tagRefs": []
+    },
+    {
+      "actionTargetId": "Topic/旅行/玩法/摄影旅拍",
+      "actionType": "join",
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Topic/旅行/玩法/摄影旅拍"
+      ]
+    },
+    {
+      "actionTargetId": "Format/内容载体/图文/图集",
+      "actionType": "join",
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Format/内容载体/图文/图集"
+      ]
+    }
+  ],
+  "license": "CC BY 3.0",
+  "normalizedEntityRefs": [
+    "entity:景区:西溪国家湿地公园"
+  ],
+  "publishAngle": "画报",
+  "publishLayout": "image",
+  "publishMediaMode": null,
+  "publishSeq": 1,
+  "publishTitle": "西溪国家湿地公园入口",
+  "publishedAt": "2026-07-31T02:22:35.316416+00:00",
+  "reviewDecision": "approved",
+  "rightsRef": "rights.json",
+  "schema": "quwoquan_data.post_object",
+  "semanticMentions": [
+    {
+      "kind": "entity",
+      "location": "manifest",
+      "mentionId": "mention_2ce73413771f69726a650b62",
+      "occurrence": 0,
+      "sourceRef": "西溪国家湿地公园_image",
+      "status": "published",
+      "surface": "西溪国家湿地公园",
+      "targetRef": "/entity/地点/景区/西溪国家湿地公园"
+    },
+    {
+      "kind": "tag",
+      "location": "manifest",
+      "mentionId": "mention_2d38c3159a1c6e5428fd6cf8",
+      "occurrence": 0,
+      "sourceRef": "西溪国家湿地公园_image",
+      "status": "published",
+      "surface": "摄影旅拍",
+      "targetRef": "Topic/旅行/玩法/摄影旅拍"
+    },
+    {
+      "kind": "tag",
+      "location": "manifest",
+      "mentionId": "mention_34c2600dd58e7d8f55ee29d9",
+      "occurrence": 0,
+      "sourceRef": "西溪国家湿地公园_image",
+      "status": "published",
+      "surface": "图集",
+      "targetRef": "Format/内容载体/图文/图集"
+    }
+  ],
+  "sourceCatalogRef": "source_catalog.json",
+  "sourceCollectionId": "open_license_file:西溪国家湿地公园:httpscommonswikimediaorgwikifilee8a5bfe6baaae59bbde5aeb6e6b9:260e28f439",
+  "sourceDigest": {
+    "algorithm": "sha256",
+    "digest": "sha256:f991fa9b0934d1e9772a0c1fafc1ec805f20b7a8e8b761cef90a9ad52026c2a8",
+    "inputs": [
+      "quwoquan_data/scripts",
+      "quwoquan_data/schema",
+      "quwoquan_data/control_plane",
+      "quwoquan_data/prompts",
+      "quwoquan_data/templates",
+      "quwoquan_data/verticals/travel",
+      "quwoquan_data/reference",
+      "quwoquan_data/requirements.txt",
+      "quwoquan_service/services/content-service/contracts/media/media_asset"
+    ]
+  },
+  "sourceTaskId": "20260731--travel-image-copy-ready--zhejiang-six--scale-017",
+  "sourceUrls": [
+    "https://commons.wikimedia.org/wiki/File:%E8%A5%BF%E6%BA%AA%E5%9B%BD%E5%AE%B6%E6%B9%BF%E5%9C%B0%E5%85%AC%E5%9B%AD%E5%85%A5%E5%8F%A3_-_panoramio.jpg"
+  ],
+  "storySpine": {
+    "beats": [
+      "西溪国家湿地公园入口"
+    ],
+    "mustIncludeFacts": [
+      "西溪国家湿地公园 开放许可图片作品",
+      "图片来自同一授权来源集合（单一 source unit），禁止跨作者/页面/底稿混图"
+    ],
+    "primaryEntity": "西溪国家湿地公园",
+    "routeEntities": [
+      "西溪国家湿地公园"
+    ]
+  },
+  "tagRefs": [
+    "Topic/旅行/玩法/摄影旅拍",
+    "Format/内容载体/图文/图集"
+  ],
+  "tagRefsRef": "tag.refs.json",
+  "template": "journal",
+  "termsUrl": "https://creativecommons.org/licenses/by/3.0",
+  "title": "西溪国家湿地公园入口",
+  "topicId": "西溪国家湿地公园_image",
+  "updatedAt": "2026-07-31T02:04:27.281334+00:00",
+  "vertical": "travel"
+}

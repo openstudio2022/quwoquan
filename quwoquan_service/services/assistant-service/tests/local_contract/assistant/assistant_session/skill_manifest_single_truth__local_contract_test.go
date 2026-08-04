@@ -4,9 +4,9 @@ package local_contract
 import (
 	"testing"
 
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
-	skillpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/skill"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/orchestration"
+	assistant "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/model"
+	skillpkg "quwoquan_service/services/assistant-service/internal/assistant/skill_package_release/application/packageasset"
 	"quwoquan_service/services/assistant-service/tests/support/skillfixture"
 )
 

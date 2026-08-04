@@ -537,10 +537,16 @@ class _CircleShellState extends ConsumerState<CircleShell> {
               sourceRouteId: AppRoutePaths.circleDetailPathTemplate,
             ),
           ),
-          onAction: (action) async {
+          onRecovery: (action) async {
             if (action.type == UiErrorActionType.retry ||
                 action.type == UiErrorActionType.resubmit) {
               await circleCtrl.loadCircle();
+              return ref
+                          .read(circleStateProvider(widget.circleId))
+                          .loadError ==
+                      null
+                  ? UiRecoveryOutcome.recovered
+                  : UiRecoveryOutcome.stillBlocked;
             } else if (action.type == UiErrorActionType.dismiss) {
               final onBack = widget.onBack;
               if (onBack != null) {
@@ -548,7 +554,9 @@ class _CircleShellState extends ConsumerState<CircleShell> {
               } else {
                 await Navigator.of(context).maybePop();
               }
+              return UiRecoveryOutcome.handedOff;
             }
+            return UiRecoveryOutcome.cancelled;
           },
         ),
       );

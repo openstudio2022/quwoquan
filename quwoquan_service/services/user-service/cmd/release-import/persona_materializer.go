@@ -2,9 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -81,7 +78,7 @@ func (materializer *creatorPersonaMaterializer) UpsertAndProject(
 	persona.OverriddenProfileFields = []string{}
 	persona.LastProfileSyncSource = "manual_sync"
 
-	meta, err := creatorPersonaCommandMeta(state, importRunID)
+	meta, err := releaseimport.CreatorPersonaCommandMeta(state, importRunID)
 	if err != nil {
 		return err
 	}
@@ -96,31 +93,4 @@ func (materializer *creatorPersonaMaterializer) UpsertAndProject(
 	}
 	_, err = materializer.projector.Project(ctx, result.PersonaID, result.Version)
 	return err
-}
-
-func creatorPersonaCommandMeta(
-	state releaseimport.CreatorPersonaState,
-	importRunID string,
-) (personaports.PersonaCommandMeta, error) {
-	normalizedRunID := strings.TrimSpace(importRunID)
-	if normalizedRunID == "" {
-		return personaports.PersonaCommandMeta{}, fmt.Errorf(
-			"creator Persona import run ID is required",
-		)
-	}
-	payload, err := json.Marshal(state)
-	if err != nil {
-		return personaports.PersonaCommandMeta{}, err
-	}
-	digest := sha256.Sum256(payload)
-	keyDigest := sha256.Sum256([]byte(strings.Join([]string{
-		"creator-release",
-		state.ReleaseID,
-		normalizedRunID,
-		state.PersonaID,
-	}, "\x00")))
-	return personaports.PersonaCommandMeta{
-		IdempotencyKey: "creator-release:" + hex.EncodeToString(keyDigest[:24]),
-		CommandDigest:  hex.EncodeToString(digest[:]),
-	}, nil
 }

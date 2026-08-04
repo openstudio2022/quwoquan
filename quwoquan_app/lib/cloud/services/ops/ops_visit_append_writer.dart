@@ -1,8 +1,12 @@
-import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
-import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/ops/ops_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/ops_request_page_ids.g.dart';
-import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
+import 'package:quwoquan_cloud_contracts/generated/ops_contracts.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
+typedef OpsVisitInvocationContextFactory =
+    CloudOperationInvocationContext Function(
+      String clientPageId, {
+      required String idempotencyKey,
+    });
 
 /// RecordVisit 的强类型出站输入（ops.VisitRecord 对象契约）。
 ///
@@ -21,22 +25,38 @@ class OpsVisitReportInput {
   final String targetType;
   final String targetKey;
 
-  /// 从本地补传队列恢复（storage 形状含 idempotencyKey，wire 形状不含）。
+  /// 从本地补传队列恢复。这是 App 自有 storage codec，不是 Cloud wire decoder。
   factory OpsVisitReportInput.fromStorageJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{'idempotencyKey', 'targetType', 'targetKey'};
+    final unknownFields = json.keys.toSet().difference(allowedFields);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException(
+        'Ops visit storage record contains unknown fields: '
+        '${unknownFields.toList()..sort()}',
+      );
+    }
     return OpsVisitReportInput(
-      idempotencyKey: (json['idempotencyKey'] ?? '').toString(),
-      targetType: (json['targetType'] ?? '').toString(),
-      targetKey: (json['targetKey'] ?? '').toString(),
+      idempotencyKey: _requiredStorageString(json, 'idempotencyKey'),
+      targetType: _requiredStorageString(json, 'targetType'),
+      targetKey: _requiredStorageString(json, 'targetKey'),
     );
   }
 
   Map<String, dynamic> toStorageJson() {
-    return <String, dynamic>{'idempotencyKey': idempotencyKey, ...toWireJson()};
+    return <String, dynamic>{
+      'idempotencyKey': idempotencyKey,
+      'targetType': targetType,
+      'targetKey': targetKey,
+    };
   }
+}
 
-  Map<String, dynamic> toWireJson() {
-    return <String, dynamic>{'targetType': targetType, 'targetKey': targetKey};
+String _requiredStorageString(Map<String, dynamic> json, String field) {
+  final value = json[field];
+  if (value is! String || value.trim().isEmpty) {
+    throw FormatException('Ops visit storage record requires $field');
   }
+  return value.trim();
 }
 
 /// VisitRecord 对象的 typed append 写面（App consumer 唯一能力 record_visit）。
@@ -46,13 +66,13 @@ abstract class OpsVisitAppendWriter {
 }
 
 class RemoteOpsVisitAppendWriter implements OpsVisitAppendWriter {
-  factory RemoteOpsVisitAppendWriter({required CloudHttpClient httpClient}) {
-    return RemoteOpsVisitAppendWriter._(httpClient);
-  }
+  const RemoteOpsVisitAppendWriter({
+    required this.client,
+    required this.invocationContext,
+  });
 
-  RemoteOpsVisitAppendWriter._(this._httpClient);
-
-  final CloudHttpClient _httpClient;
+  final GeneratedCloudOperationClient client;
+  final OpsVisitInvocationContextFactory invocationContext;
 
   @override
   Future<void> recordVisit(OpsVisitReportInput input) async {
@@ -64,15 +84,29 @@ class RemoteOpsVisitAppendWriter implements OpsVisitAppendWriter {
         'must not be empty',
       );
     }
-    await _httpClient.postJson(
-      Uri.parse(
-        '${CloudRuntimeConfig.gatewayBaseUrl}${OpsApiMetadata.recordVisitPath}',
+    await client.opsVisitRecordRecordVisit(
+      RecordVisitRequest(
+        targetType: _visitTargetType(input.targetType),
+        targetKey: input.targetKey,
       ),
-      headers: <String, String>{
-        ...CloudRequestHeaders.forPage(OpsRequestPageIds.recordVisit),
-        'Idempotency-Key': key,
-      },
-      body: input.toWireJson(),
+      context: invocationContext(
+        OpsRequestPageIds.recordVisit,
+        idempotencyKey: key,
+      ),
     );
   }
+}
+
+VisitTargetType _visitTargetType(String value) {
+  return switch (value.trim()) {
+    'page' => VisitTargetType.page,
+    'post' => VisitTargetType.post,
+    'circle' => VisitTargetType.circle,
+    'user' => VisitTargetType.user,
+    _ => throw ArgumentError.value(
+      value,
+      'targetType',
+      'must be page, post, circle, or user',
+    ),
+  };
 }

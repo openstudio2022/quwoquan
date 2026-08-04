@@ -13,6 +13,7 @@ if str(SCRIPTS_ROOT) not in sys.path:
 from core.paths import ensure_execution_command_layout, ensure_execution_layout  # noqa: E402
 from content.source.source_unit import resolve_entity_object_dir, write_source_unit  # noqa: E402
 from core.asset_identity import compute_post_asset_id  # noqa: E402
+from core.article_package import sha256_text  # noqa: E402
 from content.post.article.draft_io import is_placeholder  # noqa: E402
 from content.homepage.homepage_assets import (  # noqa: E402
     _prefer_homepage_placement,
@@ -242,6 +243,8 @@ def test_homepage_assets_exclude_non_cover_image_with_same_visual_subject(monkey
         targets=[{"name": entity, "entityType": "地点/景区"}],
     )
     ensure_execution_layout(execution_id)
+    cover_sha256 = sha256_text("homepage cover fixture")
+    detail_sha256 = sha256_text("homepage detail fixture")
     candidates = [
         {
             "researchLane": "homepage_image",
@@ -249,7 +252,7 @@ def test_homepage_assets_exclude_non_cover_image_with_same_visual_subject(monkey
             "sourceAssetRef": "sources/cover/assets/001.jpg",
             "authorizationProof": "https://commons.wikimedia.org/wiki/File:Peak.jpg",
             "caption": f"{entity}中央观景平台",
-            "sha256": "sha256:cover",
+            "sha256": cover_sha256,
         },
         {
             "researchLane": "homepage_image",
@@ -257,7 +260,7 @@ def test_homepage_assets_exclude_non_cover_image_with_same_visual_subject(monkey
             "sourceAssetRef": "sources/detail/assets/001.jpg",
             "authorizationProof": "https://commons.wikimedia.org/wiki/File:Peak_view.jpg",
             "caption": f"{entity}中央观景平台东侧",
-            "sha256": "sha256:detail",
+            "sha256": detail_sha256,
         },
     ]
     monkeypatch.setattr(

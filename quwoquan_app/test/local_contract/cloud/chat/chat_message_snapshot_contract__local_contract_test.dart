@@ -1,9 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_message_dto.g.dart';
+import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
+import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
 
 void main() {
-  test('ChatMessageDto 只消费公开消息投影字段', () {
-    final dto = ChatMessageDto.fromMap(<String, dynamic>{
+  test('ChatMessageViewData 只消费 generated 公开消息投影字段', () {
+    final wire = ChatMessageView.fromWire(<String, dynamic>{
       'id': 'm1',
       'conversationId': 'c1',
       'seq': 1,
@@ -16,6 +17,7 @@ void main() {
       'status': 'sent',
       'timestamp': '2026-01-01T00:00:00.000Z',
     });
+    final dto = ChatMessageViewData.fromWire(wire);
 
     expect(dto.senderId, 'current_sender');
     expect(dto.senderName, '记录分身名');

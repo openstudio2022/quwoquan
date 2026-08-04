@@ -1,7 +1,7 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_kind_metadata.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import '../../../../support/fixtures/intersection_fixtures.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/components/object_page/intersection_entity.dart';
 
 void main() {
@@ -19,7 +19,7 @@ void main() {
       CupertinoApp(
         home: CupertinoPageScaffold(
           child: IntersectionEntity(
-            reason: IntersectionReason(
+            reason: intersectionReasonFixture(
               objectKind: 'gathering',
               displayName: '周末西湖摄影聚集',
               primaryText: '3 位同好计划同行',

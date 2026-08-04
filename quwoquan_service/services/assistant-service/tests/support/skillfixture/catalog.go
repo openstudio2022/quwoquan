@@ -4,9 +4,9 @@ import (
 	"context"
 	"encoding/json"
 
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
-	skillpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/skill"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/orchestration"
 	"quwoquan_service/services/assistant-service/internal/assistant/skill_catalog/infrastructure/resource"
+	skillpkg "quwoquan_service/services/assistant-service/internal/assistant/skill_package_release/application/packageasset"
 )
 
 func Load() ([]skillpkg.Manifest, error) {
@@ -21,6 +21,19 @@ type Loader struct{}
 
 func (Loader) Load(context.Context) ([]skillpkg.Manifest, error) {
 	return Load()
+}
+
+// StaticLoader is an object-level test double. Runtime code deliberately has
+// no static or file-backed Skill catalog implementation.
+type StaticLoader struct {
+	Manifests []skillpkg.Manifest
+}
+
+func (loader StaticLoader) Load(ctx context.Context) ([]skillpkg.Manifest, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return append([]skillpkg.Manifest(nil), loader.Manifests...), nil
 }
 
 func (Loader) ResolvePresentationTemplate(

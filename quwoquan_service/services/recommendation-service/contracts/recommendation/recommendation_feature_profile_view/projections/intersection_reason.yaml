@@ -32,7 +32,7 @@ description: "交集理由（B1 契约，跨会话基建真相源）。\n云侧�
   \ displayText / label / sharedCount（§18.1 一次性收口）：紧凑结论句唯一来源为 primaryText，\n  证据组结构化字段（count / sampleText\
   \ / sampleAvatarUrls / 证据名词）一律由 IntersectionPoint 承载，\n  禁止在 reason 级恢复任何第二文案/计数通道。\n  本契约已零兼容收敛 recommendationTraceId（Phase\
   \ 0 漂移收口 §20）：交集证据快照/追踪 id 的唯一字段为\n  pointSummarySnapshotId（不再保留 recommendationTraceId 字段与别名）；导航级 recommendationTraceId\
-  \ 仍属于\n  entity/entity_homepage/homepage 的 object_page_context 上下文，与本 reason 无关，不得在此恢复同名字段。\n\n类型视觉（零发版扩展位）：\n  iconKey 是语义图标名，端持一份 glyph 兜底表；tone 是云侧指派的色板 token 名（registry.visualToneByIconKey 值域，如 tea / sage / stone），端持 light/dark 成对调色板并按主题取色，未认识的 tone 一律回落中性色，不得让新色号在旧版本上不可读。\n  typeVisual 是类型图标的远程资源引用（IntersectionVisual，assetKind=icon，imageUrl 指向随数据发布进 payload/media/icon 的 alpha 蒙版图）；端用 BlendMode.srcIn 以 tone 着色，加载中/失败一律退回 iconKey glyph。\n  三者共同保证「新增交集类型及其图标、配色」不需要发端。\n"
+  \ 仍属于\n  entity/entity_homepage/homepage 的 object_page_context 上下文，与本 reason 无关，不得在此恢复同名字段。\n\n类型视觉（零发版扩展位）：\n  iconKey 是语义图标名，端持一份 glyph 兜底表；tone 是云侧指派的色板 token 名（registry.visualToneByIconKey 值域，如 tea / sage / stone），端持 light/dark 成对调色板并按主题取色，未认识的 tone 一律回落中性色，确保既有客户端始终可读。\n  typeVisual 是类型图标的远程资源引用（IntersectionVisual，assetKind=icon，imageUrl 指向随数据发布进 payload/media/icon 的 alpha 蒙版图）；端用 BlendMode.srcIn 以 tone 着色，加载中/失败一律退回 iconKey glyph。\n  三者共同保证「新增交集类型及其图标、配色」不需要发端。\n"
 consumers:
 - app
 - recommendation-service

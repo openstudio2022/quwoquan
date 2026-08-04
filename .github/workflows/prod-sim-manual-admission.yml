@@ -1,0 +1,161 @@
+# Manual, non-promotable first-party container rehearsal. The canonical target
+# remains prod-hosted; mode=prevalidate creates the isolated prod-sim namespace
+# and is forbidden from writing rollout ledger/receipt evidence.
+name: 06. Prod-Sim Manual Admission
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Exact reviewed main commit SHA
+        required: true
+      release_evidence_ref:
+        description: Exact deployable ReleaseEvidenceManifest OCI ref
+        required: true
+
+concurrency:
+  group: prod-sim-manual-admission
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  QWQ_OUTPUT_ROOT: ${{ github.workspace }}/.qwq_output
+
+jobs:
+  prod_sim_admission:
+    name: Non-promotable prod-sim first-party prevalidation
+    runs-on: [self-hosted, macOS, prod-release]
+    environment: prod-sim-admission
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: read
+    env:
+      PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.source_sha }}
+      - name: Require exact reviewed main source
+        run: |
+          set -euo pipefail
+          SOURCE_SHA="$(git rev-parse HEAD)"
+          git fetch --no-tags origin main
+          if [[ "$SOURCE_SHA" != "${{ inputs.source_sha }}" ]] || \
+             [[ ! "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || \
+             ! git merge-base --is-ancestor "$SOURCE_SHA" origin/main; then
+            echo "::error::GATE_BLOCK: prod-sim admission requires an exact commit reachable from main"
+            exit 2
+          fi
+      - name: Login immutable release registry
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: candidate
+        name: Materialize and verify exact deployable candidate
+        env:
+          RELEASE_EVIDENCE_REF: ${{ inputs.release_evidence_ref }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_EVIDENCE_REF" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error::GATE_BLOCK: prod-sim admission requires an exact immutable GHCR ref"
+            exit 2
+          fi
+          ROOT="$QWQ_OUTPUT_ROOT/env/prod/runs/prod-sim-admission/release"
+          python3 quwoquan_ops/cli/prod/fetch_mainline_release_artifact.py \
+            --ref "$RELEASE_EVIDENCE_REF" \
+            --output-dir "$ROOT"
+          VALUES="$(python3 - "$ROOT/manifest.json" <<'PY'
+          import json
+          import sys
+
+          manifest = json.load(open(sys.argv[1], encoding="utf-8"))
+          print(
+              manifest["candidateId"],
+              manifest["artifactDigest"],
+              manifest["source"]["workflowRunId"],
+              sep="\t",
+          )
+          PY
+          )"
+          IFS=$'\t' read -r CANDIDATE_DIGEST ARTIFACT_DIGEST PRODUCER_WORKFLOW_RUN_ID <<< "$VALUES"
+          echo "candidate_digest=$CANDIDATE_DIGEST" >> "$GITHUB_OUTPUT"
+          echo "artifact_digest=$ARTIFACT_DIGEST" >> "$GITHUB_OUTPUT"
+          echo "producer_workflow_run_id=$PRODUCER_WORKFLOW_RUN_ID" >> "$GITHUB_OUTPUT"
+          python3 quwoquan_ops/ci/verify_workflow_release_candidate.py \
+            --manifest "$ROOT/manifest.json" \
+            --expected-candidate "$CANDIDATE_DIGEST" \
+            --expected-artifact-digest "$ARTIFACT_DIGEST" \
+            --expected-workflow-run-id "$PRODUCER_WORKFLOW_RUN_ID" \
+            --expected-source-sha "${{ inputs.source_sha }}" \
+            --expected-repository "${{ github.repository }}" \
+            --expected-release-ref "$RELEASE_EVIDENCE_REF" \
+            --require-deployable
+      - name: Materialize isolated prevalidation SSH credentials
+        env:
+          EDGE_KEY_MATERIAL: ${{ secrets.PROD_EDGE_SSH_KEY }}
+          KEY_MATERIAL: ${{ secrets.PROD_SERVICE_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          for material in "$EDGE_KEY_MATERIAL" "$KEY_MATERIAL"; do
+            if [[ -z "$material" || "$material" != *"PRIVATE KEY"* ]]; then
+              echo "::error::GATE_BLOCK: prod-sim admission SSH key material is missing"
+              exit 2
+            fi
+          done
+          EDGE_KEY_FILE="$RUNNER_TEMP/prod-sim-edge-ssh-key"
+          KEY_FILE="$RUNNER_TEMP/prod-sim-service-ssh-key"
+          (umask 077 && printf '%s\n' "$EDGE_KEY_MATERIAL" > "$EDGE_KEY_FILE")
+          (umask 077 && printf '%s\n' "$KEY_MATERIAL" > "$KEY_FILE")
+          echo "PROD_EDGE_SSH_KEY_FILE=$EDGE_KEY_FILE" >> "$GITHUB_ENV"
+          echo "PROD_SERVICE_SSH_KEY_FILE=$KEY_FILE" >> "$GITHUB_ENV"
+      - name: Run non-promotable isolated first-party prevalidation
+        run: |
+          python3 quwoquan_ops/cli/stackctl.py deploy \
+            --target prod-hosted \
+            --mode prevalidate \
+            --ssh-host "$PROD_SSH_HOST" \
+            --data-mode isolated \
+            --prevalidate-scope first-party \
+            --release-manifest "$QWQ_OUTPUT_ROOT/env/prod/runs/prod-sim-admission/release/manifest.json" \
+            --report-dir "$QWQ_OUTPUT_ROOT/env/prod/runs/prod-sim-admission/prevalidate"
+      - name: Prove the rehearsal cannot become release evidence
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          report = json.loads(
+              (
+                  Path(os.environ["QWQ_OUTPUT_ROOT"])
+                  / "env/prod/runs/prod-sim-admission/prevalidate/report.json"
+              ).read_text(encoding="utf-8")
+          )
+          if report.get("schema") != "prod-hosted-first-party-prevalidation-report":
+              raise SystemExit("GATE_BLOCK: prod-sim prevalidation report schema drifted")
+          if report.get("mode") != "prevalidate" or report.get("dataMode") != "isolated":
+              raise SystemExit("GATE_BLOCK: prod-sim did not use isolated prevalidation")
+          if (report.get("containerDeployment") or {}).get("status") != "passed":
+              raise SystemExit("GATE_BLOCK: prod-sim first-party containers did not pass")
+          if (report.get("releaseEligibility") or {}).get("status") != "GATE_BLOCK":
+              raise SystemExit("GATE_BLOCK: prod-sim evidence must remain non-promotable")
+          PY
+          {
+            echo "## Prod-sim manual admission"
+            echo "- candidate: \`${{ steps.candidate.outputs.candidate_digest }}\`"
+            echo "- container deployment: \`passed\`"
+            echo "- release eligibility: \`GATE_BLOCK (non-promotable by contract)\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload non-authoritative prod-sim diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: prod-sim-manual-admission-${{ github.run_id }}
+          path: ${{ env.QWQ_OUTPUT_ROOT }}/env/prod/runs/prod-sim-admission
+          retention-days: 1

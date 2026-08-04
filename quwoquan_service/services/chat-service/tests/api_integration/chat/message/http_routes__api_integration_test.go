@@ -86,7 +86,7 @@ func TestMessageHTTPRoutesRejectUnknownWireField(t *testing.T) {
 	request := httptest.NewRequest(
 		http.MethodPost,
 		"/chat/conversations/conversation-1/messages",
-		strings.NewReader(`{"type":"text","content":"hello","clientMsgId":"client-message-1","legacyType":"v2"}`),
+		strings.NewReader(`{"type":"text","content":"hello","clientMsgId":"client-message-1","retiredType":"unsupported"}`),
 	)
 	response := httptest.NewRecorder()
 	routes.ServeHTTP(response, request)

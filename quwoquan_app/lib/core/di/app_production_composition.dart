@@ -21,7 +21,9 @@ import 'package:quwoquan_app/cloud/remote/content/media/content_media_remote.dar
 import 'package:quwoquan_app/cloud/remote/content/media/content_media_object_uploader.dart';
 import 'package:quwoquan_app/cloud/remote/content/outbound_share/outbound_share_remote.dart';
 import 'package:quwoquan_app/cloud/remote/content/post/author_impact_remote.dart';
+import 'package:quwoquan_app/cloud/remote/content/post/content_app_config_remote.dart';
 import 'package:quwoquan_app/cloud/remote/content/post/content_behavior_remote.dart';
+import 'package:quwoquan_app/cloud/remote/content/post/post_delete_remote.dart';
 import 'package:quwoquan_app/cloud/remote/content/post/post_publication_remote.dart';
 import 'package:quwoquan_app/cloud/remote/content/profile_interaction/profile_interaction_remote.dart';
 import 'package:quwoquan_app/cloud/remote/content/report/report_query_remote.dart';
@@ -65,6 +67,7 @@ import 'package:quwoquan_app/cloud/remote/user/profile/user_profile_query_remote
 import 'package:quwoquan_app/cloud/remote/user/profile_update_proposal/profile_update_proposal_remote.dart';
 import 'package:quwoquan_app/cloud/remote/user/subject_follow/subject_follow_remote.dart';
 import 'package:quwoquan_app/cloud/remote/user/user_settings/user_settings_remote.dart';
+import 'package:quwoquan_app/cloud/remote/user/user_account/user_sync_remote.dart';
 import 'package:quwoquan_app/cloud/services/content/remote/comment_facets_remote.dart';
 import 'package:quwoquan_app/cloud/services/content/remote/discovery_feed_query_remote.dart';
 import 'package:quwoquan_app/cloud/services/content/remote/footprint_query_remote.dart';
@@ -77,7 +80,6 @@ import 'package:quwoquan_app/cloud/services/integration/remote/location_query_re
 import 'package:quwoquan_app/cloud/services/integration/remote/connector_management_remote.dart';
 import 'package:quwoquan_app/cloud/services/notification/remote/app_message_facets_remote.dart';
 import 'package:quwoquan_app/cloud/services/ops/ops_visit_append_writer.dart';
-import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/application/content/media/content_media_upload_coordinator.dart';
 import 'package:quwoquan_app/application/content/post/post_publication_status_reader.dart';
 import 'package:quwoquan_app/core/services/cache/cache_telemetry_sink.dart';
@@ -103,6 +105,7 @@ enum AppProductionAdapter {
   circleMembership,
   circlePostPlacement,
   circleQuery,
+  contentAppConfigQuery,
   contentComment,
   contentFootprint,
   contentMedia,
@@ -125,6 +128,7 @@ enum AppProductionAdapter {
   homepageReview,
   incomingCallPresentation,
   locationQuery,
+  opsVisitAppend,
   personaCommand,
   personaQuery,
   personaRelationship,
@@ -147,23 +151,20 @@ enum AppProductionAdapter {
   userProfileQuery,
   userSettingsCommand,
   userSettingsQuery,
+  userSync,
 }
-
-enum AppProductionHttpAdapter { opsVisitAppend }
 
 /// The only production owner for the content read/write/cache graph.
 final class AppProductionContentFacets {
   const AppProductionContentFacets({
     required this.read,
-    required this.write,
-    required this.engagement,
-    required this.config,
+    required this.postDeleteWriter,
+    required this.behaviorWriter,
   });
 
   final ContentReadRepository read;
-  final ContentWriteRepository write;
-  final ContentEngagementRepository engagement;
-  final ContentConfigRepository config;
+  final ContentPostDeleteCommandWriter postDeleteWriter;
+  final ContentBehaviorCommandWriter behaviorWriter;
 }
 
 /// Read-only content facets sharing one generated adapter and its cache layer.
@@ -301,9 +302,9 @@ final class AppProductionComposition {
   }
 
   static AppProductionContentFacets contentFacets({
-    required CloudHttpClient httpClient,
     required GeneratedCloudOperationClient client,
     required ContentDiscoveryFeedInvocationContextFactory invocationContext,
+    required ContentPostDeleteInvocationContextFactory deleteInvocationContext,
     required Future<List<String>> Function() blockedKeywordsLoader,
     required PostObjectCacheService postCache,
     required ContentQuerySnapshotStore querySnapshotStore,
@@ -315,13 +316,18 @@ final class AppProductionComposition {
       invocationContext: invocationContext,
       blockedKeywordsLoader: blockedKeywordsLoader,
     );
-    final remote = RemoteContentRepository(
-      discoveryFeedQuery: discoveryFeed,
-      httpClient: httpClient,
+    final remote = RemoteContentRepository(discoveryFeedQuery: discoveryFeed);
+    final deleteWriter = RemoteContentPostDeleteCommandWriter(
+      client: client,
+      invocationContext: deleteInvocationContext,
+    );
+    final behavior = RemoteContentBehaviorCommandAdapter(
+      client: client,
+      invocationContext: invocationContext,
     );
     final cached = CachedContentRepository(
       readDelegate: remote,
-      writeDelegate: remote,
+      deleteDelegate: deleteWriter,
       postCache: postCache,
       querySnapshotStore: querySnapshotStore,
       blockedKeywordsLoader: blockedKeywordsLoader,
@@ -330,22 +336,9 @@ final class AppProductionComposition {
     );
     return AppProductionContentFacets(
       read: cached,
-      write: cached,
-      engagement: remote,
-      config: remote,
+      postDeleteWriter: cached,
+      behaviorWriter: behavior,
     );
-  }
-
-  static T httpAdapter<T>(
-    AppProductionHttpAdapter adapter, {
-    required CloudHttpClient httpClient,
-  }) {
-    final Object result = switch (adapter) {
-      AppProductionHttpAdapter.opsVisitAppend => RemoteOpsVisitAppendWriter(
-        httpClient: httpClient,
-      ),
-    };
-    return result as T;
   }
 
   static ContentMediaStreamObjectUpload contentMediaObjectUpload({
@@ -459,6 +452,10 @@ final class AppProductionComposition {
         client: client,
         invocationContext: context,
       ),
+      AppProductionAdapter.contentAppConfigQuery => RemoteContentAppConfigQuery(
+        client: client,
+        invocationContext: context,
+      ),
       AppProductionAdapter.contentComment => RemoteContentCommentFacet(
         client: client,
         invocationContext: context,
@@ -555,6 +552,10 @@ final class AppProductionComposition {
           invocationContext: context,
         ),
       AppProductionAdapter.locationQuery => RemoteLocationQueryAdapter(
+        client: client,
+        invocationContext: context,
+      ),
+      AppProductionAdapter.opsVisitAppend => RemoteOpsVisitAppendWriter(
         client: client,
         invocationContext: context,
       ),
@@ -666,6 +667,10 @@ final class AppProductionComposition {
           invocationContext: context,
         ),
       AppProductionAdapter.userSettingsQuery => RemoteUserSettingsQueryReader(
+        client: client,
+        invocationContext: context,
+      ),
+      AppProductionAdapter.userSync => RemoteUserSyncRepository(
         client: client,
         invocationContext: context,
       ),

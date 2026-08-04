@@ -71,14 +71,14 @@
 ### REQ-004 三端来电唤醒与权限降级
 
 - iOS 后台/锁屏经 PushKit 唤醒并立即上报 CallKit；Android 经 FCM 高优先级+全屏意图唤醒，14+ 权限不可用降级 heads-up。
-- Web M2 仅支持前台 realtime 站内来电；后台 Web Push/Service Worker 明确 deferred， 不伪装成已实现能力。
+- Web M2 当前只支持前台 realtime 站内来电；后台 Web Push/Service Worker 尚未实现并由 `OPEN-004` 阻断，不伪装成已具备的能力。
 - 平台判断只读 PlatformCapabilities（incomingCallUi/webPushIncomingCall/realtimeCommunication），无裸平台判断。
 
 <a id="req-005"></a>
-### REQ-005 events.yaml 的 client_ws_type 经 codegen 生成 Go 映射，orchestrator 推送使用 wire type（call.ringing 等）
+### REQ-005 RealtimeEventEnvelope 是 RTC 在线事件的唯一 wire owner
 
-- events.yaml 的 client_ws_type 经 codegen 生成 Go 映射，orchestrator 推送使用 wire type（call.ringing 等）。
-- Dart parseRtcWsPayload 与 Go 推送 type 对齐；来电/参与者事件可被端侧解析。
+- `events.yaml` 的 typed event contract 经 codegen 生成 Go 与 Dart 唯一映射，orchestrator 只推送受信 `RealtimeEventEnvelope`。
+- App 只从 `RtcRealtimeEventEnvelope` 构造 `RtcSignalEvent`；来电/参与者事件不使用 Map decoder 或第二解析路径。
 - LiveKit 远端 participants/tracks 实时同步到 callParticipantsProvider，视频格渲染真实 VideoTrack。
 - RTC 不建立私有信令连接；所有在线 call/participant/screen_share 事件只由 realtime-gateway 的可信 ticket/auth_ack 连接投递。
 
@@ -170,7 +170,7 @@
 - GIVEN 执行“三端来电唤醒与权限降级”所需的身份、输入与上游事实均有效。
 - WHEN 参与者发起“三端来电唤醒与权限降级”对应动作。
 - THEN iOS 后台/锁屏经 PushKit 唤醒并立即上报 CallKit；Android 经 FCM 高优先级+全屏意图唤醒，14+ 权限不可用降级 heads-up。
-- THEN Web M2 仅支持前台 realtime 站内来电；后台 Web Push/Service Worker 明确 deferred， 不伪装成已实现能力。
+- THEN Web M2 当前只支持前台 realtime 站内来电；后台 Web Push/Service Worker 尚未实现并由 `OPEN-004` 阻断，不伪装成已具备的能力。
 - THEN 平台判断只读 PlatformCapabilities（incomingCallUi/webPushIncomingCall/realtimeCommunication），无裸平台判断。
 
 <a id="sit-005"></a>
@@ -178,8 +178,8 @@
 
 - GIVEN 执行“realtime gateway 单通道 wire type 端云一致与参与者绑定”所需的身份、输入与上游事实均有效。
 - WHEN 参与者发起“realtime gateway 单通道 wire type 端云一致与参与者绑定”对应动作。
-- THEN events.yaml 的 client_ws_type 经 codegen 生成 Go 映射，orchestrator 推送使用 wire type（call.ringing 等）。
-- THEN Dart parseRtcWsPayload 与 Go 推送 type 对齐；来电/参与者事件可被端侧解析。
+- THEN `events.yaml` 的 typed event contract 经 codegen 生成 Go 与 Dart 唯一映射，orchestrator 只推送受信 `RealtimeEventEnvelope`。
+- THEN App 只从 `RtcRealtimeEventEnvelope` 构造 `RtcSignalEvent`；来电/参与者事件可被端侧强类型解析，不存在手写 payload parser 或 Map decoder 副轨。
 - THEN LiveKit 远端 participants/tracks 实时同步到 callParticipantsProvider，视频格渲染真实 VideoTrack。
 - THEN RTC 不建立私有信令连接；所有在线 call/participant/screen_share 事件只由 realtime-gateway 的可信 ticket/auth_ack 连接投递。
 
@@ -228,7 +228,7 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`。
+- 影响或价值：仍缺 1v1 输入区按 mutual relationship 显示语音/视频入口、非互关教育卡以及对应关系拒绝的直接 `spec_ref`。
 - 目标：1v1 输入区仅互相关注显示语音/视频入口；非互相关注显示可解释教育卡而非空白。
 - 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效
 
@@ -260,7 +260,7 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`。
+- 影响或价值：仍缺后台 Web Push/Service Worker、iOS PushKit/CallKit、Android FCM 高优先级与全屏意图在同一候选上的实现、权限降级、Provider 回执和双端真机 `spec_ref`。
 - 目标：iOS 后台/锁屏经 PushKit 唤醒并立即上报 CallKit；Android 经 FCM 高优先级+全屏意图唤醒，14+ 权限不可用降级 heads-up。
 - 完成判定：`SIT-004` 对应行为满足且真实测试 `spec_ref` 有效
 
@@ -270,8 +270,8 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`。
-- 目标：events.yaml 的 client_ws_type 经 codegen 生成 Go 映射，orchestrator 推送使用 wire type（call.ringing 等）。
+- 影响或价值：仍缺最终 fresh generated graph/App package 上的全 App 编译、来电与参与者事件端云组合回归证据；Go 发布端、Dart typed envelope 与两组直接 `spec_ref` 本地合同已存在。
+- 目标：`RealtimeEventEnvelope` 是唯一在线事件 wire owner，RTC 仅通过 typed envelope 读取来电、参与者和屏幕共享事件。
 - 完成判定：`SIT-005` 对应行为满足且真实测试 `spec_ref` 有效
 
 <a id="open-006"></a>

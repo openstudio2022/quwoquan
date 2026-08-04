@@ -68,27 +68,16 @@ def _video_source_qualifier(
 ) -> TargetSourceQualification:
     """Fast, bounded Commons precheck before the deeper frozen plan is built."""
 
-    from content.source.research.auto_plan_video import qualified_video_frame_count
-    from content.source.research.image_search_providers import (
-        _commons_images,
+    from content.source.research.auto_plan_video import (
+        discover_commons_sourced_videos,
     )
 
     aliases = list(dict.fromkeys([target.name, *target.aliases]))
     try:
-        # This gate deliberately makes at most four Commons API queries per
-        # entity. The full planner adds Wikidata/Openverse/page-image rescue
-        # only after a candidate is frozen; probing every provider for every
-        # reference leaf makes scale selection unbounded.
-        frames = _commons_images(
+        videos = discover_commons_sourced_videos(
             target.name,
             entity_aliases=aliases,
-            limit=40,
-        )
-        qualified_frames = qualified_video_frame_count(
-            entity_id=target.name,
-            entity_aliases=aliases,
-            vertical="travel",
-            image_pool=frames,
+            diagnostics=[],
         )
     except (OSError, TimeoutError, ValueError):
         return TargetSourceQualification(
@@ -96,13 +85,13 @@ def _video_source_qualifier(
             qualified_source=None,
             rejection_code=DataIssueCode.MEDIA_PUBLISHABLE_SHORTFALL,
         )
-    if qualified_frames >= 2:
+    if videos:
         return TargetSourceQualification(
             accepted=True,
             qualified_source=_QualifiedVideoSource(
                 title=target.name,
-                url=str(frames[0]["url"]),
-                mode="rights_cleared_frames",
+                url=str(videos[0]["assetUrl"]),
+                mode="sourced_video",
             ),
         )
     return TargetSourceQualification(

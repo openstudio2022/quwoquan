@@ -19,15 +19,15 @@ final class AlphaUserSettingsFacet
   final DateTime Function() _now;
   bool _enablePush = true;
   bool _enableMarketing = false;
-  QuietHoursTime? _quietHoursStart;
-  QuietHoursTime? _quietHoursEnd;
+  String? _quietHoursStart;
+  String? _quietHoursEnd;
   bool _allowStrangerMsg = true;
   ProfileVisibility _profileVisibility = ProfileVisibility.public;
   String? _contentLanguage;
-  FeedPreference? _feedPreference;
+  String? _feedPreference;
   bool _assistantEnabled = true;
   final List<String> _blockedKeywords = <String>[];
-  OfficialRingtoneId? _ringtoneId = OfficialRingtoneId('official.default');
+  String? _ringtoneId = 'official.default';
   bool _allowCallerRingtoneOverride = true;
   bool _enableCallVibration = true;
   bool _enableGroupCallRing = true;
@@ -56,7 +56,7 @@ final class AlphaUserSettingsFacet
   Future<PrivacySettingsView> getPrivacySettings() async => PrivacySettingsView(
     userId: _userId,
     allowStrangerMsg: _allowStrangerMsg,
-    profileVisibility: _profileVisibility,
+    profileVisibility: _profileVisibility.wireName,
     contentLanguage: _contentLanguage,
     feedPreference: _feedPreference,
     assistantEnabled: _assistantEnabled,
@@ -225,25 +225,19 @@ final class AlphaUserSettingsFacet
     final hasOverride =
         _personaThemeMode != null && _personaFontSizePreset != null;
     return AppearanceSettingsView(
-      themeMode: _personaThemeMode ?? _ownerThemeMode,
-      fontSizePreset: _personaFontSizePreset ?? _ownerFontSizePreset,
-      source: hasOverride
-          ? AppearanceSource.subOverride
-          : AppearanceSource.ownerDefault,
-      ownerDefaultThemeMode: _ownerThemeMode,
-      ownerDefaultFontSizePreset: _ownerFontSizePreset,
+      themeMode: (_personaThemeMode ?? _ownerThemeMode).wireName,
+      fontSizePreset: (_personaFontSizePreset ?? _ownerFontSizePreset).wireName,
+      source: hasOverride ? 'sub_override' : 'owner_default',
+      ownerDefaultThemeMode: _ownerThemeMode.wireName,
+      ownerDefaultFontSizePreset: _ownerFontSizePreset.wireName,
       hasPersonaOverride: hasOverride,
       version: _appearanceVersion,
       updatedAt: _appearanceUpdatedAt,
     );
   }
 
-  T? _nextNullable<T extends Object>(
-    T? current,
-    NullableSettingMutation<T>? mutation,
-  ) {
-    if (mutation == null) return current;
-    return mutation.clearsValue ? null : mutation.value;
+  T? _nextNullable<T extends Object>(T? current, T? mutation) {
+    return mutation ?? current;
   }
 
   bool _same(List<String> left, List<String> right) {
@@ -259,8 +253,8 @@ final class AlphaUserSettingsFacet
 
 final class AlphaCredentialBindingWriter
     implements AppCredentialBindingCommandWriter, CredentialBindingQuery {
-  final Map<String, _AlphaCredentialBindingState> _bindings =
-      <String, _AlphaCredentialBindingState>{};
+  final Map<CredentialType, _AlphaCredentialBindingState> _bindings =
+      <CredentialType, _AlphaCredentialBindingState>{};
 
   @override
   Future<ListCredentialsSlice> listCredentials(
@@ -280,17 +274,18 @@ final class AlphaCredentialBindingWriter
             )
             .toList(growable: false)
           ..sort(
-            (left, right) =>
-                left.credentialType.compareTo(right.credentialType),
+            (left, right) => left.credentialType.wireName.compareTo(
+              right.credentialType.wireName,
+            ),
           );
-    return ListCredentialsSlice(items: items);
+    return ListCredentialsSlice(credentials: items);
   }
 
   @override
   Future<CredentialBindingCommandResult> bindPhoneCredential(
     BindPhoneCredentialCommand command,
   ) => _bind(
-    'phone',
+    CredentialType.phone,
     command.displayLabel ?? _maskPhoneCredential(command.phone),
   );
 
@@ -325,22 +320,27 @@ final class AlphaCredentialBindingWriter
   @override
   Future<CredentialBindingCommandResult> bindCarrierPhoneCredential(
     BindCarrierPhoneCredentialCommand command,
-  ) => _bind('carrier_phone', command.displayLabel ?? '138****0000');
+  ) =>
+      _bind(CredentialType.carrierPhone, command.displayLabel ?? '138****0000');
 
   @override
   Future<CredentialBindingCommandResult> unbindCredential(
     UnbindCredentialCommand command,
   ) async {
-    final existing = _bindings[command.credentialType];
+    final credentialType = CredentialType.fromWire(
+      command.credentialType,
+      'UnbindCredentialCommand.credentialType',
+    );
+    final existing = _bindings[credentialType];
     if (existing == null) {
-      throw const CredentialBindingNotFoundException();
+      throw StateError('credential binding not found');
     }
     if (_bindings.length == 1) {
-      throw const LastCredentialUnbindException();
+      throw StateError('the last credential binding cannot be removed');
     }
-    _bindings.remove(command.credentialType);
+    _bindings.remove(credentialType);
     return CredentialBindingCommandResult(
-      credentialType: command.credentialType,
+      credentialType: credentialType,
       isActive: false,
       version: existing.version + 1,
       idempotentReplay: false,
@@ -349,7 +349,7 @@ final class AlphaCredentialBindingWriter
   }
 
   Future<CredentialBindingCommandResult> _bind(
-    String type,
+    CredentialType type,
     String label,
   ) async {
     final existing = _bindings[type];
@@ -363,7 +363,7 @@ final class AlphaCredentialBindingWriter
       );
     }
     final binding = _AlphaCredentialBindingState(
-      id: 'alpha-credential-$type',
+      id: 'alpha-credential-${type.wireName}',
       credentialType: type,
       version: 1,
       displayLabel: label,
@@ -390,7 +390,7 @@ final class _AlphaCredentialBindingState {
   });
 
   final String id;
-  final String credentialType;
+  final CredentialType credentialType;
   final String displayLabel;
   final DateTime boundAt;
   final int version;
@@ -410,6 +410,7 @@ final class AlphaProfileCommandWriter implements ProfileCommandWriter {
       nicknameCustomized:
           command.nickname != null || command.displayName != null,
       profileVersion: _version,
+      avatarVersion: _version,
       avatarUrl: command.avatarUrl,
       avatarAssetId: command.avatarAssetId,
       backgroundUrl: command.backgroundUrl,
@@ -422,11 +423,20 @@ final class AlphaProfileCommandWriter implements ProfileCommandWriter {
             ...?command.interestTagRefs,
           ],
       gender: command.gender,
-      birthDate: command.birthDate,
+      birthDate: _parseOptionalDate(command.birthDate),
       regionTagRef: command.regionTagRef,
-      updatedAt: DateTime.now().toUtc().toIso8601String(),
+      updatedAt: DateTime.now().toUtc(),
     );
   }
+}
+
+DateTime? _parseOptionalDate(String? value) {
+  if (value == null) return null;
+  final parsed = DateTime.tryParse(value);
+  if (parsed == null) {
+    throw ArgumentError.value(value, 'birthDate', 'must be an ISO-8601 date');
+  }
+  return parsed.toUtc();
 }
 
 String _maskPhoneCredential(String phone) {

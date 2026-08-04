@@ -68,7 +68,7 @@ void main() {
     final active = await query.getActivePersonaContext();
     final guard = await query.getPersonaLifecycleGuard('persona-2');
 
-    expect(personas.single.avatarVersion, 3);
+    expect(personas.single.avatarVersion, 0);
     expect(summary.quota.usedPersonas, 1);
     expect(summary.activeContext?.displayName, '主分身');
     expect(active.contextVersion, 7);
@@ -137,6 +137,8 @@ final Map<String, Object?> _responses = <String, Object?>{
           'totalCount': 1,
           'quotaLimit': 5,
           'remainingCount': 4,
+          'activePersonaId': 'persona-1',
+          'primaryPersonaId': 'persona-1',
         },
         'activeContext': _activeContext,
       },
@@ -146,12 +148,13 @@ final Map<String, Object?> _responses = <String, Object?>{
         'personaId': 'persona-2',
         'requestedAction': 'retire',
         'allowed': true,
-        'reason': '',
+        'reason': 'allowed',
         'requiresSuccessor': false,
       },
   AppCloudOperationIds.userUserAccountGetProfileEditSnapshot: <String, Object?>{
     'ownerUserId': 'owner-1',
     'personaId': 'persona-1',
+    'avatarVersion': 3,
     'nickname': '主分身',
     'displayName': '主分身',
     'userHandle': 'owner',
@@ -161,6 +164,7 @@ final Map<String, Object?> _responses = <String, Object?>{
       'isBound': true,
     },
     'qrCard': _qrCard,
+    'updatedAt': '2026-07-20T00:00:00Z',
   },
   AppCloudOperationIds.userUserAccountGetProfileQrCard: _qrCard,
   AppCloudOperationIds.userUserAccountResolveProfileQrToken: <String, Object?>{
@@ -225,6 +229,19 @@ final Map<String, Object?> _responses = <String, Object?>{
       'isBlocked': false,
       'isBlockedBy': false,
     },
+    'tabCounts': <String, Object?>{
+      'worksCount': 4,
+      'likesCount': 20,
+      'circlesCount': 2,
+      'collectionsCount': 0,
+    },
+    'viewerContext': <String, Object?>{
+      'viewerPersonaId': 'persona-1',
+      'isOwner': false,
+      'isGuest': false,
+      'relationToTarget': 'mutual',
+      'canViewFullProfile': true,
+    },
     'cacheVersion': 'profile-revision-a',
   },
 };
@@ -233,14 +250,14 @@ const Map<String, Object?> _persona = <String, Object?>{
   'personaId': 'persona-1',
   'displayName': '主分身',
   'userHandle': 'owner',
-  'avatarVersion': 3,
+  'isolationLevel': 'open',
+  'profileVisibility': 'public',
   'isPrimary': true,
   'isActive': true,
   'status': 'active',
-  'hasPublishedContent': true,
   'inheritsProfileFromOwner': false,
   'overriddenProfileFields': <Object?>[],
-  'subjectType': 'persona',
+  'updatedAt': '2026-07-20T00:00:00Z',
 };
 
 const Map<String, Object?> _activeContext = <String, Object?>{
@@ -251,10 +268,13 @@ const Map<String, Object?> _activeContext = <String, Object?>{
   'avatarUrl': '',
   'avatarVersion': 3,
   'isPrimary': true,
+  'isolationLevel': 'open',
+  'profileVisibility': 'public',
   'contextVersion': 7,
   'personaSnapshotVersion': 9,
   'sourceSurfaceId': 'appShell',
   'explicitOverride': false,
+  'switchedAt': '2026-07-20T00:00:00Z',
 };
 
 const Map<String, Object?> _qrCard = <String, Object?>{
@@ -262,7 +282,6 @@ const Map<String, Object?> _qrCard = <String, Object?>{
   'qrPayload': 'quwoquan://profile/persona-1',
   'qrTokenId': 'qr-token-1',
   'avatarUrl': '',
-  'avatarVersion': '3',
   'displayName': '主分身',
   'region': '浙江',
   'shareText': '扫一扫认识我',
@@ -271,14 +290,20 @@ const Map<String, Object?> _qrCard = <String, Object?>{
 Map<String, Object?> _profile(String personaId, String displayName) {
   return <String, Object?>{
     'personaId': personaId,
-    'ownerUserId': 'owner-1',
     'userHandle': personaId == 'persona-1' ? 'owner' : 'xiaoq',
-    'nickname': displayName,
     'displayName': displayName,
+    'nicknameCustomized': true,
     'subjectType': 'persona',
-    'avatarVersion': 3,
+    'followerCount': 10,
+    'followingCount': 8,
+    'postCount': 4,
+    'circleCount': 2,
+    'likeCount': 20,
     'profileVisibility': 'public',
     'isolationLevel': 'open',
+    'inheritsFromOwner': false,
+    'overriddenFields': <Object?>[],
+    'updatedAt': '2026-07-20T00:00:00Z',
   };
 }
 

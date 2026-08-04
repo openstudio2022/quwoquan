@@ -20,10 +20,12 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
       "object_type": "service_catalog_entry",
       "operations": [
         {
+          "auth_mode": "required",
           "contract_operation_id": "ops.config_snapshot.ListServiceCatalogEntries",
           "method": "GET",
           "operation": "ListServiceCatalogEntries",
           "path": "/control-plane/platform/catalog/services",
+          "principal": "operator",
           "scopes": [
             "ops.platform.catalog.read"
           ]
@@ -40,10 +42,12 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
       "object_type": "plane_binding",
       "operations": [
         {
+          "auth_mode": "required",
           "contract_operation_id": "ops.config_snapshot.ListPlaneBindings",
           "method": "GET",
           "operation": "ListPlaneBindings",
           "path": "/control-plane/platform/topology/planes",
+          "principal": "operator",
           "scopes": [
             "ops.platform.catalog.read"
           ]
@@ -60,10 +64,12 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
       "object_type": "prod_plane_access_isolation",
       "operations": [
         {
+          "auth_mode": "required",
           "contract_operation_id": "ops.config_snapshot.GetProdPlaneAccessIsolation",
           "method": "GET",
           "operation": "GetProdPlaneAccessIsolation",
           "path": "/control-plane/platform/topology/prod-plane-access-isolation",
+          "principal": "operator",
           "scopes": [
             "ops.platform.dependency.read"
           ]
@@ -90,37 +96,45 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
       "object_type": "service_config",
       "operations": [
         {
+          "auth_mode": "required",
           "contract_operation_id": "ops.config_snapshot.ListServiceConfigs",
           "method": "GET",
           "operation": "ListServiceConfigs",
           "path": "/control-plane/platform/configs",
+          "principal": "operator",
           "scopes": [
             "ops.platform.config.read"
           ]
         },
         {
+          "auth_mode": "required",
           "contract_operation_id": "ops.config_snapshot.ResolveEffectiveConfig",
           "method": "GET",
           "operation": "ResolveEffectiveConfig",
           "path": "/control-plane/platform/configs/resolve",
+          "principal": "operator",
           "scopes": [
             "ops.platform.config.read"
           ]
         },
         {
+          "auth_mode": "required",
           "contract_operation_id": "ops.config_snapshot.GetConfigSnapshot",
           "method": "GET",
           "operation": "GetConfigSnapshot",
           "path": "/control-plane/platform/configs/snapshot",
+          "principal": "operator",
           "scopes": [
             "ops.platform.config.read"
           ]
         },
         {
+          "auth_mode": "required",
           "contract_operation_id": "ops.config_snapshot.ListConfigDomains",
           "method": "GET",
           "operation": "ListConfigDomains",
           "path": "/control-plane/platform/configs/domains",
+          "principal": "operator",
           "scopes": [
             "ops.platform.config.read"
           ]
@@ -137,19 +151,23 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
       "object_type": "config_instance_report",
       "operations": [
         {
+          "auth_mode": "required",
           "contract_operation_id": "ops.config_instance_report.ListConfigInstanceReports",
           "method": "GET",
           "operation": "ListConfigInstanceReports",
           "path": "/control-plane/platform/configs/instances",
+          "principal": "operator",
           "scopes": [
             "ops.platform.config.read"
           ]
         },
         {
+          "auth_mode": "required",
           "contract_operation_id": "ops.config_instance_report.ReportConfigInstance",
           "method": "POST",
           "operation": "ReportConfigInstance",
           "path": "/control-plane/platform/configs/instances/{instanceId}:report",
+          "principal": "service",
           "scopes": [
             "ops.platform.config.ack"
           ]
@@ -177,19 +195,23 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
       "object_type": "release_candidate",
       "operations": [
         {
+          "auth_mode": "required",
           "contract_operation_id": "ops.config_instance_report.ListReleaseCandidateAcks",
           "method": "GET",
           "operation": "ListReleaseCandidateAcks",
           "path": "/control-plane/platform/releases",
+          "principal": "operator",
           "scopes": [
             "ops.platform.rollout.read"
           ]
         },
         {
+          "auth_mode": "required",
           "contract_operation_id": "ops.config_snapshot.GetGrayRoutingPolicy",
           "method": "GET",
           "operation": "GetGrayRoutingPolicy",
           "path": "/control-plane/platform/rollout/routing-policy",
+          "principal": "operator",
           "scopes": [
             "ops.platform.rollout.read"
           ]
@@ -206,10 +228,12 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
       "object_type": "environment_topology",
       "operations": [
         {
+          "auth_mode": "required",
           "contract_operation_id": "ops.config_snapshot.ListEnvironmentTopologies",
           "method": "GET",
           "operation": "ListEnvironmentTopologies",
           "path": "/control-plane/platform/topology/environments",
+          "principal": "operator",
           "scopes": [
             "ops.platform.dependency.read"
           ]
@@ -226,10 +250,12 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
       "object_type": "runtime_cluster",
       "operations": [
         {
+          "auth_mode": "required",
           "contract_operation_id": "ops.config_snapshot.ListRuntimeClusters",
           "method": "GET",
           "operation": "ListRuntimeClusters",
           "path": "/control-plane/platform/topology/clusters",
+          "principal": "operator",
           "scopes": [
             "ops.platform.dependency.read"
           ]
@@ -246,10 +272,12 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
       "object_type": "runtime_service",
       "operations": [
         {
+          "auth_mode": "required",
           "contract_operation_id": "ops.config_instance_report.ListRuntimeServices",
           "method": "GET",
           "operation": "ListRuntimeServices",
           "path": "/control-plane/platform/topology/services",
+          "principal": "operator",
           "scopes": [
             "ops.platform.dependency.read"
           ]
@@ -266,10 +294,12 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
       "object_type": "runtime_instance",
       "operations": [
         {
+          "auth_mode": "required",
           "contract_operation_id": "ops.config_instance_report.ListRuntimeInstances",
           "method": "GET",
           "operation": "ListRuntimeInstances",
           "path": "/control-plane/platform/topology/instances",
+          "principal": "operator",
           "scopes": [
             "ops.platform.dependency.read"
           ]
@@ -286,30 +316,36 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
       "object_type": "active_alert",
       "operations": [
         {
+          "auth_mode": "required",
           "contract_operation_id": "ops.config_instance_report.IngestAlertmanagerWebhook",
           "method": "POST",
           "operation": "IngestAlertmanagerWebhook",
           "path": "/control-plane/platform/alerts/ingest",
+          "principal": "service",
           "scopes": [
             "ops.platform.observability.write"
           ]
         },
         {
+          "auth_mode": "required",
           "contract_operation_id": "ops.config_instance_report.ListActiveAlerts",
           "method": "GET",
           "operation": "ListActiveAlerts",
           "path": "/control-plane/platform/alerts/active",
+          "principal": "operator",
           "scopes": [
             "ops.platform.observability.read"
           ]
         },
         {
           "approval_mode": "single",
+          "auth_mode": "required",
           "contract_operation_id": "ops.config_instance_report.AcknowledgeAlert",
           "danger_level": "medium",
           "method": "POST",
           "operation": "AcknowledgeAlert",
           "path": "/control-plane/platform/alerts/{fingerprint}:ack",
+          "principal": "operator",
           "scopes": [
             "ops.platform.observability.write"
           ]
@@ -326,37 +362,45 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
       "object_type": "platform_control_plane_journal",
       "operations": [
         {
+          "auth_mode": "required",
           "contract_operation_id": "ops.config_instance_report.ListPlatformAudits",
           "method": "GET",
           "operation": "ListPlatformAudits",
           "path": "/control-plane/platform/audits",
+          "principal": "operator",
           "scopes": [
             "ops.platform.rollout.read"
           ]
         },
         {
+          "auth_mode": "required",
           "contract_operation_id": "ops.config_instance_report.ListPlatformApprovals",
           "method": "GET",
           "operation": "ListPlatformApprovals",
           "path": "/control-plane/platform/approvals",
+          "principal": "operator",
           "scopes": [
             "ops.platform.rollout.read"
           ]
         },
         {
+          "auth_mode": "required",
           "contract_operation_id": "ops.config_instance_report.GetPlatformProjectionSummary",
           "method": "GET",
           "operation": "GetPlatformProjectionSummary",
           "path": "/control-plane/platform/projections/summary",
+          "principal": "operator",
           "scopes": [
             "ops.platform.observability.read"
           ]
         },
         {
+          "auth_mode": "required",
           "contract_operation_id": "ops.config_instance_report.GetPlatformTriageSummary",
           "method": "GET",
           "operation": "GetPlatformTriageSummary",
           "path": "/control-plane/platform/triage/summary",
+          "principal": "operator",
           "scopes": [
             "ops.platform.observability.read"
           ]

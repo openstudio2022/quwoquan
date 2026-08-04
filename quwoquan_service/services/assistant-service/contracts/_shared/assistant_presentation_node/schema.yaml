@@ -13,6 +13,7 @@ fields:
   - { name: body, type: string, default: '' }
   - { name: data, type: map, default: {} }
   - { name: binding, type: map, default: {} }
+  - { name: dataPolicyRef, type: string, default: '' }
   - { name: style, type: object, ref: style, default: {} }
   - { name: media, type: object, ref: media_ref }
   - { name: action, type: object, ref: action_intent }

@@ -1014,7 +1014,7 @@ void main() {
       expect(
         policyVerifier,
         contains(
-          'legacy GeneratedPluginRegistrant patch script must not exist',
+          'retired GeneratedPluginRegistrant patch script must not exist',
         ),
       );
       expect(registrant, contains('new com.github.dart_lang.jni.JniPlugin()'));

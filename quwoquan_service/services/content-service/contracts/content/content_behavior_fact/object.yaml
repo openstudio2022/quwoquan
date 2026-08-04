@@ -2,6 +2,7 @@ kind: append_only_fact
 description: 内容曝光、点击、停留、负反馈与归因信号的不可变事实；Post 只作为被引用对象，不拥有行为事实生命周期。
 identity:
   fields:
+  - userId
   - clientEventId
   version_source: immutable
 access:
@@ -27,18 +28,38 @@ relationships:
   reference_fields:
   - personaId
   target_object: user.Persona
+- access: event
+  cardinality: N:1
+  consistency: eventual
+  kind: event_source
+  name: contentAuthor
+  on_delete: retain
+  reference_fields:
+  - authorId
+  target_object: user.Persona
 local_identity_reasons:
+  channelId: feed delivery channel correlation coordinate, not a ContentBehaviorFact or Channel business-object identity
   deviceActorId: trusted runtime install-derived actor coordinate for anonymous behavior, not a DeviceRegistration or ContentBehaviorFact identity
   feedRequestId: immutable feed delivery correlation key, not a business-object identity
+  feedSessionId: feed delivery cache correlation coordinate supplied by the current feed slice, not a runtime or business-object identity
+  intersectionEvidenceId: immutable evidence coordinate copied for attribution, not owned by ContentBehaviorFact
+  intersectionId: immutable intersection attribution coordinate, not owned by ContentBehaviorFact
+  objectId: polymorphic wishlist or interaction target coordinate interpreted together with objectKind, not a ContentBehaviorFact identity
+  pageVisitId: client page visit correlation coordinate used for observability, not a business-object identity
+  playbackSessionId: bounded media playback correlation coordinate used only by effective_play deduplication
   sessionId: runtime session correlation key injected by the trusted invocation context
+  subjectId: polymorphic intersection feedback target coordinate interpreted by feedbackKind, not a ContentBehaviorFact identity
+  taxonomyReleaseId: immutable taxonomy release reference validated by the taxonomy authority, not owned by ContentBehaviorFact
 capabilities:
 - append_only
 - idempotent_append
 - queryable
 business_rules:
-- personaId/deviceActorId 与 sessionId 只来自可信 Runtime Context，业务请求体不得伪造主体。
+- userId/personaId/deviceActorId 与 sessionId 只来自可信 Runtime Context，业务请求体不得伪造主体。
 - 同一主体与 clientEventId 只能追加一条语义一致的事实；不同语义重用幂等键必须冲突。
 - impactHelpType 只可由服务端在权威 Post author 校验后按唯一注册表派生，公共行为 payload 不得提供或覆盖。
+- effective_play 的 playbackSessionId 是媒体播放会话事实，不得冒充可信 Runtime sessionId；Runtime sessionId 只由 invocation context 注入。
+- state=works_image_pageflip_motion 时必须同时携带闭集 direction、motionProfile、非负 settleMs、reducedMotion 与 committed，五项作为同一不可变动作证据保存。
 - Post 删除不删除历史行为事实；读取和训练侧必须按当前内容可用性独立过滤。
 - 事实不可更新；推荐、分析与足迹读模型只能由 checkpoint 重放物化。
 lifecycle:

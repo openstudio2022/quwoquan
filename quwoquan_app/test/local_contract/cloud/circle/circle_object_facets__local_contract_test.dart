@@ -26,7 +26,7 @@ void main() {
       );
       expect(executor.pathParameters, <String, String>{'circleId': 'circle-1'});
       expect(executor.body, isNull);
-      expect(result.role, CircleMembershipRole.member);
+      expect(result.role, CircleMemberRole.member);
       expect(result.state, CircleMembershipState.active);
     },
   );
@@ -86,7 +86,7 @@ void main() {
       await client.circleCircleBehaviorFactReportCircleBehavior(
         AppendCircleBehaviorFactCommand(
           circleId: 'circle-1',
-          eventType: CircleBehaviorEventType.effectivePlay,
+          eventType: BehaviorEventType.effectivePlay,
         ),
         context: const CloudOperationInvocationContext(
           surfaceId: 'circleDetail',

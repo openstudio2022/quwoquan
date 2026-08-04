@@ -1,8 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/core/widgets/app_request_feedback.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
-import 'package:quwoquan_app/application/circle/membership/persona_circle_summary_mapper.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
@@ -39,7 +37,7 @@ class ContentCircleSharePickerRoute extends ConsumerStatefulWidget {
 class _ContentCircleSharePickerRouteState
     extends ConsumerState<ContentCircleSharePickerRoute> {
   final TextEditingController _searchController = TextEditingController();
-  late Future<List<CircleDto>> _future;
+  late Future<List<PersonaCircleSlice>> _future;
   String _query = '';
   String? _busyCircleId;
 
@@ -55,7 +53,7 @@ class _ContentCircleSharePickerRouteState
     super.dispose();
   }
 
-  Future<List<CircleDto>> _load() async {
+  Future<List<PersonaCircleSlice>> _load() async {
     final ownerUserId = ref.read(resolvedOwnerUserIdProvider).trim();
     if (ownerUserId.isEmpty) {
       throw StateError(FoundationText.needLogin);
@@ -64,9 +62,7 @@ class _ContentCircleSharePickerRouteState
     final page = await widget.membershipQuery.listPersonaCircles(
       PersonaCircleListQuery(personaId: persona.personaId, limit: 100),
     );
-    final circles = page.items
-        .map(circleDtoFromPersonaCircleSummary)
-        .toList(growable: false);
+    final circles = page.items;
     final active = circles
         .where((circle) => circle.status == CircleStatus.active)
         .toList(growable: false);
@@ -98,7 +94,7 @@ class _ContentCircleSharePickerRouteState
             ),
           ),
           Expanded(
-            child: FutureBuilder<List<CircleDto>>(
+            child: FutureBuilder<List<PersonaCircleSlice>>(
               future: _future,
               builder: (context, snapshot) {
                 if (snapshot.connectionState != ConnectionState.done) {
@@ -123,7 +119,7 @@ class _ContentCircleSharePickerRouteState
                   );
                 }
                 final normalizedQuery = _query.toLowerCase();
-                final circles = (snapshot.data ?? const <CircleDto>[])
+                final circles = (snapshot.data ?? const <PersonaCircleSlice>[])
                     .where(
                       (circle) =>
                           normalizedQuery.isEmpty ||
@@ -157,7 +153,7 @@ class _ContentCircleSharePickerRouteState
     );
   }
 
-  Future<void> _confirmShare(CircleDto circle) async {
+  Future<void> _confirmShare(PersonaCircleSlice circle) async {
     if (_busyCircleId != null) {
       return;
     }
@@ -184,11 +180,14 @@ class _ContentCircleSharePickerRouteState
     }
   }
 
-  Future<void> _submit(CircleDto circle) async {
-    setState(() => _busyCircleId = circle.id);
+  Future<void> _submit(PersonaCircleSlice circle) async {
+    setState(() => _busyCircleId = circle.circleId);
     try {
       await widget.placementWriter.placePost(
-        PlaceCirclePostCommand(circleId: circle.id, postId: widget.postId),
+        PlaceCirclePostCommand(
+          circleId: circle.circleId,
+          postId: widget.postId,
+        ),
       );
       if (!mounted) {
         return;
@@ -242,9 +241,9 @@ class _CircleList extends StatelessWidget {
     required this.onTap,
   });
 
-  final List<CircleDto> circles;
+  final List<PersonaCircleSlice> circles;
   final String? busyCircleId;
-  final ValueChanged<CircleDto> onTap;
+  final ValueChanged<PersonaCircleSlice> onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -259,7 +258,7 @@ class _CircleList extends StatelessWidget {
       separatorBuilder: (_, _) => SizedBox(height: AppSpacing.intraGroupSm),
       itemBuilder: (context, index) {
         final circle = circles[index];
-        final busy = busyCircleId == circle.id;
+        final busy = busyCircleId == circle.circleId;
         return DecoratedBox(
           decoration: BoxDecoration(
             color: AppColors.iosSystemBackground(context),

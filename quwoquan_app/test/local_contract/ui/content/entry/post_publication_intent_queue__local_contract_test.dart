@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/application/content/media/content_media_upload_coordinator.dart';
@@ -151,13 +154,15 @@ void main() {
       command: _command(contentType: ContentType.video),
       authorPersonaId: 'persona-publication',
     );
+    const sourceBytes = 'video-source-bytes:draft-1:video:0';
+    final sourceDigest = _sha256Digest(sourceBytes);
     await notifier.recordPreparedMediaAsset(
       'draft-1',
       ContentMediaPreparationCheckpoint.forSource(
         preparationIdentity: 'draft-1',
         slot: 'video:0',
         mediaType: MediaType.video,
-        sha256Digest: 'sha256:video-source-digest',
+        sha256Digest: sourceDigest,
       ).copyWith(
         sessionId: 'session-video-1',
         assetId: 'video_asset_1',
@@ -182,7 +187,7 @@ void main() {
         .single;
     expect(checkpoint.slot, 'video:0');
     expect(checkpoint.mediaType, MediaType.video);
-    expect(checkpoint.sha256Digest, 'sha256:video-source-digest');
+    expect(checkpoint.sha256Digest, sourceDigest);
     expect(checkpoint.assetId, 'video_asset_1');
     expect(checkpoint.sessionId, 'session-video-1');
     expect(checkpoint.phase, ContentMediaPreparationPhase.completed);
@@ -676,6 +681,9 @@ void main() {
 
 const String _pendingVideoDigest =
     'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+
+String _sha256Digest(String payload) =>
+    'sha256:${sha256.convert(utf8.encode(payload))}';
 
 ProviderContainer _container({
   required ContentPostPublicationWriter writer,

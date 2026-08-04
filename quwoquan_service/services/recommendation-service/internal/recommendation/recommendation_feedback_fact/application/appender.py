@@ -2,11 +2,15 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from internal.recommendation.recommendation_feedback_fact.domain.fact import FeedbackFact
+from internal.recommendation.recommendation_feedback_fact.domain.fact import (
+    RecommendationFeedbackFact,
+)
 
 
-class FeedbackFactStore(Protocol):
-    def append_if_absent(self, fact: FeedbackFact) -> tuple[FeedbackFact, bool]: ...
+class RecommendationFeedbackFactStore(Protocol):
+    def append_if_absent(
+        self, fact: RecommendationFeedbackFact
+    ) -> tuple[RecommendationFeedbackFact, bool]: ...
 
 
 class ExposureReader(Protocol):
@@ -20,7 +24,7 @@ class SubjectClosureReader(Protocol):
 class Appender:
     def __init__(
         self,
-        store: FeedbackFactStore,
+        store: RecommendationFeedbackFactStore,
         exposures: ExposureReader,
         subject_closures: SubjectClosureReader,
     ) -> None:
@@ -28,7 +32,9 @@ class Appender:
         self._exposures = exposures
         self._subject_closures = subject_closures
 
-    def append(self, fact: FeedbackFact) -> tuple[FeedbackFact, bool]:
+    def append(
+        self, fact: RecommendationFeedbackFact
+    ) -> tuple[RecommendationFeedbackFact, bool]:
         fact.validate()
         if self._subject_closures.exists(fact.subject_id):
             raise PermissionError("closed subjects cannot append recommendation feedback")

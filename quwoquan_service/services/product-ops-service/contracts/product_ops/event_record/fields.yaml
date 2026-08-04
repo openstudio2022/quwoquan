@@ -87,23 +87,61 @@ types:
     fields:
     - name: events
       source: events
-      type: '[]object'
+      type: '[]EventRecord'
       constraints: [NOT_NULL, MIN_ITEMS_1]
       classification: SENSITIVE
       log_policy: metadata_only
       api_exposure: write
       ops_exposure: none
+  RuntimeLogRecordWire:
+    description: App 运行诊断的 canonical typed wire；字段、枚举、signal 与属性闭集必须由 _shared/runtime_observability.yaml 生成，不在本对象复制第二份结构。
+    derived_from: _shared/runtime_observability.yaml#envelope
+    fields: []
   RuntimeLogBatchRequest:
     description: App 运行诊断批次请求体；单项为 RuntimeLogService 严格校验并归一化的结构化诊断记录。
     fields:
     - name: records
       source: records
-      type: '[]object'
+      type: '[]RuntimeLogRecordWire'
       constraints: [NOT_NULL, MIN_ITEMS_1]
       classification: SENSITIVE
       log_policy: metadata_only
       api_exposure: write
       ops_exposure: none
+  EventRecordBatchReceipt:
+    description: EventRecord 对产品事件或 App 运行诊断完整批次的原子追加回执；重放始终返回首次接收计数。
+    fields:
+    - {name: acceptedCount, source: acceptedCount, type: int, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: duplicateBatch, source: duplicateBatch, type: bool, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+  StartupTelemetryEventWire:
+    description: 匿名启动诊断的最小事件 wire；不得承载账号、内容、原始异常或堆栈。
+    fields:
+    - {name: eventId, source: eventId, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: hash, api_exposure: write, ops_exposure: none}
+    - {name: attemptId, source: attemptId, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: hash, api_exposure: write, ops_exposure: none}
+    - {name: sequence, source: sequence, type: int, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+    - {name: phase, source: phase, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+    - {name: phaseDurationMs, source: phaseDurationMs, type: int, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+    - {name: elapsedMs, source: elapsedMs, type: int, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+    - {name: outcome, source: outcome, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+    - {name: occurredAt, source: occurredAt, type: timestamp, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+    - {name: platform, source: platform, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+    - {name: runtimeEnv, source: runtimeEnv, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+    - {name: appVersion, source: appVersion, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+    - {name: networkClass, source: networkClass, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+    - {name: recoverySurface, source: recoverySurface, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+    - {name: failureCode, source: failureCode, type: string, constraints: [NULLABLE], classification: SENSITIVE, log_policy: hash, api_exposure: write, ops_exposure: none}
+    - {name: failureSource, source: failureSource, type: string, constraints: [NULLABLE], classification: SENSITIVE, log_policy: hash, api_exposure: write, ops_exposure: none}
+    - {name: deadlineOrigin, source: deadlineOrigin, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+  ReportStartupEventBatchCommand:
+    description: 匿名启动诊断批次命令；proof 只绑定受限 header，不进入 JSON body。
+    fields:
+    - {name: proof, source: header.X-Qwq-Startup-Proof, type: string, constraints: [NOT_BLANK], classification: SECRET, log_policy: drop, api_exposure: write, ops_exposure: none}
+    - {name: events, source: events, type: '[]StartupTelemetryEventWire', constraints: [NOT_NULL, MIN_ITEMS_1], classification: SENSITIVE, log_policy: metadata_only, api_exposure: write, ops_exposure: none}
+  StartupTelemetryBatchReceipt:
+    description: 服务端对完整批次的原子接收回执；duplicateBatch 为 true 时 acceptedCount 表示首次接收数。
+    fields:
+    - {name: acceptedCount, source: acceptedCount, type: int, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: duplicateBatch, source: duplicateBatch, type: bool, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
 typed_extensions:
   catalog: event_catalog.yaml
   discriminator: eventType

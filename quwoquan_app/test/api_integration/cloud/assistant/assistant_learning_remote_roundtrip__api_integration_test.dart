@@ -15,6 +15,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../support/recording_cloud_operation_telemetry_sink.dart';
+import '../../../support/assistant_remote_test_support.dart';
 
 const _gatewayUrl = String.fromEnvironment(
   'CLOUD_GATEWAY_BASE_URL',
@@ -81,6 +82,7 @@ void main() {
       );
       final sessionFacet = RemoteAssistantRepository(
         operationClient: generatedClient,
+        presentationCapabilities: assistantRemoteTestPresentationCapabilities,
         invocationContext:
             (clientPageId, {idempotencyKey, networkSurface = false}) =>
                 CloudOperationInvocationContext(

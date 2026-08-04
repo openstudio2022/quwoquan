@@ -17,7 +17,11 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from quwoquan_ops.cli.lib.prod_management_access import prod_management_ssh_host
+from quwoquan_ops.cli.prod.prod_hosted_topology import (
+    ProdHostedTopologyError,
+    load_access_manifest,
+    resolve_plan,
+)
 
 ACCESS_MANIFEST = ROOT / "quwoquan_ops/environments/prod/access-isolation.yaml"
 DEFAULT_KEY_DIR = Path.home() / ".ssh" / "quwoquan-prod"
@@ -32,6 +36,8 @@ def parse_args() -> argparse.Namespace:
         choices=["prod", "gray", "prevalidate"],
     )
     parser.add_argument("--host", default="")
+    parser.add_argument("--host-id", default="")
+    parser.add_argument("--replica-id", default="")
     parser.add_argument("--key-dir", default=os.environ.get("PROD_SSH_KEY_DIR", ""))
     parser.add_argument("--output", default="")
     return parser.parse_args()
@@ -50,13 +56,6 @@ def _resolve_plane_spec(plane_name: str) -> dict:
         if str(plane.get("plane")) == plane_name:
             return plane
     raise SystemExit(f"FAIL: plane not found in access manifest: {plane_name}")
-
-
-def _resolve_host(override: str) -> str:
-    try:
-        return prod_management_ssh_host(override=override)
-    except RuntimeError as error:
-        raise SystemExit(f"FAIL: {error}") from error
 
 
 def _resolve_key_source(secret_name: str, account: str, key_dir: Path) -> tuple[list[str], str]:
@@ -208,7 +207,24 @@ print(json.dumps(payload, ensure_ascii=False))
 def main() -> int:
     args = parse_args()
     plane = _resolve_plane_spec(args.plane)
-    host = _resolve_host(args.host)
+    try:
+        plan = resolve_plan(
+            load_access_manifest(),
+            instance=args.instance,
+            planes=(args.plane,),
+            host_ids=((args.host_id,) if args.host_id else None),
+            ssh_host_override=args.host,
+        )
+    except ProdHostedTopologyError as error:
+        raise SystemExit(f"FAIL: {error}") from error
+    if args.replica_id:
+        plan = [item for item in plan if item.replica_id == args.replica_id]
+    if len(plan) != 1:
+        raise SystemExit(
+            "FAIL: inspection must select exactly one replica; use --host-id or --replica-id"
+        )
+    placement = plan[0]
+    host = placement.ssh_host
     key_dir = Path(args.key_dir).expanduser() if args.key_dir else DEFAULT_KEY_DIR
     ssh_args, key_source = _resolve_key_source(
         str(plane.get("sshKeySecret")),
@@ -216,9 +232,7 @@ def main() -> int:
         key_dir,
     )
     layout = plane.get("rootlessRuntimeLayout") or {}
-    compose_root = str(plane.get("composeProjectRoot"))
-    if args.instance == "prevalidate":
-        compose_root = f"{compose_root.rstrip('/')}/prevalidate"
+    compose_root = placement.remote_root
     compose_file_name = str(layout.get("composeFile") or "docker-compose.prod-hosted.yaml")
     env_file_name = str(layout.get("envFile") or "stack.env")
 
@@ -235,8 +249,8 @@ def main() -> int:
                 f"COMPOSE_ROOT={json.dumps(compose_root)} "
                 f"COMPOSE_FILE_NAME={json.dumps(compose_file_name)} "
                 f"ENV_FILE_NAME={json.dumps(env_file_name)} "
-                f"COMPOSE_PROJECT={json.dumps(f'quwoquan-{args.plane}-{args.instance}')} "
-                f"SYSTEMD_UNIT={json.dumps(f'quwoquan-{args.plane}-{args.instance}.service')} "
+                f"COMPOSE_PROJECT={json.dumps(placement.project)} "
+                f"SYSTEMD_UNIT={json.dumps(placement.systemd_unit)} "
                 "python3 -"
             ),
         ],
@@ -253,6 +267,8 @@ def main() -> int:
     payload = json.loads(result.stdout)
     payload["plane"] = args.plane
     payload["instance"] = args.instance
+    payload["replicaId"] = placement.replica_id
+    payload["hostId"] = placement.host_id
     payload["host"] = host
     payload["keySource"] = key_source
     if args.output:

@@ -28,16 +28,19 @@ func (source apiCatalogSource) ListCatalogItems(context.Context) ([]model.Item, 
 	return []model.Item{{
 		PackageID:                   "assistant.session.skills",
 		ReleaseDigest:               "sha256:" + strings.Repeat("2", 64),
-		SkillID:                     model.PersonalContentAccessSkillID,
-		DisplayName:                 "个人内容访问",
-		Description:                 "允许读取个人内容。",
+		SkillID:                     "travel_companion",
+		DomainID:                    "travel",
+		DisplayName:                 "贴身旅行管家",
+		Description:                 "读取用户明确授权的旅行上下文。",
+		CatalogGroup:                model.SemanticLabel{ID: "travel", DisplayText: "旅行"},
 		RequiresConsent:             true,
-		RequiredConsentScopes:       []string{"assistant.personal_content.read"},
-		TargetUsers:                 []string{"all_users"},
+		RequiredConsentScopes:       []string{"travel.trip.read"},
+		ConsentScopeLabels:          []model.SemanticLabel{{ID: "travel.trip.read", DisplayText: "读取行程"}},
+		TargetAudiences:             []model.SemanticLabel{{ID: "trip_organizer", DisplayText: "行程组织者"}},
 		DataUseSummary:              "仅在授权后读取",
-		ExampleRefs:                 []string{},
+		Examples:                    []model.ResolvedExample{},
 		ActivationMode:              "reactive",
-		AllowedSurfaceKinds:         []string{"personal"},
+		SurfaceKinds:                []model.SemanticLabel{{ID: "personal", DisplayText: "个人小趣"}},
 		ConfigurationSchemaDigest:   "sha256:" + strings.Repeat("1", 64),
 		ConfigurationSchema:         json.RawMessage(`{"type":"object","additionalProperties":false,"properties":{}}`),
 		SetupTemplateRef:            "assistant.skill.setup.none",
@@ -88,7 +91,7 @@ func TestListSkillsHTTPUsesVerifiedAccountAndFailsClosed(t *testing.T) {
 
 	detail := requestCatalogAt(
 		handler,
-		"/assistant/skills/"+model.PersonalContentAccessSkillID,
+		"/assistant/skills/travel_companion",
 		"account-a",
 		true,
 	)
@@ -99,7 +102,7 @@ func TestListSkillsHTTPUsesVerifiedAccountAndFailsClosed(t *testing.T) {
 	if err := json.Unmarshal(detail.Body.Bytes(), &detailView); err != nil {
 		t.Fatalf("decode detail view: %v", err)
 	}
-	if detailView.Item.SkillID != model.PersonalContentAccessSkillID ||
+	if detailView.Item.SkillID != "travel_companion" ||
 		len(detailView.ConfigurationSchema) == 0 {
 		t.Fatalf("active package catalog detail missing: %+v", detailView)
 	}

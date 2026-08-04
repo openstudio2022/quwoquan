@@ -5,15 +5,13 @@ part of 'app_providers.dart';
 final class _ContentFacets {
   const _ContentFacets({
     required this.read,
-    required this.write,
-    required this.engagement,
-    required this.config,
+    required this.postDeleteWriter,
+    required this.behaviorWriter,
   });
 
   final ContentReadRepository read;
-  final ContentWriteRepository write;
-  final ContentEngagementRepository engagement;
-  final ContentConfigRepository config;
+  final ContentPostDeleteCommandWriter postDeleteWriter;
+  final ContentBehaviorCommandWriter behaviorWriter;
 }
 
 final _contentFacetsProvider = Provider<_ContentFacets>((ref) {
@@ -30,13 +28,19 @@ final _contentFacetsProvider = Provider<_ContentFacets>((ref) {
   }
 
   final facets = AppProductionComposition.contentFacets(
-    httpClient: ref.watch(cloudHttpClientProvider),
     client: ref.watch(generatedCloudOperationClientProvider),
     invocationContext: (clientPageId) => _contentQueryInvocationContext(
       ref,
       surface: AppUiSurfaces.homeFeed,
       clientPageId: clientPageId,
     ),
+    deleteInvocationContext: (clientPageId, idempotencyKey) =>
+        _contentCommandInvocationContext(
+          ref,
+          surface: AppUiSurfaces.workBrowser,
+          clientPageId: clientPageId,
+          idempotencyKey: idempotencyKey,
+        ),
     blockedKeywordsLoader: loadBlockedKeywords,
     postCache: ref.watch(postObjectCacheProvider),
     querySnapshotStore: ref.watch(contentQuerySnapshotStoreProvider),
@@ -45,9 +49,8 @@ final _contentFacetsProvider = Provider<_ContentFacets>((ref) {
   );
   return _ContentFacets(
     read: facets.read,
-    write: facets.write,
-    engagement: facets.engagement,
-    config: facets.config,
+    postDeleteWriter: facets.postDeleteWriter,
+    behaviorWriter: facets.behaviorWriter,
   );
 });
 
@@ -67,12 +70,13 @@ final profileMediaUploadGatewayProvider = Provider<ProfileMediaUploadGateway>((
 final contentDiscoveryFeedQueryProvider = Provider<ContentDiscoveryFeedQuery>(
   (ref) => ref.watch(_contentFacetsProvider).read,
 );
-final contentWriteRepositoryProvider = Provider<ContentWriteRepository>(
-  (ref) => ref.watch(_contentFacetsProvider).write,
-);
-final contentEngagementRepositoryProvider =
-    Provider<ContentEngagementRepository>(
-      (ref) => ref.watch(_contentFacetsProvider).engagement,
+final contentPostDeleteCommandWriterProvider =
+    Provider<ContentPostDeleteCommandWriter>(
+      (ref) => ref.watch(_contentFacetsProvider).postDeleteWriter,
+    );
+final contentBehaviorCommandWriterProvider =
+    Provider<ContentBehaviorCommandWriter>(
+      (ref) => ref.watch(_contentFacetsProvider).behaviorWriter,
     );
 
 ContentPostReactionFacet _productionPostReactionFacet(Ref ref) {
@@ -154,9 +158,19 @@ final profileCommentsContentCommentFacetProvider =
     Provider<ContentCommentFacet>(
       (ref) => _productionCommentFacet(ref, AppUiSurfaces.profileHome),
     );
-final contentConfigRepositoryProvider = Provider<ContentConfigRepository>(
-  (ref) => ref.watch(_contentFacetsProvider).config,
-);
+final contentConfigRepositoryProvider = Provider<ContentConfigRepository>((
+  ref,
+) {
+  return AppProductionComposition.generatedAdapter<ContentConfigRepository>(
+    AppProductionAdapter.contentAppConfigQuery,
+    client: ref.watch(generatedCloudOperationClientProvider),
+    invocationContext: (clientPageId) => _contentQueryInvocationContext(
+      ref,
+      surface: AppUiSurfaces.homeFeed,
+      clientPageId: clientPageId,
+    ),
+  );
+});
 
 final _imageEditorFilterCatalogQueryProvider =
     Provider<ContentFilterCatalogQuery>((ref) {
@@ -303,6 +317,17 @@ final profileEditContentMediaFacetProvider = Provider<ContentMediaFacet>(
 final circleDetailContentMediaFacetProvider = Provider<ContentMediaFacet>(
   (ref) => _productionContentMediaFacet(ref, AppUiSurfaces.circleDetail),
 );
+final personalAssistantContentMediaFacetProvider = Provider<ContentMediaFacet>(
+  (ref) =>
+      _productionContentMediaFacet(ref, AppUiSurfaces.personalAssistantDialog),
+);
+final assistantPresentationMediaResolverProvider =
+    Provider<AssistantPresentationMediaResolver>((ref) {
+      return AssistantPresentationMediaResolver(
+        media: ref.watch(personalAssistantContentMediaFacetProvider),
+        delivery: MediaDeliveryResolver.fromRuntimeConfig(),
+      );
+    });
 
 final contentMediaStreamObjectUploadProvider =
     Provider<ContentMediaStreamObjectUpload>((ref) {

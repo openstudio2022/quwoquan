@@ -603,6 +603,7 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/成都市/成华区
     aliases:
     - 熊猫基地
+    - Chengdu Research Base of Giant Panda Breeding
     selectionPriority: 1
   - name: 成都动物园
     canonicalName: 成都动物园

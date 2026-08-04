@@ -2,6 +2,8 @@ package api_integration
 
 import (
 	"context"
+	"crypto/sha256"
+	"fmt"
 	"testing"
 	"time"
 
@@ -14,9 +16,13 @@ import (
 func TestContactDiscoveryRecordPostgresPersistsOnlyHashesAndExpires(t *testing.T) {
 	usersupport.WithUserPostgres(t, func(ctx context.Context, pool *pgxpool.Pool) {
 		store := contactpersistence.NewPgContactDiscoveryStore(pool)
+		hashedPhone := fmt.Sprintf(
+			"sha256:%x",
+			sha256.Sum256([]byte("+8613800000001")),
+		)
 		record := &contactmodel.ContactDiscoveryRecord{
 			ID: "contact-discovery-1", OwnerAccountID: "contact-owner",
-			HashedPhones: []string{"sha256:contact-one"}, Status: "pending",
+			HashedPhones: []string{hashedPhone}, Status: "pending",
 			ExpireAt: time.Now().UTC().Add(time.Hour), CreatedAt: time.Now().UTC(),
 		}
 		if err := store.Create(ctx, record); err != nil {

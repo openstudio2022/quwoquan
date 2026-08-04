@@ -2,6 +2,7 @@ package runtimeconfig
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	configrelease "quwoquan_service/runtime/configrelease"
 	"strconv"
@@ -63,6 +64,7 @@ type PushDeliveryProviderConfig struct {
 	Enabled            bool   `yaml:"enabled"`
 	Mode               string `yaml:"mode"`
 	TimeoutMs          int    `yaml:"timeout_ms"`
+	Endpoint           string `yaml:"endpoint"`
 	UserServiceBaseURL string `yaml:"user_service_base_url"`
 	APNs               struct {
 		Environment string `yaml:"environment"`
@@ -142,6 +144,9 @@ func MergeFile(cfg *Config, path string) error {
 	if err := rejectRetiredLocationProviderConfig(raw, path); err != nil {
 		return err
 	}
+	if err := rejectRetiredExternalInteractionConfig(raw, path); err != nil {
+		return err
+	}
 	if err := yaml.Unmarshal(raw, cfg); err != nil {
 		return fmt.Errorf("parse %s: %w", path, err)
 	}
@@ -168,6 +173,25 @@ func rejectRetiredLocationProviderConfig(raw []byte, path string) error {
 		if _, found := location[key]; found {
 			return fmt.Errorf(
 				"%s: integration.location.%s is retired; use the generated external provider binding",
+				path,
+				key,
+			)
+		}
+	}
+	return nil
+}
+
+func rejectRetiredExternalInteractionConfig(raw []byte, path string) error {
+	var document map[string]any
+	if err := yaml.Unmarshal(raw, &document); err != nil {
+		return fmt.Errorf("parse %s for external interaction validation: %w", path, err)
+	}
+	integration, _ := document["integration"].(map[string]any)
+	externalInteraction, _ := integration["external_interaction"].(map[string]any)
+	for _, key := range []string{"sms", "push"} {
+		if _, found := externalInteraction[key]; found {
+			return fmt.Errorf(
+				"%s: integration.external_interaction.%s is retired; use the generated external provider binding",
 				path,
 				key,
 			)
@@ -303,11 +327,17 @@ func validatePushDeliveryConfig(
 		return nil
 	}
 	mode := strings.TrimSpace(push.Mode)
-	if mode == "local_recorder" {
+	if mode == "protocol_substitute" {
 		if appEnv != "alpha" && appEnv != "beta" && appEnv != "gamma" {
 			return fmt.Errorf(
-				"integration push local_recorder is only permitted in alpha/beta/gamma, got APP_ENV=%s",
+				"integration push protocol_substitute is only permitted in alpha/beta/gamma, got APP_ENV=%s",
 				appEnv,
+			)
+		}
+		endpoint, err := url.ParseRequestURI(strings.TrimSpace(push.Endpoint))
+		if err != nil || endpoint.Host == "" || endpoint.Scheme != "https" {
+			return fmt.Errorf(
+				"integration push protocol_substitute endpoint is invalid",
 			)
 		}
 		if push.TimeoutMs <= 0 {
@@ -317,7 +347,7 @@ func validatePushDeliveryConfig(
 	}
 	if mode != "real" && mode != "remote" {
 		return fmt.Errorf(
-			"integration push mode must be real/remote, or local_recorder in alpha/beta/gamma, when APP_ENV=%s",
+			"integration push mode must be real/remote, or protocol_substitute in alpha/beta/gamma, when APP_ENV=%s",
 			appEnv,
 		)
 	}
@@ -389,6 +419,9 @@ func ApplyEnvOverrides(cfg *Config) error {
 	if err := rejectRetiredLocationProviderEnvOverrides(); err != nil {
 		return err
 	}
+	if err := rejectRetiredExternalProviderEnvOverrides(); err != nil {
+		return err
+	}
 	if value := strings.TrimSpace(os.Getenv("MONGO_URI")); value != "" {
 		cfg.MongoDB.URI = value
 	}
@@ -429,17 +462,6 @@ func ApplyEnvOverrides(cfg *Config) error {
 			return fmt.Errorf("INTEGRATION_LOCATION_DEFAULT_LONGITUDE must be numeric: %w", err)
 		}
 		cfg.Integration.Location.DefaultLongitude = longitude
-	}
-	if err := applyExternalProviderEnv(
-		&cfg.Integration.ExternalInteraction.SMS,
-		"INTEGRATION_SMS",
-	); err != nil {
-		return err
-	}
-	if err := applyPushDeliveryEnv(
-		&cfg.Integration.ExternalInteraction.Push,
-	); err != nil {
-		return err
 	}
 	return nil
 }
@@ -496,84 +518,23 @@ func rejectRetiredLocationProviderEnvOverrides() error {
 	return nil
 }
 
-func applyExternalProviderEnv(cfg *ExternalProviderConfig, prefix string) error {
-	if raw, present := os.LookupEnv(prefix + "_ENABLED"); present {
-		value, err := strconv.ParseBool(strings.TrimSpace(raw))
-		if err != nil {
-			return fmt.Errorf("%s_ENABLED must be boolean: %w", prefix, err)
+func rejectRetiredExternalProviderEnvOverrides() error {
+	for _, key := range []string{
+		"INTEGRATION_SMS_ENABLED",
+		"INTEGRATION_SMS_PROVIDER",
+		"INTEGRATION_SMS_TIMEOUT_MS",
+		"INTEGRATION_PUSH_ENABLED",
+		"INTEGRATION_PUSH_MODE",
+		"INTEGRATION_PUSH_TIMEOUT_MS",
+	} {
+		if _, found := os.LookupEnv(key); found {
+			return fmt.Errorf(
+				"%s is retired; use the generated external provider binding",
+				key,
+			)
 		}
-		cfg.Enabled = value
-	}
-	if value := strings.TrimSpace(os.Getenv(prefix + "_PROVIDER")); value != "" {
-		cfg.Provider = value
-	}
-	if value := strings.TrimSpace(os.Getenv(prefix + "_ENDPOINT")); value != "" {
-		cfg.Endpoint = value
-	}
-	if value := strings.TrimSpace(os.Getenv(prefix + "_TOKEN")); value != "" {
-		cfg.Token = value
-	}
-	if raw := strings.TrimSpace(os.Getenv(prefix + "_TIMEOUT_MS")); raw != "" {
-		value, err := parsePositiveIntEnv(prefix+"_TIMEOUT_MS", raw)
-		if err != nil {
-			return err
-		}
-		cfg.TimeoutMs = value
 	}
 	return nil
-}
-
-func applyPushDeliveryEnv(cfg *PushDeliveryProviderConfig) error {
-	if raw, present := os.LookupEnv("INTEGRATION_PUSH_ENABLED"); present {
-		value, err := strconv.ParseBool(strings.TrimSpace(raw))
-		if err != nil {
-			return fmt.Errorf("INTEGRATION_PUSH_ENABLED must be boolean: %w", err)
-		}
-		cfg.Enabled = value
-	}
-	if value := strings.TrimSpace(os.Getenv("INTEGRATION_PUSH_MODE")); value != "" {
-		cfg.Mode = value
-	}
-	if raw := strings.TrimSpace(os.Getenv("INTEGRATION_PUSH_TIMEOUT_MS")); raw != "" {
-		value, err := parsePositiveIntEnv("INTEGRATION_PUSH_TIMEOUT_MS", raw)
-		if err != nil {
-			return err
-		}
-		cfg.TimeoutMs = value
-	}
-	if value := strings.TrimSpace(os.Getenv("INTEGRATION_PUSH_USER_SERVICE_BASE_URL")); value != "" {
-		cfg.UserServiceBaseURL = value
-	}
-	if value := strings.TrimSpace(os.Getenv("INTEGRATION_PUSH_APNS_ENVIRONMENT")); value != "" {
-		cfg.APNs.Environment = value
-	}
-	if value := strings.TrimSpace(os.Getenv("INTEGRATION_PUSH_APNS_KEY_FILE")); value != "" {
-		cfg.APNs.KeyFile = value
-	}
-	if value := strings.TrimSpace(os.Getenv("INTEGRATION_PUSH_APNS_KEY_ID")); value != "" {
-		cfg.APNs.KeyID = value
-	}
-	if value := strings.TrimSpace(os.Getenv("INTEGRATION_PUSH_APNS_TEAM_ID")); value != "" {
-		cfg.APNs.TeamID = value
-	}
-	if value := strings.TrimSpace(os.Getenv("INTEGRATION_PUSH_APNS_TOPIC")); value != "" {
-		cfg.APNs.Topic = value
-	}
-	if value := strings.TrimSpace(os.Getenv("INTEGRATION_PUSH_FCM_SERVICE_ACCOUNT_FILE")); value != "" {
-		cfg.FCM.ServiceAccountFile = value
-	}
-	if value := strings.TrimSpace(os.Getenv("INTEGRATION_PUSH_FCM_PROJECT_ID")); value != "" {
-		cfg.FCM.ProjectID = value
-	}
-	return nil
-}
-
-func parsePositiveIntEnv(key string, raw string) (int, error) {
-	value, err := strconv.Atoi(strings.TrimSpace(raw))
-	if err != nil || value <= 0 {
-		return 0, fmt.Errorf("%s must be a positive integer", key)
-	}
-	return value, nil
 }
 
 func getenvOrDefault(key, fallback string) string {

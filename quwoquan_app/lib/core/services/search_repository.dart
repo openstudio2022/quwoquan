@@ -14,7 +14,7 @@ abstract interface class SearchRepository {
 }
 
 extension SearchHitTypedViews on SearchHit {
-  ChatContactSearchItemDto? get asChatContactItem {
+  ChatContactSearchItemViewData? get asChatContactItem {
     final value = payload;
     return value is SearchHitPayloadChatContact ? value.item : null;
   }

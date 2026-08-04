@@ -154,13 +154,49 @@ func TestReportOperatorQueueReviewResolveTransitionAndIdempotency(t *testing.T) 
 	create.Header.Set("Idempotency-Key", "create-report-local-contract")
 	createRecorder := httptest.NewRecorder()
 	handler.ServeHTTP(createRecorder, create)
-	if createRecorder.Code != http.StatusNoContent {
+	if createRecorder.Code != http.StatusOK {
 		t.Fatalf(
 			"create report status=%d want=%d body=%s",
 			createRecorder.Code,
-			http.StatusNoContent,
+			http.StatusOK,
 			createRecorder.Body.String(),
 		)
+	}
+	var createResult reportapp.ReportCommandResult
+	if err := json.Unmarshal(createRecorder.Body.Bytes(), &createResult); err != nil {
+		t.Fatalf("decode create report response: %v", err)
+	}
+	if createResult.ID == "" || createResult.Version != 1 ||
+		string(createResult.Status) != "pending" || createResult.Replayed {
+		t.Fatalf("create report result=%+v", createResult)
+	}
+	replayCreate := newAuthenticatedReportRequest(
+		t,
+		http.MethodPost,
+		"/content/reports",
+		bytes.NewBufferString(`{
+			"targetType":"post",
+			"targetId":"report-target-post",
+			"reason":"spam"
+		}`),
+		reporter,
+	)
+	replayCreate.Header.Set("Content-Type", "application/json")
+	replayCreate.Header.Set("Idempotency-Key", "create-report-local-contract")
+	replayCreateRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(replayCreateRecorder, replayCreate)
+	if replayCreateRecorder.Code != http.StatusOK {
+		t.Fatalf("replay create report status=%d body=%s", replayCreateRecorder.Code, replayCreateRecorder.Body.String())
+	}
+	var replayCreateResult reportapp.ReportCommandResult
+	if err := json.Unmarshal(replayCreateRecorder.Body.Bytes(), &replayCreateResult); err != nil {
+		t.Fatalf("decode replay create report response: %v", err)
+	}
+	if replayCreateResult.ID != createResult.ID ||
+		replayCreateResult.Version != createResult.Version ||
+		replayCreateResult.Status != createResult.Status ||
+		!replayCreateResult.Replayed {
+		t.Fatalf("replay create result=%+v first=%+v", replayCreateResult, createResult)
 	}
 
 	readOperator := rtauth.TokenSubject{

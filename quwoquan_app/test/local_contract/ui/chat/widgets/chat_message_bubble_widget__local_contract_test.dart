@@ -205,13 +205,13 @@ void main() {
     testWidgets('强类型分享卡片展示标题、摘要和缩略图', (tester) async {
       final cardMessage = _message(
         type: 'card',
-        card: ChatMessageCardDto.fromMap(<String, dynamic>{
+        card: MessageCard.fromWire(<String, Object?>{
           'kind': 'content_post',
           'title': '城市漫步',
           'subtitle': '周末路线',
           'thumbnailUrl': 'https://cdn.example.com/card.jpg',
-          'attributes': <Map<String, String>>[
-            <String, String>{'name': 'postId', 'value': 'post_001'},
+          'attributes': <Object?>[
+            <String, Object?>{'name': 'postId', 'value': 'post_001'},
           ],
         }),
       );
@@ -370,7 +370,7 @@ ChatMessageDisplayItem _message({
   String thumbnailUrl = '',
   int audioDurationMs = 0,
   List<String> mentions = const <String>[],
-  ChatMessageCardDto? card,
+  MessageCard? card,
 }) {
   return ChatMessageDisplayItem(
     id: id,

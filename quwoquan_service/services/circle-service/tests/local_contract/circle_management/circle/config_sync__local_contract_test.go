@@ -1,6 +1,8 @@
 package local_contract
 
 import (
+	"crypto/sha256"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -25,7 +27,15 @@ func TestDefaultClusterNamePerEnvironment(t *testing.T) {
 func TestLoadCanonicalSnapshotIsRequired(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "circle-service.yaml")
-	if err := os.WriteFile(path, []byte("config:\n  version: sha256:canonical\nservice:\n  http:\n    addr: ':18091'\n"), 0o600); err != nil {
+	canonicalDigest := fmt.Sprintf(
+		"sha256:%x",
+		sha256.Sum256([]byte("circle-service:canonical-config")),
+	)
+	config := fmt.Sprintf(
+		"config:\n  version: %s\nservice:\n  http:\n    addr: ':18091'\n",
+		canonicalDigest,
+	)
+	if err := os.WriteFile(path, []byte(config), 0o600); err != nil {
 		t.Fatalf("write canonical snapshot: %v", err)
 	}
 	var cfg struct {
@@ -41,7 +51,7 @@ func TestLoadCanonicalSnapshotIsRequired(t *testing.T) {
 	if err := circleconfig.LoadCanonicalSnapshot("circle-service", "gamma", root, &cfg); err != nil {
 		t.Fatalf("load canonical external release config: %v", err)
 	}
-	if cfg.Config.Version != "sha256:canonical" || cfg.Service.HTTP.Addr != ":18091" {
+	if cfg.Config.Version != canonicalDigest || cfg.Service.HTTP.Addr != ":18091" {
 		t.Fatalf("canonical snapshot drift: %#v", cfg)
 	}
 	if err := os.Remove(path); err != nil {

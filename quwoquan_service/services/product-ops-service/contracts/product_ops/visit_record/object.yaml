@@ -30,6 +30,7 @@ business_rules:
 - visitCount 只增不减；occurredAt 只由服务端时钟在真实访问时推进
 - 同一 actor 与 Idempotency-Key 的重放返回首次回执，不得重复累加计数
 - 同一 actor 与 Idempotency-Key 不得用于不同目标
+- targetKey 与 Idempotency-Key 必须非空且各不超过 256 字符
 - VisitRecord 与幂等回执必须在同一 MongoDB transaction 提交
 - VisitRecord 只是访问聚合与统计读模型；推荐反馈只来自 BehaviorSignal，不发布第二路访问事件
 lifecycle:

@@ -562,10 +562,10 @@ types:
       - {name: imageDerivativePolicyVersion, type: int, constraints: [NULLABLE, MIN_1], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
       - {name: cdnUrl, type: url, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
   MediaAssetDiscardResult:
-    description: Idempotent logical deletion result for one unreferenced MediaAsset.
+    description: Idempotent logical deletion result for one unreferenced MediaAsset; a successful response can only represent the deleted terminal state.
     fields:
       - {name: mediaId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
-      - {name: status, type: enum, enum_ref: MediaAssetStatus, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: status, type: enum, enum_ref: MediaAssetDiscardStatus, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
       - {name: replayed, type: bool, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
   MediaCoverSelectionResult:
     description: Current canonical cover projection after an idempotent MediaAsset mutation.
@@ -680,3 +680,6 @@ types:
           - NOT_BLANK
         client_dart_type: String
         client_normalization: trim
+enums:
+  MediaAssetDiscardStatus:
+    values: [deleted]

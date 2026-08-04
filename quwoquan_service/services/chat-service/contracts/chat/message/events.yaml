@@ -1,10 +1,11 @@
 events:
 - name: MessageSent
+  client_ws_type: MessageSent
   producer: chat-service
   consumers:
   - projection-workers
   channel: transactional_outbox
-  payload_entity: Message
+  payload_entity: MessageSentEventPayload
   payload_fields:
   - messageId
   - conversationId
@@ -22,11 +23,12 @@ events:
   - senderAvatarUrlSnapshot
   - timestamp
 - name: MessageRecalled
+  client_ws_type: MessageRecalled
   producer: chat-service
   consumers:
   - projection-workers
   channel: transactional_outbox
-  payload_entity: Message
+  payload_entity: MessageRecalledEventPayload
   payload_fields:
   - messageId
   - conversationId

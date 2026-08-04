@@ -315,6 +315,115 @@ enums:
       - name: disabled
         wire: disabled
 
+  - name: SkillDataControlRequestStatus
+    values:
+      - name: pendingConfirmation
+        wire: pending_confirmation
+      - name: executing
+        wire: executing
+      - name: completed
+        wire: completed
+      - name: cancelled
+        wire: cancelled
+      - name: failed
+        wire: failed
+
+  - name: SkillDataControlAction
+    values:
+      - name: hideActivityHistory
+        wire: hide_activity_history
+      - name: revokeConsent
+        wire: revoke_consent
+      - name: archiveSubscriptions
+        wire: archive_subscriptions
+
+  - name: SkillActivityKind
+    values:
+      - name: run
+        wire: run
+      - name: consent
+        wire: consent
+      - name: subscription
+        wire: subscription
+      - name: dataControl
+        wire: data_control
+
+  - name: SkillActivityRecoveryAction
+    values:
+      - name: retryRun
+        wire: retry_run
+      - name: provideInput
+        wire: provide_input
+      - name: reviewApproval
+        wire: review_approval
+      - name: resumeRun
+        wire: resume_run
+      - name: reviewConsent
+        wire: review_consent
+      - name: manageConsent
+        wire: manage_consent
+      - name: resumeSubscription
+        wire: resume_subscription
+      - name: manageSubscription
+        wire: manage_subscription
+      - name: retryDataControl
+        wire: retry_data_control
+
+  - name: SkillActivityDisplayKey
+    values:
+      - name: runAccepted
+        wire: assistant.skill_activity.run.accepted
+      - name: runOrienting
+        wire: assistant.skill_activity.run.orienting
+      - name: runPlanning
+        wire: assistant.skill_activity.run.planning
+      - name: runExecuting
+        wire: assistant.skill_activity.run.executing
+      - name: runObserving
+        wire: assistant.skill_activity.run.observing
+      - name: runReflecting
+        wire: assistant.skill_activity.run.reflecting
+      - name: runCheckpointing
+        wire: assistant.skill_activity.run.checkpointing
+      - name: runWaitingUser
+        wire: assistant.skill_activity.run.waiting_user
+      - name: runWaitingApproval
+        wire: assistant.skill_activity.run.waiting_approval
+      - name: runWaitingExternal
+        wire: assistant.skill_activity.run.waiting_external
+      - name: runPaused
+        wire: assistant.skill_activity.run.paused
+      - name: runSynthesizing
+        wire: assistant.skill_activity.run.synthesizing
+      - name: runVerifying
+        wire: assistant.skill_activity.run.verifying
+      - name: runCompleted
+        wire: assistant.skill_activity.run.completed
+      - name: runFailed
+        wire: assistant.skill_activity.run.failed
+      - name: runCancelled
+        wire: assistant.skill_activity.run.cancelled
+      - name: consentGranted
+        wire: assistant.skill_activity.consent.granted
+      - name: consentRevoked
+        wire: assistant.skill_activity.consent.revoked
+      - name: subscriptionActive
+        wire: assistant.skill_activity.subscription.active
+      - name: subscriptionPaused
+        wire: assistant.skill_activity.subscription.paused
+      - name: subscriptionArchived
+        wire: assistant.skill_activity.subscription.archived
+      - name: dataControlPendingConfirmation
+        wire: assistant.skill_activity.data_control.pending_confirmation
+      - name: dataControlExecuting
+        wire: assistant.skill_activity.data_control.executing
+      - name: dataControlCompleted
+        wire: assistant.skill_activity.data_control.completed
+      - name: dataControlCancelled
+        wire: assistant.skill_activity.data_control.cancelled
+      - name: dataControlFailed
+        wire: assistant.skill_activity.data_control.failed
+
   - name: SkillMemoryPolicy
     values:
       - name: packageDefault

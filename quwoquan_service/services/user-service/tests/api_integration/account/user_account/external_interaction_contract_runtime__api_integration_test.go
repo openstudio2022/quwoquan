@@ -1,9 +1,11 @@
 package api_integration
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -18,14 +20,16 @@ import (
 )
 
 type externalInteractionContractRuntime struct {
-	server *httptest.Server
-	client *capturingExternalInteractionClient
+	server         *httptest.Server
+	client         *capturingExternalInteractionClient
+	captureBridge  *localCaptureBridge
+	forceFailNext  bool
+	mu             sync.Mutex
 }
 
 type capturingExternalInteractionClient struct {
 	delegate application.ExternalInteractionClient
-	mu       sync.RWMutex
-	codes    map[string]string
+	runtime  *externalInteractionContractRuntime
 }
 
 func (client *capturingExternalInteractionClient) SubmitSMSOTP(
@@ -40,21 +44,23 @@ func (client *capturingExternalInteractionClient) SubmitSMSOTP(
 	if err != nil {
 		return application.ExternalInteractionAccepted{}, err
 	}
-	client.mu.Lock()
-	client.codes[secret.Phone] = secret.Code
-	client.mu.Unlock()
+	if client.runtime == nil || client.runtime.captureBridge == nil {
+		return application.ExternalInteractionAccepted{}, fmt.Errorf("local capture bridge unavailable")
+	}
+	if err := client.runtime.forwardToLocalCapture(request, secret); err != nil {
+		return application.ExternalInteractionAccepted{}, err
+	}
 	return client.delegate.SubmitSMSOTP(ctx, request)
 }
 
-func (client *capturingExternalInteractionClient) OTPCode(phone string) string {
-	client.mu.RLock()
-	defer client.mu.RUnlock()
-	return client.codes[phone]
-}
-
 func startExternalInteractionContractRuntime() (*externalInteractionContractRuntime, error) {
+	captureBridge, err := startLocalCaptureBridge()
+	if err != nil {
+		return nil, err
+	}
+	runtime := &externalInteractionContractRuntime{captureBridge: captureBridge}
 	mux := http.NewServeMux()
-	mux.HandleFunc("/integrations/external-requests", handleExternalInteractionRequest)
+	mux.HandleFunc("/integrations/external-requests", runtime.handleExternalInteractionRequest)
 	server := httptest.NewServer(mux)
 	serverAddress := server.Listener.Addr().String()
 	transport := &http.Transport{
@@ -70,24 +76,89 @@ func startExternalInteractionContractRuntime() (*externalInteractionContractRunt
 	)
 	if err != nil {
 		server.Close()
+		captureBridge.Close()
 		return nil, err
 	}
-	return &externalInteractionContractRuntime{
-		server: server,
-		client: &capturingExternalInteractionClient{
-			delegate: client,
-			codes:    map[string]string{},
-		},
-	}, nil
+	runtime.server = server
+	runtime.client = &capturingExternalInteractionClient{
+		delegate: client,
+		runtime:  runtime,
+	}
+	return runtime, nil
 }
 
 func (runtime *externalInteractionContractRuntime) Close() {
 	if runtime != nil && runtime.server != nil {
 		runtime.server.Close()
 	}
+	if runtime != nil && runtime.captureBridge != nil {
+		runtime.captureBridge.Close()
+	}
 }
 
-func handleExternalInteractionRequest(writer http.ResponseWriter, request *http.Request) {
+func (runtime *externalInteractionContractRuntime) ForceNextProviderFailure() {
+	runtime.mu.Lock()
+	runtime.forceFailNext = true
+	runtime.mu.Unlock()
+	if runtime.captureBridge != nil {
+		runtime.captureBridge.ForceNextProviderFailure()
+	}
+}
+
+func (runtime *externalInteractionContractRuntime) forwardToLocalCapture(
+	request application.SMSOTPDispatchRequest,
+	secret otpseal.Secret,
+) error {
+	runtime.mu.Lock()
+	failNext := runtime.forceFailNext
+	runtime.forceFailNext = false
+	runtime.mu.Unlock()
+	if failNext {
+		runtime.captureBridge.ForceNextProviderFailure()
+	}
+	body, err := json.Marshal(map[string]any{
+		"requestId":      request.RequestID,
+		"operation":      "sms_otp.send",
+		"env":            "beta",
+		"idempotencyKey": request.IdempotencyKey,
+		"expiresAt":      request.ExpiresAt.UTC().Format(time.RFC3339),
+		"payload": map[string]string{
+			"recipient":  secret.Phone,
+			"code":       secret.Code,
+			"templateId": "sms_otp_login",
+		},
+	})
+	if err != nil {
+		return err
+	}
+	httpRequest, err := http.NewRequest(
+		http.MethodPost,
+		runtime.captureBridge.server.URL+"/v1/provider/sms/send",
+		bytes.NewReader(body),
+	)
+	if err != nil {
+		return err
+	}
+	httpRequest.Header.Set("Authorization", "Bearer "+runtime.captureBridge.providerToken)
+	httpRequest.Header.Set("Content-Type", "application/json")
+	httpRequest.Header.Set("Idempotency-Key", request.IdempotencyKey)
+	httpRequest.Header.Set("X-QWQ-Request-ID", request.RequestID)
+	response, err := http.DefaultClient.Do(httpRequest)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	raw, _ := io.ReadAll(response.Body)
+	if response.StatusCode != http.StatusAccepted {
+		return fmt.Errorf("local capture provider status %d: %s", response.StatusCode, string(raw))
+	}
+	return nil
+}
+
+func (runtime *externalInteractionContractRuntime) handleExternalInteractionRequest(
+	writer http.ResponseWriter,
+	request *http.Request,
+) {
 	if request.Method != http.MethodPost || request.Header.Get("Content-Type") != "application/json" {
 		http.Error(writer, "invalid external interaction request", http.StatusBadRequest)
 		return
@@ -169,6 +240,13 @@ func TestExternalInteractionContractRuntime_ProductionClientSubmitsSecretReferen
 	}
 	if accepted.RequestID != "otp_req_contract" || accepted.Status != "accepted" {
 		t.Fatalf("unexpected accepted response: %s", fmt.Sprintf("%+v", accepted))
+	}
+	code, err := externalInteractionRuntime.captureBridge.readOTP("+8618013813901")
+	if err != nil {
+		t.Fatalf("protected read after contract submit: %v", err)
+	}
+	if code != "123456" {
+		t.Fatalf("protected read returned unexpected code")
 	}
 }
 

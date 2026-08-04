@@ -158,8 +158,14 @@
 
 - 类型：`capability_gap`
 - 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：当前对象目录与 kind-aware 层门已覆盖既有服务，但运行时存储复核仍发现 AssistantSession/AssistantTurnView 直读 AssistantRun、Chat/Circle/Content 的账号关闭与查询实现直写兄弟或跨服务集合，以及 App operation 仍保留手写 `client_contract`/业务 decoder。新增 Travel 对象正在其唯一 owner 任务内完成物理分拆与测试，最终 canonical 对象数必须以同一 ContractGraph source hash 的实际 roster 为准，不再维护失效的固定数量台账。上述存储旁路、第二 wire 真相源、对象级测试或生成归属任一非零时，本 OPEN 不得删除，也不得声明 `MODEL_GOVERNANCE_READY`。
+- 准出影响：`block`
+- 影响或价值：当前 fresh ContractGraph source roster 为 126 个对象、22 个 bounded context、16 个服务；source validate 与 15 个领域 OpenAPI snapshot 已通过。
+- 已通过 kind-aware source 归属、对象级测试目录、存储唯一 owner、跨服务直接存储访问和源 contracts `client_contract` 门。
+- Assistant 对象依赖反转、Activity/DataControl wire 与唯一响应 owner 仍在其唯一 owner 原子内完成，当前全局生成窗口尚未释放。
+- Realtime/RTC 的 ticket、long-poll 与事件 envelope 已具备 typed source owner；Circle 与 Entity 旧 DTO 调用方已硬切，但仍需在最终 fresh 生成物上完成全 App 编译与回归证明。
+- 最终 ContractGraph、operationsecurity、App contract package、lock 与 manifest 仍未从同一 current fresh source 双遍幂等生成，旧中间生成快照不得作为 package 或商业证据。
+- canonical 对象数只认同一 ContractGraph source hash 的实际 roster，不维护失效的固定目标台账。
+- 上述依赖、typed wire、生成或 consumer 证据任一未闭环时，本 OPEN 不得删除，也不得声明 `MODEL_GOVERNANCE_READY`。
 - 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。
 
 <a id="open-003"></a>

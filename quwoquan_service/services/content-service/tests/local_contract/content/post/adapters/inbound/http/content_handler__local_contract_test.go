@@ -248,7 +248,7 @@ func TestFeedAndPostEndpoints(t *testing.T) {
 	if postBody["postId"] != "post_photo_001" {
 		t.Fatalf("GetPost must expose the generated postId wire field: %+v", postBody)
 	}
-	if _, legacyID := postBody["_id"]; legacyID {
+	if _, privateStorageID := postBody["_id"]; privateStorageID {
 		t.Fatalf("GetPost must not expose storage _id as a client wire field: %+v", postBody)
 	}
 }
@@ -293,6 +293,13 @@ func TestAppConfigEndpointIsImplemented(t *testing.T) {
 	var body map[string]any
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatalf("decode app config response: %v", err)
+	}
+	var typed postapp.AppConfigSlice
+	if err := json.Unmarshal(rec.Body.Bytes(), &typed); err != nil {
+		t.Fatalf("decode typed app config response: %v", err)
+	}
+	if typed.Schema != "app_remote_config" || typed.ConfigHash == "" {
+		t.Fatalf("invalid typed app config identity: %+v", typed)
 	}
 	content, _ := body["content"].(map[string]any)
 	if content == nil {
@@ -674,10 +681,27 @@ func TestDeletePostAndTombstoneLookup(t *testing.T) {
 
 	delReq := httptest.NewRequest("DELETE", "/content/posts/"+postID, nil)
 	setActorHeaders(delReq, "u_delete", "u_delete")
+	delReq.Header.Set("Idempotency-Key", "delete-post-stable")
 	delRec := httptest.NewRecorder()
 	handler.ServeHTTP(delRec, delReq)
 	if delRec.Code != http.StatusOK {
 		t.Fatalf("delete failed: %d", delRec.Code)
+	}
+	var deletionReceipt struct {
+		PostID   string `json:"postId"`
+		Status   string `json:"status"`
+		Replayed bool   `json:"replayed"`
+	}
+	if err := json.Unmarshal(delRec.Body.Bytes(), &deletionReceipt); err != nil || deletionReceipt.PostID != postID || deletionReceipt.Status != "deleted" || deletionReceipt.Replayed {
+		t.Fatalf("unexpected deletion receipt: %+v err=%v", deletionReceipt, err)
+	}
+	replayReq := httptest.NewRequest("DELETE", "/content/posts/"+postID, nil)
+	setActorHeaders(replayReq, "u_delete", "u_delete")
+	replayReq.Header.Set("Idempotency-Key", "delete-post-stable")
+	replayRec := httptest.NewRecorder()
+	handler.ServeHTTP(replayRec, replayReq)
+	if err := json.Unmarshal(replayRec.Body.Bytes(), &deletionReceipt); replayRec.Code != http.StatusOK || err != nil || !deletionReceipt.Replayed {
+		t.Fatalf("delete replay did not return typed replay receipt: code=%d body=%s err=%v", replayRec.Code, replayRec.Body.String(), err)
 	}
 
 	getReq := httptest.NewRequest("GET", "/content/posts/"+postID, nil)

@@ -1,5 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/services/chat/remote/chat_contract_projection_mapper.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {
@@ -18,7 +17,7 @@ void main() {
     });
 
     test('strictly decodes canonical conversation page', () {
-      final page = decodeChatConversationPageSlice(<String, Object?>{
+      final page = decodeConversationPageSlice(<String, Object?>{
         'items': <Object?>[_conversationWire()],
         'nextCursor': 'opaque-token',
       });
@@ -29,9 +28,9 @@ void main() {
       expect(page.nextCursor, 'opaque-token');
     });
 
-    test('rejects legacy cursor and unknown conversation fields', () {
+    test('rejects retired cursor and unknown conversation fields', () {
       expect(
-        () => decodeChatConversationPageSlice(<String, Object?>{
+        () => decodeConversationPageSlice(<String, Object?>{
           'items': <Object?>[_conversationWire()],
           'cursor': 'retired',
         }),
@@ -57,22 +56,17 @@ void main() {
     });
 
     test('group home uses the same canonical origin contract', () {
-      final home = decodeChatGroupHome(_groupHomeWire());
+      final home = decodeGroupHome(_groupHomeWire());
 
       expect(home.originType, 'circle_group');
       expect(home.circleId, 'circle-1');
       expect(home.circleGroupId, 'circle-group-1');
-      final appProjection = const ChatContractProjectionMapper().toGroupHome(
-        home,
-      );
-      expect(appProjection.originType, 'circle_group');
-      expect(appProjection.circleGroupId, 'circle-group-1');
-      expect(appProjection.toMap().containsKey('bindingType'), isFalse);
-      expect(appProjection.toMap().containsKey('lifecyclePolicy'), isFalse);
+      expect(home.toWire().containsKey('bindingType'), isFalse);
+      expect(home.toWire().containsKey('lifecyclePolicy'), isFalse);
 
       for (final retiredField in <String>['bindingType', 'lifecyclePolicy']) {
         expect(
-          () => decodeChatGroupHome(<String, Object?>{
+          () => decodeGroupHome(<String, Object?>{
             ..._groupHomeWire(),
             retiredField: 'retired',
           }),
@@ -106,7 +100,7 @@ void main() {
       });
       expect(dissolve.body, isNull);
       expect(
-        decodeChatCommandAck(<String, Object?>{'status': 'ok'}).status,
+        decodeConversationCommandAck(<String, Object?>{'status': 'ok'}).status,
         'ok',
       );
     });
@@ -132,6 +126,7 @@ Map<String, Object?> _conversationWire() => <String, Object?>{
   'receiptEnabled': true,
   'announcement': '',
   'announcementUpdatedBy': '',
+  'announcementUpdatedAt': '2026-07-21T06:00:00Z',
   'nameEditableByAdminOnly': true,
   'lastMessageId': 'message-8',
   'lastMessagePreview': '最后一条消息',

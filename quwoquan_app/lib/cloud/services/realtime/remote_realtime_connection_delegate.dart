@@ -4,9 +4,10 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:riverpod/misc.dart' show ProviderListenable;
 import 'package:quwoquan_app/cloud/runtime/auth/cloud_auth_token_provider.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/feed_realtime_patch.g.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_config.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_delegate.dart';
+import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_operation_gateway.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_message_handler.dart';
 import 'package:quwoquan_app/cloud/services/realtime/transport/longpoll_transport.dart';
 import 'package:quwoquan_app/cloud/services/realtime/transport/websocket_transport.dart';
@@ -44,6 +45,7 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
     ChatProviderInvalidate? invalidate,
     required this.currentUserIdResolver,
     required this.authTokenProvider,
+    this.operations,
     this.onStateChanged,
     this.telemetryRecorder,
     RealtimeReconnectDelayResolver? reconnectDelayResolver,
@@ -53,38 +55,12 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
   }) : _config = config ?? RealtimeConfig.fromRuntime(),
        _reconnectDelayResolver =
            reconnectDelayResolver ?? _defaultReconnectDelay,
-       _longPollFactory = longPollFactory ?? _defaultLongPollFactory,
-       _webSocketFactory = webSocketFactory ?? _defaultWebSocketFactory {
+       _longPollFactory = longPollFactory,
+       _webSocketFactory = webSocketFactory {
     _handler = RealtimeMessageHandler(
       read,
       invalidate: invalidate,
       currentUserIdResolver: currentUserIdResolver,
-    );
-  }
-
-  static LongPollTransport _defaultLongPollFactory({
-    required RealtimeConfig config,
-    required CloudAuthTokenProvider authTokenProvider,
-    required LongPollEventCallback onEvents,
-  }) {
-    return LongPollTransport(
-      config: config,
-      authTokenProvider: authTokenProvider,
-      onEvents: onEvents,
-    );
-  }
-
-  static WebSocketTransport _defaultWebSocketFactory({
-    required RealtimeConfig config,
-    required CloudAuthTokenProvider authTokenProvider,
-    required RealtimeEventCallback onEvent,
-    required VoidCallback onDisconnect,
-  }) {
-    return WebSocketTransport(
-      config: config,
-      authTokenProvider: authTokenProvider,
-      onEvent: onEvent,
-      onDisconnect: onDisconnect,
     );
   }
 
@@ -109,11 +85,12 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
   final T Function<T>(ProviderListenable<T> provider) read;
   final String Function() currentUserIdResolver;
   final CloudAuthTokenProvider authTokenProvider;
+  final RealtimeConnectionOperationGateway? operations;
   final RealtimeConnectionStateListener? onStateChanged;
   final RealtimeConnectTelemetryRecorder? telemetryRecorder;
   final RealtimeConfig _config;
-  final RemoteRealtimeLongPollFactory _longPollFactory;
-  final RemoteRealtimeWebSocketFactory _webSocketFactory;
+  final RemoteRealtimeLongPollFactory? _longPollFactory;
+  final RemoteRealtimeWebSocketFactory? _webSocketFactory;
   final RealtimeReconnectDelayResolver _reconnectDelayResolver;
 
   late final RealtimeMessageHandler _handler;
@@ -211,12 +188,21 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
       topics.add(feedRealtimePatchChannelFor(feedPatchUserId));
     }
 
-    _ws = _webSocketFactory(
-      config: _config,
-      authTokenProvider: authTokenProvider,
-      onEvent: _onRealtimeEvent,
-      onDisconnect: _onWebSocketDisconnect,
-    );
+    final factory = _webSocketFactory;
+    _ws = factory != null
+        ? factory(
+            config: _config,
+            authTokenProvider: authTokenProvider,
+            onEvent: _onRealtimeEvent,
+            onDisconnect: _onWebSocketDisconnect,
+          )
+        : WebSocketTransport(
+            config: _config,
+            authTokenProvider: authTokenProvider,
+            operations: _requiredOperations(),
+            onEvent: _onRealtimeEvent,
+            onDisconnect: _onWebSocketDisconnect,
+          );
     await _ws!.connect(topics: topics);
     final connected = _ws?.isConnected.value ?? false;
     if (connected) {
@@ -271,11 +257,19 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
 
   void _startLongPoll() {
     _teardownLongPoll();
-    _longPoll = _longPollFactory(
-      config: _config,
-      authTokenProvider: authTokenProvider,
-      onEvents: _onLongPollEvents,
-    );
+    final factory = _longPollFactory;
+    _longPoll = factory != null
+        ? factory(
+            config: _config,
+            authTokenProvider: authTokenProvider,
+            onEvents: _onLongPollEvents,
+          )
+        : LongPollTransport(
+            config: _config,
+            authTokenProvider: authTokenProvider,
+            operations: _requiredOperations(),
+            onEvents: _onLongPollEvents,
+          );
     _longPoll!.onFirstTransportFailure = (reasonCode) {
       unawaited(
         _recordConnectResult(
@@ -305,6 +299,16 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
   void _teardownLongPoll() {
     _longPoll?.dispose();
     _longPoll = null;
+  }
+
+  RealtimeConnectionOperationGateway _requiredOperations() {
+    final gateway = operations;
+    if (gateway == null) {
+      throw StateError(
+        'production realtime transport requires generated operation gateway',
+      );
+    }
+    return gateway;
   }
 
   void _onRealtimeEvent(Map<String, dynamic> event) {

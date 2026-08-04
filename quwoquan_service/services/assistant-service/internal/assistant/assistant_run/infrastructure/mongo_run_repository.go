@@ -130,6 +130,14 @@ func (r *MongoRunRepository) EnsureIndexes(ctx context.Context) error {
 			Options: options.Index().SetName("idx_runs_user_created"),
 		},
 		{
+			Keys: bson.D{
+				{Key: "userId", Value: 1},
+				{Key: "snapshot.frozenPolicySelection.template.skillId", Value: 1},
+				{Key: "updatedAt", Value: -1},
+			},
+			Options: options.Index().SetName("idx_runs_skill_activity"),
+		},
+		{
 			Keys:    bson.D{{Key: "sessionId", Value: 1}, {Key: "createdAt", Value: -1}},
 			Options: options.Index().SetName("idx_runs_session"),
 		},
@@ -211,6 +219,74 @@ func (r *MongoRunRepository) LoadByRequest(
 		"sessionId":       strings.TrimSpace(sessionID),
 		"clientRequestId": strings.TrimSpace(clientRequestID),
 	})
+}
+
+// ListSkillActivityEvents exposes only the redacted current Run lifecycle
+// needed by SkillActivityView. The projection is intentionally owner-scoped
+// and never returns user input, output, ContextSnapshot, Items, or evidence.
+func (r *MongoRunRepository) ListSkillActivityEvents(
+	ctx context.Context,
+	userID string,
+	skillID string,
+	limit int,
+) ([]runruntime.SkillActivityEvent, error) {
+	userID = strings.TrimSpace(userID)
+	skillID = strings.TrimSpace(skillID)
+	if userID == "" || skillID == "" {
+		return nil, runruntime.ErrInvalidRun
+	}
+	if limit <= 0 || limit > 100 {
+		limit = 100
+	}
+	filter := bson.M{
+		"userId": userID,
+		"$or": bson.A{
+			bson.M{"snapshot.frozenPolicySelection.template.skillId": skillID},
+			bson.M{"snapshot.requestedSkillId": skillID},
+		},
+	}
+	cursor, err := r.runs.Find(
+		ctx,
+		filter,
+		options.Find().
+			SetSort(bson.D{{Key: "updatedAt", Value: -1}, {Key: "_id", Value: -1}}).
+			SetLimit(int64(limit)),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list assistant run skill activity: %w", err)
+	}
+	defer cursor.Close(ctx)
+	documents := []runDocument{}
+	if err := cursor.All(ctx, &documents); err != nil {
+		return nil, fmt.Errorf("decode assistant run skill activity: %w", err)
+	}
+	activities := make([]runruntime.SkillActivityEvent, 0, len(documents))
+	for _, document := range documents {
+		selectedSkillID := strings.TrimSpace(
+			document.Snapshot.FrozenPolicySelection.Template.SkillID,
+		)
+		if selectedSkillID == "" {
+			selectedSkillID = strings.TrimSpace(document.Snapshot.RequestedSkillID)
+		}
+		if selectedSkillID != skillID {
+			continue
+		}
+		state := strings.TrimSpace(document.State)
+		failureCode := ""
+		if state == "failed" {
+			failureCode = strings.TrimSpace(document.Snapshot.TerminalReason)
+		}
+		activities = append(activities, runruntime.SkillActivityEvent{
+			RunID:       document.ID,
+			UserID:      document.UserID,
+			SkillID:     selectedSkillID,
+			State:       state,
+			FailureCode: failureCode,
+			Revision:    document.Revision,
+			OccurredAt:  document.UpdatedAt.UTC(),
+		})
+	}
+	return activities, nil
 }
 
 // ListTerminalRunsAfter exposes committed terminal runs through the

@@ -1,0 +1,5 @@
+schema: provider-endpoint-contract
+role: livekit-http
+endpoints:
+  RTC_MEDIA_CONNECTION_URL:
+    path: ''

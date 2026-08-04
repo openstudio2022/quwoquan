@@ -311,14 +311,14 @@ final class _LocalReader implements LocalChatSearchReader {
   final List<String> calls = <String>[];
 
   @override
-  Future<CacheReadResult<List<MessageDto>>> readTimeline({
+  Future<CacheReadResult<List<ChatMessageViewData>>> readTimeline({
     required LocalSearchNamespace namespace,
     required String conversationId,
     int beforeSeq = 0,
     int limit = 50,
   }) async {
-    return const CacheReadResult<List<MessageDto>>(
-      value: <MessageDto>[],
+    return const CacheReadResult<List<ChatMessageViewData>>(
+      value: <ChatMessageViewData>[],
       source: CacheReadSource.disk,
       freshness: CacheFreshness.unknown,
       syncState: CacheSyncState.idle,

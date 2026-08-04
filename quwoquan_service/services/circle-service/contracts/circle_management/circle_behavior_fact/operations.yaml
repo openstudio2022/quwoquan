@@ -21,7 +21,9 @@ api_routes:
       mutation_target: CircleBehaviorFact
       invariant_target: CircleBehaviorFact
     request_entity: AppendCircleBehaviorFactCommand
-    response_body_kind: ack
+    response_entity: AppendResult
+    response_body: AppendResult
+    response_body_kind: object
     authorization:
       principal: public
       ownership_policy: authenticated_persona_or_derived_device_actor

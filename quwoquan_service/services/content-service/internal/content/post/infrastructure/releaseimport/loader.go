@@ -183,14 +183,29 @@ func LoadReleaseBinding(releaseRoot string) (ReleaseBinding, error) {
 	for path, values := range map[string][2]string{
 		headerPath + ":schema":           {header.Schema, "quwoquan_data.release"},
 		headerPath + ":sourceOwner":      {header.SourceOwner, "qwq_data"},
-		headerPath + ":releaseKind":      {header.ReleaseKind, "content"},
 		attestationPath + ":schema":      {attestation.Schema, "quwoquan_data.release_attestation"},
 		attestationPath + ":sourceOwner": {attestation.SourceOwner, "qwq_data"},
-		attestationPath + ":releaseKind": {attestation.ReleaseKind, "content"},
 	} {
 		if strings.TrimSpace(values[0]) != values[1] {
 			return empty, fmt.Errorf("%s must be %q", path, values[1])
 		}
+	}
+	headerReleaseKind := strings.TrimSpace(header.ReleaseKind)
+	attestedReleaseKind := strings.TrimSpace(attestation.ReleaseKind)
+	if !isFullSyncReleaseKind(headerReleaseKind) {
+		return empty, fmt.Errorf(
+			"%s:releaseKind must be %q or %q",
+			headerPath,
+			"content",
+			"empty_baseline",
+		)
+	}
+	if headerReleaseKind != attestedReleaseKind {
+		return empty, fmt.Errorf(
+			"release header/attestation releaseKind drift: header=%q attestation=%q",
+			headerReleaseKind,
+			attestedReleaseKind,
+		)
 	}
 	headerReleaseID := strings.TrimSpace(header.ReleaseID)
 	attestedReleaseID := strings.TrimSpace(attestation.ReleaseID)
@@ -211,9 +226,18 @@ func LoadReleaseBinding(releaseRoot string) (ReleaseBinding, error) {
 	return ReleaseBinding{
 		ReleaseID:      headerReleaseID,
 		SourceOwner:    "qwq_data",
-		ReleaseKind:    "content",
+		ReleaseKind:    headerReleaseKind,
 		ManifestDigest: manifestDigest,
 	}, nil
+}
+
+func isFullSyncReleaseKind(kind string) bool {
+	switch kind {
+	case "content", "empty_baseline":
+		return true
+	default:
+		return false
+	}
 }
 
 func loadReleaseJSON(path string, target any) error {

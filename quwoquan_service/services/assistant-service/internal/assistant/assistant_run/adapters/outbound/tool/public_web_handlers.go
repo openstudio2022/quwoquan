@@ -10,7 +10,7 @@ import (
 	rtfailures "quwoquan_service/runtime/failures"
 	runerrors "quwoquan_service/services/assistant-service/generated/assistant/assistant_run"
 	publicweb "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/publicweb"
-	toolpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/tool"
+	toolpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/tool"
 )
 
 const publicWebToolExcerptRunes = 20_000
@@ -27,7 +27,9 @@ func SearchHandler(
 		handlerErr error,
 	) {
 		started := time.Now()
-		defer func() { observePublicWebTool("web_search", started, handlerErr) }()
+		defer func() {
+			observePublicWebTool(strings.TrimSpace(request.ToolName), started, handlerErr)
+		}()
 		delegateResult, err := delegate(ctx, request)
 		if err != nil {
 			return toolpkg.Result{}, err

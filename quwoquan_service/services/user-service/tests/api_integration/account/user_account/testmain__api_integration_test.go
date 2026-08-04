@@ -49,6 +49,7 @@ import (
 	"quwoquan_service/services/user-service/internal/account/user_account/infrastructure/projection"
 	useraccountprojection "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/projection"
 	"quwoquan_service/services/user-service/internal/account/user_account/infrastructure/searchindex"
+	usersyncstream "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/syncstream"
 	usercache "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/user/cache"
 	userpersistence "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/user/persistence"
 	usersettingshttp "quwoquan_service/services/user-service/internal/account/user_settings/adapters/inbound/http"
@@ -417,7 +418,9 @@ func rebuildTestHandler(ctx context.Context) error {
 		return err
 	}
 	userEventPublisher := mq.NewEventPublisher(messageTransport)
-	userSyncService := runtimesync.NewService(redisClient, redisClient)
+	userSyncService := usersyncstream.NewRuntimeUserSyncStream(
+		runtimesync.NewService(redisClient, redisClient),
+	)
 	shardDirectory, err := application.LoadDefaultShardDirectory()
 	if err != nil {
 		return err

@@ -177,7 +177,7 @@ func TestOnboardingInterestPreflightRejectsMissingReleaseWithoutWrites(t *testin
 
 	invalid := validOnboardingEvent("evt-onboarding-missing-release")
 	invalid.TaxonomyReleaseID = ""
-	err := service.ProcessBatch(context.Background(), []BehaviorEventInput{
+	_, err := service.ProcessBatch(context.Background(), []BehaviorEventInput{
 		validClickEvent("evt-normal-before-invalid"),
 		invalid,
 	})
@@ -206,7 +206,7 @@ func TestOnboardingInterestPreflightForwardsClientTaxonomyReleaseToTagService(t 
 
 	stale := validOnboardingEvent("evt-onboarding-stale-release")
 	stale.TaxonomyReleaseID = "tag-taxonomy-old-release"
-	err := service.ProcessBatch(context.Background(), []BehaviorEventInput{stale})
+	_, err := service.ProcessBatch(context.Background(), []BehaviorEventInput{stale})
 	if err == nil {
 		t.Fatal("stale client taxonomy release must reject the batch")
 	}
@@ -227,7 +227,7 @@ func TestOnboardingInterestPreflightAcceptsUnknownTaxonomyReleaseWhenTagServiceA
 
 	event := validOnboardingEvent("evt-onboarding-newly-published-release")
 	event.TaxonomyReleaseID = "tag-taxonomy-published-after-this-build"
-	if err := service.ProcessBatch(
+	if _, err := service.ProcessBatch(
 		context.Background(),
 		[]BehaviorEventInput{event},
 	); err != nil {
@@ -255,7 +255,7 @@ func TestOnboardingInterestPreflightRejectsMixedTaxonomyReleasesWithoutWrites(t 
 
 	second := validOnboardingEvent("evt-onboarding-other-release")
 	second.TaxonomyReleaseID = "tag-taxonomy-test-002"
-	err := service.ProcessBatch(context.Background(), []BehaviorEventInput{
+	_, err := service.ProcessBatch(context.Background(), []BehaviorEventInput{
 		validOnboardingEvent("evt-onboarding-first-release"),
 		second,
 	})
@@ -279,7 +279,7 @@ func TestOnboardingInterestInvalidLeafRejectsBatchWithoutWrites(t *testing.T) {
 	eventStore := &trackingOnboardingEventStore{}
 	service := newOnboardingTaxonomyService(leafPort, processor, eventStore)
 
-	err := service.ProcessBatch(context.Background(), []BehaviorEventInput{
+	_, err := service.ProcessBatch(context.Background(), []BehaviorEventInput{
 		validClickEvent("evt-normal-before-invalid-leaf"),
 		validOnboardingEvent("evt-onboarding-invalid-leaf"),
 	})
@@ -303,7 +303,7 @@ func TestOnboardingInterestDependencyFailureRejectsBatchWithoutWrites(t *testing
 	eventStore := &trackingOnboardingEventStore{}
 	service := newOnboardingTaxonomyService(leafPort, processor, eventStore)
 
-	err := service.ProcessBatch(context.Background(), []BehaviorEventInput{
+	_, err := service.ProcessBatch(context.Background(), []BehaviorEventInput{
 		validClickEvent("evt-normal-before-dependency-failure"),
 		validOnboardingEvent("evt-onboarding-dependency-failure"),
 	})
@@ -327,8 +327,12 @@ func TestOnboardingInterestBatchUsesOneValidationAndReplayDoesNotRewrite(t *test
 	second.Tags = []string{"Audience/photography", "Topic/travel"}
 	events := []BehaviorEventInput{first, second}
 
-	if err := service.ProcessBatch(context.Background(), events); err != nil {
+	firstReceipt, err := service.ProcessBatch(context.Background(), events)
+	if err != nil {
 		t.Fatalf("first ProcessBatch() error = %v", err)
+	}
+	if firstReceipt.AcceptedCount != 2 || firstReceipt.ReplayedCount != 0 {
+		t.Fatalf("first receipt=%+v", firstReceipt)
 	}
 	if leafPort.calls != 1 {
 		t.Fatalf("one request batch must issue one tag validation, got %d", leafPort.calls)
@@ -347,8 +351,12 @@ func TestOnboardingInterestBatchUsesOneValidationAndReplayDoesNotRewrite(t *test
 	leafPort.err = contentgenerated.AppErrorFromRequiredDependencyUnavailable(
 		"tag-service is unavailable after the command committed",
 	)
-	if err := service.ProcessBatch(context.Background(), events); err != nil {
+	replayReceipt, err := service.ProcessBatch(context.Background(), events)
+	if err != nil {
 		t.Fatalf("idempotency replay ProcessBatch() error = %v", err)
+	}
+	if replayReceipt.AcceptedCount != 0 || replayReceipt.ReplayedCount != 2 {
+		t.Fatalf("replay receipt=%+v", replayReceipt)
 	}
 	if leafPort.calls != 1 {
 		t.Fatalf("committed idempotency replay must bypass taxonomy dependency, got %d calls", leafPort.calls)
@@ -364,7 +372,7 @@ func TestOnboardingInterestAbsentDoesNotCallTaxonomyPort(t *testing.T) {
 	eventStore := &trackingOnboardingEventStore{}
 	service := newOnboardingTaxonomyService(leafPort, processor, eventStore)
 
-	if err := service.ProcessBatch(context.Background(), []BehaviorEventInput{
+	if _, err := service.ProcessBatch(context.Background(), []BehaviorEventInput{
 		validClickEvent("evt-no-onboarding"),
 	}); err != nil {
 		t.Fatalf("ProcessBatch() error = %v", err)

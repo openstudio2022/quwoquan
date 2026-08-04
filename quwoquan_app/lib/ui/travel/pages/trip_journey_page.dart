@@ -142,16 +142,29 @@ final class _TripJourneyPageState extends ConsumerState<TripJourneyPage>
                 sourceSurfaceId: AppUiSurfaces.travelTimeline.id,
               ),
             ),
-            onAction: (action) async {
-              if (action.type == UiErrorActionType.retry ||
-                  action.type == UiErrorActionType.resubmit) {
-                ref.invalidate(tripJourneySnapshotProvider(widget.tripId));
-              }
-            },
+            onRecovery: _recoverJourney,
           ),
         ),
       ),
     );
+  }
+
+  Future<UiRecoveryOutcome> _recoverJourney(UiErrorAction action) async {
+    if (action.type != UiErrorActionType.retry &&
+        action.type != UiErrorActionType.resubmit) {
+      return UiRecoveryOutcome.cancelled;
+    }
+    try {
+      ref.invalidate(tripJourneySnapshotProvider(widget.tripId));
+      await ref.read(tripJourneySnapshotProvider(widget.tripId).future);
+      return mounted
+          ? UiRecoveryOutcome.recovered
+          : UiRecoveryOutcome.superseded;
+    } catch (_) {
+      return mounted
+          ? UiRecoveryOutcome.stillBlocked
+          : UiRecoveryOutcome.superseded;
+    }
   }
 
   Future<void> _advanceGuideTask(TripGuideAssignment assignment) async {

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
+import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
 import '../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_message_handler.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -18,6 +18,11 @@ void main() {
   testWidgets('ConversationMemberAdded 不伪造未持久化 Message', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
+        overrides: [
+          chatRepositoryCompositionProvider.overrideWithValue(
+            MockChatRepository(),
+          ),
+        ],
         child: Consumer(
           builder: (context, ref, _) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -68,7 +73,7 @@ class _CountingMembersRepo extends MockChatRepository {
   int listMembersCallCount = 0;
 
   @override
-  Future<List<ChatConversationMemberDto>> listMembers({
+  Future<List<ConversationMemberListRow>> listMembers({
     required String conversationId,
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,

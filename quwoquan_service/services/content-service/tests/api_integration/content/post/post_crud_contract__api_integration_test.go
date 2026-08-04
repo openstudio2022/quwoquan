@@ -189,11 +189,19 @@ func TestDeletePostContract(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodDelete, "/content/posts/"+postID, nil)
 	req.Header.Set("X-Client-User-Id", "delete_author")
-	ensureIdempotencyHeader(req, "delete-post")
+	req.Header.Set("Idempotency-Key", "delete-post-stable")
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var deletionReceipt struct {
+		PostID   string `json:"postId"`
+		Status   string `json:"status"`
+		Replayed bool   `json:"replayed"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &deletionReceipt); err != nil || deletionReceipt.PostID != postID || deletionReceipt.Status != "deleted" || deletionReceipt.Replayed {
+		t.Fatalf("unexpected deletion receipt: %+v err=%v", deletionReceipt, err)
 	}
 	tombstones := requireMongoDB(t).Collection("deleted_post_tombstones")
 	count, err := tombstones.CountDocuments(
@@ -206,7 +214,7 @@ func TestDeletePostContract(t *testing.T) {
 
 	replayReq := httptest.NewRequest(http.MethodDelete, "/content/posts/"+postID, nil)
 	replayReq.Header.Set("X-Client-User-Id", "delete_author")
-	ensureIdempotencyHeader(replayReq, "delete-post-replay")
+	replayReq.Header.Set("Idempotency-Key", "delete-post-stable")
 	replayRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(replayRec, replayReq)
 	if replayRec.Code != http.StatusOK {
@@ -215,6 +223,9 @@ func TestDeletePostContract(t *testing.T) {
 			replayRec.Code,
 			replayRec.Body.String(),
 		)
+	}
+	if err := json.Unmarshal(replayRec.Body.Bytes(), &deletionReceipt); err != nil || !deletionReceipt.Replayed {
+		t.Fatalf("delete replay did not return typed replay receipt: body=%s err=%v", replayRec.Body.String(), err)
 	}
 	count, err = tombstones.CountDocuments(t.Context(), bson.M{"_id": postID})
 	if err != nil || count != 1 {

@@ -1,13 +1,13 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: 9816b2b7d9fedea34ad78dd719fc16fdf3e982073304d7f50f7a8ea4064f6b7f
+// ContractGraph SHA256: 93359367b8614f01bb5e1c51e37af383332b01f117cc1c6cf39e4fdf838e49d2
 
 library;
 
 import '../operation_request_payload.dart';
-import "../generated/homepage_type.g.dart";
+import "../generated/shared_operation_enums.g.dart";
 import "../recommendation/recommendation_operation_contracts.g.dart";
 
-export "../generated/homepage_type.g.dart";
+export "../generated/shared_operation_enums.g.dart";
 export "../recommendation/recommendation_operation_contracts.g.dart";
 
 part '../generated/requests/entity/entity_operation_contracts.g.requests.g.dart';
@@ -1051,7 +1051,7 @@ final class HomepageReviewView {
       id: _requiredNonBlankString(map["id"], '$path.id'),
       homepageId: _requiredNonBlankString(map["homepageId"], '$path.homepageId'),
       authorPersonaId: _requiredNonBlankString(map["authorPersonaId"], '$path.authorPersonaId'),
-      rating: _requiredPositiveInt(map["rating"], '$path.rating'),
+      rating: _requiredBoundedInt(map["rating"], '$path.rating', min: 1, max: 5),
       status: HomepageReviewStatus.fromWire(map["status"], '$path.status'),
       createdAt: _requiredTimestamp(map["createdAt"], '$path.createdAt'),
       updatedAt: _requiredTimestamp(map["updatedAt"], '$path.updatedAt'),
@@ -1731,10 +1731,18 @@ int _requiredInt(Object? value, String path) {
   return value;
 }
 
-int _requiredPositiveInt(Object? value, String path) {
+int _requiredBoundedInt(
+  Object? value,
+  String path, {
+  int? min,
+  int? max,
+}) {
   final result = _requiredInt(value, path);
-  if (result < 1) {
-    throw FormatException('$path must be positive');
+  if (min != null && result < min) {
+    throw FormatException('$path must be at least $min');
+  }
+  if (max != null && result > max) {
+    throw FormatException('$path must not exceed $max');
   }
   return result;
 }

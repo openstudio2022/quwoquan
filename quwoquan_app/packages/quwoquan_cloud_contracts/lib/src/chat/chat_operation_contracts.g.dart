@@ -1,9 +1,12 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: 9816b2b7d9fedea34ad78dd719fc16fdf3e982073304d7f50f7a8ea4064f6b7f
+// ContractGraph SHA256: 93359367b8614f01bb5e1c51e37af383332b01f117cc1c6cf39e4fdf838e49d2
 
 library;
 
 import '../operation_request_payload.dart';
+import "../generated/shared_operation_types.g.dart";
+
+export "../generated/shared_operation_types.g.dart";
 
 part '../generated/requests/chat/chat_operation_contracts.g.requests.g.dart';
 
@@ -180,6 +183,7 @@ final class ChatConversation {
     required this.title,
     required this.avatarUrl,
     required this.groupAvatarVersion,
+    this.groupAvatarSourceHash,
     required this.creatorId,
     required this.circleId,
     required this.circleGroupId,
@@ -211,6 +215,7 @@ final class ChatConversation {
   final String title;
   final String avatarUrl;
   final int groupAvatarVersion;
+  final String? groupAvatarSourceHash;
   final String creatorId;
   final String circleId;
   final String circleGroupId;
@@ -236,7 +241,7 @@ final class ChatConversation {
   final DateTime updatedAt;
 
   factory ChatConversation.fromWire(Map<String, Object?> map, [String path = "ChatConversation"]) {
-    _rejectUnknownFields(map, const <String>{"id", "conversationId", "type", "title", "avatarUrl", "groupAvatarVersion", "creatorId", "circleId", "circleGroupId", "entityId", "originType", "originIntersectionSnapshot", "maxSeq", "memberCount", "membersRosterRevision", "maxGroupSize", "receiptEnabled", "announcement", "announcementUpdatedBy", "announcementUpdatedAt", "nameEditableByAdminOnly", "lastMessageId", "lastMessagePreview", "lastMessageType", "lastMessageTime", "messageCount", "status", "createdAt", "updatedAt"}, path);
+    _rejectUnknownFields(map, const <String>{"id", "conversationId", "type", "title", "avatarUrl", "groupAvatarVersion", "groupAvatarSourceHash", "creatorId", "circleId", "circleGroupId", "entityId", "originType", "originIntersectionSnapshot", "maxSeq", "memberCount", "membersRosterRevision", "maxGroupSize", "receiptEnabled", "announcement", "announcementUpdatedBy", "announcementUpdatedAt", "nameEditableByAdminOnly", "lastMessageId", "lastMessagePreview", "lastMessageType", "lastMessageTime", "messageCount", "status", "createdAt", "updatedAt"}, path);
     return ChatConversation(
       id: _requiredString(map["id"], '$path.id'),
       conversationId: _requiredString(map["conversationId"], '$path.conversationId'),
@@ -244,6 +249,7 @@ final class ChatConversation {
       title: _requiredString(map["title"], '$path.title'),
       avatarUrl: _requiredString(map["avatarUrl"], '$path.avatarUrl'),
       groupAvatarVersion: _requiredInt(map["groupAvatarVersion"], '$path.groupAvatarVersion'),
+      groupAvatarSourceHash: map["groupAvatarSourceHash"] == null ? null : _requiredString(map["groupAvatarSourceHash"], '$path.groupAvatarSourceHash'),
       creatorId: _requiredString(map["creatorId"], '$path.creatorId'),
       circleId: _requiredString(map["circleId"], '$path.circleId'),
       circleGroupId: _requiredString(map["circleGroupId"], '$path.circleGroupId'),
@@ -277,6 +283,7 @@ final class ChatConversation {
     "title": title,
     "avatarUrl": avatarUrl,
     "groupAvatarVersion": groupAvatarVersion,
+    if (groupAvatarSourceHash != null) "groupAvatarSourceHash": groupAvatarSourceHash!,
     "creatorId": creatorId,
     "circleId": circleId,
     "circleGroupId": circleGroupId,
@@ -953,53 +960,6 @@ final class ConversationUserStateCommandAck {
   };
 }
 
-final class GreetingIntersectionSnapshot {
-  const GreetingIntersectionSnapshot({
-    required this.intersectionId,
-    required this.evidenceId,
-    required this.sourceRef,
-    required this.objectTypeRef,
-    required this.objectId,
-    required this.primaryText,
-    this.dimension,
-    required this.resolvedAt,
-  });
-
-  final String intersectionId;
-  final String evidenceId;
-  final String sourceRef;
-  final String objectTypeRef;
-  final String objectId;
-  final String primaryText;
-  final String? dimension;
-  final DateTime resolvedAt;
-
-  factory GreetingIntersectionSnapshot.fromWire(Map<String, Object?> map, [String path = "GreetingIntersectionSnapshot"]) {
-    _rejectUnknownFields(map, const <String>{"intersectionId", "evidenceId", "sourceRef", "objectTypeRef", "objectId", "primaryText", "dimension", "resolvedAt"}, path);
-    return GreetingIntersectionSnapshot(
-      intersectionId: _requiredNonBlankString(map["intersectionId"], '$path.intersectionId'),
-      evidenceId: _requiredNonBlankString(map["evidenceId"], '$path.evidenceId'),
-      sourceRef: _requiredNonBlankString(map["sourceRef"], '$path.sourceRef'),
-      objectTypeRef: _requiredNonBlankString(map["objectTypeRef"], '$path.objectTypeRef'),
-      objectId: _requiredNonBlankString(map["objectId"], '$path.objectId'),
-      primaryText: _requiredNonBlankString(map["primaryText"], '$path.primaryText'),
-      dimension: map["dimension"] == null ? null : _requiredString(map["dimension"], '$path.dimension'),
-      resolvedAt: _requiredTimestamp(map["resolvedAt"], '$path.resolvedAt'),
-    );
-  }
-
-  Map<String, Object?> toWire() => <String, Object?>{
-    "intersectionId": intersectionId,
-    "evidenceId": evidenceId,
-    "sourceRef": sourceRef,
-    "objectTypeRef": objectTypeRef,
-    "objectId": objectId,
-    "primaryText": primaryText,
-    if (dimension != null) "dimension": dimension!,
-    "resolvedAt": resolvedAt.toUtc().toIso8601String(),
-  };
-}
-
 final class GroupCandidatePageSlice {
   const GroupCandidatePageSlice({
     required this.items,
@@ -1634,14 +1594,6 @@ void _rejectUnknownFields(
 String _requiredString(Object? value, String path) {
   if (value is! String) throw FormatException('$path must be a string');
   return value;
-}
-
-String _requiredNonBlankString(Object? value, String path) {
-  final result = _requiredString(value, path);
-  if (result.trim().isEmpty) {
-    throw FormatException('$path must not be blank');
-  }
-  return result;
 }
 
 DateTime _requiredTimestamp(Object? value, String path) {

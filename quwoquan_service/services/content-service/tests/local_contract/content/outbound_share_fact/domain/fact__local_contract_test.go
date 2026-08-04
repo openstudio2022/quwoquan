@@ -35,7 +35,7 @@ func TestOutboundShareFactRequiresCompleteImmutableIdentityAndLifecycleData(t *t
 		t.Fatal("OutboundShareFact with a non-canonical actor dimension must be rejected")
 	}
 	invalid = valid
-	invalid.Channel = "legacy_share"
+	invalid.Channel = "unsupported_share"
 	if err := invalid.Validate(); err == nil {
 		t.Fatal("OutboundShareFact with a non-canonical channel must be rejected")
 	}

@@ -77,6 +77,43 @@ def test_health_probe_records_unreadable_local_auth_as_gate_block(
     assert findings == [output]
 
 
+def test_health_probe_binds_local_managed_ca_before_reference_auth(
+    tmp_path: Path,
+) -> None:
+    ca_path = tmp_path / "gamma-local-root.crt"
+    ca_path.write_text("dummy-ca\n", encoding="utf-8")
+    seen_ssl_cert_file: list[str] = []
+
+    def _capture_session(*_args, **_kwargs):
+        seen_ssl_cert_file.append(os.environ.get("SSL_CERT_FILE", ""))
+        raise RuntimeError("stop after CA capture")
+
+    with (
+        mock.patch.object(stackctl, "_resolve_test_auth_token", return_value=""),
+        mock.patch.object(
+            stackctl,
+            "open_reference_acceptance_session",
+            side_effect=_capture_session,
+        ),
+        mock.patch.object(
+            stackctl,
+            "root_certificate_path",
+            return_value=ca_path,
+        ),
+    ):
+        status, output, findings = stackctl._run_environment_integration_probe(
+            stackctl.load_environment_topology(),
+            "gamma-local",
+            tmp_path,
+        )
+
+    assert seen_ssl_cert_file == [str(ca_path)]
+    assert status["ok"] is False
+    assert "integration auth failed" in output
+    assert findings == [output]
+    assert "SSL_CERT_FILE" not in os.environ
+
+
 def test_public_release_readback_does_not_require_candidate_identity(
     tmp_path: Path,
 ) -> None:

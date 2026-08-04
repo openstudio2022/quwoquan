@@ -52,9 +52,11 @@ def _has_typed_method(
     *,
     response_type: str,
     method_name: str,
+    transport: str,
 ) -> bool:
+    return_type = "Stream" if transport == "sse" else "Future"
     return re.search(
-        rf"\bFuture<{_qualified_symbol_pattern(response_type)}>\s+"
+        rf"\b{re.escape(return_type)}<{_qualified_symbol_pattern(response_type)}>\s+"
         rf"{re.escape(method_name)}\s*\(",
         source,
     ) is not None
@@ -168,6 +170,7 @@ def main() -> int:
             dart_source,
             response_type=response_type,
             method_name=method_name,
+            transport=str(operation.get("transport", "")).strip(),
         ):
             failures.append(f"{operation_id}: typed Dart method missing")
         decoder = str(client.get("responseDecoder", "")).strip()

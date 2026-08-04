@@ -58,19 +58,42 @@ void main() {
     expect(exception.runtimeFailure.context.attributes.first.value, '503');
   });
 
-  test('CloudErrorMapper 兼容简化错误体里的 userMessage', () {
-    final exception = CloudErrorMapper.fromStatusCode(
-      404,
-      body: jsonEncode(<String, dynamic>{
-        'code': 'CONTENT.USER.post_not_found',
-        'userMessage': '内容不存在或已删除',
-      }),
-      requestPath: '/content/posts/deleted',
-    );
+  test(
+    'CloudErrorMapper reads canonical userMessage from a simplified body',
+    () {
+      final exception = CloudErrorMapper.fromStatusCode(
+        404,
+        body: jsonEncode(<String, dynamic>{
+          'code': 'CONTENT.USER.post_not_found',
+          'userMessage': '内容不存在或已删除',
+        }),
+        requestPath: '/content/posts/deleted',
+      );
 
-    expect(exception.userMessage, '内容不存在或已删除');
-    expect(exception.code, 'CONTENT.USER.post_not_found');
-    expect(exception.runtimeFailure.kind, RuntimeFailureKind.notFound);
+      expect(exception.userMessage, '内容不存在或已删除');
+      expect(exception.code, 'CONTENT.USER.post_not_found');
+      expect(exception.runtimeFailure.kind, RuntimeFailureKind.notFound);
+    },
+  );
+
+  test('CloudErrorMapper rejects retired user-message aliases', () {
+    for (final key in <String>['user_message', 'message', 'reasonMessage']) {
+      expect(
+        CloudErrorMapper.parsedUserMessage(
+          jsonEncode(<String, dynamic>{key: 'retired message'}),
+        ),
+        isNull,
+        reason: '$key must not form a second response decoder track',
+      );
+    }
+    expect(
+      CloudErrorMapper.parsedUserMessage(
+        jsonEncode(<String, dynamic>{
+          'error': <String, dynamic>{'userMessage': 'nested alias'},
+        }),
+      ),
+      isNull,
+    );
   });
 
   test('CloudErrorMapper maps local runtime exceptions', () {

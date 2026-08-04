@@ -41,11 +41,14 @@ def main() -> int:
         "deploy",
         "roll",
         "matrix",
+        "dev-session",
+        "provider-config",
     )
     if help_result.returncode != 0 or any(command not in help_result.stdout for command in required_commands):
         issues.append(
             "stackctl --help must list package, content-readiness, data-execution-fleet, "
-            "account-enforcement-uat, filter-catalog, roll, deploy and matrix commands"
+            "account-enforcement-uat, filter-catalog, roll, deploy, matrix, "
+            "dev-session and provider-config commands"
         )
 
     readiness_help = run(["python3", str(STACKCTL), "content-readiness", "--help"])
@@ -122,6 +125,41 @@ def main() -> int:
         issues.append("stackctl up --help must expose --env/--device-id/--workload")
     if "--gateway-base-url" in up_help.stdout:
         issues.append("stackctl up user surface must not expose gateway override flags")
+
+    dev_session_help = run(["python3", str(STACKCTL), "dev-session", "--help"])
+    if (
+        dev_session_help.returncode != 0
+        or "--env" not in dev_session_help.stdout
+        or "--target" not in dev_session_help.stdout
+        or "--all-nonprod" not in dev_session_help.stdout
+        or "--release-attestation" not in dev_session_help.stdout
+        or "--rollback-release-attestation" not in dev_session_help.stdout
+        or "--launch-app" not in dev_session_help.stdout
+        or "--gateway-base-url" in dev_session_help.stdout
+    ):
+        issues.append(
+            "stackctl dev-session must expose canonical target/release/App inputs "
+            "and forbid endpoint overrides"
+        )
+
+    provider_config_help = run(
+        ["python3", str(STACKCTL), "provider-config", "--help"]
+    )
+    if (
+        provider_config_help.returncode != 0
+        or "--env" not in provider_config_help.stdout
+        or "--target" not in provider_config_help.stdout
+        or any(
+            action not in provider_config_help.stdout
+            for action in ("validate", "render", "diff")
+        )
+        or "--endpoint" in provider_config_help.stdout
+        or "--token" in provider_config_help.stdout
+    ):
+        issues.append(
+            "stackctl provider-config must expose validate/render/diff with "
+            "canonical env/target and no value override flags"
+        )
 
     filter_catalog_help = run(["python3", str(STACKCTL), "filter-catalog", "--help"])
     if (

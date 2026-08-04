@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"quwoquan_service/runtime/clientrealtime"
 	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtredis "quwoquan_service/runtime/redis"
 	conversationevent "quwoquan_service/services/chat-service/generated/chat/conversation/contract/event"
@@ -140,12 +141,21 @@ func (p *EventPublisher) Publish(ctx context.Context, evt DomainEvent) error {
 	if evt.Timestamp.IsZero() {
 		evt.Timestamp = time.Now()
 	}
-	payload, err := json.Marshal(evt)
-	if err != nil {
-		return fmt.Errorf("marshal event: %w", err)
-	}
 	if rosterMutatingEventTypes[evt.Type] {
 		p.invalidateRecipients(evt.ConversationID)
+	}
+	wireType, clientRealtime := clientRealtimeWireType(evt.Type)
+	if !clientRealtime {
+		return nil
+	}
+	payload, err := clientrealtime.MarshalClientRealtimeEventEnvelope(
+		wireType,
+		evt.EventID,
+		evt.Timestamp,
+		evt.Payload,
+	)
+	if err != nil {
+		return fmt.Errorf("marshal client realtime event: %w", err)
 	}
 	recipients, err := p.recipients(ctx, evt.ConversationID)
 	if err != nil {
@@ -430,6 +440,20 @@ func isSupportedEventType(eventType string) bool {
 		}
 	}
 	return false
+}
+
+func clientRealtimeWireType(eventType string) (string, bool) {
+	for _, catalog := range []map[string]string{
+		conversationevent.ClientRealtimeWireTypes,
+		membershipevent.ClientRealtimeWireTypes,
+		userstateevent.ClientRealtimeWireTypes,
+		messageevent.ClientRealtimeWireTypes,
+	} {
+		if wireType := strings.TrimSpace(catalog[eventType]); wireType != "" {
+			return wireType, true
+		}
+	}
+	return "", false
 }
 
 func assistantMentionedStreamValues(evt DomainEvent) map[string]string {

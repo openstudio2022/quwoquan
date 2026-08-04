@@ -1,19 +1,15 @@
 import 'dart:async';
+import '../../../../support/fixtures/intersection_fixtures.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/application/content/post/author_impact_query.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_evidence_item.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_evidence_page.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_item.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_summary.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_inbox_summary.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/user/providers/author_impact_provider.dart';
 import 'package:quwoquan_app/ui/user/providers/my_intersection_inbox_provider.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 const _authorImpactEvidenceSnapshotId = 'impact_evidence_snapshot_001';
 
@@ -171,7 +167,7 @@ class _CountingIntersectionRepository implements IntersectionRepository {
 
   @override
   Future<IntersectionInboxSummary> getMyIntersectionSummary() async {
-    return IntersectionInboxSummary(totalCount: 0, totalNewCount: 0);
+    return intersectionInboxSummaryFixture(totalCount: 0, totalNewCount: 0);
   }
 
   @override

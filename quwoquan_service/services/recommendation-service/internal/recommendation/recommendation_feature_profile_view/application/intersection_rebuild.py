@@ -81,7 +81,7 @@ class SubjectClosureReader(Protocol):
 class IntersectionRebuilder:
     """Rebuilds canonical snapshots from object-local typed-event evidence.
 
-    Legacy Content snapshots are deliberately not read or translated: they are
+    Retired Content snapshots are deliberately not read or translated: they are
     reconstructable projections, not authoritative facts. The coordinator
     reconciles the complete expected identity/digest set and is idempotent for
     one immutable evidence snapshot.

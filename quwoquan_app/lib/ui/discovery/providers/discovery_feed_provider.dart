@@ -53,8 +53,7 @@ bool _isCanonicalInitialEmptyPage(String channelId, DiscoveryFeedPage page) {
   return switch (page.emptyReason!) {
     ContentFeedEmptyReason.followingEmpty => channelId == 'following',
     ContentFeedEmptyReason.noActiveRelease ||
-    ContentFeedEmptyReason.noEligibleContent =>
-      channelId != 'following',
+    ContentFeedEmptyReason.noEligibleContent => channelId != 'following',
     ContentFeedEmptyReason.continuationEnd => false,
   };
 }
@@ -63,8 +62,7 @@ void _requireCanonicalContinuationPage(DiscoveryFeedPage page) {
   final valid = page.items.isEmpty
       ? page.outcome == ContentFeedOutcome.empty &&
             page.emptyReason == ContentFeedEmptyReason.continuationEnd
-      : page.outcome == ContentFeedOutcome.content &&
-            page.emptyReason == null;
+      : page.outcome == ContentFeedOutcome.content && page.emptyReason == null;
   if (!valid) {
     throw const FormatException(
       'Continuation feed page has an invalid outcome envelope',

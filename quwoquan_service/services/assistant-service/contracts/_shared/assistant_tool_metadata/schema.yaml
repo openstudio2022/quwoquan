@@ -18,6 +18,7 @@ fields:
   - { name: serverInjectedInputs, type: list<string>, default: [] }
   - { name: readOnly, type: bool, default: true }
   - { name: capability, type: object, ref: capability_policy, default: {} }
+  - { name: research, type: object, ref: research_policy, default: {} }
   - { name: confirmation, type: object, ref: confirmation_policy, default: {} }
   - { name: resilience, type: object, ref: resilience_policy, default: {} }
   - { name: recovery, type: object, ref: recovery_policy, default: {} }
@@ -30,6 +31,16 @@ subcontracts:
       - { name: consentScopes, type: list<string>, default: [] }
       - { name: allowedSurfaceKinds, type: list<string>, default: [] }
       - { name: recheckAtExecution, type: bool, default: false }
+  research_policy:
+    class_name: AssistantToolResearchPolicyWire
+    fields:
+      - { name: operation, type: string, default: none }
+      - { name: parallelInputField, type: string, default: '' }
+      - { name: targetInputField, type: string, default: '' }
+      - { name: targetKindField, type: string, default: '' }
+      - { name: targetValueField, type: string, default: '' }
+      - { name: reusableSourceTargetKinds, type: list<string>, default: [] }
+      - { name: childTargetKinds, type: list<string>, default: [] }
   confirmation_policy:
     class_name: AssistantToolConfirmationPolicyWire
     fields:

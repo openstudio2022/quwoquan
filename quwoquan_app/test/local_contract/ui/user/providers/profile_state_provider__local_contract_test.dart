@@ -4,8 +4,9 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
+import 'package:quwoquan_app/cloud/services/content/content_read_model_projection.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -70,7 +71,7 @@ class _CountingRelationshipCapabilityQuery
   int getCapabilityCalls = 0;
 
   @override
-  Future<RelationshipCapabilityResult> getRelationshipCapability(
+  Future<RelationshipCapabilityView> getRelationshipCapability(
     GetRelationshipCapabilityQuery query,
   ) async {
     getCapabilityCalls += 1;

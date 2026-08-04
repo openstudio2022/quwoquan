@@ -21,7 +21,7 @@ func TestHydrateOperationReferencesUsesContractGraphTransportAndScopes(t *testin
 	contractGraph := &graph.ContractGraph{Operations: []ast.Operation{{
 		ID: "ops.experiment.UpdateExperimentRollout", LocalID: "UpdateExperimentRollout",
 		Method: "POST", PathTemplate: "/control-plane/product/experiments/{experimentId}:rollout",
-		Scopes: []string{"ops.experiment.write"},
+		AuthMode: "required", Principal: "operator", Scopes: []string{"ops.experiment.write"},
 	}}}
 
 	if err := HydrateOperationReferences(document, contractGraph); err != nil {
@@ -37,6 +37,9 @@ func TestHydrateOperationReferencesUsesContractGraphTransportAndScopes(t *testin
 	}
 	if operation["contract_operation_id"] != contractGraph.Operations[0].ID {
 		t.Fatalf("missing canonical operation identity: %#v", operation)
+	}
+	if operation["auth_mode"] != "required" || operation["principal"] != "operator" {
+		t.Fatalf("operation authorization was not sourced from ContractGraph: %#v", operation)
 	}
 }
 

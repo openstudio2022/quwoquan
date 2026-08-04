@@ -297,6 +297,11 @@ def materialize_posts(
                     "fileName": a.get("fileName", ""),
                     "caption": a.get("caption", ""),
                     "imageLayout": a.get("imageLayout", "fullWidth"),
+                    "role": (
+                        "cover"
+                        if str(a.get("role") or "") == "cover"
+                        else "detail"
+                    ),
                     "sha256": a.get("sha256", ""),
                     # 资产证据链（相对 batch 根）：source 原图 + 原文，禁绝对路径。
                     "sourceAssetRef": _materialized_asset_refs(a, execution_id=execution_id)[1],

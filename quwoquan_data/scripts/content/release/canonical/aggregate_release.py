@@ -128,6 +128,23 @@ def _object_root(publish_root: Path, kind: str, ref: str) -> Path:
     return publish_root / kind / _safe_rel(ref, label=f"{kind}Ref")
 
 
+def _copy_tag_snapshot(source: Path, target: Path) -> None:
+    """Copy one taxonomy node snapshot without nested child tag directories.
+
+    Publish tag trees nest child refs under parent directories. Aggregate desiredRefs
+    lists exact tag refs; recursively copying a parent would smuggle sibling /
+    descendant snapshots into the release payload and break importer closure.
+    """
+    if not source.is_dir():
+        raise ObjectTransactionError(f"目录不存在：{source}")
+    if not (source / "_definition.json").is_file():
+        raise ObjectTransactionError(f"canonical tag snapshot missing definition: {source}")
+    target.mkdir(parents=True, exist_ok=True)
+    for path in source.iterdir():
+        if path.is_file():
+            shutil.copy2(path, target / path.name)
+
+
 def _object_refs_document(
     publish_root: Path,
     *,
@@ -298,10 +315,12 @@ def build_aggregate_release(
         payload = payload_root(staging)
         for kind in OBJECT_KINDS:
             for ref in desired[kind]:
-                _copy_tree(
-                    _object_root(publish_root, kind, ref),
-                    payload / "objects" / kind / ref,
-                )
+                source = _object_root(publish_root, kind, ref)
+                target = payload / "objects" / kind / ref
+                if kind == "tags":
+                    _copy_tag_snapshot(source, target)
+                else:
+                    _copy_tree(source, target)
         media_manifest = build_release_media_manifest(
             release_id=release_id,
             post_refs=desired["posts"],

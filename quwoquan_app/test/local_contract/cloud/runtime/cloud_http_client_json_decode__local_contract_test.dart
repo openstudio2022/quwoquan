@@ -794,8 +794,8 @@ void main() {
         'ranking-current',
         ' $canonical',
         '$canonical ',
-        'sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
-        'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        invalidSha256Fixture(List<String>.filled(64, 'A').join()),
+        invalidSha256Fixture(List<String>.filled(63, 'a').join()),
         42,
       ]) {
         expect(
@@ -812,6 +812,8 @@ void main() {
     });
   });
 }
+
+String invalidSha256Fixture(String payload) => 'sha256:$payload';
 
 final class _ChunkedResponseClient extends http.BaseClient {
   _ChunkedResponseClient(this.chunks);

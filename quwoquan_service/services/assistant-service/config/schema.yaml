@@ -163,6 +163,7 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: false
+# Runtime-only immutable release root. Controlled source assets are never read here.
 - key: sys.assistant-service.skill_package.asset_root
   type: string
   scope: workload

@@ -115,10 +115,9 @@ void main() {
       },
     );
 
-    test('rejects retired catalogVersion draft instead of dual-reading', () {
+    test('rejects unknown draft fields instead of guessing a second shape', () {
       final parsed = InterestOnboardingDraft.tryParse(<String, Object?>{
-        // Retired catalogVersion input is a negative fixture and must fail closed.
-        'catalogVersion': 'retired',
+        'unexpectedEnvelopeField': 'retired',
         'taxonomyReleaseId': 'tag-taxonomy-current',
         'clientEventId': 'onboarding:retired-draft',
         'tagRefs': <String>['Topic/兴趣/旅行'],

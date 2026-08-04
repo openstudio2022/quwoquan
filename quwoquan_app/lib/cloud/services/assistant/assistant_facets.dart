@@ -14,6 +14,9 @@ library;
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
+export 'package:quwoquan_app/application/assistant/skill_activity/skill_activity_query.dart';
+export 'package:quwoquan_app/application/assistant/skill_data_control/skill_data_control_facet.dart';
+
 export 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show
         AssistantAnswerRunIntent,
@@ -85,6 +88,20 @@ export 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
         SkillSubscriptionWire,
         SkillConsent,
         SkillConsentListSlice,
+        SkillActivityDisplayKey,
+        SkillActivityDisplayKeyX,
+        SkillActivityKind,
+        SkillActivityKindX,
+        SkillActivityRecoveryAction,
+        SkillActivityRecoveryActionX,
+        SkillActivitySlice,
+        SkillActivityView,
+        SkillDataControlAction,
+        SkillDataControlActionX,
+        SkillDataControlMutationReceipt,
+        SkillDataControlRequest,
+        SkillDataControlRequestStatus,
+        SkillDataControlRequestStatusX,
         SkillUserSetting,
         SkillUserSettingListSlice,
         SkillUserSettingStatus,
@@ -97,12 +114,14 @@ export 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
         parseFeedbackTypeStrict,
         parseInteractionEventTypeStrict,
         parseSkillSubscriptionDestinationTypeStrict,
-        parseSkillSubscriptionStatusStrict;
+        parseSkillSubscriptionStatusStrict,
+        parseSkillActivityDisplayKeyStrict,
+        parseSkillActivityKindStrict,
+        parseSkillActivityRecoveryActionStrict,
+        parseSkillDataControlActionStrict,
+        parseSkillDataControlRequestStatusStrict;
 export 'package:quwoquan_app/assistant/generated/contracts/tool_use.g.dart'
     show ToolUseWire;
-
-const String kPersonalContentAccessSkillId = 'personal_content_access';
-const String kPersonalContentAccessScope = 'personal_content_access';
 
 /// Assistant 任务/记忆等列表接口单次拉取条数（与网关约定一致，非 [CloudApiDefaults.pageLimit]）。
 const int kAssistantListPageDefaultLimit = 32;
@@ -381,7 +400,7 @@ abstract class AssistantPersonalDataFacet {
   });
 }
 
-/// 用户显式偏好事实（即时设置、可见、遗忘与撤销恢复）。
+/// 用户显式助手偏好（即时设置、可见、遗忘与撤销恢复）。
 abstract class AssistantPreferenceFacet {
   Future<AssistantPreference> setAssistantPreference({
     required AssistantPreferenceScope scope,
