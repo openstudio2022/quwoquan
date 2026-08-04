@@ -41,8 +41,9 @@ export 'avatar/rounded_square_avatar.dart';
 export 'avatar/conversation_avatar.dart';
 
 // ==================== 助理组件 ====================
+// assistant_floating_ball 已迁入 assistant/assistant/assistant_entry_view/presentation；
+// 共享 barrel 禁止 export lib/<domain>/**，消费者按对象路径直接 import。
 export 'assistant/assistant_avatar.dart';
-export 'assistant/assistant_floating_ball.dart';
 
 // ==================== 输入组件 ====================
 export 'input/unified_emoji_picker.dart';
