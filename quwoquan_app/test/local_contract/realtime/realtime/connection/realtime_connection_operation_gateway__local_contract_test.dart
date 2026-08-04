@@ -2,7 +2,7 @@
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
-import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_operation_gateway.dart';
+import 'package:quwoquan_app/realtime/realtime/connection/application/realtime_connection_operation_gateway.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {

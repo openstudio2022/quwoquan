@@ -3,9 +3,9 @@ import 'dart:developer' as developer;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/cloud/services/realtime/remote_realtime_connection_delegate.dart';
-import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_delegate.dart';
-import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_operation_gateway.dart';
+import 'package:quwoquan_app/realtime/realtime/connection/adapters/remote_realtime_connection_delegate.dart';
+import 'package:quwoquan_app/realtime/realtime/connection/domain/realtime_connection_delegate.dart';
+import 'package:quwoquan_app/realtime/realtime/connection/application/realtime_connection_operation_gateway.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/app_telemetry_catalog.g.dart';
 import 'package:quwoquan_app/core/di/ops_event_dependencies.dart';
@@ -27,12 +27,10 @@ typedef RealtimeConnectionOperationGatewayResolver =
 class RealtimeConnectionNotifier extends Notifier<TransportState> {
   RealtimeConnectionNotifier({
     RealtimeCurrentUserIdResolver? currentUserIdResolver,
-    RealtimeConnectionDelegateFactory? delegateFactory,
-    RealtimeConnectionOperationGatewayResolver? operationGatewayResolver,
+    this._delegateFactory,
+    this._operationGatewayResolver,
   }) : _currentUserIdResolver =
-           currentUserIdResolver ?? _defaultCurrentUserIdResolver,
-       _delegateFactory = delegateFactory,
-       _operationGatewayResolver = operationGatewayResolver;
+           currentUserIdResolver ?? _defaultCurrentUserIdResolver;
 
   static String _defaultCurrentUserIdResolver(Ref ref) {
     final authSession = ref.read(authSessionControllerProvider);

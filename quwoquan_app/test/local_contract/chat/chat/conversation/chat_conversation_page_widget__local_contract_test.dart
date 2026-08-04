@@ -7,15 +7,15 @@ import 'package:hive/hive.dart';
 import 'package:quwoquan_app/chat/chat/message/domain/message_dto.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import '../../../../support/cloud_services/chat_repository_mock.dart';
-import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_delegate.dart';
-import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_notifier.dart';
+import 'package:quwoquan_app/realtime/realtime/connection/domain/realtime_connection_delegate.dart';
+import 'package:quwoquan_app/realtime/realtime/connection/presentation/realtime_connection_notifier.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_conversation_page.dart';
-import '../../../../support/cloud_services/object_doubles/chat/alpha_message_writer.dart';
+import '../../../../support/chat/chat/message/message_typed_double.dart';
 
 Widget _scopedApp({
   ChatRepository? mock,

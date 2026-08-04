@@ -129,7 +129,7 @@ echo "[runtime-media] flutter test realtime/cache coverage"
     test/local_contract/core/services/content_cache_services__local_contract_test.dart \
     test/local_contract/core/services/conversation_avatar_sync_contract__local_contract_test.dart \
     test/local_contract/ui/components/avatar/conversation_avatar__local_contract_test.dart \
-    test/local_contract/cloud/realtime/realtime_avatar_sync_handler__local_contract_test.dart \
+    test/local_contract/realtime/realtime/connection/realtime_avatar_sync_handler__local_contract_test.dart \
     test/local_contract/core/services/local_chat_search_sync_service__local_contract_test.dart \
     test/local_contract/ui/chat/widgets/chat_page_widget__local_contract_test.dart
 )

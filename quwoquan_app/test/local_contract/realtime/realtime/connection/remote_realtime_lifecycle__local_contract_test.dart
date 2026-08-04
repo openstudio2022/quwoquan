@@ -6,11 +6,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/auth/cloud_auth_token_provider.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
-import 'package:quwoquan_app/cloud/services/realtime/remote_realtime_connection_delegate.dart';
-import 'package:quwoquan_app/cloud/services/realtime/realtime_config.dart';
-import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_delegate.dart';
-import 'package:quwoquan_app/cloud/services/realtime/transport/longpoll_transport.dart';
-import 'package:quwoquan_app/cloud/services/realtime/transport/websocket_transport.dart';
+import 'package:quwoquan_app/realtime/realtime/connection/adapters/remote_realtime_connection_delegate.dart';
+import 'package:quwoquan_app/realtime/realtime/connection/adapters/realtime_config.dart';
+import 'package:quwoquan_app/realtime/realtime/connection/domain/realtime_connection_delegate.dart';
+import 'package:quwoquan_app/realtime/realtime/connection/adapters/longpoll_transport.dart';
+import 'package:quwoquan_app/realtime/realtime/connection/adapters/websocket_transport.dart';
 
 void main() {
   test('remote foreground enters idle and starts long poll', () {

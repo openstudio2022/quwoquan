@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
-import '../../../support/cloud_services/chat_repository_mock.dart';
-import 'package:quwoquan_app/cloud/services/realtime/realtime_message_handler.dart';
+import '../../../../support/cloud_services/chat_repository_mock.dart';
+import 'package:quwoquan_app/realtime/realtime/connection/presentation/realtime_message_handler.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/providers/group_home_provider.dart';
 

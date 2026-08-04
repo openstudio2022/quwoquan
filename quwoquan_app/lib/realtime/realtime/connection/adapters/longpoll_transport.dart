@@ -2,8 +2,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:quwoquan_app/cloud/runtime/auth/cloud_auth_token_provider.dart';
 import 'package:quwoquan_app/cloud/runtime/auth/realtime_connection_credential.dart';
-import 'package:quwoquan_app/cloud/services/realtime/realtime_config.dart';
-import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_operation_gateway.dart';
+import 'package:quwoquan_app/realtime/realtime/connection/adapters/realtime_config.dart';
+import 'package:quwoquan_app/realtime/realtime/connection/application/realtime_connection_operation_gateway.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Callback for incoming realtime events from long-polling.

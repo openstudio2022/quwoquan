@@ -19,9 +19,9 @@ import 'package:quwoquan_app/cloud/remote/chat/conversation/conversation_remote.
 import 'package:quwoquan_app/cloud/remote/chat/conversation/conversation_user_state_remote.dart';
 import 'package:quwoquan_app/cloud/remote/chat/conversation/message_home_remote.dart';
 import 'package:quwoquan_app/cloud/remote/chat/message/message_remote.dart';
-import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_delegate.dart';
-import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_notifier.dart';
-import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_operation_gateway.dart';
+import 'package:quwoquan_app/realtime/realtime/connection/domain/realtime_connection_delegate.dart';
+import 'package:quwoquan_app/realtime/realtime/connection/presentation/realtime_connection_notifier.dart';
+import 'package:quwoquan_app/realtime/realtime/connection/application/realtime_connection_operation_gateway.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/remote/user/contact_discovery/contact_discovery_remote.dart';
 import 'package:quwoquan_app/application/content/media/content_media_upload_coordinator.dart';

@@ -1,9 +1,9 @@
 import 'dart:async';
 
-import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_delegate.dart';
-import 'package:quwoquan_app/cloud/services/realtime/realtime_message_handler.dart';
+import 'package:quwoquan_app/realtime/realtime/connection/domain/realtime_connection_delegate.dart';
+import 'package:quwoquan_app/realtime/realtime/connection/presentation/realtime_message_handler.dart';
 
-import '../../cloud_services/object_doubles/object_scenario_seed_reader.dart';
+import '../../../cloud_services/object_doubles/object_scenario_seed_reader.dart';
 
 /// Test-only catalog backed by the canonical Chat contract scenario.
 final class FixtureRealtimeEventCatalog {

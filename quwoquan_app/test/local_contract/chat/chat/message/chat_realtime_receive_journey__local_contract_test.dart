@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_message_provider.dart';
 
-import '../../../../support/fixtures/chat/fixture_realtime_connection_delegate.dart';
+import '../../../../support/realtime/realtime/connection/connection_typed_double.dart';
 
 void main() {
   testWidgets('进入会话后 realtime fixture 推送新消息并更新可见列表', (tester) async {

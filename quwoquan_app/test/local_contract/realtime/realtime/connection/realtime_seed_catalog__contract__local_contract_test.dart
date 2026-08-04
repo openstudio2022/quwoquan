@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import '../../../support/fixtures/chat/fixture_realtime_connection_delegate.dart';
+import '../../../../support/realtime/realtime/connection/connection_typed_double.dart';
 
 void main() {
   test('registered conversation returns canonical fixture event', () {

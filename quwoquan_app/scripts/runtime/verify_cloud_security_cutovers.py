@@ -98,7 +98,7 @@ def main() -> int:
         "runtimeEnvironment != 'gamma'",
     )
     require(
-        "quwoquan_app/lib/cloud/services/realtime/realtime_connection_operation_gateway.dart",
+        "quwoquan_app/lib/realtime/realtime/connection/application/realtime_connection_operation_gateway.dart",
         "GeneratedCloudOperationClient client",
         "realtimeConnectionIssueConnectionTicket",
         "IssueConnectionTicketRequest",
@@ -106,17 +106,17 @@ def main() -> int:
         "LongPollRequest",
     )
     require(
-        "quwoquan_app/lib/cloud/services/realtime/transport/websocket_transport.dart",
+        "quwoquan_app/lib/realtime/realtime/connection/adapters/websocket_transport.dart",
         "RealtimeConnectionCredential.resolveWebSocket",
         "'auth_ack'",
     )
     forbid(
-        "quwoquan_app/lib/cloud/services/realtime/transport/websocket_transport.dart",
+        "quwoquan_app/lib/realtime/realtime/connection/adapters/websocket_transport.dart",
         "'userId':",
         "'topics':",
     )
     require(
-        "quwoquan_app/lib/cloud/rtc/rtc_signal_events.dart",
+        "quwoquan_app/lib/rtc/rtc/call_session/application/rtc_signal_events.dart",
         "realtime 单通道",
         "RtcSignalEventBus",
         "RealtimeEventEnvelope envelope",
@@ -125,24 +125,24 @@ def main() -> int:
         "final RtcWsPayload payload",
     )
     forbid(
-        "quwoquan_app/lib/cloud/rtc/rtc_signal_events.dart",
+        "quwoquan_app/lib/rtc/rtc/call_session/application/rtc_signal_events.dart",
         "parseRtcWsPayload",
         "Map<String, dynamic>",
     )
     require(
-        "quwoquan_app/lib/cloud/rtc/incoming_call_coordinator.dart",
+        "quwoquan_app/lib/rtc/rtc/call_session/application/incoming_call_coordinator.dart",
         "rtcSignalEventBusProvider",
         "不再维护独立信令 WebSocket",
     )
     require(
-        "quwoquan_app/lib/cloud/services/realtime/transport/longpoll_transport.dart",
+        "quwoquan_app/lib/realtime/realtime/connection/adapters/longpoll_transport.dart",
         "RealtimeConnectionCredential.resolveHttp",
         "_loadCursor(credential.cursorPartition)",
         "long poll requires generated realtime operation gateway",
         ".longPoll(timeout:",
     )
     forbid(
-        "quwoquan_app/lib/cloud/services/realtime/transport/longpoll_transport.dart",
+        "quwoquan_app/lib/realtime/realtime/connection/adapters/longpoll_transport.dart",
         "'userId':",
         "authorizeHttp",
         "RealtimeApiMetadata",
