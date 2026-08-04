@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
 
-import '../../../support/assistant_remote_test_support.dart';
+import '../../../../support/assistant_remote_test_support.dart';
 
 void main() {
   test('SSE 提前断开后携带 canonical resumeToken 续传且事件不重复', () async {

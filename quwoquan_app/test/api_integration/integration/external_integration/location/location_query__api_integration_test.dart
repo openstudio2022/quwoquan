@@ -7,7 +7,7 @@ import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/integration/external_integration/location/adapters/location_query_remote.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-import '../../../support/recording_cloud_operation_telemetry_sink.dart';
+import '../../../../support/recording_cloud_operation_telemetry_sink.dart';
 
 const _gatewayUrl = String.fromEnvironment('GAMMA_GATEWAY_URL');
 

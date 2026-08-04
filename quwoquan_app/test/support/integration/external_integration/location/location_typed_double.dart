@@ -1,11 +1,11 @@
 import 'package:quwoquan_app/cloud/services/integration/location_query_contracts.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-import '../object_scenario_seed_reader.dart';
+import '../../../cloud_services/object_doubles/object_scenario_seed_reader.dart';
 
-final class AlphaLocationQueryAdapter
+final class LocationQueryTypedDouble
     implements NearbyLocationReader, LocationSearchReader {
-  AlphaLocationQueryAdapter({ObjectScenarioSeedReader? fixtures})
+  LocationQueryTypedDouble({ObjectScenarioSeedReader? fixtures})
     : _items = _readItems(fixtures ?? objectScenarioSeedReader);
 
   final List<LocationPoi> _items;
@@ -38,7 +38,7 @@ final class AlphaLocationQueryAdapter
     final decoded = fixtures.document('integration');
     final seedSets = decoded['seedSets'];
     if (seedSets is! Map) {
-      throw FormatException('Integration alpha fixture seedSets is missing');
+      throw FormatException('Integration location fixture seedSets is missing');
     }
     final locationSeed = seedSets['location_poi_core'];
     if (locationSeed is! Map || locationSeed['pois'] is! List) {

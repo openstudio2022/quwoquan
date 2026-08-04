@@ -7,7 +7,7 @@ import 'package:quwoquan_app/cloud/runtime/auth/cloud_auth_token_provider.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
 
-import '../../../support/assistant_remote_test_support.dart';
+import '../../../../support/assistant_remote_test_support.dart';
 
 void main() {
   test(

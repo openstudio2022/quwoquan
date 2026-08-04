@@ -8,7 +8,7 @@ import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
 
-import '../../../support/assistant_remote_test_support.dart';
+import '../../../../support/assistant_remote_test_support.dart';
 
 void main() {
   test('App 不从消息或诊断结果推断长期 AssistantPreference', () {
@@ -18,7 +18,7 @@ void main() {
         'assistant',
         'memory',
         'preference',
-        'preference_' + 'fact_service.dart',
+        'preference_' 'fact_service.dart',
       ].join(Platform.pathSeparator),
     );
     expect(retiredService.existsSync(), isFalse);
@@ -31,12 +31,12 @@ void main() {
       final content = source.readAsStringSync();
       expect(
         content,
-        isNot(contains('buildLongTermPreference' + 'Facts')),
+        isNot(contains('buildLongTermPreference' 'Facts')),
         reason: '${source.path} must not infer persistent preferences',
       );
       expect(
         content,
-        isNot(contains('collectPreference' + 'FactsFromMessages')),
+        isNot(contains('collectPreference' 'FactsFromMessages')),
         reason: '${source.path} must not promote messages into memory',
       );
     }

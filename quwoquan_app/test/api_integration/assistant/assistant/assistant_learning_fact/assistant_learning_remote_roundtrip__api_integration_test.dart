@@ -14,8 +14,8 @@ import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart'
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:uuid/uuid.dart';
 
-import '../../../support/recording_cloud_operation_telemetry_sink.dart';
-import '../../../support/assistant_remote_test_support.dart';
+import '../../../../support/recording_cloud_operation_telemetry_sink.dart';
+import '../../../../support/assistant_remote_test_support.dart';
 
 const _gatewayUrl = String.fromEnvironment(
   'CLOUD_GATEWAY_BASE_URL',
