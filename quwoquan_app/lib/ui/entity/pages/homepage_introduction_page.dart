@@ -12,9 +12,9 @@ import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/components/media/app_media_image.dart';
 import 'package:quwoquan_app/core/models/circle_detail_page_route_extra.dart';
 import 'package:quwoquan_app/ui/entity/models/homepage_route_models.dart';
-import 'package:quwoquan_app/ui/entity/models/homepage_tab.dart';
+import 'package:quwoquan_app/entity/entity_homepage/homepage/domain/homepage_tab.dart';
 import 'package:quwoquan_app/ui/entity/models/homepage_type_labels.dart';
-import 'package:quwoquan_app/ui/entity/providers/homepage_introduction_provider.dart';
+import 'package:quwoquan_app/entity/entity_homepage/homepage/application/homepage_introduction_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 part 'homepage_introduction_page_content.dart';

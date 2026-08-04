@@ -2,7 +2,7 @@ import 'package:quwoquan_app/application/entity/homepage_view_data.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
     show ReferralSource;
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
-import 'package:quwoquan_app/ui/entity/models/homepage_tab.dart';
+import 'package:quwoquan_app/entity/entity_homepage/homepage/domain/homepage_tab.dart';
 
 class HomepagePickerPageRouteExtra {
   const HomepagePickerPageRouteExtra({this.initialSelection});

@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/codec/homepage_wire_codec.dart';
+import 'package:quwoquan_app/entity/entity_homepage/homepage/adapters/homepage_wire_codec.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 
 void main() {
