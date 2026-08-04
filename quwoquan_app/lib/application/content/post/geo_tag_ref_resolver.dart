@@ -1,7 +1,7 @@
 import 'dart:developer' as developer;
 
-import 'package:quwoquan_app/cloud/services/tag/tag_facets.dart';
-import 'package:quwoquan_app/core/geo/administrative_tag_path.dart';
+import 'package:quwoquan_app/tag/tag/tag_node_view/application/tag_catalog_query.dart';
+import 'package:quwoquan_app/tag/tag/tag_node_view/domain/administrative_tag_path.dart';
 
 /// 把发布定位解析成行政区标签 `geoTagRef`。
 ///

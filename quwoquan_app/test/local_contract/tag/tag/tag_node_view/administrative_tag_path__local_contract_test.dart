@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/application/content/post/geo_tag_ref_resolver.dart';
-import 'package:quwoquan_app/cloud/services/tag/tag_facets.dart';
-import 'package:quwoquan_app/core/geo/administrative_tag_path.dart';
+import 'package:quwoquan_app/tag/tag/tag_node_view/application/tag_catalog_query.dart';
+import 'package:quwoquan_app/tag/tag/tag_node_view/domain/administrative_tag_path.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// 对象级 typed double：只认注册过的 tagRef，其余按 tag-service 的

@@ -1,10 +1,11 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import '../../../../support/cloud_services/object_doubles/tag/alpha_tag_facets.dart';
+import '../../../../support/tag/tag/tag_node_view/tag_catalog_typed_double.dart';
+import '../../../../support/tag/tag/tag_feedback_fact/tag_feedback_typed_double.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/application/user/profile/profile_edit_query.dart';
-import 'package:quwoquan_app/cloud/services/tag/tag_facets.dart';
+import 'package:quwoquan_app/tag/tag/tag_node_view/application/tag_catalog_query.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_edit_models.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -19,9 +20,9 @@ void main() {
           profileEditQueryProvider.overrideWith(
             (ref, surface) => const _CareerProfileEditQuery(),
           ),
-          tagCatalogQueryProvider.overrideWithValue(AlphaTagFacet()),
+          tagCatalogQueryProvider.overrideWithValue(TagCatalogTypedDouble()),
           tagFeedbackCommandWriterProvider.overrideWithValue(
-            AlphaTagFeedbackWriter(),
+            TagFeedbackTypedDouble(),
           ),
         ],
         child: const MaterialApp(home: _CareerInterestHost()),
@@ -85,9 +86,9 @@ void main() {
           profileEditQueryProvider.overrideWith(
             (ref, surface) => const _CareerProfileEditQuery(),
           ),
-          tagCatalogQueryProvider.overrideWithValue(AlphaTagFacet()),
+          tagCatalogQueryProvider.overrideWithValue(TagCatalogTypedDouble()),
           tagFeedbackCommandWriterProvider.overrideWithValue(
-            AlphaTagFeedbackWriter(),
+            TagFeedbackTypedDouble(),
           ),
         ],
         child: const MaterialApp(home: _CareerInterestHost()),
@@ -126,7 +127,7 @@ void main() {
             _ReleaseOverrideTagCatalogQuery(remoteReleaseId),
           ),
           tagFeedbackCommandWriterProvider.overrideWithValue(
-            AlphaTagFeedbackWriter(),
+            TagFeedbackTypedDouble(),
           ),
           profileCommandWriterProvider.overrideWithValue(writer),
         ],
@@ -169,10 +170,10 @@ final class _CapturingProfileCommandWriter implements ProfileCommandWriter {
 }
 
 final class _ReleaseOverrideTagCatalogQuery implements TagCatalogQuery {
-  _ReleaseOverrideTagCatalogQuery(this.releaseId) : _inner = AlphaTagFacet();
+  _ReleaseOverrideTagCatalogQuery(this.releaseId) : _inner = TagCatalogTypedDouble();
 
   final String releaseId;
-  final AlphaTagFacet _inner;
+  final TagCatalogTypedDouble _inner;
 
   @override
   Future<List<TagChildView>> listChildren(

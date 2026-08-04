@@ -1,15 +1,15 @@
-import 'package:quwoquan_app/cloud/services/tag/tag_facets.dart';
+import 'package:quwoquan_app/tag/tag/tag_node_view/application/tag_catalog_query.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-import '../object_scenario_seed_reader.dart';
+import '../../../cloud_services/object_doubles/object_scenario_seed_reader.dart';
 
 /// Tag 目录对象级替身：只在 local_contract 中读取 tag-service canonical 场景。
-final class AlphaTagFacet implements TagCatalogQuery {
+final class TagCatalogTypedDouble implements TagCatalogQuery {
   /// 默认发布身份来自 fixture 目录节点自身，与线上「客户端回显 TagChildView.releaseId」
   /// 同构；显式传值只用于构造过期发布的负例。
-  factory AlphaTagFacet({String? taxonomyReleaseId}) {
+  factory TagCatalogTypedDouble({String? taxonomyReleaseId}) {
     final catalog = _loadCatalog();
-    return AlphaTagFacet._(
+    return TagCatalogTypedDouble._(
       taxonomyReleaseId: _requiredTaxonomyReleaseId(
         taxonomyReleaseId ?? catalog.taxonomyReleaseId,
       ),
@@ -17,7 +17,7 @@ final class AlphaTagFacet implements TagCatalogQuery {
     );
   }
 
-  AlphaTagFacet._({required this.taxonomyReleaseId, required this._catalog});
+  TagCatalogTypedDouble._({required this.taxonomyReleaseId, required this._catalog});
 
   final String taxonomyReleaseId;
   final _TagCatalogFixture _catalog;
@@ -111,25 +111,6 @@ final class AlphaTagFacet implements TagCatalogQuery {
       );
     }
     return normalized;
-  }
-}
-
-/// Alpha TagFeedbackFact 替身：进程内追加 + 同 key 幂等（与服务端唯一索引同构）。
-final class AlphaTagFeedbackWriter implements TagFeedbackCommandWriter {
-  final Map<String, ReportTagFeedbackCommand> _byKey =
-      <String, ReportTagFeedbackCommand>{};
-
-  List<ReportTagFeedbackCommand> get recorded =>
-      _byKey.values.toList(growable: false);
-
-  @override
-  Future<TagFeedbackResultView> reportTagFeedback(
-    ReportTagFeedbackCommand command,
-  ) async {
-    final key =
-        '${command.tagRef}\u0000${command.action.wireName}\u0000${command.context ?? ''}';
-    _byKey.putIfAbsent(key, () => command);
-    return const TagFeedbackResultView(accepted: true);
   }
 }
 

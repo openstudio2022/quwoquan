@@ -32,8 +32,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
         ProfileUpdateProposalView,
         ProfileUpdateSnapshot,
         UpdateUserProfileCommand;
-import '../../../../support/cloud_services/object_doubles/tag/alpha_tag_facets.dart'
-    show AlphaTagFacet;
+import '../../../../support/tag/tag/tag_node_view/tag_catalog_typed_double.dart';
 
 import '../../../../support/cloud_services/user_typed_facet_test_support.dart';
 
@@ -387,7 +386,7 @@ void main() {
               const TestRelationshipCapabilityQuery.mutual(),
             ),
           ),
-          tagCatalogQueryProvider.overrideWithValue(AlphaTagFacet()),
+          tagCatalogQueryProvider.overrideWithValue(TagCatalogTypedDouble()),
           currentUserIdProvider.overrideWithValue(currentUserId),
           activePersonaContextProvider.overrideWith(
             (ref) async => const ActivePersonaContextViewData(

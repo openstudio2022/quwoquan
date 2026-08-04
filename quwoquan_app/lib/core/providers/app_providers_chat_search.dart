@@ -8,8 +8,8 @@ import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/context/actor_queue_partition.dart';
 import 'package:quwoquan_app/core/di/generated_operation_client_dependencies.dart';
 import 'package:quwoquan_app/core/services/search_recent_history_store.dart';
-import 'package:quwoquan_app/cloud/remote/tag/tag_catalog_remote.dart';
-import 'package:quwoquan_app/cloud/services/tag/tag_facets.dart';
+import 'package:quwoquan_app/tag/tag/tag_node_view/adapters/tag_catalog_remote.dart';
+import 'package:quwoquan_app/tag/tag/tag_node_view/application/tag_catalog_query.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
@@ -613,7 +613,7 @@ final greetingRepositoryProvider = Provider<GreetingRepository>((ref) {
 });
 
 /// TagCatalogQuery（标签层级/解析/校验）：
-/// production Remote-only（08 Mock 隔离），alpha 经 override 注入 AlphaTagFacet。
+/// production Remote-only（08 Mock 隔离），alpha 经 override 注入 TagCatalogTypedDouble。
 final tagCatalogQueryProvider = Provider<TagCatalogQuery>((ref) {
   return RemoteGeneratedTagCatalogQuery(
     client: ref.watch(generatedCloudOperationClientProvider),

@@ -1,6 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/core/utils/tag_ref_label.dart';
+import 'package:quwoquan_app/tag/tag/tag_node_view/domain/tag_ref_label.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show HomepageReviewView;
 

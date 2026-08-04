@@ -4,14 +4,14 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/career-interest-profile-editor/spec.md#gwt-004
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-006
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/services/tag/tag_facets.dart';
-import '../../../support/cloud_services/repository_mock_reexports.dart';
+import 'package:quwoquan_app/tag/tag/tag_node_view/application/tag_catalog_query.dart';
+import '../../../../support/tag/tag/tag_node_view/tag_catalog_typed_double.dart';
 
 void main() {
   test(
     'career and interest profile catalog comes from Audience user roots',
     () async {
-      final repo = AlphaTagFacet();
+      final repo = TagCatalogTypedDouble();
 
       final occupationCategories = await repo.listChildren(
         TagTaxonomyRefs.careerOccupationRoot,

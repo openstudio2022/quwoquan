@@ -1,5 +1,5 @@
 import 'package:quwoquan_app/cloud/runtime/generated/tag/tag_request_page_ids.g.dart';
-import 'package:quwoquan_app/cloud/services/tag/tag_facets.dart';
+import 'package:quwoquan_app/tag/tag/tag_node_view/application/tag_catalog_query.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 typedef TagCatalogInvocationContextFactory =

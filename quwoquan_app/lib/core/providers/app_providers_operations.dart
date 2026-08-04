@@ -8,7 +8,7 @@ import 'package:quwoquan_app/application/user/profile/profile_edit_query.dart';
 import 'package:quwoquan_app/application/user/profile/profile_query.dart';
 import 'package:quwoquan_app/application/account/user_settings/blocked_keyword_writer.dart';
 import 'package:quwoquan_app/core/di/generated_operation_client_dependencies.dart';
-import 'package:quwoquan_app/cloud/services/tag/tag_facets.dart';
+import 'package:quwoquan_app/tag/tag/tag_feedback_fact/application/tag_feedback_command_writer.dart';
 import 'package:quwoquan_app/cloud/remote/search/hot_query_remote.dart';
 import 'package:quwoquan_app/cloud/remote/user/persona/persona_remote.dart';
 import 'package:quwoquan_app/cloud/remote/user/persona_relationship/persona_relationship_follow_remote.dart';
@@ -25,7 +25,7 @@ import 'package:quwoquan_app/cloud/remote/user/greeting_request/greeting_request
 import 'package:quwoquan_app/cloud/remote/user/persona_relationship/persona_relationship_remote.dart';
 import 'package:quwoquan_app/cloud/remote/search/recent_search_remote.dart';
 import 'package:quwoquan_app/cloud/remote/search/search_feedback_remote.dart';
-import 'package:quwoquan_app/cloud/remote/tag/tag_feedback_fact_remote.dart';
+import 'package:quwoquan_app/tag/tag/tag_feedback_fact/adapters/tag_feedback_fact_remote.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/platform/location/geolocator_location_gateway.dart';
 import 'package:quwoquan_app/core/platform/location/location_gateway.dart';

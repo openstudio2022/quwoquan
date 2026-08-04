@@ -1,17 +1,17 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/career-interest-profile-editor/spec.md#gwt-001
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/career-interest-profile-editor/spec.md#gwt-002
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/services/tag/tag_facets.dart';
-import '../../../support/cloud_services/repository_mock_reexports.dart';
+import 'package:quwoquan_app/tag/tag/tag_node_view/application/tag_catalog_query.dart';
+import '../../../../support/tag/tag/tag_node_view/tag_catalog_typed_double.dart';
 
 void main() {
-  late AlphaTagFacet query;
+  late TagCatalogTypedDouble query;
 
   setUp(() {
-    query = AlphaTagFacet();
+    query = TagCatalogTypedDouble();
   });
 
-  group('Alpha TagCatalog 与 Remote 查询语义对等', () {
+  group('TagCatalog 对象替身 与 Remote 查询语义对等', () {
     test('目录和解析只返回 immutable fixture 中存在的 canonical tag', () async {
       final provinces = await query.listChildren(
         TagTaxonomyRefs.chinaAdminRegionRoot,

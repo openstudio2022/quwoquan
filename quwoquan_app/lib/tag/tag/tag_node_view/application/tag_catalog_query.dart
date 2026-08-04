@@ -26,10 +26,3 @@ abstract interface class TagCatalogQuery {
     required List<String> tagRefs,
   });
 }
-
-/// TagFeedbackFact 的 App append port。
-abstract interface class TagFeedbackCommandWriter {
-  Future<TagFeedbackResultView> reportTagFeedback(
-    ReportTagFeedbackCommand command,
-  );
-}
