@@ -29,7 +29,7 @@ import 'package:quwoquan_app/ui/chat/providers/notification_inbox_provider.dart'
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show AppMessage, NotificationType;
 import 'package:quwoquan_app/ui/chat/widgets/chat_conversation_avatar_tokens.dart';
-import 'package:quwoquan_app/ops/product_ops/visit_record/presentation/chat_page_visit_recorder.dart';
+import 'package:quwoquan_app/ui/chat/pages/chat_page_visit_recorder.dart';
 import 'package:quwoquan_app/chat/chat/conversation/domain/chat_contact_initials.dart';
 part 'chat_page_state.dart';
 
