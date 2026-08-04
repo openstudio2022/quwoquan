@@ -13,8 +13,8 @@ import 'package:quwoquan_app/components/media/picker/image_pick_gateway.dart';
 import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/ui/circle/models/circle_page_tab.dart';
-import 'package:quwoquan_app/ui/circle/models/circle_edit_submit_payload.dart';
-import 'package:quwoquan_app/ui/circle/providers/circle_state_provider.dart';
+import 'package:quwoquan_app/circle/circle_management/circle/domain/circle_edit_submit_payload.dart';
+import 'package:quwoquan_app/circle/circle_management/circle/application/circle_state_provider.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show
         Circle,

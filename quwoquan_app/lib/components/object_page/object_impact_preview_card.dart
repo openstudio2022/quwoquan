@@ -11,7 +11,7 @@ import 'package:quwoquan_app/components/object_page/intersection_target_navigato
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
-import 'package:quwoquan_app/ui/circle/providers/circle_impact_provider.dart';
+import 'package:quwoquan_app/circle/circle_management/circle/application/circle_impact_provider.dart';
 import 'package:quwoquan_app/ui/entity/providers/entity_impact_provider.dart';
 
 /// 对象页「打动」预览卡目标（实体 homepage / 圈子 circle）。

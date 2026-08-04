@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/ui/circle/models/circle_edit_submit_payload.dart';
-import 'package:quwoquan_app/ui/circle/models/circle_stats_view_data.dart';
+import 'package:quwoquan_app/circle/circle_management/circle/domain/circle_edit_submit_payload.dart';
+import 'package:quwoquan_app/circle/circle_management/circle/domain/circle_stats_view_data.dart';
 import 'package:quwoquan_cloud_contracts/generated/circle_contracts.dart';
 
 // spec_ref: specs/feature-tree/circle-community/circle-experience-redesign/circle-homepage-redesign/spec.md#gwt-001

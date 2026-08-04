@@ -2,7 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/components/object_page/object_action_bar.dart';
 import 'package:quwoquan_app/components/object_page/profile_ios_components.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/ui/circle/providers/circle_state_provider.dart';
+import 'package:quwoquan_app/circle/circle_management/circle/application/circle_state_provider.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show CircleJoinPolicy;
 

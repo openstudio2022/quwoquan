@@ -10,8 +10,8 @@ import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/ui/circle/models/circle_stats_list_view_data.dart';
-import 'package:quwoquan_app/ui/circle/services/circle_stats_row_wire.dart';
+import 'package:quwoquan_app/circle/circle_management/circle/domain/circle_stats_list_view_data.dart';
+import 'package:quwoquan_app/circle/circle_management/circle/adapters/circle_stats_row_wire.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// 圈子成员/群聊/粉丝/获赞列表页（1:1 对应 AuthorStatsList 的 members/groups/fans/likes 圈子维度）

@@ -5,7 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/components/post/post_preview_list_tile.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/ui/circle/providers/circle_state_provider.dart';
+import 'package:quwoquan_app/circle/circle_management/circle/application/circle_state_provider.dart';
 import 'package:quwoquan_app/ui/circle/widgets/section_creations.dart';
 import 'package:quwoquan_app/ui/circle/widgets/section_chat.dart';
 import 'package:quwoquan_app/ui/circle/widgets/section_storage.dart';

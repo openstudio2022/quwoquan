@@ -5,8 +5,8 @@ import 'package:quwoquan_app/assistant/observability/logging/app_exception_telem
 import 'package:quwoquan_app/cloud/circle/generated/circle_membership_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/ui/circle/models/circle_stats_view_data.dart';
-import 'package:quwoquan_app/ui/circle/models/circle_tab.dart';
+import 'package:quwoquan_app/circle/circle_management/circle/domain/circle_stats_view_data.dart';
+import 'package:quwoquan_app/circle/circle_management/circle/domain/circle_tab.dart';
 import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 

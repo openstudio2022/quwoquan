@@ -2,8 +2,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
-import 'package:quwoquan_app/ui/circle/models/circle_stats_list_view_data.dart';
-import 'package:quwoquan_app/ui/circle/services/circle_stats_row_wire.dart';
+import 'package:quwoquan_app/circle/circle_management/circle/domain/circle_stats_list_view_data.dart';
+import 'package:quwoquan_app/circle/circle_management/circle/adapters/circle_stats_row_wire.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// 圈子成员板块：展示成员摘要列表（含独立 loading/error 状态）。
