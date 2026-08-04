@@ -35,7 +35,7 @@ import 'package:quwoquan_app/components/content/intersection_reason_chip.dart';
 import 'package:quwoquan_app/core/models/circle_detail_page_route_extra.dart';
 import 'package:quwoquan_app/ui/entity/models/homepage_tab.dart';
 import 'package:quwoquan_app/ui/entity/models/homepage_type_labels.dart';
-import 'package:quwoquan_app/ui/entity/widgets/homepage_review_section.dart';
+import 'package:quwoquan_app/entity/entity_homepage/homepage_review/presentation/homepage_review_section.dart';
 
 part 'homepage_detail_shell_components.dart';
 part 'homepage_detail_shell_components2.dart';
