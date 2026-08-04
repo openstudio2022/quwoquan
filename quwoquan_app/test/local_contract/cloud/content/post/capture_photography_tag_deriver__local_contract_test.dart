@@ -2,7 +2,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/application/content/post/capture_photography_tag_deriver.dart';
 import 'package:quwoquan_app/core/geo/solar_position.dart';
-import 'package:quwoquan_app/core/media/media_capture_metadata.dart';
+import 'package:quwoquan_app/content/media/media_upload_session/domain/media_capture_metadata.dart';
 
 const _deriver = CapturePhotographyTagDeriver();
 

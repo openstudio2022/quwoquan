@@ -6,7 +6,7 @@ import 'package:photo_manager/photo_manager.dart';
 import 'package:quwoquan_app/components/media/image/editor/filter/image_editor_filter_models.dart';
 import 'package:quwoquan_app/components/media/image/editor/filter/image_editor_filter_repository.dart';
 import 'package:quwoquan_app/components/media/picker/create_media_picker_page.dart';
-import 'package:quwoquan_app/components/media/picker/create_media_picker_presentation.dart';
+import 'package:quwoquan_app/content/media/media_upload_session/presentation/create_media_picker_presentation.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/models/create_media_models.dart';

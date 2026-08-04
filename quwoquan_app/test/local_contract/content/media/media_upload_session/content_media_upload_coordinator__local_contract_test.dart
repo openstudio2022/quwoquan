@@ -11,7 +11,7 @@ import 'package:quwoquan_app/core/telemetry/app_telemetry_reporter.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
-import '../../../support/recording_content_media_facet.dart';
+import '../../../../support/recording_content_media_facet.dart';
 
 void main() {
   group('ContentMediaUploadCoordinator commercial contract', () {

@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/components/media/picker/desktop/desktop_picker_services.dart';
+import 'package:quwoquan_app/content/media/media_upload_session/adapters/desktop_picker_services.dart';
 import 'package:quwoquan_app/core/models/create_media_models.dart';
 import 'package:quwoquan_app/core/platform/platform_capabilities.dart';
 import 'package:shared_preferences/shared_preferences.dart';

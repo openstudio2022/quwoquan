@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:image/image.dart' as img;
-import 'package:quwoquan_app/core/media/media_capture_metadata.dart';
+import 'package:quwoquan_app/content/media/media_upload_session/domain/media_capture_metadata.dart';
 
 /// 从原始图片字节解析拍摄元数据。
 ///

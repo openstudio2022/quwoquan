@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/core/media/media_capture_metadata.dart';
+import 'package:quwoquan_app/content/media/media_upload_session/domain/media_capture_metadata.dart';
 import 'package:quwoquan_app/ui/content/models/publish_settings_models.dart';
 
 void main() {

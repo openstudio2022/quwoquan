@@ -13,7 +13,7 @@ import 'package:quwoquan_app/cloud/remote/content/media/local_media_upload_sourc
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
-import '../../../support/recording_content_media_facet.dart';
+import '../../../../support/recording_content_media_facet.dart';
 
 void main() {
   test('retry 只使用有界全抖动，不存在确定性指数延迟', () {

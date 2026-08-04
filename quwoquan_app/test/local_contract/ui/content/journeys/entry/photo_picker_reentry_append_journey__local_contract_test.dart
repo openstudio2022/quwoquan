@@ -7,13 +7,12 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:camera/camera.dart';
 import 'package:photo_manager/photo_manager.dart';
-import '../../../../../support/cloud_services/repository_mock_reexports.dart';
 import 'package:quwoquan_app/components/media/camera/camera_capture_page.dart';
-import 'package:quwoquan_app/components/media/camera/camera_session_models.dart';
+import 'package:quwoquan_app/content/media/media_upload_session/presentation/camera_session_models.dart';
 import 'package:quwoquan_app/components/media/image/editor/filter/image_editor_filter_models.dart';
 import 'package:quwoquan_app/components/media/image/editor/filter/image_editor_filter_repository.dart';
 import 'package:quwoquan_app/components/media/picker/create_media_picker_page.dart';
-import 'package:quwoquan_app/components/media/picker/create_media_picker_presentation.dart';
+import 'package:quwoquan_app/content/media/media_upload_session/presentation/create_media_picker_presentation.dart';
 import 'package:quwoquan_app/core/models/create_media_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/app_permission_coordinator.dart';
@@ -27,6 +26,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../../support/cloud_services/content_facet_overrides.dart';
 import '../../../../../support/cloud_services/content/mock_content_repository.dart';
+import '../../../../../support/cloud_services/repository_mock_reexports.dart';
 
 class _AuthedSessionStore implements AuthSessionStore {
   const _AuthedSessionStore();

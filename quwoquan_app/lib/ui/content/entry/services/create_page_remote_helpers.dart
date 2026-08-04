@@ -1,8 +1,8 @@
 import 'package:quwoquan_app/application/content/media/content_media_upload_coordinator.dart';
-import 'package:quwoquan_app/application/content/media/content_media_cover_selection.dart';
+import 'package:quwoquan_app/content/media/media_upload_session/application/content_media_cover_selection.dart';
 import 'package:quwoquan_app/core/telemetry/app_telemetry_reporter.dart';
-import 'package:quwoquan_app/ui/content/entry/services/create_page_article_media_projection.dart';
-import 'package:quwoquan_app/ui/content/entry/services/create_page_article_media_uploader.dart';
+import 'package:quwoquan_app/content/media/media_upload_session/adapters/create_page_article_media_projection.dart';
+import 'package:quwoquan_app/content/media/media_upload_session/adapters/create_page_article_media_uploader.dart';
 import 'package:quwoquan_app/ui/content/entry/services/prepared_post_publication_payload.dart';
 import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/models/publish_settings_models.dart';
@@ -10,7 +10,7 @@ import 'package:quwoquan_app/ui/content/article_render/markdown/qwq_markdown.dar
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 export 'package:quwoquan_app/ui/content/entry/services/prepared_post_publication_payload.dart';
-export 'package:quwoquan_app/ui/content/entry/services/create_page_article_media_projection.dart'
+export 'package:quwoquan_app/content/media/media_upload_session/adapters/create_page_article_media_projection.dart'
     show
         buildArticleAssetManifestForPayload,
         buildArticleRenderProfileForPayload;

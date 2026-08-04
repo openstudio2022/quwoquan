@@ -1,5 +1,5 @@
 import 'package:quwoquan_app/application/entity/homepage_view_data.dart';
-import 'package:quwoquan_app/core/media/media_capture_metadata.dart';
+import 'package:quwoquan_app/content/media/media_upload_session/domain/media_capture_metadata.dart';
 import 'package:quwoquan_cloud_contracts/generated/integration_contracts.dart'
     show LocationPoi;
 

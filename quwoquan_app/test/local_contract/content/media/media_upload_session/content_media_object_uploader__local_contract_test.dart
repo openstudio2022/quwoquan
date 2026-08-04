@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/application/content/media/content_media_upload_coordinator.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
-import 'package:quwoquan_app/cloud/remote/content/media/content_media_object_uploader.dart';
+import 'package:quwoquan_app/content/media/media_upload_session/adapters/content_media_object_uploader.dart';
 
 void main() {
   const digest =

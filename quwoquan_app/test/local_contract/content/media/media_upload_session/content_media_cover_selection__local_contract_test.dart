@@ -1,12 +1,12 @@
 // spec_ref: specs/feature-tree/runtime/runtime-media/media-upload-and-storage/spec.md#gwt-001
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/application/content/media/content_media_cover_selection.dart';
+import 'package:quwoquan_app/content/media/media_upload_session/application/content_media_cover_selection.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
-import '../../../support/runtime_failure_fixtures.dart';
+import '../../../../support/runtime_failure_fixtures.dart';
 
 void main() {
   test(

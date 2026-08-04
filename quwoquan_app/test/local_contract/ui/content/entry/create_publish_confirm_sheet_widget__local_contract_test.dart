@@ -6,7 +6,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/core/application/content/create_location_coordinator.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
-import 'package:quwoquan_app/core/media/media_capture_metadata.dart';
+import 'package:quwoquan_app/content/media/media_upload_session/domain/media_capture_metadata.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
 import 'package:quwoquan_app/ui/content/models/publish_settings_models.dart';

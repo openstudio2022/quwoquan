@@ -10,7 +10,7 @@ import 'package:quwoquan_app/cloud/runtime/context/actor_queue_partition.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_consent_store.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/content/content/comment/adapters/comment_draft_store.dart';
-import 'package:quwoquan_app/components/media/picker/desktop/desktop_picker_services.dart';
+import 'package:quwoquan_app/content/media/media_upload_session/adapters/desktop_picker_services.dart';
 import 'package:quwoquan_app/core/di/ops_event_dependencies.dart';
 import 'package:quwoquan_app/core/di/runtime_observability_dependencies.dart';
 import 'package:quwoquan_app/core/emoji/emoji_providers.dart';

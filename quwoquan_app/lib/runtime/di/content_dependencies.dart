@@ -1,7 +1,7 @@
 import 'package:quwoquan_app/application/content/media/content_media_upload_coordinator.dart';
 import 'package:quwoquan_app/application/content/post/post_publication_status_reader.dart';
 import 'package:quwoquan_app/cloud/remote/content/filter_catalog/filter_catalog_remote.dart';
-import 'package:quwoquan_app/cloud/remote/content/media/content_media_object_uploader.dart';
+import 'package:quwoquan_app/content/media/media_upload_session/adapters/content_media_object_uploader.dart';
 import 'package:quwoquan_app/cloud/remote/content/media/content_media_remote.dart';
 import 'package:quwoquan_app/content/content/outbound_share_fact/adapters/outbound_share_remote.dart';
 import 'package:quwoquan_app/cloud/remote/content/post/author_impact_remote.dart';

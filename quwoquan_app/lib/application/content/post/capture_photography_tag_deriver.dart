@@ -1,5 +1,5 @@
 import 'package:quwoquan_app/core/geo/solar_position.dart';
-import 'package:quwoquan_app/core/media/media_capture_metadata.dart';
+import 'package:quwoquan_app/content/media/media_upload_session/domain/media_capture_metadata.dart';
 
 /// 摄影标签在标签树中的根路径。
 const String kPhotographyTagRoot = 'Topic/摄影';

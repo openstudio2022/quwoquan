@@ -1,7 +1,7 @@
 // spec_ref: specs/feature-tree/discovery-content/content-type-framework/creation-mode-and-surface-ia-unification/spec.md#gwt-001
 // spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/post-create-update/spec.md#gwt-001
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/components/media/picker/create_media_picker_presentation.dart';
+import 'package:quwoquan_app/content/media/media_upload_session/presentation/create_media_picker_presentation.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/models/create_media_models.dart';
 import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';

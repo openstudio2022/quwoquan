@@ -2,7 +2,7 @@ import 'package:camera/camera.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/components/media/camera/camera_capture_page.dart';
-import 'package:quwoquan_app/components/media/camera/camera_session_models.dart';
+import 'package:quwoquan_app/content/media/media_upload_session/presentation/camera_session_models.dart';
 import 'package:quwoquan_app/components/media/image/editor/filter/image_editor_filter_models.dart';
 import 'package:quwoquan_app/components/media/image/editor/filter/image_editor_filter_repository.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';

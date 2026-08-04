@@ -2,7 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
-import 'package:quwoquan_app/core/media/media_capture_metadata.dart';
+import 'package:quwoquan_app/content/media/media_upload_session/domain/media_capture_metadata.dart';
 import 'package:quwoquan_app/core/media/media_capture_metadata_extractor.dart';
 
 /// `Rational` 未从 `package:image` 公开导出，只能借 [img.IfdValueRational] 中转

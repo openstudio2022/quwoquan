@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/components/media/picker/desktop/desktop_image_album_scanner.dart';
+import 'package:quwoquan_app/content/media/media_upload_session/adapters/desktop_image_album_scanner.dart';
 import 'package:quwoquan_app/core/platform/file_storage_gateway.dart';
 
 /// 内存目录树驱动的 [FileStorageGateway]，只实现 [listDirectory]，其余抛错以

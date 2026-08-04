@@ -4,7 +4,6 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/app/providers/startup_auth_restore_gate_provider.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
-import '../../../../support/cloud_services/repository_mock_reexports.dart';
 import 'package:quwoquan_app/core/models/create_media_models.dart';
 import 'package:quwoquan_app/core/platform/platform_capabilities.dart';
 import 'package:quwoquan_app/core/platform/platform_target.dart';
@@ -19,6 +18,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../support/cloud_services/content_facet_overrides.dart';
 import '../../../../support/cloud_services/content/mock_content_repository.dart';
 import '../../../../support/fakes/test_auth_facets.dart';
+import '../../../../support/cloud_services/repository_mock_reexports.dart';
 
 void main() {
   setUp(() {

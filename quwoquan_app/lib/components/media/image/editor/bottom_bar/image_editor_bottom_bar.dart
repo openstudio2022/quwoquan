@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:quwoquan_app/components/media/image/editor/tool_list/image_editor_tool_constants.dart';
 import 'package:quwoquan_app/components/media/image/editor/tool_list/image_editor_tool_entry_chip.dart';
-import 'package:quwoquan_app/components/media/shared/media_creation_bottom_button.dart';
+import 'package:quwoquan_app/content/media/media_upload_session/presentation/media_creation_bottom_button.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';

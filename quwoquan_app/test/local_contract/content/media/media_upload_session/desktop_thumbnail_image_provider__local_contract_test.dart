@@ -3,7 +3,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/painting.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/components/media/picker/desktop/desktop_thumbnail_image_provider.dart';
+import 'package:quwoquan_app/content/media/media_upload_session/presentation/desktop_thumbnail_image_provider.dart';
 import 'package:quwoquan_app/core/platform/file_storage_gateway.dart';
 
 class _BytesGateway implements FileStorageGateway {
