@@ -7,7 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/app/providers/accessibility_provider.dart';
 import 'package:quwoquan_app/assistant/capabilities/assistant_presentation_capability_catalog.dart';
-import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/runtime_enums.dart';
 import 'package:quwoquan_app/core/design_system/providers/theme_provider.dart';
 import 'package:quwoquan_app/core/di/ops_event_dependencies.dart';
 import 'package:quwoquan_app/core/platform/platform_target.dart';

@@ -1,16 +1,16 @@
 // ASSISTANT_WEAK_TYPE: EXTENSION_MAP — 会话持久化消息 Map；子树用 codegen/Codec 收窄。
 
-import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
-import 'package:quwoquan_app/assistant/contracts/orchestrator_state_contract.dart';
-import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
-import 'package:quwoquan_app/assistant/contracts/system_context_envelope.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/assistant_journey.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/orchestrator_state_contract.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/run_artifacts.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/system_context_envelope.dart';
 import 'package:quwoquan_app/assistant/contracts/task_graph_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/turn_synthesis_state_contract.dart';
-import 'package:quwoquan_app/assistant/contracts/understanding_result_contract.dart';
-import 'package:quwoquan_app/assistant/protocol/assistant_display_state_projection.dart';
-import 'package:quwoquan_app/assistant/protocol/assistant_process_timeline.dart';
-import 'package:quwoquan_app/assistant/protocol/assistant_display_text_resolver.dart';
-import 'package:quwoquan_app/assistant/protocol/understanding_snapshot_codec.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/understanding_result_contract.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/assistant_display_state_projection.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/assistant_process_timeline.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/assistant_display_text_resolver.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/understanding_snapshot_codec.dart';
 
 part 'persisted_assistant_turn_timeline_helpers.dart';
 

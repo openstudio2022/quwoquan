@@ -1,6 +1,6 @@
 // spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/context-assembly-slot-filling/spec.md#gwt-001
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/assistant/contracts/slot_schema.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/slot_schema.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {

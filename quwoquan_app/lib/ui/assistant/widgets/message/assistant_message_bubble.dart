@@ -2,14 +2,14 @@ import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/assistant_presentation_document.g.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/assistant_presentation_node.g.dart';
-import 'package:quwoquan_app/assistant/protocol/assistant_display_state_projection.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/assistant_display_state_projection.dart';
 import 'package:quwoquan_app/assistant/transcript/citation/assistant_citation.dart';
 import 'package:quwoquan_app/assistant/transcript/persisted_timeline/persisted_timeline_turn_codec.dart';
 import 'package:quwoquan_app/assistant/transcript/row/assistant_transcript_timeline_row.dart';
-import 'package:quwoquan_app/assistant/protocol/assistant_display_text_resolver.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/assistant_display_text_resolver.dart';
 import 'package:quwoquan_app/components/assistant/assistant_avatar.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/components/conversation/message_bubble_frame.dart';

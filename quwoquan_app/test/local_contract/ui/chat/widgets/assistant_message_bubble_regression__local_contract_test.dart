@@ -2,11 +2,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
-import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
-import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
-import 'package:quwoquan_app/assistant/protocol/assistant_display_state_projection.dart';
-import 'package:quwoquan_app/assistant/protocol/assistant_process_timeline.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/assistant_journey.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/run_artifacts.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/runtime_enums.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/assistant_display_state_projection.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/assistant_process_timeline.dart';
 import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';

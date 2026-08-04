@@ -3,7 +3,7 @@ import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
-import 'package:quwoquan_app/ui/assistant/config/assistant_prompt_config.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/assistant_prompt_config.dart';
 
 class AssistantSessionEmptyState extends StatelessWidget {
   const AssistantSessionEmptyState({

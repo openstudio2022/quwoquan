@@ -1,6 +1,6 @@
-import 'package:quwoquan_app/assistant/infrastructure/llm/llm_response_parser.dart';
-import 'package:quwoquan_app/assistant/protocol/assistant_content_filters.dart';
-import 'package:quwoquan_app/assistant/protocol/assistant_display_text_resolver.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/llm_response_parser.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/assistant_content_filters.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/assistant_display_text_resolver.dart';
 
 final RegExp _xmlToolCallTagRe = RegExp(
   r'<tool_call>[\s\S]*?</tool_call>|'

@@ -1,7 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:quwoquan_app/assistant/capabilities/assistant_presentation_capability_catalog.dart';
-import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/assistant_presentation_document.g.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/assistant_presentation_node.g.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';

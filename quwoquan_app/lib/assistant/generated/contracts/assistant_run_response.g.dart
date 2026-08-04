@@ -2,8 +2,8 @@
 
 // ignore_for_file: avoid_classes_with_only_static_members
 
-import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
-import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/assistant_journey.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/assistant_journey.g.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/assistant_presentation_document.g.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/assistant_run_runtime.g.dart';

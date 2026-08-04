@@ -1,9 +1,9 @@
 // ASSISTANT_WEAK_TYPE: EXTENSION_MAP — 时间轴协议 Map 与 persisted turn 键空间（与 Codec 对齐）。
 
-import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
-import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/assistant_journey.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
-import 'package:quwoquan_app/assistant/protocol/understanding_snapshot_codec.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/understanding_snapshot_codec.dart';
 import 'package:quwoquan_app/assistant/transcript/persisted_timeline/persisted_timeline_turn_codec.dart';
 import 'package:quwoquan_app/assistant/transcript/row/assistant_transcript_timeline_row.dart';
 

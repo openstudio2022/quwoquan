@@ -7,7 +7,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:markdown/markdown.dart' as md;
-import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/assistant_presentation_document.g.dart';
 import 'package:quwoquan_app/assistant/transcript/citation/assistant_citation.dart';
 import 'package:quwoquan_app/assistant/transcript/row/assistant_transcript_timeline_row.dart';

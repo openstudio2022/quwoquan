@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/assistant/protocol/assistant_display_state_projection.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/assistant_display_state_projection.dart';
 
 void main() {
   testWidgets('iPad 成答失败不会把 assistant_turn JSON 展示为最终答案', (tester) async {

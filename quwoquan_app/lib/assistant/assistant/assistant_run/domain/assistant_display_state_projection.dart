@@ -1,7 +1,7 @@
-import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
-import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
-import 'package:quwoquan_app/assistant/protocol/assistant_content_filters.dart';
-import 'package:quwoquan_app/assistant/protocol/assistant_process_timeline.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/run_artifacts.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/runtime_enums.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/assistant_content_filters.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/assistant_process_timeline.dart';
 import 'package:quwoquan_app/assistant/transcript/citation/citation_destination_resolver.dart';
 import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
 

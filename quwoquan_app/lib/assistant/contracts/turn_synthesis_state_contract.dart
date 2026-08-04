@@ -1,4 +1,4 @@
-import 'package:quwoquan_app/assistant/contracts/orchestrator_state_contract.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/orchestrator_state_contract.dart';
 
 class TurnSynthesisState {
   const TurnSynthesisState({

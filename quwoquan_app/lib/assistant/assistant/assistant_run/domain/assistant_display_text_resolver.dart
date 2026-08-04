@@ -1,9 +1,9 @@
 import 'dart:convert';
 
 import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
-import 'package:quwoquan_app/assistant/protocol/assistant_content_filters.dart';
-import 'package:quwoquan_app/assistant/protocol/assistant_display_state_projection.dart';
-import 'package:quwoquan_app/assistant/infrastructure/llm/llm_response_parser.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/assistant_content_filters.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/assistant_display_state_projection.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/llm_response_parser.dart';
 
 class AssistantDisplayProjection {
   const AssistantDisplayProjection({required this.markdown});

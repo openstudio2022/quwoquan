@@ -3,11 +3,11 @@ import 'dart:developer' as developer;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
-import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
-import 'package:quwoquan_app/assistant/protocol/assistant_process_timeline.dart';
-import 'package:quwoquan_app/assistant/protocol/assistant_presentation_stream_projection.dart';
-import 'package:quwoquan_app/assistant/protocol/assistant_run_stream_event.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/assistant_journey.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/run_artifacts.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/assistant_process_timeline.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/assistant_presentation_stream_projection.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/assistant_run_stream_event.dart';
 import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/assistant/transcript/assistant_answer/assistant_answer_anchor.dart';
 import 'package:quwoquan_app/assistant/transcript/persisted_timeline/persisted_assistant_timeline_payload.dart';

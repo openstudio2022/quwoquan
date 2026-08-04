@@ -1,4 +1,4 @@
-import 'package:quwoquan_app/assistant/protocol/assistant_display_state_projection.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/assistant_display_state_projection.dart';
 import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 
 /// C4 持久化块允许的顶层键（与 [buildPersistedAssistantTurnFields] 及 controller spread 对齐）。

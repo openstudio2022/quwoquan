@@ -1,4 +1,4 @@
-import 'package:quwoquan_app/assistant/contracts/subagent_plan.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/subagent_plan.dart';
 
 class SkillRouteTarget {
   const SkillRouteTarget({

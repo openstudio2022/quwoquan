@@ -3,9 +3,9 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
-import 'package:quwoquan_app/assistant/infrastructure/llm/llm_response_parser.dart';
-import 'package:quwoquan_app/assistant/infrastructure/streaming/assistant_stream_chunk_visibility.dart';
-import 'package:quwoquan_app/assistant/protocol/assistant_display_text_resolver.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/llm_response_parser.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/assistant_stream_chunk_visibility.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/assistant_display_text_resolver.dart';
 
 // spec_ref: specs/feature-tree/assistant-run-learning/spec.md#dom-001
 void main() {

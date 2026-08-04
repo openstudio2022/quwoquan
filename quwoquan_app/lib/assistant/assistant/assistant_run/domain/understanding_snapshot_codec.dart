@@ -1,4 +1,4 @@
-import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/run_artifacts.dart';
 
 RunArtifactsUnderstandingSnapshot parseRunArtifactsUnderstandingSnapshot(
   Object? raw,

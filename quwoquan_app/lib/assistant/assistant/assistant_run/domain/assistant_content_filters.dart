@@ -1,4 +1,4 @@
-import 'package:quwoquan_app/assistant/protocol/display_text_classifier.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/display_text_classifier.dart';
 
 /// 集中管理 assistant 内容过滤逻辑的唯一真相。
 ///

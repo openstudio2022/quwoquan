@@ -2,16 +2,16 @@
 
 // ignore_for_file: avoid_classes_with_only_static_members
 
-import 'package:quwoquan_app/assistant/contracts/aggregation_state.dart';
-import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/aggregation_state.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_preference_snapshot.dart';
-import 'package:quwoquan_app/assistant/contracts/orchestrator_state_contract.dart';
-import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
-import 'package:quwoquan_app/assistant/contracts/skill_run.dart';
-import 'package:quwoquan_app/assistant/contracts/subagent_plan.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/orchestrator_state_contract.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/run_artifacts.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/skill_run.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/subagent_plan.dart';
 import 'package:quwoquan_app/assistant/contracts/task_graph_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/turn_synthesis_state_contract.dart';
-import 'package:quwoquan_app/assistant/contracts/understanding_result_contract.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/understanding_result_contract.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/assistant_presentation_document.g.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/assistant_run_runtime.g.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';

@@ -1,4 +1,4 @@
-import 'package:quwoquan_app/assistant/contracts/planner_contracts.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/planner_contracts.dart';
 
 // Runtime-only protocol boundary:
 // - This wrapper is derived from planner runtime enums and is not a shared

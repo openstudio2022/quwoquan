@@ -2,7 +2,7 @@
 // spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/adaptive-presentation-runtime/spec.md#gwt-002
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/assistant/capabilities/assistant_presentation_capability_catalog.dart';
-import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/runtime_enums.dart';
 
 void main() {
   test('rich personal surface exposes every implemented structural node', () {

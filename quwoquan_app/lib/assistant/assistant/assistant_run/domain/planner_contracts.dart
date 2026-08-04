@@ -3,10 +3,10 @@
 // generated metadata contract. Shared protocol fields must live in assistant
 // metadata/codegen rather than expanding this file.
 
-export 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+export 'package:quwoquan_app/assistant/assistant/assistant_run/domain/runtime_enums.dart';
 export 'package:quwoquan_app/assistant/generated/contracts/planner_contracts.g.dart';
 
-import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/planner_contracts.g.dart';
 
 class SlotFillPlan extends SlotFillPlanDto {

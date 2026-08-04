@@ -1,6 +1,6 @@
 // ASSISTANT_WEAK_TYPE: EXTENSION_MAP — `openContext.hints.privacyPolicy` 为开放配置 JSON。
 
-import 'package:quwoquan_app/assistant/capabilities/capabilities.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/capabilities.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 
 /// 私助打开上下文里 `privacyPolicy` 子树的只读投影与默认表。
