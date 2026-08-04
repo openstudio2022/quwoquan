@@ -1,4 +1,4 @@
-import 'package:quwoquan_app/app/startup/startup_telemetry.dart';
+import 'package:quwoquan_app/ops/product_ops/event_record/application/startup_telemetry.dart';
 import 'package:quwoquan_cloud_contracts/generated/ops_contracts.dart'
     as ops_contracts;
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';

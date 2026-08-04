@@ -4,7 +4,7 @@ import 'dart:developer' as developer;
 import 'dart:math';
 
 import 'package:quwoquan_app/app/startup/startup_native_journal_adapter.dart';
-import 'package:quwoquan_app/app/startup/startup_telemetry_support.dart';
+import 'package:quwoquan_app/ops/product_ops/event_record/application/startup_telemetry_support.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// 启动遥测仅用于一次启动的可靠性诊断，禁止承载账号、内容、异常文本或堆栈。

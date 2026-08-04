@@ -2,8 +2,8 @@
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
-import 'package:quwoquan_app/app/startup/startup_telemetry.dart';
-import 'package:quwoquan_app/cloud/remote/ops/startup_telemetry_remote.dart';
+import 'package:quwoquan_app/ops/product_ops/event_record/application/startup_telemetry.dart';
+import 'package:quwoquan_app/ops/product_ops/event_record/adapters/startup_telemetry_remote.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/ops_request_page_ids.g.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 

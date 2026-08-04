@@ -12,7 +12,7 @@ import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/di/ops_event_record_dependencies.dart';
 import 'package:quwoquan_app/core/di/runtime_observability_dependencies.dart';
 import 'package:quwoquan_app/core/telemetry/app_telemetry_context_provider.dart';
-import 'package:quwoquan_app/core/telemetry/app_telemetry_coordinator.dart';
+import 'package:quwoquan_app/ops/product_ops/event_record/application/app_telemetry_coordinator.dart';
 import 'package:quwoquan_app/core/telemetry/app_telemetry_outbox.dart';
 import 'package:quwoquan_app/core/telemetry/app_telemetry_reporter.dart';
 import 'package:quwoquan_app/core/telemetry/app_telemetry_session_store.dart';
