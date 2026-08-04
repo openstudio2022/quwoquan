@@ -111,16 +111,16 @@
 
 ## 4. 契约引用
 
-- canonical：`quwoquan_app/lib/components/media/picker/create_media_picker_page.dart`
+- canonical：`quwoquan_app/lib/content/media/media_upload_session/presentation/create_media_picker_page.dart`
 - canonical：`quwoquan_app/lib/core/services/media_picker_service.dart`
-- canonical：`quwoquan_app/lib/ui/content/entry/pages/create_page.dart`
+- canonical：`quwoquan_app/lib/content/content/post/presentation/create_page.dart`
 - canonical：`quwoquan_app/lib/components/media/camera/camera_capture_page.dart`
 - canonical：`quwoquan_service/services/content-service/contracts/content/post/operations.yaml`
 - canonical：`quwoquan_app/lib/cloud/services/content/content_repository.dart`
-- canonical：`quwoquan_app/lib/ui/content/entry/services/create_page_remote_helpers.dart`
-- canonical：`quwoquan_app/lib/ui/content/entry/pages/video_editor_page.dart`
+- canonical：`quwoquan_app/lib/content/content/post/adapters/create_page_remote_helpers.dart`
+- canonical：`quwoquan_app/lib/content/media/media_upload_session/presentation/video_editor_page.dart`
 - canonical：`quwoquan_service/services/content-service/contracts/content/post/fields.yaml`
-- canonical：`quwoquan_app/lib/ui/content/entry/providers/create_editor_provider.dart`
+- canonical：`quwoquan_app/lib/content/content/post/application/create_editor_provider.dart`
 - canonical：`quwoquan_data/schema/content/post_manifest.schema.json`
 - canonical：`quwoquan_data/scripts/content/release/canonical/gate.py`
 - canonical：`quwoquan_service/services/content-service/cmd/import/main.go`

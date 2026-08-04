@@ -54,11 +54,11 @@
 ## 4. 契约引用
 
 - canonical：`specs/feature-tree/discovery-content/publish-comment-reaction/post-create-update/spec.md`
-- canonical：`quwoquan_app/lib/components/media/picker/create_media_picker_page.dart`
+- canonical：`quwoquan_app/lib/content/media/media_upload_session/presentation/create_media_picker_page.dart`
 - canonical：`quwoquan_app/lib/components/media/camera/camera_capture_page.dart`
-- canonical：`quwoquan_app/lib/ui/content/entry/pages/create_page.dart`
-- canonical：`quwoquan_app/lib/ui/content/models/create_editor_models.dart`
-- canonical：`quwoquan_app/lib/ui/content/entry/services/create_draft_local_storage.dart`
+- canonical：`quwoquan_app/lib/content/content/post/presentation/create_page.dart`
+- canonical：`quwoquan_app/lib/content/content/post/domain/create_editor_models.dart`
+- canonical：`quwoquan_app/lib/content/content/post/adapters/create_draft_local_storage.dart`
 - canonical：`quwoquan_app/lib/core/auth/auth_gate.dart`
 
 ## 5. 验收场景
