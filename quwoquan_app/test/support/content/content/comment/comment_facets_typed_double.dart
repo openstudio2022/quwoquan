@@ -1,6 +1,6 @@
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-import '../object_scenario_seed_reader.dart';
+import '../../../cloud_services/object_doubles/object_scenario_seed_reader.dart';
 
 /// local_contract Comment/ContentReaction 对象替身。
 final class AlphaContentCommentFacet implements ContentCommentFacet {

@@ -3,16 +3,16 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
-import 'package:quwoquan_app/components/comment_system/comment_models.dart';
-import 'package:quwoquan_app/components/comment_system/comment_toolbar.dart';
+import 'package:quwoquan_app/content/content/comment/domain/comment_models.dart';
+import 'package:quwoquan_app/content/content/comment/presentation/comment_toolbar.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/interactions/media_viewer_interaction_bridge.dart';
-import 'package:quwoquan_app/ui/content/comments/widgets/comment_input_overlay.dart';
-import 'package:quwoquan_app/ui/content/comments/widgets/comment_thread_view.dart';
-import 'package:quwoquan_app/ui/content/comments/providers/comment_provider.dart';
-import 'package:quwoquan_app/ui/content/models/comment_view_data.dart';
+import 'package:quwoquan_app/content/content/comment/presentation/comment_input_overlay.dart';
+import 'package:quwoquan_app/content/content/comment/presentation/comment_thread_view.dart';
+import 'package:quwoquan_app/content/content/comment/application/comment_provider.dart';
+import 'package:quwoquan_app/content/content/comment/domain/comment_view_data.dart';
 
 enum CommentDetailSurfaceMode {
   cardModal('card_modal', AppUiSurfaces.homeFeed),

@@ -38,7 +38,7 @@ import 'package:quwoquan_app/core/widgets/app_action_sheet.dart';
 import 'package:quwoquan_app/core/widgets/content_report_reason_sheet.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
-import 'package:quwoquan_app/ui/content/comments/widgets/comment_viewer_modal.dart';
+import 'package:quwoquan_app/content/content/comment/presentation/comment_viewer_modal.dart';
 import 'package:quwoquan_app/components/object_page/interactive_intersection_text.dart';
 import 'package:quwoquan_app/components/object_page/intersection_target_navigator.dart';
 import 'package:quwoquan_app/components/settings_conversation/more_actions_popup/configs/media_post_config.dart';

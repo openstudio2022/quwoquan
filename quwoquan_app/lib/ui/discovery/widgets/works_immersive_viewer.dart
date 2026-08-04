@@ -31,7 +31,7 @@ import 'package:quwoquan_app/components/object_page/intersection_target_navigato
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/core/widgets/app_modal_presenter.dart';
-import 'package:quwoquan_app/ui/content/comments/widgets/immersive_comment_split_sheet.dart';
+import 'package:quwoquan_app/content/content/comment/presentation/immersive_comment_split_sheet.dart';
 import 'package:quwoquan_app/components/media/shared/toolbar/immersive_engagement_bar.dart';
 import 'package:quwoquan_app/recommendation/recommendation/recommendation_feature_profile_view/presentation/immersive_intersection_statement.dart';
 import 'package:quwoquan_app/components/media/shared/toolbar/media_viewer_toolbar.dart';

@@ -11,7 +11,7 @@ import 'package:quwoquan_app/cloud/remote/content/post/post_delete_remote.dart';
 import 'package:quwoquan_app/cloud/remote/content/post/post_publication_remote.dart';
 import 'package:quwoquan_app/content/trust_safety/report/adapters/report_query_remote.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
-import 'package:quwoquan_app/cloud/services/content/remote/comment_facets_remote.dart';
+import 'package:quwoquan_app/content/content/comment/adapters/comment_facets_remote.dart';
 import 'package:quwoquan_app/content/content/feed_delivery_page/adapters/discovery_feed_query_remote.dart';
 import 'package:quwoquan_app/cloud/services/content/remote/footprint_query_remote.dart';
 import 'package:quwoquan_app/content/content/content_reaction/adapters/post_reaction_facets_remote.dart';

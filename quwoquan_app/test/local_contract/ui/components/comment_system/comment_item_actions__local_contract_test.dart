@@ -8,7 +8,7 @@ import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
-import 'package:quwoquan_app/ui/content/comments/widgets/comment_thread_view.dart';
+import 'package:quwoquan_app/content/content/comment/presentation/comment_thread_view.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../../support/cloud_services/test_content_comment_facet.dart';

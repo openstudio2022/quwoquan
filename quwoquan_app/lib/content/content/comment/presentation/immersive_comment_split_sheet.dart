@@ -1,7 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/ui/content/comments/widgets/comment_detail_surface.dart';
-import 'package:quwoquan_app/components/comment_system/comment_models.dart';
+import 'package:quwoquan_app/content/content/comment/presentation/comment_detail_surface.dart';
+import 'package:quwoquan_app/content/content/comment/domain/comment_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/test_keys.dart';

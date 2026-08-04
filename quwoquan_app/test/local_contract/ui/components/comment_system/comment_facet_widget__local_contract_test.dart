@@ -9,9 +9,9 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
-import 'package:quwoquan_app/ui/content/comments/providers/comment_provider.dart';
-import 'package:quwoquan_app/ui/content/comments/widgets/comment_thread_view.dart';
-import 'package:quwoquan_app/ui/content/comments/widgets/comment_viewer_modal.dart';
+import 'package:quwoquan_app/content/content/comment/application/comment_provider.dart';
+import 'package:quwoquan_app/content/content/comment/presentation/comment_thread_view.dart';
+import 'package:quwoquan_app/content/content/comment/presentation/comment_viewer_modal.dart';
 
 import '../../../../support/cloud_services/test_content_comment_facet.dart';
 

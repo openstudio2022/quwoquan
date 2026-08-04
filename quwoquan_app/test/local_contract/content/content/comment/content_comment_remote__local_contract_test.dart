@@ -10,7 +10,7 @@ import 'package:quwoquan_app/cloud/runtime/executor/cloud_operation_client_facto
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/runtime/observability/cloud_operation_telemetry.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
-import 'package:quwoquan_app/cloud/services/content/remote/comment_facets_remote.dart';
+import 'package:quwoquan_app/content/content/comment/adapters/comment_facets_remote.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {

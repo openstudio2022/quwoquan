@@ -9,9 +9,9 @@ import 'package:quwoquan_app/app/navigation/generated/page_access_internal_route
 import 'package:quwoquan_app/application/content/media/content_media_upload_coordinator.dart';
 import 'package:quwoquan_app/cloud/runtime/models/comment_remote_config.dart';
 import 'package:quwoquan_app/components/media/picker/image_pick_gateway.dart';
-import 'package:quwoquan_app/components/comment_system/comment_composer_models.dart';
-import 'package:quwoquan_app/components/comment_system/comment_draft_store.dart';
-import 'package:quwoquan_app/components/comment_system/comment_models.dart';
+import 'package:quwoquan_app/content/content/comment/domain/comment_composer_models.dart';
+import 'package:quwoquan_app/content/content/comment/adapters/comment_draft_store.dart';
+import 'package:quwoquan_app/content/content/comment/domain/comment_models.dart';
 import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
@@ -20,8 +20,8 @@ import 'package:quwoquan_app/core/trackers/comment_observability.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/components/input/unified_emoji_picker.dart';
-import 'package:quwoquan_app/ui/content/comments/providers/comment_provider.dart';
-import 'package:quwoquan_app/ui/content/models/comment_view_data.dart';
+import 'package:quwoquan_app/content/content/comment/application/comment_provider.dart';
+import 'package:quwoquan_app/content/content/comment/domain/comment_view_data.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 part 'comment_input_overlay_components.dart';

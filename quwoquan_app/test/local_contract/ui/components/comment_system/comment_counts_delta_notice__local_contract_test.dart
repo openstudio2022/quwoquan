@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
 import 'package:quwoquan_app/cloud/runtime/models/comment_remote_config.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
-import 'package:quwoquan_app/ui/content/comments/widgets/comment_detail_surface.dart';
+import 'package:quwoquan_app/content/content/comment/presentation/comment_detail_surface.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
@@ -26,7 +26,7 @@ class _EntryCountFacet extends TestContentCommentFacet {
   }
 
   void _seedComments(int count) {
-    items = List<ContentCommentListItem>.generate(
+    items = List<CommentListItem>.generate(
       count,
       (index) => testCommentItem(
         id: 'comment_$index',

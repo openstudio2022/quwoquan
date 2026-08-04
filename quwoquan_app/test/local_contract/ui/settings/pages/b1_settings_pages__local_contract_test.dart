@@ -10,7 +10,7 @@ import 'package:quwoquan_app/user/account/user_account/application/account_closu
 import 'package:quwoquan_app/user/account/user_account/application/account_closure_local_data_purger_provider.dart';
 import 'package:quwoquan_app/core/auth/terminal_account_cleanup_receipt_store.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_consent_store.dart';
-import 'package:quwoquan_app/components/comment_system/comment_draft_store.dart';
+import 'package:quwoquan_app/content/content/comment/adapters/comment_draft_store.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/emoji/emoji_repository.dart';
@@ -23,8 +23,8 @@ import 'package:quwoquan_app/ui/settings/pages/settings_calls_page.dart';
 import 'package:quwoquan_app/ui/settings/pages/settings_notifications_page.dart';
 import 'package:quwoquan_app/ui/settings/pages/settings_privacy_page.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
-import '../../../../support/cloud_services/repository_mock_reexports.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../../support/cloud_services/repository_mock_reexports.dart';
 
 void main() {
   setUp(() {
