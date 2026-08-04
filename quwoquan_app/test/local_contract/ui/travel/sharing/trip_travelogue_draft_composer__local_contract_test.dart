@@ -1,6 +1,6 @@
 // spec_ref: specs/feature-tree/travel-journey/collaborative-trip-lifecycle/trip-shared-timeline/spec.md#gwt-001
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/application/travel/trip_travelogue_draft.dart';
+import 'package:quwoquan_app/travel/travel/trip_share_snapshot/application/trip_travelogue_draft.dart';
 import 'package:quwoquan_app/ui/travel/sharing/trip_travelogue_draft_composer.dart';
 import 'package:quwoquan_app/ui/travel/travel_text_constants.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';

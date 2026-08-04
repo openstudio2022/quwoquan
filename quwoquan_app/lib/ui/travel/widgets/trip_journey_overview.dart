@@ -1,6 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:quwoquan_app/application/travel/trip_journey_query.dart';
+import 'package:quwoquan_app/travel/travel/trip_timeline_view/application/trip_journey_query.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/ui/travel/guide/trip_guide_assignment_panel.dart';
