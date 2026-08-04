@@ -1,7 +1,7 @@
 // spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/skill-user-lifecycle/spec.md#gwt-002
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/ui/assistant/pages/assistant_skill_subscription_setup_sheet.dart';
+import 'package:quwoquan_app/assistant/assistant/skill_subscription/presentation/assistant_skill_subscription_setup_sheet.dart';
 
 void main() {
   testWidgets('creates a timezone-bound daily rule without exposing cron', (

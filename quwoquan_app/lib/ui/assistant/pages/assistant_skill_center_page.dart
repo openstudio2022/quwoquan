@@ -18,7 +18,7 @@ import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/assistant/assistant/skill_user_setting/presentation/assistant_skill_setup_schema.dart';
 import 'package:quwoquan_app/assistant/assistant/skill_user_setting/presentation/assistant_skill_setup_sheet.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_skill_lifecycle_sheet.dart';
-import 'package:quwoquan_app/ui/assistant/pages/assistant_skill_subscription_setup_sheet.dart';
+import 'package:quwoquan_app/assistant/assistant/skill_subscription/presentation/assistant_skill_subscription_setup_sheet.dart';
 import 'package:uuid/uuid.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
