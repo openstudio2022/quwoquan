@@ -187,7 +187,7 @@ void main() {
     test('comment deep links use the generated workBrowser builder', () {
       for (final path in <String>[
         'lib/ui/user/utils/profile_comment_detail_route.dart',
-        'lib/cloud/services/notification/app_message_navigation.dart',
+        'lib/notification/notification_delivery/notification/application/app_message_navigation.dart',
       ]) {
         final source = File(path).readAsStringSync();
         expect(source, contains('AppRoutePaths.workBrowser('));

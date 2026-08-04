@@ -68,6 +68,9 @@ ops.RuntimeLogRecordWire _runtimeLogRecord() =>
       'severity': 'WARN',
       'signal': 'app.performance.frame',
       'message': 'frame jank',
+      // logKind=event 的 canonical 必需字段（generated 校验 requiredKindFields）。
+      'event': 'frame_jank_observed',
+      'result': 'observed',
       'resource': <String, Object?>{
         'sourceType': 'app',
         'service': 'quwoquan_app',

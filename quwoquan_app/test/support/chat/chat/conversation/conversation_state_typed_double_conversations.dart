@@ -1,4 +1,4 @@
-part of 'alpha_chat_state_engine.dart';
+part of 'conversation_state_typed_double.dart';
 
 extension AlphaChatConversationState on AlphaChatStateEngine {
   List<ChatFixtureObject> listInbox({int limit = 20}) {

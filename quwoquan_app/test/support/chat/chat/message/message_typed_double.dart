@@ -2,7 +2,6 @@ import 'package:quwoquan_cloud_contracts/chat_contracts.dart';
 
 import '../../../cloud_services/object_doubles/object_scenario_seed_reader.dart';
 import '../conversation/conversation_state_typed_double.dart';
-import '../../../cloud_services/repository_mock_reexports.dart';
 
 /// local_contract Message command 薄适配器。
 ///

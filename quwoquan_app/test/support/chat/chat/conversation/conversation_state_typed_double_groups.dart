@@ -1,4 +1,4 @@
-part of 'alpha_chat_state_engine.dart';
+part of 'conversation_state_typed_double.dart';
 
 extension AlphaChatGroupState on AlphaChatStateEngine {
   List<ChatFixtureObject> listMembers({

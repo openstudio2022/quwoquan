@@ -29,7 +29,7 @@ import 'package:quwoquan_app/assistant/assistant/assistant_turn_view/domain/assi
 import 'package:quwoquan_app/cloud/assistant/generated/assistant_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
-import 'package:quwoquan_app/cloud/services/notification/notification_facets.dart';
+import 'package:quwoquan_app/notification/notification_delivery/notification/application/notification_facets.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';

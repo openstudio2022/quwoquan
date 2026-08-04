@@ -11,7 +11,7 @@ import 'package:quwoquan_app/components/navigation/tab_swipe_switch_region.dart'
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_view_data.dart';
-import 'package:quwoquan_app/cloud/services/notification/notification_facets.dart';
+import 'package:quwoquan_app/notification/notification_delivery/notification/application/notification_facets.dart';
 import '../../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';

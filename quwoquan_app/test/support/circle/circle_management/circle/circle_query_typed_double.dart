@@ -2,7 +2,6 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../cloud_services/object_doubles/object_scenario_seed_reader.dart';
 import '../circle_post_placement/circle_post_placement_typed_double.dart';
-import '../../../cloud_services/repository_mock_reexports.dart';
 
 /// Alpha/test only Circle query adapter.
 ///

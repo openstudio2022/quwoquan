@@ -1,7 +1,6 @@
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../cloud_services/object_doubles/object_scenario_seed_reader.dart';
-import '../../../cloud_services/repository_mock_reexports.dart';
 
 /// Alpha-only 关注主体读面与访问回执；状态只来自不可变 contract fixture。
 final class AlphaFollowingSubjectFacet

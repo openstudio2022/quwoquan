@@ -18,14 +18,14 @@ import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
-import 'package:quwoquan_app/cloud/services/notification/app_message_navigation.dart';
+import 'package:quwoquan_app/notification/notification_delivery/notification/application/app_message_navigation.dart';
 import 'package:quwoquan_app/cloud/services/user/greeting_repository.dart';
 import 'package:quwoquan_app/ui/chat/models/chat_contacts_row.dart';
 import 'package:quwoquan_app/ui/chat/models/chat_list_item_view_model.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_contacts_rows_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/greeting_inbox_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/message_home_rows_provider.dart';
-import 'package:quwoquan_app/ui/chat/providers/notification_inbox_provider.dart';
+import 'package:quwoquan_app/notification/notification_delivery/notification/presentation/notification_inbox_provider.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show AppMessage, NotificationType;
 import 'package:quwoquan_app/ui/chat/widgets/chat_conversation_avatar_tokens.dart';

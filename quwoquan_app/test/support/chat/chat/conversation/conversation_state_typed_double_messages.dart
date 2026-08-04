@@ -1,4 +1,4 @@
-part of 'alpha_chat_state_engine.dart';
+part of 'conversation_state_typed_double.dart';
 
 extension AlphaChatMessageCommandState on AlphaChatStateEngine {
   ChatSendMessageResult sendMessage(ChatSendMessageCommand command) {

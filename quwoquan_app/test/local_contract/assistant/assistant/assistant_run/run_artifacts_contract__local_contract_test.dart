@@ -22,7 +22,7 @@ void main() {
         () => parseRunArtifacts(<String, dynamic>{
           'diagnostics': <String, dynamic>{'renderFallback': true},
         }),
-        throwsA(isA<TypeError>()),
+        throwsA(isA<FormatException>()),
       );
     });
   });

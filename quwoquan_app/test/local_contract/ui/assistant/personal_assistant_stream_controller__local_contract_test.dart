@@ -11,7 +11,7 @@ import 'package:quwoquan_app/assistant/generated/contracts/assistant_presentatio
 import 'package:quwoquan_app/cloud/assistant/generated/assistant_errors.g.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
-import 'package:quwoquan_app/cloud/services/notification/notification_facets.dart';
+import 'package:quwoquan_app/notification/notification_delivery/notification/application/notification_facets.dart';
 import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
 import 'package:quwoquan_app/core/di/ops_event_dependencies.dart'
     show actorQueueStorageProvider;

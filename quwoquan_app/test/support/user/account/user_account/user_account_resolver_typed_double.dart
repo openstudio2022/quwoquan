@@ -1,5 +1,4 @@
 import '../../../cloud_services/object_doubles/object_scenario_seed_reader.dart';
-import '../../../cloud_services/repository_mock_reexports.dart';
 
 /// 仅供 local_contract 使用的用户身份与资料索引。
 ///
