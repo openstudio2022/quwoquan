@@ -31,7 +31,7 @@ import 'package:quwoquan_app/assistant/assistant/page_context/domain/assistant_o
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
-import 'package:quwoquan_app/ui/assistant/widgets/assistant_half_sheet.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_entry_view/presentation/assistant_half_sheet.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 import '../../../../../support/runtime_failure_fixtures.dart';
