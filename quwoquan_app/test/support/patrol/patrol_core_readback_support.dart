@@ -7,7 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:patrol/patrol.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/ui/chat/providers/message_home_rows_provider.dart';
+import 'package:quwoquan_app/chat/chat/message/application/message_home_rows_provider.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 final class PatrolCoreChatProvision {

@@ -6,7 +6,7 @@ import 'package:quwoquan_app/assistant/observability/logging/app_exception_telem
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/ui/circle/widgets/circle_shell.dart';
+import 'package:quwoquan_app/circle/circle_management/circle/presentation/circle_shell.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show
         AppendCircleBehaviorFactCommand,

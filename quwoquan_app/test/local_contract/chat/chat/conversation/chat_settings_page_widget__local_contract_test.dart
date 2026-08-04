@@ -14,7 +14,7 @@ import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_settings_page.dart';
-import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
+import 'package:quwoquan_app/chat/chat/conversation/application/conversation_members_provider.dart';
 import 'package:quwoquan_app/rtc/rtc/call_session/presentation/call_permission_guard.dart';
 import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
 import '../../../../support/fixtures/chat/chat_mock_seed_refs.dart';

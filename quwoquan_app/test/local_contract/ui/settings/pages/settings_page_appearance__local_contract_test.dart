@@ -7,7 +7,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:quwoquan_app/app/models/appearance_settings_models.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/providers/appearance_settings_provider.dart';
-import 'package:quwoquan_app/application/user/device_registration/device_push_endpoint_writer.dart';
+import 'package:quwoquan_app/user/account/device_registration/application/device_push_endpoint_writer.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
@@ -24,13 +24,13 @@ import 'package:quwoquan_app/core/observability/runtime_logger.dart';
 import 'package:quwoquan_app/core/platform/push_endpoint_gateway.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/telemetry/app_telemetry_reporter.dart';
-import 'package:quwoquan_app/ui/settings/pages/settings_about_page.dart';
-import 'package:quwoquan_app/ui/settings/pages/settings_calls_page.dart';
-import 'package:quwoquan_app/ui/settings/pages/settings_dark_mode_page.dart';
-import 'package:quwoquan_app/ui/settings/pages/settings_notifications_page.dart';
+import 'package:quwoquan_app/user/account/user_settings/presentation/settings_about_page.dart';
+import 'package:quwoquan_app/user/account/user_settings/presentation/settings_calls_page.dart';
+import 'package:quwoquan_app/user/account/user_settings/presentation/settings_dark_mode_page.dart';
+import 'package:quwoquan_app/user/account/user_settings/presentation/settings_notifications_page.dart';
 import '../../../../support/cloud_services/behavior_repository_double.dart';
-import 'package:quwoquan_app/ui/settings/pages/settings_page.dart';
-import 'package:quwoquan_app/ui/settings/pages/settings_permissions_page.dart';
+import 'package:quwoquan_app/user/account/user_settings/presentation/settings_page.dart';
+import 'package:quwoquan_app/user/account/user_settings/presentation/settings_permissions_page.dart';
 import '../../../../support/recording_app_telemetry_recorder.dart';
 
 void main() {
@@ -691,7 +691,7 @@ class _SettingsQueryReader implements contracts.UserSettingsQueryReader {
       contracts.PrivacySettingsView(
         userId: 'owner-id',
         allowStrangerMsg: true,
-        profileVisibility: contracts.ProfileVisibility.public.wireName,
+        profileVisibility: contracts.ProfileVisibility.public,
         assistantEnabled: true,
         blockedKeywords: const <String>[],
         version: 1,
@@ -713,11 +713,11 @@ class _SettingsQueryReader implements contracts.UserSettingsQueryReader {
   @override
   Future<contracts.AppearanceSettingsView> getAppearanceSettings() async =>
       contracts.AppearanceSettingsView(
-        themeMode: contracts.ThemeModeSetting.system.wireName,
-        fontSizePreset: contracts.FontSizePreset.md.wireName,
-        source: 'owner_default',
-        ownerDefaultThemeMode: contracts.ThemeModeSetting.system.wireName,
-        ownerDefaultFontSizePreset: contracts.FontSizePreset.md.wireName,
+        themeMode: contracts.ThemeModeSetting.system,
+        fontSizePreset: contracts.FontSizePreset.md,
+        source: contracts.AppearanceSource.ownerDefault,
+        ownerDefaultThemeMode: contracts.ThemeModeSetting.system,
+        ownerDefaultFontSizePreset: contracts.FontSizePreset.md,
         hasPersonaOverride: false,
         version: 1,
         updatedAt: DateTime.utc(2026, 7, 19),
@@ -938,11 +938,11 @@ final class _RecordingUserSettingsCommandWriter
     contracts.UpdateAppearanceSettingsCommand command,
   ) async {
     return contracts.AppearanceSettingsView(
-      themeMode: command.themeMode.wireName,
-      fontSizePreset: command.fontSizePreset.wireName,
-      source: 'owner_default',
-      ownerDefaultThemeMode: command.themeMode.wireName,
-      ownerDefaultFontSizePreset: command.fontSizePreset.wireName,
+      themeMode: command.themeMode,
+      fontSizePreset: command.fontSizePreset,
+      source: contracts.AppearanceSource.ownerDefault,
+      ownerDefaultThemeMode: command.themeMode,
+      ownerDefaultFontSizePreset: command.fontSizePreset,
       hasPersonaOverride: false,
       version: ++version,
       updatedAt: DateTime.utc(2026, 7, 19),

@@ -6,9 +6,9 @@ import 'package:quwoquan_app/chat/chat/message/domain/message_dto.dart';
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/platform/app_font_families.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
-import 'package:quwoquan_app/ui/chat/widgets/message/chat_mention_text.dart';
-import 'package:quwoquan_app/ui/chat/widgets/message/chat_message_bubble.dart';
-import 'package:quwoquan_app/ui/chat/widgets/message/voice_message_bubble.dart';
+import 'package:quwoquan_app/chat/chat/message/presentation/chat_mention_text.dart';
+import 'package:quwoquan_app/chat/chat/message/presentation/chat_message_bubble.dart';
+import 'package:quwoquan_app/chat/chat/message/presentation/voice_message_bubble.dart';
 
 Widget _wrapBubble({
   required ChatMessageDisplayItem message,

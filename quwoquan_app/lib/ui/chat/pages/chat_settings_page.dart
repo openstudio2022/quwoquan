@@ -6,16 +6,16 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_pages.g.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
-import 'package:quwoquan_app/application/rtc/call_session/rtc_call_entry_coordinator.dart';
+import 'package:quwoquan_app/rtc/rtc/call_session/application/rtc_call_entry_coordinator.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
-import 'package:quwoquan_app/components/rtc/rtc_call_entry_presenter.dart';
+import 'package:quwoquan_app/rtc/rtc/call_session/presentation/rtc_call_entry_presenter.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/trackers/chat_interaction_telemetry_tracker.dart';
-import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
+import 'package:quwoquan_app/chat/chat/conversation/application/conversation_members_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/group_home_provider.dart';
 
 /// 聊天设置/聊天信息页；全屏表单布局复用 [SettingsInsetFormPageScaffold]。

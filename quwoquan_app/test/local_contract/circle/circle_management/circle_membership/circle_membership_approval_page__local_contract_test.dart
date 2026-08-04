@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
-import 'package:quwoquan_app/ui/circle/pages/circle_membership_approval_page.dart';
+import 'package:quwoquan_app/circle/circle_management/circle_membership/presentation/circle_membership_approval_page.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// GWT1（member-role-permission）本地分解：审批队列页消费

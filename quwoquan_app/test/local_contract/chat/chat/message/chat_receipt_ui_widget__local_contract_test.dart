@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/chat/chat/message/domain/message_dto.dart';
-import 'package:quwoquan_app/ui/chat/widgets/message/chat_message_bubble.dart';
+import 'package:quwoquan_app/chat/chat/message/presentation/chat_message_bubble.dart';
 
 Widget _wrapBubble({
   required ChatMessageDisplayItem message,

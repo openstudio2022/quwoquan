@@ -15,9 +15,9 @@ library;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
-import 'package:quwoquan_app/cloud/remote/user/account/account_lifecycle_remote.dart';
-import 'package:quwoquan_app/cloud/remote/user/account_session/account_session_remote.dart';
-import 'package:quwoquan_app/cloud/remote/user/user_settings/user_settings_remote.dart';
+import 'package:quwoquan_app/user/account/user_account/adapters/account_lifecycle_remote.dart';
+import 'package:quwoquan_app/user/account/account_session/adapters/account_session_remote.dart';
+import 'package:quwoquan_app/user/account/user_settings/adapters/user_settings_remote.dart';
 import 'package:quwoquan_app/cloud/runtime/auth/cloud_auth_token_provider.dart';
 import 'package:quwoquan_app/cloud/runtime/config/cloud_runtime_environment.dart';
 import 'package:quwoquan_app/cloud/runtime/context/cloud_client_context.dart';

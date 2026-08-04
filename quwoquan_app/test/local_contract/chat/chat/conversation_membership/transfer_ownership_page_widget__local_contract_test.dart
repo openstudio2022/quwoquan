@@ -8,7 +8,7 @@ import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
 import '../../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/ui/chat/pages/transfer_ownership_page.dart';
+import 'package:quwoquan_app/chat/chat/conversation_membership/presentation/transfer_ownership_page.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import '../../../../support/fixtures/chat/chat_mock_seed_refs.dart';
 

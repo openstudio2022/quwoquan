@@ -15,15 +15,15 @@ library;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
-import 'package:quwoquan_app/cloud/remote/rtc/call_session/call_lifecycle_remote.dart';
-import 'package:quwoquan_app/cloud/remote/rtc/call_session/call_media_control_remote.dart';
-import 'package:quwoquan_app/cloud/remote/rtc/call_session/call_participant_remote.dart';
-import 'package:quwoquan_app/cloud/remote/rtc/call_session/call_query_remote.dart';
-import 'package:quwoquan_app/cloud/remote/rtc/call_session/call_screen_share_remote.dart';
-import 'package:quwoquan_app/cloud/remote/user/account_session/account_session_remote.dart';
-import 'package:quwoquan_app/cloud/remote/user/persona_relationship/persona_relationship_follow_remote.dart'
+import 'package:quwoquan_app/rtc/rtc/call_session/adapters/call_lifecycle_remote.dart';
+import 'package:quwoquan_app/rtc/rtc/call_session/adapters/call_media_control_remote.dart';
+import 'package:quwoquan_app/rtc/rtc/call_session/adapters/call_participant_remote.dart';
+import 'package:quwoquan_app/rtc/rtc/call_session/adapters/call_query_remote.dart';
+import 'package:quwoquan_app/rtc/rtc/call_session/adapters/call_screen_share_remote.dart';
+import 'package:quwoquan_app/user/account/account_session/adapters/account_session_remote.dart';
+import 'package:quwoquan_app/user/relationship/persona_relationship/adapters/persona_relationship_follow_remote.dart'
     as relationship_follow;
-import 'package:quwoquan_app/cloud/remote/user/persona_relationship/persona_relationship_remote.dart'
+import 'package:quwoquan_app/user/relationship/persona_relationship/adapters/persona_relationship_remote.dart'
     as relationship_capability;
 import 'package:quwoquan_app/cloud/runtime/auth/cloud_auth_token_provider.dart';
 import 'package:quwoquan_app/cloud/runtime/config/cloud_runtime_environment.dart';

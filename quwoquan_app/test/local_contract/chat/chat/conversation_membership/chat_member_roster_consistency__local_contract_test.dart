@@ -4,7 +4,7 @@ import '../../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_message_provider.dart';
-import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
+import 'package:quwoquan_app/chat/chat/conversation/application/conversation_members_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/group_home_provider.dart';
 
 const _conversationId = 'fixture_conv_group';

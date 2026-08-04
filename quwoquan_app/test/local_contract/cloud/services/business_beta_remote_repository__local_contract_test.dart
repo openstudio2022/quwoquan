@@ -13,23 +13,23 @@ import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_request_page_
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/runtime/observability/cloud_operation_telemetry.dart';
-import 'package:quwoquan_app/cloud/remote/chat/conversation/contact_remote.dart';
-import 'package:quwoquan_app/cloud/remote/chat/conversation/conversation_membership_remote.dart';
-import 'package:quwoquan_app/cloud/remote/chat/conversation/conversation_remote.dart';
-import 'package:quwoquan_app/cloud/remote/chat/conversation/conversation_user_state_remote.dart';
-import 'package:quwoquan_app/cloud/remote/chat/conversation/message_home_remote.dart';
-import 'package:quwoquan_app/cloud/remote/chat/message/message_remote.dart';
-import 'package:quwoquan_app/cloud/remote/circle/circle/circle_query_remote.dart';
+import 'package:quwoquan_app/chat/chat/conversation/adapters/contact_remote.dart';
+import 'package:quwoquan_app/chat/chat/conversation/adapters/conversation_membership_remote.dart';
+import 'package:quwoquan_app/chat/chat/conversation/adapters/conversation_remote.dart';
+import 'package:quwoquan_app/chat/chat/conversation/adapters/conversation_user_state_remote.dart';
+import 'package:quwoquan_app/chat/chat/conversation/adapters/message_home_remote.dart';
+import 'package:quwoquan_app/chat/chat/message/adapters/message_remote.dart';
+import 'package:quwoquan_app/circle/circle_management/circle/adapters/circle_query_remote.dart';
 import 'package:quwoquan_app/cloud/services/chat/remote/chat_repository_remote.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
-import 'package:quwoquan_app/cloud/services/content/content_read_model_projection.dart';
-import 'package:quwoquan_app/cloud/services/content/remote/discovery_feed_query_remote.dart';
-import 'package:quwoquan_app/cloud/services/content/remote/post_reader_remote.dart';
+import 'package:quwoquan_app/content/content/post/adapters/content_read_model_projection.dart';
+import 'package:quwoquan_app/content/content/feed_delivery_page/adapters/discovery_feed_query_remote.dart';
+import 'package:quwoquan_app/content/content/post/adapters/post_reader_remote.dart';
 import 'package:quwoquan_app/core/media/media_delivery_reference.dart';
-import 'package:quwoquan_app/cloud/remote/user/persona/persona_query_remote.dart';
+import 'package:quwoquan_app/user/persona_management/persona/adapters/persona_query_remote.dart';
 import 'package:quwoquan_app/cloud/remote/user/profile/profile_query_remote.dart';
 import 'package:quwoquan_app/cloud/remote/user/profile/user_profile_query_remote.dart';
-import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
+import 'package:quwoquan_app/content/content/post/domain/content_surface_view_mapper.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     hide ContentType;
 
@@ -65,7 +65,6 @@ void main() {
         ),
         blockedKeywordsLoader: () async => const <String>[],
       ),
-      baseUrl: baseUrl,
     );
     final contentPostReader = RemoteContentPostReaderAdapter(
       client: generatedClient,
@@ -311,7 +310,7 @@ void main() {
       isTrue,
     );
     expect(
-      contactHomeCircles.map((item) => item.circleId),
+      contactHomeCircles.map((item) => item.id),
       contains('fixture_circle_photo'),
     );
     final funGroups = await chatRepository.listContactHome(
@@ -328,7 +327,7 @@ void main() {
     )).items;
     expect(circles.length, greaterThanOrEqualTo(6));
     expect(
-      circles.map((item) => item.circleId),
+      circles.map((item) => item.id),
       contains('fixture_circle_photo'),
     );
     expect(
@@ -342,7 +341,7 @@ void main() {
     final circle = await circleQuery.get(
       const CircleDetailQuery(circleId: 'fixture_circle_photo'),
     );
-    expect(circle.circleId, 'fixture_circle_photo');
+    expect(circle.id, 'fixture_circle_photo');
     await expectLater(
       circleQuery.listDiscoveryFeed(const CircleDiscoveryFeedQuery(limit: 20)),
       throwsA(
@@ -589,6 +588,8 @@ class _ContractSeedHttpServer {
         _writeJson(request, {
           'items': _filteredFeed(request.uri.queryParameters),
           'outcome': 'content',
+          'feedRequestId': 'fixture-feed-request-1',
+          'objectCards': const <Map<String, Object?>>[],
         });
         return;
       }
@@ -597,17 +598,14 @@ class _ContractSeedHttpServer {
         final selectedIds = userId == 'fixture_user_current'
             ? _fixtures.userFeedSeed['myPostIds'] as List<dynamic>
             : _fixtures.userFeedSeed['authorPostIds'] as List<dynamic>;
-        _writeJson(request, {'items': _contentPostsByIds(selectedIds)});
+        _writeJson(request, {
+          'items': _contentPostsByIds(selectedIds),
+          'hasMore': false,
+        });
         return;
       }
       if (path == '/content/posts/fixture_photo_001') {
-        final post = _contentPost('fixture_photo_001');
-        _writeJson(request, <String, dynamic>{
-          ...post,
-          'status':
-              post['status'] ??
-              (post['publishedAt'] == null ? 'draft' : 'published'),
-        });
+        _writeJson(request, _contentPostDetailWire('fixture_photo_001'));
         return;
       }
       if (path == '/chat/inbox') {
@@ -777,12 +775,49 @@ class _ContractSeedHttpServer {
     return items.map(_contentFeedWire).toList(growable: false);
   }
 
-  Map<String, dynamic> _contentFeedWire(Map<String, dynamic> source) {
-    final wire = contentPostWireFromReadModelMap(source);
-    wire['postId'] = wire.remove('id');
-    wire['contentType'] = wire.remove('type');
-    wire['mediaUrls'] = wire.remove('imageUrls') ?? const <String>[];
-    return wire;
+  Map<String, dynamic> _contentFeedWire(Map<String, dynamic> source) =>
+      Map<String, dynamic>.from(contentPostWireFromReadModelMap(source));
+
+  /// canonical 场景种子同时承载服务内部存储键（objectKey / circleIds / themeTags
+  /// 等），网关绝不会把它们透传给端侧。detail 响应因此只投影 Post 详情契约声明的
+  /// 字段，让 fixture 与真实 wire 一样对未知字段 fail closed。
+  Map<String, dynamic> _contentPostDetailWire(String id) {
+    final source = _contentPost(id);
+    final wire = _contentFeedWire(source);
+    return <String, dynamic>{
+      'postId': wire['postId'],
+      'contentType': wire['contentType'],
+      'status':
+          source['status'] ??
+          (source['publishedAt'] == null ? 'draft' : 'published'),
+      'visibility': source['visibility'] ?? 'public',
+      'likeCount': source['likeCount'] ?? 0,
+      'commentCount': source['commentCount'] ?? 0,
+      'shareCount': source['shareCount'] ?? 0,
+      'viewCount': source['viewCount'] ?? 0,
+      'createdAt': wire['createdAt'],
+      'updatedAt': wire['updatedAt'],
+      for (final field in const <String>[
+        'contentIdentity',
+        'assistantUsePolicy',
+        'authorId',
+        'authorDisplayName',
+        'authorAvatarUrl',
+        'title',
+        'body',
+        'summary',
+        'mediaUrls',
+        'coverUrl',
+        'thumbnailUrl',
+        'videoUrl',
+        'width',
+        'height',
+        'durationMs',
+        'contentVertical',
+        'publishedAt',
+      ])
+        if (wire[field] != null) field: wire[field],
+    };
   }
 
   List<Map<String, dynamic>> _contentPostsByIds(List<dynamic> ids) {
@@ -790,6 +825,7 @@ class _ContractSeedHttpServer {
     return ((_fixtures.contentSeed['posts'] as List<dynamic>)
             .cast<Map<String, dynamic>>())
         .where((item) => wanted.contains(item['postId']))
+        .map(_contentFeedWire)
         .toList(growable: false);
   }
 
@@ -934,11 +970,24 @@ class _ContractSeedHttpServer {
         });
       }
     }
+    final normalized = rows
+        .map(
+          (row) => <String, dynamic>{
+            ...row,
+            'subtitle': row['subtitle'] ?? '',
+            'avatarUrl': row['avatarUrl'] ?? '',
+            'summaryIntersections':
+                row['summaryIntersections'] ?? const <String>[],
+            'contactCount': row['contactCount'] ?? 0,
+            'sortKey': row['sortKey'] ?? row['id'],
+          },
+        )
+        .toList();
     final limit = int.tryParse(query['limit'] ?? '');
-    if (limit != null && rows.length > limit) {
-      return rows.take(limit).toList(growable: false);
+    if (limit != null && normalized.length > limit) {
+      return normalized.take(limit).toList(growable: false);
     }
-    return rows;
+    return normalized;
   }
 
   List<Map<String, dynamic>> _contactRows() {
@@ -954,6 +1003,11 @@ class _ContractSeedHttpServer {
             'metFrom': contact['metFrom'] ?? '',
             'lastInteraction': contact['lastInteraction'] ?? '',
             'relationState': contact['relationState'] ?? 'not_following',
+            'conversationId': contact['conversationId'] ?? '',
+            'conversationType': contact['conversationType'] ?? 'direct',
+            'subtitle': contact['subtitle'] ?? '',
+            'highlightText': contact['highlightText'] ?? '',
+            'matchedField': contact['matchedField'] ?? '',
             'source': contact['source'] ?? '',
             'isStarred': contact['isStarred'] ?? false,
           },
@@ -994,12 +1048,36 @@ class _ContractSeedHttpServer {
         .toList(growable: false);
   }
 
+  /// Circle 契约不再承载 viewer 作用域字段（role / joinStatus / isFollowed）与服务
+  /// 内部存储键；它们分别由 CircleMembership 与媒体授权链路提供，网关不会透传。
   Map<String, dynamic> _circleWire(Map<String, dynamic> row) {
     return <String, dynamic>{
-      ...row,
+      'id': row['id'],
+      'name': row['name'],
+      'description': row['description'],
+      'coverUrl': row['coverUrl'],
+      'ownerId': row['ownerId'],
+      'ownerDisplayNameSnapshot': row['ownerDisplayNameSnapshot'],
+      'category': row['category'] ?? row['categoryId'],
+      'subCategory': row['subCategory'],
+      'tags': row['tags'] ?? const <String>[],
+      'memberCount': row['memberCount'] ?? 0,
+      'postCount': row['postCount'] ?? 0,
+      'weeklyActiveCount': row['weeklyActiveCount'] ?? 0,
+      'version': row['version'] ?? 1,
       'status': row['status'] ?? 'active',
+      'visibility': row['visibility'],
+      'joinPolicy': row['joinPolicy'],
       'kind': row['kind'] ?? 'interest',
       'displaySubjectType': row['displaySubjectType'] ?? 'circle',
+      'followEnabled': row['followEnabled'] ?? true,
+      'defaultPublicGroupId': row['defaultPublicGroupId'],
+      'autoSyncChat': row['autoSyncChat'] ?? false,
+      'storageUsedBytes': row['storageUsedBytes'] ?? 0,
+      'storageQuotaBytes': row['storageQuotaBytes'] ?? 1073741824,
+      'domainId': row['domainId'],
+      'createdAt': row['createdAt'],
+      'updatedAt': row['updatedAt'],
     };
   }
 
@@ -1014,10 +1092,9 @@ class _ContractSeedHttpServer {
     final userId = profile['userId'].toString();
     return <String, dynamic>{
       'personaId': userId,
-      'ownerUserId': userId,
       'userHandle': userId,
-      'nickname': profile['displayName'],
       'displayName': profile['displayName'],
+      'nicknameCustomized': profile['nicknameCustomized'] ?? false,
       'subjectType': 'account',
       'avatarUrl': profile['avatarUrl'],
       'backgroundUrl': profile['backgroundUrl'],
@@ -1027,6 +1104,10 @@ class _ContractSeedHttpServer {
       'postCount': stats['postCount'] ?? 0,
       'circleCount': stats['circleCount'] ?? 0,
       'likeCount': stats['likeCount'] ?? 0,
+      'profileVisibility': profile['profileVisibility'] ?? 'public',
+      'isolationLevel': profile['isolationLevel'] ?? 'open',
+      'inheritsFromOwner': profile['inheritsFromOwner'] ?? true,
+      'updatedAt': profile['updatedAt'] ?? '2026-07-20T00:00:00Z',
     };
   }
 
@@ -1035,12 +1116,17 @@ class _ContractSeedHttpServer {
     return <String, dynamic>{
       'ownerUserId': userId,
       'personaId': userId,
-      'subjectType': 'owner',
+      'subjectType': 'account',
       'displayName': profile['displayName'],
       'avatarUrl': profile['avatarUrl'],
-      'personaContextVersion': '1',
-      'personaSnapshotVersion': 1,
+      'avatarVersion': profile['avatarVersion'] ?? 1,
       'isPrimary': true,
+      'isolationLevel': profile['isolationLevel'] ?? 'open',
+      'profileVisibility': profile['profileVisibility'] ?? 'public',
+      'contextVersion': 1,
+      'personaSnapshotVersion': 1,
+      'explicitOverride': false,
+      'switchedAt': '2026-07-20T00:00:00Z',
     };
   }
 

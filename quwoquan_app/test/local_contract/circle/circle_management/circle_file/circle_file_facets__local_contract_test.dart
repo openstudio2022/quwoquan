@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/remote/circle/file/file_remote.dart';
+import 'package:quwoquan_app/circle/circle_management/circle_file/adapters/file_remote.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {

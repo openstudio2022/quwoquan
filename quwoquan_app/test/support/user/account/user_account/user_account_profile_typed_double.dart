@@ -1,5 +1,5 @@
 import 'package:quwoquan_app/application/content/post/author_impact_query.dart';
-import 'package:quwoquan_app/application/user/persona_relationship/persona_relationship_facets.dart';
+import 'package:quwoquan_app/user/relationship/persona_relationship/application/persona_relationship_facets.dart';
 import 'package:quwoquan_app/application/user/profile/profile_edit_query.dart';
 import 'package:quwoquan_app/application/user/profile/profile_query.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';

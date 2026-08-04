@@ -1,4 +1,4 @@
-import 'package:quwoquan_app/application/user/persona/persona_query.dart';
+import 'package:quwoquan_app/user/persona_management/persona/application/persona_query.dart';
 import 'package:quwoquan_app/application/user/profile/profile_edit_query.dart';
 import 'package:quwoquan_app/application/user/profile/profile_query.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_edit_models.dart';

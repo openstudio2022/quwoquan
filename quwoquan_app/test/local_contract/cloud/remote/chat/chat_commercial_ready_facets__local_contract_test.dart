@@ -1,12 +1,12 @@
 // spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/commercial-remote-only-message-system/spec.md#gwt-001
 // spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/spec.md#sit-006
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/remote/chat/conversation/contact_remote.dart';
-import 'package:quwoquan_app/cloud/remote/chat/conversation/conversation_membership_remote.dart';
-import 'package:quwoquan_app/cloud/remote/chat/conversation/conversation_remote.dart';
-import 'package:quwoquan_app/cloud/remote/chat/conversation/conversation_user_state_remote.dart';
-import 'package:quwoquan_app/cloud/remote/chat/conversation/message_home_remote.dart';
-import 'package:quwoquan_app/cloud/remote/chat/message/message_remote.dart';
+import 'package:quwoquan_app/chat/chat/conversation/adapters/contact_remote.dart';
+import 'package:quwoquan_app/chat/chat/conversation/adapters/conversation_membership_remote.dart';
+import 'package:quwoquan_app/chat/chat/conversation/adapters/conversation_remote.dart';
+import 'package:quwoquan_app/chat/chat/conversation/adapters/conversation_user_state_remote.dart';
+import 'package:quwoquan_app/chat/chat/conversation/adapters/message_home_remote.dart';
+import 'package:quwoquan_app/chat/chat/message/adapters/message_remote.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {

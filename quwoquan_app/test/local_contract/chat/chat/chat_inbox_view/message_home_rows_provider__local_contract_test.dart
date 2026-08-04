@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
 import '../../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/ui/chat/providers/message_home_rows_provider.dart';
+import 'package:quwoquan_app/chat/chat/message/application/message_home_rows_provider.dart';
 
 void main() {
   group('messageHomeRowsStateProvider', () {

@@ -5,7 +5,7 @@ import 'package:quwoquan_app/core/di/generated_operation_client_dependencies.dar
 import 'package:quwoquan_app/rtc/rtc/call_session/adapters/chat_member_presentation_resolver.dart';
 import 'package:quwoquan_app/rtc/rtc/call_session/application/incoming_call_presentation_acknowledger.dart';
 import 'package:quwoquan_app/rtc/rtc/call_session/application/call_participant_presentation.dart';
-import 'package:quwoquan_app/application/user/device_registration/device_push_endpoint_writer.dart';
+import 'package:quwoquan_app/user/account/device_registration/application/device_push_endpoint_writer.dart';
 import 'package:quwoquan_app/runtime/di/notification_dependencies.dart';
 import 'package:quwoquan_app/runtime/di/rtc_dependencies.dart';
 import 'package:quwoquan_app/runtime/di/user_dependencies.dart';

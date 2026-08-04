@@ -1,10 +1,10 @@
-import 'package:quwoquan_app/cloud/remote/circle/behavior_fact/behavior_fact_remote.dart';
-import 'package:quwoquan_app/cloud/remote/circle/circle/circle_lifecycle_remote.dart';
-import 'package:quwoquan_app/cloud/remote/circle/circle/circle_query_remote.dart';
-import 'package:quwoquan_app/cloud/remote/circle/file/file_remote.dart';
-import 'package:quwoquan_app/cloud/remote/circle/group/group_remote.dart';
-import 'package:quwoquan_app/cloud/remote/circle/membership/membership_remote.dart';
-import 'package:quwoquan_app/cloud/remote/circle/post_placement/post_placement_remote.dart';
+import 'package:quwoquan_app/circle/circle_management/circle_behavior_fact/adapters/behavior_fact_remote.dart';
+import 'package:quwoquan_app/circle/circle_management/circle/adapters/circle_lifecycle_remote.dart';
+import 'package:quwoquan_app/circle/circle_management/circle/adapters/circle_query_remote.dart';
+import 'package:quwoquan_app/circle/circle_management/circle_file/adapters/file_remote.dart';
+import 'package:quwoquan_app/circle/circle_management/circle_group/adapters/group_remote.dart';
+import 'package:quwoquan_app/circle/circle_management/circle_membership/adapters/membership_remote.dart';
+import 'package:quwoquan_app/circle/circle_management/circle_post_placement/adapters/post_placement_remote.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// circle domain 的 production Remote adapter 种类。

@@ -3,7 +3,7 @@ import 'package:quwoquan_app/cloud/services/user/relationship_capability_reposit
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-import 'object_doubles/user/alpha_greeting_request_facets.dart';
+import '../user/relationship/greeting_request/greeting_request_typed_double.dart';
 
 /// Chat/User widget contracts use an explicit authenticated identity instead
 /// of relying on the production session store or an anonymous default.

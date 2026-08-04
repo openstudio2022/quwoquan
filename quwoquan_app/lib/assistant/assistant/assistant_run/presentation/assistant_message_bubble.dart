@@ -25,7 +25,7 @@ import 'package:quwoquan_app/assistant/assistant/assistant_run/presentation/assi
 import 'package:quwoquan_app/assistant/assistant/assistant_run/presentation/assistant_turn_message_resolver.dart';
 import 'package:quwoquan_app/assistant/assistant/assistant_run/presentation/assistant_presentation_renderer.dart';
 import 'package:quwoquan_app/assistant/assistant/assistant_run/presentation/regenerate_options_popup.dart';
-import 'package:quwoquan_app/ui/chat/widgets/message/voice_message_bubble.dart';
+import 'package:quwoquan_app/chat/chat/message/presentation/voice_message_bubble.dart';
 
 part 'assistant_message_followup_card.dart';
 

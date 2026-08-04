@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/platform/platform_capabilities.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/ui/settings/pages/settings_permissions_page.dart';
+import 'package:quwoquan_app/user/account/user_settings/presentation/settings_permissions_page.dart';
 
 void main() {
   testWidgets('Web 无通讯录能力时展示不可用且不保留对象权限占位', (tester) async {

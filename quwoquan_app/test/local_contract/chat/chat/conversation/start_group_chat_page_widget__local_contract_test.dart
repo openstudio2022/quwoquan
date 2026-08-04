@@ -18,7 +18,7 @@ import 'package:quwoquan_app/core/models/start_group_chat_route_extra.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/pages/start_group_chat_page.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_contacts_rows_provider.dart';
-import 'package:quwoquan_app/ui/chat/providers/chat_inbox_provider.dart';
+import 'package:quwoquan_app/chat/chat/chat_inbox_view/application/chat_inbox_provider.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
 import '../../../../support/runtime_failure_fixtures.dart';

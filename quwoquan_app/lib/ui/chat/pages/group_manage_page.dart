@@ -6,8 +6,8 @@ import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.d
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
-import 'package:quwoquan_app/ui/chat/providers/chat_inbox_provider.dart';
-import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
+import 'package:quwoquan_app/chat/chat/chat_inbox_view/application/chat_inbox_provider.dart';
+import 'package:quwoquan_app/chat/chat/conversation/application/conversation_members_provider.dart';
 
 /// 群管理页 — 群主/管理员专属管理入口
 class GroupManagePage extends ConsumerStatefulWidget {

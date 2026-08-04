@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/ui/settings/pages/blocked_keywords_page.dart';
+import 'package:quwoquan_app/user/account/user_settings/presentation/blocked_keywords_page.dart';
 import 'package:quwoquan_app/ui/settings/pages/my_reports_page.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import '../../../../support/cloud_services/repository_mock_reexports.dart';

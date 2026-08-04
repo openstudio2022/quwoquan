@@ -9,8 +9,8 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/trackers/journey_event_tracker.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
-import 'package:quwoquan_app/ui/user/pages/persona_management_form_page.dart';
-import 'package:quwoquan_app/ui/user/providers/persona_management_provider.dart';
+import 'package:quwoquan_app/user/persona_management/persona/presentation/persona_management_form_page.dart';
+import 'package:quwoquan_app/user/persona_management/persona/application/persona_management_provider.dart';
 import 'package:quwoquan_app/components/object_page/profile_ios_components.dart';
 
 class PersonaManagementPage extends ConsumerStatefulWidget {

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
-import 'package:quwoquan_app/ui/chat/widgets/message/rtc_call_log_bubble.dart';
+import 'package:quwoquan_app/chat/chat/message/presentation/rtc_call_log_bubble.dart';
 import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
 
 void main() {

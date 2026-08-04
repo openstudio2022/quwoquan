@@ -1,4 +1,4 @@
-import 'package:quwoquan_app/application/user/persona/persona_query.dart';
+import 'package:quwoquan_app/user/persona_management/persona/application/persona_query.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     as contracts;

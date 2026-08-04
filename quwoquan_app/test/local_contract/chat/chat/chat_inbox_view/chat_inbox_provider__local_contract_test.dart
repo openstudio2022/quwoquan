@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_view_data.dart';
 import '../../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/ui/chat/providers/chat_inbox_provider.dart';
+import 'package:quwoquan_app/chat/chat/chat_inbox_view/application/chat_inbox_provider.dart';
 
 import '../../../../support/chat/chat/chat_inbox_view/chat_inbox_view_fixture_builder.dart';
 

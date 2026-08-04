@@ -11,7 +11,7 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/trackers/chat_interaction_telemetry_tracker.dart';
 import 'package:quwoquan_app/core/trackers/page_lifecycle_observability.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
-import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
+import 'package:quwoquan_app/chat/chat/conversation/application/conversation_members_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/group_home_provider.dart';
 
 /// 群公告查看与编辑页。

@@ -2,7 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/components/object_page/object_page_sections.dart';
-import 'package:quwoquan_app/ui/circle/widgets/circle_header.dart';
+import 'package:quwoquan_app/circle/circle_management/circle/presentation/circle_header.dart';
 
 Widget _wrap(Widget child) => MaterialApp(
   home: Scaffold(

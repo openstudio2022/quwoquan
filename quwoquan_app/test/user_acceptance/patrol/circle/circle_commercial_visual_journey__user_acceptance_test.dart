@@ -12,8 +12,8 @@ import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/testing/patrol_test_support.dart';
 import 'package:quwoquan_app/ui/circle/pages/circle_detail_page.dart';
-import 'package:quwoquan_app/ui/circle/pages/circle_edit_settings_page.dart';
-import 'package:quwoquan_app/ui/circle/pages/circle_stats_page.dart';
+import 'package:quwoquan_app/circle/circle_management/circle/presentation/circle_edit_settings_page.dart';
+import 'package:quwoquan_app/circle/circle_management/circle/presentation/circle_stats_page.dart';
 import 'package:quwoquan_app/ui/circle/pages/home_circles_hub_page.dart';
 
 const _circleId = 'fixture_circle_photo';

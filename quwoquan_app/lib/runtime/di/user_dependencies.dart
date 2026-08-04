@@ -1,16 +1,16 @@
-import 'package:quwoquan_app/cloud/remote/user/account/account_lifecycle_remote.dart';
-import 'package:quwoquan_app/cloud/remote/user/account_session/account_session_remote.dart';
-import 'package:quwoquan_app/cloud/remote/user/authentication_challenge/authentication_challenge_remote.dart';
-import 'package:quwoquan_app/cloud/remote/user/credential_binding/credential_binding_remote.dart';
-import 'package:quwoquan_app/cloud/remote/user/device_registration/device_push_endpoint_remote.dart';
-import 'package:quwoquan_app/cloud/remote/user/following_subject/following_subject_remote.dart';
-import 'package:quwoquan_app/cloud/remote/user/persona/persona_query_remote.dart';
+import 'package:quwoquan_app/user/account/user_account/adapters/account_lifecycle_remote.dart';
+import 'package:quwoquan_app/user/account/account_session/adapters/account_session_remote.dart';
+import 'package:quwoquan_app/user/account/authentication_challenge/adapters/authentication_challenge_remote.dart';
+import 'package:quwoquan_app/user/account/credential_binding/adapters/credential_binding_remote.dart';
+import 'package:quwoquan_app/user/account/device_registration/adapters/device_push_endpoint_remote.dart';
+import 'package:quwoquan_app/user/profile_projection/following_subject/adapters/following_subject_remote.dart';
+import 'package:quwoquan_app/user/persona_management/persona/adapters/persona_query_remote.dart';
 import 'package:quwoquan_app/cloud/remote/user/profile/profile_edit_query_remote.dart';
 import 'package:quwoquan_app/cloud/remote/user/profile/profile_query_remote.dart';
 import 'package:quwoquan_app/cloud/remote/user/profile/user_profile_query_remote.dart';
-import 'package:quwoquan_app/cloud/remote/user/profile_update_proposal/profile_update_proposal_remote.dart';
-import 'package:quwoquan_app/cloud/remote/user/subject_follow/subject_follow_remote.dart';
-import 'package:quwoquan_app/cloud/remote/user/user_account/user_sync_remote.dart';
+import 'package:quwoquan_app/user/persona_management/profile_update_proposal/adapters/profile_update_proposal_remote.dart';
+import 'package:quwoquan_app/user/relationship/subject_follow/adapters/subject_follow_remote.dart';
+import 'package:quwoquan_app/user/account/user_account/adapters/user_sync_remote.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// user domain 的 production Remote adapter 种类。

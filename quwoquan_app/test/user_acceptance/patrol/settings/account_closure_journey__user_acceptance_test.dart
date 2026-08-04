@@ -29,7 +29,7 @@ import 'package:go_router/go_router.dart';
 import 'package:patrol/patrol.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
-import 'package:quwoquan_app/cloud/remote/user/user_settings/user_settings_remote.dart';
+import 'package:quwoquan_app/user/account/user_settings/adapters/user_settings_remote.dart';
 import 'package:quwoquan_app/cloud/runtime/auth/cloud_auth_token_provider.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/config/cloud_runtime_environment.dart';

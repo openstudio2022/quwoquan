@@ -24,7 +24,7 @@ import 'package:quwoquan_app/ui/chat/models/chat_contacts_row.dart';
 import 'package:quwoquan_app/ui/chat/models/chat_list_item_view_model.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_contacts_rows_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/greeting_inbox_provider.dart';
-import 'package:quwoquan_app/ui/chat/providers/message_home_rows_provider.dart';
+import 'package:quwoquan_app/chat/chat/message/application/message_home_rows_provider.dart';
 import 'package:quwoquan_app/notification/notification_delivery/notification/presentation/notification_inbox_provider.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show AppMessage, NotificationType;
