@@ -8,7 +8,7 @@ import 'package:http/testing.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/cloud/runtime/auth/cloud_auth_token_provider.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
-import 'package:quwoquan_app/cloud/services/integration/remote/connector_management_remote.dart';
+import 'package:quwoquan_app/integration/external_integration/connector_connection/adapters/connector_management_remote.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../support/assistant_remote_test_support.dart';

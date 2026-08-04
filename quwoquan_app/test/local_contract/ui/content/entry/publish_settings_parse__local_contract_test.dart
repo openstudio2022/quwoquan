@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
-import 'package:quwoquan_app/cloud/services/integration/remote/location_query_remote.dart';
+import 'package:quwoquan_app/integration/external_integration/location/adapters/location_query_remote.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 final class _StubOperationExecutor implements CloudOperationExecutor {

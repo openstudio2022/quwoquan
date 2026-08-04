@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/core/application/content/create_location_coordinator.dart';
-import 'package:quwoquan_app/cloud/services/integration/remote/location_query_remote.dart';
+import 'package:quwoquan_app/integration/external_integration/location/adapters/location_query_remote.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 
 void main() {

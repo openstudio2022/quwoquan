@@ -4,7 +4,7 @@ import 'package:quwoquan_app/cloud/runtime/config/cloud_runtime_environment.dart
 import 'package:quwoquan_app/cloud/runtime/context/cloud_client_context.dart';
 import 'package:quwoquan_app/cloud/runtime/executor/cloud_operation_client_factory.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
-import 'package:quwoquan_app/cloud/services/integration/remote/location_query_remote.dart';
+import 'package:quwoquan_app/integration/external_integration/location/adapters/location_query_remote.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../support/recording_cloud_operation_telemetry_sink.dart';
