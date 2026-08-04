@@ -36,7 +36,7 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/services/visit_recorder_service.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/assistant/pages/personal_assistant_session_page.dart';
-import 'package:quwoquan_app/ui/assistant/providers/assistant_history_loader.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_session/application/assistant_history_loader.dart';
 import 'package:quwoquan_app/ui/assistant/providers/personal_assistant_stream_controller.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
