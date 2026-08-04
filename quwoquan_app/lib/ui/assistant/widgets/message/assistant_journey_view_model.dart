@@ -2,7 +2,7 @@ import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/assistant_
 import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/runtime_enums.dart';
 import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
-import 'package:quwoquan_app/ui/assistant/models/assistant_ui_usage_stats_view_data.dart';
+import 'package:quwoquan_app/assistant/assistant/skill_activity_view/presentation/assistant_ui_usage_stats_view_data.dart';
 import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/assistant_display_state_projection.dart';
 import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/assistant_display_text_resolver.dart';
 import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/assistant_process_timeline.dart';

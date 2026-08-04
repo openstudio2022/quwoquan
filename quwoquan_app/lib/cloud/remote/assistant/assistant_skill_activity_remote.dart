@@ -1,4 +1,4 @@
-import 'package:quwoquan_app/application/assistant/skill_activity/skill_activity_query.dart';
+import 'package:quwoquan_app/assistant/assistant/skill_activity_view/application/skill_activity_query.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_request_page_ids.g.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
