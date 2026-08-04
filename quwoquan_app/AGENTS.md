@@ -21,6 +21,16 @@
 - 用户可见错误提示必须来自 codegen 错误枚举、`toDisplayMessage(context.l10n)`、`UITextConstants` 或 l10n；禁止在 UI/Provider 中 switch 硬编码错误码字符串或中文提示。
 - `CloudException` 必须由 runtime mapper 生成并暴露 `runtimeFailure`；UI 状态只消费 `RuntimeFailure`、`runtimeErrorDisplayMessage` 和 `RuntimeRecoveryPolicy`，不得展示 raw exception/debugMessage。
 - 新页面或页面行为变化，要同步核对页面横向质量矩阵、metadata-driven UI 清单与相关测试。
+- 搬迁或改名页面文件时**不要手改** `quwoquan_service/contracts/metadata/_shared/page_object_contract.yaml`：
+ 该契约的 `source_path`、`route_registration_evidence`、`mount_evidence` 由
+ `python3 quwoquan_service/scripts/contracts/sync_page_object_source_paths.py` 统一同步，
+ 它是该文件迁移期的唯一写入口，避免多条并发流整文件覆写互相清掉改动。搬完页面跑一次即可；
+ `--check` 只检测不落盘。工具无法唯一定位新落点时会 `MANUAL` 报错退出，此时补人工裁决，
+ 不要绕过它直接改 YAML。
+- 页面的业务归属仍以 `page_object_contract.yaml` 的 `object_ids` 为真相源：多对象页面被物理搬进
+ 某个对象的 `presentation/` **不等于**已经拆页，`object_path_map.py` 会按 `app_target_shape`
+ 判成单对象、`multi_object_page` 信号随之消失。不得为了让派生器闭嘴而删减 `object_ids`；
+ 同步工具会把这类页面报成 `REVIEW [multi_object_single_presentation]` 等待拆页裁决。
 - App 端在 `alpha/beta/gamma/prod` 全部使用同一个 production Remote composition；环境只提供 runtime package/endpoints，App 可见第一方业务数据只来自环境已激活的 canonical immutable release。任何 runner、UAT support 或启动脚本均不得注入 Mock/fixture，也不得保留 Mock/Remote 切换入口。
 - 新页面、入口、详情、搜索、创作、消息或推荐相关改动，必须补曝光、停留、异常、关键点击、`referralSource`/`feedRequestId`/trace 传递；内容消费页还要补消费深度和互动反馈。
 - 用户反馈、点赞/评论/收藏/分享/关注、搜索点击、内容停留等行为必须能回流到推荐和运营分析，不得只停留在 UI 状态。
@@ -76,6 +86,8 @@ key 命名表达归属，避免 16 条 domain 并行流互相覆盖。
 
 - 改 Dart 文件后读取最近改动文件的 lint。
 - 页面/壳层改动：执行 `make verify-app-page-horizontal-quality`。
+- 搬迁/改名页面文件后：先执行 `python3 quwoquan_service/scripts/contracts/sync_page_object_source_paths.py`
+ 收敛契约路径，再跑页面横向质量门禁。
 - 改动 runtime error 契约相关代码：执行 `dart quwoquan_ops/tools/runtime_error_codegen/bin/check_runtime_error_cutover.dart`。
 - 根据触达范围跑对应 `flutter test`，必要时再跑 `bash quwoquan_ops/gate/gate_repo.sh --scope app`。
 - 涉及环境、包纯度或部署验证时，使用 `python3 quwoquan_ops/cli/stackctl.py package/verify/health/inspect`，不要手写第二套 URL、端口或拓扑。

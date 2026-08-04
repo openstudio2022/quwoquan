@@ -8,7 +8,7 @@ import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/integration/integration_location_errors.g.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/core/application/content/create_location_coordinator.dart';
-import 'package:quwoquan_app/cloud/services/integration/location_query_contracts.dart';
+import 'package:quwoquan_app/integration/external_integration/location/application/location_query_contracts.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/platform/location/location_gateway.dart';
 import 'package:quwoquan_app/core/widgets/app_request_feedback.dart';

@@ -13,8 +13,8 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/services/visit_recorder_service.dart';
 import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
-import 'package:quwoquan_app/cloud/services/integration/connector_management_facet.dart';
-import 'package:quwoquan_app/ui/assistant/pages/assistant_skill_center_page.dart';
+import 'package:quwoquan_app/integration/external_integration/connector_connection/application/connector_management_facet.dart';
+import 'package:quwoquan_app/assistant/assistant/skill_catalog/presentation/assistant_skill_center_page.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../../support/cloud_services/assistant_facet_overrides.dart';

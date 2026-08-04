@@ -25,7 +25,7 @@ import 'package:quwoquan_app/cloud/remote/assistant/assistant_skill_user_setting
 import 'package:quwoquan_app/cloud/remote/entity/homepage/homepage_command_remote.dart';
 import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
 import 'package:quwoquan_app/cloud/services/entity/remote/homepage_query_remote.dart';
-import 'package:quwoquan_app/cloud/services/integration/connector_management_facet.dart';
+import 'package:quwoquan_app/integration/external_integration/connector_connection/application/connector_management_facet.dart';
 import 'package:quwoquan_app/notification/notification_delivery/notification/application/notification_facets.dart';
 import 'package:quwoquan_app/notification/notification_delivery/notification/adapters/app_message_facets_remote.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';

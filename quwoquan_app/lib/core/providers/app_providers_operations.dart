@@ -17,7 +17,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/content/content_request_pag
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_request_page_ids.g.dart';
 import 'package:quwoquan_app/application/entity/homepage_review_operation_ports.dart';
 import 'package:quwoquan_app/core/application/content/create_location_coordinator.dart';
-import 'package:quwoquan_app/cloud/services/integration/location_query_contracts.dart';
+import 'package:quwoquan_app/integration/external_integration/location/application/location_query_contracts.dart';
 import 'package:quwoquan_app/cloud/services/ops/ops_visit_append_writer.dart';
 import 'package:quwoquan_app/cloud/remote/content/profile_interaction/profile_interaction_remote.dart';
 import 'package:quwoquan_app/cloud/remote/entity/homepage_review/homepage_review_remote.dart';

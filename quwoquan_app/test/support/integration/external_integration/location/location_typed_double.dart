@@ -1,4 +1,4 @@
-import 'package:quwoquan_app/cloud/services/integration/location_query_contracts.dart';
+import 'package:quwoquan_app/integration/external_integration/location/application/location_query_contracts.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../cloud_services/object_doubles/object_scenario_seed_reader.dart';
