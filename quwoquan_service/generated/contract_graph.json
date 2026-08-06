@@ -100172,17 +100172,22 @@
             "sha256": "7b8668be00b3b2cd689a6780fc3432b3e5f6204d448aad42ad6770252bdcd52f"
           }
         ],
-        "transport": [],
+        "transport": [
+          {
+            "path": "quwoquan_service/services/api-edge/internal/edge_security/operation_admission_decision/adapters/inbound/http/middleware.go",
+            "sha256": "1ead472dbd6d79325f90a6ea0f1d8447346c637c2bc8cf4e9e1566c9a64685da"
+          }
+        ],
         "localContract": [
           {
             "path": "quwoquan_service/services/api-edge/tests/local_contract/edge_security/operation_admission_decision/operation_admission_port__contract__local_contract_test.go",
-            "sha256": "ecc3dc09a391d53b73862a0f51e38eb352ab0806a53f1ef969b69446228024bb"
+            "sha256": "36c313a2a3c88f1058faf8e2846301426b72893ddd8b838ec056c39911fd4845"
           }
         ],
         "apiIntegration": [
           {
             "path": "quwoquan_service/services/api-edge/tests/api_integration/edge_security/operation_admission_decision/generated_operation_admission__api_integration_test.go",
-            "sha256": "62b715c0c1e84bbab608c3ac604e07ed396f6f38e30e910a511eeeabaa0665a7"
+            "sha256": "9f5f0a1ade08d29f6c15cd3718e08d786785ae44f4154410699127359c5fb274"
           }
         ]
       },
@@ -110620,13 +110625,13 @@
     },
     {
       "objectId": "gateway.operation_admission_decision",
-      "stage": "contract-ready",
+      "stage": "implemented",
       "modeled": true,
       "contractReady": true,
-      "implemented": false,
+      "implemented": true,
       "commercialReady": false,
       "missing": [
-        "implementation.service.transport"
+        "commercial.result_bundle"
       ]
     },
     {

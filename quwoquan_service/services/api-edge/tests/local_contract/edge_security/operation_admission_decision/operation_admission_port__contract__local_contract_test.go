@@ -3,11 +3,14 @@
 package operation_admission_decision_test
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	rtauth "quwoquan_service/runtime/auth"
+	rterr "quwoquan_service/runtime/errors"
+	admissionhttp "quwoquan_service/services/api-edge/internal/edge_security/operation_admission_decision/adapters/inbound/http"
 	"quwoquan_service/services/api-edge/internal/edge_security/operation_admission_decision/application"
 	"quwoquan_service/services/api-edge/internal/edge_security/operation_admission_decision/infrastructure"
 )
@@ -24,11 +27,11 @@ func (port *recordingOperationAdmissionPort) Wrap(next http.Handler) http.Handle
 	})
 }
 
-func TestOperationAdmissionFacadeDelegatesToTypedExternalPort(t *testing.T) {
+func TestOperationAdmissionMiddlewareDelegatesThroughFacadeToTypedExternalPort(t *testing.T) {
 	port := &recordingOperationAdmissionPort{}
-	facade := application.NewFacade(port)
+	middleware := admissionhttp.NewMiddleware(application.NewFacade(port))
 	ownerReached := false
-	handler := facade.Wrap(http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
+	handler := middleware.Wrap(http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
 		ownerReached = true
 		response.WriteHeader(http.StatusNoContent)
 	}))
@@ -73,12 +76,14 @@ func TestOperationAdmissionPortKeepsUnknownAndBlockedOperationsFailClosed(
 	t *testing.T,
 ) {
 	reachedOwner := 0
-	facade := application.NewFacade(
-		infrastructure.NewGeneratedOperationPort(
-			[]rtauth.OperationSecurityDescriptor{blockedDescriptor()},
+	middleware := admissionhttp.NewMiddleware(
+		application.NewFacade(
+			infrastructure.NewGeneratedOperationPort(
+				[]rtauth.OperationSecurityDescriptor{blockedDescriptor()},
+			),
 		),
 	)
-	handler := facade.Wrap(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+	handler := middleware.Wrap(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		reachedOwner++
 	}))
 
@@ -86,16 +91,22 @@ func TestOperationAdmissionPortKeepsUnknownAndBlockedOperationsFailClosed(
 		name       string
 		path       string
 		wantStatus int
+		wantCode   string
+		wantMsg    string
 	}{
 		{
 			name:       "unknown route",
 			path:       "/unregistered",
 			wantStatus: http.StatusNotFound,
+			wantCode:   "GATEWAY.USER.route_not_found",
+			wantMsg:    "接口不存在或已下线",
 		},
 		{
 			name:       "commercially blocked operation",
 			path:       "/content/posts/post-1",
 			wantStatus: http.StatusForbidden,
+			wantCode:   "GATEWAY.USER.forbidden",
+			wantMsg:    "当前账号没有该操作权限",
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -104,17 +115,44 @@ func TestOperationAdmissionPortKeepsUnknownAndBlockedOperationsFailClosed(
 				response,
 				httptest.NewRequest(http.MethodGet, testCase.path, nil),
 			)
-			if response.Code != testCase.wantStatus {
-				t.Fatalf(
-					"status=%d want=%d body=%s",
-					response.Code,
-					testCase.wantStatus,
-					response.Body.String(),
-				)
-			}
+			assertGatewayRuntimeError(
+				t,
+				response,
+				testCase.wantStatus,
+				testCase.wantCode,
+				testCase.wantMsg,
+			)
 		})
 	}
 	if reachedOwner != 0 {
 		t.Fatalf("owner reached %d time(s), want 0", reachedOwner)
+	}
+}
+
+func assertGatewayRuntimeError(
+	t *testing.T,
+	response *httptest.ResponseRecorder,
+	wantStatus int,
+	wantCode string,
+	wantMsg string,
+) {
+	t.Helper()
+	if response.Code != wantStatus {
+		t.Fatalf(
+			"status=%d want=%d body=%s",
+			response.Code,
+			wantStatus,
+			response.Body.String(),
+		)
+	}
+	var body rterr.ErrorResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode runtime error: %v body=%s", err, response.Body.String())
+	}
+	if body.Code != wantCode {
+		t.Fatalf("code=%q want=%q", body.Code, wantCode)
+	}
+	if body.UserMessage != wantMsg {
+		t.Fatalf("userMessage=%q want=%q", body.UserMessage, wantMsg)
 	}
 }

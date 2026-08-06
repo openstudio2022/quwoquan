@@ -3,15 +3,31 @@
 package api_integration
 
 import (
+	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
 
 	rtauth "quwoquan_service/runtime/auth"
+	rterr "quwoquan_service/runtime/errors"
+	admissionhttp "quwoquan_service/services/api-edge/internal/edge_security/operation_admission_decision/adapters/inbound/http"
 	"quwoquan_service/services/api-edge/internal/edge_security/operation_admission_decision/application"
 	"quwoquan_service/services/api-edge/internal/edge_security/operation_admission_decision/infrastructure"
 )
+
+func newAdmissionServer(
+	descriptors []rtauth.OperationSecurityDescriptor,
+	owner http.Handler,
+) *httptest.Server {
+	middleware := admissionhttp.NewMiddleware(
+		application.NewFacade(
+			infrastructure.NewGeneratedOperationPort(descriptors),
+		),
+	)
+	return httptest.NewServer(middleware.Wrap(owner))
+}
 
 func TestGeneratedOperationAdmissionAllowsKnownAndRejectsUnknownRoutes(t *testing.T) {
 	descriptor := rtauth.OperationSecurityDescriptor{
@@ -40,12 +56,10 @@ func TestGeneratedOperationAdmissionAllowsKnownAndRejectsUnknownRoutes(t *testin
 		ownerCalls.Add(1)
 		response.WriteHeader(http.StatusNoContent)
 	})
-	facade := application.NewFacade(
-		infrastructure.NewGeneratedOperationPort(
-			[]rtauth.OperationSecurityDescriptor{descriptor},
-		),
+	server := newAdmissionServer(
+		[]rtauth.OperationSecurityDescriptor{descriptor},
+		owner,
 	)
-	server := httptest.NewServer(facade.Wrap(owner))
 	t.Cleanup(server.Close)
 
 	known, err := server.Client().Get(server.URL + "/content/posts/post-1")
@@ -61,10 +75,13 @@ func TestGeneratedOperationAdmissionAllowsKnownAndRejectsUnknownRoutes(t *testin
 	if err != nil {
 		t.Fatalf("unknown operation request: %v", err)
 	}
-	_ = unknown.Body.Close()
-	if unknown.StatusCode != http.StatusNotFound {
-		t.Fatalf("unknown operation status=%d, want %d", unknown.StatusCode, http.StatusNotFound)
-	}
+	assertGatewayRuntimeError(
+		t,
+		unknown,
+		http.StatusNotFound,
+		"GATEWAY.USER.route_not_found",
+		"接口不存在或已下线",
+	)
 	if calls := ownerCalls.Load(); calls != 1 {
 		t.Fatalf("owner calls=%d, want 1", calls)
 	}
@@ -84,17 +101,11 @@ func TestGeneratedOperationAdmissionRejectsAnonymousHTTPInvocation(t *testing.T)
 		TimeoutMilliseconds:  1500,
 		CommercialStatus:     "ready",
 	}
-	facade := application.NewFacade(
-		infrastructure.NewGeneratedOperationPort(
-			[]rtauth.OperationSecurityDescriptor{descriptor},
-		),
-	)
-	server := httptest.NewServer(
-		facade.Wrap(http.HandlerFunc(
-			func(http.ResponseWriter, *http.Request) {
-				t.Fatal("anonymous request reached operation owner")
-			},
-		)),
+	server := newAdmissionServer(
+		[]rtauth.OperationSecurityDescriptor{descriptor},
+		http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+			t.Fatal("anonymous request reached operation owner")
+		}),
 	)
 	defer server.Close()
 
@@ -102,12 +113,44 @@ func TestGeneratedOperationAdmissionRejectsAnonymousHTTPInvocation(t *testing.T)
 	if err != nil {
 		t.Fatalf("invoke admission boundary: %v", err)
 	}
+	assertGatewayRuntimeError(
+		t,
+		response,
+		http.StatusUnauthorized,
+		"GATEWAY.USER.unauthorized",
+		"请先登录后再继续",
+	)
+}
+
+func assertGatewayRuntimeError(
+	t *testing.T,
+	response *http.Response,
+	wantStatus int,
+	wantCode string,
+	wantMsg string,
+) {
+	t.Helper()
 	defer response.Body.Close()
-	if response.StatusCode != http.StatusUnauthorized {
+	bodyBytes, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatalf("read runtime error body: %v", err)
+	}
+	if response.StatusCode != wantStatus {
 		t.Fatalf(
-			"status=%d want=%d",
+			"status=%d want=%d body=%s",
 			response.StatusCode,
-			http.StatusUnauthorized,
+			wantStatus,
+			string(bodyBytes),
 		)
+	}
+	var body rterr.ErrorResponse
+	if err := json.Unmarshal(bodyBytes, &body); err != nil {
+		t.Fatalf("decode runtime error: %v body=%s", err, string(bodyBytes))
+	}
+	if body.Code != wantCode {
+		t.Fatalf("code=%q want=%q", body.Code, wantCode)
+	}
+	if body.UserMessage != wantMsg {
+		t.Fatalf("userMessage=%q want=%q", body.UserMessage, wantMsg)
 	}
 }
