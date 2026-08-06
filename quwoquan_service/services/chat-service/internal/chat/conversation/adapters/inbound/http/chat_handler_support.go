@@ -12,6 +12,7 @@ import (
 
 	rtauth "quwoquan_service/runtime/auth"
 	rterr "quwoquan_service/runtime/errors"
+	generated "quwoquan_service/services/chat-service/generated/chat/conversation"
 	"quwoquan_service/services/chat-service/internal/chat/conversation/application"
 	model "quwoquan_service/services/chat-service/internal/chat/conversation/domain/model"
 )
@@ -57,14 +58,14 @@ func conversationMemberToWire(
 	currentUserID string,
 ) map[string]any {
 	return map[string]any{
-		"userId":           member.UserId,
-		"userHandle":       strings.TrimSpace(member.UserHandle),
-		"displayName":      member.DisplayName,
-		"avatarUrl":        member.AvatarUrl,
-		"role":             member.Role,
-		"memberType":       member.MemberType,
-		"joinedAt":         formatOptionalTime(member.JoinedAt),
-		"isCurrentUser":    member.UserId == currentUserID,
+		"userId":        member.UserId,
+		"userHandle":    strings.TrimSpace(member.UserHandle),
+		"displayName":   member.DisplayName,
+		"avatarUrl":     member.AvatarUrl,
+		"role":          member.Role,
+		"memberType":    member.MemberType,
+		"joinedAt":      formatOptionalTime(member.JoinedAt),
+		"isCurrentUser": member.UserId == currentUserID,
 	}
 }
 
@@ -195,6 +196,9 @@ func (h *ChatHandler) groupHomeToWire(ctx context.Context, conv model.Conversati
 		"groupAvatarVersion": conv.GroupAvatarVersion,
 		"circleId":           conv.CircleId,
 		"circleGroupId":      conv.CircleGroupId,
+		"gatheringId":        conv.GatheringId,
+		"accessMode":         application.EffectiveConversationAccessMode(conv),
+		"postingPolicy":      application.EffectiveConversationPostingPolicy(conv),
 		"entityId":           conv.EntityId,
 		"sourceEntityTitle":  conv.EntityId,
 		"sourceCircleTitle":  conv.CircleId,
@@ -319,6 +323,11 @@ func (h *ChatHandler) conversationToWire(ctx context.Context, conv model.Convers
 		"creatorId":                  conv.CreatorId,
 		"circleId":                   conv.CircleId,
 		"circleGroupId":              conv.CircleGroupId,
+		"gatheringId":                conv.GatheringId,
+		"gatheringSourceVersion":     conv.GatheringSourceVersion,
+		"gatheringSourceEventId":     conv.GatheringSourceEventID,
+		"accessMode":                 application.EffectiveConversationAccessMode(conv),
+		"postingPolicy":              application.EffectiveConversationPostingPolicy(conv),
 		"entityId":                   conv.EntityId,
 		"originType":                 conv.OriginType,
 		"originIntersectionSnapshot": conv.OriginIntersectionSnapshot,
@@ -409,15 +418,7 @@ func writeHTTPError(w http.ResponseWriter, r *http.Request, err error) {
 }
 
 func newNotFound(entity, id string) *rterr.AppError {
-	reason := "not_found"
-	if entity == "会话" {
-		reason = "conversation_not_found"
-	}
-	return rterr.NewAppError(
-		rterr.NewCode(rterr.ModuleChat, rterr.KindUser, reason),
-		entity+"不存在",
-		entity+" not found: "+id,
-	)
+	return generated.AppErrorFromConversationNotFound(entity + " not found: " + id)
 }
 
 func readJSON(r *http.Request, v any) error {

@@ -1,13 +1,20 @@
 """Route image asset selection and asset metadata construction."""
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any
 
-from content.execution.asset_registry import ExecutionAssetRegistry, allocate_post_asset_id, load_execution_asset_registry
+from core.image_safety import STATUS_UNSAFE, assess_image, is_near_duplicate
+
+from content.execution.asset_registry import (
+    ExecutionAssetRegistry,
+    allocate_post_asset_id,
+    load_execution_asset_registry,
+)
 from content.execution.runtime_state import load_execution_runtime_state
-from core.image_safety import assess_image, is_near_duplicate, STATUS_UNSAFE
 from content.post.article.route_core import _article_without_assets_allowed
+
 
 def _entity_image_candidates(
     execution_id: str, name: str, entity_ref: str = ""
@@ -17,7 +24,10 @@ def _entity_image_candidates(
     每项 {path, sourceRef, sourceAssetRef}（后两者为相对 batch 根路径，构成证据链）。
     """
     from content.source.source_assets import object_image_candidates
-    from content.source.source_unit import find_entity_object_dirs, resolve_entity_object_dir
+    from content.source.source_unit import (
+        find_entity_object_dirs,
+        resolve_entity_object_dir,
+    )
 
     cands: list[dict[str, Any]] = []
     if entity_ref:
@@ -157,108 +167,6 @@ def _specific_asset_caption(candidate: Mapping[str, Any], entity_name: str, fall
     return f"{entity}：来源图像" if entity else "来源图像"
 
 
-def _node_base_pool(
-    candidates: Sequence[Mapping[str, Any]], base_source_id: str
-) -> list[dict[str, Any]]:
-    """某目的地节点的同源候选：researchLane!=image 且来源单元 == 该节点底稿(baseSourceId)。"""
-    base_id = str(base_source_id or "").strip()
-    if not base_id:
-        return []
-    pool = [
-        dict(candidate)
-        for candidate in candidates
-        if str(candidate.get("researchLane") or "") != "image"
-        and Path(str(candidate.get("sourceRef") or "")).parent.name == base_id
-    ]
-    pool.sort(key=lambda row: str(row.get("sourceAssetRef") or row.get("path") or ""))
-    return pool
-
-
-def _build_multi_destination_route_assets(
-    ref: str,
-    route_nodes: Sequence[Mapping[str, Any]],
-    per_entity: Mapping[str, Sequence[Mapping[str, Any]]],
-    layouts: Sequence[str],
-    *,
-    execution_sequence: int,
-    asset_registry: ExecutionAssetRegistry,
-) -> list[dict[str, Any]]:
-    """route 单一多目的地底稿模型：每个目的地节点配图只来自该节点自身底稿(baseSourceId)。
-
-    节点内不跨源、节点间不互借；cover←首节点底稿、各 node←本节点底稿、closing←末节点底稿。
-    某节点无可用同源图 ⇒ 该节点文字承载（不借用其它节点来源替代）。
-    """
-    nodes = [node for node in route_nodes if node.get("entityName")]
-    if not nodes:
-        return []
-    node_pool: dict[str, list[dict[str, Any]]] = {}
-    for node in nodes:
-        name = str(node["entityName"])
-        node_pool[name] = _node_base_pool(
-            per_entity.get(name, []), str(node.get("baseSourceId") or "")
-        )
-
-    assets: list[dict[str, Any]] = []
-    chosen: list[Path] = []
-    first_name = str(nodes[0]["entityName"])
-    last_name = str(nodes[-1]["entityName"])
-
-    cover = _pick_safe_image(node_pool.get(first_name, []), chosen)
-    if cover is not None:
-        chosen.append(cover[0]["path"])
-        assets.append(
-            _make_asset(
-                ref,
-                role="cover",
-                candidate=cover[0],
-                layout=layouts[0] if layouts else "fullWidth",
-                caption=_specific_asset_caption(cover[0], first_name),
-                entity_name=first_name,
-                execution_sequence=execution_sequence,
-                asset_registry=asset_registry,
-                verdict=cover[1],
-            )
-        )
-
-    for position, node in enumerate(nodes):
-        name = str(node["entityName"])
-        node_image = _pick_safe_image(node_pool.get(name, []), chosen)
-        if node_image is None:
-            continue
-        chosen.append(node_image[0]["path"])
-        assets.append(
-            _make_asset(
-                ref,
-                role="node",
-                candidate=node_image[0],
-                layout=_node_layout(layouts, position),
-                caption=_specific_asset_caption(node_image[0], name),
-                entity_name=name,
-                execution_sequence=execution_sequence,
-                asset_registry=asset_registry,
-                verdict=node_image[1],
-            )
-        )
-
-    closing = _pick_safe_image(node_pool.get(last_name, []), chosen)
-    if closing is not None:
-        chosen.append(closing[0]["path"])
-        assets.append(
-            _make_asset(
-                ref,
-                role="closing",
-                candidate=closing[0],
-                layout="fullWidth",
-                caption=_specific_asset_caption(closing[0], last_name, f"{last_name}·回望"),
-                entity_name=last_name,
-                execution_sequence=execution_sequence,
-                asset_registry=asset_registry,
-                verdict=closing[1],
-            )
-        )
-    return assets
-
-
 def _build_route_assets(
     execution_id: str,
     ref: str,
@@ -267,10 +175,8 @@ def _build_route_assets(
 ) -> list[dict[str, Any]]:
     """选图：cover/node/closing 三类职责。
 
-    单实体文章 / 已声明单一底稿：图 100% 同源——全部从 baseSourceRef 底稿来源自身 assets
+    article 图 100% 同源——全部从唯一 baseSourceRef 底稿来源自身 assets
     汇聚的单一 base_pool 去重取图（去实体键控），node 数以 routeNodes 长度 bound、池耗尽即止。
-    多目的地线路（无单一 baseSourceRef 且 >=2 个目的地节点）：每个节点各自单一底稿，
-    节点内不跨源、节点间不互借（_build_multi_destination_route_assets）。
     image carrier：一源一作品（单一 sourceCollectionId）。
     """
     image_plan = list(brief.get("imagePlan") or [])
@@ -298,8 +204,13 @@ def _build_route_assets(
     chosen: list[Path] = []
 
     declared_carrier = str(brief.get("carrier") or "").lower()
-    if declared_carrier != "image" and _article_without_assets_allowed(brief):
-        return []
+    base_source_ref = ""
+    if declared_carrier != "image":
+        base_source_ref = str(brief.get("baseSourceRef") or "").strip()
+        if not base_source_ref:
+            raise RuntimeError(f"{ref}: article requires exactly one baseSourceRef")
+        if _article_without_assets_allowed(brief):
+            return []
     if declared_carrier == "image":
         collection_id = str(brief.get("sourceCollectionId") or "").strip()
         declared_refs = {
@@ -370,30 +281,15 @@ def _build_route_assets(
         if len(collection_ids) != 1 or "" in collection_ids:
             raise RuntimeError(f"{ref}: image work must resolve exactly one sourceCollectionId")
         return assets
-    base_source_ref = str(brief.get("baseSourceRef") or "").strip()
-    # route 单一多目的地底稿模型：无单一 baseSourceRef 且 >=2 个目的地节点 ⇒ 线路文章，
-    # 每个目的地节点各自单一底稿（节点内不跨源、节点间不互借）；单实体/已声明单底稿走下方
-    # 单一 base_pool（保留既有同源硬门行为，不回归）。
-    if not base_source_ref and len(entity_names) >= 2:
-        return _build_multi_destination_route_assets(
-            ref,
-            route_nodes,
-            per_entity,
-            layouts,
-            execution_sequence=execution_sequence,
-            asset_registry=asset_registry,
-        )
     # RC1/RC4 去实体键控：文章配图 100% 同源——只用 baseSourceRef 指向的底稿来源自身
     # assets，汇聚成单一 base_pool；不再按 routeNodes 实体位置(entity_names[0]/[-1])
     # 键控选 cover/closing，避免 base 源不在首/末节点时漏图，也杜绝跨源替代图。
-    # baseSourceRef 缺失时绝不回退到借用同实体/兄弟来源 ⇒ 不配图（text_only）。
     base_pool = sorted(
         (
             candidate
             for rows in per_entity.values()
             for candidate in rows
             if str(candidate.get("researchLane") or "") != "image"
-            and base_source_ref
             and str(candidate.get("sourceRef") or "") == base_source_ref
             and str(candidate.get("sourceAssetRef") or "").startswith(
                 base_source_ref.rsplit("/", 1)[0] + "/assets/"
@@ -401,7 +297,7 @@ def _build_route_assets(
         ),
         key=lambda row: str(row.get("sourceAssetRef") or row.get("path") or ""),
     )
-    if base_source_ref and not base_pool:
+    if not base_pool:
         raise RuntimeError(f"{ref}: article base draft source has no usable source images")
     primary_entity = entity_names[0]
 

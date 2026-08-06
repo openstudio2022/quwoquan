@@ -80,6 +80,7 @@ func writeGeneratedOperationContracts(
 	b.WriteString("    required this.retryMode,\n")
 	b.WriteString("    required this.maxAttempts,\n")
 	b.WriteString("    required this.idempotency,\n")
+	b.WriteString("    this.streamBudget,\n")
 	b.WriteString("    this.paginationDefaultItems,\n")
 	b.WriteString("    this.paginationMaximumItems,\n")
 	b.WriteString("    this.maximumResponseBodyBytes,\n")
@@ -104,6 +105,7 @@ func writeGeneratedOperationContracts(
 	b.WriteString("    required this.responseEntity,\n")
 	b.WriteString("    required this.responseBody,\n")
 	b.WriteString("    required this.responseBodyKind,\n")
+	b.WriteString("    this.successStatus,\n")
 	b.WriteString("    required this.surfaceIds,\n")
 	b.WriteString("  });\n\n")
 	for _, field := range []string{
@@ -146,6 +148,7 @@ func writeGeneratedOperationContracts(
 	b.WriteString("  final List<String> permissions;\n")
 	b.WriteString("  final int timeoutMilliseconds;\n")
 	b.WriteString("  final int maxAttempts;\n")
+	b.WriteString("  final CloudOperationStreamBudget? streamBudget;\n")
 	b.WriteString("  final int? paginationDefaultItems;\n")
 	b.WriteString("  final int? paginationMaximumItems;\n")
 	b.WriteString("  final int? maximumResponseBodyBytes;\n")
@@ -158,8 +161,19 @@ func writeGeneratedOperationContracts(
 	b.WriteString("  final List<CloudOperationRequestBinding> requestQueryBindings;\n")
 	b.WriteString("  final List<CloudOperationRequestBinding> requestHeaderBindings;\n")
 	b.WriteString("  final List<CloudOperationRequestBinding> requestInjectedBindings;\n")
+	b.WriteString("  final int? successStatus;\n")
 	b.WriteString("  final List<String> surfaceIds;\n")
 	b.WriteString("  final CloudOperationStreamingContract? streaming;\n")
+	b.WriteString("}\n\n")
+	b.WriteString("final class CloudOperationStreamBudget {\n")
+	b.WriteString("  const CloudOperationStreamBudget({\n")
+	b.WriteString("    required this.handshakeMilliseconds,\n")
+	b.WriteString("    required this.idleMilliseconds,\n")
+	b.WriteString("    required this.maxDurationMilliseconds,\n")
+	b.WriteString("  });\n\n")
+	b.WriteString("  final int handshakeMilliseconds;\n")
+	b.WriteString("  final int idleMilliseconds;\n")
+	b.WriteString("  final int maxDurationMilliseconds;\n")
 	b.WriteString("}\n\n")
 	b.WriteString("final class CloudOperationStreamingContract {\n")
 	b.WriteString("  const CloudOperationStreamingContract({\n")
@@ -253,6 +267,24 @@ func writeGeneratedOperationContracts(
 		"typedef CloudOperationRequestEncoder = " +
 			"CloudOperationRequestPayload Function();\n\n",
 	)
+	b.WriteString(
+		"typedef CloudOperationUpgradeRequestEncoder<TRequest> = " +
+			"CloudOperationRequestPayload Function(TRequest request);\n\n",
+	)
+	b.WriteString("/// Typed handoff for protocols that replace the HTTP response stream.\n")
+	b.WriteString("///\n")
+	b.WriteString("/// Upgrade operations are consumed by a protocol-specific adapter (for\n")
+	b.WriteString("/// example, WebSocketChannel), never by the JSON response executor.\n")
+	b.WriteString("final class CloudOperationUpgradeDescriptor<TRequest> {\n")
+	b.WriteString("  const CloudOperationUpgradeDescriptor({\n")
+	b.WriteString("    required this.operation,\n")
+	b.WriteString("    required this.requestEncoder,\n")
+	b.WriteString("  });\n\n")
+	b.WriteString("  final CloudOperationContract operation;\n")
+	b.WriteString(
+		"  final CloudOperationUpgradeRequestEncoder<TRequest> requestEncoder;\n",
+	)
+	b.WriteString("}\n\n")
 	b.WriteString("abstract interface class CloudOperationExecutor {\n")
 	b.WriteString("  Future<TResponse> send<TResponse>(\n")
 	b.WriteString("    CloudOperationContract operation, {\n")
@@ -291,6 +323,21 @@ func writeGeneratedOperationContracts(
 				"%s has a client_contract but no generated canonical request artifact",
 				operation.CanonicalOperationID,
 			)
+		}
+		if strings.TrimSpace(operation.ResponseBodyKind) == "upgrade" {
+			if strings.TrimSpace(operation.Method) != "GET" ||
+				strings.TrimSpace(operation.RequestBodyKind) != "none" ||
+				client.ResponseType != "void" ||
+				client.ResponseDecoder != "decodeEmptyResponse" {
+				return fmt.Errorf(
+					"%s upgrade ABI must be GET/body-none with an empty JSON response decoder",
+					operation.CanonicalOperationID,
+				)
+			}
+			// An HTTP upgrade has no JSON response to decode.  Its canonical
+			// request ABI is exposed below as a typed descriptor for the
+			// protocol-specific adapter instead of a fake send<void> method.
+			continue
 		}
 		methodName := canonicalOperationIdentifier(operation.CanonicalOperationID)
 		ownerAlias := ownerAliases[client.DartImport]
@@ -425,6 +472,25 @@ func writeGeneratedOperationContracts(
 			"    maxAttempts: %d,\n",
 			operation.Reliability.MaxAttempts,
 		)
+		if budget := operation.Reliability.StreamBudget; budget != nil {
+			b.WriteString("    streamBudget: CloudOperationStreamBudget(\n")
+			fmt.Fprintf(
+				&b,
+				"      handshakeMilliseconds: %d,\n",
+				budget.HandshakeMilliseconds,
+			)
+			fmt.Fprintf(
+				&b,
+				"      idleMilliseconds: %d,\n",
+				budget.IdleMilliseconds,
+			)
+			fmt.Fprintf(
+				&b,
+				"      maxDurationMilliseconds: %d,\n",
+				budget.MaxDurationMilliseconds,
+			)
+			b.WriteString("    ),\n")
+		}
 		if operation.Pagination != nil {
 			fmt.Fprintf(
 				&b,
@@ -442,6 +508,13 @@ func writeGeneratedOperationContracts(
 				&b,
 				"    maximumResponseBodyBytes: %d,\n",
 				operation.ResponseAdmission.MaximumBodyBytes,
+			)
+		}
+		if operation.SuccessStatus != nil {
+			fmt.Fprintf(
+				&b,
+				"    successStatus: %d,\n",
+				*operation.SuccessStatus,
 			)
 		}
 		if operation.Streaming != nil {
@@ -524,7 +597,59 @@ func writeGeneratedOperationContracts(
 		b.WriteString("    ],\n")
 		b.WriteString("  ),\n")
 	}
-	b.WriteString("};\n")
+	b.WriteString("};\n\n")
+	b.WriteString("/// Protocol-upgrade operations keyed by canonical operation ID.\n")
+	b.WriteString("///\n")
+	b.WriteString("/// Callers hand these descriptors to their protocol adapter; they must\n")
+	b.WriteString("/// not route them through [CloudOperationExecutor.send].\n")
+	b.WriteString("abstract final class AppCloudOperationUpgradeDescriptors {\n")
+	b.WriteString("  const AppCloudOperationUpgradeDescriptors._();\n\n")
+	for _, operation := range operations {
+		if strings.TrimSpace(operation.ResponseBodyKind) != "upgrade" {
+			continue
+		}
+		client := operation.ClientContract
+		if client == nil {
+			continue
+		}
+		artifact, exists := requestArtifacts[operation.CanonicalOperationID]
+		if !exists {
+			return fmt.Errorf(
+				"%s upgrade has no generated canonical request artifact",
+				operation.CanonicalOperationID,
+			)
+		}
+		methodName := canonicalOperationIdentifier(operation.CanonicalOperationID)
+		ownerAlias := ownerAliases[client.DartImport]
+		requestType := qualifiedOperationOwnerSymbol(
+			ownerAlias,
+			artifact.RequestType,
+		)
+		fmt.Fprintf(
+			&b,
+			"  static final CloudOperationUpgradeDescriptor<%s> %s =\n",
+			requestType,
+			methodName,
+		)
+		fmt.Fprintf(
+			&b,
+			"      CloudOperationUpgradeDescriptor<%s>(\n",
+			requestType,
+		)
+		fmt.Fprintf(
+			&b,
+			"        operation: appCloudOperationContracts[AppCloudOperationIds.%s]!,\n",
+			methodName,
+		)
+		fmt.Fprintf(
+			&b,
+			"        requestEncoder: %s.%s,\n",
+			ownerAlias,
+			artifact.Encoder,
+		)
+		b.WriteString("      );\n\n")
+	}
+	b.WriteString("}\n")
 
 	writeFile(
 		filepath.Join(

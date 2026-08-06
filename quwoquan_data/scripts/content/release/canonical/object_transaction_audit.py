@@ -1,19 +1,47 @@
-"""Validate and audit canonical object transactions."""
+"""Validate and audit canonical object transactions.
+
+canonical publish 的 closure 分两层，两层共用同一批文档级规则：
+
+- `validate_publish_delta` 是 per-object 热路径，成本 O(Δ)，只看本次事务触及的路径与
+  它们引用的 CAS，候选字节直接读不可变 delta blob（此时还没落到 publish 树）。
+- `validate_publish_invariants` 是全量扫描，负责只有看全树才能判定的 orphan 不变量，
+  只在 release 聚合边界与 verify 门运行。
+"""
 from __future__ import annotations
-import shutil
+
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
 import yaml
-from core.paths import CONTROL_PLANE_CREATOR_POOL_ROOT
-from core.tree_integrity import tree_integrity_stats
-from core.schema import assert_valid
-from content.release.canonical.object_transaction_contract import (
-    DRY_RUN_SCHEMA, LAYOUT_SCHEMA, ALLOWED_CANONICAL_ROOTS,
-    ObjectTransactionError, _json_bytes, _digest_bytes, _digest_file, _read_json,
-    _write_json, _safe_id, _safe_rel, _files, _copy_tree, collect_canonical_tag_refs,
-    refresh_canonical_tag_snapshots, _collect_object_keys, _verify_package,
+from content.release.canonical.canonical_inventory import (
+    load_or_bootstrap_inventory,
 )
+from content.release.canonical.object_transaction_contract import (
+    ALLOWED_CANONICAL_ROOTS,
+    DRY_RUN_SCHEMA,
+    LAYOUT_SCHEMA,
+    ObjectTransactionError,
+    _collect_object_keys,
+    _digest_bytes,
+    _files,
+    _json_bytes,
+    _read_json,
+    _safe_id,
+    _safe_rel,
+    _verify_package,
+    _write_json,
+    collect_canonical_tag_refs,
+)
+from content.release.canonical.object_transaction_delta import (
+    build_transaction_delta,
+    load_transaction_delta,
+)
+from content.release.canonical.object_transaction_lock import (
+    canonical_publish_serialized,
+)
+from core.paths import CONTROL_PLANE_CREATOR_POOL_ROOT
+from core.schema import assert_valid
 
 
 def _system_creator_seed_closure() -> tuple[set[str], set[str]]:
@@ -94,7 +122,154 @@ def _post_media_issues(payload: dict[str, Any], ref: str) -> list[dict[str, str]
             issues.append({"code": "video_poster_closure_invalid", "ref": f"{ref}:{video_id}"})
     return issues
 
-def validate_canonical_publish(root: Path) -> dict[str, Any]:
+def _document_closure_issues(
+    *,
+    rel: str,
+    payload: dict[str, Any],
+    cas_resolved: Callable[[str], bool],
+    creator_refs_of: Callable[[str], Any],
+) -> tuple[list[dict[str, str]], set[str], set[str]]:
+    """Canonical closure rules for one document, shared by both closure layers."""
+    issues: list[dict[str, str]] = []
+    referenced_media: set[str] = set()
+    referenced_creators: set[str] = set()
+    for object_key in _collect_object_keys(payload):
+        referenced_media.add(object_key)
+        try:
+            _safe_rel(object_key, label="objectKey")
+        except ObjectTransactionError:
+            issues.append({"code": "asset_ref_path_escape", "ref": f"{rel}:{object_key}"})
+            continue
+        if not object_key.startswith("media/objects/sha256/"):
+            issues.append({"code": "non_cas_asset_ref", "ref": f"{rel}:{object_key}"})
+        elif not cas_resolved(object_key):
+            issues.append({"code": "dangling_asset_ref", "ref": f"{rel}:{object_key}"})
+    if not rel.startswith("creators/"):
+        referenced_creators.update(_collect_creator_ids(payload))
+    if rel.startswith("entities/") and rel.endswith("/_entity.json"):
+        creator_profile_id = str(payload.get("creatorProfileId") or "").strip()
+        if creator_profile_id:
+            creator_refs = creator_refs_of(rel)
+            if (
+                not isinstance(creator_refs, list)
+                or creator_profile_id not in creator_refs
+            ):
+                issues.append(
+                    {
+                        "code": "entity_creator_closure_missing",
+                        "ref": f"{rel}:{creator_profile_id}",
+                    }
+                )
+    if rel.startswith("posts/") and rel.endswith("/manifest.json"):
+        issues.extend(_post_media_issues(payload, rel))
+    return issues, referenced_media, referenced_creators
+
+
+def validate_publish_delta(
+    *,
+    publish_root: Path,
+    run_root: Path,
+    entries: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    """Validate one frozen transaction delta in O(Δ) before it reaches publish.
+
+    Candidate bytes still live in the immutable delta blob store, so references
+    close against `publish ∪ delta`.  Global orphan invariants are deliberately
+    out of scope: they need the whole tree and belong to the release boundary.
+    """
+    issues: list[dict[str, str]] = []
+    candidates: dict[str, Path] = {}
+    for raw in entries:
+        destination = str(raw.get("destination") or "")
+        try:
+            relative = _safe_rel(destination, label="delta.destination")
+            blob_ref = _safe_rel(str(raw.get("blobRef") or ""), label="delta.blobRef")
+        except ObjectTransactionError as exc:
+            issues.append({"code": "delta_ref_path_escape", "ref": f"{destination}: {exc}"})
+            continue
+        if relative.parts[0] not in ALLOWED_CANONICAL_ROOTS:
+            issues.append({"code": "noncanonical_root", "ref": relative.parts[0]})
+            continue
+        blob = run_root / blob_ref
+        if not blob.is_file():
+            issues.append({"code": "delta_blob_missing", "ref": relative.as_posix()})
+            continue
+        candidates[relative.as_posix()] = blob
+
+    def cas_resolved(object_key: str) -> bool:
+        if object_key in candidates:
+            return True
+        try:
+            return (publish_root / _safe_rel(object_key, label="objectKey")).is_file()
+        except ObjectTransactionError:
+            return False
+
+    def creator_refs_of(rel: str) -> Any:
+        sibling = (Path(rel).parent / "creator.refs.json").as_posix()
+        blob = candidates.get(sibling)
+        if blob is None:
+            path = publish_root / sibling
+            blob = path if path.is_file() else None
+        if blob is None:
+            return None
+        try:
+            return _read_json(blob).get("creatorRefs")
+        except ObjectTransactionError:
+            return None
+
+    referenced_creators: set[str] = set()
+    for rel, blob in sorted(candidates.items()):
+        if not rel.endswith(".json"):
+            continue
+        try:
+            payload = _read_json(blob)
+        except ObjectTransactionError as exc:
+            issues.append({"code": "invalid_json", "ref": rel, "message": str(exc)})
+            continue
+        if rel.startswith("tags/") and rel.endswith("/_definition.json"):
+            try:
+                assert_valid(
+                    payload,
+                    "governance",
+                    "_definition",
+                    label=f"publish tag {rel}",
+                )
+            except (ValueError, FileNotFoundError) as exc:
+                issues.append({"code": "invalid_tag_snapshot", "ref": f"{rel}: {exc}"})
+        document_issues, _media, creators = _document_closure_issues(
+            rel=rel,
+            payload=payload,
+            cas_resolved=cas_resolved,
+            creator_refs_of=creator_refs_of,
+        )
+        issues.extend(document_issues)
+        referenced_creators.update(creators)
+
+    for creator_id in sorted(referenced_creators):
+        manifest = f"creators/{creator_id}/_creator.json"
+        try:
+            resolved = manifest in candidates or (
+                publish_root / _safe_rel(manifest, label="creatorRef")
+            ).is_file()
+        except ObjectTransactionError:
+            resolved = False
+        if not resolved:
+            issues.append({"code": "dangling_creator_ref", "ref": creator_id})
+
+    return {
+        "status": "passed" if not issues else "failed",
+        "issues": issues,
+        "validationScope": "delta",
+        "deltaFileCount": len(entries),
+    }
+
+
+def validate_publish_invariants(root: Path) -> dict[str, Any]:
+    """Full-tree canonical closure, including the orphan invariants.
+
+    O(N) by construction; only the release aggregation boundary and the verify
+    gates may pay it.  The per-object hot path uses `validate_publish_delta`.
+    """
     issues: list[dict[str, str]] = []
     referenced_media: set[str] = set()
     referenced_creators: set[str] = set()
@@ -103,6 +278,17 @@ def validate_canonical_publish(root: Path) -> dict[str, Any]:
         for child in root.iterdir():
             if child.name not in ALLOWED_CANONICAL_ROOTS:
                 issues.append({"code": "noncanonical_root", "ref": child.name})
+
+    def cas_resolved(object_key: str) -> bool:
+        return (root / _safe_rel(object_key, label="objectKey")).is_file()
+
+    def creator_refs_of(rel: str) -> Any:
+        path = root / rel
+        creator_refs_path = path.parent / "creator.refs.json"
+        if not creator_refs_path.is_file():
+            return None
+        return _read_json(creator_refs_path).get("creatorRefs")
+
     for path in _files(root):
         if path.suffix != ".json":
             continue
@@ -112,41 +298,15 @@ def validate_canonical_publish(root: Path) -> dict[str, Any]:
         except ObjectTransactionError as exc:
             issues.append({"code": "invalid_json", "ref": rel, "message": str(exc)})
             continue
-        for object_key in _collect_object_keys(payload):
-            referenced_media.add(object_key)
-            try:
-                safe_key = _safe_rel(object_key, label="objectKey")
-            except ObjectTransactionError:
-                issues.append({"code": "asset_ref_path_escape", "ref": f"{rel}:{object_key}"})
-                continue
-            asset = root / safe_key
-            if not object_key.startswith("media/objects/sha256/"):
-                issues.append({"code": "non_cas_asset_ref", "ref": f"{rel}:{object_key}"})
-            elif not asset.is_file():
-                issues.append({"code": "dangling_asset_ref", "ref": f"{rel}:{object_key}"})
-        if not rel.startswith("creators/"):
-            referenced_creators.update(_collect_creator_ids(payload))
-        if rel.startswith("entities/") and rel.endswith("/_entity.json"):
-            creator_profile_id = str(payload.get("creatorProfileId") or "").strip()
-            if creator_profile_id:
-                creator_refs_path = path.parent / "creator.refs.json"
-                creator_refs = (
-                    _read_json(creator_refs_path).get("creatorRefs")
-                    if creator_refs_path.is_file()
-                    else None
-                )
-                if (
-                    not isinstance(creator_refs, list)
-                    or creator_profile_id not in creator_refs
-                ):
-                    issues.append(
-                        {
-                            "code": "entity_creator_closure_missing",
-                            "ref": f"{rel}:{creator_profile_id}",
-                        }
-                    )
-        if rel.startswith("posts/") and rel.endswith("/manifest.json"):
-            issues.extend(_post_media_issues(payload, rel))
+        document_issues, media, creators = _document_closure_issues(
+            rel=rel,
+            payload=payload,
+            cas_resolved=cas_resolved,
+            creator_refs_of=creator_refs_of,
+        )
+        issues.extend(document_issues)
+        referenced_media.update(media)
+        referenced_creators.update(creators)
 
     try:
         referenced_tags = set(collect_canonical_tag_refs(root))
@@ -232,6 +392,7 @@ def _verify_attestation(report: dict[str, Any], expected: str) -> None:
             f"expected={expected} embedded={embedded} actual={actual}"
         )
 
+@canonical_publish_serialized
 def audit_object_transaction(
     *,
     publish_root: Path,
@@ -248,7 +409,8 @@ def audit_object_transaction(
     if publish_root.exists() and not publish_root.is_dir():
         raise ObjectTransactionError(f"canonical publish root is not a directory: {publish_root}")
     publish_root.mkdir(parents=True, exist_ok=True)
-    before = tree_integrity_stats(publish_root)
+    before_inventory = load_or_bootstrap_inventory(publish_root)
+    before = before_inventory["stats"]
     if before["merkleRoot"] != expected_canonical_merkle:
         raise ObjectTransactionError(
             "current canonical Merkle 不匹配："
@@ -263,7 +425,6 @@ def audit_object_transaction(
         raise ObjectTransactionError("package transactionId 不匹配")
     run_root = _transaction_root(output_root, transaction_id)
     report_path = run_root / "audit_report.json"
-    staging = run_root / "staging/canonical"
     if report_path.is_file():
         persisted = _read_json(report_path)
         _verify_attestation(
@@ -273,49 +434,56 @@ def audit_object_transaction(
         if (
             persisted.get("beforeCanonical", {}).get("merkleRoot")
             == before["merkleRoot"]
+            and persisted.get("beforeInventoryDigest")
+            == before_inventory["inventoryDigest"]
             and persisted.get("objectClosureDigest")
             == package["objectClosureDigest"]
             and persisted.get("packageSha256") == package["packageSha256"]
-            and staging.is_dir()
-            and tree_integrity_stats(staging)["merkleRoot"]
-            == persisted.get("afterCanonical", {}).get("merkleRoot")
         ):
+            delta = load_transaction_delta(
+                run_root=run_root,
+                expected_digest=str(persisted.get("deltaManifestDigest") or ""),
+            )
+            if (
+                delta.get("afterMerkle")
+                != persisted.get("afterCanonical", {}).get("merkleRoot")
+                or delta.get("afterInventoryDigest")
+                != persisted.get("afterInventoryDigest")
+            ):
+                raise ObjectTransactionError("persisted transaction delta after Merkle drift")
             return {**persisted, "idempotent": True}
         raise ObjectTransactionError("已有 audit 与当前事务输入不一致")
-    if staging.exists():
-        # Abandoned dry-runs leave staging behind after handler crashes; drop the
-        # incomplete tree so an idempotent retry can rebuild from current publish.
-        shutil.rmtree(staging)
-    _copy_tree(publish_root, staging)
-    for creator in package["creatorObjects"]:
-        target_creator = staging / "creators" / creator["creatorRef"]
-        if target_creator.is_dir():
-            if tree_integrity_stats(target_creator)["merkleRoot"] != tree_integrity_stats(
-                creator["objectRoot"]
-            )["merkleRoot"]:
-                raise ObjectTransactionError(
-                    f"canonical creator projection drift：{creator['creatorRef']}"
-                )
-            continue
-        _copy_tree(Path(creator["objectRoot"]), target_creator)
-    target = staging / package["objectKind"] / package["objectRef"]
-    _copy_tree(Path(package["objectRoot"]), target)
-    for row in package["casRows"]:
-        source = package_root / row["sourceRef"]
-        destination = staging / row["objectKey"]
-        if destination.is_file():
-            if _digest_file(destination) != row["sha256"]:
-                raise ObjectTransactionError(f"canonical CAS collision：{row['objectKey']}")
-        else:
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(source, destination)
-    refresh_canonical_tag_snapshots(staging)
-    closure = validate_canonical_publish(staging)
+    delta, after_inventory = build_transaction_delta(
+        publish_root=publish_root,
+        run_root=run_root,
+        package_root=package_root,
+        package=package,
+        before_inventory=before_inventory,
+    )
+    after = after_inventory["stats"]
+    closure = validate_publish_delta(
+        publish_root=publish_root,
+        run_root=run_root,
+        entries=delta["entries"],
+    )
     if closure["status"] != "passed":
         raise ObjectTransactionError(
-            f"staging canonical closure 失败：{closure['issues'][:5]}"
+            "canonical publish delta closure invalid："
+            + "; ".join(
+                f"{item['code']}:{item.get('ref', '')}"
+                for item in closure["issues"][:5]
+            )
         )
-    after = tree_integrity_stats(staging)
+    fence_token = _digest_bytes(
+        _json_bytes(
+            {
+                "transactionId": transaction_id,
+                "beforeMerkle": before["merkleRoot"],
+                "afterMerkle": after["merkleRoot"],
+                "deltaDigest": delta["deltaDigest"],
+            }
+        )
+    )
     report: dict[str, Any] = {
         "schema": DRY_RUN_SCHEMA,
         "transactionId": transaction_id,
@@ -327,6 +495,16 @@ def audit_object_transaction(
         "objectRef": package["objectRef"],
         "objectClosureDigest": package["objectClosureDigest"],
         "packageSha256": package["packageSha256"],
+        "fenceToken": fence_token,
+        "deltaManifestRef": (
+            run_root / "delta/manifest.json"
+        ).relative_to(output_root).as_posix(),
+        "deltaManifestDigest": delta["deltaDigest"],
+        "deltaFileCount": len(delta["entries"]),
+        "deltaBytes": delta["deltaBytes"],
+        "candidateValidationMode": "incremental_inventory_delta",
+        "beforeInventoryDigest": before_inventory["inventoryDigest"],
+        "afterInventoryDigest": after_inventory["inventoryDigest"],
         "beforeCanonical": {
             key: before[key]
             for key in ("algorithm", "merkleRoot", "fileCount", "totalBytes", "inventoryHash")
@@ -338,6 +516,8 @@ def audit_object_transaction(
         "review": package["review"],
         "closure": {
             "status": closure["status"],
+            "validationScope": closure["validationScope"],
+            "deltaFileCount": closure["deltaFileCount"],
             "creatorRefs": package["creatorRefs"],
             "tagRefs": package["tagRefs"],
             "casRefs": [

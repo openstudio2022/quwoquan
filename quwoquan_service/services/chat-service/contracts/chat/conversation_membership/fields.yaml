@@ -165,20 +165,23 @@ types:
       - {name: memberCount, type: int, constraints: [NOT_NULL]}
       - {name: leftAt, type: timestamp, constraints: [NOT_NULL]}
   GatheringConversationMembershipProjectionCommand:
-    description: circle-service 提交的 Gathering participant source fact；sourceVersion 单调且 operation 幂等。
+    description: circle-service 提交的 OrganizerAssignment/Participation/Block source fact；角色由 sourceType 派生，sourceVersion 按来源单调。
     fields:
       - {name: gatheringId, source: path.gatheringId, type: string, constraints: [NOT_BLANK]}
       - {name: personaId, source: path.personaId, type: string, constraints: [NOT_BLANK]}
       - {name: sourceEventId, type: string, constraints: [NOT_BLANK]}
       - {name: sourceVersion, type: int64, constraints: [NOT_NULL]}
-      - {name: ownerPersonaId, type: string, constraints: [NOT_BLANK]}
-      - {name: state, type: enum, enum_ref: GatheringMembershipProjectionState, constraints: [NOT_NULL]}
+      - {name: sourceType, type: enum, enum_ref: GatheringAccessProjectionSourceType, constraints: [NOT_NULL]}
+      - {name: state, type: enum, enum_ref: GatheringAccessProjectionState, constraints: [NOT_NULL]}
   GatheringConversationMembershipProjectionResult:
     fields:
       - {name: gatheringId, type: string, constraints: [NOT_BLANK]}
       - {name: conversationId, type: string, constraints: [NOT_BLANK]}
       - {name: personaId, type: string, constraints: [NOT_BLANK]}
-      - {name: state, type: enum, enum_ref: GatheringMembershipProjectionState, constraints: [NOT_NULL]}
+      - {name: sourceType, type: enum, enum_ref: GatheringAccessProjectionSourceType, constraints: [NOT_NULL]}
+      - {name: state, type: enum, enum_ref: GatheringAccessProjectionState, constraints: [NOT_NULL]}
+      - {name: accessStatus, type: enum, enum_ref: GatheringConversationAccessStatus, constraints: [NOT_NULL]}
+      - {name: accessRole, type: enum, enum_ref: GatheringConversationAccessRole, constraints: [NOT_NULL]}
   ChatRemoveConversationAssistantCommand:
     fields:
       - name: conversationId
@@ -358,5 +361,11 @@ types:
         type: string
         constraints: [NULLABLE]
 enums:
-  GatheringMembershipProjectionState:
-    values: [joined, left]
+  GatheringAccessProjectionSourceType:
+    values: [organizer_assignment, participation, block]
+  GatheringAccessProjectionState:
+    values: [active, closed, revoked, blocked, cleared]
+  GatheringConversationAccessStatus:
+    values: [active, revoked]
+  GatheringConversationAccessRole:
+    values: [admin, participant, none]

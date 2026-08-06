@@ -17,7 +17,10 @@ var generatedRouteTable = []generatedRouteDef{
 	{method: "PATCH", pathTemplate: "/content/reports/{reportId}", operation: "ResolveReport"},
 	{method: "POST", pathTemplate: "/content/reports/{reportId}/review", operation: "BeginReportReview"},
 	{method: "POST", pathTemplate: "/content/reports/{reportId}:dismiss", operation: "DismissReport"},
+	{method: "POST", pathTemplate: "/content/reports/{reportId}:grant-gathering-safety-termination", operation: "GrantGatheringSafetyTermination"},
+	{method: "POST", pathTemplate: "/content/reports/{reportId}:revoke-gathering-safety-termination", operation: "RevokeGatheringSafetyTermination"},
 	{method: "GET", pathTemplate: "/content/users/me/reports", operation: "ListMyReports"},
+	{method: "POST", pathTemplate: "/internal/content/gathering-safety-termination:authorize", operation: "AuthorizeGatheringSafetyTermination"},
 }
 
 type generatedRouteDef struct {
@@ -127,14 +130,29 @@ func generatedSplitPath(raw string) []string {
 }
 
 var generatedRequestBodyFieldSetByOperation = map[string]map[string]struct{}{
+	"AuthorizeGatheringSafetyTermination": {
+		"actorPersonaId": {},
+		"gatheringId":    {},
+		"action":         {},
+		"evidenceRef":    {},
+		"decisionRef":    {},
+	},
 	"CreateReport": {
 		"targetId":    {},
 		"targetType":  {},
 		"reason":      {},
 		"description": {},
 	},
+	"GrantGatheringSafetyTermination": {
+		"expectedReportVersion": {},
+		"actorPersonaId":        {},
+		"expiresAt":             {},
+	},
 	"ResolveReport": {
 		"resolution": {},
+	},
+	"RevokeGatheringSafetyTermination": {
+		"decisionRef": {},
 	},
 }
 

@@ -18,10 +18,14 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.cli.lib.provider_conformance import (
-    evidence_files,
+    EVIDENCE_ENVIRONMENTS,
+    exact_required_cell_issues,
+    expected_required_cell_keys,
+    load_evidence,
     load_validate_and_derive,
     readiness_issues,
 )
+from quwoquan_ops.cli.lib import external_provider_governance
 from quwoquan_ops.cli.lib.output_paths import output_root
 
 
@@ -48,7 +52,7 @@ REPORT_FIELDS = frozenset(
         "issues",
     }
 )
-READINESS_ENVIRONMENTS = frozenset({"alpha", "beta", "gamma", "prod"})
+READINESS_ENVIRONMENTS = frozenset(EVIDENCE_ENVIRONMENTS)
 CAPABILITY_READINESS_FIELDS = frozenset(
     {
         "state",
@@ -77,14 +81,45 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _validate_readiness(value: object) -> dict[str, dict[str, dict[str, Any]]]:
+def expected_required_cell_count_from_readiness(value: object) -> int:
+    """Derive the required cell count from a four-environment readiness payload."""
+
     if not isinstance(value, Mapping) or set(value) != READINESS_ENVIRONMENTS:
         raise ValueError("Provider readiness must contain exactly alpha, beta, gamma and prod")
-    canonical: dict[str, dict[str, dict[str, Any]]] = {}
+    capability_sets: list[frozenset[str]] = []
     for environment in sorted(READINESS_ENVIRONMENTS):
         capabilities = value.get(environment)
         if not isinstance(capabilities, Mapping) or not capabilities:
             raise ValueError(f"Provider readiness.{environment} must be non-empty")
+        if any(
+            not isinstance(capability_id, str)
+            or not capability_id
+            or not isinstance(item, Mapping)
+            or item.get("required") is not True
+            or item.get("capability_ready") is not True
+            for capability_id, item in capabilities.items()
+        ):
+            raise ValueError(
+                f"Provider readiness.{environment} must contain only required ready capabilities"
+            )
+        capability_sets.append(frozenset(capabilities))
+    if len(set(capability_sets)) != 1:
+        raise ValueError("Provider readiness capability set differs across environments")
+    capability_ids = capability_sets[0]
+    return len(
+        expected_required_cell_keys(
+            {"providerConformanceCapabilityIds": sorted(capability_ids)}
+        )
+    )
+
+
+def _validate_readiness(value: object) -> dict[str, dict[str, dict[str, Any]]]:
+    expected_required_cell_count_from_readiness(value)
+    assert isinstance(value, Mapping)
+    canonical: dict[str, dict[str, dict[str, Any]]] = {}
+    for environment in sorted(READINESS_ENVIRONMENTS):
+        capabilities = value[environment]
+        assert isinstance(capabilities, Mapping)
         expected_fields = (
             PROD_CAPABILITY_READINESS_FIELDS
             if environment == "prod"
@@ -122,8 +157,13 @@ def validate_source(payload: Mapping[str, Any]) -> None:
     """Reject every non-canonical or historical Provider source shape."""
     if set(payload) != FIELDS or payload.get("schema") != SCHEMA:
         raise ValueError("Provider conformance source fields are not canonical")
-    if not isinstance(payload.get("evidenceCount"), int) or payload["evidenceCount"] <= 0:
-        raise ValueError("real Provider conformance evidenceCount must be positive")
+    readiness = _validate_readiness(payload.get("readiness"))
+    expected_count = expected_required_cell_count_from_readiness(readiness)
+    if payload.get("evidenceCount") != expected_count:
+        raise ValueError(
+            "real Provider conformance evidenceCount must equal the "
+            f"readiness-derived required cell count {expected_count}"
+        )
     source = payload.get("sourceEvidence")
     if not isinstance(source, Mapping) or set(source) != {"ref", "digest", "files"}:
         raise ValueError("Provider sourceEvidence shape is not canonical")
@@ -149,7 +189,6 @@ def validate_source(payload: Mapping[str, Any]) -> None:
         issues = payload.get(field)
         if not isinstance(issues, list) or issues:
             raise ValueError(f"Provider conformance {field} is not empty")
-    _validate_readiness(payload.get("readiness"))
 
 
 def render(
@@ -165,16 +204,24 @@ def render(
     evidence_count = report.get("evidenceCount")
     source_coverage = report.get("sourceCoverageIssues")
     readiness = _validate_readiness(report.get("readiness"))
+    expected_count = expected_required_cell_count_from_readiness(readiness)
     report_issues = report.get("issues")
     if not isinstance(report_issues, list):
         raise ValueError("Provider readiness issues must be a list")
     issues = [
         *validation_issues,
         *(str(issue) for issue in report_issues),
-        *readiness_issues(report, environment=environment),
+        *(
+            issue
+            for target in sorted(READINESS_ENVIRONMENTS)
+            for issue in readiness_issues(report, environment=target)
+        ),
     ]
-    if not isinstance(evidence_count, int) or evidence_count <= 0:
-        raise ValueError("real Provider conformance evidenceCount must be positive")
+    if evidence_count != expected_count:
+        raise ValueError(
+            "real Provider conformance evidenceCount must equal the "
+            f"readiness-derived required cell count {expected_count}"
+        )
     if not isinstance(source_coverage, list):
         raise ValueError("Provider sourceCoverageIssues must be a list")
     if issues:
@@ -238,9 +285,15 @@ def main() -> int:
     try:
         evidence_root = output_root()
         report, issues = load_validate_and_derive(root=evidence_root)
+        compiled, governance_issues = external_provider_governance.load_and_compile()
+        evidence, load_issues = load_evidence(evidence_root)
+        exact_issues = exact_required_cell_issues(
+            evidence,
+            compiled=compiled,
+        )
         raw_files = _archive_raw_evidence(
             source_root=evidence_root,
-            paths=evidence_files(evidence_root),
+            paths=sorted(Path(str(item["_source"])) for item in evidence),
             archive_dir=args.archive_dir,
         )
         source_ref = str(args.source_evidence_ref).strip()
@@ -248,7 +301,12 @@ def main() -> int:
             source_ref = "oci://" + source_ref
         payload = render(
             report,
-            validation_issues=list(issues),
+            validation_issues=[
+                *issues,
+                *(issue.render() for issue in governance_issues),
+                *load_issues,
+                *exact_issues,
+            ],
             environment=args.require_environment,
             source_evidence={
                 "ref": source_ref,

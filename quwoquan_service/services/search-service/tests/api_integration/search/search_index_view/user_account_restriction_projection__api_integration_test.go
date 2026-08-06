@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-suspension-and-appeal-lifecycle/spec.md#gwt-003
+// readiness_case: apply-search-account-restriction-api
 package api_integration
 
 import (
@@ -7,9 +8,56 @@ import (
 	"time"
 
 	"quwoquan_service/runtime/accountrestriction"
+	runtimemessaging "quwoquan_service/runtime/messaging"
+	consumer "quwoquan_service/services/search-service/internal/search/search_index_view/adapters/inbound/mq"
 	"quwoquan_service/services/search-service/internal/search/search_index_view/application"
 	accountrestrictioninfra "quwoquan_service/services/search-service/internal/search/search_index_view/infrastructure/accountrestriction"
 )
+
+func TestUserAccountRestrictionConsumerPersistsAndAcknowledgesRealMongoProjection(t *testing.T) {
+	cleanSearchCollections(t)
+	projection, err := accountrestrictioninfra.NewMongoAccountRestrictionProjection(mongoDB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := projection.EnsureIndexes(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	transport, err := runtimemessaging.NewRedisMessageTransport(
+		realRedisClient,
+		realRedisClient,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner, err := consumer.NewUserAccountRestrictionConsumer(
+		transport, projection, "search-index-restriction-api", nil,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := transport.AppendDurable(t.Context(), runtimemessaging.DurableMessage{
+		Stream: consumer.UserAccountEventStream,
+		Fields: []runtimemessaging.DurableField{
+			{Name: "eventId", Value: "search-index-api-suspend-9"},
+			{Name: "eventName", Value: accountrestriction.UserSuspendedEventName},
+			{Name: "accountId", Value: "account-api-9"},
+			{Name: "accountVersion", Value: "9"},
+			{Name: "occurredAt", Value: "2026-08-05T09:00:00Z"},
+			{Name: "payload", Value: `{"userId":"account-api-9","personaIds":["persona-api-9"],"accountState":"suspended","authEpoch":9,"decisionRef":"decision-api-9","occurredAt":"2026-08-05T09:00:00Z"}`},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	processed, err := runner.ProcessOnce(t.Context())
+	if err != nil || processed != 1 {
+		t.Fatalf("ProcessOnce() processed=%d err=%v", processed, err)
+	}
+	restricted, err := projection.RestrictedSubjects(t.Context(), []string{"persona-api-9"})
+	if err != nil || !restricted["persona-api-9"] {
+		t.Fatalf("restriction=%v err=%v", restricted, err)
+	}
+}
 
 func TestUserAccountRestrictionProjectionIsReversibleMonotonicAndReplaySafe(
 	t *testing.T,

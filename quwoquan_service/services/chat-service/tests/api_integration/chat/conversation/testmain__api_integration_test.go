@@ -41,6 +41,7 @@ import (
 	userstatehttp "quwoquan_service/services/chat-service/internal/chat/conversation_user_state/adapters/inbound/http"
 	userstatepersistence "quwoquan_service/services/chat-service/internal/chat/conversation_user_state/infrastructure/persistence"
 	messagehttp "quwoquan_service/services/chat-service/internal/chat/message/adapters/inbound/http"
+	messageapp "quwoquan_service/services/chat-service/internal/chat/message/application"
 	messageports "quwoquan_service/services/chat-service/internal/chat/message/domain/ports"
 	receipthttp "quwoquan_service/services/chat-service/internal/chat/message_receipt_fact/adapters/inbound/http"
 	receiptpersistence "quwoquan_service/services/chat-service/internal/chat/message_receipt_fact/infrastructure/persistence"
@@ -54,10 +55,10 @@ var (
 	integrationRedis           *testinfra.RealRedis
 	redisRouter                *rtredis.Router
 	testEventPublisher         application.EventPublisher
-	testMessageOutboxRelay     *application.MessageOutboxRelay
+	testMessageOutboxRelay     *messageapp.MessageOutboxRelay
 	testMessageService         *application.MessageService
 	testAggregateOutboxRelays  []*application.AggregateOutboxRelay
-	testInboxViewProjector     *inboxapp.Projector
+	testInboxViewProjector     *inboxapp.ChatInboxViewProjector
 	testInboxViewStore         *inboxpersistence.MongoStore
 	testGroupAvatarMedia       application.GroupAvatarAssetizer
 	testUserSyncPublisher      application.UserSyncPublisher
@@ -282,7 +283,7 @@ func TestMain(m *testing.M) {
 		}),
 	)
 	testEventPublisher = eventPublisher
-	testMessageOutboxRelay = application.NewMessageOutboxRelay(
+	testMessageOutboxRelay = messageapp.NewMessageOutboxRelay(
 		chatStore,
 		chatStore,
 		chatStore,

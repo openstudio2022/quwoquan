@@ -1,9 +1,6 @@
 events:
 - name: CircleFileCreated
-  producer: circle-service
-  consumers:
-  - projection-workers
-  channel: transactional_outbox
+  delivery_semantics: transactional_event_log
   payload_entity: CircleFile
   payload_fields:
   - _id
@@ -15,11 +12,9 @@ events:
   - uploaderPersonaId
   - status
   - updatedAt
+  no_consumer_reason: 文件创建结果已由 CircleFile 聚合持久化；事件只作为对象级事务审计日志保留，没有下游接收方。
 - name: CircleFileUpdated
-  producer: circle-service
-  consumers:
-  - projection-workers
-  channel: transactional_outbox
+  delivery_semantics: transactional_event_log
   payload_entity: CircleFile
   payload_fields:
   - _id
@@ -30,11 +25,9 @@ events:
   - name
   - status
   - updatedAt
+  no_consumer_reason: 文件更新结果已由 CircleFile 聚合持久化；事件只作为对象级事务审计日志保留，没有下游接收方。
 - name: CircleFileDeleted
-  producer: circle-service
-  consumers:
-  - projection-workers
-  channel: transactional_outbox
+  delivery_semantics: transactional_event_log
   payload_entity: CircleFile
   payload_fields:
   - _id
@@ -44,3 +37,4 @@ events:
   - assetId
   - status
   - updatedAt
+  no_consumer_reason: 文件删除结果已由 CircleFile 聚合持久化；事件只作为对象级事务审计日志保留，没有下游接收方。

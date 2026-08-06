@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 93359367b8614f01bb5e1c51e37af383332b01f117cc1c6cf39e4fdf838e49d2
+// ContractGraph SHA256: 99a8a52d1ede68d6295d252a5c3cfd90ce40fa7e11b50e9fee2dad7a7afdf2b2
 
 part of '../../../user/user_operation_contracts.g.dart';
 
@@ -681,7 +681,7 @@ final class DismissContactDiscoveryCommand {
 
 final class FollowSubjectCommand {
   FollowSubjectCommand({
-    required FollowSubjectKind subjectType,
+    required SubjectFollowTargetKind subjectType,
     required String subjectId,
     String? source,
   }) : subjectType = subjectType,
@@ -692,14 +692,14 @@ final class FollowSubjectCommand {
     }
   }
 
-  final FollowSubjectKind subjectType;
+  final SubjectFollowTargetKind subjectType;
   final String subjectId;
   final String? source;
 
   factory FollowSubjectCommand.fromWire(Map<String, Object?> map, [String path = "FollowSubjectCommand"]) {
     _generatedRequestRejectUnknownFields(map, const <String>{"subjectType", "subjectId", "source"}, path);
     return FollowSubjectCommand(
-      subjectType: switch (map["subjectType"]) { "persona" => FollowSubjectKind.persona, "homepage" => FollowSubjectKind.homepage, "circle" => FollowSubjectKind.circle, "location" => FollowSubjectKind.location, _ => throw FormatException('$path.subjectType' + ' has an invalid enum value'), },
+      subjectType: switch (map["subjectType"]) { "homepage" => SubjectFollowTargetKind.homepage, "circle" => SubjectFollowTargetKind.circle, "location" => SubjectFollowTargetKind.location, _ => throw FormatException('$path.subjectType' + ' has an invalid enum value'), },
       subjectId: _generatedRequestString(map["subjectId"], '$path.subjectId'),
       source: map["source"] == null ? null : _generatedRequestString(map["source"], '$path.source'),
     );
@@ -893,11 +893,21 @@ final class InitiateContactDiscoveryCommand {
 }
 
 final class ListBlockedUsersQuery {
-  const ListBlockedUsersQuery({
+  static const int defaultLimit = 20;
+  static const int maximumLimit = 100;
+
+  ListBlockedUsersQuery({
     String? cursor,
     int limit = 20,
   }) : cursor = cursor,
-       limit = limit;
+       limit = limit {
+    if (this.limit <= 0) {
+      throw ArgumentError.value(this.limit, "limit", "must be positive");
+    }
+    if (this.limit > 100) {
+      throw ArgumentError.value(this.limit, "limit", "must not exceed 100");
+    }
+  }
 
   final String? cursor;
   final int limit;
@@ -921,13 +931,23 @@ final class ListCredentialsQuery {
 }
 
 final class ListFollowingSubjectsQuery {
-  const ListFollowingSubjectsQuery({
+  static const int defaultLimit = 20;
+  static const int maximumLimit = 100;
+
+  ListFollowingSubjectsQuery({
     String? cursor,
     int limit = 20,
     FollowSubjectKind? subjectType,
   }) : cursor = cursor,
        limit = limit,
-       subjectType = subjectType;
+       subjectType = subjectType {
+    if (this.limit <= 0) {
+      throw ArgumentError.value(this.limit, "limit", "must be positive");
+    }
+    if (this.limit > 100) {
+      throw ArgumentError.value(this.limit, "limit", "must not exceed 100");
+    }
+  }
 
   final String? cursor;
   final int limit;
@@ -1411,6 +1431,9 @@ final class MarkFollowedSubjectVisitedCommand {
 }
 
 final class PersonaRelationshipListQuery {
+  static const int defaultLimit = 20;
+  static const int maximumLimit = 100;
+
   PersonaRelationshipListQuery({
     required String personaId,
     String? query,
@@ -1422,6 +1445,12 @@ final class PersonaRelationshipListQuery {
        limit = limit {
     if (this.personaId.isEmpty) {
       throw ArgumentError.value(this.personaId, "personaId", 'must not be blank');
+    }
+    if (this.limit <= 0) {
+      throw ArgumentError.value(this.limit, "limit", "must be positive");
+    }
+    if (this.limit > 100) {
+      throw ArgumentError.value(this.limit, "limit", "must not exceed 100");
     }
   }
 
@@ -1449,6 +1478,9 @@ final class PersonaRelationshipListQuery {
 }
 
 final class ProfileUpdateProposalListQuery {
+  static const int defaultLimit = 20;
+  static const int maximumLimit = 100;
+
   ProfileUpdateProposalListQuery({
     required String personaId,
     String? cursor,
@@ -1458,6 +1490,12 @@ final class ProfileUpdateProposalListQuery {
        limit = limit {
     if (this.personaId.isEmpty) {
       throw ArgumentError.value(this.personaId, "personaId", 'must not be blank');
+    }
+    if (this.limit <= 0) {
+      throw ArgumentError.value(this.limit, "limit", "must be positive");
+    }
+    if (this.limit > 100) {
+      throw ArgumentError.value(this.limit, "limit", "must not exceed 100");
     }
   }
 
@@ -1696,13 +1734,23 @@ final class RollbackProfileUpdateProposalCommand {
 }
 
 final class SearchSocialRelationsQuery {
-  const SearchSocialRelationsQuery({
+  static const int defaultLimit = 20;
+  static const int maximumLimit = 50;
+
+  SearchSocialRelationsQuery({
     required String query,
     String? cursor,
     int limit = 20,
   }) : query = query,
        cursor = cursor,
-       limit = limit;
+       limit = limit {
+    if (this.limit <= 0) {
+      throw ArgumentError.value(this.limit, "limit", "must be positive");
+    }
+    if (this.limit > 50) {
+      throw ArgumentError.value(this.limit, "limit", "must not exceed 50");
+    }
+  }
 
   final String query;
   final String? cursor;
@@ -1861,7 +1909,7 @@ final class UnblockUserCommand {
 
 final class UnfollowSubjectCommand {
   UnfollowSubjectCommand({
-    required FollowSubjectKind subjectType,
+    required SubjectFollowTargetKind subjectType,
     required String subjectId,
   }) : subjectType = subjectType,
        subjectId = subjectId.trim() {
@@ -1870,13 +1918,13 @@ final class UnfollowSubjectCommand {
     }
   }
 
-  final FollowSubjectKind subjectType;
+  final SubjectFollowTargetKind subjectType;
   final String subjectId;
 
   factory UnfollowSubjectCommand.fromWire(Map<String, Object?> map, [String path = "UnfollowSubjectCommand"]) {
     _generatedRequestRejectUnknownFields(map, const <String>{"subjectType", "subjectId"}, path);
     return UnfollowSubjectCommand(
-      subjectType: switch (map["subjectType"]) { "persona" => FollowSubjectKind.persona, "homepage" => FollowSubjectKind.homepage, "circle" => FollowSubjectKind.circle, "location" => FollowSubjectKind.location, _ => throw FormatException('$path.subjectType' + ' has an invalid enum value'), },
+      subjectType: switch (map["subjectType"]) { "homepage" => SubjectFollowTargetKind.homepage, "circle" => SubjectFollowTargetKind.circle, "location" => SubjectFollowTargetKind.location, _ => throw FormatException('$path.subjectType' + ' has an invalid enum value'), },
       subjectId: _generatedRequestString(map["subjectId"], '$path.subjectId'),
     );
   }

@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/gateway-orchestrator-foundation/realtime-gateway/realtime-channel-delivery/spec.md#gwt-001
+// spec_ref: specs/feature-tree/gateway-orchestrator-foundation/realtime-gateway/realtime-channel-delivery/spec.md#gwt-003
 package local_contract
 
 import (
@@ -30,9 +31,14 @@ type connectionOperationContract struct {
 		OwnershipPolicy string `yaml:"ownership_policy"`
 	} `yaml:"authorization"`
 	Reliability struct {
-		TimeoutMilliseconds int    `yaml:"timeout_ms"`
+		TimeoutMilliseconds *int   `yaml:"timeout_ms"`
 		RetryMode           string `yaml:"retry_mode"`
 		MaxAttempts         int    `yaml:"max_attempts"`
+		StreamBudget        *struct {
+			HandshakeMilliseconds   int `yaml:"handshake_ms"`
+			IdleMilliseconds        int `yaml:"idle_ms"`
+			MaxDurationMilliseconds int `yaml:"max_duration_ms"`
+		} `yaml:"stream_budget"`
 	} `yaml:"reliability"`
 	ErrorCodes []string `yaml:"error_codes"`
 	Privacy    struct {
@@ -94,6 +100,13 @@ func TestConnectionOperationPoliciesAreSingleTrack(t *testing.T) {
 		!*webSocket.RequestBindings.Query[0].Required {
 		t.Fatalf("WebSocket ticket policy drifted: %+v", webSocket)
 	}
+	if webSocket.Reliability.TimeoutMilliseconds != nil ||
+		webSocket.Reliability.StreamBudget == nil ||
+		webSocket.Reliability.StreamBudget.HandshakeMilliseconds != 5000 ||
+		webSocket.Reliability.StreamBudget.IdleMilliseconds != 90000 ||
+		webSocket.Reliability.StreamBudget.MaxDurationMilliseconds != 1800000 {
+		t.Fatalf("WebSocket generated stream budget drifted: %+v", webSocket.Reliability)
+	}
 
 	longPoll := requireConnectionOperation(t, operations, "LongPoll")
 	if longPoll.Security.AuthMode != "required" ||
@@ -101,7 +114,8 @@ func TestConnectionOperationPoliciesAreSingleTrack(t *testing.T) {
 		longPoll.Security.TokenTransport != "bearer" ||
 		longPoll.Security.AnonymousPolicy != "deny" ||
 		longPoll.Authorization.OwnershipPolicy != "connection_self" ||
-		longPoll.Reliability.TimeoutMilliseconds != 30000 {
+		longPoll.Reliability.TimeoutMilliseconds == nil ||
+		*longPoll.Reliability.TimeoutMilliseconds != 30000 {
 		t.Fatalf("LongPoll bearer/self/timeout policy drifted: %+v", longPoll)
 	}
 

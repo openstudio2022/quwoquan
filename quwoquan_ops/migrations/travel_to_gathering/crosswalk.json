@@ -1,0 +1,88 @@
+{
+  "schema": "qwq.travel_to_gathering.crosswalk",
+  "migrationId": "travel-to-gathering",
+  "mode": "target-only",
+  "sourceService": "travel-service",
+  "targetService": "circle-service",
+  "rules": {
+    "TripPlan": {
+      "targetObjects": [
+        "circle.gathering",
+        "circle.gathering_plan",
+        "content.post"
+      ],
+      "rule": "active roots require explicit target policy, disclosure, timezone, capacity, room and host-authority bindings; archived roots remain archived"
+    },
+    "TripPlanRevision": {
+      "targetObjects": [
+        "circle.gathering",
+        "circle.gathering_plan"
+      ],
+      "rule": "immutable source revisions retain source identity and order; no mutable current-plan fallback"
+    },
+    "TripMembership": {
+      "targetObjects": [
+        "circle.gathering"
+      ],
+      "rule": "participation and organizer authority remain separate; organizer authority requires explicit evidence"
+    },
+    "TripMoment": {
+      "targetObjects": [
+        "circle.gathering_plan",
+        "content.post"
+      ],
+      "rule": "only canonical content references recirculate; inline content is never copied"
+    },
+    "TripPlanContentLink": {
+      "targetObjects": [
+        "circle.gathering_plan",
+        "content.post"
+      ],
+      "rule": "content remains owned by Content and is linked only by canonical reference"
+    },
+    "TripGuideAssignment": {
+      "targetObjects": [],
+      "rule": "cancelled assignments are archived; active assignments are not_applicable while no canonical target guide-assignment contract exists, and never manufacture Host authority"
+    },
+    "TripPlanPlacement": {
+      "targetObjects": [
+        "circle.gathering_plan",
+        "circle.circle",
+        "chat.conversation"
+      ],
+      "rule": "conversation and Circle placements become typed source or room references only when the target binding is explicit"
+    },
+    "TripMapView": {
+      "targetObjects": [],
+      "rule": "derived projections are rebuilt from target facts and are never imported as authoritative state"
+    },
+    "TripTimelineView": {
+      "targetObjects": [],
+      "rule": "derived projections are parity inputs only and are never written directly"
+    },
+    "TripShareSnapshot": {
+      "targetObjects": [],
+      "rule": "immutable snapshots remain audit inputs; target Board and Content projections rebuild from canonical references"
+    },
+    "TripPlanTemplate": {
+      "targetObjects": [],
+      "rule": "archived templates remain archived; active templates are explicitly not_applicable until a canonical target template contract exists"
+    }
+  },
+  "dispositions": [
+    "migrated",
+    "archived",
+    "quarantined",
+    "not_applicable"
+  ],
+  "prohibitions": [
+    "dual-read",
+    "dual-write",
+    "compatibility-shim",
+    "source-write",
+    "control-plane-environment-write",
+    "target-direct-database-write",
+    "derived-projection-write",
+    "fabricated-field"
+  ]
+}

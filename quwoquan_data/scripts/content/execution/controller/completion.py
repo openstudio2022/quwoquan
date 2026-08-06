@@ -1,16 +1,28 @@
 """Execution completion checks owned by the controller boundary."""
 from __future__ import annotations
 
-from content.execution.support import ExecutionContext, ExecutionStateStatus, ExecutionStateTransition, store
+from content.execution.execution_state_journal import (
+    verify_execution_state_journal_for_execution,
+)
+from content.execution.support import (
+    ExecutionContext,
+    ExecutionStateStatus,
+    ExecutionStateTransition,
+    store,
+)
 
 
 def execution_completion_issues(
     ctx: ExecutionContext,
     state: ExecutionStateTransition,
 ) -> list[str]:
+    verify_execution_state_journal_for_execution(ctx.execution_id)
     from content.execution.agent.agent_checkpoint import _checkpoint_is_done
-    from content.execution.agent.history import last_managed_agent_run, save_managed_agent_run
     from content.execution.agent.auto_research import _download_auto_research_lanes
+    from content.execution.agent.history import (
+        last_managed_agent_run,
+        save_managed_agent_run,
+    )
 
     issues: list[str] = []
     if state.waiting_checkpoint:
@@ -71,18 +83,16 @@ def execution_completion_issues(
         except Exception as exc:  # noqa: BLE001
             issues.append(f"managed execution audit unavailable: {exc}")
         else:
-            failed_lane_count = int(audit.get("failedLaneCount") or 0)
-            if failed_lane_count:
-                issues.append(
-                    f"managed execution audit failedLaneCount={failed_lane_count}"
-                )
             lane_passed = audit.get("lanePassed") or {}
-            target_count = int(audit.get("targetCount") or 0)
             enabled_lanes = _download_auto_research_lanes(ctx)
-            for lane in sorted(enabled_lanes):
-                passed = int(lane_passed.get(lane) or 0)
-                if target_count and passed != target_count:
-                    issues.append(
-                        f"managed lane {lane} passed {passed}/{target_count}"
-                    )
+            qualified_count = sum(
+                int(lane_passed.get(lane) or 0) for lane in enabled_lanes
+            )
+            # Object shortfall is preserved in review/campaign receipts.  It
+            # must not cancel qualified siblings or force an execution to
+            # fabricate the original candidate count.  Zero qualified objects
+            # remains a hard execution blocker; scale readiness separately
+            # enforces the exact milestone quota.
+            if enabled_lanes and qualified_count <= 0:
+                issues.append("managed execution has no qualified objects")
     return issues

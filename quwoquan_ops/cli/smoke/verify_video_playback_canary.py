@@ -208,7 +208,7 @@ def main(argv: list[str] | None = None) -> int:
             "durationMs": duration_ms,
             "firstFrameDecoded": first_frame_decoded,
         },
-        # Kept as typed aliases for the runtime-media T4 archive reader.
+        # Kept as typed aliases for the runtime-media playback archive reader.
         "publicSliceKey": key,
         "videoAuthority": base,
         "rangeStatus": delivery["rangeStatus"],

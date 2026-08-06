@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/gateway-orchestrator-foundation/unified-entry-security/rate-limit-protection/spec.md#gwt-001
+// readiness_case: shared-admission-local
 package local_contract
 
 import (

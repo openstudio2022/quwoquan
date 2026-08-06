@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/interaction-notification-inbox/spec.md#gwt-001
+// readiness_case: create-interaction-notifications-local
 package local_contract
 
 import (
@@ -103,7 +105,7 @@ func TestProjectionCoversSevenSourcesWithStableIdentity(t *testing.T) {
 		},
 		{
 			name: "resolved report notifies reporter",
-			event: contentEvent(t, "content.report.resolved", "report-1:3", map[string]any{
+			event: contentEvent(t, "content.report.ReportResolved", "report-1:3", map[string]any{
 				"reportId": "report-1", "reporterAccountId": "account-reporter-1",
 				"targetType": "post", "targetId": "post-1", "resolution": "delete_content",
 			}),
@@ -112,7 +114,7 @@ func TestProjectionCoversSevenSourcesWithStableIdentity(t *testing.T) {
 		},
 		{
 			name: "dismissed report notifies reporter",
-			event: contentEvent(t, "content.report.dismissed", "report-2:3", map[string]any{
+			event: contentEvent(t, "content.report.ReportDismissed", "report-2:3", map[string]any{
 				"reportId": "report-2", "reporterAccountId": "account-reporter-1",
 				"targetType": "post", "targetId": "post-2",
 			}),
@@ -212,7 +214,7 @@ func TestProjectionCoversSevenSourcesWithStableIdentity(t *testing.T) {
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			commands, err := application.ProjectInteractionNotification(testCase.event)
+			commands, err := (application.InteractionNotificationProjection{}).Project(testCase.event)
 			if err != nil {
 				t.Fatalf("projection failed: %v", err)
 			}
@@ -265,11 +267,11 @@ func TestCommentCreatedFanoutUsesDistinctStableDeliveryIdentity(t *testing.T) {
 		"mentionedUserIds": []string{"reply-target-1", "mention-target-1", "actor-1"},
 	})
 
-	first, err := application.ProjectInteractionNotification(event)
+	first, err := (application.InteractionNotificationProjection{}).Project(event)
 	if err != nil {
 		t.Fatalf("project Comment fan-out: %v", err)
 	}
-	second, err := application.ProjectInteractionNotification(event)
+	second, err := (application.InteractionNotificationProjection{}).Project(event)
 	if err != nil {
 		t.Fatalf("replay Comment fan-out: %v", err)
 	}
@@ -418,7 +420,7 @@ func TestProjectionSkipsNonNotifiableEvents(t *testing.T) {
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			commands, err := application.ProjectInteractionNotification(testCase.event)
+			commands, err := (application.InteractionNotificationProjection{}).Project(testCase.event)
 			if err != nil {
 				t.Fatalf("skip path must not error: %v", err)
 			}
@@ -461,14 +463,14 @@ func TestProjectionFailsClosedOnIncompletePayload(t *testing.T) {
 		},
 		{
 			name: "report result rejects persona-only recipient",
-			event: contentEvent(t, "content.report.resolved", "report-bad:3", map[string]any{
+			event: contentEvent(t, "content.report.ReportResolved", "report-bad:3", map[string]any{
 				"reportId": "report-bad", "reporterId": "persona-only-reporter",
 			}),
 		},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			command, err := application.ProjectInteractionNotification(testCase.event)
+			command, err := (application.InteractionNotificationProjection{}).Project(testCase.event)
 			if err == nil {
 				t.Fatalf("expected structured failure, got command=%v", command)
 			}

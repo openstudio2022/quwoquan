@@ -192,7 +192,7 @@ class LocalMediaOriginCachePolicyContractTest(unittest.TestCase):
     def test_alpha_beta_and_prod_sim_publish_the_same_cache_contract(self) -> None:
         sources = (
             ROOT / "quwoquan_ops/cli/alpha/content_release_runtime.py",
-            ROOT / "quwoquan_app/scripts/device/start_app_beta_manual.sh",
+            ROOT / "quwoquan_app/scripts/tools/device/beta_manual_app.sh",
             ROOT / "quwoquan_ops/cli/prod_sim/start_prod_sim_stack.sh",
         )
         for source in sources:

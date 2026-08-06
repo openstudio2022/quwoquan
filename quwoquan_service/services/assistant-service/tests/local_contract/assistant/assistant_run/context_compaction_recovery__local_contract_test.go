@@ -9,7 +9,9 @@ import (
 	"time"
 
 	generated "quwoquan_service/services/assistant-service/generated/assistant/assistant_session"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/orchestration"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
+	assistant "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/model"
 )
 
 func TestContextCompactionPersistsMonotonicCursorAndSurvivesCheckpointReplacement(
@@ -55,6 +57,7 @@ func TestContextCompactionPersistsMonotonicCursorAndSurvivesCheckpointReplacemen
 			NavigationDepth: 1,
 			SourceIDs:       []string{"source:official:1"},
 			ToolHistory:     []string{"web_open"},
+			ModelHistory:    []string{"model-reasoning-v1"},
 		},
 		runruntime.ContextObservationSnapshot{
 			Iteration: 1,
@@ -85,7 +88,8 @@ func TestContextCompactionPersistsMonotonicCursorAndSurvivesCheckpointReplacemen
 	}
 	if run.Checkpoint == nil || run.Checkpoint.ContextReceiptSeq != 2 ||
 		run.Checkpoint.ContextCompaction == nil ||
-		run.Checkpoint.ContextState.NavigationDepth != 1 {
+		run.Checkpoint.ContextState.NavigationDepth != 1 ||
+		len(run.Checkpoint.ContextState.ModelHistory) != 1 {
 		t.Fatalf("context progress was not persisted: %#v", run.Checkpoint)
 	}
 	if _, err := run.CreateCheckpoint(
@@ -101,8 +105,122 @@ func TestContextCompactionPersistsMonotonicCursorAndSurvivesCheckpointReplacemen
 	if run.Checkpoint.ContextReceiptSeq != 2 ||
 		run.Checkpoint.ContextState.PlanCursor != 1 ||
 		run.Checkpoint.ContextCompaction == nil ||
-		run.Checkpoint.ContextCompaction.SummaryText == "" {
+		run.Checkpoint.ContextCompaction.SummaryText == "" ||
+		len(run.Checkpoint.ContextState.ModelHistory) != 1 ||
+		run.Checkpoint.ContextState.ModelHistory[0] != "model-reasoning-v1" {
 		t.Fatalf("checkpoint replacement discarded context state: %#v", run.Checkpoint)
+	}
+}
+
+type compactionReceiptModel struct{}
+
+func (compactionReceiptModel) Complete(
+	_ context.Context,
+	request orchestration.ModelRequest,
+) (orchestration.ModelResponse, error) {
+	response := orchestration.ModelResponse{
+		ClientModelInteraction: map[string]any{"modelId": "provider-" + request.Stage},
+		Usage:                  map[string]any{"totalTokens": 10},
+	}
+	switch request.Stage {
+	case "reasoning":
+		response.StructuredDelta = map[string]any{
+			"nextAction": "tool_call",
+			"toolName":   "web_search",
+			"toolInput":  map[string]any{"query": "canonical fact"},
+		}
+	case "evidence_processing":
+		response.StructuredDelta = map[string]any{
+			"evidenceSufficient": true,
+			"retrievalProcessing": map[string]any{
+				"processingSummary": "已核验公开事实",
+			},
+		}
+	case "compaction":
+		response.Text = "目标不变；公开事实已核验；等待最终综合。"
+	case "final":
+		response.Text = "公开事实已完成核验。"
+		response.StructuredDelta = map[string]any{
+			"userMarkdown": response.Text,
+		}
+	}
+	return response, nil
+}
+
+func TestReactCompactionPersistsProviderModelIdentityAcrossRestart(t *testing.T) {
+	repository := newMemoryRunRepository()
+	run, err := workerCommandService(repository).Start(
+		t.Context(),
+		runruntime.StartCommand{
+			UserID: "compaction-model-owner", SessionID: "compaction-model-session",
+			ClientRequestID: "compaction-model-request", InputText: "核验并压缩上下文",
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := run.CreatedAt.Add(2 * time.Minute)
+	ctx, err := runruntime.WithContextCompactionRuntime(
+		t.Context(),
+		runruntime.ContextCompactionRuntimeConfig{
+			Scope: runruntime.ContextProgressScope(run), CheckpointEvery: time.Minute,
+			StartedAt: run.CreatedAt, Now: func() time.Time { return now },
+			Sink: func(_ context.Context, receipt runruntime.ContextProgressReceipt) error {
+				return run.RecordContextProgress(receipt, now)
+			},
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx = runruntime.WithContextCompactionBoundary(ctx)
+	if _, err := (orchestration.ReactRuntime{
+		Model: compactionReceiptModel{}, Tools: reactHookTools{},
+	}).Run(ctx, assistant.AssistantTurn{
+		TurnID: "turn-compaction-model",
+		Input:  assistant.AssistantTurnInput{Text: "核验公开事实"},
+	}, orchestration.SkillSelection{
+		SkillID: "knowledge_general", DomainID: "knowledge_general",
+		ToolPolicy: []string{"web_search"}, MaxToolCalls: 1,
+	}); err != nil {
+		t.Fatalf("ReactRuntime.Run() error=%v", err)
+	}
+	if run.Checkpoint == nil || run.Checkpoint.ContextCompaction == nil {
+		t.Fatalf("compaction checkpoint missing: %#v", run.Checkpoint)
+	}
+	compactionIndex := -1
+	for index, modelID := range run.Checkpoint.ContextState.ModelHistory {
+		if modelID == "provider-compaction" {
+			compactionIndex = index
+			break
+		}
+	}
+	if compactionIndex < 1 {
+		t.Fatalf("compaction model missing from append-only history: %v", run.Checkpoint.ContextState.ModelHistory)
+	}
+
+	restartCtx, err := runruntime.WithContextCompactionRuntime(
+		t.Context(),
+		runruntime.ContextCompactionRuntimeConfig{
+			Scope: runruntime.ContextProgressScope(run), CheckpointEvery: time.Minute,
+			StartedAt: run.CreatedAt, InitialState: run.Checkpoint.ContextState,
+			InitialCompaction:      run.Checkpoint.ContextCompaction,
+			InitialReceiptSequence: run.Checkpoint.ContextReceiptSeq,
+			Now:                    func() time.Time { return now.Add(time.Second) },
+			Sink: func(_ context.Context, receipt runruntime.ContextProgressReceipt) error {
+				return run.RecordContextProgress(receipt, now.Add(time.Second))
+			},
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	restored, _, ok := runruntime.RestoreContextExecution(
+		runruntime.WithContextCompactionBoundary(restartCtx),
+	)
+	if !ok || len(restored.ModelHistory) <= compactionIndex ||
+		restored.ModelHistory[compactionIndex] != "provider-compaction" {
+		t.Fatalf("restart lost compaction model history: %#v", restored)
 	}
 }
 
@@ -140,6 +258,7 @@ func (e *contextRecoveryExecutor) Execute(
 				NavigationDepth:     2,
 				SourceIDs:           []string{"source:recovery:1"},
 				ToolHistory:         []string{"web_open"},
+				ModelHistory:        []string{"model-reasoning-v1", "model-final-v2"},
 			},
 			runruntime.ContextObservationSnapshot{
 				Iteration: 2,
@@ -214,7 +333,9 @@ func TestDurableWorkerRestoresContextLedgerBeforeReenteringExecutor(
 		len(restored.SourceIDs) != 1 ||
 		restored.SourceIDs[0] != "source:recovery:1" ||
 		len(restored.ToolHistory) != 1 ||
-		restored.ToolHistory[0] != "web_open" {
+		restored.ToolHistory[0] != "web_open" ||
+		len(restored.ModelHistory) != 2 ||
+		restored.ModelHistory[1] != "model-final-v2" {
 		t.Fatalf("second worker received reset context state: %#v", restored)
 	}
 	stored, err := repository.Load(t.Context(), run.RunID)

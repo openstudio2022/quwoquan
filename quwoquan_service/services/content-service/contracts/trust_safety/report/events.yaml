@@ -1,33 +1,47 @@
 events:
-- name: content.report.created
+- name: ReportCreated
   description: 举报聚合创建事实；post 目标审核 Case 和推荐负信号各使用独立 checkpoint。
-  producer: content-service
-  consumers: [content-report-runtime-events, content-report-moderation-projection, content-report-recommend-signal]
-  channel: transactional_outbox
+  delivery_semantics: transactional_outbox
   payload_entity: ReportCreatedPayload
   payload_shape: exact
-  payload_fields: [reportId, reporterId, reporterAccountId, targetType, targetId, reason]
-- name: content.report.review_started
-  description: operator 开始审核；当前只发布到 shared runtime event transport。
-  producer: content-service
-  consumers: [content-report-runtime-events]
-  channel: transactional_outbox
+  payload_fields:
+  - reportId
+  - reporterId
+  - reporterAccountId
+  - targetType
+  - targetId
+  - reason
+- name: ReportReviewStarted
+  description: operator 开始审核；当前没有 canonical 下游 handler。
+  delivery_semantics: transactional_event_log
   payload_entity: ReportReviewStartedPayload
   payload_shape: exact
-  payload_fields: [reportId, reviewerId]
-- name: content.report.resolved
+  payload_fields:
+  - reportId
+  - reviewerId
+  no_consumer_reason: 审核领取只形成 Report 聚合内的持久运营审计；下游治理结果只由 ReportResolved 或 ReportDismissed 承载。
+- name: ReportResolved
   description: 举报核实并结案；通知与 comment delete_content 治理投影分别使用独立 checkpoint。
-  producer: content-service
-  consumers: [content-report-runtime-events, content-report-notification-stream, content-report-comment-moderation]
-  channel: transactional_outbox
+  delivery_semantics: transactional_outbox
   payload_entity: ReportResolvedPayload
   payload_shape: exact
-  payload_fields: [reportId, reporterId, reporterAccountId, targetType, targetId, reviewerId, resolution]
-- name: content.report.dismissed
+  payload_fields:
+  - reportId
+  - reporterId
+  - reporterAccountId
+  - targetType
+  - targetId
+  - reviewerId
+  - resolution
+- name: ReportDismissed
   description: 举报审核完成但未发现违规；通知传输使用独立 checkpoint。
-  producer: content-service
-  consumers: [content-report-runtime-events, content-report-notification-stream]
-  channel: transactional_outbox
+  delivery_semantics: transactional_outbox
   payload_entity: ReportDismissedPayload
   payload_shape: exact
-  payload_fields: [reportId, reporterId, reporterAccountId, targetType, targetId, reviewerId]
+  payload_fields:
+  - reportId
+  - reporterId
+  - reporterAccountId
+  - targetType
+  - targetId
+  - reviewerId

@@ -15,12 +15,8 @@ from quwoquan_ops.ci.provider_conformance.native_case_result import run_native_h
 RESULT_PATH_ENV = "QWQ_PROVIDER_CONFORMANCE_RESULT_PATH"
 TARGET = "ext-push-protocol-substitute-api-integration"
 COMMAND = (
-    "go",
-    "-C",
-    "quwoquan_service",
-    "test",
-    "./services/integration-service/tests/api_integration/external_integration/external_interaction",
-    "-count=1",
+    "python3",
+    "quwoquan_ops/ci/provider_conformance/run_generic_protocol_substitute_conformance.py",
 )
 
 if __name__ == "__main__":

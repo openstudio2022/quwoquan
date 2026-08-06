@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/product-ops-growth/outbound-share-distribution/share-attribution-and-token/spec.md#gwt-001
+// readiness_case: create-outbound-share-api
 package outbound_share_fact_test
 
 import (
@@ -13,11 +14,11 @@ import (
 
 	"quwoquan_service/internal/platform/testinfra"
 	rtauth "quwoquan_service/runtime/auth"
+	"quwoquan_service/runtime/commandmeta"
 	"quwoquan_service/runtime/operation"
 	sharehttp "quwoquan_service/services/content-service/internal/content/outbound_share_fact/adapters/inbound/http"
 	shareapp "quwoquan_service/services/content-service/internal/content/outbound_share_fact/application/command"
 	sharepersistence "quwoquan_service/services/content-service/internal/content/outbound_share_fact/infrastructure/persistence"
-	"quwoquan_service/runtime/commandmeta"
 )
 
 type publishedPostReader struct{}

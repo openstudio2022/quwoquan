@@ -1,10 +1,14 @@
 // spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-001
+// spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+// readiness_case: get-receipts-api
 package api_integration
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
@@ -16,10 +20,24 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	"quwoquan_service/internal/platform/testinfra"
+	rtauth "quwoquan_service/runtime/auth"
+	"quwoquan_service/runtime/operation"
+	receipthttp "quwoquan_service/services/chat-service/internal/chat/message_receipt_fact/adapters/inbound/http"
 	receiptapp "quwoquan_service/services/chat-service/internal/chat/message_receipt_fact/application"
 	receiptmodel "quwoquan_service/services/chat-service/internal/chat/message_receipt_fact/domain/model"
 	receiptpersistence "quwoquan_service/services/chat-service/internal/chat/message_receipt_fact/infrastructure/persistence"
 )
+
+type receiptHTTPQuery struct{ appender *receiptapp.Appender }
+
+func (query receiptHTTPQuery) GetReceipts(
+	ctx context.Context,
+	_ string,
+	messageID string,
+	_ string,
+) ([]receiptmodel.Fact, error) {
+	return query.appender.ListByMessage(ctx, messageID)
+}
 
 var (
 	receiptMongoClient    *mongo.Client
@@ -112,5 +130,19 @@ func TestMongoStoreCommitsOneImmutableFactPerMessageAndPersona(t *testing.T) {
 	items, err := receiptAppender.ListByMessage(context.Background(), fact.MessageID)
 	if err != nil || len(items) != 1 || !items[0].SameImmutableValue(fact) {
 		t.Fatalf("named reader items=%+v err=%v", items, err)
+	}
+	handler := receipthttp.NewHandler(receiptHTTPQuery{appender: receiptAppender})
+	request := httptest.NewRequest(
+		http.MethodGet,
+		"/chat/conversations/"+fact.ConversationID+"/messages/"+fact.MessageID+"/receipts",
+		nil,
+	)
+	request = request.WithContext(rtauth.WithPrincipal(request.Context(), rtauth.Principal{
+		Actor: operation.ActorContext{PersonaID: fact.UserID},
+	}))
+	response := httptest.NewRecorder()
+	handler.GetReceipts(response, request)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), fact.ID) {
+		t.Fatalf("receipt HTTP result status=%d body=%s", response.Code, response.Body.String())
 	}
 }

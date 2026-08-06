@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import json
 import os
 import sys
@@ -111,6 +112,9 @@ def verify_release_governance(
         "mergedBy": merger,
         "approvers": approvers,
         "distinctPrincipals": sorted(principals),
+        "verifiedAt": dt.datetime.now(dt.timezone.utc)
+        .isoformat()
+        .replace("+00:00", "Z"),
     }
 
 
@@ -139,7 +143,10 @@ def main() -> int:
             if not isinstance(manifest, dict):
                 raise RuntimeError("release evidence manifest must be an object")
             try:
-                validate_manifest(manifest, allowed_statuses={"deployable"})
+                validate_manifest(
+                    manifest,
+                    allowed_statuses={"candidate-ready", "deployable", "released"},
+                )
             except ValueError as error:
                 raise RuntimeError(
                     f"release evidence manifest is invalid: {error}"

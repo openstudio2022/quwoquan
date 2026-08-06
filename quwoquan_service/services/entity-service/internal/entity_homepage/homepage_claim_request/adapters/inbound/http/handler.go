@@ -96,7 +96,7 @@ func (h *Handler) Review(
 		return
 	}
 	view, err := h.facade.Review(r.Context(), claimapp.ReviewCommand{
-		HomepageID: strings.TrimSpace(homepageID),
+		HomepageID:     strings.TrimSpace(homepageID),
 		ClaimRequestID: strings.TrimSpace(claimRequestID), ActorAccountID: actor,
 		TargetStatus: body.Status, ReviewNote: body.ReviewNote,
 	})

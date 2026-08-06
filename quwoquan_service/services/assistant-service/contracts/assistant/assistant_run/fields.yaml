@@ -1860,21 +1860,53 @@ types:
     - {name: runId, source: runId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
     - {name: idempotencyKey, source: idempotencyKey, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: write, ops_exposure: read}
     - {name: instruction, source: instruction, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: mask, api_exposure: write, ops_exposure: read}
-  AssistantDeviceActionExecutionReceipt:
-    description: App 在 capability 检查和原生调用后提交的强类型设备动作执行回执；服务端不得从用户批准推导执行成功。
+  AssistantDeviceActionPermit:
+    description: 用户批准后签发给单一安装、设备和 capability 的短期不透明许可；许可不等于执行成功。
     fields:
-    - {name: actionKind, source: actionKind, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: runId, source: runId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: toolInvocationId, source: toolInvocationId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: installationId, source: installationId, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: read, ops_exposure: none}
+    - {name: deviceId, source: deviceId, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: read, ops_exposure: none}
+    - {name: capability, source: capability, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: inputDigest, source: inputDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: idempotencyKey, source: idempotencyKey, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: write, ops_exposure: read}
+    - {name: approvalRef, source: approvalRef, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+    - {name: jti, source: jti, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
+    - {name: expiresAt, source: expiresAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: permit, source: permit, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: read, ops_exposure: none}
+  AssistantDeviceActionExecutionReceipt:
+    description: App 在 capability 检查和原生调用后提交的强类型设备动作执行回执；所有绑定必须与 DeviceActionPermit 完全一致。
+    fields:
+    - {name: installationId, source: installationId, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: write, ops_exposure: none}
+    - {name: deviceId, source: deviceId, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: write, ops_exposure: none}
+    - {name: capability, source: capability, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: inputDigest, source: inputDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: permit, source: permit, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: write, ops_exposure: none}
     - {name: idempotencyKey, source: idempotencyKey, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: write, ops_exposure: read}
     - {name: outcome, source: outcome, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
     - {name: executedAt, source: executedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
     - {name: deviceObjectId, source: deviceObjectId, type: string, constraints: [NULLABLE], classification: SENSITIVE, log_policy: hash, api_exposure: write, ops_exposure: none}
-    - {name: failureCode, source: failureCode, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
-  AssistantContinueToolUseRequest:
-    description: 用户对待确认设备或外部动作的显式决定；批准设备动作时必须携带原生执行回执，runId 与 toolUseId 只从 path 绑定。
+    - {name: failureCode, source: failureCode, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read, description: SubmitDeviceActionReceipt 仅接受 assistant_run/errors.yaml 为该 operation 声明的 canonical stable code；端侧强类型仍由同一 errors.yaml 生成。}
+  AssistantApproveToolUseRequest:
+    description: 用户只提交批准或拒绝；批准设备动作时服务端返回 DeviceActionPermit，不接受执行回执。
     fields:
     - {name: runId, source: runId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
-    - {name: toolUseId, source: toolUseId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: toolInvocationId, source: toolInvocationId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
     - {name: idempotencyKey, source: idempotencyKey, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: write, ops_exposure: read}
     - {name: decision, source: decision, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
-    - {name: continuationToken, source: continuationToken, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: write, ops_exposure: none}
-    - {name: executionReceipt, source: executionReceipt, type: AssistantDeviceActionExecutionReceipt, constraints: [NULLABLE], classification: SENSITIVE, log_policy: metadata_only, api_exposure: write, ops_exposure: read}
+    - {name: approvalPermit, source: approvalPermit, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: write, ops_exposure: none}
+    - {name: installationId, source: installationId, type: string, constraints: [NULLABLE], classification: SENSITIVE, log_policy: hash, api_exposure: write, ops_exposure: none}
+    - {name: deviceId, source: deviceId, type: string, constraints: [NULLABLE], classification: SENSITIVE, log_policy: hash, api_exposure: write, ops_exposure: none}
+  AssistantToolApprovalResult:
+    description: 批准后返回短期 DeviceActionPermit；拒绝时 permit 为空且 Run 进入取消终态。
+    fields:
+    - {name: runId, source: runId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: state, source: state, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: deviceActionPermit, source: deviceActionPermit, type: AssistantDeviceActionPermit, constraints: [NULLABLE], classification: SENSITIVE, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+  AssistantSubmitDeviceActionReceiptRequest:
+    description: App 原生能力执行后单独提交回执；path、permit、安装、设备、capability、input digest 和幂等键必须完全匹配且许可未过期。
+    fields:
+    - {name: runId, source: runId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: toolInvocationId, source: toolInvocationId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: idempotencyKey, source: idempotencyKey, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: write, ops_exposure: read}
+    - {name: receipt, source: receipt, type: AssistantDeviceActionExecutionReceipt, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: write, ops_exposure: read}

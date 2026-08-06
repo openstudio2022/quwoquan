@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	rterr "quwoquan_service/runtime/errors"
+	skillgenerated "quwoquan_service/services/assistant-service/generated/assistant/skill_subscription"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/ports"
 )
 
@@ -19,11 +19,7 @@ func (s *AssistantService) publishNotificationAppMessage(
 	command ports.NotificationAppMessageCommand,
 ) (ports.NotificationAppMessageReceipt, error) {
 	if s.notificationMessages == nil {
-		return ports.NotificationAppMessageReceipt{}, rterr.NewUnavailable(
-			rterr.ModuleAssistant,
-			"应用消息通道不可用",
-			"notification app message command writer is not configured",
-		)
+		return ports.NotificationAppMessageReceipt{}, skillgenerated.AppErrorFromSubscriptionDeliveryFailed("notification app message command writer is not configured")
 	}
 	// 投递目的地防错发校验（P0 告警 AssistantWrongDestinationIncident）：
 	// 主动投递必须携带非空 user 目的地且与命令 owner 一致；校验失败计入
@@ -33,11 +29,7 @@ func (s *AssistantService) publishNotificationAppMessage(
 	if destinationID == "" || ownerID == "" ||
 		(command.Destination.Type == "user" && destinationID != ownerID) {
 		RecordAssistantWrongDestinationIncident()
-		return ports.NotificationAppMessageReceipt{}, rterr.NewInvalidArgument(
-			rterr.ModuleAssistant,
-			"投递目的地校验失败",
-			"proactive delivery destination mismatch: type="+command.Destination.Type,
-		)
+		return ports.NotificationAppMessageReceipt{}, skillgenerated.AppErrorFromSubscriptionDestinationForbidden("proactive delivery destination mismatch: type=" + command.Destination.Type)
 	}
 	return s.notificationMessages.CreateAppMessage(ctx, command)
 }

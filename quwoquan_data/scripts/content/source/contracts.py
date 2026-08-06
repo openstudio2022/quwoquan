@@ -220,7 +220,11 @@ class MediaProvenance:
             sorted(
                 {
                     _text(issue)
-                    for issue in audit_image_rights(audit_input, vertical=vertical)
+                    for issue in (
+                        *audit_image_rights(audit_input, vertical=vertical),
+                        *(raw.get("rightsIssues") or ()),
+                        *(raw.get("rightsAuditIssues") or ()),
+                    )
                     if _text(issue)
                 }
             )

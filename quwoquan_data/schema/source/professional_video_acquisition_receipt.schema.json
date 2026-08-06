@@ -1,0 +1,302 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/source/professional_video_acquisition_receipt.schema.json",
+  "type": "object",
+  "required": [
+    "schema", "manifestId", "manifestDigest", "sourceRevision", "sourceDigest",
+    "entityCatalogDigest", "plannedAssetCount", "discoveredAssetCount",
+    "downloadedAssetCount", "acceptedAssetCount", "rejectedAssetCount",
+    "providerAssetCounts", "assets", "receiptDigest"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {"const": "quwoquan_data.professional_video_acquisition_receipt"},
+    "manifestId": {"type": "string", "minLength": 1},
+    "manifestDigest": {"$ref": "#/$defs/sha256"},
+    "sourceRevision": {"type": "string", "minLength": 1},
+    "sourceDigest": {"$ref": "#/$defs/sha256"},
+    "entityCatalogDigest": {"$ref": "#/$defs/sha256"},
+    "plannedAssetCount": {"type": "integer", "minimum": 1},
+    "discoveredAssetCount": {"type": "integer", "minimum": 1},
+    "downloadedAssetCount": {"type": "integer", "minimum": 0},
+    "acceptedAssetCount": {"type": "integer", "minimum": 0},
+    "rejectedAssetCount": {"type": "integer", "minimum": 0},
+    "providerAssetCounts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/providerCounts"}
+    },
+    "assets": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/asset"}
+    },
+    "receiptDigest": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "emptyOrSha256": {
+      "anyOf": [
+        {"const": ""},
+        {"$ref": "#/$defs/sha256"}
+      ]
+    },
+    "nullableNumber": {
+      "anyOf": [
+        {"type": "number", "minimum": 0},
+        {"type": "null"}
+      ]
+    },
+    "nullableCount": {
+      "anyOf": [
+        {"type": "integer", "minimum": 0},
+        {"type": "null"}
+      ]
+    },
+    "accessEvidence": {
+      "type": "object",
+      "required": [
+        "anonymousAssetAccess", "loginRequired", "captchaRequired",
+        "paywallRequired", "drmProtected", "accessControlBypass"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "anonymousAssetAccess": {"type": "boolean"},
+        "loginRequired": {"type": "boolean"},
+        "captchaRequired": {"type": "boolean"},
+        "paywallRequired": {"type": "boolean"},
+        "drmProtected": {"type": "boolean"},
+        "accessControlBypass": {"type": "boolean"}
+      }
+    },
+    "safetyReview": {
+      "type": "object",
+      "required": [
+        "status", "entityMatch", "privacyRisk", "minorRisk",
+        "maliciousMediaRisk", "watermarkStatus", "reviewedAt",
+        "reviewer", "evidenceRef"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "status": {"enum": ["passed", "blocked", "pending"]},
+        "entityMatch": {"enum": ["matched", "mismatch", "unknown"]},
+        "privacyRisk": {"enum": ["none", "present", "unknown"]},
+        "minorRisk": {"enum": ["none", "present", "unknown"]},
+        "maliciousMediaRisk": {"enum": ["none", "present", "unknown"]},
+        "watermarkStatus": {"enum": ["absent", "present", "unknown"]},
+        "reviewedAt": {"type": "string", "minLength": 1},
+        "reviewer": {"type": "string", "minLength": 1},
+        "evidenceRef": {"type": "string", "minLength": 1}
+      }
+    },
+    "popularitySignals": {
+      "type": "object",
+      "required": [
+        "playCount", "likeCount", "commentCount", "shareCount",
+        "favoriteCount", "observedAt", "provider", "topic", "timeBucket",
+        "popularityScore", "popularityPercentile", "rankingEligible",
+        "rankingIneligibleReason", "comparisonCandidateCount"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "playCount": {"$ref": "#/$defs/nullableCount"},
+        "likeCount": {"$ref": "#/$defs/nullableCount"},
+        "commentCount": {"$ref": "#/$defs/nullableCount"},
+        "shareCount": {"$ref": "#/$defs/nullableCount"},
+        "favoriteCount": {"$ref": "#/$defs/nullableCount"},
+        "observedAt": {"type": "string", "minLength": 1},
+        "provider": {"type": "string", "minLength": 1},
+        "topic": {"type": "string", "minLength": 1},
+        "timeBucket": {"type": "string", "minLength": 1},
+        "popularityScore": {"$ref": "#/$defs/nullableNumber"},
+        "popularityPercentile": {
+          "anyOf": [
+            {"type": "number", "minimum": 0, "maximum": 1},
+            {"type": "null"}
+          ]
+        },
+        "rankingEligible": {"type": "boolean"},
+        "rankingIneligibleReason": {"type": "string"},
+        "comparisonCandidateCount": {"type": "integer", "minimum": 0}
+      }
+    },
+    "mediaProbe": {
+      "type": "object",
+      "required": [
+        "width", "height", "frameCount", "framesPerSecond", "durationMs",
+        "codec", "hasAudio", "sampleCount", "distinctFrameCount",
+        "movingTransitionCount", "meanTransitionDelta", "playable",
+        "motionVideo", "staticImageSequence", "premiumPlayableEligible"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "width": {"type": "integer", "minimum": 1},
+        "height": {"type": "integer", "minimum": 1},
+        "frameCount": {"type": "integer", "minimum": 1},
+        "framesPerSecond": {"type": "number", "exclusiveMinimum": 0},
+        "durationMs": {"type": "integer", "minimum": 1},
+        "codec": {"type": "string"},
+        "hasAudio": {"type": "boolean"},
+        "sampleCount": {"type": "integer", "minimum": 1},
+        "distinctFrameCount": {"type": "integer", "minimum": 1},
+        "movingTransitionCount": {"type": "integer", "minimum": 0},
+        "meanTransitionDelta": {"type": "number", "minimum": 0, "maximum": 1},
+        "playable": {"type": "boolean"},
+        "motionVideo": {"type": "boolean"},
+        "staticImageSequence": {"type": "boolean"},
+        "premiumPlayableEligible": {"type": "boolean"}
+      }
+    },
+    "providerCounts": {
+      "type": "object",
+      "required": [
+        "displayName", "provider", "platform", "plannedAssetCount",
+        "discoveredAssetCount", "downloadedAssetCount", "acceptedAssetCount",
+        "rejectedAssetCount", "verifiedAssetCount", "unverifiedAssetCount",
+        "restrictedAssetCount", "unknownAssetCount", "rankingEligibleAssetCount"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "displayName": {"type": "string", "minLength": 1},
+        "provider": {"type": "string", "minLength": 1},
+        "platform": {"type": "string", "minLength": 1},
+        "plannedAssetCount": {"type": "integer", "minimum": 1},
+        "discoveredAssetCount": {"type": "integer", "minimum": 1},
+        "downloadedAssetCount": {"type": "integer", "minimum": 0},
+        "acceptedAssetCount": {"type": "integer", "minimum": 0},
+        "rejectedAssetCount": {"type": "integer", "minimum": 0},
+        "verifiedAssetCount": {"type": "integer", "minimum": 0},
+        "unverifiedAssetCount": {"type": "integer", "minimum": 0},
+        "restrictedAssetCount": {"type": "integer", "minimum": 0},
+        "unknownAssetCount": {"type": "integer", "minimum": 0},
+        "rankingEligibleAssetCount": {"type": "integer", "minimum": 0}
+      }
+    },
+    "planVideoSpec": {
+      "type": "object",
+      "required": [
+        "sourceId", "sourceKind", "ordinal", "title", "relevance", "platform",
+        "assetUrl", "originalAssetUrl", "sourcePostUrl", "authorizationProofUrl",
+        "termsUrl", "rightsBasis", "originalCreatorName", "attributionText",
+        "commercialAuthorizationStatus", "rightsStatus", "rightsIssues",
+        "publicationAdmission", "modelReleaseStatus", "propertyReleaseStatus",
+        "takedownPolicy", "durationSeconds", "sizeBytes", "mediaProbe",
+        "popularitySignals",
+        "professionalAcquisitionReceiptRef", "professionalAssetId",
+        "professionalContentSha256", "premiumPlayableEligible"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "required": ["publicationAdmission"],
+            "properties": {"publicationAdmission": {"const": "commercial_release"}}
+          },
+          "then": {
+            "properties": {
+              "commercialAuthorizationStatus": {"const": "verified"},
+              "rightsStatus": {"const": "verified"},
+              "rightsIssues": {"maxItems": 0},
+              "authorizationProofUrl": {"pattern": "^https://"},
+              "termsUrl": {"pattern": "^https://"}
+            }
+          }
+        }
+      ],
+      "properties": {
+        "sourceId": {"type": "string", "minLength": 1},
+        "sourceKind": {"type": "string", "minLength": 1},
+        "ordinal": {"type": "integer", "minimum": 1},
+        "title": {"type": "string", "minLength": 1},
+        "relevance": {"type": "string", "minLength": 1},
+        "platform": {"type": "string", "minLength": 1},
+        "assetUrl": {"type": "string", "pattern": "^cas://sha256/[0-9a-f]{64}$"},
+        "originalAssetUrl": {"type": "string", "minLength": 1},
+        "sourcePostUrl": {"type": "string", "pattern": "^https://"},
+        "authorizationProofUrl": {"type": "string"},
+        "termsUrl": {"type": "string"},
+        "rightsBasis": {"type": "string", "minLength": 1},
+        "originalCreatorName": {"type": "string", "minLength": 1},
+        "attributionText": {"type": "string", "minLength": 1},
+        "commercialAuthorizationStatus": {"enum": ["verified", "unverified"]},
+        "rightsStatus": {"enum": ["verified", "unverified", "unknown"]},
+        "rightsIssues": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "publicationAdmission": {"enum": ["research_release", "commercial_release"]},
+        "modelReleaseStatus": {"enum": ["verified", "not_required", "unverified"]},
+        "propertyReleaseStatus": {"enum": ["verified", "not_required", "unverified"]},
+        "takedownPolicy": {"type": "string", "minLength": 1},
+        "durationSeconds": {"type": "number", "exclusiveMinimum": 0},
+        "sizeBytes": {"type": "integer", "minimum": 1},
+        "mediaProbe": {"$ref": "#/$defs/mediaProbe"},
+        "popularitySignals": {"$ref": "#/$defs/popularitySignals"},
+        "professionalAcquisitionReceiptRef": {"type": "string", "pattern": "^receipts/[0-9a-f]{64}\\.json$"},
+        "professionalAssetId": {"type": "string", "minLength": 1},
+        "professionalContentSha256": {"$ref": "#/$defs/sha256"},
+        "premiumPlayableEligible": {"const": true}
+      }
+    },
+    "asset": {
+      "type": "object",
+      "required": [
+        "assetId", "entityId", "observedEntityId", "provider", "platform",
+        "displayName", "sourceKind", "acquisitionPath", "sourceUrl", "assetUrl",
+        "manualFile", "apiEvidence", "accessEvidence", "title", "relevance",
+        "creator", "capturedAt", "acquisitionStatus", "rightsStatus",
+        "authorizationRequired", "distributionDecision", "contentSha256", "assetRef",
+        "bytes", "license", "termsUrl", "authorizationProof", "rightsIssues",
+        "modelReleaseStatus", "propertyReleaseStatus", "safetyReview", "mediaProbe",
+        "duplicateOf", "failureCode", "failure", "popularitySignals", "planVideoSpec"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "assetId": {"type": "string", "minLength": 1},
+        "entityId": {"type": "string", "minLength": 1},
+        "observedEntityId": {"type": "string", "minLength": 1},
+        "provider": {"type": "string", "minLength": 1},
+        "platform": {"type": "string", "minLength": 1},
+        "displayName": {"type": "string", "minLength": 1},
+        "sourceKind": {"type": "string", "minLength": 1},
+        "acquisitionPath": {"enum": ["public_direct", "supported_api", "manual_file"]},
+        "sourceUrl": {"type": "string", "pattern": "^https://"},
+        "assetUrl": {"type": "string"},
+        "manualFile": {"type": "string"},
+        "apiEvidence": {"type": "string"},
+        "accessEvidence": {"$ref": "#/$defs/accessEvidence"},
+        "title": {"type": "string", "minLength": 1},
+        "relevance": {"type": "string", "minLength": 1},
+        "creator": {"type": "string", "minLength": 1},
+        "capturedAt": {"type": "string", "minLength": 1},
+        "acquisitionStatus": {"enum": ["acquired", "failed", "blocked"]},
+        "rightsStatus": {"enum": ["verified", "unverified", "restricted", "unknown"]},
+        "authorizationRequired": {"type": "boolean"},
+        "distributionDecision": {"enum": ["research_allowed", "commercial_allowed", "blocked"]},
+        "contentSha256": {"$ref": "#/$defs/emptyOrSha256"},
+        "assetRef": {"type": "string"},
+        "bytes": {"type": "integer", "minimum": 0},
+        "license": {"type": "string", "minLength": 1},
+        "termsUrl": {"type": "string"},
+        "authorizationProof": {"type": "string"},
+        "rightsIssues": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "modelReleaseStatus": {"enum": ["verified", "not_required", "unverified"]},
+        "propertyReleaseStatus": {"enum": ["verified", "not_required", "unverified"]},
+        "safetyReview": {"$ref": "#/$defs/safetyReview"},
+        "mediaProbe": {
+          "anyOf": [
+            {"$ref": "#/$defs/mediaProbe"},
+            {"type": "null"}
+          ]
+        },
+        "duplicateOf": {"type": "string"},
+        "failureCode": {"type": "string"},
+        "failure": {"type": "string"},
+        "popularitySignals": {"$ref": "#/$defs/popularitySignals"},
+        "planVideoSpec": {
+          "anyOf": [
+            {"$ref": "#/$defs/planVideoSpec"},
+            {"type": "null"}
+          ]
+        }
+      }
+    }
+  }
+}

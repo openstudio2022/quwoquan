@@ -2,8 +2,7 @@
 """Print Dart defines for an app runtime env package.
 
 The app runtime YAML is the audited package artifact, while Flutter reads
-compile-time --dart-define values. This helper keeps local gamma mirror, T3
-and T4 runners on the same endpoint set.
+compile-time --dart-define values. This helper keeps local gamma mirror, release-consumer and device-UAT runners on the same endpoint set.
 """
 
 from __future__ import annotations

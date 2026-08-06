@@ -23,47 +23,47 @@ var (
 // AppErrorFromInvalidArgument returns *AppError for ENTITY.USER.invalid_argument (user_message from errors.yaml).
 func AppErrorFromInvalidArgument(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrInvalidArgument.Error()))
-	return rerrors.NewAppError(code, "请求参数有误，请检查后重试", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "请求参数有误，请检查后重试", debugMessage).WithMetadata("invalid_argument", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromHomepageNotFound returns *AppError for ENTITY.USER.homepage_not_found (user_message from errors.yaml).
 func AppErrorFromHomepageNotFound(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrHomepageNotFound.Error()))
-	return rerrors.NewAppError(code, "主页不存在或已下线", debugMessage).WithMetadata("not_found", 404).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "主页不存在或已下线", debugMessage).WithMetadata("not_found", 404).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromHomepageOffline returns *AppError for ENTITY.USER.homepage_offline (user_message from errors.yaml).
 func AppErrorFromHomepageOffline(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrHomepageOffline.Error()))
-	return rerrors.NewAppError(code, "主页已下线，仅保留记录信息", debugMessage).WithMetadata("gone", 410).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "主页已下线，仅保留记录信息", debugMessage).WithMetadata("gone", 410).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromInvalidHomepageType returns *AppError for ENTITY.USER.invalid_homepage_type (user_message from errors.yaml).
 func AppErrorFromInvalidHomepageType(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrInvalidHomepageType.Error()))
-	return rerrors.NewAppError(code, "不支持的主页类型", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "不支持的主页类型", debugMessage).WithMetadata("invalid_argument", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromPermissionDenied returns *AppError for ENTITY.USER.permission_denied (user_message from errors.yaml).
 func AppErrorFromPermissionDenied(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrPermissionDenied.Error()))
-	return rerrors.NewAppError(code, "当前无权限执行此操作", debugMessage).WithMetadata("forbidden", 403).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "当前无权限执行此操作", debugMessage).WithMetadata("forbidden", 403).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromVersionConflict returns *AppError for ENTITY.USER.version_conflict (user_message from errors.yaml).
 func AppErrorFromVersionConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrVersionConflict.Error()))
-	return rerrors.NewAppError(code, "内容已变更，请刷新后重试", debugMessage).WithMetadata("version_conflict", 409).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "内容已变更，请刷新后重试", debugMessage).WithMetadata("version_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromIdempotencyConflict returns *AppError for ENTITY.USER.idempotency_conflict (user_message from errors.yaml).
 func AppErrorFromIdempotencyConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrIdempotencyConflict.Error()))
-	return rerrors.NewAppError(code, "请求重复提交，请稍后重试", debugMessage).WithMetadata("idempotency_conflict", 409).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "请求重复提交，请稍后重试", debugMessage).WithMetadata("idempotency_conflict", 409).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromInternalError returns *AppError for ENTITY.SYSTEM.internal_error (user_message from errors.yaml).
 func AppErrorFromInternalError(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrInternalError.Error()))
-	return rerrors.NewAppError(code, "共享主页暂时不可用，请稍后再试", debugMessage).WithMetadata("internal_error", 500).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "共享主页暂时不可用，请稍后再试", debugMessage).WithMetadata("internal_error", 500).WithRecoveryDirective("surface", "inlineCard", 0)
 }

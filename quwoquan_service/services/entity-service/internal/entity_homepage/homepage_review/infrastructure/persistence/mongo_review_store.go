@@ -29,16 +29,14 @@ type MongoReviewStore struct {
 	receipts    *mongo.Collection
 	outbox      *mongo.Collection
 	checkpoints *mongo.Collection
-	supportsTxn bool
 }
 
-func NewMongoReviewStore(db *mongo.Database, supportsTransactions bool) *MongoReviewStore {
+func NewMongoReviewStore(db *mongo.Database) *MongoReviewStore {
 	return &MongoReviewStore{
 		reviews:     db.Collection(reviewCollection),
 		receipts:    db.Collection(reviewReceiptsCollection),
 		outbox:      db.Collection(reviewOutboxCollection),
 		checkpoints: db.Collection(reviewCheckpointCollection),
-		supportsTxn: supportsTransactions,
 	}
 }
 
@@ -367,9 +365,6 @@ func (s *MongoReviewStore) Commit(
 	if err := validateCommit(commit); err != nil {
 		return reviewports.CommitResult{}, err
 	}
-	if !s.supportsTxn {
-		return s.commitWithoutTransaction(ctx, commit)
-	}
 	session, err := s.reviews.Database().Client().StartSession()
 	if err != nil {
 		return reviewports.CommitResult{}, err
@@ -378,11 +373,70 @@ func (s *MongoReviewStore) Commit(
 
 	var result reviewports.CommitResult
 	_, err = session.WithTransaction(ctx, func(txCtx context.Context) (any, error) {
-		committed, txErr := s.commitBody(txCtx, commit)
-		if txErr != nil {
-			return nil, txErr
+		replayed, found, replayErr := s.resolveReplay(txCtx, commit)
+		if replayErr != nil {
+			return nil, replayErr
 		}
-		result = committed
+		if found {
+			result = replayed
+			return nil, nil
+		}
+		record := documentFromSnapshot(commit.Aggregate.Snapshot())
+		if commit.ExpectedVersion == 0 {
+			if _, insertErr := s.reviews.InsertOne(txCtx, record); insertErr != nil {
+				if mongo.IsDuplicateKeyError(insertErr) {
+					return nil, generated.AppErrorFromVersionConflict(
+						"homepage review already exists for this author",
+					)
+				}
+				return nil, insertErr
+			}
+		} else {
+			replaceResult, replaceErr := s.reviews.ReplaceOne(
+				txCtx,
+				bson.M{"_id": record.ID, "version": commit.ExpectedVersion},
+				record,
+			)
+			if replaceErr != nil {
+				return nil, replaceErr
+			}
+			if replaceResult.MatchedCount != 1 {
+				return nil, generated.AppErrorFromVersionConflict(
+					"homepage review version changed before commit",
+				)
+			}
+		}
+		// 事件行与聚合状态共用同一个事务句柄：提交成功即事件已可投递，任一步失败
+		// 则状态与事件一起回滚，不存在「状态已改、事件丢失」的中间态。
+		for _, event := range commit.Events {
+			if _, insertErr := s.outbox.InsertOne(txCtx, reviewOutboxDocument{
+				ID:               event.EventID,
+				EventType:        event.EventType,
+				AggregateID:      event.AggregateID,
+				AggregateVersion: event.AggregateVersion,
+				Payload:          append([]byte(nil), event.Payload...),
+				OccurredAt:       event.OccurredAt.UTC(),
+			}); insertErr != nil {
+				return nil, insertErr
+			}
+		}
+		if _, insertErr := s.receipts.InsertOne(txCtx, reviewReceiptDocument{
+			ID:               commit.IdempotencyKey,
+			AggregateID:      record.ID,
+			AggregateVersion: record.Version,
+			CommandName:      commit.CommandName,
+			CommandDigest:    commit.CommandDigest,
+			Result:           record,
+			CreatedAt:        time.Now().UTC(),
+			ExpiresAt:        receiptExpiry(commit.ReceiptExpiresAt),
+		}); insertErr != nil {
+			return nil, insertErr
+		}
+		aggregate, aggregateErr := record.aggregate()
+		if aggregateErr != nil {
+			return nil, aggregateErr
+		}
+		result = reviewports.CommitResult{Aggregate: aggregate}
 		return nil, nil
 	})
 	if err != nil {
@@ -403,103 +457,40 @@ func (s *MongoReviewStore) Commit(
 	return result, nil
 }
 
-// commitWithoutTransaction 服务本地/单节点 Mongo（无副本集）时按固定顺序提交；
-// state CAS 仍然原子，receipt/outbox 落盘失败由幂等重放收敛。
-func (s *MongoReviewStore) commitWithoutTransaction(
+// resolveReplay 在提交事务内判定本次命令是否已被同一 idempotency key 提交过。
+// 过期 receipt 就地清理，让同 key 的新命令可以重新提交。
+func (s *MongoReviewStore) resolveReplay(
 	ctx context.Context,
 	commit reviewports.Commit,
-) (reviewports.CommitResult, error) {
-	return s.commitBody(ctx, commit)
+) (reviewports.CommitResult, bool, error) {
+	receipt, found, err := s.findReceipt(ctx, commit.IdempotencyKey)
+	if err != nil || !found {
+		return reviewports.CommitResult{}, false, err
+	}
+	if !receipt.ExpiresAt.After(time.Now().UTC()) {
+		if _, err := s.receipts.DeleteOne(ctx, bson.M{"_id": receipt.ID}); err != nil {
+			return reviewports.CommitResult{}, false, err
+		}
+		return reviewports.CommitResult{}, false, nil
+	}
+	if receipt.CommandName != commit.CommandName ||
+		receipt.CommandDigest != commit.CommandDigest {
+		return reviewports.CommitResult{}, false, generated.AppErrorFromIdempotencyConflict(
+			"idempotency key was reused with a different homepage review command",
+		)
+	}
+	replayed, err := receipt.Result.aggregate()
+	if err != nil {
+		return reviewports.CommitResult{}, false, err
+	}
+	return reviewports.CommitResult{Aggregate: replayed, Replayed: true}, true, nil
 }
 
-func (s *MongoReviewStore) commitBody(
-	ctx context.Context,
-	commit reviewports.Commit,
-) (reviewports.CommitResult, error) {
-	receipt, receiptFound, receiptErr := s.findReceipt(ctx, commit.IdempotencyKey)
-	if receiptErr != nil {
-		return reviewports.CommitResult{}, receiptErr
+func receiptExpiry(value time.Time) time.Time {
+	if expiresAt := value.UTC(); !expiresAt.IsZero() {
+		return expiresAt
 	}
-	if receiptFound {
-		if !receipt.ExpiresAt.After(time.Now().UTC()) {
-			if _, err := s.receipts.DeleteOne(ctx, bson.M{"_id": receipt.ID}); err != nil {
-				return reviewports.CommitResult{}, err
-			}
-		} else {
-			if receipt.CommandName != commit.CommandName ||
-				receipt.CommandDigest != commit.CommandDigest {
-				return reviewports.CommitResult{}, generated.AppErrorFromIdempotencyConflict(
-					"idempotency key was reused with a different homepage review command",
-				)
-			}
-			replayed, err := receipt.Result.aggregate()
-			if err != nil {
-				return reviewports.CommitResult{}, err
-			}
-			return reviewports.CommitResult{Aggregate: replayed, Replayed: true}, nil
-		}
-	}
-
-	record := documentFromSnapshot(commit.Aggregate.Snapshot())
-	if commit.ExpectedVersion == 0 {
-		if _, err := s.reviews.InsertOne(ctx, record); err != nil {
-			if mongo.IsDuplicateKeyError(err) {
-				return reviewports.CommitResult{}, generated.AppErrorFromVersionConflict(
-					"homepage review already exists for this author",
-				)
-			}
-			return reviewports.CommitResult{}, err
-		}
-	} else {
-		replaceResult, err := s.reviews.ReplaceOne(
-			ctx,
-			bson.M{"_id": record.ID, "version": commit.ExpectedVersion},
-			record,
-		)
-		if err != nil {
-			return reviewports.CommitResult{}, err
-		}
-		if replaceResult.MatchedCount != 1 {
-			return reviewports.CommitResult{}, generated.AppErrorFromVersionConflict(
-				"homepage review version changed before commit",
-			)
-		}
-	}
-
-	for _, event := range commit.Events {
-		if _, err := s.outbox.InsertOne(ctx, reviewOutboxDocument{
-			ID:               event.EventID,
-			EventType:        event.EventType,
-			AggregateID:      event.AggregateID,
-			AggregateVersion: event.AggregateVersion,
-			Payload:          append([]byte(nil), event.Payload...),
-			OccurredAt:       event.OccurredAt.UTC(),
-		}); err != nil {
-			return reviewports.CommitResult{}, err
-		}
-	}
-
-	expiresAt := commit.ReceiptExpiresAt.UTC()
-	if expiresAt.IsZero() {
-		expiresAt = time.Now().UTC().Add(24 * time.Hour)
-	}
-	if _, err := s.receipts.InsertOne(ctx, reviewReceiptDocument{
-		ID:               commit.IdempotencyKey,
-		AggregateID:      record.ID,
-		AggregateVersion: record.Version,
-		CommandName:      commit.CommandName,
-		CommandDigest:    commit.CommandDigest,
-		Result:           record,
-		CreatedAt:        time.Now().UTC(),
-		ExpiresAt:        expiresAt,
-	}); err != nil {
-		return reviewports.CommitResult{}, err
-	}
-	aggregate, err := record.aggregate()
-	if err != nil {
-		return reviewports.CommitResult{}, err
-	}
-	return reviewports.CommitResult{Aggregate: aggregate}, nil
+	return time.Now().UTC().Add(24 * time.Hour)
 }
 
 func (s *MongoReviewStore) ListByHomepage(

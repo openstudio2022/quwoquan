@@ -26,7 +26,16 @@ business_rules:
 - 同一 homepageId 仅保留最高聚合版本，重复或乱序事件不得回退条目。
 - Homepage 下线或删除必须产生 tombstone 并从搜索结果移除。
 lifecycle:
-  source_events: [HomepageCreated, HomepageUpdated, HomepagePublished, HomepageRetired]
-  checkpoint: homepage_outbox_sequence
-  rebuild: replay_homepage_public_outbox
-  tombstone: delete_search_item_keep_checkpoint
+  source_events:
+  - entity.homepage.HomepageCandidateIntaken
+  - entity.homepage.HomepagePublished
+  checkpoint: homepage_source_version
+  rebuild: enumerate_current_homepages_through_canonical_projector
+  tombstone: delete_ineligible_homepage_keep_source_version
+  idempotency: aggregate_version
+  event_consumers:
+  - name: ProjectHomepageSearchItem
+    kind: projector
+    facet: HomepageSearchItemViewProjector
+    method: apply
+    idempotency: aggregate_version

@@ -10,7 +10,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
-from core.paths import DATA_ROOT
+from core.paths import DATA_ROOT, SOURCE_ACQUISITION_ROOT
 from core.runtime_policy import active_runtime_policy
 from content.source.fetch_http import _http_get_bytes
 from content.source.fetch_image_candidates import candidate_image_urls, page_image_candidate_urls
@@ -115,8 +115,11 @@ def _fetch_image_payload_once(url: str, *, min_bytes: int = 3000, max_bytes: int
     if parsed.scheme == "file":
         try:
             path = Path(urllib.parse.unquote(parsed.path)).resolve()
-            data_root = DATA_ROOT.resolve()
-            if not path.is_relative_to(data_root) or not path.is_file():
+            allowed_roots = (
+                DATA_ROOT.resolve(),
+                (SOURCE_ACQUISITION_ROOT / "cas").resolve(),
+            )
+            if not any(path.is_relative_to(root) for root in allowed_roots) or not path.is_file():
                 return None
             body = path.read_bytes()
             status = 200
@@ -183,8 +186,11 @@ def _fetch_page_image_payload_once(
     if parsed.scheme == "file":
         try:
             path = Path(urllib.parse.unquote(parsed.path)).resolve()
-            data_root = DATA_ROOT.resolve()
-            if not path.is_relative_to(data_root) or not path.is_file():
+            allowed_roots = (
+                DATA_ROOT.resolve(),
+                (SOURCE_ACQUISITION_ROOT / "cas").resolve(),
+            )
+            if not any(path.is_relative_to(root) for root in allowed_roots) or not path.is_file():
                 return PageImageFetchResult(
                     requested_url=requested_url,
                     resolved_url=url,

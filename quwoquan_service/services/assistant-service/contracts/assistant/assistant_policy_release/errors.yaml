@@ -1,54 +1,52 @@
-entity: AssistantPolicyRelease
-domain: ASSISTANT
 description: AssistantPolicyRelease 校验、幂等与持久化错误。
 errors:
 - code: ASSISTANT.USER.policy_release_invalid
-  kind: USER
   reason: policy_release_invalid
   http_status: 400
   emitted_by:
   - surface: http
     operations: [StageAssistantPolicyRelease]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: policyReleaseInvalid
   go_const: ErrPolicyReleaseInvalid
   user_message:
     zh: 助手策略发布内容不合法
     en: Assistant policy release is invalid
 - code: ASSISTANT.USER.policy_release_digest_mismatch
-  kind: USER
   reason: policy_release_digest_mismatch
   http_status: 400
   emitted_by:
   - surface: http
     operations: [StageAssistantPolicyRelease]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: policyReleaseDigestMismatch
   go_const: ErrPolicyReleaseDigestMismatch
   user_message:
     zh: 助手策略发布校验失败
     en: Assistant policy release digest verification failed
 - code: ASSISTANT.USER.policy_release_idempotency_conflict
-  kind: USER
   reason: policy_release_idempotency_conflict
   http_status: 409
   emitted_by:
   - surface: http
     operations: [StageAssistantPolicyRelease]
-  recovery_action: refresh
+  recovery_action: retry
+  disruption_level: snackbar
   dart_const: policyReleaseIdempotencyConflict
   go_const: ErrPolicyReleaseIdempotencyConflict
   user_message:
     zh: 重复发布请求与原策略内容不一致
     en: Repeated policy release request differs from the original
 - code: ASSISTANT.SYSTEM.policy_release_storage_unavailable
-  kind: SYSTEM
   reason: policy_release_storage_unavailable
   http_status: 503
   emitted_by:
   - surface: http
     operations: [StageAssistantPolicyRelease]
   recovery_action: retry
+  disruption_level: snackbar
   recovery_after_seconds: 3
   dart_const: policyReleaseStorageUnavailable
   go_const: ErrPolicyReleaseStorageUnavailable

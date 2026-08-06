@@ -210,7 +210,11 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`。
+- 影响或价值：尚缺在受控 runner 上实际执行并留存 126 个 nonprod + 14 个 Prod cells
+  的直接 `spec_ref`，因此本 OPEN 不关闭。Provider producer 已从单一 released
+  `ReleaseEvidenceManifest` exact OCI ref 导出 candidate/source/producer 与
+  pilot/lifecycle/data closure，并静态证明缺失、mutable、OIDC/闭包篡改和派生身份
+  漂移会阻断，该静态部分已具备。
 - 目标：公共 suite 覆盖 success、validation、auth、network/DNS、timeout、throttle、retry、 idempotency、redaction 与 observability；能力专项 profile 覆盖本能力协议语义。
 - 完成判定：`SIT-003` 对应行为满足且真实测试 `spec_ref` 有效
 

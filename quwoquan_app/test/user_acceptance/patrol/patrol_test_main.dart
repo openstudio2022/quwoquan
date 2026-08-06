@@ -1,14 +1,14 @@
 /// Patrol test entry point.
 ///
 /// Patrol 4.x 仍要求 main() 调用真实 app，否则 user_acceptance Patrol 用例会在空白屏运行。
-/// 本仓库将 Patrol 用例保留在 `test/user_acceptance/patrol/`，并通过 `pubspec.yaml` 的
-/// `patrol.test_directory` 指向该目录。
+/// `pubspec.yaml` 的 `patrol.test_directory` 仅保留 Patrol runner shell；真实用例按
+/// 对象或跨对象 Journey 分布在 `test/user_acceptance/**`，由目标文件显式触发。
 ///
 /// 执行方式（本地，需连接真机或模拟器）：
-///   patrol test test/user_acceptance/patrol/ \
+///   patrol test --target test/user_acceptance/CANONICAL_TARGET \
 ///     --dart-define=APP_RUNTIME_ENV=gamma \
 ///     --dart-define=API_CONTRACT_ENV=gamma \
-///     --dart-define=RUN_T4_PATROL=true \
+///     --dart-define=RUN_PATROL_ACCEPTANCE=true \
 ///     --dart-define=TEST_AUTH_TOKEN=YOUR_TOKEN
 ///
 /// 执行方式（Firebase Test Lab）：

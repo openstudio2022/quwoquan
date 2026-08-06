@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/release/fault_injection_cases.schema.json",
+  "title": "Raw campaign fault injection cases bound to queue timeline events",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "rootExecutionId",
+    "sourceRevision",
+    "sourceDigest",
+    "entityCatalogDigest",
+    "cases"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.fault_injection_cases"},
+    "runtimeSessionId": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]{2,127}$"
+    },
+    "runtimeSessionRef": {"$ref": "#/$defs/safeRef"},
+    "runtimeSessionDigest": {"$ref": "#/$defs/digest"},
+    "rootExecutionId": {"type": "string", "minLength": 1},
+    "runId": {"type": "string", "minLength": 1},
+    "generation": {"type": "integer", "minimum": 1},
+    "fencingToken": {"$ref": "#/$defs/digest"},
+    "sourceRevision": {"$ref": "#/$defs/digest"},
+    "sourceDigest": {"$ref": "#/$defs/digest"},
+    "entityCatalogDigest": {"$ref": "#/$defs/digest"},
+    "faultCaseReceipts": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/faultReceipt"}
+    },
+    "cases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "caseId",
+          "faultType",
+          "carrier",
+          "executionId",
+          "jobId",
+          "faultEventAt",
+          "injectionEvidenceRef",
+          "injectionEvidenceSha256"
+        ],
+        "properties": {
+          "caseId": {"type": "string", "minLength": 1},
+          "faultType": {
+            "enum": [
+              "worker_termination",
+              "lease_expiry",
+              "redis_restart",
+              "mongo_reconnect",
+              "provider_timeout",
+              "provider_rate_limit"
+            ]
+          },
+          "carrier": {"enum": ["homepage", "article", "image", "video"]},
+          "executionId": {"type": "string", "minLength": 1},
+          "jobId": {"type": "string", "minLength": 8},
+          "faultEventAt": {"type": "string", "format": "date-time"},
+          "injectionEvidenceRef": {"$ref": "#/$defs/safeRef"},
+          "injectionEvidenceSha256": {"$ref": "#/$defs/digest"}
+        }
+      }
+    },
+    "recordedAt": {"type": "string", "format": "date-time"},
+    "evidenceDigest": {"$ref": "#/$defs/digest"}
+  },
+  "allOf": [
+    {
+      "if": {"required": ["runtimeSessionId"]},
+      "then": {
+        "required": [
+          "runtimeSessionRef",
+          "runtimeSessionDigest",
+          "runId",
+          "generation",
+          "fencingToken",
+          "faultCaseReceipts",
+          "recordedAt",
+          "evidenceDigest"
+        ]
+      }
+    }
+  ],
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "safeRef": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+    },
+    "faultReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "caseId",
+        "actionStatus",
+        "receiptRef",
+        "receiptDigest",
+        "requestDigest"
+      ],
+      "properties": {
+        "caseId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]{2,127}$"
+        },
+        "actionStatus": {"enum": ["triggered", "failed"]},
+        "receiptRef": {"$ref": "#/$defs/safeRef"},
+        "receiptDigest": {"$ref": "#/$defs/digest"},
+        "requestDigest": {"$ref": "#/$defs/digest"}
+      }
+    }
+  }
+}

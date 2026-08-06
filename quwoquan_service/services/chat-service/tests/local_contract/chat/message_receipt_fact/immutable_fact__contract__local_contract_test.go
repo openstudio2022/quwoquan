@@ -1,4 +1,6 @@
 // spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-001
+// spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+// readiness_case: get-receipts-local
 package local_contract
 
 import (
@@ -71,6 +73,10 @@ func TestMessageReceiptFactIsImmutableAndReplaySafe(t *testing.T) {
 	}
 	if len(store.committed) != 1 {
 		t.Fatalf("replay or conflict appended a second fact: %d", len(store.committed))
+	}
+	items, err := appender.ListByMessage(context.Background(), fact.MessageID)
+	if err != nil || len(items) != 1 || !items[0].SameImmutableValue(fact) {
+		t.Fatalf("GetReceipts query result=%+v err=%v", items, err)
 	}
 	wire, err := json.Marshal(committed)
 	if err != nil {

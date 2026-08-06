@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/spec.md#sit-002
+// readiness_case: append-deleted-post-tombstone-api
 package deleted_post_tombstone_test
 
 import (
@@ -9,6 +11,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 
 	"quwoquan_service/internal/platform/testinfra"
+	tombstonepost "quwoquan_service/services/content-service/internal/content/deleted_post_tombstone/adapters/inbound/post"
 	tombstonemodel "quwoquan_service/services/content-service/internal/content/deleted_post_tombstone/domain/model"
 	tombstonepersistence "quwoquan_service/services/content-service/internal/content/deleted_post_tombstone/infrastructure/persistence"
 )
@@ -23,8 +26,8 @@ func TestMongoStoreParticipatesInCallerTransactionAndDeduplicatesPostIdentity(t 
 			t.Errorf("close real MongoDB: %v", closeErr)
 		}
 	})
-	store := tombstonepersistence.NewMongoStore(runtime.Database)
-	if err := store.EnsureIndexes(context.Background()); err != nil {
+	port := tombstonepost.NewStorePort(tombstonepersistence.NewMongoStore(runtime.Database))
+	if err := port.EnsureIndexes(context.Background()); err != nil {
 		t.Fatalf("ensure DeletedPostTombstone indexes: %v", err)
 	}
 	deletedAt := time.Date(2026, 8, 2, 9, 10, 0, 0, time.UTC)
@@ -43,7 +46,7 @@ func TestMongoStoreParticipatesInCallerTransactionAndDeduplicatesPostIdentity(t 
 	defer session.EndSession(context.Background())
 	rollback := errors.New("force caller transaction rollback")
 	_, err = session.WithTransaction(context.Background(), func(txCtx context.Context) (any, error) {
-		if _, appendErr := store.AppendIfAbsent(txCtx, tombstone); appendErr != nil {
+		if _, appendErr := port.AppendIfAbsent(txCtx, tombstone); appendErr != nil {
 			return nil, appendErr
 		}
 		return nil, rollback
@@ -57,15 +60,15 @@ func TestMongoStoreParticipatesInCallerTransactionAndDeduplicatesPostIdentity(t 
 		t.Fatalf("rolled back tombstone count=%d err=%v", count, countErr)
 	}
 
-	inserted, err := store.AppendIfAbsent(context.Background(), tombstone)
+	inserted, err := port.AppendIfAbsent(context.Background(), tombstone)
 	if err != nil || !inserted {
 		t.Fatalf("append tombstone inserted=%v err=%v", inserted, err)
 	}
-	inserted, err = store.AppendIfAbsent(context.Background(), tombstone)
+	inserted, err = port.AppendIfAbsent(context.Background(), tombstone)
 	if err != nil || inserted {
 		t.Fatalf("replay tombstone inserted=%v err=%v", inserted, err)
 	}
-	found, exists, err := store.Find(context.Background(), tombstone.PostID)
+	found, exists, err := port.Find(context.Background(), tombstone.PostID)
 	if err != nil || !exists || found.PostID != tombstone.PostID || found.ExpireAt.IsZero() {
 		t.Fatalf("find tombstone found=%#v exists=%v err=%v", found, exists, err)
 	}

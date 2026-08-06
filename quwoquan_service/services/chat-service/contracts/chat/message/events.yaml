@@ -1,10 +1,6 @@
 events:
 - name: MessageSent
-  client_ws_type: MessageSent
-  producer: chat-service
-  consumers:
-  - projection-workers
-  channel: transactional_outbox
+  delivery_semantics: transactional_outbox
   payload_entity: MessageSentEventPayload
   payload_fields:
   - messageId
@@ -22,24 +18,19 @@ events:
   - senderDisplayNameSnapshot
   - senderAvatarUrlSnapshot
   - timestamp
+  client_ws_type: MessageSent
 - name: MessageRecalled
-  client_ws_type: MessageRecalled
-  producer: chat-service
-  consumers:
-  - projection-workers
-  channel: transactional_outbox
+  delivery_semantics: transactional_outbox
   payload_entity: MessageRecalledEventPayload
   payload_fields:
   - messageId
   - conversationId
   - seq
   - recalledAt
+  client_ws_type: MessageRecalled
 - name: AssistantMentioned
   description: 会话消息中提及已加入助手时，交给 assistant-service 的可靠消费事件。
-  producer: chat-service
-  consumers:
-  - assistant-service
-  channel: transactional_outbox
+  delivery_semantics: transactional_outbox
   payload_entity: Message
   payload_fields:
   - conversationId

@@ -1,4 +1,4 @@
-"""来源单元 → 文章资产 证据链契约 (T2)。
+"""来源单元 → 文章资产 行为证据链契约。
 
 证明 object-homepage-coverage-scaling 的来源单元与对象证据链合同：
 - download 写来源单元（编号 + assets/ + index + manifest），无对象级散 images/。

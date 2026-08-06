@@ -7,51 +7,46 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Mapping, Sequence
+from collections.abc import Mapping
+from typing import Any
 
-from core.data_issue import DataIssueCode, DataIssueStage, DataRecoveryAction, data_issues
-from content.post.article.evidence_bundle import gate_route_evidence_bundle, public_byline_label
-from core.creative_brief import creative_brief_contract_issues, creative_governance_issues
-from content.post.object_index import require_title_hint
-from governance.coverage.entity_extract import normalize_entity_refs
-from content.review.annotation.entity_annotation import merge_entity_refs
-from content.post.content_review import fact_traceability_issues, generator_provenance_issues
+from core.creative_brief import (
+    creative_governance_issues,
+)
+from core.data_issue import (
+    DataIssueCode,
+    DataIssueStage,
+    DataRecoveryAction,
+    data_issues,
+)
+from core.template_fingerprints import template_fingerprint_issues
+
+from content.execution.stage_reports import (
+    clear_repair_report,
+    write_gate_report,
+    write_repair_report,
+    write_stage_result,
+)
+from content.post.article.article_media_contract import article_media_contract_issues
 from content.post.article.draft_io import (
-    GENERATOR_AGENT,
     draft_asset_reference_issues,
     is_placeholder,
     read_draft_article,
     read_draft_meta,
     read_writing_pack,
     repair_creative_meta,
-    write_image_evidence_draft,
-    write_placeholder_draft,
-    write_prompt,
-    write_writing_pack,
 )
-from core.content_tags import resolved_content_tag_refs
-from content.execution.stage_reports import clear_repair_report, write_gate_report, write_repair_report, write_stage_result
-from core.template_fingerprints import template_fingerprint_issues
-from content.post.article.prompt_renderer import render_prompt_md
-from content.post.article.writing_pack import build_writing_pack
-from content.post.article.route_analysis import analyze_route_ref
-from content.post.article.route_assets import _build_route_assets
-from content.post.article.route_compose import _attach_base_draft_text
+from content.post.article.entity_composition import (
+    _compose_payload_from_pack,
+    _entity_name,
+    _image_source_paths_from_assets,
+    _source_ref_from_asset_path,
+)
 from content.post.article.route_core import (
-    IMAGE_EVIDENCE_GENERATOR,
-    aggregate_checks,
-    is_route_brief,
-    resolve_carrier,
-    _article_without_assets_allowed,
-    _build_summary,
-    _compact_public_text,
-    _image_caption_from_article,
-    _image_caption_from_brief,
     _jaccard,
-    _publish_angle,
     _section_bodies,
     _unique_strings,
-    load_compose_brief,
+    aggregate_checks,
 )
 from content.post.article.route_review import (
     _load_source_texts,
@@ -68,14 +63,11 @@ from content.post.article.route_review_checks import (
     _check_travelogue_density,
     _resolve_style_opening,
 )
-
-
-from content.post.article.entity_composition import (
-    _compose_payload_from_pack,
-    _entity_name,
-    _image_source_paths_from_assets,
-    _source_ref_from_asset_path,
+from content.post.content_review import (
+    fact_traceability_issues,
+    generator_provenance_issues,
 )
+
 
 def _same_source_unit(a: str, b: str) -> bool:
     marker = "/1.download/sources/"
@@ -84,7 +76,7 @@ def _same_source_unit(a: str, b: str) -> bool:
         text = str(ref or "").replace("\\", "/")
         if "/assets/" in text:
             return text.split("/assets/", 1)[0]
-        if text.endswith("/source.md") or text.endswith("/meta.json"):
+        if text.endswith(("/source.md", "/meta.json")):
             return text.rsplit("/", 1)[0]
         if marker in text:
             head, tail = text.split(marker, 1)
@@ -187,6 +179,19 @@ def review_entity_draft(
         ref=ref,
         draft_meta=draft_meta,
     )
+    media_issues = article_media_contract_issues(
+        compose_payload,
+        str(brief.get("baseSourceRef") or pack.get("baseSourceRef") or ""),
+    )
+    checks["articleMediaClosure"] = {
+        "passed": not media_issues,
+        "issues": media_issues,
+        "suggestions": [
+            "补齐唯一底稿 sourceUnit 内的封面和至少一张正文图；若明确 text_only，资产必须为空。"
+        ]
+        if media_issues
+        else [],
+    }
     checks["generatorProvenance"] = {
         "passed": not authenticity_issues,
         "issues": authenticity_issues,
@@ -315,8 +320,11 @@ def review_entity_draft(
         "passed": not creative_issues,
         "issues": creative_issues,
         "suggestions": [
-            "按 creativeBrief 先形成 2-3 个构思，选择最能兑现 readerPromise 的结构；"
-            "修正文案时只在 evidence 边界内发挥，不伪装真实亲历，并把 creativePlan/selfCritique 写入 draft_meta。"
+            (
+                "按 creativeBrief 先形成 2-3 个构思，选择最能兑现 readerPromise 的结构；"
+                "修正文案时只在 evidence 边界内发挥，不伪装真实亲历，并把 "
+                "creativePlan/selfCritique 写入 draft_meta。"
+            )
         ] if creative_issues else [],
     }
 
@@ -450,6 +458,8 @@ def _entity_fallback_stage(checks: Mapping[str, Mapping[str, Any]]) -> str:
     if not checks.get("generatorProvenance", {"passed": True})["passed"]:
         return "agent_compose"
     if not checks.get("evidenceQuality", {"passed": True})["passed"]:
+        return "download"
+    if not checks.get("articleMediaClosure", {"passed": True})["passed"]:
         return "download"
     if not checks.get("factTraceability", {"passed": True})["passed"]:
         return "agent_compose"

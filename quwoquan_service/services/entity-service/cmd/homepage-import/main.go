@@ -130,10 +130,7 @@ func main() {
 			defer cancel()
 			_ = client.Disconnect(shutdownCtx)
 		}()
-		store := homepagepersistence.NewMongoHomepageStore(
-			client.Database(*entityDB),
-			*env != "alpha",
-		)
+		store := homepagepersistence.NewMongoHomepageStore(client.Database(*entityDB))
 		if err := store.EnsureIndexes(ctx); err != nil {
 			log.Fatalf("[homepage-import] ensure homepage indexes: %v", err)
 		}

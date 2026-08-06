@@ -1,6 +1,6 @@
 dart_class: AssistantPreferenceSnapshot
-library_path: assistant/contracts/assistant_preference_snapshot.dart
-output_path: assistant/generated/contracts/assistant_preference_snapshot.g.dart
+library_path: service/assistant_service/assistant/assistant_preference/domain/assistant_preference_snapshot.dart
+output_path: service/assistant_service/assistant/assistant_preference/domain/generated/assistant_preference_snapshot.g.dart
 fields:
   - name: preferenceId
     source: preferenceId

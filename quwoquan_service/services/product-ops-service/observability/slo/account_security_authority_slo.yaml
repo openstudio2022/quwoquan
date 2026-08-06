@@ -20,7 +20,7 @@ slis:
     sli: histogram_quantile(0.95, sum(rate(runtime_auth_account_security_authority_check_duration_seconds_bucket[5m])) by (le))
     objective:
       p95_ms: 150
-      timeout_ms: 300
+      timeout_ms: 1500
   - id: account_security_authority_availability
     description: authority 不可用时必须拒绝终端用户请求，禁止缓存回退。
     sli: 1 - sum(rate(runtime_auth_account_security_authority_checks_total{outcome="unavailable"}[5m])) / sum(rate(runtime_auth_account_security_authority_checks_total[5m]))
@@ -30,6 +30,21 @@ slis:
     sli: runtime_health_check_status{check="account-security-authority"}
     objective: 1
 
+deadline_policy:
+  latency_slo_ms: 150
+  request_deadline_ms: 1500
+  slow_success: allow_before_deadline_and_charge_latency_error_budget
+  deadline_exceeded: fail_closed_and_degrade_readiness
+  latency_error_budget_fraction: 0.05
+
 failure_semantics:
   authority_unavailable: deny_end_user_request
   readiness_failure: remove_instance_from_ready_pool
+
+alerts:
+  - id: account_security_authority_latency_error_budget_burn
+    signal: AccountSecurityAuthorityLatencyErrorBudgetBurn
+    short_window: 5m
+    long_window: 1h
+    burn_rate_threshold: 14.4
+    response: page_owner_and_halt_rollout

@@ -56,14 +56,14 @@
 
 ## 4. 契约引用
 
-- canonical：`quwoquan_app/lib/components/media/image/editor/image_editor_page.dart`
-- canonical：`quwoquan_app/lib/components/media/image/editor/shared/image_editor_export_engine.dart`
-- canonical：`quwoquan_app/lib/components/media/image/editor/panels/curves/image_editor_curve_models.dart`
-- canonical：`quwoquan_app/lib/components/media/image/editor/panels/curves/image_editor_curve_panel.dart`
-- canonical：`quwoquan_app/lib/components/media/image/editor/panels/mosaic/image_editor_mosaic_models.dart`
-- canonical：`quwoquan_app/lib/components/media/image/editor/panels/text/image_editor_text_models.dart`
-- canonical：`quwoquan_app/lib/components/media/image/editor/shared/image_editor_step_stack.dart`
-- canonical：`quwoquan_app/lib/components/media/image/editor/top_bar/image_editor_top_bar.dart`
+- canonical：`quwoquan_app/lib/service/content_service/media/filter_catalog_release/presentation/image_editor_page.dart`
+- canonical：`quwoquan_app/lib/service/content_service/media/filter_catalog_release/presentation/image_editor_export_engine.dart`
+- canonical：`quwoquan_app/lib/service/content_service/media/filter_catalog_release/presentation/image_editor_curve_models.dart`
+- canonical：`quwoquan_app/lib/service/content_service/media/filter_catalog_release/presentation/image_editor_curve_panel.dart`
+- canonical：`quwoquan_app/lib/service/content_service/media/filter_catalog_release/presentation/image_editor_mosaic_models.dart`
+- canonical：`quwoquan_app/lib/service/content_service/media/filter_catalog_release/presentation/image_editor_text_models.dart`
+- canonical：`quwoquan_app/lib/service/content_service/media/filter_catalog_release/presentation/image_editor_step_stack.dart`
+- canonical：`quwoquan_app/lib/service/content_service/media/filter_catalog_release/presentation/image_editor_top_bar.dart`
 
 ## 5. 验收场景
 

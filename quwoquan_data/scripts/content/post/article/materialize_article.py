@@ -4,8 +4,10 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from content.post.article.article_media_contract import materialize_article_media
 from content.post.article.draft_io import is_placeholder, read_draft_article
 from content.post.materialize_contract import _annotate_manifest_entities
+
 
 def _resolve_materialized_article(
     execution_id: str,
@@ -40,6 +42,13 @@ def _resolve_materialized_article(
         if stripped != article_md:
             actions.append("text_only_asset_markup_removed")
             article_md = stripped
+    article_md, media_actions = materialize_article_media(
+        execution_id,
+        ref,
+        article_md,
+        compose_payload,
+    )
+    actions.extend(media_actions)
     return article_md, actions
 
 

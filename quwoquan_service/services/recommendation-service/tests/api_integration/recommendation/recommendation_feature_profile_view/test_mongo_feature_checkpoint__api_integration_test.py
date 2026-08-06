@@ -1,6 +1,17 @@
 # spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-003
+# readiness_case: list-subject-intersections-api
+# readiness_case: list-object-intersections-api
+# readiness_case: get-intersection-supply-api
+# readiness_case: get-author-impact-api
+# readiness_case: list-author-impact-evidence-api
+# readiness_case: project-feature-profile-api
+# readiness_case: project-feature-tag-feedback-api
+# readiness_case: project-feature-persona-relationship-api
+# readiness_case: project-feature-circle-membership-api
+# readiness_case: project-feature-post-lifecycle-api
 from datetime import datetime, timezone
 import hashlib
+import json
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -8,6 +19,31 @@ from fastapi.testclient import TestClient
 from internal.recommendation.recommendation_feature_profile_view.adapters.inbound.http.router import (
     FEATURE_PROFILE_READ_SCOPE,
     build_router,
+)
+from internal.recommendation.recommendation_feature_profile_view.adapters.inbound.stream.content_behavior_consumer import (
+    CONSUMER_GROUP as CONTENT_BEHAVIOR_GROUP,
+    CONTENT_BEHAVIOR_STREAM,
+    ContentBehaviorConsumer,
+)
+from internal.recommendation.recommendation_feature_profile_view.adapters.inbound.stream.circle_membership_consumer import (
+    CIRCLE_MEMBERSHIP_STREAM,
+    CONSUMER_GROUP as CIRCLE_MEMBERSHIP_GROUP,
+    CircleMembershipConsumer,
+)
+from internal.recommendation.recommendation_feature_profile_view.adapters.inbound.stream.persona_relationship_consumer import (
+    CONSUMER_GROUP as PERSONA_RELATIONSHIP_GROUP,
+    PERSONA_RELATIONSHIP_STREAM,
+    PersonaRelationshipConsumer,
+)
+from internal.recommendation.recommendation_feature_profile_view.adapters.inbound.stream.post_lifecycle_consumer import (
+    CONSUMER_GROUP as POST_LIFECYCLE_GROUP,
+    POST_LIFECYCLE_STREAM,
+    PostLifecycleConsumer,
+)
+from internal.recommendation.recommendation_feature_profile_view.adapters.inbound.stream.tag_feedback_consumer import (
+    CONSUMER_GROUP as TAG_FEEDBACK_GROUP,
+    TAG_FEEDBACK_STREAM,
+    TagFeedbackConsumer,
 )
 from internal.recommendation.recommendation_feature_profile_view.application.author_impact_reader import (
     Reader,
@@ -17,6 +53,9 @@ from internal.recommendation.recommendation_feature_profile_view.application.int
 )
 from internal.recommendation.recommendation_feature_profile_view.application.intersection_projector import (
     Projector as IntersectionProjector,
+)
+from internal.recommendation.recommendation_feature_profile_view.application.intersection_event_projector import (
+    IntersectionEventProjector,
 )
 from internal.recommendation.recommendation_feature_profile_view.application.intersection_materializer import (
     Materializer as IntersectionMaterializer,
@@ -30,6 +69,7 @@ from internal.recommendation.recommendation_feature_profile_view.infrastructure.
 )
 from security.service_authorization import AuthorizationFailure
 from tests.support.recommendation_mongo import mongo_client, mongo_database
+from tests.support.recommendation_redis import real_redis
 from tests.support.intersection_reason import (
     canonical_intersection_reason,
 )
@@ -68,6 +108,218 @@ def _intersection_reader(
         ),
         subject_closures or _OpenSubjects(),
     )
+
+
+def test_content_behavior_stream_projects_mongo_state_before_ack(
+    mongo_database,
+    real_redis,
+) -> None:
+    store = MongoFeatureProfileStore(mongo_database)
+    store.ensure_indexes()
+    projector = IntersectionEventProjector(
+        store=store,
+        materializer=IntersectionMaterializer(
+            evidence=store,
+            projector=IntersectionProjector(store),
+        ),
+        subject_closures=_OpenSubjects(),
+    )
+    subject_id = "persona-stream-viewer"
+    client_event_id = "behavior-stream-001"
+    event_id = hashlib.sha256(
+        f"ContentBehaviorRecorded:{subject_id}:{client_event_id}".encode()
+    ).hexdigest()
+    occurred_at = "2026-08-05T08:00:00Z"
+    payload = {
+        "clientEventId": client_event_id,
+        "personaId": subject_id,
+        "contentId": "post-stream-001",
+        "contentType": "post",
+        "objectId": "post-stream-001",
+        "objectKind": "post",
+        "displayName": "流式投影内容",
+        "action": "view",
+        "entityRefs": ["entity-stream-001"],
+        "occurredAt": occurred_at,
+    }
+    real_redis.xadd(
+        CONTENT_BEHAVIOR_STREAM,
+        {
+            "eventId": event_id,
+            "eventName": "ContentBehaviorRecorded",
+            "subjectId": subject_id,
+            "targetId": "post-stream-001",
+            "payload": json.dumps(payload, ensure_ascii=False),
+            "occurredAt": occurred_at,
+        },
+    )
+    consumer = ContentBehaviorConsumer(
+        redis_client=real_redis,
+        feature_store=store,
+        projector=projector,
+        consumer="feature-profile-api-test",
+    )
+
+    assert consumer.process_once() == 1
+    projected = mongo_database["recommendation_intersection_behaviors"].find_one(
+        {"_id": event_id}
+    )
+    assert projected is not None
+    assert projected["subjectId"] == subject_id
+    assert projected["targetId"] == "post-stream-001"
+    assert real_redis.xpending(CONTENT_BEHAVIOR_STREAM, CONTENT_BEHAVIOR_GROUP)[
+        "pending"
+    ] == 0
+
+
+def test_remaining_feature_streams_project_object_state_before_ack(
+    mongo_database,
+    real_redis,
+) -> None:
+    store = MongoFeatureProfileStore(mongo_database)
+    store.ensure_indexes()
+    materializer = IntersectionMaterializer(
+        evidence=store,
+        projector=IntersectionProjector(store),
+    )
+    intersection_projector = IntersectionEventProjector(
+        store=store,
+        materializer=materializer,
+        subject_closures=_OpenSubjects(),
+    )
+
+    real_redis.xadd(
+        TAG_FEEDBACK_STREAM,
+        {
+            "eventName": "TagFeedbackRecorded",
+            "eventId": "tag-feedback-stream-001",
+            "id": "tag-feedback-stream-001",
+            "actorId": "persona-feature-stream",
+            "actorKind": "persona",
+            "tagRef": "Topic/旅行",
+            "action": "dislike",
+            "recordedAt": "2026-08-05T08:00:00Z",
+        },
+    )
+    tag_consumer = TagFeedbackConsumer(
+        redis_client=real_redis,
+        feature_store=store,
+        feature_projector=Projector(store),
+        subject_closures=_OpenSubjects(),
+        consumer="feature-tag-api-test",
+    )
+    assert tag_consumer.process_once() == 1
+    assert store.read_for_scoring("persona-feature-stream")["tagAffinities"] == {
+        "Topic/旅行": -1.0
+    }
+    assert real_redis.xpending(TAG_FEEDBACK_STREAM, TAG_FEEDBACK_GROUP)["pending"] == 0
+
+    real_redis.xadd(
+        PERSONA_RELATIONSHIP_STREAM,
+        {
+            "eventId": "feature-relationship-stream-001",
+            "eventName": "PersonaFollowStateChanged",
+            "sourcePersonaId": "persona-feature-stream",
+            "targetPersonaId": "persona-feature-author",
+            "following": "true",
+            "sourceFollowCleared": "false",
+            "targetFollowCleared": "false",
+            "version": "1",
+            "occurredAt": "2026-08-05T08:00:00Z",
+        },
+    )
+    relationship_consumer = PersonaRelationshipConsumer(
+        redis_client=real_redis,
+        feature_store=store,
+        projector=intersection_projector,
+        consumer="feature-relationship-api-test",
+    )
+    assert relationship_consumer.process_once() == 1
+    relationship = mongo_database[
+        "recommendation_intersection_persona_relationships"
+    ].find_one({"sourcePersonaId": "persona-feature-stream"})
+    assert relationship is not None
+    assert relationship["targetPersonaId"] == "persona-feature-author"
+    assert real_redis.xpending(
+        PERSONA_RELATIONSHIP_STREAM,
+        PERSONA_RELATIONSHIP_GROUP,
+    )["pending"] == 0
+
+    membership_payload = {
+        "id": "membership-feature-stream-001",
+        "version": 1,
+        "circleId": "circle-feature-stream",
+        "personaId": "persona-feature-stream",
+        "role": "member",
+        "state": "active",
+    }
+    real_redis.xadd(
+        CIRCLE_MEMBERSHIP_STREAM,
+        {
+            "eventId": "membership-feature-event-001",
+            "eventType": "CircleMembershipJoined",
+            "aggregateType": "CircleMembership",
+            "aggregateId": membership_payload["id"],
+            "aggregateVersion": "1",
+            "payload": json.dumps(membership_payload),
+            "occurredAt": "2026-08-05T08:00:00Z",
+        },
+    )
+    membership_consumer = CircleMembershipConsumer(
+        redis_client=real_redis,
+        feature_store=store,
+        projector=intersection_projector,
+        consumer="feature-membership-api-test",
+    )
+    assert membership_consumer.process_once() == 1
+    membership = mongo_database[
+        "recommendation_intersection_circle_memberships"
+    ].find_one({"_id": membership_payload["id"]})
+    assert membership is not None
+    assert membership["state"] == "active"
+    assert real_redis.xpending(
+        CIRCLE_MEMBERSHIP_STREAM,
+        CIRCLE_MEMBERSHIP_GROUP,
+    )["pending"] == 0
+
+    post_payload = {
+        "postId": "post-feature-stream-001",
+        "authorId": "persona-feature-author",
+        "authorDisplayNameSnapshot": "公开作者",
+        "authorAvatarUrlSnapshot": "https://image.invalid/author",
+        "status": "published",
+        "visibility": "public",
+        "moderationStatus": "approved",
+        "primaryHomepageId": "homepage-feature-stream",
+        "visitedAt": "2026-08-05T08:00:00Z",
+    }
+    real_redis.xadd(
+        POST_LIFECYCLE_STREAM,
+        {
+            "eventId": "post-feature-event-001",
+            "eventType": "PostPublished",
+            "aggregateType": "Post",
+            "aggregateId": post_payload["postId"],
+            "aggregateVersion": "1",
+            "payload": json.dumps(post_payload),
+            "occurredAt": "2026-08-05T08:00:00Z",
+        },
+    )
+    post_consumer = PostLifecycleConsumer(
+        redis_client=real_redis,
+        feature_store=store,
+        projector=intersection_projector,
+        consumer="feature-post-api-test",
+    )
+    assert post_consumer.process_once() == 1
+    profile = mongo_database[
+        "recommendation_intersection_persona_profiles"
+    ].find_one({"personaId": "persona-feature-author"})
+    assert profile is not None
+    assert profile["displayName"] == "公开作者"
+    assert real_redis.xpending(POST_LIFECYCLE_STREAM, POST_LIFECYCLE_GROUP)[
+        "pending"
+    ] == 0
 
 
 def test_feature_profile_applies_behavior_once_with_transactional_checkpoint(mongo_database) -> None:

@@ -37,6 +37,7 @@ import (
 	claimpersistence "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_claim_request/infrastructure/persistence"
 	reviewhttp "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_review/adapters/inbound/http"
 	reviewapp "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_review/application"
+	reviewmessaging "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_review/infrastructure/messaging"
 	reviewpersistence "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_review/infrastructure/persistence"
 	searchitempersistence "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_search_item_view/infrastructure/persistence"
 	searchitemindex "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_search_item_view/infrastructure/searchindex"
@@ -133,23 +134,20 @@ func main() {
 		}
 		mongoClient := rtmongo.MustConnect(ctx, rtmongo.ConnectConfig{URI: mongoURI}, "entity-service")
 		mongoDatabase = mongoClient.Database(mongoDBName)
-		mongoHomepageStore := homepagepersistence.NewMongoHomepageStore(
-			mongoDatabase,
-			appEnv != "alpha",
-		)
+		mongoHomepageStore := homepagepersistence.NewMongoHomepageStore(mongoDatabase)
 		if err := mongoHomepageStore.EnsureIndexes(ctx); err != nil {
 			log.Fatalf("entity-service homepage indexes failed: %v", err)
 		}
 		homepageStore = mongoHomepageStore
-		reviewStore = reviewpersistence.NewMongoReviewStore(mongoDatabase, appEnv != "alpha")
+		reviewStore = reviewpersistence.NewMongoReviewStore(mongoDatabase)
 		if err := reviewStore.EnsureIndexes(ctx); err != nil {
 			log.Fatalf("entity-service homepage review indexes failed: %v", err)
 		}
-		claimStore = claimpersistence.NewMongoStore(mongoDatabase, appEnv != "alpha")
+		claimStore = claimpersistence.NewMongoStore(mongoDatabase)
 		if err := claimStore.EnsureIndexes(ctx); err != nil {
 			log.Fatalf("entity-service homepage claim indexes failed: %v", err)
 		}
-		statusReportStore = statuspersistence.NewMongoStore(mongoDatabase, appEnv != "alpha")
+		statusReportStore = statuspersistence.NewMongoStore(mongoDatabase)
 		if err := statusReportStore.EnsureIndexes(ctx); err != nil {
 			log.Fatalf("entity-service homepage status report indexes failed: %v", err)
 		}
@@ -258,6 +256,7 @@ func main() {
 		serviceOpts = append(serviceOpts, application.WithIntersectionReader(intersectionReader))
 	}
 	homepageService := application.NewHomepageServiceWithStore(ctx, homepageStore, serviceOpts...)
+	homepageLifecycleHandler := application.NewHomepageLifecycleHandler(homepageService)
 	projectionRunners := []namedProjectionRunner{}
 	var claimFacade *claimapp.Facade
 	var statusFacade *statusapp.Facade
@@ -286,7 +285,7 @@ func main() {
 		}
 		claimProjector, projectorErr := application.NewClaimHomepageProjector(
 			claimStore,
-			homepageService,
+			homepageLifecycleHandler,
 		)
 		if projectorErr != nil {
 			log.Fatalf("entity-service homepage claim projector failed: %v", projectorErr)
@@ -362,7 +361,15 @@ func main() {
 		})
 	}
 	log.Printf("entity-service subject follow consumer enabled")
-	httpHandler := httpadapter.NewHandler(homepageService)
+	homepageHostAuthorityEvaluator, err := homepageapp.NewHostAuthorityEvaluator(
+		homepageStore,
+		time.Now,
+	)
+	if err != nil {
+		log.Fatalf("EntityHomepage Host authority composition failed: %v", err)
+	}
+	httpHandler := httpadapter.NewHandler(homepageService).
+		WithHostAuthorityEvaluator(homepageHostAuthorityEvaluator)
 	if claimFacade != nil {
 		httpHandler = httpHandler.WithClaimRequestHandler(claimhttp.NewHandler(claimFacade))
 	}
@@ -383,13 +390,29 @@ func main() {
 			reviewStore,
 			reviewStore,
 			reviewStore,
-			homepageService,
+			homepageLifecycleHandler,
 		)
 		if relayErr != nil {
 			log.Fatalf("entity-service homepage review summary relay failed: %v", relayErr)
 		}
 		projectionRunners = append(projectionRunners, namedProjectionRunner{
 			name: "homepage-review-summary", runner: reviewRelay,
+		})
+		reviewPublisher, publisherErr := reviewmessaging.NewEventPublisher(messageTransport)
+		if publisherErr != nil {
+			log.Fatalf("entity-service HomepageReview event publisher failed: %v", publisherErr)
+		}
+		reviewStreamRelay, streamErr := reviewapp.NewOutboxRelay(
+			reviewStore,
+			reviewStore,
+			reviewPublisher,
+			"entity.homepage-review-event-stream",
+		)
+		if streamErr != nil {
+			log.Fatalf("entity-service HomepageReview stream relay failed: %v", streamErr)
+		}
+		projectionRunners = append(projectionRunners, namedProjectionRunner{
+			name: "homepage-review-event-stream", runner: reviewStreamRelay,
 		})
 	}
 	for _, runner := range projectionRunners {
@@ -427,6 +450,7 @@ func main() {
 	withObs := rthttp.NewHTTPServerMiddleware(rootMux, serverCfg, ioLogger, processLogger, exceptionLogger)
 
 	addr := getenvOrDefault("ENTITY_SERVICE_ADDR", cfg.Service.HTTP.Addr)
+	timeouts := rtauth.ContractHTTPServerTimeouts(entityguard.Descriptors())
 	server := &http.Server{
 		Addr: addr,
 		Handler: rtauth.Middleware(rtauth.MiddlewareConfig{
@@ -434,9 +458,9 @@ func main() {
 			AccountSecurityAuthority: accountSecurityAuthority,
 		})(withObs),
 		BaseContext:       func(_ net.Listener) context.Context { return ctx },
-		ReadHeaderTimeout: 5 * time.Second,
-		WriteTimeout:      30 * time.Second,
-		IdleTimeout:       60 * time.Second,
+		ReadHeaderTimeout: timeouts.ReadHeader,
+		WriteTimeout:      timeouts.Write,
+		IdleTimeout:       timeouts.Idle,
 	}
 	log.Printf("entity-service listening on %s", addr)
 	if err := rthttp.ListenAndServeGraceful(server, 15*time.Second); err != nil {
@@ -458,22 +482,41 @@ func runProjectionLoop(ctx context.Context, named namedProjectionRunner) {
 		interval  = 2 * time.Second
 		batchSize = 100
 	)
-	run := func() {
+	delay := time.Duration(0)
+	consecutiveFailures := 0
+	for {
+		if delay > 0 {
+			timer := time.NewTimer(delay)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return
+			case <-timer.C:
+			}
+		}
 		if _, err := named.runner.RunOnce(ctx, batchSize); err != nil && ctx.Err() == nil {
 			log.Printf("entity-service projection %s failed: %v", named.name, err)
+			consecutiveFailures++
+			delay = projectionRetryDelay(interval, consecutiveFailures)
+		} else {
+			consecutiveFailures = 0
+			delay = interval
 		}
 	}
-	run()
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			run()
-		}
+}
+
+func projectionRetryDelay(base time.Duration, attempt int) time.Duration {
+	if attempt < 1 {
+		attempt = 1
 	}
+	if attempt > 5 {
+		attempt = 5
+	}
+	delay := base * time.Duration(1<<(attempt-1))
+	if delay > 30*time.Second {
+		return 30 * time.Second
+	}
+	return delay
 }
 
 func loadRuntimeConfig() (config, error) {

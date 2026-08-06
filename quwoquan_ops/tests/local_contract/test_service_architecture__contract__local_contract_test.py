@@ -16,7 +16,10 @@ import sys
 
 from quwoquan_ops.gate.verify_service_architecture import (
     is_substantive_test_source,
+    lifecycle_authored_consumers,
+    lifecycle_handler_binding_issues,
     object_contract_semantic_issues,
+    object_entrypoint_mode,
     valid_object_test_spec_refs,
 )
 
@@ -119,3 +122,294 @@ def test_object_semantics_are_kind_aware_and_reject_generic_placeholders() -> No
     assert any("version_source" in issue for issue in issues)
     assert any("access.commands" in issue for issue in issues)
     assert any("business_rules[0]" in issue for issue in issues)
+
+
+def lifecycle_projection_document() -> dict[str, object]:
+    return {
+        "lifecycle": {
+            "source_events": ["content.post.PostPublished"],
+            "event_consumers": [
+                {
+                    "name": "ProjectPublishedPost",
+                    "kind": "projector",
+                    "facet": "PublishedPostConsumer",
+                    "method": "processOnce",
+                    "idempotency": "aggregate_version",
+                }
+            ],
+        }
+    }
+
+
+def test_dec011_lifecycle_only_projection_requires_a_real_same_object_handler(
+    tmp_path: Path,
+) -> None:
+    object_root = tmp_path / "internal/content/published_post_view"
+    handler = object_root / "adapters/inbound/post_consumer.py"
+    handler.parent.mkdir(parents=True)
+    handler.write_text(
+        "class PublishedPostConsumer:\n"
+        "    def process_once(self):\n"
+        "        return 1\n",
+        encoding="utf-8",
+    )
+    consumers, issues = lifecycle_authored_consumers(lifecycle_projection_document())
+    assert issues == []
+    assert object_entrypoint_mode("projection", [], [], consumers) == (
+        "lifecycle",
+        [],
+    )
+    assert lifecycle_handler_binding_issues(consumers, object_root, [handler]) == []
+
+
+def test_dec011_lifecycle_entrypoint_rejects_empty_or_malformed_authorship() -> None:
+    assert object_entrypoint_mode("projection", [], [], []) == (
+        None,
+        [
+            (
+                "canonical object must own an HTTP operation, typed runtime entrypoint, "
+                "or object-local lifecycle consumer handler"
+            )
+        ],
+    )
+    consumers, issues = lifecycle_authored_consumers(
+        {"lifecycle": {"event_consumers": []}}
+    )
+    assert consumers == []
+    assert "lifecycle entrypoint requires a non-empty source_events string list" in issues
+    assert "lifecycle.event_consumers must be a non-empty list" in issues
+
+
+def test_dec011_lifecycle_entrypoint_rejects_fake_cross_object_and_missing_handlers(
+    tmp_path: Path,
+) -> None:
+    object_root = tmp_path / "internal/content/published_post_view"
+    fake = object_root / "adapters/inbound/fake.py"
+    fake.parent.mkdir(parents=True)
+    fake.write_text(
+        "# class PublishedPostConsumer:\n"
+        "MARKER = 'def process_once(self):'\n",
+        encoding="utf-8",
+    )
+    cross_object = tmp_path / "internal/content/other_view/adapters/consumer.py"
+    cross_object.parent.mkdir(parents=True)
+    cross_object.write_text(
+        "class PublishedPostConsumer:\n"
+        "    def process_once(self):\n"
+        "        return 1\n",
+        encoding="utf-8",
+    )
+    missing_method = object_root / "adapters/inbound/missing_method.py"
+    missing_method.write_text(
+        "class PublishedPostConsumer:\n"
+        "    def other_method(self):\n"
+        "        return 1\n",
+        encoding="utf-8",
+    )
+    consumers, issues = lifecycle_authored_consumers(lifecycle_projection_document())
+    assert issues == []
+    for sources in ([fake], [cross_object], [fake, cross_object], [missing_method]):
+        binding_issues = lifecycle_handler_binding_issues(
+            consumers,
+            object_root,
+            sources,
+        )
+        assert binding_issues == [
+            (
+                "lifecycle consumer ProjectPublishedPost must bind same-object handler "
+                "PublishedPostConsumer.processOnce"
+            )
+        ]
+
+
+def test_dec011_lifecycle_entrypoint_rejects_noncanonical_or_duplicate_source_events(
+) -> None:
+    invalid = lifecycle_projection_document()
+    invalid["lifecycle"]["source_events"] = ["not-an-authored-edge"]
+    _, issues = lifecycle_authored_consumers(invalid)
+    assert issues == [
+        (
+            "lifecycle.source_events must use canonical domain.object.EventName refs; "
+            "invalid indexes=[0]"
+        )
+    ]
+
+    duplicate = lifecycle_projection_document()
+    duplicate["lifecycle"]["source_events"] = [
+        "content.post.PostPublished",
+        "content.post.PostPublished",
+    ]
+    _, issues = lifecycle_authored_consumers(duplicate)
+    assert issues == ["lifecycle.source_events must be unique"]
+
+
+def test_dec011_lifecycle_only_entrypoint_is_projection_only() -> None:
+    consumers, issues = lifecycle_authored_consumers(lifecycle_projection_document())
+    assert issues == []
+    for kind in (
+        "aggregate_root",
+        "append_only_fact",
+        "external_reference",
+        "runtime_session",
+    ):
+        assert object_entrypoint_mode(kind, [], [], consumers) == (
+            None,
+            [
+                (
+                    f"kind={kind} cannot use lifecycle consumers as its only entrypoint; "
+                    "lifecycle-only entrypoints require ['projection']"
+                )
+            ],
+        )
+
+
+def test_dec011_lifecycle_entrypoint_rejects_stub_python_and_go_handlers(
+    tmp_path: Path,
+) -> None:
+    object_root = tmp_path / "internal/content/published_post_view"
+    adapters = object_root / "adapters"
+    adapters.mkdir(parents=True)
+    consumers, issues = lifecycle_authored_consumers(lifecycle_projection_document())
+    assert issues == []
+    expected = [
+        (
+            "lifecycle consumer ProjectPublishedPost must bind same-object handler "
+            "PublishedPostConsumer.processOnce"
+        )
+    ]
+
+    python_stubs = {
+        "pass.py": (
+            "class PublishedPostConsumer:\n"
+            "    def process_once(self):\n"
+            "        pass\n"
+        ),
+        "ellipsis.py": (
+            "class PublishedPostConsumer:\n"
+            "    def process_once(self):\n"
+            "        ...\n"
+        ),
+        "abstract.py": (
+            "from abc import abstractmethod\n"
+            "class PublishedPostConsumer:\n"
+            "    @abstractmethod\n"
+            "    def process_once(self):\n"
+            "        return 1\n"
+        ),
+        "not_implemented.py": (
+            "class PublishedPostConsumer:\n"
+            "    def process_once(self):\n"
+            "        raise NotImplementedError()\n"
+        ),
+    }
+    for name, source in python_stubs.items():
+        path = adapters / name
+        path.write_text(source, encoding="utf-8")
+        assert lifecycle_handler_binding_issues(
+            consumers,
+            object_root,
+            [path],
+        ) == expected
+
+    go_stubs = {
+        "empty.go": (
+            "package adapters\n"
+            "type PublishedPostConsumer struct{}\n"
+            "func (*PublishedPostConsumer) ProcessOnce() {}\n"
+        ),
+        "panic.go": (
+            "package adapters\n"
+            "type PublishedPostConsumer struct{}\n"
+            "func (*PublishedPostConsumer) ProcessOnce() { panic(\"not implemented\") }\n"
+        ),
+        "return.go": (
+            "package adapters\n"
+            "type PublishedPostConsumer struct{}\n"
+            "func (*PublishedPostConsumer) ProcessOnce() { return }\n"
+        ),
+        "return_nil.go": (
+            "package adapters\n"
+            "type PublishedPostConsumer struct{}\n"
+            "func (*PublishedPostConsumer) ProcessOnce() error { return nil }\n"
+        ),
+        "return_zero.go": (
+            "package adapters\n"
+            "type PublishedPostConsumer struct{}\n"
+            "func (*PublishedPostConsumer) ProcessOnce() int { return 0 }\n"
+        ),
+        "return_false.go": (
+            "package adapters\n"
+            "type PublishedPostConsumer struct{}\n"
+            "func (*PublishedPostConsumer) ProcessOnce() bool { return false }\n"
+        ),
+        "return_empty_string.go": (
+            "package adapters\n"
+            "type PublishedPostConsumer struct{}\n"
+            "func (*PublishedPostConsumer) ProcessOnce() string { return \"\" }\n"
+        ),
+    }
+    for name, source in go_stubs.items():
+        path = adapters / name
+        path.write_text(source, encoding="utf-8")
+        assert lifecycle_handler_binding_issues(
+            consumers,
+            object_root,
+            [path],
+        ) == expected
+
+    real_go_handler = adapters / "real.go"
+    real_go_handler.write_text(
+        "package adapters\n"
+        "type PublishedPostConsumer struct{}\n"
+        "func (*PublishedPostConsumer) ProcessOnce() int {\n"
+        "    processed := 1\n"
+        "    return processed\n"
+        "}\n",
+        encoding="utf-8",
+    )
+    assert lifecycle_handler_binding_issues(
+        consumers,
+        object_root,
+        [real_go_handler],
+    ) == []
+
+
+def test_dec011_http_and_runtime_entrypoints_remain_mutually_exclusive() -> None:
+    consumers, issues = lifecycle_authored_consumers(lifecycle_projection_document())
+    assert issues == []
+    http_route = {"method": "GET", "path": "/published-posts"}
+    runtime_entrypoint = {"kind": "projector"}
+    assert object_entrypoint_mode(
+        "projection",
+        [http_route],
+        [runtime_entrypoint],
+        consumers,
+    ) == (
+        None,
+        [
+            (
+                "canonical object must not own both HTTP api_routes and "
+                "runtime_entrypoints"
+            )
+        ],
+    )
+    assert object_entrypoint_mode(
+        "projection",
+        [http_route],
+        [],
+        consumers,
+    ) == ("http", [])
+
+
+def test_dec011_legacy_runtime_entrypoint_remains_the_entry_owner() -> None:
+    consumers, issues = lifecycle_authored_consumers(lifecycle_projection_document())
+    assert issues == []
+    assert object_entrypoint_mode(
+        "projection",
+        [],
+        [{"kind": "projector"}],
+        consumers,
+    ) == (
+        "runtime",
+        [],
+    )

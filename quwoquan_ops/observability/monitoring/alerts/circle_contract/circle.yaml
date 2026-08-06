@@ -1,0 +1,265 @@
+# Code generated from quwoquan_service/generated/contract_graph.json.
+# Regenerate with verify_object_alert_coverage.py --write.
+groups:
+  - name: quwoquan_circle_contract_circle
+    rules:
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="DELETE",route=~"^/circles/[^/]+$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle.ArchiveCircle"
+          contract_metric: "circle_archive"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "700"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="DELETE",route=~"^/circles/[^/]+$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle.ArchiveCircle"
+          contract_metric: "circle_archive"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "700"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="POST",route="/circles"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle.CreateCircle"
+          contract_metric: "circle_create"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "700"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="POST",route="/circles"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle.CreateCircle"
+          contract_metric: "circle_create"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "700"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="POST",route=~"^/internal/circle/circles/[^/]+/gathering-host-authority:evaluate$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle.EvaluateCircleGatheringHostAuthority"
+          contract_metric: "circle_gathering_host_authority_evaluate"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "200"
+          slo_availability_percent: "99.95"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="POST",route=~"^/internal/circle/circles/[^/]+/gathering-host-authority:evaluate$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle.EvaluateCircleGatheringHostAuthority"
+          contract_metric: "circle_gathering_host_authority_evaluate"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "200"
+          slo_availability_percent: "99.95"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="GET",route=~"^/circles/[^/]+$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle.GetCircle"
+          contract_metric: "circle_detail_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="GET",route=~"^/circles/[^/]+$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle.GetCircle"
+          contract_metric: "circle_detail_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="GET",route=~"^/circles/[^/]+/feed$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle.GetCircleFeed"
+          contract_metric: "circle_feed_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "600"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="GET",route=~"^/circles/[^/]+/feed$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle.GetCircleFeed"
+          contract_metric: "circle_feed_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "600"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="GET",route=~"^/circles/[^/]+/impact$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle.GetCircleImpact"
+          contract_metric: "circle_impact_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="GET",route=~"^/circles/[^/]+/impact$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle.GetCircleImpact"
+          contract_metric: "circle_impact_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="GET",route=~"^/circles/[^/]+/stats$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle.GetCircleStats"
+          contract_metric: "circle_stats_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "350"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="GET",route=~"^/circles/[^/]+/stats$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle.GetCircleStats"
+          contract_metric: "circle_stats_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "350"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="GET",route="/circles/discovery-feed"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle.ListCircleDiscoveryFeed"
+          contract_metric: "circle_discovery_feed_list"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="GET",route="/circles/discovery-feed"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle.ListCircleDiscoveryFeed"
+          contract_metric: "circle_discovery_feed_list"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="GET",route="/circles"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle.ListCircles"
+          contract_metric: "circle_list"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="GET",route="/circles"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle.ListCircles"
+          contract_metric: "circle_list"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="POST",route="/internal/circle/account-closure/dead-letters:recover"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle.RecoverCircleAccountClosureDeadLetter"
+          contract_metric: "circle_account_closure_dead_letter_recover"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="POST",route="/internal/circle/account-closure/dead-letters:recover"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle.RecoverCircleAccountClosureDeadLetter"
+          contract_metric: "circle_account_closure_dead_letter_recover"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="GET",route="/circles/search"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle.SearchCircles"
+          contract_metric: "circle_search"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="GET",route="/circles/search"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle.SearchCircles"
+          contract_metric: "circle_search"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="PATCH",route=~"^/circles/[^/]+$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle.UpdateCircle"
+          contract_metric: "circle_update"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "700"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="PATCH",route=~"^/circles/[^/]+$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle.UpdateCircle"
+          contract_metric: "circle_update"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "700"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="PATCH",route=~"^/circles/[^/]+/sections$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle.UpdateCircleSections"
+          contract_metric: "circle_sections_update"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "700"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="PATCH",route=~"^/circles/[^/]+/sections$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle.UpdateCircleSections"
+          contract_metric: "circle_sections_update"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "700"
+          slo_availability_percent: "99.9"

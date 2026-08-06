@@ -20,7 +20,7 @@ from unittest.mock import patch
 _ROOT = Path(__file__).resolve().parents[3]
 _SPEC = importlib.util.spec_from_file_location(
     "es_cli",
-    _ROOT / "quwoquan_service/scripts/runtime/observability/es_cli.py",
+    _ROOT / "quwoquan_service/scripts/tools/observability/es_cli.py",
 )
 assert _SPEC and _SPEC.loader
 es_cli = importlib.util.module_from_spec(_SPEC)

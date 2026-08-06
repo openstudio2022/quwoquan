@@ -21,41 +21,41 @@ var (
 // AppErrorFromPolicyRolloutIdempotencyConflict returns *AppError for ASSISTANT.USER.policy_rollout_idempotency_conflict (user_message from errors.yaml).
 func AppErrorFromPolicyRolloutIdempotencyConflict(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.policy_rollout_idempotency_conflict")
-	return rterr.NewAppError(code, "重复灰度请求与原操作不一致", debugMessage).WithMetadata("policy_rollout_idempotency_conflict", 409).WithRecovery("refresh", 0)
+	return rterr.NewAppError(code, "重复灰度请求与原操作不一致", debugMessage).WithMetadata("policy_rollout_idempotency_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromPolicyRolloutInvalid returns *AppError for ASSISTANT.USER.policy_rollout_invalid (user_message from errors.yaml).
 func AppErrorFromPolicyRolloutInvalid(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.policy_rollout_invalid")
-	return rterr.NewAppError(code, "助手策略灰度配置不合法", debugMessage).WithMetadata("policy_rollout_invalid", 400).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "助手策略灰度配置不合法", debugMessage).WithMetadata("policy_rollout_invalid", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromPolicyRolloutNoPreviousMapping returns *AppError for ASSISTANT.USER.policy_rollout_no_previous_mapping (user_message from errors.yaml).
 func AppErrorFromPolicyRolloutNoPreviousMapping(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.policy_rollout_no_previous_mapping")
-	return rterr.NewAppError(code, "当前没有可回滚的上一版策略", debugMessage).WithMetadata("policy_rollout_no_previous_mapping", 409).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "当前没有可回滚的上一版策略", debugMessage).WithMetadata("policy_rollout_no_previous_mapping", 409).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromPolicyRolloutNotFound returns *AppError for ASSISTANT.USER.policy_rollout_not_found (user_message from errors.yaml).
 func AppErrorFromPolicyRolloutNotFound(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.policy_rollout_not_found")
-	return rterr.NewAppError(code, "助手策略灰度配置不存在", debugMessage).WithMetadata("policy_rollout_not_found", 404).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "助手策略灰度配置不存在", debugMessage).WithMetadata("policy_rollout_not_found", 404).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromPolicyRolloutReleaseNotFound returns *AppError for ASSISTANT.USER.policy_rollout_release_not_found (user_message from errors.yaml).
 func AppErrorFromPolicyRolloutReleaseNotFound(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.policy_rollout_release_not_found")
-	return rterr.NewAppError(code, "助手策略发布不存在", debugMessage).WithMetadata("policy_rollout_release_not_found", 404).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "助手策略发布不存在", debugMessage).WithMetadata("policy_rollout_release_not_found", 404).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromPolicyRolloutRevisionConflict returns *AppError for ASSISTANT.USER.policy_rollout_revision_conflict (user_message from errors.yaml).
 func AppErrorFromPolicyRolloutRevisionConflict(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.policy_rollout_revision_conflict")
-	return rterr.NewAppError(code, "助手策略灰度配置已更新，请刷新后重试", debugMessage).WithMetadata("policy_rollout_revision_conflict", 409).WithRecovery("refresh", 0)
+	return rterr.NewAppError(code, "助手策略灰度配置已更新，请刷新后重试", debugMessage).WithMetadata("policy_rollout_revision_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromPolicyRolloutStorageUnavailable returns *AppError for ASSISTANT.SYSTEM.policy_rollout_storage_unavailable (user_message from errors.yaml).
 func AppErrorFromPolicyRolloutStorageUnavailable(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.SYSTEM.policy_rollout_storage_unavailable")
-	return rterr.NewAppError(code, "助手策略灰度服务暂不可用", debugMessage).WithMetadata("policy_rollout_storage_unavailable", 503).WithRecovery("retry", 3)
+	return rterr.NewAppError(code, "助手策略灰度服务暂不可用", debugMessage).WithMetadata("policy_rollout_storage_unavailable", 503).WithRecoveryDirective("retry", "snackbar", 3)
 }

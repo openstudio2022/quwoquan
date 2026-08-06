@@ -22,11 +22,6 @@ relationships:
   target_object: user.UserAccount
 local_identity_reasons:
   claimedCaseId: immutable Product Ops claim tuple component; Product Ops case is referenced only through the public claim contract and is not a User aggregate identity
-capabilities:
-- commandable
-- expiring
-- idempotent_commands
-- auditable
 business_rules:
 - credential 只能由仍在有效期内、purpose=account_appeal 的已完成 AuthenticationChallenge 签发，身份必须解析到 active phone CredentialBinding
 - 签发和提交时 UserAccount 必须为 suspended；credential 与 intake 均绑定签发时的 authEpoch，账号恢复或安全代次变化后立即失效

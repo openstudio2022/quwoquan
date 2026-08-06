@@ -8,7 +8,6 @@ const (
 	UserProfileUpdated     = accountevent.UserProfileUpdated
 	UserProfileTagsChanged = accountevent.UserProfileTagsChanged
 	UserAvatarUpdated      = accountevent.UserAvatarUpdated
-	UserRegistered         = accountevent.UserRegistered
 	UserSuspended          = accountevent.UserSuspended
 	UserRestored           = accountevent.UserRestored
 	UserAccountClosed      = accountevent.UserAccountClosed

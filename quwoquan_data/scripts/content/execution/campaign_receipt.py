@@ -1,6 +1,10 @@
 """Campaign-owned review and publish receipts for one carrier lane."""
+
 from __future__ import annotations
 
+import fcntl
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
@@ -8,10 +12,109 @@ from typing import Any
 
 from core.io import read_json, write_json
 from core.schema import assert_valid
+
 from content.execution import store
+from content.execution.campaign_publish_binding import (
+    PUBLISH_BINDING_FIELDS,
+    CampaignPublishProjection,
+    CampaignReceiptError,
+    project_publish_receipt_binding,
+)
+from content.execution.campaign_publish_binding import (
+    project_publish_receipt as _project_publish_receipt_binding,
+)
+from content.execution.campaign_publish_binding import (
+    receipt_error as _receipt_error,
+)
 from content.execution.campaign_submission import campaign_root
+from content.execution.campaign_workspace import CampaignRuntimePaths
 from content.execution.identity import parse_execution_id, validate_execution_id
-from content.execution.workspace import execution_root
+from content.execution.reviewed_closure_adoption_campaign_contract import (
+    CAMPAIGN_ADOPTION_FIELD,
+    validate_campaign_adoption_binding,
+)
+
+_ADOPTION_PUBLISH_FIELDS = (CAMPAIGN_ADOPTION_FIELD, "adoptedObjectRefs")
+
+
+@contextmanager
+def _receipt_lock(path: Path) -> Iterator[None]:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = path.parent / f".{path.name}.lock"
+    with lock_path.open("a+b") as handle:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
+def _assert_phase_binding(payload: Mapping[str, Any], *, path: Path) -> None:
+    phase = str(payload.get("phase") or "")
+    standard_present = [field for field in PUBLISH_BINDING_FIELDS if field in payload]
+    adoption_present = [field for field in _ADOPTION_PUBLISH_FIELDS if field in payload]
+    if phase == "publish":
+        standard_complete = all(field in payload for field in PUBLISH_BINDING_FIELDS)
+        adoption_complete = all(
+            field in payload for field in _ADOPTION_PUBLISH_FIELDS
+        ) and all(
+            field in payload
+            for field in (
+                "campaignRunId",
+                "campaignGeneration",
+                "campaignFencingToken",
+            )
+        )
+        if standard_complete == adoption_complete:
+            if standard_present and not adoption_present:
+                detail = "publish receipt lacks " + ", ".join(
+                    field
+                    for field in PUBLISH_BINDING_FIELDS
+                    if field not in payload
+                )
+            elif adoption_present and not standard_present:
+                detail = "adoption publish receipt lacks " + ", ".join(
+                    field
+                    for field in (
+                        *_ADOPTION_PUBLISH_FIELDS,
+                        "campaignRunId",
+                        "campaignGeneration",
+                        "campaignFencingToken",
+                    )
+                    if field not in payload
+                )
+            else:
+                detail = (
+                    "publish receipt must carry exactly one canonical publish or "
+                    "reviewed-closure adoption binding"
+                )
+            raise _receipt_error(
+                "PUBLISH_BINDING_MISSING",
+                detail,
+                evidence=path,
+            )
+        if standard_complete and adoption_present:
+            raise _receipt_error(
+                "PUBLISH_BINDING_CONFLICT",
+                "publish receipt cannot mix canonical and adoption bindings",
+                evidence=path,
+            )
+        if adoption_complete and any(
+            field in payload
+            for field in ("executionPublishRef", "executionPublishSha256")
+        ):
+            raise _receipt_error(
+                "PUBLISH_BINDING_CONFLICT",
+                "adoption receipt cannot carry canonical publish_ref fields",
+                evidence=path,
+            )
+    elif phase == "review" and (standard_present or adoption_present):
+        raise _receipt_error(
+            "REVIEW_BINDING_FORBIDDEN",
+            "review receipt cannot freeze publish fields: "
+            + ", ".join([*standard_present, *adoption_present]),
+            evidence=path,
+        )
 
 
 def lane_receipt_path(
@@ -33,17 +136,29 @@ def lane_receipt_path(
 
 
 def _write_immutable_receipt(path: Path, payload: dict[str, Any]) -> Path:
+    _assert_phase_binding(payload, path=path)
     assert_valid(
         payload,
         "execution",
         "content_campaign_lane_receipt",
         label=f"campaign lane receipt:{path.name}",
     )
-    if path.is_file():
-        if read_json(path) != payload:
-            raise ValueError(f"campaign lane receipt collision: {path}")
-        return path
-    write_json(path, payload)
+    with _receipt_lock(path):
+        if path.is_symlink():
+            raise _receipt_error(
+                "PATH_INVALID",
+                "campaign lane receipt cannot be a symlink",
+                evidence=path,
+            )
+        if path.is_file():
+            if read_json(path) != payload:
+                raise _receipt_error(
+                    "IMMUTABLE_COLLISION",
+                    "campaign lane receipt already differs",
+                    evidence=path,
+                )
+            return path
+        write_json(path, payload)
     return path
 
 
@@ -154,8 +269,7 @@ def write_review_receipt(
     carrier = parse_execution_id(normalized).content_type.value
     evidence = _review_evidence(normalized, carrier)
     if (
-        evidence.selected_count
-        != evidence.qualified_count + evidence.discarded_count
+        evidence.selected_count != evidence.qualified_count + evidence.discarded_count
         or evidence.discarded_count != len(evidence.discards)
     ):
         raise ValueError("campaign review receipt selected/discard count drift")
@@ -184,29 +298,25 @@ def write_publish_receipt(
     *,
     root_execution_id: str,
     execution_id: str,
+    runtime_paths: CampaignRuntimePaths | None = None,
 ) -> Path:
+    runtime = runtime_paths or CampaignRuntimePaths.defaults()
     normalized = validate_execution_id(execution_id)
     carrier = parse_execution_id(normalized).content_type.value
-    review = load_lane_receipt(root_execution_id, carrier, "review")
-    if str(review.get("status") or "") == "blocked":
-        raise ValueError(
-            f"campaign publish refused for blocked review lane: {carrier}"
-        )
-    publish_ref_path = execution_root(normalized) / "publish_ref.json"
-    if not publish_ref_path.is_file():
-        raise FileNotFoundError(
-            f"campaign publish receipt is missing: {publish_ref_path}"
-        )
-    publish_ref = read_json(publish_ref_path)
-    assert_valid(
-        publish_ref,
-        "execution",
-        "publish_ref",
-        label=f"publish_ref:{normalized}",
+    review = load_lane_receipt(
+        root_execution_id,
+        carrier,
+        "review",
+        root=runtime.campaigns_root,
     )
-    if str(publish_ref.get("executionId") or "") != normalized:
-        raise ValueError("campaign publish_ref executionId drift")
-    refs = publish_ref.get("publishedRefs") or {}
+    if str(review.get("status") or "") == "blocked":
+        raise ValueError(f"campaign publish refused for blocked review lane: {carrier}")
+    projection = _project_publish_receipt_binding(
+        root_execution_id=root_execution_id,
+        execution_id=normalized,
+        runtime_paths=runtime,
+    )
+    refs = projection.publish_ref.get("publishedRefs") or {}
     ref_key = "entities" if carrier == "homepage" else "posts"
     finalized_count = len(refs.get(ref_key) or [])
     qualified_count = int(review["qualifiedCount"])
@@ -218,11 +328,7 @@ def write_publish_receipt(
         )
     if finalized_count <= 0:
         raise ValueError("campaign publish has no qualified objects to finalize")
-    status = (
-        "finalized"
-        if finalized_count >= approved_quota
-        else "partial"
-    )
+    status = "finalized" if finalized_count >= approved_quota else "partial"
     payload = {
         "schema": "quwoquan_data.content_campaign_lane_receipt",
         "rootExecutionId": validate_execution_id(root_execution_id),
@@ -237,9 +343,80 @@ def write_publish_receipt(
         "discardedCount": int(review["discardedCount"]),
         "shortfallCount": max(0, approved_quota - finalized_count),
         "discards": list(review["discards"]),
+        **projection.binding,
     }
     return _write_immutable_receipt(
-        lane_receipt_path(root_execution_id, carrier, "publish"),
+        lane_receipt_path(
+            root_execution_id,
+            carrier,
+            "publish",
+            root=runtime.campaigns_root,
+        ),
+        payload,
+    )
+
+
+def write_adoption_publish_receipt(
+    *,
+    root_execution_id: str,
+    execution_id: str,
+    reviewed_closure_adoption: Mapping[str, Any],
+    adopted_object_refs: list[str],
+    run_session: Any,
+) -> Path:
+    """Derive one finalized lane receipt from the current fenced adoption run."""
+
+    runtime = run_session.runtime
+    normalized = validate_execution_id(execution_id)
+    carrier = parse_execution_id(normalized).content_type.value
+    snapshot = run_session.assert_fence()
+    plan_path = (
+        campaign_root(root_execution_id, root=runtime.campaigns_root)
+        / "campaign_plan.json"
+    )
+    plan = read_json(plan_path)
+    if (
+        plan.get("planDigest") != snapshot.get("planDigest")
+        or plan.get(CAMPAIGN_ADOPTION_FIELD) != dict(reviewed_closure_adoption)
+        or (plan.get("executionIds") or {}).get(carrier) != normalized
+    ):
+        raise ValueError("reviewed closure publish plan/fence binding drift")
+    validate_campaign_adoption_binding(
+        reviewed_closure_adoption,
+        output_root=runtime.output_root,
+    )
+    if not adopted_object_refs or adopted_object_refs != sorted(
+        set(adopted_object_refs)
+    ):
+        raise ValueError("reviewed closure adoptedObjectRefs must be sorted and unique")
+    count = len(adopted_object_refs)
+    payload = {
+        "schema": "quwoquan_data.content_campaign_lane_receipt",
+        "rootExecutionId": validate_execution_id(root_execution_id),
+        "executionId": normalized,
+        "carrier": carrier,
+        "phase": "publish",
+        "status": "finalized",
+        "approvedQuota": count,
+        "qualifiedCount": count,
+        "finalizedCount": count,
+        "selectedCount": count,
+        "discardedCount": 0,
+        "shortfallCount": 0,
+        "discards": [],
+        "campaignRunId": run_session.run_id,
+        "campaignGeneration": run_session.generation,
+        "campaignFencingToken": run_session.fencing_token,
+        CAMPAIGN_ADOPTION_FIELD: dict(reviewed_closure_adoption),
+        "adoptedObjectRefs": list(adopted_object_refs),
+    }
+    return _write_immutable_receipt(
+        lane_receipt_path(
+            root_execution_id,
+            carrier,
+            "publish",
+            root=runtime.campaigns_root,
+        ),
         payload,
     )
 
@@ -253,6 +430,11 @@ def load_lane_receipt(
 ) -> dict[str, Any]:
     path = lane_receipt_path(root_execution_id, carrier, phase, root=root)
     payload = read_json(path)
+    if isinstance(payload, Mapping):
+        # Give the campaign boundary's stable typed error priority over the
+        # lower-level oneOf diagnostic.  The strict schema remains the next
+        # gate and still rejects every other malformed shape.
+        _assert_phase_binding(payload, path=path)
     assert_valid(
         payload,
         "execution",
@@ -271,14 +453,10 @@ def load_lane_receipt(
         raise ValueError(f"campaign lane receipt discard count drift: {path}")
     if any(
         not str(row.get("objectRef") or "").strip()
-        or not [
-            issue for issue in (row.get("issues") or []) if str(issue).strip()
-        ]
+        or not [issue for issue in (row.get("issues") or []) if str(issue).strip()]
         for row in discards
     ):
-        raise ValueError(
-            f"campaign lane receipt discard evidence incomplete: {path}"
-        )
+        raise ValueError(f"campaign lane receipt discard evidence incomplete: {path}")
     return payload
 
 
@@ -307,10 +485,14 @@ def require_lane_review_receipt(
 
 
 __all__ = [
+    "CampaignPublishProjection",
+    "CampaignReceiptError",
     "LaneReviewEvidence",
     "lane_receipt_path",
     "load_lane_receipt",
+    "project_publish_receipt_binding",
     "require_lane_review_receipt",
+    "write_adoption_publish_receipt",
     "write_publish_receipt",
     "write_review_receipt",
 ]

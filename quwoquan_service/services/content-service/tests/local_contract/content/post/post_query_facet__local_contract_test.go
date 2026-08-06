@@ -1,3 +1,6 @@
+// readiness_case: get-post-local
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-005
+// readiness_case: list-user-posts-local
 package local_contract
 
 import (

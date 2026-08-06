@@ -93,7 +93,10 @@ func (r *Resolver) Resolve(
 			node.DataPolicyRef = ""
 		}
 		if node.Action != nil {
-			if err := validateActionIntent(*node.Action, allowedActions); err != nil {
+			now := r.now().UTC()
+			if err := validateActionIntent(*node.Action, allowedActions); err != nil ||
+				node.Action.IssuedAt.After(now) ||
+				!now.Before(node.Action.ExpiresAt) {
 				document.FallbackReason = ErrActionRejected.Error()
 				return document, nil
 			}
@@ -406,7 +409,22 @@ func cloneNodes(values []Node) []Node {
 		}
 		if node.Action != nil {
 			action := *node.Action
-			action.Payload = cloneMap(node.Action.Payload)
+			if node.Action.Navigate != nil {
+				value := *node.Action.Navigate
+				action.Navigate = &value
+			}
+			if node.Action.ApproveTool != nil {
+				value := *node.Action.ApproveTool
+				action.ApproveTool = &value
+			}
+			if node.Action.ExecuteDeviceAction != nil {
+				value := *node.Action.ExecuteDeviceAction
+				action.ExecuteDeviceAction = &value
+			}
+			if node.Action.ProvideInput != nil {
+				value := *node.Action.ProvideInput
+				action.ProvideInput = &value
+			}
 			result[index].Action = &action
 		}
 	}

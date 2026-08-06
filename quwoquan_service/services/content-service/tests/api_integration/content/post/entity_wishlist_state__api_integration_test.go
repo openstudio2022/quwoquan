@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md#sit-005
+// readiness_case: get-entity-wishlist-state-api
 package api_integration
 
 import (

@@ -42,7 +42,8 @@
 
 - object / projection：`AssistantPresentationTemplate`、`AssistantPresentationSelection`、`AssistantPresentationDocument`、`AssistantPresentationNode`
 - event / metric：`presentation_snapshot`、`presentation_patch`、`presentation_commit`、`assistant_presentation_fallback`
-- operation：`ContinueAssistantToolUse`
+- ActionIntent：闭集 `Navigate`、`ApproveTool`、`ExecuteDeviceAction`、`ProvideInput`，每类只携带自己的 typed 子契约，未知 kind、过期、digest mismatch 与 replay 均零执行。
+- operation：`ApproveAssistantToolUse`、`SubmitDeviceActionReceipt`
 
 ## 5. 验收场景
 

@@ -18,6 +18,7 @@ services:
       RECOMMENDATION_POLICY_FILE: /etc/qwq-rec-policy/policy.yaml
       MONGODB_URI: "${QWQ_COMPOSE_MONGODB_URI:-mongodb://mongodb:27017/?directConnection=true}"
       MONGODB_DATABASE: quwoquan_recommendation
+      CIRCLE_SERVICE_BASE_URL: "${QWQ_COMPOSE_CIRCLE_SERVICE_BASE_URL:-http://circle-service:18082}"
       CONFIG_VERSION: "${QWQ_COMPOSE_RECOMMENDATION_SERVICE_CONFIG_VERSION:?QWQ_COMPOSE_RECOMMENDATION_SERVICE_CONFIG_VERSION is required}"
       IMAGE_VERSION: "${QWQ_COMPOSE_IMAGE_VERSION:?immutable image version is required}"
       PYTHONUNBUFFERED: "1"

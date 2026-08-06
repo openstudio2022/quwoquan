@@ -1,6 +1,6 @@
 dart_class: AssistantJourney
-library_path: assistant/contracts/assistant_journey.dart
-output_path: assistant/generated/contracts/assistant_journey.g.dart
+library_path: service/assistant_service/assistant/assistant_run/domain/assistant_journey.dart
+output_path: service/assistant_service/assistant/assistant_run/domain/generated/assistant_journey.g.dart
 contract: assistant_journey
 kind: explainability_contract
 imports:

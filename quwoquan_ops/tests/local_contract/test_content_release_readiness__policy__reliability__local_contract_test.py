@@ -15,6 +15,9 @@ from quwoquan_ops.cli.lib.content_release_readiness import (
     VerificationProfile,
     load_content_release_readiness_policy,
 )
+from quwoquan_ops.cli.lib.provider_runtime_composition import (
+    compile_provider_runtime_composition,
+)
 
 
 def _operation_evidence(path: str, page_id: str, *, suffix: str) -> dict[str, object]:
@@ -173,9 +176,9 @@ def test_media_edge_health_uses_edge_root_not_carrier_path_base__local_contract(
         assert "/media/video/" not in media["url"]
 
 
-def test_content_release_import_plane_excludes_tag_and_search__local_contract() -> (
-    None
-):
+def test_content_release_import_plane_excludes_tag_and_search__local_contract(
+    monkeypatch,
+) -> None:
     topology = stackctl.load_environment_topology()
     checks = stackctl._health_checks_for_target(
         topology,
@@ -188,6 +191,25 @@ def test_content_release_import_plane_excludes_tag_and_search__local_contract() 
     assert "entity-service" in names
     assert "tag-service" not in names
     assert "search-service" not in names
+
+    composition = compile_provider_runtime_composition(
+        environment="alpha",
+        target="alpha-local",
+    )
+    monkeypatch.setattr(
+        stackctl,
+        "_active_provider_runtime",
+        lambda _environment, _target: {"composition": composition},
+    )
+    monkeypatch.setattr(
+        stackctl,
+        "load_startup_attempt",
+        lambda _target: {
+            "status": "running",
+            "workload": "full",
+            "providerRuntimeDigest": composition["runtimeCompositionDigest"],
+        },
+    )
 
     full_plane = {
         str(item["name"])
@@ -1126,8 +1148,7 @@ def test_data_lifecycle_exit__allows_commercial_readiness_on_replay_import(
         / "env/gamma/runs/data-release/pilot-002/commercial-verify-001/result.json"
     )
     commercial_result.parent.mkdir(parents=True, exist_ok=True)
-    commercial_result.write_text("{}
-", encoding="utf-8")
+    commercial_result.write_text("{}\n", encoding="utf-8")
 
     receipt, path = stackctl._load_data_release_lifecycle_exit(
         environment="gamma",

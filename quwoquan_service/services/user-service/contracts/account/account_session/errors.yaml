@@ -1,5 +1,3 @@
-domain: USER
-aggregate: AccountSession
 description: 'AccountSession 对象专属错误码。格式：MODULE.KIND.REASON。
 
   覆盖六路登录、token 生命周期、账号态与运营商/第三方登录链路；
@@ -9,59 +7,49 @@ description: 'AccountSession 对象专属错误码。格式：MODULE.KIND.REASON
   '
 errors:
 - code: USER.AUTH.login_locked
-  kind: AUTH
   reason: locked
   emitted_by:
   - surface: http
     operations:
     - LoginWithPhone
   http_status: 423
-  recovery:
-    action: retry
-    disruptionLevel: inlineCard
-    afterSeconds: 1800
-  l10n_key: userAuthLoginLocked
+  recovery_action: retry
+  recovery_after_seconds: 1800
+  disruption_level: inlineCard
   dart_const: loginLocked
   go_const: ErrLoginLocked
   user_message:
     zh: 账号因多次失败已暂时锁定，请30分钟后重试
     en: Account temporarily locked due to multiple failed attempts, please retry in 30 minutes
 - code: USER.AUTH.token_expired
-  kind: AUTH
   reason: token_expired
   emitted_by:
   - surface: http
     operations:
     - RefreshToken
   http_status: 401
-  recovery:
-    action: surface
-    disruptionLevel: inlineCard
-  l10n_key: userAuthTokenExpired
+  recovery_action: surface
+  disruption_level: inlineCard
   dart_const: tokenExpired
   go_const: ErrTokenExpired
   user_message:
     zh: 登录已过期，请重新登录
     en: Session expired, please sign in again
 - code: USER.AUTH.wechat_auth_failed
-  kind: AUTH
   reason: third_party_failure
   emitted_by:
   - surface: http
     operations:
     - LoginWithWechat
   http_status: 502
-  recovery:
-    action: fallback
-    disruptionLevel: inlineCard
-  l10n_key: userAuthWechatFailed
+  recovery_action: fallback
+  disruption_level: inlineCard
   dart_const: wechatAuthFailed
   go_const: ErrWechatAuthFailed
   user_message:
     zh: 授权未完成
     en: Authorization was not completed
 - code: USER.AUTH.alipay_auth_failed
-  kind: AUTH
   reason: third_party_failure
   emitted_by:
   - surface: http
@@ -69,34 +57,28 @@ errors:
     - LoginWithAlipay
     - user.authentication_challenge.CreateAlipayAuthorizationRequest
   http_status: 502
-  recovery:
-    action: fallback
-    disruptionLevel: inlineCard
-  l10n_key: userAuthAlipayFailed
+  recovery_action: fallback
+  disruption_level: inlineCard
   dart_const: alipayAuthFailed
   go_const: ErrAlipayAuthFailed
   user_message:
     zh: 授权未完成
     en: Authorization was not completed
 - code: USER.AUTH.qq_auth_failed
-  kind: AUTH
   reason: third_party_failure
   emitted_by:
   - surface: http
     operations:
     - LoginWithQq
   http_status: 502
-  recovery:
-    action: fallback
-    disruptionLevel: inlineCard
-  l10n_key: userAuthQqFailed
+  recovery_action: fallback
+  disruption_level: inlineCard
   dart_const: qqAuthFailed
   go_const: ErrQqAuthFailed
   user_message:
     zh: 授权未完成
     en: Authorization was not completed
 - code: USER.AUTH.social_provider_cancelled
-  kind: AUTH
   reason: cancelled
   emitted_by:
   - surface: http
@@ -105,17 +87,14 @@ errors:
     - LoginWithQq
     - LoginWithWechat
   http_status: 400
-  recovery:
-    action: absorb
-    disruptionLevel: silent
-  l10n_key: userAuthSocialProviderCancelled
+  recovery_action: absorb
+  disruption_level: silent
   dart_const: socialProviderCancelled
   go_const: ErrSocialProviderCancelled
   user_message:
     zh: 已取消第三方授权
     en: Third-party authorization was cancelled
 - code: USER.AUTH.social_provider_unavailable
-  kind: AUTH
   reason: third_party_unavailable
   emitted_by:
   - surface: http
@@ -125,17 +104,14 @@ errors:
     - LoginWithWechat
     - user.authentication_challenge.CreateAlipayAuthorizationRequest
   http_status: 503
-  recovery:
-    action: fallback
-    disruptionLevel: inlineCard
-  l10n_key: userAuthSocialProviderUnavailable
+  recovery_action: fallback
+  disruption_level: inlineCard
   dart_const: socialProviderUnavailable
   go_const: ErrSocialProviderUnavailable
   user_message:
     zh: 授权未完成
     en: Authorization was not completed
 - code: USER.AUTH.carrier_unavailable
-  kind: AUTH
   reason: third_party_unavailable
   emitted_by:
   - surface: http
@@ -144,17 +120,14 @@ errors:
     - user.authentication_challenge.ResolveOneTapLoginHint
     - user.credential_binding.BindCarrierPhoneCredential
   http_status: 503
-  recovery:
-    action: fallback
-    disruptionLevel: inlineCard
-  l10n_key: userAuthCarrierUnavailable
+  recovery_action: fallback
+  disruption_level: inlineCard
   dart_const: carrierUnavailable
   go_const: ErrCarrierUnavailable
   user_message:
     zh: 本机号码登录暂不可用，请使用其他方式登录
     en: Carrier sign-in is unavailable; use SMS verification instead
 - code: USER.AUTH.carrier_token_invalid
-  kind: AUTH
   reason: invalid_token
   emitted_by:
   - surface: http
@@ -163,17 +136,14 @@ errors:
     - user.authentication_challenge.ResolveOneTapLoginHint
     - user.credential_binding.BindCarrierPhoneCredential
   http_status: 400
-  recovery:
-    action: fallback
-    disruptionLevel: inlineCard
-  l10n_key: userAuthCarrierTokenInvalid
+  recovery_action: fallback
+  disruption_level: inlineCard
   dart_const: carrierTokenInvalid
   go_const: ErrCarrierTokenInvalid
   user_message:
     zh: 本机号码授权已失效，请使用其他方式登录
     en: Carrier authorization expired; use SMS verification instead
 - code: USER.AUTH.carrier_provider_timeout
-  kind: AUTH
   reason: upstream_timeout
   emitted_by:
   - surface: http
@@ -182,34 +152,28 @@ errors:
     - user.authentication_challenge.ResolveOneTapLoginHint
     - user.credential_binding.BindCarrierPhoneCredential
   http_status: 504
-  recovery:
-    action: retry
-    disruptionLevel: inlineCard
-  l10n_key: userAuthCarrierProviderTimeout
+  recovery_action: retry
+  disruption_level: inlineCard
   dart_const: carrierProviderTimeout
   go_const: ErrCarrierProviderTimeout
   user_message:
     zh: 本机号码校验超时，请使用其他方式登录
     en: Carrier verification timed out; use SMS verification instead
 - code: USER.AUTH.carrier_phone_mismatch
-  kind: AUTH
   reason: conflict
   emitted_by:
   - surface: http
     operations:
     - LoginOneTap
   http_status: 409
-  recovery:
-    action: fallback
-    disruptionLevel: inlineCard
-  l10n_key: userAuthCarrierPhoneMismatch
+  recovery_action: fallback
+  disruption_level: inlineCard
   dart_const: carrierPhoneMismatch
   go_const: ErrCarrierPhoneMismatch
   user_message:
     zh: 本机号码与上次账号不一致，请使用其他手机号或其他方式登录
     en: Carrier phone does not match the remembered account; use another phone or sign-in method
 - code: USER.AUTH.consent_required
-  kind: AUTH
   reason: consent_required
   emitted_by:
   - surface: http
@@ -221,17 +185,14 @@ errors:
     - LoginWithWechat
     - user.credential_binding.CompleteFederatedPhoneBinding
   http_status: 400
-  recovery:
-    action: surface
-    disruptionLevel: inlineCard
-  l10n_key: userAuthConsentRequired
+  recovery_action: surface
+  disruption_level: inlineCard
   dart_const: consentRequired
   go_const: ErrConsentRequired
   user_message:
     zh: 请先阅读并同意用户协议与隐私政策
     en: Please agree to the user agreement and privacy policy first
 - code: USER.AUTH.account_suspended
-  kind: AUTH
   reason: suspended
   emitted_by:
   - surface: http
@@ -313,17 +274,14 @@ errors:
     - user.user_settings.UpdateNotificationSettings
     - user.user_settings.UpdatePrivacySettings
   http_status: 403
-  recovery:
-    action: escalate
-    disruptionLevel: inlineCard
-  l10n_key: userAuthAccountSuspended
+  recovery_action: escalate
+  disruption_level: inlineCard
   dart_const: accountSuspended
   go_const: ErrAccountSuspended
   user_message:
     zh: 账号已被限制登录，请更换手机号或联系支持
     en: This account is currently restricted
 - code: USER.AUTH.account_deleted
-  kind: AUTH
   reason: deleted
   emitted_by:
   - surface: http
@@ -404,17 +362,14 @@ errors:
     - user.user_settings.UpdateNotificationSettings
     - user.user_settings.UpdatePrivacySettings
   http_status: 410
-  recovery:
-    action: escalate
-    disruptionLevel: inlineCard
-  l10n_key: userAuthAccountDeleted
+  recovery_action: escalate
+  disruption_level: inlineCard
   dart_const: accountDeleted
   go_const: ErrAccountDeleted
   user_message:
     zh: 账号已注销或进入删除流程，请更换手机号登录
     en: This account has been deleted or is being deleted
 - code: USER.AUTH.token_stale
-  kind: AUTH
   reason: token_stale
   emitted_by:
   - surface: http
@@ -488,17 +443,14 @@ errors:
     - user.user_settings.UpdateNotificationSettings
     - user.user_settings.UpdatePrivacySettings
   http_status: 401
-  recovery:
-    action: surface
-    disruptionLevel: inlineCard
-  l10n_key: userAuthTokenStale
+  recovery_action: surface
+  disruption_level: inlineCard
   dart_const: tokenStale
   go_const: ErrTokenStale
   user_message:
     zh: 登录凭据已失效，请重新登录
     en: This session is no longer valid. Please sign in again
 - code: USER.AUTH.account_security_unavailable
-  kind: AUTH
   reason: account_security_unavailable
   emitted_by:
   - surface: http
@@ -572,13 +524,24 @@ errors:
     - user.user_settings.UpdateNotificationSettings
     - user.user_settings.UpdatePrivacySettings
   http_status: 503
-  recovery:
-    action: retry
-    disruptionLevel: inlineCard
-    afterSeconds: 3
-  l10n_key: userAuthAccountSecurityUnavailable
+  recovery_action: retry
+  recovery_after_seconds: 3
+  disruption_level: inlineCard
   dart_const: accountSecurityUnavailable
   go_const: ErrAccountSecurityUnavailable
   user_message:
     zh: 账号安全校验暂不可用，请稍后重试
     en: Account security verification is temporarily unavailable. Please retry
+- code: USER.AUTH.mfa_required
+  reason: mfa_required
+  emitted_by:
+  - surface: control_plane
+  recovery_action: escalate
+  disruption_level: inlineCard
+  go_const: ErrMfaRequired
+  description: >-
+    运营 OIDC 凭据缺少 MFA 声明。由 runtime/auth 的 OIDC verifier 在 control-plane
+    边界产出，不出现在 App 面向用户的 HTTP operation 上，因此不绑定 operation。
+  user_message:
+    zh: 该操作需要多因子认证，请用已启用 MFA 的运营账号重新登录
+    en: This action requires multi-factor authentication; sign in with an MFA-enabled operator account

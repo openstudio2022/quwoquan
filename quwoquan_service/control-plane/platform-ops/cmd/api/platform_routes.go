@@ -3,7 +3,6 @@ package main
 import (
 	"net/http"
 	"os"
-	"strings"
 
 	rtmetrics "quwoquan_service/runtime/metrics"
 )
@@ -15,6 +14,20 @@ func newServerMux(service *platformService) *http.ServeMux {
 			panic(err)
 		}
 		service.configInstanceReports = handler
+	}
+	if service.configTopology == nil {
+		handler, err := composeConfigSnapshotTopologyHandler(service)
+		if err != nil {
+			panic(err)
+		}
+		service.configTopology = handler
+	}
+	if service.configInstanceRuntime == nil {
+		handler, err := composeConfigInstanceRuntimeHandler(service)
+		if err != nil {
+			panic(err)
+		}
+		service.configInstanceRuntime = handler
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -37,46 +50,25 @@ func newServerMux(service *platformService) *http.ServeMux {
 	mux.Handle("/metrics", rtmetrics.Handler())
 	mux.HandleFunc("/readyz/config-convergence", service.handleConfigAckConvergence)
 	mux.HandleFunc("/control-plane/platform/catalog/services", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			writeRuntimeNotFound(w, r)
-			return
-		}
-		service.handleListServiceCatalog(w, r)
+		service.configTopology.ServeHTTP(w, r)
 	})
 	mux.HandleFunc("/control-plane/platform/topology/planes", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			writeRuntimeNotFound(w, r)
-			return
-		}
-		service.handleListPlaneBindings(w, r)
+		service.configTopology.ServeHTTP(w, r)
+	})
+	mux.HandleFunc("/control-plane/platform/topology/prod-plane-access-isolation", func(w http.ResponseWriter, r *http.Request) {
+		service.configTopology.ServeHTTP(w, r)
 	})
 	mux.HandleFunc("/control-plane/platform/topology/environments", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			writeRuntimeNotFound(w, r)
-			return
-		}
-		service.handleListEnvironmentTopologies(w, r)
+		service.configTopology.ServeHTTP(w, r)
 	})
 	mux.HandleFunc("/control-plane/platform/topology/clusters", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			writeRuntimeNotFound(w, r)
-			return
-		}
-		service.handleListRuntimeClusters(w, r)
+		service.configTopology.ServeHTTP(w, r)
 	})
 	mux.HandleFunc("/control-plane/platform/topology/services", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			writeRuntimeNotFound(w, r)
-			return
-		}
-		service.handleListRuntimeServices(w, r)
+		service.configInstanceRuntime.ServeHTTP(w, r)
 	})
 	mux.HandleFunc("/control-plane/platform/topology/instances", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			writeRuntimeNotFound(w, r)
-			return
-		}
-		service.handleListRuntimeInstances(w, r)
+		service.configInstanceRuntime.ServeHTTP(w, r)
 	})
 	mux.HandleFunc("/control-plane/platform/configs", func(w http.ResponseWriter, r *http.Request) {
 		service.configLayers.ServeHTTP(w, r)
@@ -100,77 +92,31 @@ func newServerMux(service *platformService) *http.ServeMux {
 		service.configInstanceReports.ServeHTTP(w, r)
 	})
 	mux.HandleFunc("/control-plane/platform/alerts/ingest", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			writeRuntimeNotFound(w, r)
-			return
-		}
-		service.handleIngestAlertmanagerWebhook(w, r)
+		service.configInstanceRuntime.ServeHTTP(w, r)
 	})
 	mux.HandleFunc("/control-plane/platform/alerts/active", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			writeRuntimeNotFound(w, r)
-			return
-		}
-		service.handleListActiveAlerts(w, r)
+		service.configInstanceRuntime.ServeHTTP(w, r)
 	})
 	mux.HandleFunc("/control-plane/platform/alerts/", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, ":ack") {
-			writeRuntimeNotFound(w, r)
-			return
-		}
-		service.handleAckAlert(w, r)
+		service.configInstanceRuntime.ServeHTTP(w, r)
 	})
 	mux.HandleFunc("/control-plane/platform/audits", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			writeRuntimeNotFound(w, r)
-			return
-		}
-		items, err := service.store.ListAudits()
-		if err != nil {
-			writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"items": items})
+		service.configInstanceRuntime.ServeHTTP(w, r)
 	})
 	mux.HandleFunc("/control-plane/platform/approvals", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			writeRuntimeNotFound(w, r)
-			return
-		}
-		items, err := service.store.ListAllApprovals()
-		if err != nil {
-			writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"items": items})
+		service.configInstanceRuntime.ServeHTTP(w, r)
 	})
 	mux.HandleFunc("/control-plane/platform/projections/summary", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			writeRuntimeNotFound(w, r)
-			return
-		}
-		service.handleProjectionSummary(w, r)
+		service.configInstanceRuntime.ServeHTTP(w, r)
 	})
 	mux.HandleFunc("/control-plane/platform/triage/summary", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			writeRuntimeNotFound(w, r)
-			return
-		}
-		service.handleGetTriageSummary(w, r)
+		service.configInstanceRuntime.ServeHTTP(w, r)
 	})
 	mux.HandleFunc("/control-plane/platform/releases", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			writeRuntimeError(w, r, http.StatusMethodNotAllowed, "请求处理失败", "only GET")
-			return
-		}
-		service.handleListReleases(w, r, r.URL.Query().Get("service"))
+		service.configInstanceRuntime.ServeHTTP(w, r)
 	})
 	mux.HandleFunc("/control-plane/platform/rollout/routing-policy", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			writeRuntimeNotFound(w, r)
-			return
-		}
-		service.handleGetGrayRoutingPolicy(w, r)
+		service.configTopology.ServeHTTP(w, r)
 	})
 	return mux
 }

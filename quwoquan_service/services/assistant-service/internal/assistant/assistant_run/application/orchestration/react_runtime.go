@@ -280,6 +280,10 @@ func (r ReactRuntime) RunWithFinalTextSink(
 			return ReactResult{}, err
 		}
 		stepInteractions := collectModelInteraction(reasoningResp)
+		contextState.ModelHistory = appendModelHistory(
+			contextState.ModelHistory,
+			stepInteractions,
+		)
 		usage[fmt.Sprintf("reasoning_%d", iteration)] = reasoningResp.Usage
 		finalReasoningText = reasoning
 		finalModelDelta = reasoningResp.Text
@@ -794,7 +798,12 @@ func (r ReactRuntime) RunWithFinalTextSink(
 			return ReactResult{}, err
 		}
 		usage[fmt.Sprintf("evidence_%d", iteration)] = evidenceResp.Usage
-		stepInteractions = append(stepInteractions, collectModelInteraction(evidenceResp)...)
+		evidenceInteractions := collectModelInteraction(evidenceResp)
+		stepInteractions = append(stepInteractions, evidenceInteractions...)
+		contextState.ModelHistory = appendModelHistory(
+			contextState.ModelHistory,
+			evidenceInteractions,
+		)
 		remainingBudget := react.Budget{
 			MaxIterations: budget.MaxIterations - iteration,
 			MaxToolCalls:  budget.MaxToolCalls - len(toolHistory),
@@ -936,6 +945,13 @@ func (r ReactRuntime) RunWithFinalTextSink(
 		}
 	}
 	usage["final"] = finalResp.Usage
+	contextState.ModelHistory = appendModelHistory(
+		contextState.ModelHistory,
+		collectModelInteraction(finalResp),
+	)
+	if err := runruntime.PersistContextProgress(ctx, contextState); err != nil {
+		return ReactResult{}, err
+	}
 	toolExecution := ToolExecution{}
 	if len(stepsOut) > 0 {
 		toolExecution = stepsOut[len(stepsOut)-1].Tool
@@ -952,6 +968,19 @@ func (r ReactRuntime) RunWithFinalTextSink(
 		StopReason:       stopReason,
 		FinalClientTrace: finalResp.ClientModelInteraction,
 	}, nil
+}
+
+func appendModelHistory(
+	history []string,
+	interactions []map[string]any,
+) []string {
+	for _, interaction := range interactions {
+		modelID := strings.TrimSpace(stringValue(interaction["modelId"]))
+		if modelID != "" {
+			history = append(history, modelID)
+		}
+	}
+	return history
 }
 
 func plannedToolStepID(steps []react.PlanStep, toolName string) string {
@@ -1059,6 +1088,10 @@ func (r ReactRuntime) compactContext(
 	if transformed := hookString(postCompact.Data, "summaryText"); transformed != "" {
 		summaryText = transformed
 	}
+	state.ModelHistory = appendModelHistory(
+		state.ModelHistory,
+		collectModelInteraction(response),
+	)
 	if _, err := runruntime.CommitContextCompaction(
 		ctx,
 		state,

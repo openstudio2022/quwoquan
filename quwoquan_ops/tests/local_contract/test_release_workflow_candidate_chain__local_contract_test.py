@@ -65,6 +65,15 @@ class ServiceReleaseImagePlanTest(unittest.TestCase):
         self.assertEqual(affected, ALL_SERVICES)
         self.assertTrue(reasons[0].startswith("shared-change:"))
 
+    def test_retired_travel_service_is_never_an_image_candidate(self) -> None:
+        self.assertNotIn("travel-service", ALL_SERVICES)
+
+        affected, _ = affected_services(
+            ["specs/feature-tree/travel-journey/spec.md"]
+        )
+
+        self.assertEqual(affected, frozenset({"circle-service"}))
+
     def test_service_contract_change_expands_to_every_consumer(self) -> None:
         affected, reasons = affected_services(
             ["quwoquan_service/services/chat-service/contracts/message.yaml"]

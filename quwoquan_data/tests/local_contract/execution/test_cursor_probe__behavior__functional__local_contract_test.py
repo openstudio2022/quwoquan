@@ -6,15 +6,15 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
-from core import cursor_startup_probe as pr
 from core import cursor_startup_cache as cache
+from core import cursor_startup_probe_suite as pr
 from core import cursor_workspace_probe as workspace_probe
 from content.execution.preflight import handler as preflight_handler
 
 
 def test_cursor_sdk_dependency_pin_matches_repaired_runtime() -> None:
     data_root = Path(__file__).resolve().parents[3]
-    requirements = data_root / "requirements.txt"
+    requirements = data_root / "requirements-cursor.txt"
     pins = {
         line.strip()
         for line in requirements.read_text(encoding="utf-8").splitlines()
@@ -22,6 +22,10 @@ def test_cursor_sdk_dependency_pin_matches_repaired_runtime() -> None:
     }
 
     assert "cursor-sdk==1.0.26" in pins
+    assert "-r requirements.txt" in pins
+    assert "cursor-sdk==1.0.26" not in (
+        data_root / "requirements.txt"
+    ).read_text(encoding="utf-8")
     sdk_boundary = "\n".join(
         path.read_text(encoding="utf-8")
         for path in (
@@ -248,9 +252,14 @@ def test_cursor_startup_timeout_is_not_counted_as_true_5xx(monkeypatch):
     assert "startup timeout rate" in joined.casefold()
 
 
-def test_cursor_probe_cli_writes_report(monkeypatch, tmp_path, capsys):
+def test_semantic_agent_probe_handler_writes_provider_report(
+    monkeypatch,
+    tmp_path,
+    capsys,
+):
     report = {
-        "schema": "quwoquan_data.cursor_startup_probe_suite",
+        "schema": "quwoquan_data.semantic_agent_startup_probe_suite",
+        "provider": "codex_sdk",
         "attempts": 2,
         "successCount": 2,
         "authFailures": 0,
@@ -260,10 +269,14 @@ def test_cursor_probe_cli_writes_report(monkeypatch, tmp_path, capsys):
         "ready": True,
         "issues": [],
     }
-    monkeypatch.setattr(preflight_handler, "cursor_startup_probe_suite", lambda **_kwargs: dict(report))
-    out = tmp_path / "cursor_probe.json"
+    monkeypatch.setattr(
+        preflight_handler,
+        "semantic_agent_probe_suite",
+        lambda **_kwargs: dict(report),
+    )
+    out = tmp_path / "semantic_agent_probe.json"
 
-    preflight_handler.handle_cursor_probe(
+    preflight_handler.handle_semantic_agent_probe(
         argparse.Namespace(
             model="composer",
             runtime="local",
@@ -277,4 +290,4 @@ def test_cursor_probe_cli_writes_report(monkeypatch, tmp_path, capsys):
 
     assert json.loads(out.read_text(encoding="utf-8"))["ready"] is True
     printed = capsys.readouterr().out
-    assert "[env cursor-probe] READY" in printed
+    assert "[env semantic-agent-probe] READY" in printed

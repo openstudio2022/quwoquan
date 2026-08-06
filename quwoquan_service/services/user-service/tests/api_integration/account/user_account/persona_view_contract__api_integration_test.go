@@ -1,3 +1,9 @@
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-profile-subject-and-visibility/spec.md#gwt-001
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/social-graph-read/spec.md#gwt-001
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/profile-read-update/spec.md#gwt-001
+// readiness_case: get-persona-profile-api
+// readiness_case: get-me-profile-api
+// readiness_case: search-social-relations-api
 package api_integration
 
 import (

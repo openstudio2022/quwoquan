@@ -1,10 +1,7 @@
 events:
 - name: TagFeedbackRecorded
-  producer: tag-service
-  consumers:
-  - recommendation-service
-  channel: redis_stream
-  stream: events.tag.feedback
+  delivery_semantics: durable_stream
+  topic: events.tag.feedback
   payload_entity: TagFeedbackFact
   payload_fields:
   - id

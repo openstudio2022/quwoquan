@@ -1,16 +1,15 @@
 """Bounded crawl of one registry-admitted public article site."""
 from __future__ import annotations
 
+import hashlib
+import json
+import urllib.parse
+import urllib.robotparser
 from collections import deque
 from collections.abc import Mapping
 from dataclasses import dataclass
-from html import unescape
-from html.parser import HTMLParser
-import hashlib
-import json
-import re
-import urllib.parse
-import urllib.robotparser
+
+from core.data_issue import DataIssue
 
 from content.source.research import network_io
 from content.source.research.article_frontier_contract import (
@@ -35,12 +34,11 @@ from content.source.research.article_frontier_robots import (
     robots_for_url,
     shared_rate_limiter,
 )
+from content.source.research.article_site_page import PageParser, sitemap_urls
 from content.source.research.text_match import (
     _text_mentions_entity,
     _title_matches_entity,
 )
-from core.data_issue import DataIssue
-
 
 LOGIN_WALL_MARKERS = (
     "请先登录",
@@ -58,97 +56,6 @@ LOGIN_WALL_MARKERS = (
 class SiteCrawlResult:
     evidence: ArticleSiteDiscoveryEvidence
     candidates: tuple[ArticleSourceCandidate, ...]
-
-
-class PageParser(HTMLParser):
-    def __init__(self, base_url: str) -> None:
-        super().__init__()
-        self.base_url = base_url
-        self.title_parts: list[str] = []
-        self.text_parts: list[str] = []
-        self.links: list[PublicSearchResult] = []
-        self.canonical_url = ""
-        self._in_title = False
-        self._active_link = ""
-        self._active_link_text: list[str] = []
-        self._suppressed_depth = 0
-
-    def handle_starttag(
-        self,
-        tag: str,
-        attrs: list[tuple[str, str | None]],
-    ) -> None:
-        if tag in {"script", "style", "noscript", "template"}:
-            self._suppressed_depth += 1
-            return
-        if self._suppressed_depth:
-            return
-        attributes = dict(attrs)
-        if tag == "title":
-            self._in_title = True
-        if tag == "link":
-            rel = {
-                value.casefold()
-                for value in str(attributes.get("rel") or "").split()
-            }
-            href = str(attributes.get("href") or "").strip()
-            if "canonical" in rel and href and not self.canonical_url:
-                self.canonical_url = urllib.parse.urljoin(self.base_url, href)
-        if tag == "a" and not self._active_link:
-            href = str(attributes.get("href") or "").strip()
-            if href:
-                self._active_link = urllib.parse.urljoin(self.base_url, href)
-                self._active_link_text = []
-
-    def handle_data(self, data: str) -> None:
-        if self._suppressed_depth:
-            return
-        value = " ".join(str(data or "").split())
-        if not value:
-            return
-        if self._in_title:
-            self.title_parts.append(value)
-        if self._active_link:
-            self._active_link_text.append(value)
-        if len(self.text_parts) < 1200:
-            self.text_parts.append(value)
-
-    def handle_endtag(self, tag: str) -> None:
-        if (
-            tag in {"script", "style", "noscript", "template"}
-            and self._suppressed_depth
-        ):
-            self._suppressed_depth -= 1
-            return
-        if self._suppressed_depth:
-            return
-        if tag == "title":
-            self._in_title = False
-        if tag == "a" and self._active_link:
-            title = " ".join(self._active_link_text).strip()
-            self.links.append(
-                PublicSearchResult(title=title, url=self._active_link)
-            )
-            self._active_link = ""
-            self._active_link_text = []
-
-    @property
-    def title(self) -> str:
-        return " ".join(self.title_parts).strip()
-
-    @property
-    def text(self) -> str:
-        return " ".join(self.text_parts)[:30000]
-
-
-def sitemap_urls(body: bytes) -> tuple[str, ...]:
-    text = body.decode("utf-8", errors="replace")
-    urls: list[str] = []
-    for value in re.findall(r"(?is)<loc>\s*(.*?)\s*</loc>", text):
-        canonical = canonicalize_article_url(unescape(value.strip()))
-        if canonical and canonical not in urls:
-            urls.append(canonical)
-    return tuple(urls)
 
 
 def page_relevance(
@@ -170,6 +77,32 @@ def page_relevance(
     if not entity_hit:
         return False, 0.2 if topic_hit else 0.0
     return True, 0.99 if topic_hit else 0.94
+
+
+def _has_structural_entity_anchor(
+    links: tuple[PublicSearchResult, ...] | list[PublicSearchResult],
+    aliases: tuple[str, ...],
+) -> bool:
+    """Require an exact page/link anchor for related MediaWiki search hits.
+
+    MediaWiki full-text search may return unrelated compounds such as
+    ``良乌镇`` for the entity ``乌镇``.  A related guide page is admissible only
+    when its rendered document links to the exact entity (or the page title
+    itself already matches, checked by the caller).
+    """
+    for link in links:
+        parsed = urllib.parse.urlsplit(link.url)
+        linked_title = ""
+        if "/wiki/" in parsed.path:
+            linked_title = urllib.parse.unquote(
+                parsed.path.split("/wiki/", 1)[1].split("#", 1)[0]
+            ).replace("_", " ")
+        for alias in aliases:
+            if _title_matches_entity(link.title, alias) or _title_matches_entity(
+                linked_title, alias
+            ):
+                return True
+    return False
 
 
 def _record(
@@ -497,6 +430,15 @@ def crawl_article_site(
             aliases=aliases,
             topics=topics,
         )
+        if (
+            relevant
+            and str(profile.get("fetchMode") or "") == "mediawiki_api"
+            and item.discovery_method == "mediawiki_api_search"
+            and not any(_title_matches_entity(title, alias) for alias in aliases)
+            and not _has_structural_entity_anchor(parser.links, aliases)
+        ):
+            relevant = False
+            relevance_score = 0.0
         if not relevant:
             records.append(
                 _record(

@@ -1,0 +1,25 @@
+read_model: LocationRoute
+description: integration/external_integration/location 路线读取 API 的 provider 无关 canonical 视图。
+source_entities:
+- LocationRoute
+consumers:
+- app (route reading)
+fields:
+- name: routeRef
+  type: string
+- name: originLatitude
+  type: double
+- name: originLongitude
+  type: double
+- name: destinationLatitude
+  type: double
+- name: destinationLongitude
+  type: double
+- name: encodedPolyline
+  type: string
+- name: durationSeconds
+  type: int
+- name: distanceMeters
+  type: int
+- name: travelMode
+  type: string

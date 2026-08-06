@@ -9,6 +9,7 @@ import re
 import sys
 from collections import defaultdict
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
 
 import yaml
@@ -174,7 +175,7 @@ RUNTIME_ERROR_SINGLE_TRACK_PATHS = frozenset(
     {
         "quwoquan_service/contracts/metadata/_shared/openapi_common.yaml",
         "quwoquan_service/runtime/errors/errors.go",
-        "quwoquan_app/lib/cloud/runtime/errors/cloud_error_mapper.dart",
+        "quwoquan_app/lib/runtime/errors/cloud_error_mapper.dart",
     }
 )
 # 已完成字段切换的领域身份。字段名本身在外部 Provider、聚合并发修订、
@@ -239,6 +240,9 @@ RETIRED_MOCK_EXPERIMENT_RUNTIME = re.compile(
 RETIRED_CREATE_ROUTE_EXTRA = re.compile(
     r"state\.extra\s+is\s+HomepageCanonicalReference"
 )
+APP_ROUTER_SINGLE_TRACK_PATH = (
+    "quwoquan_app/lib/runtime/di/navigation/app_router.dart"
+)
 # client_state_sync 的同步事实只由队列记录状态表达；needsRemoteSync 是从
 # 旧 guard shape 派生出的第二真相，业务源码不得重新引入。
 RETIRED_CLIENT_STATE_SYNC_DERIVED_FIELD = re.compile(r"\bneedsRemoteSync\b")
@@ -252,9 +256,9 @@ RETIRED_GROUP_AVATAR_LAYOUT = re.compile(
 FORBIDDEN_APP_REMOTE_CONFIG_PACKAGE_VERSION = re.compile(r"\bpackageVersion\b")
 APP_REMOTE_CONFIG_SINGLE_IDENTITY_PATHS = frozenset(
     {
-        "quwoquan_app/lib/cloud/runtime/models/app_remote_config_snapshot.dart",
-        "quwoquan_app/lib/core/providers/app_providers_content_runtime.dart",
-        "quwoquan_app/lib/core/providers/app_providers_content_runtime_defaults.dart",
+        "quwoquan_app/lib/runtime/config/app_remote_config_snapshot.dart",
+        "quwoquan_app/lib/runtime/di/app_providers_content_runtime.dart",
+        "quwoquan_app/lib/runtime/di/app_providers_content_runtime_defaults.dart",
         "quwoquan_service/services/content-service/internal/content/post/application/post_service_config_search.go",
     }
 )
@@ -271,6 +275,7 @@ CUSTOM_CONTROL_VERSION_FIELDS = frozenset(
 ALIASES_LINE = re.compile(r"^\s+aliases\s*:")
 CONTRACT_COMPAT_ALIAS = re.compile(r"兼容别名|兼容字段别名|旧字段别名", re.I)
 SKIP_EMPTY_ALIASES = re.compile(r"^\s+skip_empty_string_aliases\s*:")
+SOURCE_KEYS_ALIAS_LINE = re.compile(r"^[ \t]*source_keys[ \t]*:", re.MULTILINE)
 AUTH_REQUIRED_LINE = re.compile(r"^\s+auth_required\s*:")
 OPTIONAL_ALIAS_HELPER = re.compile(r"_optionalAliasText|_requiredAliasText")
 MAP_LIST_FIRST_PRESENT = re.compile(r"mapListFirstPresent\s*\(")
@@ -349,6 +354,9 @@ PUBLIC_USER_MODEL_RETIRED_PATTERNS = (
     re.compile(r"\bthis\.avatar\b"),
     re.compile(r"\bjson\s*\[\s*['\"]avatar['\"]\s*\]"),
     re.compile(r"['\"]avatar['\"]\s*:"),
+)
+PUBLIC_USER_MODEL_SINGLE_TRACK_ROOT = (
+    "quwoquan_app/lib/service/user_service/"
 )
 NEGATIVE_ID_TEST_LINE = re.compile(
     r"reject|拒绝|forbidden|不得|must not|只认|isEmpty|equals\(\s*''\s*\)|期望.*空",
@@ -707,18 +715,182 @@ def _is_external_provider_path(rel: str) -> bool:
     )
 
 
-def _retired_domain_identity_applies(
-    scope: str,
-    rel: str,
-    lines: list[str],
-    line_number: int,
-) -> bool:
-    """Match retired fields only inside the first-party object that retired them."""
+#: scope -> ContractGraph 对象 id。归属只认 ContractGraph 声明，不维护第二份台账；
+#: 对象不存在时 `_scope_object_segments` 会直接抛错，禁止悄悄退化成永不命中。
+RETIRED_DOMAIN_IDENTITY_OBJECTS = {
+    "assistant_policy_release": "assistant.assistant_policy_release",
+    "product_ops_experiment_assignment": "ops.experiment_assignment_fact",
+    "assistant_learning_fact": "assistant.assistant_learning_fact",
+}
+CONTRACT_GRAPH_PATH = ROOT / "quwoquan_service/generated/contract_graph.json"
+#: 对象 contracts 源目录的物理布局。`object.yaml` 的父目录是对象，祖父目录是
+#: bounded context，与 ContractGraph `sourcePath` 的 `<domain>/<context>/<object>`
+#: 是同一条布局不变量。这里用固定根（导入时求值），测试替换 `ROOT` 时不受影响。
+CONTRACT_OBJECT_DIR_GLOBS = (
+    "services/*/contracts/*/*/object.yaml",
+    "control-plane/*/contracts/*/*/object.yaml",
+    "contracts/metadata/*/*/object.yaml",
+)
+CONTRACT_OBJECT_SOURCE_ROOT = ROOT / "quwoquan_service"
+#: `recommendation_content_identity` 收口后的 canonical 单轨身份字段。模型与特征
+#: 身份只由 `modelReleaseId` + `featureContractDigest` 表达，`modelVersion` /
+#: `featureVersion` / `featureContractVersion` 是被它们取代的第二轨。
+#: 谁在自己的 contracts 里声明了 canonical 身份，谁就承载这条身份，也就落在
+#: 单轨范围内——这是从 contracts 结构派生的归属事实。
+RECOMMENDATION_CANONICAL_IDENTITY_FIELDS = frozenset(
+    {"modelReleaseId", "featureContractDigest"}
+)
+#: YAML 里承载自然语言、与标识符恒不相等的键；解析后按值排除，避免把散文当声明。
+CONTRACT_PROSE_KEYS = frozenset(
+    {"description", "doc", "summary", "note", "notes", "rationale", "reason"}
+)
+
+
+@lru_cache(maxsize=1)
+def _contract_graph_object_segments() -> dict[str, tuple[str, str]]:
+    """对象 id -> (bounded context, 对象目录名)，来自 ContractGraph `sourcePath`。
+
+    `sourcePath` 形如 `<domain>/<context>/<object>/object.yaml`；contracts、internal、
+    tests 与端侧目标形态四种物理布局都把 `<context>/<object>` 作为连续目录段，
+    这与 `object_path_map.derive_cloud_source_identity` /
+    `derive_app_target_shape_identity` 编码的是同一条布局不变量。
+    """
+    try:
+        payload = json.loads(CONTRACT_GRAPH_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise SystemExit(f"[single-track] 无法读取 ContractGraph: {error}") from error
+    segments: dict[str, tuple[str, str]] = {}
+    for record in payload.get("objects", []):
+        source_path = str(record.get("sourcePath", ""))
+        parts = source_path.split("/")
+        if len(parts) < 4:
+            continue
+        segments[str(record.get("id", ""))] = (parts[1], parts[2])
+    return segments
+
+
+def _scope_object_segments(scope: str) -> tuple[str, str]:
+    object_id = RETIRED_DOMAIN_IDENTITY_OBJECTS[scope]
+    segments = _contract_graph_object_segments().get(object_id)
+    if segments is None:
+        raise SystemExit(
+            f"[single-track] scope {scope!r} 声明的对象 {object_id!r} 不在 ContractGraph 中；"
+            "先修对象归属，不要让门禁静默失效"
+        )
+    return segments
+
+
+def _path_owns_segments(rel: str, segments: tuple[str, str]) -> bool:
+    context, object_name = segments
+    parts = rel.split("/")
+    return any(
+        parts[index] == context and parts[index + 1] == object_name
+        for index in range(len(parts) - 1)
+    )
+
+
+def _path_owns_object(rel: str, scope: str) -> bool:
+    """文件是否落在该对象自己的领地内，由 ContractGraph 归属判定，不看上下文文本。"""
+    return _path_owns_segments(rel, _scope_object_segments(scope))
+
+
+@lru_cache(maxsize=1)
+def _contract_object_source_dirs() -> dict[tuple[str, str], Path]:
+    """(bounded context, 对象目录名) -> 该对象 contracts 源目录。"""
+    dirs: dict[tuple[str, str], Path] = {}
+    for pattern in CONTRACT_OBJECT_DIR_GLOBS:
+        for object_yaml in CONTRACT_OBJECT_SOURCE_ROOT.glob(pattern):
+            directory = object_yaml.parent
+            dirs[(directory.parent.name, directory.name)] = directory
+    return dirs
+
+
+def _yaml_declared_identifiers(node: object) -> set[str]:
+    """YAML 文档里作为「声明」出现的标识符：映射键、非散文标量、列表项标量。
+
+    输入是 `yaml.safe_load` 的解析结果，注释在这一步已经不存在，因此注释里的
+    否认句、示例和 prose 都无法冒充声明。散文键（description 等）的值按键名排除。
+    """
+    declared: set[str] = set()
+    if isinstance(node, dict):
+        for raw_key, child in node.items():
+            key = str(raw_key)
+            declared.add(key)
+            if key in CONTRACT_PROSE_KEYS:
+                continue
+            declared |= _yaml_declared_identifiers(child)
+    elif isinstance(node, list):
+        for child in node:
+            declared |= _yaml_declared_identifiers(child)
+    elif isinstance(node, str):
+        declared.add(node)
+    return declared
+
+
+def _object_declares_identifiers(directory: Path, wanted: frozenset[str]) -> bool:
+    for contract_yaml in sorted(directory.rglob("*.yaml")):
+        try:
+            raw = contract_yaml.read_text(encoding="utf-8")
+        except OSError as error:
+            raise SystemExit(
+                f"[single-track] 无法读取对象契约 {contract_yaml}: {error}"
+            ) from error
+        # 纯性能预筛：字节里根本没有该标识符时，解析后也不可能有该节点。
+        # 判定本身仍由下面的解析结果给出，出现在注释里不算声明。
+        if not any(name in raw for name in wanted):
+            continue
+        try:
+            document = yaml.safe_load(raw)
+        except yaml.YAMLError as error:
+            raise SystemExit(
+                f"[single-track] 无法解析对象契约 {contract_yaml}: {error}"
+            ) from error
+        if _yaml_declared_identifiers(document) & wanted:
+            return True
+    return False
+
+
+@lru_cache(maxsize=1)
+def _recommendation_identity_object_segments() -> tuple[tuple[str, str], ...]:
+    """承载 recommendation canonical 模型身份的全部对象领地。
+
+    归属由两个结构事实合成，都不依赖命中行附近的自由文本：
+
+    1. ContractGraph 声明了哪些对象、以及每个对象的 `<context>/<object>` 布局；
+    2. 对象自己的 `contracts/**.yaml` 是否在解析后的键/标量位置声明了
+       `modelReleaseId` 或 `featureContractDigest`。
+
+    这样一来，新对象一旦承载 canonical 身份就自动进入范围，跨服务消费者
+    （如 content.feed_delivery_page）也不再依赖「附近有没有提到推荐对象名」。
+    """
+    dirs = _contract_object_source_dirs()
+    segments: set[tuple[str, str]] = set()
+    for object_segments in _contract_graph_object_segments().values():
+        directory = dirs.get(object_segments)
+        if directory is None:
+            continue
+        if _object_declares_identifiers(
+            directory,
+            RECOMMENDATION_CANONICAL_IDENTITY_FIELDS,
+        ):
+            segments.add(object_segments)
+    if not segments:
+        raise SystemExit(
+            "[single-track] 没有任何 ContractGraph 对象声明 "
+            f"{sorted(RECOMMENDATION_CANONICAL_IDENTITY_FIELDS)}；"
+            "recommendation 单轨身份的归属已失真，先修契约，"
+            "不要让门禁静默退化成永不命中"
+        )
+    return tuple(sorted(segments))
+
+
+def _retired_domain_identity_applies(scope: str, rel: str) -> bool:
+    """Match retired fields only inside the first-party object that retired them.
+
+    归属只由文件位置与 contracts 结构决定；命中行附近写了什么与判定无关。
+    """
     if _is_external_provider_path(rel):
         return False
-    start = max(0, line_number - 16)
-    end = min(len(lines), line_number + 16)
-    context = "\n".join(lines[start:end]).lower()
     rel_lower = rel.lower()
 
     if scope == "assistant_policy_release":
@@ -733,8 +905,7 @@ def _retired_domain_identity_applies(
                 rel_lower.startswith("quwoquan_app/")
                 and "/assistant/" in rel_lower
             )
-            or "assistantpolicyrelease" in context
-            or "assistant_policy_release" in context
+            or _path_owns_object(rel, scope)
         )
     if scope == "product_ops_experiment_assignment":
         return (
@@ -744,8 +915,7 @@ def _retired_domain_identity_applies(
             or rel_lower.startswith(
                 "specs/feature-tree/product-operations/"
             )
-            or "experimentassignmentfact" in context
-            or "experiment_assignment_fact" in context
+            or _path_owns_object(rel, scope)
         )
     if scope == "recommendation_content_identity":
         return (
@@ -763,11 +933,13 @@ def _retired_domain_identity_applies(
                 and "recommend" in rel_lower
             )
             or rel_lower.endswith("/l3_rec_model.json")
-            or "recommendationmodelexposure" in context
-            or "recommendationexposurefact" in context
-            or "recommendationmodelrelease" in context
-            or "recommendation_model_release" in context
-            or "rankedfeedwindow" in context
+            # 本 scope 没有单一权威对象，但它有单一权威身份：承载 canonical
+            # `modelReleaseId` / `featureContractDigest` 的对象集合。归属因此从
+            # contracts 结构派生，而不是看命中行附近提到了哪个名字。
+            or any(
+                _path_owns_segments(rel, segments)
+                for segments in _recommendation_identity_object_segments()
+            )
         )
     if scope == "assistant_learning_fact":
         return (
@@ -777,8 +949,7 @@ def _retired_domain_identity_applies(
                 "specs/feature-tree/assistant-run-learning/"
                 "learning-event-feedback-injection/"
             )
-            or "assistantlearningfact" in context
-            or "assistant_learning_fact" in context
+            or _path_owns_object(rel, scope)
         )
     return False
 
@@ -805,6 +976,19 @@ def scan_file(path: Path, inv: Inventory) -> None:
         return
     lines = text.splitlines()
     in_custom_control = is_custom_control_document(path)
+
+    # Contract fields have one canonical source. ``source_keys`` encodes an
+    # ordered fallback list and therefore revives wire dual-read even when the
+    # runtime decoder is generated later. Storage/BSON aliases belong in the
+    # persistence adapter, never in an App/API projection contract.
+    if is_contract_yaml(path):
+        for match in SOURCE_KEYS_ALIAS_LINE.finditer(text):
+            line_number = text.count("\n", 0, match.start()) + 1
+            inv.add(
+                "T1_contract_source_keys_alias",
+                path,
+                f"L{line_number}: source_keys is forbidden; declare one canonical source",
+            )
 
     for identity_name, pattern, canonical in FROZEN_IDENTITY_PATTERNS:
         for match in pattern.finditer(text):
@@ -871,7 +1055,7 @@ def scan_file(path: Path, inv: Inventory) -> None:
             if _is_rejection_context(lines, line_number):
                 continue
             inv.add(
-                "T3_runtime_error_message_alias",
+                "runtime_error_message_alias",
                 path,
                 f"L{line_number}: {match.group(0).strip()}",
             )
@@ -885,12 +1069,7 @@ def scan_file(path: Path, inv: Inventory) -> None:
                 continue
             if _is_rejection_context(lines, line_number):
                 continue
-            if not _retired_domain_identity_applies(
-                scope,
-                rel,
-                lines,
-                line_number,
-            ):
+            if not _retired_domain_identity_applies(scope, rel):
                 continue
             retired_domain_lines.add(key)
             inv.add(
@@ -943,11 +1122,11 @@ def scan_file(path: Path, inv: Inventory) -> None:
                 f"L{line_number}: {match.group(0)}",
             )
 
-    if rel == "quwoquan_app/lib/app/navigation/app_router.dart":
+    if rel == APP_ROUTER_SINGLE_TRACK_PATH:
         for match in RETIRED_CREATE_ROUTE_EXTRA.finditer(text):
             line_number = text.count("\n", 0, match.start()) + 1
             inv.add(
-                "T3_create_route_extra_compat",
+                "create_route_extra_compat",
                 path,
                 f"L{line_number}: {match.group(0)}",
             )
@@ -1057,7 +1236,7 @@ def scan_file(path: Path, inv: Inventory) -> None:
                 f"L{line_number}: {match.group(0)}",
             )
 
-    if rel == "quwoquan_app/lib/core/models/user_models.dart":
+    if rel.startswith(PUBLIC_USER_MODEL_SINGLE_TRACK_ROOT):
         for pattern in PUBLIC_USER_MODEL_RETIRED_PATTERNS:
             for match in pattern.finditer(text):
                 line_number = text.count("\n", 0, match.start()) + 1
@@ -1085,7 +1264,7 @@ def scan_file(path: Path, inv: Inventory) -> None:
             if in_contract and SKIP_EMPTY_ALIASES.search(line):
                 inv.add("T2_skip_empty_string_aliases", path, f"L{lineno}: {line.strip()}")
             if in_contract and AUTH_REQUIRED_LINE.search(line):
-                inv.add("T4_auth_required", path, f"L{lineno}: {line.strip()}")
+                inv.add("auth_required", path, f"L{lineno}: {line.strip()}")
             if (
                 in_contract
                 and CONTRACT_COMPAT_ALIAS.search(line)
@@ -1193,7 +1372,7 @@ def scan_file(path: Path, inv: Inventory) -> None:
         inv.add("T1_numeric_schema_identity", path, match.group(0))
 
     if OPTIONAL_ALIAS_HELPER.search(text):
-        inv.add("T3_alias_helper", path, "alias helper symbol")
+        inv.add("alias_helper", path, "alias helper symbol")
 
     # 多键解码：Dart / Go 全量（含手写 lib / generated），同标识符且键名不同才计
     if suffix in {".dart", ".go"}:
@@ -1204,13 +1383,13 @@ def scan_file(path: Path, inv: Inventory) -> None:
                 if match.group("k1") == match.group("k2"):
                     continue
                 inv.add(
-                    "T3_multi_key_decode",
+                    "multi_key_decode",
                     path,
                     f"L{lineno}: {line.strip()[:140]}",
                 )
             if MULTI_KEY_GO_TEMPLATE.search(line):
                 inv.add(
-                    "T3_multi_key_decode",
+                    "multi_key_decode",
                     path,
                     f"L{lineno}: {line.strip()[:140]}",
                 )
@@ -1237,7 +1416,7 @@ def scan_file(path: Path, inv: Inventory) -> None:
     ):
         if "/lib/" in rel.replace("\\", "/"):
             inv.add(
-                "T3_map_list_first_present",
+                "map_list_first_present",
                 path,
                 "mapListFirstPresent/mapListFirstNonEmpty forbidden in lib",
             )
@@ -1248,7 +1427,7 @@ def scan_file(path: Path, inv: Inventory) -> None:
                     keys = re.findall(r"'([A-Za-z0-9_]+)'", window)
                     if len(keys) >= 2:
                         inv.add(
-                            "T3_map_list_first_present",
+                            "map_list_first_present",
                             path,
                             f"L{lineno}: multi-key {keys}",
                         )
@@ -1271,7 +1450,7 @@ def scan_file(path: Path, inv: Inventory) -> None:
             if rel.startswith(".cursor/rules/") or rel.startswith("specs/"):
                 # 规则清单里出现 mode=compat 等禁词本身即治理文案
                 continue
-            inv.add("T4_compat_smell", path, f"L{lineno}: {line.strip()[:120]}")
+            inv.add("compat_smell", path, f"L{lineno}: {line.strip()[:120]}")
 
     # 正向 alias 测试语义
     if "test" in rel and suffix in {".dart", ".go", ".py"}:
@@ -1286,7 +1465,7 @@ def scan_file(path: Path, inv: Inventory) -> None:
                     f"L{lineno}: {line.strip()[:140]}",
                 )
 
-    # T3_wire_id_key：客户端 wire 禁止 _id JSON 键
+    # wire_id_key：客户端 wire 禁止 _id JSON 键
     if suffix == ".dart" and (
         "/lib/" in rel
         or "/packages/" in rel
@@ -1312,7 +1491,7 @@ def scan_file(path: Path, inv: Inventory) -> None:
                     line,
                 ):
                     continue
-            inv.add("T3_wire_id_key", path, f"L{lineno}: {line.strip()[:140]}")
+            inv.add("wire_id_key", path, f"L{lineno}: {line.strip()[:140]}")
 
     if suffix == ".go" and not _is_persistence_go_path(rel):
         for lineno, line in enumerate(text.splitlines(), start=1):
@@ -1325,7 +1504,7 @@ def scan_file(path: Path, inv: Inventory) -> None:
                     continue
                 if _is_elasticsearch_bulk_metadata_context(rel, lines, lineno):
                     continue
-                inv.add("T3_wire_id_key", path, f"L{lineno}: {line.strip()[:140]}")
+                inv.add("wire_id_key", path, f"L{lineno}: {line.strip()[:140]}")
                 continue
             # map 出站 "_id":
             if GO_MAP_ID_KEY.search(line) and (
@@ -1336,15 +1515,15 @@ def scan_file(path: Path, inv: Inventory) -> None:
             ):
                 if _is_test_path(rel) and NEGATIVE_ID_TEST_LINE.search(line):
                     continue
-                inv.add("T3_wire_id_key", path, f"L{lineno}: {line.strip()[:140]}")
+                inv.add("wire_id_key", path, f"L{lineno}: {line.strip()[:140]}")
 
-    # T3_multi_key_helper：_firstNonEmpty(..., '_id', ...)
+    # multi_key_helper：_firstNonEmpty(..., '_id', ...)
     if suffix in {".dart", ".go"} and MULTI_KEY_HELPER_ID.search(text):
         for lineno, line in enumerate(text.splitlines(), start=1):
             if "_firstNonEmpty" in line or "mapListFirstPresent" in line or "mapListFirstNonEmpty" in line:
                 if "'_id'" in line or '"_id"' in line:
                     inv.add(
-                        "T3_multi_key_helper",
+                        "multi_key_helper",
                         path,
                         f"L{lineno}: {line.strip()[:140]}",
                     )
@@ -1436,12 +1615,16 @@ def main() -> int:
         scan_file(path, inv)
     scan_versioned_golden_assets(inv)
 
-    out_path = Path(args.inventory_out)
+    out_path = Path(args.inventory_out).resolve()
     write_inventory(inv, out_path)
 
     total = sum(inv.counts.values())
+    try:
+        inventory_label = out_path.relative_to(ROOT).as_posix()
+    except ValueError:
+        inventory_label = str(out_path)
     print(
-        f"[single-track] inventory={out_path.relative_to(ROOT).as_posix()} "
+        f"[single-track] inventory={inventory_label} "
         f"total_findings={total}"
     )
     for key in sorted(inv.counts):

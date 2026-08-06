@@ -1,4 +1,6 @@
 // spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/domain-reader-connector-grant/spec.md#gwt-001
+// readiness_case: get-domain-reader-descriptor-api
+// readiness_case: list-domain-reader-descriptors-api
 package api_integration
 
 import (
@@ -19,13 +21,13 @@ import (
 
 func TestDomainReaderDescriptorHTTPIsTypedBoundedAndServiceOnly(t *testing.T) {
 	descriptor, err := model.NewDescriptor(model.Descriptor{
-		DescriptorID:        "travel.trip_context",
-		ResolverRef:         "trip.current_context",
-		OwnerService:        "travel-service",
-		OwnerOperationRefs:  []string{"travel.trip_timeline_view.GetTripTimeline"},
-		InputSchemaRef:      "travel.GetTripTimelineQuery",
-		OutputSchemaRef:     "assistant.TravelContextSegment",
-		ObjectTypeRefs:      []string{"travel.TripTimelineView"},
+		DescriptorID:        "circle.gathering_context",
+		ResolverRef:         "gathering.current_context",
+		OwnerService:        "circle-service",
+		OwnerOperationRefs:  []string{"circle.gathering.GetPublicGathering"},
+		InputSchemaRef:      "circle.GatheringIDQuery",
+		OutputSchemaRef:     "assistant.ContextSegment",
+		ObjectTypeRefs:      []string{"circle.Gathering"},
 		AcceptedSourceKinds: []string{"domain"},
 		Authority:           generated.AssistantContextAuthorityDomainCanonical,
 		Sensitivity:         generated.AssistantContextSensitivityInternal,
@@ -71,7 +73,7 @@ func TestDomainReaderDescriptorHTTPIsTypedBoundedAndServiceOnly(t *testing.T) {
 
 	detail := performRequest(
 		handler.Routes(),
-		"/internal/assistant/domain-readers/travel.trip_context",
+		"/internal/assistant/domain-readers/circle.gathering_context",
 		true,
 	)
 	if detail.Code != http.StatusOK {

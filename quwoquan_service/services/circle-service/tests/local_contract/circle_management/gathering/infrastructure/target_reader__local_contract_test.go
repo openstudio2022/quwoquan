@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	model "quwoquan_service/services/circle-service/internal/circle_management/gathering/domain/model"
+	contract "quwoquan_service/services/circle-service/generated/circle_management/gathering/contract/model"
 	ports "quwoquan_service/services/circle-service/internal/circle_management/gathering/domain/ports"
 	external "quwoquan_service/services/circle-service/internal/circle_management/gathering/infrastructure/external"
 )
@@ -32,8 +32,12 @@ func TestTargetReaderUsesCanonicalOwnerAndRoutePair(t *testing.T) {
 	t.Cleanup(owner.Close)
 	reader := requireTargetReader(t, owner.URL, circleReaderStub{exists: true})
 
-	err := reader.RequireNavigable(context.Background(), model.TargetRef{
-		ObjectTypeRef: "photo_spot", ObjectID: "spot/001", RouteID: "homepageDetail",
+	err := reader.RequireNavigable(context.Background(), contract.GatheringSourceRef{
+		ObjectRef: contract.CanonicalObjectRef{
+			ObjectTypeRef: "photo_spot",
+			ObjectID:      "spot/001",
+		},
+		RouteID: "homepageDetail",
 	})
 	if err != nil {
 		t.Fatalf("RequireNavigable: %v", err)
@@ -41,8 +45,12 @@ func TestTargetReaderUsesCanonicalOwnerAndRoutePair(t *testing.T) {
 	if requestedPath != "/homepages/spot%2F001" {
 		t.Fatalf("entity owner path = %q", requestedPath)
 	}
-	if err := reader.RequireNavigable(context.Background(), model.TargetRef{
-		ObjectTypeRef: "photo_spot", ObjectID: "spot-001", RouteID: "gatheringDetail",
+	if err := reader.RequireNavigable(context.Background(), contract.GatheringSourceRef{
+		ObjectRef: contract.CanonicalObjectRef{
+			ObjectTypeRef: "photo_spot",
+			ObjectID:      "spot-001",
+		},
+		RouteID: "gatheringDetail",
 	}); !errors.Is(err, ports.ErrTargetNotNavigable) {
 		t.Fatalf("non-canonical route error = %v", err)
 	}
@@ -66,8 +74,12 @@ func TestTargetReaderDistinguishesMissingTargetFromAuthorityFailure(t *testing.T
 			}))
 			t.Cleanup(owner.Close)
 			reader := requireTargetReader(t, owner.URL, circleReaderStub{exists: true})
-			err := reader.RequireNavigable(context.Background(), model.TargetRef{
-				ObjectTypeRef: "content", ObjectID: "post-001", RouteID: "workBrowser",
+			err := reader.RequireNavigable(context.Background(), contract.GatheringSourceRef{
+				ObjectRef: contract.CanonicalObjectRef{
+					ObjectTypeRef: "content",
+					ObjectID:      "post-001",
+				},
+				RouteID: "workBrowser",
 			})
 			if !errors.Is(err, current.want) {
 				t.Fatalf("error = %v, want %v", err, current.want)

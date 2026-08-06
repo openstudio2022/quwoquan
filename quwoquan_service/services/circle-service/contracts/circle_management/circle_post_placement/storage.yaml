@@ -1,6 +1,7 @@
 backend: mongodb
 collections:
   circle_post_placements:
+    publication_role: not_published
     entity: CirclePostPlacement
     role: authoritative
     indexes:
@@ -18,6 +19,7 @@ collections:
         featured: -1
         lastActiveAt: -1
   circle_post_placement_command_receipts:
+    publication_role: not_published
     entity: CirclePostPlacementCommandReceipt
     role: authoritative
     indexes:
@@ -28,8 +30,9 @@ collections:
     - name: idx_circle_post_placement_receipt_expiry
       keys:
         expiresAt: 1
-      expireAfterSeconds: 0
+      expire_after_seconds: 0
   circle_post_placement_outbox:
+    publication_role: transactional_outbox
     entity: CirclePostPlacementOutbox
     role: append_only
     indexes:
@@ -47,10 +50,12 @@ collections:
         outboxSequence: 1
       unique: true
   circle_post_placement_outbox_sequences:
+    publication_role: publication_accessory
     entity: CirclePostPlacementOutboxSequence
     role: authoritative
     description: 与 placement 事务内分配的全局单调 outbox sequence；只允许原子递增。
   circle_post_placement_projection_checkpoints:
+    publication_role: publication_accessory
     entity: CirclePostPlacementProjectionCheckpoint
     role: projection
     description: 每个外部传输或本地读模型消费者的独立 durable checkpoint。
@@ -60,6 +65,7 @@ collections:
         _id: 1
       unique: true
   circle_post_placement_projection_inbox:
+    publication_role: publication_accessory
     entity: CirclePostPlacementProjectionInbox
     role: append_only
     description: placement 计数投影的 eventId inbox，防止 checkpoint 写入前崩溃导致重复增减。
@@ -69,6 +75,7 @@ collections:
         _id: 1
       unique: true
   circle_post_owner_views:
+    publication_role: not_published
     entity: CirclePostOwnerView
     role: projection
     description: Circle 对 Content Post 的具名外部引用投影，仅保存 placement 授权所需 owner/state/version。
@@ -78,6 +85,7 @@ collections:
         state: 1
         updatedAt: -1
   circle_feed_items:
+    publication_role: not_published
     entity: CircleFeedItemView
     role: projection
     description: Content Post lifecycle typed fact 在 Circle 边界形成的本地展示投影；圈子 feed 只能读取本集合，禁止读取 Content 的 posts。
@@ -88,6 +96,7 @@ collections:
         status: 1
         updatedAt: -1
   circle_content_post_inbox:
+    publication_role: not_published
     entity: CircleContentPostInbox
     role: append_only
     description: Content Post lifecycle consumer 的 eventId 去重 inbox，与 owner view 在同一 Mongo transaction
@@ -98,6 +107,7 @@ collections:
         _id: 1
       unique: true
   circle_content_post_failures:
+    publication_role: not_published
     entity: CircleContentPostFailure
     role: append_only
     description: pending reclaim 的持久失败次数与最后错误；达到上限后写 DLQ 并清除。

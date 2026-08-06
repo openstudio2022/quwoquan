@@ -448,7 +448,7 @@ behavior_events:
   dart_method: null
   ml_signal: explicit_negative
   signal_weight: -10.0
-  notes: 'N0-3 服务端权威信号：content.report.created outbox 事实经
+  notes: 'N0-3 服务端权威信号：content.report.ReportCreated outbox 事实经
 
     ReportSignalProjector 注入负信号（HotPath 负反馈集 + 特征轨 + 学习标签）；
 

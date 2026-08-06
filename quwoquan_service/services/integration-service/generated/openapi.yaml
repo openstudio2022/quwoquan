@@ -53,6 +53,60 @@ paths:
             security:
                 - bearerAuth: []
                 - {}
+    /integration/location/route:
+        get:
+            operationId: ReadLocationRoute
+            x-contract-operation-id: integration.location.ReadLocationRoute
+            x-object-id: integration.location
+            x-actor: none
+            x-application:
+                kind: query
+                facet: LocationQueryFacade
+                method: readLocationRoute
+                reader: LocationRouteReader
+                slice: LocationRoute
+            parameters:
+                - name: originLat
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: originLng
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: destinationLat
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: destinationLng
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: travelMode
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/LocationRoute'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+                - {}
     /integration/location/search:
         get:
             operationId: SearchLocations
@@ -467,8 +521,8 @@ paths:
                         schema:
                             $ref: '#/components/schemas/ExternalInteractionRequest'
             responses:
-                "200":
-                    description: OK
+                "202":
+                    description: Accepted
                     content:
                         application/json:
                             schema:
@@ -605,8 +659,8 @@ paths:
                         schema:
                             $ref: '#/components/schemas/ExternalInteractionRecoverRequest'
             responses:
-                "200":
-                    description: OK
+                "202":
+                    description: Accepted
                     content:
                         application/json:
                             schema:
@@ -1050,6 +1104,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: LocationPoiListSlice
+            x-contract-placeholder: true
+        LocationRoute:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: LocationRoute
             x-contract-placeholder: true
         PublishConnectorDefinitionReceipt:
             type: object

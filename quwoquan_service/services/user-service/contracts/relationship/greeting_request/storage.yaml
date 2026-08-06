@@ -1,6 +1,7 @@
 backend: postgresql
 tables:
   greeting_requests:
+    publication_role: not_published
     entity: GreetingRequest
     columns:
     - name: id
@@ -83,6 +84,7 @@ tables:
       condition: status = 'pending'
       description: 惰性过期判断扫描索引
   greeting_request_command_receipts:
+    publication_role: not_published
     description: 与 greeting_requests state 和 outbox 同事务提交的幂等命令回执
     infrastructure_only: true
     columns:
@@ -123,6 +125,7 @@ tables:
       - idempotency_key
       unique: true
   greeting_request_outbox:
+    publication_role: transactional_outbox
     description: GreetingRequest 事件的事务性 outbox（append-only，relay 消费）
     infrastructure_only: true
     columns:
@@ -164,17 +167,6 @@ tables:
       columns:
       - published_at
       - occurred_at
-cache:
-  backend: redis
-  patterns:
-  - key: greeting:inbox:{targetPersonaId}:pending
-    ttl: 60s
-    invalidate_on:
-    - GreetingRequestSent
-    - GreetingRequestReplied
-    - GreetingRequestIgnored
-    - GreetingRequestCancelled
-    description: 收件箱 pending 数量缓存（红点角标）
 role: authoritative
 codegen:
   enabled: true

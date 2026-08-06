@@ -441,7 +441,7 @@ def build_start_app_command(
     overrides = resolve_app_endpoint_overrides(env_name, device_kind, topology=manifest)
     command = [
         "bash",
-        "quwoquan_app/scripts/device/start_app_instance.sh",
+        "quwoquan_app/scripts/device/run_app_instance.sh",
         "--env",
         runtime_env_for_dev_env(env_name),
         "--target",

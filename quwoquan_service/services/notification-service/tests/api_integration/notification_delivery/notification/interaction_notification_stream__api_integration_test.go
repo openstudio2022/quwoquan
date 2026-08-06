@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/interaction-notification-inbox/spec.md#gwt-001
+// readiness_case: create-interaction-notifications-api
 package api_integration
 
 import (
@@ -176,7 +177,7 @@ func TestInteractionNotificationStreamProjectsOnce(t *testing.T) {
 	}
 	if _, err := redisClient.XAdd(ctx, "events.content.report_lifecycle", map[string]string{
 		"eventId":     "evt-api-report-1",
-		"eventType":   "content.report.resolved",
+		"eventType":   "content.report.ReportResolved",
 		"aggregateId": "report-api-1",
 		"payload":     string(reportPayload),
 		"occurredAt":  time.Now().UTC().Format(time.RFC3339Nano),

@@ -9,10 +9,11 @@ from pathlib import Path
 from typing import Any
 from unittest import mock
 
-from quwoquan_ops.ci import render_release_bound_environment_identity as renderer
+from quwoquan_ops.ci import generate_release_bound_environment_identity as renderer
 from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
     APPLICATION_PACKAGES,
     ENVIRONMENTS,
+    RELEASE_CLOSURE_PATHS,
     canonical_candidate_digest,
     canonical_manifest_digest,
 )
@@ -177,6 +178,12 @@ class Fixture:
                 "path": "evidence/tests/three-layer.json",
                 "digest": DIGEST_A,
                 "status": "passed",
+                "evidence": {
+                    "files": {
+                        label: {"path": relative, "digest": DIGEST_A}
+                        for label, relative in RELEASE_CLOSURE_PATHS.items()
+                    }
+                },
                 "layers": {
                     layer: {"status": "passed", "artifactDigest": DIGEST_A}
                     for layer in ("local_contract", "api_integration", "user_acceptance")

@@ -470,11 +470,7 @@ func (s *MemberService) TransferOwnership(ctx context.Context, req TransferOwner
 	}
 	nextOwner, err := s.members.FindMember(ctx, req.ConversationId, req.NewOwnerId)
 	if err != nil {
-		return rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleChat, rterr.KindUser, "not_found"),
-			"目标成员不存在",
-			"new owner is not a member",
-		)
+		return rterr.NewInvalidArgument(rterr.ModuleChat, "目标成员不存在", "new owner is not a member")
 	}
 	receipt, err := chatCommandReceipt(scopedKey, "TransferOwnership", digest, req.ConversationId, nil)
 	if err != nil {

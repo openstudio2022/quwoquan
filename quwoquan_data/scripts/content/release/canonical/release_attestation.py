@@ -3,11 +3,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from core.codec import JsonObject, JsonObjectDecodeError
-from core.source_digest import SourceDigest, SourceDigestError
 from content.release.model import DataSourceOwner, ReleaseKind
+from core.codec import JsonObject, JsonObjectDecodeError
+from core.source_digest import (
+    SourceDigest,
+    SourceDigestError,
+    content_source_revision,
+)
 from governance.coverage.distribution import ProductLifecycleState, ReleaseClass
-
 
 _SCHEMA = "quwoquan_data.release_attestation"
 
@@ -40,6 +43,9 @@ class ReleaseAttestation:
     creator_count: int
     tag_count: int
     canonical_merkle: str
+    source_revision: str | None
+    source_digest: str | None
+    entity_catalog_digest: str | None
     source_digests: tuple[SourceDigest, ...]
     payload_sha256: str
     recorded_at: str
@@ -108,6 +114,36 @@ class ReleaseAttestation:
                 raise ReleaseAttestationError(
                     "content release requires executions and canonical entities or posts"
                 )
+            if len(self.source_digests) != 1:
+                raise ReleaseAttestationError(
+                    "content release requires exactly one sourceDigest"
+                )
+            if not all(
+                isinstance(value, str) and value.startswith("sha256:")
+                for value in (
+                    self.source_revision,
+                    self.source_digest,
+                    self.entity_catalog_digest,
+                )
+            ):
+                raise ReleaseAttestationError(
+                    "content release source identity is required"
+                )
+            if self.source_digest != self.source_digests[0].digest:
+                raise ReleaseAttestationError(
+                    "sourceDigest must match the frozen sourceDigests closure"
+                )
+            try:
+                expected_revision = content_source_revision(
+                    source_digest=self.source_digest,
+                    entity_catalog_digest=self.entity_catalog_digest,
+                )
+            except SourceDigestError as exc:
+                raise ReleaseAttestationError(str(exc)) from exc
+            if self.source_revision != expected_revision:
+                raise ReleaseAttestationError(
+                    "sourceRevision does not match sourceDigest/entityCatalogDigest"
+                )
         elif self.release_kind is ReleaseKind.EMPTY_BASELINE:
             if (
                 self.execution_ids
@@ -115,6 +151,14 @@ class ReleaseAttestation:
                 or self.research_accepted_count
                 or self.commercial_accepted_count
                 or self.authorization_required_asset_ids
+                or any(
+                    value is not None
+                    for value in (
+                        self.source_revision,
+                        self.source_digest,
+                        self.entity_catalog_digest,
+                    )
+                )
             ):
                 raise ReleaseAttestationError(
                     "empty baseline must not contain executions or canonical objects"
@@ -127,7 +171,7 @@ class ReleaseAttestation:
         return (self.entity_count, self.post_count, self.creator_count, self.tag_count)
 
     def to_document(self) -> dict[str, object]:
-        return {
+        document: dict[str, object] = {
             "schema": _SCHEMA,
             "releaseId": self.release_id,
             "sourceOwner": self.source_owner.value,
@@ -151,9 +195,18 @@ class ReleaseAttestation:
             "payloadSha256": self.payload_sha256,
             "recordedAt": self.recorded_at,
         }
+        if self.release_kind is ReleaseKind.CONTENT:
+            document.update(
+                {
+                    "sourceRevision": self.source_revision,
+                    "sourceDigest": self.source_digest,
+                    "entityCatalogDigest": self.entity_catalog_digest,
+                }
+            )
+        return document
 
     @classmethod
-    def from_document(cls, value: object) -> "ReleaseAttestation":
+    def from_document(cls, value: object) -> ReleaseAttestation:
         try:
             document = JsonObject.from_value(value, label="release attestation")
             if document.string("schema") != _SCHEMA:
@@ -193,6 +246,11 @@ class ReleaseAttestation:
                 creator_count=document.integer("creatorCount"),
                 tag_count=document.integer("tagCount"),
                 canonical_merkle=document.string("canonicalMerkle"),
+                source_revision=document.optional_string("sourceRevision"),
+                source_digest=document.optional_string("sourceDigest"),
+                entity_catalog_digest=document.optional_string(
+                    "entityCatalogDigest"
+                ),
                 source_digests=source_digests,
                 payload_sha256=document.string("payloadSha256"),
                 recorded_at=document.string("recordedAt"),

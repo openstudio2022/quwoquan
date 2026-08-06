@@ -27,8 +27,6 @@ relationships:
 local_identity_reasons:
   skillId: stable catalog or release key; resolved through its typed catalog reader and never used as
     an aggregate Store identity
-capabilities:
-- queryable
 taggable: false
 vector_enabled: false
 business_rules:

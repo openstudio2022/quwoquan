@@ -24,7 +24,7 @@ const (
 // coordinate against the authoritative UserProfile. Returning nil means the
 // ES/OpenSearch write has succeeded and the durable checkpoint may advance.
 type UserProfileSearchProjectionPublisher interface {
-	ProjectUserProfileSearch(
+	PublishUserProfileSearch(
 		ctx context.Context,
 		eventType string,
 		userID string,
@@ -101,7 +101,7 @@ func (relay *UserProfileSearchOutboxRelay) RelayOnce(
 	defer func() { rtobs.EndSpan(span, err) }()
 
 	now := relay.now().UTC()
-	event, found, err := relay.store.ClaimReady(
+	event, found, err := relay.store.ClaimPendingOutbox(
 		ctx,
 		relay.owner,
 		now,
@@ -119,7 +119,7 @@ func (relay *UserProfileSearchOutboxRelay) RelayOnce(
 		relay.recordSuccessfulScan(now)
 		return false, nil
 	}
-	if err := relay.publisher.ProjectUserProfileSearch(
+	if err := relay.publisher.PublishUserProfileSearch(
 		ctx,
 		event.EventType,
 		event.UserID,

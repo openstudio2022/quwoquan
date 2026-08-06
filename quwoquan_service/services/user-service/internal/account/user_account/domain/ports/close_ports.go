@@ -88,7 +88,7 @@ type UserAccountOutboxTerminalFailure struct {
 
 // UserAccountOutboxStore 为 UserAccount 生命周期事件提供带租约的至少一次投递端口。
 type UserAccountOutboxStore interface {
-	ClaimReady(
+	ClaimPendingOutbox(
 		ctx context.Context,
 		owner string,
 		now time.Time,

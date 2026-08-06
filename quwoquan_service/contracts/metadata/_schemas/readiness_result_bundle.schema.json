@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quwoquan.local/contracts/metadata/readiness_result_bundle.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["generatedAt", "results"],
+  "properties": {
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "results": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/caseResult" }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "gitCommit": {
+      "type": "string",
+      "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$"
+    },
+    "nonSecretIdentity": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$"
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "id"],
+      "properties": {
+        "kind": { "enum": ["operation", "page", "object"] },
+        "id": { "type": "string", "minLength": 1 }
+      }
+    },
+    "caseResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "objectId",
+        "specRef",
+        "caseId",
+        "producer",
+        "layer",
+        "status",
+        "target",
+        "commitSha",
+        "contractGraphSourceHash",
+        "deploymentTarget",
+        "baselineId",
+        "packageDigest",
+        "configurationDigest",
+        "candidateManifestSha256",
+        "environment",
+        "platform",
+        "deviceClass",
+        "provider",
+        "startedAt",
+        "completedAt",
+        "runnerIdentity",
+        "artifactSha256"
+      ],
+      "properties": {
+        "objectId": { "type": "string", "minLength": 1 },
+        "specRef": { "type": "string", "minLength": 1 },
+        "caseId": { "type": "string", "minLength": 1 },
+        "producer": { "enum": ["service", "app", "ops"] },
+        "layer": {
+          "enum": [
+            "local_contract",
+            "api_integration",
+            "user_acceptance",
+            "environment_acceptance",
+            "rollback",
+            "replay"
+          ]
+        },
+        "status": { "enum": ["passed", "failed", "blocked", "skipped"] },
+        "target": { "$ref": "#/$defs/target" },
+        "commitSha": { "$ref": "#/$defs/gitCommit" },
+        "contractGraphSourceHash": { "$ref": "#/$defs/sha256" },
+        "deploymentTarget": { "$ref": "#/$defs/nonSecretIdentity" },
+        "baselineId": { "$ref": "#/$defs/nonSecretIdentity" },
+        "packageDigest": { "$ref": "#/$defs/digest" },
+        "configurationDigest": { "$ref": "#/$defs/digest" },
+        "candidateManifestSha256": { "$ref": "#/$defs/sha256" },
+        "candidateDigest": { "$ref": "#/$defs/digest" },
+        "releaseDigest": { "$ref": "#/$defs/digest" },
+        "environment": { "enum": ["alpha", "beta", "gamma", "prod"] },
+        "platform": { "$ref": "#/$defs/nonSecretIdentity" },
+        "deviceClass": { "$ref": "#/$defs/nonSecretIdentity" },
+        "provider": { "$ref": "#/$defs/nonSecretIdentity" },
+        "startedAt": { "type": "string", "format": "date-time" },
+        "completedAt": { "type": "string", "format": "date-time" },
+        "runnerIdentity": { "$ref": "#/$defs/nonSecretIdentity" },
+        "artifactSha256": { "$ref": "#/$defs/sha256" },
+        "artifactPath": {
+          "type": "string",
+          "maxLength": 512,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*$"
+        },
+        "receiptRef": { "$ref": "#/$defs/nonSecretIdentity" }
+      },
+      "allOf": [
+        {
+          "oneOf": [
+            {
+              "properties": {
+                "producer": { "const": "service" },
+                "layer": { "enum": ["local_contract", "api_integration"] }
+              }
+            },
+            {
+              "properties": {
+                "producer": { "const": "app" },
+                "layer": { "enum": ["local_contract", "api_integration", "user_acceptance"] }
+              }
+            },
+            {
+              "properties": {
+                "producer": { "const": "ops" },
+                "layer": { "enum": ["environment_acceptance", "rollback", "replay"] }
+              }
+            }
+          ]
+        }
+      ],
+      "oneOf": [
+        { "required": ["artifactPath"], "not": { "required": ["receiptRef"] } },
+        { "required": ["receiptRef"], "not": { "required": ["artifactPath"] } }
+      ]
+    }
+  }
+}

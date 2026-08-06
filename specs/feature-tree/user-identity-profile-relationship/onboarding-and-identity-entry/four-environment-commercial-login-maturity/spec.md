@@ -129,7 +129,7 @@
 - canonical：`quwoquan_service/services/user-service/contracts/account/credential_binding/errors.yaml`
 - canonical：`quwoquan_service/services/user-service/contracts/account/user_account/fields.yaml`
 - canonical：`quwoquan_service/services/user-service/tests/api_integration/account/user_account/auth_contract__api_integration_test.go`
-- canonical：`quwoquan_app/test/local_contract/ui/user/login_page_widget__local_contract_test.dart`
+- canonical：`quwoquan_app/test/local_contract/service/user_service/account/account_session/login_page_widget__local_contract_test.dart`
 
 ## 5. 验收场景
 

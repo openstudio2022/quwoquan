@@ -1,10 +1,7 @@
 events:
 - name: AccountSessionAuthenticated
-  producer: user-service
-  consumers: []
-  channel: transactional_audit
-  no_consumer_reason: UserAccount provision is completed synchronously by the login application flow; the persisted session event currently has no relay.
   description: 首次成功认证与 UserAccount 同步 provision 的持久化审计事实；当前不声明未装配的异步 projector。
+  delivery_semantics: transactional_event_log
   payload_entity: AccountSession
   payload_fields:
   - sessionId
@@ -12,11 +9,10 @@ events:
   - identityOrigin
   - deviceId
   - issuedAt
+  no_consumer_reason: UserAccount provision is completed synchronously by the login application flow; the persisted session
+    event currently has no relay.
 - name: AccountSessionRevoked
-  producer: user-service
-  consumers: []
-  channel: transactional_audit
-  no_consumer_reason: Session revocation is enforced by the authoritative session store; the persisted event currently has no relay.
+  delivery_semantics: transactional_event_log
   payload_entity: AccountSession
   payload_fields:
   - sessionId
@@ -24,3 +20,5 @@ events:
   - deviceId
   - revokedAt
   - reason
+  no_consumer_reason: Session revocation is enforced by the authoritative session store; the persisted event currently has
+    no relay.

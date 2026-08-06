@@ -1,6 +1,6 @@
 dart_class: SkillSubscriptionWire
-library_path: assistant/generated/contracts/skill_subscription.g.dart
-output_path: assistant/generated/contracts/skill_subscription.g.dart
+library_path: package:quwoquan_cloud_contracts/src/generated/assistant/skill_subscription.g.dart
+output_path: packages/quwoquan_cloud_contracts/lib/src/generated/assistant/skill_subscription.g.dart
 contract: skill_subscription
 kind: entity_wire_contract
 fields:

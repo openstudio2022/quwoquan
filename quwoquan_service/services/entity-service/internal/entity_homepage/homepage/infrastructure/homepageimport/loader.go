@@ -32,7 +32,7 @@ var entityTypeToHomepageType = map[string]string{
 	"城市":   "city",
 	"住宿":   "hotel",
 	"餐饮":   "restaurant",
-	"学校":   "university",
+	"学校":   "school",
 	"博物馆":  "museum",
 	"遗址":   "heritage_site",
 	"古镇":   "ancient_town",

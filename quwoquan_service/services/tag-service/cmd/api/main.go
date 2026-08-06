@@ -187,7 +187,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("tag-service message transport init failed: %v", err)
 	}
-	profileTagConsumer, err := signalstream.NewConsumer(
+	profileTagConsumer, err := signalstream.NewUserProfileTagConsumer(
 		messageTransport,
 		objectTagStore,
 		serviceName,
@@ -287,6 +287,9 @@ func main() {
 	}, ioLogger, processLogger, exceptionLogger)
 	corsHandler := rthttp.WithCORS(observed, rthttp.CORSOptionsFromEnv())
 
+	timeouts := rtauth.ContractHTTPServerTimeouts(
+		operationsecurity.ForDomain("tag"),
+	)
 	server := &http.Server{
 		Addr: addr,
 		Handler: rtauth.Middleware(rtauth.MiddlewareConfig{
@@ -294,9 +297,9 @@ func main() {
 			DeviceTicketVerifier:     deviceTicketVerifier,
 			AccountSecurityAuthority: accountSecurityAuthority,
 		})(corsHandler),
-		ReadHeaderTimeout: 5 * time.Second,
-		WriteTimeout:      30 * time.Second,
-		IdleTimeout:       60 * time.Second,
+		ReadHeaderTimeout: timeouts.ReadHeader,
+		WriteTimeout:      timeouts.Write,
+		IdleTimeout:       timeouts.Idle,
 	}
 	log.Printf("tag-service listening on %s (env=%s)", addr, appEnv)
 	if err := rthttp.ListenAndServeGraceful(server, 15*time.Second); err != nil {

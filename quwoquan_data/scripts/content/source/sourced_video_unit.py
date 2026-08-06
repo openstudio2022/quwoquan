@@ -1,26 +1,18 @@
 """Build one admitted sourced-video unit with frozen rights and scan evidence."""
 from __future__ import annotations
 
-from datetime import UTC, datetime
 import json
-from pathlib import Path
 import shutil
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
-from content.post.video.package_common import sha256_file
-from content.post.video.source_video import SourcedVideoEvidence
-from content.source.source_unit import resolve_entity_object_dir, write_source_unit
-from content.source.sourced_video_admission import (
-    admitted_audio_evidence,
-    probe_sourced_video,
-    scan_sourced_video_watermark,
-)
+from core.content_source_registry import load_content_source_registry
 from core.paths import (
     execution_source_unit_dir,
     relative_execution_ref,
 )
 from core.schema import assert_valid
-from core.content_source_registry import load_content_source_registry
 from core.video_source_admission import (
     VIDEO_SOURCE_KINDS,
     assert_video_source_admitted,
@@ -28,6 +20,19 @@ from core.video_source_admission import (
 from governance.coverage.distribution import (
     ProductLifecycleState,
     load_content_distribution_policy,
+)
+
+from content.post.video.package_common import sha256_file
+from content.post.video.source_video import SourcedVideoEvidence
+from content.source.professional_video_receipt import (
+    assert_observed_popularity_signals,
+    assert_publishable_media_probe,
+)
+from content.source.source_unit import resolve_entity_object_dir, write_source_unit
+from content.source.sourced_video_admission import (
+    admitted_audio_evidence,
+    probe_sourced_video,
+    scan_sourced_video_watermark,
 )
 
 
@@ -215,6 +220,48 @@ def write_admitted_sourced_video_unit(
         raise ValueError("sourced video audio rights admission blocked")
 
     asset_sha256 = sha256_file(asset_path)
+    professional_identity = (
+        str(source_unit.get("professionalAcquisitionReceiptRef") or "").strip(),
+        str(source_unit.get("professionalAssetId") or "").strip(),
+        str(source_unit.get("professionalContentSha256") or "").strip(),
+    )
+    if any(professional_identity) and not all(professional_identity):
+        raise ValueError(
+            "professional sourced video requires receipt, assetId, and contentSha256"
+        )
+    popularity_signals: dict[str, Any] | None = None
+    professional_media_probe: dict[str, Any] | None = None
+    if professional_identity[0]:
+        if professional_identity[2] != asset_sha256:
+            raise ValueError("professional sourced video contentSha256 drift")
+        if source_unit.get("premiumPlayableEligible") is not True:
+            raise ValueError("professional sourced video is not Premium-playable")
+        raw_professional_probe = source_unit.get("mediaProbe")
+        assert_publishable_media_probe(
+            raw_professional_probe,
+            asset_id=professional_identity[1],
+        )
+        assert isinstance(raw_professional_probe, dict)
+        for field in (
+            "width",
+            "height",
+            "frameCount",
+            "framesPerSecond",
+            "durationMs",
+            "codec",
+        ):
+            if raw_professional_probe.get(field) != media_probe.get(field):
+                raise ValueError(
+                    f"professional sourced video media probe drift: {field}"
+                )
+        professional_media_probe = dict(raw_professional_probe)
+        raw_signals = source_unit.get("popularitySignals")
+        assert_observed_popularity_signals(
+            raw_signals,
+            asset_id=professional_identity[1],
+        )
+        assert isinstance(raw_signals, dict)
+        popularity_signals = dict(raw_signals)
     rights_status = (
         str(source_unit.get("rightsStatus") or "unverified").strip()
         if research_release
@@ -265,6 +312,14 @@ def write_admitted_sourced_video_unit(
                     ),
                     "collectionPageUrl": source_post_url,
                     "authorizationProof": authorization_proof_url or "",
+                    "professionalAcquisitionReceiptRef": professional_identity[0],
+                    "professionalAssetId": professional_identity[1],
+                    "professionalContentSha256": professional_identity[2],
+                    "professionalMediaProbe": professional_media_probe,
+                    "popularitySignals": popularity_signals,
+                    "premiumPlayableEligible": (
+                        source_unit.get("premiumPlayableEligible") is True
+                    ),
                     "rightsAuditStatus": rights_status,
                     "rightsAuditIssues": rights_issues,
                     "modelReleaseStatus": model_release_status,

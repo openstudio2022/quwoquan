@@ -1,0 +1,165 @@
+# Code generated from quwoquan_service/generated/contract_graph.json.
+# Regenerate with verify_object_alert_coverage.py --write.
+groups:
+  - name: quwoquan_circle_contract_circle_group_membership
+    rules:
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="POST",route=~"^/circles/[^/]+/groups/[^/]+/memberships$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle_group_membership.ApplyJoinCircleGroup"
+          contract_metric: "circle_group_membership_apply"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "650"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="POST",route=~"^/circles/[^/]+/groups/[^/]+/memberships$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle_group_membership.ApplyJoinCircleGroup"
+          contract_metric: "circle_group_membership_apply"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "650"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="POST",route=~"^/circles/[^/]+/groups/[^/]+/memberships/[^/]+:approve$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle_group_membership.ApproveCircleGroupMember"
+          contract_metric: "circle_group_membership_approve"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "650"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="POST",route=~"^/circles/[^/]+/groups/[^/]+/memberships/[^/]+:approve$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle_group_membership.ApproveCircleGroupMember"
+          contract_metric: "circle_group_membership_approve"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "650"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="GET",route=~"^/circles/[^/]+/groups/[^/]+/memberships/self$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle_group_membership.GetMyCircleGroupMembership"
+          contract_metric: "circle_group_membership_self_read"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "350"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="GET",route=~"^/circles/[^/]+/groups/[^/]+/memberships/self$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle_group_membership.GetMyCircleGroupMembership"
+          contract_metric: "circle_group_membership_self_read"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "350"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="DELETE",route=~"^/circles/[^/]+/groups/[^/]+/memberships/self$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle_group_membership.LeaveCircleGroup"
+          contract_metric: "circle_group_membership_leave"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "650"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="DELETE",route=~"^/circles/[^/]+/groups/[^/]+/memberships/self$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle_group_membership.LeaveCircleGroup"
+          contract_metric: "circle_group_membership_leave"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "650"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="GET",route=~"^/circles/[^/]+/groups/[^/]+/memberships$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle_group_membership.ListCircleGroupMemberships"
+          contract_metric: "circle_group_membership_list"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="GET",route=~"^/circles/[^/]+/groups/[^/]+/memberships$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle_group_membership.ListCircleGroupMemberships"
+          contract_metric: "circle_group_membership_list"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="POST",route=~"^/circles/[^/]+/groups/[^/]+/memberships/[^/]+:reject$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle_group_membership.RejectCircleGroupMember"
+          contract_metric: "circle_group_membership_reject"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "650"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="POST",route=~"^/circles/[^/]+/groups/[^/]+/memberships/[^/]+:reject$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle_group_membership.RejectCircleGroupMember"
+          contract_metric: "circle_group_membership_reject"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "650"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="DELETE",route=~"^/circles/[^/]+/groups/[^/]+/memberships/[^/]+$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle_group_membership.RemoveCircleGroupMember"
+          contract_metric: "circle_group_membership_remove"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "650"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="DELETE",route=~"^/circles/[^/]+/groups/[^/]+/memberships/[^/]+$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle_group_membership.RemoveCircleGroupMember"
+          contract_metric: "circle_group_membership_remove"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "650"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="PATCH",route=~"^/circles/[^/]+/groups/[^/]+/memberships/[^/]+/role$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle_group_membership.UpdateCircleGroupMemberRole"
+          contract_metric: "circle_group_membership_role_update"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "650"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="PATCH",route=~"^/circles/[^/]+/groups/[^/]+/memberships/[^/]+/role$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle_group_membership.UpdateCircleGroupMemberRole"
+          contract_metric: "circle_group_membership_role_update"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "650"
+          slo_availability_percent: "99.9"

@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 93359367b8614f01bb5e1c51e37af383332b01f117cc1c6cf39e4fdf838e49d2
+// ContractGraph SHA256: 99a8a52d1ede68d6295d252a5c3cfd90ce40fa7e11b50e9fee2dad7a7afdf2b2
 
 part of '../../../notification/notification_operation_contracts.g.dart';
 
@@ -100,7 +100,10 @@ final class GetAppMessageUnreadCountQuery {
 }
 
 final class ListAppMessagesQuery {
-  const ListAppMessagesQuery({
+  static const int defaultLimit = 20;
+  static const int maximumLimit = 100;
+
+  ListAppMessagesQuery({
     String? messageType,
     bool? read,
     String? cursor,
@@ -108,7 +111,14 @@ final class ListAppMessagesQuery {
   }) : messageType = messageType,
        read = read,
        cursor = cursor,
-       limit = limit;
+       limit = limit {
+    if (this.limit <= 0) {
+      throw ArgumentError.value(this.limit, "limit", "must be positive");
+    }
+    if (this.limit > 100) {
+      throw ArgumentError.value(this.limit, "limit", "must not exceed 100");
+    }
+  }
 
   final String? messageType;
   final bool? read;

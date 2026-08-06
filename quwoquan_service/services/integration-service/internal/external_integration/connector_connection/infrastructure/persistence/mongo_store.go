@@ -36,14 +36,19 @@ type commandReceipt struct {
 }
 
 type outboxRecord struct {
-	ID           string    `bson:"_id"`
-	EventType    string    `bson:"eventType"`
-	ConnectionID string    `bson:"connectionId"`
-	AccountID    string    `bson:"accountId"`
-	ConnectorID  string    `bson:"connectorId"`
-	Status       string    `bson:"status"`
-	Revision     int64     `bson:"revision"`
-	OccurredAt   time.Time `bson:"occurredAt"`
+	ID                  string     `bson:"_id"`
+	EventType           string     `bson:"eventType"`
+	ConnectionID        string     `bson:"connectionId"`
+	AccountID           string     `bson:"accountId"`
+	ConnectorID         string     `bson:"connectorId"`
+	GrantedCapabilities []string   `bson:"grantedCapabilities,omitempty"`
+	Status              string     `bson:"status"`
+	FreshnessAt         time.Time  `bson:"freshnessAt"`
+	ExpiresAt           *time.Time `bson:"expiresAt,omitempty"`
+	RevokedAt           *time.Time `bson:"revokedAt,omitempty"`
+	Revision            int64      `bson:"revision"`
+	UpdatedAt           time.Time  `bson:"updatedAt"`
+	OccurredAt          time.Time  `bson:"occurredAt"`
 }
 
 func NewMongoStore(database *mongo.Database, grantConsumer authorizationports.GrantConsumer) *MongoStore {
@@ -134,22 +139,35 @@ func (store *MongoStore) Create(ctx context.Context, command model.CreateCommand
 	if !store.available() {
 		return model.MutationResult{}, model.ErrStorageUnavailable
 	}
-	return store.withTransaction(ctx, func(txCtx context.Context) (model.MutationResult, error) {
-		if replay, found, err := store.readReceipt(txCtx, command.AccountID, command.IdempotencyKey, "create", command.CommandDigest); found || err != nil {
-			return replay, err
+	session, sessionErr := store.connections.Database().Client().StartSession()
+	if sessionErr != nil {
+		return model.MutationResult{}, fmt.Errorf("start connector connection transaction: %w", sessionErr)
+	}
+	defer session.EndSession(ctx)
+
+	var committed model.MutationResult
+	if _, txErr := session.WithTransaction(ctx, func(txCtx context.Context) (any, error) {
+		replay, found, receiptErr := store.readReceipt(txCtx, command.AccountID, command.IdempotencyKey, "create", command.CommandDigest)
+		if receiptErr != nil {
+			return nil, receiptErr
+		}
+		if found {
+			committed = replay
+			return nil, nil
 		}
 		var current model.Connection
 		err := store.connections.FindOne(txCtx, bson.M{
 			"accountId": command.AccountID, "connectorId": command.ConnectorID,
 		}).Decode(&current)
 		if err != nil && !errors.Is(err, mongo.ErrNoDocuments) {
-			return model.MutationResult{}, err
+			return nil, err
 		}
 		next := model.Connection{
 			ConnectionID: uuid.NewString(), AccountID: command.AccountID,
 			ConnectorID: command.ConnectorID, GrantedCapabilities: command.GrantedCapabilities,
 			Status: model.StatusActive, CredentialRef: command.CredentialRef,
-			GrantReceiptDigest: command.GrantReceiptDigest, FreshnessAt: command.OccurredAt,
+			ProviderAccountSubjectDigest: command.ProviderAccountSubjectDigest,
+			GrantReceiptDigest:           command.GrantReceiptDigest, FreshnessAt: command.OccurredAt,
 			ExpiresAt: command.ExpiresAt, Revision: 1,
 			CreatedAt: command.OccurredAt, UpdatedAt: command.OccurredAt,
 		}
@@ -159,7 +177,7 @@ func (store *MongoStore) Create(ctx context.Context, command model.CreateCommand
 			next.CreatedAt = current.CreatedAt
 		}
 		if store.grantConsumer == nil {
-			return model.MutationResult{}, model.ErrGrantReceiptInvalid
+			return nil, model.ErrGrantReceiptInvalid
 		}
 		if err := store.grantConsumer.Consume(
 			txCtx,
@@ -170,18 +188,28 @@ func (store *MongoStore) Create(ctx context.Context, command model.CreateCommand
 			next.ConnectionID,
 			command.OccurredAt,
 		); err != nil {
-			return model.MutationResult{}, model.ErrGrantReceiptInvalid
+			return nil, model.ErrGrantReceiptInvalid
 		}
 		if _, err := store.connections.ReplaceOne(txCtx, bson.M{
 			"accountId": command.AccountID, "connectorId": command.ConnectorID,
 		}, next, options.Replace().SetUpsert(true)); err != nil {
 			if mongo.IsDuplicateKeyError(err) {
-				return model.MutationResult{}, model.ErrGrantReceiptInvalid
+				return nil, model.ErrGrantReceiptInvalid
 			}
-			return model.MutationResult{}, err
+			return nil, err
 		}
-		return store.commitReceiptAndOutbox(txCtx, command.AccountID, command.IdempotencyKey, "create", command.CommandDigest, next, "ConnectorConnectionChanged")
-	})
+		// receipt 与事件行与连接状态共用同一个事务句柄：提交成功即事件已可投递，
+		// 任一步失败则连接状态与事件一起回滚。
+		result, commitErr := store.commitReceiptAndOutbox(txCtx, command.AccountID, command.IdempotencyKey, "create", command.CommandDigest, next, "ConnectorConnectionChanged")
+		if commitErr != nil {
+			return nil, commitErr
+		}
+		committed = result
+		return nil, nil
+	}); txErr != nil {
+		return model.MutationResult{}, txErr
+	}
+	return committed, nil
 }
 
 func (store *MongoStore) Revoke(ctx context.Context, input model.RevokeInput) (model.MutationResult, error) {
@@ -189,25 +217,38 @@ func (store *MongoStore) Revoke(ctx context.Context, input model.RevokeInput) (m
 		return model.MutationResult{}, model.ErrStorageUnavailable
 	}
 	commandDigest := hash(strings.Join([]string{input.AccountID, input.ConnectionID, fmt.Sprint(input.ExpectedRevision)}, "\x00"))
-	return store.withTransaction(ctx, func(txCtx context.Context) (model.MutationResult, error) {
-		if replay, found, err := store.readReceipt(txCtx, input.AccountID, input.IdempotencyKey, "revoke", commandDigest); found || err != nil {
-			return replay, err
+	session, sessionErr := store.connections.Database().Client().StartSession()
+	if sessionErr != nil {
+		return model.MutationResult{}, fmt.Errorf("start connector connection transaction: %w", sessionErr)
+	}
+	defer session.EndSession(ctx)
+
+	var committed model.MutationResult
+	if _, txErr := session.WithTransaction(ctx, func(txCtx context.Context) (any, error) {
+		replay, found, receiptErr := store.readReceipt(txCtx, input.AccountID, input.IdempotencyKey, "revoke", commandDigest)
+		if receiptErr != nil {
+			return nil, receiptErr
+		}
+		if found {
+			committed = replay
+			return nil, nil
 		}
 		current, err := store.Get(txCtx, input.AccountID, input.ConnectionID)
 		if err != nil {
-			return model.MutationResult{}, err
+			return nil, err
 		}
 		if current.Revision != input.ExpectedRevision {
-			return model.MutationResult{}, model.ErrRevisionConflict
+			return nil, model.ErrRevisionConflict
 		}
 		next := current
 		next.Status = model.StatusRevoked
 		next.CredentialRef = ""
+		next.ProviderAccountSubjectDigest = ""
 		next.RevokedAt = timePointer(input.OccurredAt)
 		next.Revision++
 		next.UpdatedAt = input.OccurredAt
 		if store.grantConsumer == nil {
-			return model.MutationResult{}, model.ErrStorageUnavailable
+			return nil, model.ErrStorageUnavailable
 		}
 		if err := store.grantConsumer.Revoke(
 			txCtx,
@@ -216,20 +257,30 @@ func (store *MongoStore) Revoke(ctx context.Context, input model.RevokeInput) (m
 			current.GrantReceiptDigest,
 			input.OccurredAt,
 		); err != nil {
-			return model.MutationResult{}, model.ErrStorageUnavailable
+			return nil, model.ErrStorageUnavailable
 		}
 		updated, err := store.connections.ReplaceOne(txCtx, bson.M{
 			"accountId": input.AccountID, "connectionId": input.ConnectionID,
 			"revision": input.ExpectedRevision,
 		}, next)
 		if err != nil {
-			return model.MutationResult{}, err
+			return nil, err
 		}
 		if updated.MatchedCount != 1 {
-			return model.MutationResult{}, model.ErrRevisionConflict
+			return nil, model.ErrRevisionConflict
 		}
-		return store.commitReceiptAndOutbox(txCtx, input.AccountID, input.IdempotencyKey, "revoke", commandDigest, next, "ConnectorConnectionRevoked")
-	})
+		// receipt 与事件行与连接状态共用同一个事务句柄：提交成功即事件已可投递，
+		// 任一步失败则连接状态与事件一起回滚。
+		result, commitErr := store.commitReceiptAndOutbox(txCtx, input.AccountID, input.IdempotencyKey, "revoke", commandDigest, next, "ConnectorConnectionRevoked")
+		if commitErr != nil {
+			return nil, commitErr
+		}
+		committed = result
+		return nil, nil
+	}); txErr != nil {
+		return model.MutationResult{}, txErr
+	}
+	return committed, nil
 }
 
 func (store *MongoStore) commitReceiptAndOutbox(ctx context.Context, accountID, key, kind, digest string, connection model.Connection, eventType string) (model.MutationResult, error) {
@@ -242,10 +293,19 @@ func (store *MongoStore) commitReceiptAndOutbox(ctx context.Context, accountID, 
 		return model.MutationResult{}, err
 	}
 	if _, err := store.outbox.InsertOne(ctx, outboxRecord{
-		ID:        fmt.Sprintf("%s:%d", connection.ConnectionID, connection.Revision),
-		EventType: eventType, ConnectionID: connection.ConnectionID,
-		AccountID: connection.AccountID, ConnectorID: connection.ConnectorID,
-		Status: connection.Status, Revision: connection.Revision, OccurredAt: connection.UpdatedAt,
+		ID:                  fmt.Sprintf("%s:%d", connection.ConnectionID, connection.Revision),
+		EventType:           eventType,
+		ConnectionID:        connection.ConnectionID,
+		AccountID:           connection.AccountID,
+		ConnectorID:         connection.ConnectorID,
+		GrantedCapabilities: append([]string(nil), connection.GrantedCapabilities...),
+		Status:              connection.Status,
+		FreshnessAt:         connection.FreshnessAt,
+		ExpiresAt:           connection.ExpiresAt,
+		RevokedAt:           connection.RevokedAt,
+		Revision:            connection.Revision,
+		UpdatedAt:           connection.UpdatedAt,
+		OccurredAt:          connection.UpdatedAt,
 	}); err != nil {
 		return model.MutationResult{}, err
 	}
@@ -265,24 +325,6 @@ func (store *MongoStore) readReceipt(ctx context.Context, accountID, key, kind, 
 		return model.MutationResult{}, true, model.ErrIdempotencyConflict
 	}
 	return model.MutationResult{Connection: receipt.Connection, Replayed: true}, true, nil
-}
-
-func (store *MongoStore) withTransaction(ctx context.Context, action func(context.Context) (model.MutationResult, error)) (model.MutationResult, error) {
-	session, err := store.connections.Database().Client().StartSession()
-	if err != nil {
-		return model.MutationResult{}, fmt.Errorf("start connector connection transaction: %w", err)
-	}
-	defer session.EndSession(ctx)
-	var result model.MutationResult
-	_, err = session.WithTransaction(ctx, func(txCtx context.Context) (any, error) {
-		var actionErr error
-		result, actionErr = action(txCtx)
-		return nil, actionErr
-	})
-	if err != nil {
-		return model.MutationResult{}, err
-	}
-	return result, nil
 }
 
 func hash(value string) string {

@@ -56,15 +56,18 @@ func (store *MongoStore) LoadGatheringProjectionState(
 	ctx context.Context,
 	gatheringID string,
 	personaID string,
+	sourceType string,
 ) (membershipapp.GatheringProjectionState, bool, error) {
 	var document struct {
-		GatheringID    string    `bson:"gatheringId"`
-		ConversationID string    `bson:"conversationId"`
-		UserID         string    `bson:"userId"`
-		SourceVersion  int64     `bson:"sourceVersion"`
-		State          string    `bson:"state"`
-		LastEventID    string    `bson:"lastEventId"`
-		UpdatedAt      time.Time `bson:"updatedAt"`
+		GatheringID    string `bson:"gatheringId"`
+		ConversationID string `bson:"conversationId"`
+		UserID         string `bson:"userId"`
+		Sources        map[string]struct {
+			SourceVersion int64     `bson:"sourceVersion"`
+			State         string    `bson:"state"`
+			LastEventID   string    `bson:"lastEventId"`
+			UpdatedAt     time.Time `bson:"updatedAt"`
+		} `bson:"sources"`
 	}
 	err := store.gatheringProjections.FindOne(ctx, bson.M{
 		"gatheringId": strings.TrimSpace(gatheringID), "userId": strings.TrimSpace(personaID),
@@ -75,10 +78,14 @@ func (store *MongoStore) LoadGatheringProjectionState(
 	if err != nil {
 		return membershipapp.GatheringProjectionState{}, false, err
 	}
+	source, found := document.Sources[strings.TrimSpace(sourceType)]
+	if !found {
+		return membershipapp.GatheringProjectionState{}, false, nil
+	}
 	return membershipapp.GatheringProjectionState{
 		GatheringID: document.GatheringID, ConversationID: document.ConversationID,
-		PersonaID: document.UserID, SourceVersion: document.SourceVersion,
-		State: document.State, LastEventID: document.LastEventID, UpdatedAt: document.UpdatedAt,
+		PersonaID: document.UserID, SourceType: sourceType, SourceVersion: source.SourceVersion,
+		State: source.State, LastEventID: source.LastEventID, UpdatedAt: source.UpdatedAt,
 	}, true, nil
 }
 
@@ -86,15 +93,25 @@ func (store *MongoStore) SaveGatheringProjectionState(
 	ctx context.Context,
 	state membershipapp.GatheringProjectionState,
 ) error {
-	_, err := store.gatheringProjections.ReplaceOne(
+	sourceType := strings.TrimSpace(state.SourceType)
+	if sourceType == "" {
+		return errors.New("Gathering access projection sourceType is required")
+	}
+	_, err := store.gatheringProjections.UpdateOne(
 		ctx,
 		bson.M{"gatheringId": state.GatheringID, "userId": state.PersonaID},
 		bson.M{
-			"gatheringId": state.GatheringID, "conversationId": state.ConversationID,
-			"userId": state.PersonaID, "sourceVersion": state.SourceVersion,
-			"state": state.State, "lastEventId": state.LastEventID, "updatedAt": state.UpdatedAt.UTC(),
+			"$set": bson.M{
+				"gatheringId": state.GatheringID, "conversationId": state.ConversationID,
+				"userId": state.PersonaID,
+				"sources." + sourceType: bson.M{
+					"sourceVersion": state.SourceVersion, "state": state.State,
+					"lastEventId": state.LastEventID, "updatedAt": state.UpdatedAt.UTC(),
+				},
+			},
+			"$max": bson.M{"sourceVersion": state.SourceVersion},
 		},
-		options.Replace().SetUpsert(true),
+		options.UpdateOne().SetUpsert(true),
 	)
 	return err
 }

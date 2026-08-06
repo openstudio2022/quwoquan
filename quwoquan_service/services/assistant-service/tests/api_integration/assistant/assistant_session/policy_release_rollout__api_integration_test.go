@@ -15,6 +15,7 @@ import (
 	releasepersistence "quwoquan_service/services/assistant-service/internal/assistant/assistant_policy_release/infrastructure/persistence"
 	rolloutapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_policy_rollout/application"
 	rolloutmodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_policy_rollout/domain/model"
+	rolloutmessaging "quwoquan_service/services/assistant-service/internal/assistant/assistant_policy_rollout/infrastructure/messaging"
 	rolloutpersistence "quwoquan_service/services/assistant-service/internal/assistant/assistant_policy_rollout/infrastructure/persistence"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
 	assistant "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/model"
@@ -161,8 +162,7 @@ func TestAssistantPolicyReleaseRolloutPersistsActivationAndRollback(
 	if err != nil || releasePublished != 2 {
 		t.Fatalf("publish release outbox count=%d err=%v", releasePublished, err)
 	}
-	rolloutRelay, err := policymessaging.NewOutboxRelay(
-		"rollout",
+	rolloutRelay, err := rolloutmessaging.NewOutboxRelay(
 		rolloutStore,
 		newIntegrationMessageTransport(),
 		time.Second,

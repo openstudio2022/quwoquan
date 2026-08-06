@@ -1,6 +1,7 @@
 backend: mongodb
 collections:
   circle_groups:
+    publication_role: not_published
     entity: CircleGroup
     role: authoritative
     indexes:
@@ -10,20 +11,25 @@ collections:
       sparse: true
       unique: true
   circle_group_command_receipts:
+    publication_role: not_published
     entity: CircleGroupCommandReceipt
     role: authoritative
     description: 与 aggregate state 和 outbox 在同一 mongodb transaction 提交的幂等回执。
   circle_group_outbox:
+    publication_role: transactional_outbox
     entity: CircleGroupOutbox
     role: append_only
     description: 按 aggregate version 幂等发布并支持 replay/checkpoint。
   circle_group_outbox_sequences:
+    publication_role: publication_accessory
     entity: CircleGroupOutboxSequence
     role: authoritative
   circle_group_projection_checkpoints:
+    publication_role: publication_accessory
     entity: CircleGroupProjectionCheckpoint
     role: projection
   circle_group_conversation_binding_receipts:
+    publication_role: not_published
     entity: CircleGroup
     role: projection
     description: CircleGroupConversationProvisioned durable event 的 source-event 幂等回执；与 circle_groups.conversationId
@@ -38,6 +44,7 @@ collections:
         conversationId: 1
       unique: true
   circle_group_conversation_binding_failures:
+    publication_role: not_published
     entity: CircleGroup
     role: projection
     description: Conversation provision 回执投影的有限重试状态；只保存事件引用、错误摘要与 TTL。
@@ -45,5 +52,5 @@ collections:
     - name: ttl_circle_group_conversation_binding_failures
       keys:
         expiresAt: 1
-      expireAfterSeconds: 0
+      expire_after_seconds: 0
 role: authoritative

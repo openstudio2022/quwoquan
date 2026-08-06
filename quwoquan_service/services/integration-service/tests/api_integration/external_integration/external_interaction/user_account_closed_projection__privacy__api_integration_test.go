@@ -1,13 +1,21 @@
+// spec_ref: specs/feature-tree/runtime/runtime-external-integration/integration-service-foundation/spec.md#gwt-001
+// readiness_case: apply-external-interaction-account-closure-api
 package api_integration
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
+	platformredis "quwoquan_service/internal/platform/redis"
+	"quwoquan_service/internal/platform/testinfra"
+	runtimemessaging "quwoquan_service/runtime/messaging"
+	rtredis "quwoquan_service/runtime/redis"
 	"quwoquan_service/runtime/reliabletask"
+	streamadapter "quwoquan_service/services/integration-service/internal/external_integration/external_interaction/adapters/inbound/stream"
 	"quwoquan_service/services/integration-service/internal/external_integration/external_interaction/application"
 	interactionpersistence "quwoquan_service/services/integration-service/internal/external_integration/external_interaction/infrastructure/persistence"
 	attemptpersistence "quwoquan_service/services/integration-service/internal/external_integration/external_interaction_attempt_fact/infrastructure/persistence"
@@ -110,14 +118,93 @@ func TestIntegrationUserAccountClosedDeletesOwnedRequestsDeadLettersAndAttempts(
 		UpdatedAt:      now,
 		OccurredAt:     now,
 	}
-	result, err := projection.ApplyUserAccountClosed(ctx, event)
+	applicationFacet, err := application.NewUserAccountClosedProjection(projection)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.DeletedRequests != 1 || result.DeletedTasks != 1 ||
-		result.DeletedAttempts != 1 || result.DeletedResultOutboxes != 1 ||
-		result.DeletedRecoveryRecords != 1 {
-		t.Fatalf("unexpected integration account closure result: %+v", result)
+	redisRuntime, err := testinfra.StartRealRedis(ctx)
+	if err != nil {
+		t.Fatalf("start real Redis: %v", err)
+	}
+	t.Cleanup(func() {
+		if closeErr := redisRuntime.Close(context.Background()); closeErr != nil {
+			t.Errorf("close real Redis: %v", closeErr)
+		}
+	})
+	if err := redisRuntime.FlushDBs(ctx, 0); err != nil {
+		t.Fatalf("flush real Redis: %v", err)
+	}
+	redisRouter := platformredis.MustNewRouter(rtredis.RouterConfig{
+		Scenes: map[string]rtredis.SceneConfig{
+			"general": {
+				Mode:     "standalone",
+				Addr:     redisRuntime.Addr,
+				Password: redisRuntime.Password,
+				DB:       0,
+				TLS:      redisRuntime.TLS,
+			},
+		},
+		DefaultScene: "general",
+	})
+	t.Cleanup(func() {
+		if closeErr := redisRouter.Close(); closeErr != nil {
+			t.Errorf("close real Redis router: %v", closeErr)
+		}
+	})
+	redisClient := redisRouter.Scene("general")
+	transport, err := runtimemessaging.NewRedisMessageTransportForRoot(
+		"integration-account-closure-api",
+		runtimemessaging.RedisMessageTransportAdapter,
+		redisClient,
+		redisClient,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config := streamadapter.DefaultUserAccountClosedConsumerConfig()
+	config.MinIdle = 0
+	consumer, err := streamadapter.NewUserAccountClosedConsumer(
+		transport,
+		applicationFacet,
+		projection,
+		"integration-account-closure-api",
+		nil,
+		config,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	appendIntegrationAccountClosureEvent(t, redisClient, event)
+	if processed, err := consumer.ProcessOnce(ctx); err != nil || processed != 1 {
+		t.Fatalf("process UserAccountClosed: processed=%d err=%v", processed, err)
+	}
+	pending, _, err := redisClient.XAutoClaim(
+		ctx,
+		streamadapter.UserAccountEventStream,
+		streamadapter.UserAccountClosedConsumerGroup,
+		"integration-account-closure-api-inspector",
+		0,
+		"0-0",
+		10,
+	)
+	if err != nil || len(pending) != 0 {
+		t.Fatalf("UserAccountClosed ACK pending=%d err=%v", len(pending), err)
+	}
+	var inboxReceipt struct {
+		DeletedRequests        int64 `bson:"deletedRequests"`
+		DeletedTasks           int64 `bson:"deletedTasks"`
+		DeletedAttempts        int64 `bson:"deletedAttempts"`
+		DeletedResultOutboxes  int64 `bson:"deletedResultOutboxes"`
+		DeletedRecoveryRecords int64 `bson:"deletedRecoveryRecords"`
+	}
+	if err := integrationMongoDB.Collection("integration_user_account_closed_inbox").
+		FindOne(ctx, bson.M{"_id": event.EventID}).Decode(&inboxReceipt); err != nil {
+		t.Fatalf("read account closure receipt: %v", err)
+	}
+	if inboxReceipt.DeletedRequests != 1 || inboxReceipt.DeletedTasks != 1 ||
+		inboxReceipt.DeletedAttempts != 1 || inboxReceipt.DeletedResultOutboxes != 1 ||
+		inboxReceipt.DeletedRecoveryRecords != 1 {
+		t.Fatalf("unexpected integration account closure receipt: %+v", inboxReceipt)
 	}
 	for _, collection := range []string{
 		"reliable_task_outbox",
@@ -134,8 +221,42 @@ func TestIntegrationUserAccountClosedDeletesOwnedRequestsDeadLettersAndAttempts(
 	if err != nil || count != 1 {
 		t.Fatalf("provider attempt isolation count=%d err=%v", count, err)
 	}
-	replayed, err := projection.ApplyUserAccountClosed(ctx, event)
-	if err != nil || !replayed.Replayed {
-		t.Fatalf("account closure replay=%+v err=%v", replayed, err)
+	appendIntegrationAccountClosureEvent(t, redisClient, event)
+	if processed, err := consumer.ProcessOnce(ctx); err != nil || processed != 1 {
+		t.Fatalf("process UserAccountClosed replay: processed=%d err=%v", processed, err)
 	}
+	inboxCount, err := integrationMongoDB.Collection("integration_user_account_closed_inbox").
+		CountDocuments(ctx, bson.M{"_id": event.EventID})
+	if err != nil || inboxCount != 1 {
+		t.Fatalf("account closure replay receipt count=%d err=%v", inboxCount, err)
+	}
+}
+
+func appendIntegrationAccountClosureEvent(
+	t *testing.T,
+	client rtredis.Client,
+	event application.UserAccountClosedEvent,
+) string {
+	t.Helper()
+	payload, err := json.Marshal(map[string]any{
+		"userId":       event.UserID,
+		"personaIds":   event.PersonaIDs,
+		"accountState": event.AccountState,
+		"updatedAt":    event.UpdatedAt.UTC().Format(time.RFC3339Nano),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	messageID, err := client.XAdd(t.Context(), streamadapter.UserAccountEventStream, map[string]string{
+		"eventId":        event.EventID,
+		"eventName":      application.UserAccountClosedEventName,
+		"accountId":      event.UserID,
+		"accountVersion": "9",
+		"payload":        string(payload),
+		"occurredAt":     event.OccurredAt.UTC().Format(time.RFC3339Nano),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return messageID
 }

@@ -71,3 +71,68 @@ api_routes:
   slo: {latency_p95_ms: 1200, availability_percent: 99.9}
   application: {kind: command, facet: ConnectorAuthorizationCommandFacade, method: completeOAuthAuthorization, aggregate_owner: ConnectorAuthorization, mutation_target: ConnectorAuthorization, invariant_target: ConnectorAuthorization}
   description: OAuth callback edge 先完成 state/PKCE/provider 校验并把受保护 callbackRef 交给本命令；公开 callback 参数不进入业务 DTO。
+readiness_cases:
+- case_id: start-connector-authorization-local
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: StartConnectorAuthorization}
+  runner_source_path: quwoquan_service/services/integration-service/tests/local_contract/external_integration/connector_authorization/connector_authorization__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: start-connector-authorization-api
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-001
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: StartConnectorAuthorization}
+  runner_source_path: quwoquan_service/services/integration-service/tests/api_integration/external_integration/connector_authorization/connector_authorization_mongo__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: get-connector-authorization-local
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: GetConnectorAuthorization}
+  runner_source_path: quwoquan_service/services/integration-service/tests/local_contract/external_integration/connector_authorization/connector_authorization__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: get-connector-authorization-api
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-001
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: GetConnectorAuthorization}
+  runner_source_path: quwoquan_service/services/integration-service/tests/api_integration/external_integration/connector_authorization/connector_authorization_mongo__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: complete-native-connector-authorization-local
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: CompleteNativeConnectorAuthorization}
+  runner_source_path: quwoquan_service/services/integration-service/tests/local_contract/external_integration/connector_authorization/connector_authorization__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: native-proof-verifier-double, digest_binding: candidate}
+- case_id: complete-native-connector-authorization-api
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-001
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: CompleteNativeConnectorAuthorization}
+  runner_source_path: quwoquan_service/services/integration-service/tests/api_integration/external_integration/connector_authorization/connector_authorization_mongo__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb-native-proof-verifier-double, digest_binding: candidate}
+- case_id: complete-oauth-connector-authorization-local
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: CompleteOAuthConnectorAuthorization}
+  runner_source_path: quwoquan_service/services/integration-service/tests/local_contract/external_integration/connector_authorization/connector_authorization__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: oauth-proof-verifier-double, digest_binding: candidate}
+- case_id: complete-oauth-connector-authorization-api
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-001
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: CompleteOAuthConnectorAuthorization}
+  runner_source_path: quwoquan_service/services/integration-service/tests/api_integration/external_integration/connector_authorization/connector_authorization_mongo__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb-oauth-proof-verifier-double, digest_binding: candidate}

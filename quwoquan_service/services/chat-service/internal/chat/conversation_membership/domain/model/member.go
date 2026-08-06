@@ -11,18 +11,18 @@ import (
 var ErrNotFound = errors.New("conversation member not found")
 
 type Member struct {
-	ID               string    `json:"id" bson:"_id"`
-	ConversationId   string    `json:"conversationId" bson:"conversationId"`
-	UserId           string    `json:"userId" bson:"userId"`
-	UserHandle       string    `json:"userHandle" bson:"userHandle"`
-	DisplayName      string    `json:"displayName" bson:"displayName"`
-	AvatarUrl        string    `json:"avatarUrl" bson:"avatarUrl"`
-	AvatarAssetId    string    `json:"avatarAssetId" bson:"avatarAssetId"`
-	AvatarVersion    int64     `json:"avatarVersion" bson:"avatarVersion"`
-	MemberType       string    `json:"memberType" bson:"memberType"`
-	Role             string    `json:"role" bson:"role"`
-	InvitedBy        string    `json:"invitedBy" bson:"invitedBy"`
-	JoinedAt         time.Time `json:"joinedAt" bson:"joinedAt"`
+	ID             string    `json:"id" bson:"_id"`
+	ConversationId string    `json:"conversationId" bson:"conversationId"`
+	UserId         string    `json:"userId" bson:"userId"`
+	UserHandle     string    `json:"userHandle" bson:"userHandle"`
+	DisplayName    string    `json:"displayName" bson:"displayName"`
+	AvatarUrl      string    `json:"avatarUrl" bson:"avatarUrl"`
+	AvatarAssetId  string    `json:"avatarAssetId" bson:"avatarAssetId"`
+	AvatarVersion  int64     `json:"avatarVersion" bson:"avatarVersion"`
+	MemberType     string    `json:"memberType" bson:"memberType"`
+	Role           string    `json:"role" bson:"role"`
+	InvitedBy      string    `json:"invitedBy" bson:"invitedBy"`
+	JoinedAt       time.Time `json:"joinedAt" bson:"joinedAt"`
 }
 
 func (member Member) Validate() error {

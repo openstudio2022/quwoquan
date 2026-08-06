@@ -3,21 +3,30 @@
 from __future__ import annotations
 
 import hashlib
-import json
-import os
 import shutil
 import tempfile
-from datetime import datetime, timezone
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any
 
-from core.tree_integrity import tree_integrity_stats
-from core.schema import assert_valid
-from core.release_layout import (
-    attestation_root,
-    payload_digest,
-    payload_file,
-    payload_root,
+from content.release.canonical.asset_review_adoption import (
+    adopt_independent_asset_review,
+)
+from content.release.canonical.creator_projection import project_creator_object
+from content.release.canonical.object_transaction_contract import (
+    LAYOUT_SCHEMA,
+    PACKAGE_SCHEMA,
+    REQUIRED_SOURCE_POLICY,
+    ObjectTransactionError,
+    _closure_digest,
+    _digest_file,
+    _execution_id,
+    _read_json,
+    _review_binding,
+    _safe_id,
+    _safe_rel,
+    _tree_digest,
+    _write_json,
 )
 from core.source_digest import SourceDigest, SourceDigestError
 from governance.coverage.license import (
@@ -25,42 +34,6 @@ from governance.coverage.license import (
     parse_rights_audit_status,
     rights_proof_required,
 )
-from content.release.canonical.object_transaction_contract import (
-    PACKAGE_SCHEMA,
-    DRY_RUN_SCHEMA,
-    APPLY_SCHEMA,
-    ROLLBACK_SCHEMA,
-    LAYOUT_SCHEMA,
-    RELEASE_SCHEMA,
-    REQUIRED_SOURCE_POLICY,
-    ALLOWED_OBJECT_KINDS,
-    ALLOWED_CANONICAL_ROOTS,
-    EXPECTED_OBJECT_SCHEMAS,
-    ObjectTransactionError,
-    assert_environment_neutral,
-    _now,
-    _json_bytes,
-    _digest_bytes,
-    _digest_file,
-    _execution_id,
-    _read_json,
-    _write_json,
-    _safe_id,
-    _safe_rel,
-    _files,
-    _copy_tree,
-    _tree_digest,
-    _tag_exists,
-    collect_canonical_tag_refs,
-    refresh_canonical_tag_snapshots,
-    _collect_object_keys,
-    _object_json_keys,
-    _review_binding,
-    _rights_binding,
-    _closure_digest,
-    _verify_package,
-)
-from content.release.canonical.creator_projection import project_creator_object
 
 
 def _release_entity_tag_refs(*, publish_root: Path, entity_refs: set[str]) -> list[str]:
@@ -297,6 +270,18 @@ def build_entity_object_transaction_package(
                 raw,
                 source_assets,
             )
+            independent_review = adopt_independent_asset_review(
+                raw_asset=raw,
+                related_sources=(source_asset,),
+                asset_kind="image",
+                asset_id=asset_id,
+                content_sha256=digest,
+                object_ref=object_ref,
+                execution_root=execution_root,
+                execution_manifest=execution_manifest,
+                object_root=object_root,
+                source_digest=source_digest.digest,
+            )
             canonical_file_page = str(
                 raw.get("authorizationProof")
                 or source_asset.get("authorizationProof")
@@ -380,13 +365,36 @@ def build_entity_object_transaction_package(
                 raise ObjectTransactionError(
                     f"asset {asset_id} 非 verified 权利状态缺审计问题"
                 )
-            attribution = f"{str(raw.get('caption') or asset_id)}，" + (
+            attribution = f"{raw.get('caption') or asset_id!s}，" + (
                 f"作者：{author}，许可：{effective_license_name}"
                 if rights_audit_status is RightsAuditStatus.VERIFIED
                 else "来源已记录，作者与许可尚未核实"
             )
-            rights_rows.append(
-                {
+            usage_scope = str(
+                raw.get("usageScope") or source_asset.get("usageScope") or ""
+            ).strip()
+            model_release_status = str(
+                raw.get("modelReleaseStatus")
+                or source_asset.get("modelReleaseStatus")
+                or ""
+            ).strip()
+            if usage_scope not in {
+                "internal_reference",
+                "app_publish",
+                "editorial",
+            }:
+                raise ObjectTransactionError(
+                    f"asset {asset_id} 缺 canonical usageScope"
+                )
+            if model_release_status not in {
+                "not_required",
+                "obtained",
+                "editorial_only",
+            }:
+                raise ObjectTransactionError(
+                    f"asset {asset_id} 缺 canonical modelReleaseStatus"
+                )
+            rights_row = {
                     "assetId": asset_id,
                     "sourceKind": str(
                         (entity.get("primarySource") or {}).get("sourceKind")
@@ -410,7 +418,7 @@ def build_entity_object_transaction_package(
                     "licenseName": effective_license_name,
                     "licenseShortName": effective_license_name,
                     "licenseUrl": license_url,
-                    "usageScope": "app_publish",
+                    "usageScope": usage_scope,
                     "attribution": attribution,
                     "caption": str(raw.get("caption") or ""),
                     "captionSource": "captured source asset metadata",
@@ -432,9 +440,16 @@ def build_entity_object_transaction_package(
                     "authorizationProof": authorization_proof,
                     "rightsAuditStatus": rights_audit_status.value,
                     "rightsAuditIssues": rights_audit_issues,
-                    "modelReleaseStatus": "not_required",
+                    "modelReleaseStatus": model_release_status,
                 }
-            )
+            if independent_review is not None:
+                rights_row.update(
+                    acquisitionReceiptRef=independent_review[
+                        "acquisitionReceiptRef"
+                    ],
+                    independentAssetReview=independent_review,
+                )
+            rights_rows.append(rights_row)
             cas_rows.append(
                 {
                     "sourceRef": cas_ref.as_posix(),

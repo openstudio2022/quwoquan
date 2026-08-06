@@ -2,6 +2,16 @@ backend: mongodb
 role: projection
 collections:
   rm_discovery_feed: {entity: RecommendationCandidateIndexView, role: projection}
+  rm_gathering_candidates:
+    entity: RecommendationGatheringCandidateProjection
+    role: projection
+    description: Circle 签发 PublicCard 的最小发现索引；以 gatheringId 为 sourceKey，和 Post/Entity 对象卡共用 ranked candidate reader。
+    indexes:
+    - name: uq_recommendation_gathering_candidate_source
+      keys: {sourceKey: 1}
+      unique: true
+    - name: idx_recommendation_gathering_candidate_rank_scan
+      keys: {updatedAt: -1, sourceKey: 1}
   rm_premium_pool: {entity: RecommendationPremiumCandidateProjection, role: projection}
   rm_entity_tags: {entity: RecommendationEntityTagProjection, role: projection}
   recommendation_candidate_tombstones:
@@ -61,6 +71,12 @@ collections:
       keys: {_id: 1}
       unique: true
 streams:
+  events.circle.gathering.recommendation_candidate.dlq:
+    entity: RecommendationCandidateIndexView
+    role: dead_letter
+    idempotency_key: sourceStreamId
+    retention_seconds: 604800
+    description: Gathering lifecycle 发现投影达到重试上限后的脱敏终止记录。
   events.user.persona_relationship.recommendation-candidate.dlq:
     entity: RecommendationCandidateIndexView
     role: dead_letter

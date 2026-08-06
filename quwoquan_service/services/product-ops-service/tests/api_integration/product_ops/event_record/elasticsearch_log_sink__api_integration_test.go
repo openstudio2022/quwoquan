@@ -1,15 +1,27 @@
+// spec_ref: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/spec.md#sit-001
+// readiness_case: report-event-batch-api
+// readiness_case: report-startup-event-batch-api
 package api_integration
 
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
+	platformredis "quwoquan_service/internal/platform/redis"
+	"quwoquan_service/internal/platform/testinfra"
+	rtauth "quwoquan_service/runtime/auth"
+	"quwoquan_service/runtime/operation"
+	rtredis "quwoquan_service/runtime/redis"
+	eventhttp "quwoquan_service/services/product-ops-service/internal/product_ops/event_record/adapters/inbound/http"
 	"quwoquan_service/services/product-ops-service/internal/product_ops/event_record/application"
 	telemetrypersistence "quwoquan_service/services/product-ops-service/internal/product_ops/event_record/infrastructure/persistence"
 	testsupport "quwoquan_service/services/product-ops-service/tests/support"
@@ -20,8 +32,32 @@ func TestElasticsearchLogSinkPersistsAndQueriesCanonicalTelemetry(
 ) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
+	testinfra.ConfigureLocalContainerRuntime()
 	endpoint, terminate := testsupport.StartElasticsearch(t, ctx)
 	defer terminate()
+	redisRuntime, err := testinfra.StartRealRedis(ctx)
+	if err != nil {
+		t.Fatalf("start real Redis: %v", err)
+	}
+	if err := redisRuntime.FlushDBs(ctx, 0); err != nil {
+		t.Fatalf("flush real Redis: %v", err)
+	}
+	redisRouter, err := platformredis.NewRouter(
+		eventRecordRealRedisRouterConfig(redisRuntime),
+	)
+	if err != nil {
+		t.Fatalf("create real Redis router: %v", err)
+	}
+	t.Cleanup(func() {
+		if closeErr := redisRouter.Close(); closeErr != nil {
+			t.Errorf("close Redis router: %v", closeErr)
+		}
+		closeCtx, closeCancel := context.WithTimeout(context.Background(), time.Minute)
+		defer closeCancel()
+		if closeErr := redisRuntime.Close(closeCtx); closeErr != nil {
+			t.Errorf("close real Redis: %v", closeErr)
+		}
+	})
 
 	suffix := fmt.Sprintf("%d", time.Now().UnixNano())
 	config := telemetrypersistence.ElasticsearchConfig{
@@ -98,15 +134,21 @@ func TestElasticsearchLogSinkPersistsAndQueriesCanonicalTelemetry(
 		ctx,
 		startupBatchKey,
 		[]application.StartupDiagnosticRecord{{
-			EventID:      "startup-event",
-			AttemptID:    "startup-attempt",
-			Phase:        "flutter_first_frame",
-			Outcome:      "succeeded",
-			OccurredAt:   now.Format(time.RFC3339Nano),
-			Platform:     "ios",
-			RuntimeEnv:   "gamma",
-			AppVersion:   "1.0.0",
-			NetworkClass: "wifi",
+			EventID:           "startup-event",
+			AttemptID:         "startup-attempt",
+			Phase:             "recovery",
+			Outcome:           "failed",
+			OccurredAt:        now.Format(time.RFC3339Nano),
+			Platform:          "ios",
+			RuntimeEnv:        "gamma",
+			AppVersion:        "1.0.0",
+			NetworkClass:      "wifi",
+			RecoverySurface:   "page.app.startup_recovery",
+			RecoveryLifecycle: "failure",
+			RecoveryMount:     "runtime_boundary",
+			RecoveryPhase:     "runtime_unavailable",
+			RecoveryAction:    "none",
+			FailureSource:     "runtime_boundary",
 		}},
 	); err != nil {
 		t.Fatalf("PutStartupDiagnostics() error = %v", err)
@@ -118,6 +160,25 @@ func TestElasticsearchLogSinkPersistsAndQueriesCanonicalTelemetry(
 			complete,
 			err,
 		)
+	}
+	startupSource := readElasticsearchDocumentSource(
+		t,
+		ctx,
+		endpoint,
+		config.StartupDiagnosticIndex+"-"+now.Format("2006.01.02"),
+		startupBatchKey+":0",
+	)
+	for field, want := range map[string]string{
+		"recoverySurface":   "page.app.startup_recovery",
+		"recoveryLifecycle": "failure",
+		"recoveryMount":     "runtime_boundary",
+		"recoveryPhase":     "runtime_unavailable",
+		"recoveryAction":    "none",
+		"failureSource":     "runtime_boundary",
+	} {
+		if got := fmt.Sprint(startupSource[field]); got != want {
+			t.Fatalf("startup source %s = %q; want %q", field, got, want)
+		}
 	}
 
 	runtimeBatchKey := strings.Repeat("c", 64)
@@ -324,6 +385,86 @@ func TestElasticsearchLogSinkPersistsAndQueriesCanonicalTelemetry(
 		len(runtimeDrilldown.Items[0].Correlation) != 0 {
 		t.Fatalf("GetRuntimeLogDrilldown() = %+v", runtimeDrilldown)
 	}
+
+	// Exercise the canonical inbound routes against this same real
+	// Elasticsearch-backed service. Direct store assertions above prove the
+	// provider contract; these requests prove the declared HTTP operations
+	// actually reach that provider boundary.
+	service := application.NewTelemetryService(
+		store,
+		telemetrypersistence.NewRedisEventBatchLedger(
+			redisRouter.Scene("general"),
+		),
+	)
+	mux := http.NewServeMux()
+	eventhttp.NewHandler(service, nil, nil).Register(mux)
+	eventhttp.NewStartupTelemetryHandler(service, nil).Register(mux)
+	eventBody, err := json.Marshal(map[string]any{
+		"events": []application.EventRecordInput{
+			integrationElasticsearchPageEvent(time.Now().UTC(), "page_open", "http-route"),
+		},
+	})
+	if err != nil {
+		t.Fatalf("marshal ReportEventBatch body: %v", err)
+	}
+	var canonicalEventBody any
+	if err := json.Unmarshal(eventBody, &canonicalEventBody); err != nil {
+		t.Fatalf("normalize ReportEventBatch body: %v", err)
+	}
+	canonicalEventJSON, err := json.Marshal(canonicalEventBody)
+	if err != nil {
+		t.Fatalf("canonicalize ReportEventBatch body: %v", err)
+	}
+	eventDigest := sha256.Sum256(canonicalEventJSON)
+	eventRequest := httptest.NewRequest(http.MethodPost, "/ops/events", bytes.NewReader(eventBody))
+	eventRequest = eventRequest.WithContext(rtauth.WithPrincipal(
+		eventRequest.Context(),
+		rtauth.Principal{Actor: operation.ActorContext{PersonaID: "persona-api-integration"}},
+	))
+	eventRequest.Header.Set("Idempotency-Key", fmt.Sprintf("%x", eventDigest))
+	eventResponse := httptest.NewRecorder()
+	mux.ServeHTTP(eventResponse, eventRequest)
+	if eventResponse.Code != http.StatusOK {
+		t.Fatalf("ReportEventBatch status=%d body=%s", eventResponse.Code, eventResponse.Body)
+	}
+
+	startupBody := []byte(fmt.Sprintf(
+		`{"events":[{"eventId":"attempt_1234567890123456_1","attemptId":"attempt_1234567890123456","sequence":1,"phase":"terminal","phaseDurationMs":10,"elapsedMs":1000,"outcome":"success","occurredAt":%q,"platform":"android","runtimeEnv":"gamma","appVersion":"1.0.0","networkClass":"wifi","recoverySurface":"","failureCode":"","failureSource":"","deadlineOrigin":"android_process"}]}`,
+		time.Now().UTC().Format(time.RFC3339Nano),
+	))
+	startupRequest := httptest.NewRequest(
+		http.MethodPost,
+		"/ops/startup-events",
+		bytes.NewReader(startupBody),
+	)
+	startupRequest.Header.Set("X-Qwq-Startup-Proof", "proof_123456789012345678901234")
+	startupResponse := httptest.NewRecorder()
+	mux.ServeHTTP(startupResponse, startupRequest)
+	if startupResponse.Code != http.StatusOK {
+		t.Fatalf(
+			"ReportStartupEventBatch status=%d body=%s",
+			startupResponse.Code,
+			startupResponse.Body,
+		)
+	}
+}
+
+func eventRecordRealRedisRouterConfig(runtime *testinfra.RealRedis) rtredis.RouterConfig {
+	scenes := make(map[string]rtredis.SceneConfig, len(rtredis.GeneratedSceneNames()))
+	for _, name := range rtredis.GeneratedSceneNames() {
+		scenes[name] = rtredis.SceneConfig{
+			Mode:     "standalone",
+			Addr:     runtime.Addr,
+			Password: runtime.Password,
+			DB:       0,
+			TLS:      runtime.TLS,
+		}
+	}
+	return rtredis.RouterConfig{
+		Scenes:       scenes,
+		PrefixRoutes: rtredis.GeneratedPrefixRoutes(),
+		DefaultScene: rtredis.GeneratedDefaultScene,
+	}
 }
 
 func integrationElasticsearchPageEvent(
@@ -440,6 +581,47 @@ func assertElasticsearchLifecycleBinding(
 			)
 		}
 	}
+}
+
+func readElasticsearchDocumentSource(
+	t *testing.T,
+	ctx context.Context,
+	endpoint string,
+	index string,
+	documentID string,
+) map[string]any {
+	t.Helper()
+	request, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodGet,
+		endpoint+"/"+index+"/_doc/"+documentID,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("build Elasticsearch document request: %v", err)
+	}
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatalf("read Elasticsearch document: %v", err)
+	}
+	defer response.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(response.Body, 64<<10))
+	if err != nil {
+		t.Fatalf("read Elasticsearch document response: %v", err)
+	}
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("Elasticsearch document status=%d body=%s", response.StatusCode, body)
+	}
+	var document struct {
+		Source map[string]any `json:"_source"`
+	}
+	if err := json.Unmarshal(body, &document); err != nil {
+		t.Fatalf("decode Elasticsearch document: %v", err)
+	}
+	if document.Source == nil {
+		t.Fatalf("Elasticsearch document has no _source: %s", body)
+	}
+	return document.Source
 }
 
 func refreshElasticsearchIndices(

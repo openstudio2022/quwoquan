@@ -22,47 +22,47 @@ var (
 // AppErrorFromSkillSettingIdempotencyConflict returns *AppError for ASSISTANT.USER.skill_setting_idempotency_conflict (user_message from errors.yaml).
 func AppErrorFromSkillSettingIdempotencyConflict(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.skill_setting_idempotency_conflict")
-	return rterr.NewAppError(code, "重复请求与原技能设置不一致", debugMessage).WithMetadata("skill_setting_idempotency_conflict", 409).WithRecovery("refresh", 0)
+	return rterr.NewAppError(code, "重复请求与原技能设置不一致", debugMessage).WithMetadata("skill_setting_idempotency_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromSkillSettingInvalidArgument returns *AppError for ASSISTANT.USER.skill_setting_invalid_argument (user_message from errors.yaml).
 func AppErrorFromSkillSettingInvalidArgument(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.skill_setting_invalid_argument")
-	return rterr.NewAppError(code, "技能设置参数有误", debugMessage).WithMetadata("skill_setting_invalid_argument", 400).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "技能设置参数有误", debugMessage).WithMetadata("skill_setting_invalid_argument", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromSkillSettingNotFound returns *AppError for ASSISTANT.USER.skill_setting_not_found (user_message from errors.yaml).
 func AppErrorFromSkillSettingNotFound(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.skill_setting_not_found")
-	return rterr.NewAppError(code, "尚未保存此技能的个性设置", debugMessage).WithMetadata("skill_setting_not_found", 404).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "尚未保存此技能的个性设置", debugMessage).WithMetadata("skill_setting_not_found", 404).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromSkillSettingPackageUnavailable returns *AppError for ASSISTANT.SYSTEM.skill_setting_package_unavailable (user_message from errors.yaml).
 func AppErrorFromSkillSettingPackageUnavailable(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.SYSTEM.skill_setting_package_unavailable")
-	return rterr.NewAppError(code, "暂时无法验证技能设置结构，请稍后重试", debugMessage).WithMetadata("skill_setting_package_unavailable", 503).WithRecovery("retry", 3)
+	return rterr.NewAppError(code, "暂时无法验证技能设置结构，请稍后重试", debugMessage).WithMetadata("skill_setting_package_unavailable", 503).WithRecoveryDirective("retry", "snackbar", 3)
 }
 
 // AppErrorFromSkillSettingRevisionConflict returns *AppError for ASSISTANT.USER.skill_setting_revision_conflict (user_message from errors.yaml).
 func AppErrorFromSkillSettingRevisionConflict(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.skill_setting_revision_conflict")
-	return rterr.NewAppError(code, "技能设置已更新，请刷新后重试", debugMessage).WithMetadata("skill_setting_revision_conflict", 409).WithRecovery("refresh", 0)
+	return rterr.NewAppError(code, "技能设置已更新，请刷新后重试", debugMessage).WithMetadata("skill_setting_revision_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromSkillSettingSchemaDigestMismatch returns *AppError for ASSISTANT.USER.skill_setting_schema_digest_mismatch (user_message from errors.yaml).
 func AppErrorFromSkillSettingSchemaDigestMismatch(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.skill_setting_schema_digest_mismatch")
-	return rterr.NewAppError(code, "技能设置结构已更新，请刷新后重新设置", debugMessage).WithMetadata("skill_setting_schema_digest_mismatch", 409).WithRecovery("refresh", 0)
+	return rterr.NewAppError(code, "技能设置结构已更新，请刷新后重新设置", debugMessage).WithMetadata("skill_setting_schema_digest_mismatch", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromSkillSettingStorageUnavailable returns *AppError for ASSISTANT.SYSTEM.skill_setting_storage_unavailable (user_message from errors.yaml).
 func AppErrorFromSkillSettingStorageUnavailable(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.SYSTEM.skill_setting_storage_unavailable")
-	return rterr.NewAppError(code, "技能设置服务暂不可用，个人技能按失败关闭处理", debugMessage).WithMetadata("skill_setting_storage_unavailable", 503).WithRecovery("retry", 3)
+	return rterr.NewAppError(code, "技能设置服务暂不可用，个人技能按失败关闭处理", debugMessage).WithMetadata("skill_setting_storage_unavailable", 503).WithRecoveryDirective("retry", "snackbar", 3)
 }
 
 // AppErrorFromSkillSettingUnauthorized returns *AppError for ASSISTANT.USER.skill_setting_unauthorized (user_message from errors.yaml).
 func AppErrorFromSkillSettingUnauthorized(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.skill_setting_unauthorized")
-	return rterr.NewAppError(code, "请先登录后管理技能设置", debugMessage).WithMetadata("skill_setting_unauthorized", 401).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "请先登录后管理技能设置", debugMessage).WithMetadata("skill_setting_unauthorized", 401).WithRecoveryDirective("surface", "inlineCard", 0)
 }

@@ -13,10 +13,10 @@ import (
 
 func main() {
 	handler, err := server.New(server.Config{
-		Environment:         required("APP_ENV"),
-		ConfigurationDigest: required("PROVIDER_SUBSTITUTE_CONFIGURATION_DIGEST"),
-		OperatorToken:       required("PROVIDER_SUBSTITUTE_OPERATOR_TOKEN"),
-		DefaultScenario:     strings.TrimSpace(os.Getenv("PROVIDER_SUBSTITUTE_SCENARIO")),
+		Environment:              required("APP_ENV"),
+		ConfigurationDigest:      required("PROVIDER_SUBSTITUTE_CONFIGURATION_DIGEST"),
+		RuntimeCompositionDigest: required("QWQ_PROVIDER_RUNTIME_DIGEST"),
+		OperatorToken:            required("PROVIDER_SUBSTITUTE_OPERATOR_TOKEN"),
 	})
 	if err != nil {
 		log.Fatal(err)

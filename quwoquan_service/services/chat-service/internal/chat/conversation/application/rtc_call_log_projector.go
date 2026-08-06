@@ -12,6 +12,7 @@ import (
 
 	messageevent "quwoquan_service/services/chat-service/generated/chat/message/contract/event"
 	messagemodel "quwoquan_service/services/chat-service/internal/chat/message/domain/model"
+	messageports "quwoquan_service/services/chat-service/internal/chat/message/domain/ports"
 )
 
 // RtcCallEndedFact 是 rtc CallEnded 公共事件的 typed application 输入。
@@ -75,7 +76,7 @@ func (s *MessageService) AppendRtcCallLog(
 	committed, err := s.messages.CommitMessage(ctx, MessageCommit{
 		Message:       msg,
 		CommandDigest: hex.EncodeToString(digest[:]),
-		Events: []MessageOutboxEvent{{
+		Events: []messageports.OutboxEvent{{
 			EventID:        messageID + ":" + messageevent.MessageSent,
 			EventType:      messageevent.MessageSent,
 			ConversationID: conversationID,

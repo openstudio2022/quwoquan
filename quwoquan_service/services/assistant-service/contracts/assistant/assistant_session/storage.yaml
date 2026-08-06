@@ -1,6 +1,7 @@
 backend: mongodb
 collections:
   assistant_sessions:
+    publication_role: not_published
     entity: AssistantSession
     role: authoritative
     description: AssistantSession 聚合真相源；一次创建幂等由 userId+clientRequestId 唯一约束承载（聚合自身即 receipt，与 Post 发布同型）。
@@ -16,6 +17,7 @@ collections:
       unique: true
       sparse: true
   assistant_session_summary_receipts:
+    publication_role: not_published
     entity: AssistantSession
     role: authoritative
     description: AssistantSession 滚动摘要提交的事务幂等回执；completionEventId 是稳定回执身份，sessionId+sourceSequence 防止同一完成序列重复压缩。
@@ -25,4 +27,15 @@ collections:
         sessionId: 1
         sourceSequence: 1
       unique: true
+  assistant_session_outbox:
+    publication_role: transactional_outbox
+    entity: AssistantSession
+    role: authoritative
+    description: AssistantSession 领域事件的事务性发件箱；事件行与聚合状态在同一个 Mongo 事务内提交，relay 以 claimUntil 租约认领后至少一次投递到耐久传输，禁止同步发布替代 outbox。
+    indexes:
+    - name: idx_assistant_session_outbox_claimable
+      keys:
+        publishedAt: 1
+        claimUntil: 1
+        occurredAt: 1
 role: authoritative

@@ -1,6 +1,7 @@
 backend: mongodb
 collections:
   skill_subscriptions:
+    publication_role: not_published
     entity: SkillSubscription
     role: authoritative
     description: 订阅聚合真相源；所有外部 command 通过 version CAS、独立 receipt 与 outbox 单事务提交。
@@ -25,6 +26,7 @@ collections:
         updatedAt: 1
         _id: 1
   skill_subscription_command_receipts:
+    publication_role: not_published
     entity: SkillSubscriptionCommandReceipt
     role: authoritative
     description: 外部创建与状态命令的不可变幂等回执；同一 owner/commandId 只允许一个 canonical command digest。
@@ -35,6 +37,7 @@ collections:
         commandId: 1
       unique: true
   skill_subscription_outbox:
+    publication_role: transactional_outbox
     entity: SkillSubscriptionOutboxEvent
     role: authoritative
     description: 与聚合版本和 command receipt 同事务提交的生命周期事件；禁止同步发布替代 outbox。
@@ -48,8 +51,10 @@ collections:
     - name: idx_skill_subscription_outbox_pending
       keys:
         publishedAt: 1
+        nextAttemptAt: 1
+        claimUntil: 1
         occurredAt: 1
-status_transition_note: UpdateSkillSubscriptionStatus 使用内部 version CAS；目标状态已满足时只提交 command receipt，聚合版本、updatedAt 和 outbox 均保持不变。
+description: UpdateSkillSubscriptionStatus 使用内部 version CAS；目标状态已满足时只提交 command receipt，聚合版本、updatedAt 和 outbox 均保持不变。
 redis_cache:
 - key: assistant:subscription:lease:{subscriptionId}:{deliveryId}
   ttl_seconds: 300

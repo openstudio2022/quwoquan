@@ -107,8 +107,8 @@
 
 ## 7. 工程归属
 
-- App：`quwoquan_app/lib/ui/entity`
-- App（协作引用，不用于代码归属）：`quwoquan_app/lib/ui/content`
+- App：`quwoquan_app/lib/service/entity_service`
+- App（协作引用，不用于代码归属）：`quwoquan_app/lib/service/content_service`
 - Contracts：`quwoquan_service/services/entity-service/contracts`
 - Contracts（协作引用，不用于代码归属）：`quwoquan_service/services/content-service/contracts`
 - Service：`quwoquan_service/services/entity-service`

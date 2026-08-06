@@ -107,6 +107,56 @@ def test_video_completion_accepts_video_lane_readiness(monkeypatch):
     ) == []
 
 
+def test_managed_completion_preserves_partial_qualified_objects(monkeypatch):
+    ctx = _context(entity_ids=["测试实体甲", "测试实体乙", "测试实体丙"])
+    monkeypatch.setattr(
+        auto_research,
+        "_download_auto_research_lanes",
+        lambda _ctx: {ContentType.HOMEPAGE.value},
+    )
+    from content.execution import readiness_audit
+
+    monkeypatch.setattr(
+        readiness_audit,
+        "audit_execution_readiness",
+        lambda *_args, **_kwargs: {
+            "failedLaneCount": 2,
+            "lanePassed": {ContentType.HOMEPAGE.value: 1},
+            "targetCount": 3,
+        },
+    )
+
+    assert execution_completion.execution_completion_issues(
+        ctx,
+        ExecutionFixtureBuilder(ctx.execution_id).state(),
+    ) == []
+
+
+def test_managed_completion_blocks_when_no_object_qualified(monkeypatch):
+    ctx = _context()
+    monkeypatch.setattr(
+        auto_research,
+        "_download_auto_research_lanes",
+        lambda _ctx: {ContentType.HOMEPAGE.value},
+    )
+    from content.execution import readiness_audit
+
+    monkeypatch.setattr(
+        readiness_audit,
+        "audit_execution_readiness",
+        lambda *_args, **_kwargs: {
+            "failedLaneCount": 1,
+            "lanePassed": {ContentType.HOMEPAGE.value: 0},
+            "targetCount": 1,
+        },
+    )
+
+    assert execution_completion.execution_completion_issues(
+        ctx,
+        ExecutionFixtureBuilder(ctx.execution_id).state(),
+    ) == ["managed execution has no qualified objects"]
+
+
 def test_readiness_quota_projection_covers_every_content_type():
     from content.execution.readiness_audit import _quota_by_lane
 

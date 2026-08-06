@@ -1,24 +1,10 @@
 from __future__ import annotations
 
-import importlib.util
-import io
-import json
 import re
-import urllib.error
 from pathlib import Path
-from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[3]
-SETUP_PATH = ROOT / "quwoquan_ops/ci/setup_flutter_sdk.py"
-
-
-def _load_setup_module():
-    spec = importlib.util.spec_from_file_location("setup_flutter_sdk", SETUP_PATH)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
 
 
 def test_delivery_gate_bootstrap_uses_pinned_cached_toolchains() -> None:
@@ -99,7 +85,7 @@ def test_environment_writing_jobs_stay_on_controlled_runners() -> None:
 
 def test_contract_metadata_bootstrap_creates_cache_parent_before_mktemp() -> None:
     script = (
-        ROOT / "quwoquan_service/scripts/contract/verify_contract_metadata.sh"
+        ROOT / "quwoquan_service/scripts/verify/verify_contract_metadata.sh"
     ).read_text(encoding="utf-8")
 
     mkdir_index = script.index('mkdir -p "$CONTRACT_VIEW_CACHE"')
@@ -114,122 +100,3 @@ def test_ff_config_contract_uses_portable_grep() -> None:
 
     assert 'grep -nF -- "$token" "$spec"' in script
     assert "rg -n" not in script
-
-
-def test_flutter_release_resolution_requires_official_checksum_and_architecture() -> None:
-    setup = _load_setup_module()
-    assert setup.OS_NAMES["macOS"] == "macos"
-    assert setup.OS_NAMES["darwin"] == "macos"
-    assert setup.ARCH_NAMES["ARM64"] == "arm64"
-    assert setup.ARCH_NAMES["aarch64"] == "arm64"
-    manifest = {
-        "current_release": {"stable": "abc123"},
-        "releases": [
-            {
-                "archive": "stable/linux/flutter_linux_1.2.3-stable.tar.xz",
-                "dart_sdk_arch": "x64",
-                "hash": "abc123",
-                "sha256": "a" * 64,
-                "version": "1.2.3",
-            },
-            {
-                "archive": "stable/linux/flutter_linux_arm64_1.2.3-stable.tar.xz",
-                "dart_sdk_arch": "arm64",
-                "hash": "abc123",
-                "sha256": "b" * 64,
-                "version": "1.2.3",
-            },
-        ],
-    }
-
-    release = setup.select_current_release(manifest, channel="stable", architecture="x64")
-
-    assert release == {
-        "archive": "stable/linux/flutter_linux_1.2.3-stable.tar.xz",
-        "hash": "abc123",
-        "sha256": "a" * 64,
-        "version": "1.2.3",
-    }
-
-
-def test_flutter_release_resolution_honors_repository_pinned_version() -> None:
-    setup = _load_setup_module()
-    manifest = {
-        "current_release": {"stable": "new-current"},
-        "releases": [
-            {
-                "archive": "stable/linux/flutter_linux_3.44.8-stable.tar.xz",
-                "channel": "stable",
-                "dart_sdk_arch": "x64",
-                "hash": "new-current",
-                "sha256": "a" * 64,
-                "version": "3.44.8",
-            },
-            {
-                "archive": "stable/linux/flutter_linux_3.44.3-stable.tar.xz",
-                "channel": "stable",
-                "dart_sdk_arch": "x64",
-                "hash": "locked-release",
-                "sha256": "b" * 64,
-                "version": "3.44.3",
-            },
-        ],
-    }
-
-    release = setup.select_current_release(
-        manifest, channel="stable", architecture="x64", version="3.44.3"
-    )
-
-    assert release == {
-        "archive": "stable/linux/flutter_linux_3.44.3-stable.tar.xz",
-        "hash": "locked-release",
-        "sha256": "b" * 64,
-        "version": "3.44.3",
-    }
-
-
-def test_flutter_release_manifest_download_retries_transient_ssl_eof() -> None:
-    setup = _load_setup_module()
-    payload = {"current_release": {"stable": "locked"}, "releases": []}
-    response = io.BytesIO(json.dumps(payload).encode("utf-8"))
-    transient = urllib.error.URLError("SSL: UNEXPECTED_EOF_WHILE_READING")
-
-    with (
-        mock.patch.object(
-            setup.urllib.request,
-            "urlopen",
-            side_effect=[transient, transient, response],
-        ) as opened,
-        mock.patch.object(setup.time, "sleep") as slept,
-    ):
-        downloaded = setup._download_json(
-            "https://storage.googleapis.com/flutter_infra_release/releases/releases_macos.json"
-        )
-
-    assert downloaded == payload
-    assert opened.call_count == 3
-    assert [item.args[0] for item in slept.call_args_list] == [5, 15]
-
-
-def test_flutter_release_manifest_download_does_not_retry_not_found() -> None:
-    setup = _load_setup_module()
-    not_found = urllib.error.HTTPError(
-        "https://storage.googleapis.com/flutter_infra_release/releases/missing.json",
-        404,
-        "not found",
-        {},
-        None,
-    )
-    with (
-        mock.patch.object(setup.urllib.request, "urlopen", side_effect=not_found) as opened,
-        mock.patch.object(setup.time, "sleep") as slept,
-    ):
-        try:
-            setup._download_json(not_found.url)
-        except urllib.error.HTTPError as error:
-            assert error.code == 404
-        else:
-            raise AssertionError("404 must fail without retry")
-
-    assert opened.call_count == 1
-    slept.assert_not_called()

@@ -25,59 +25,59 @@ var (
 // AppErrorFromConnectorConnectionUnauthorized returns *AppError for INTEGRATION.USER.connector_connection_unauthorized (user_message from errors.yaml).
 func AppErrorFromConnectorConnectionUnauthorized(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConnectorConnectionUnauthorized.Error()))
-	return rerrors.NewAppError(code, "请先登录后管理外部应用连接", debugMessage).WithMetadata("connector_connection_unauthorized", 401).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "请先登录后管理外部应用连接", debugMessage).WithMetadata("connector_connection_unauthorized", 401).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromConnectorConnectionInvalidArgument returns *AppError for INTEGRATION.USER.connector_connection_invalid_argument (user_message from errors.yaml).
 func AppErrorFromConnectorConnectionInvalidArgument(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConnectorConnectionInvalidArgument.Error()))
-	return rerrors.NewAppError(code, "连接请求参数有误", debugMessage).WithMetadata("connector_connection_invalid_argument", 400).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "连接请求参数有误", debugMessage).WithMetadata("connector_connection_invalid_argument", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromConnectorConnectionNotFound returns *AppError for INTEGRATION.USER.connector_connection_not_found (user_message from errors.yaml).
 func AppErrorFromConnectorConnectionNotFound(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConnectorConnectionNotFound.Error()))
-	return rerrors.NewAppError(code, "连接不存在或已不可用，请刷新", debugMessage).WithMetadata("connector_connection_not_found", 404).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "连接不存在或已不可用，请刷新", debugMessage).WithMetadata("connector_connection_not_found", 404).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromConnectionConnectorDefinitionNotFound returns *AppError for INTEGRATION.USER.connection_connector_definition_not_found (user_message from errors.yaml).
 func AppErrorFromConnectionConnectorDefinitionNotFound(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConnectionConnectorDefinitionNotFound.Error()))
-	return rerrors.NewAppError(code, "此连接能力已下线，请刷新", debugMessage).WithMetadata("connector_definition_not_found", 404).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "此连接能力已下线，请刷新", debugMessage).WithMetadata("connector_definition_not_found", 404).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromConnectorCapabilityDenied returns *AppError for INTEGRATION.USER.connector_capability_denied (user_message from errors.yaml).
 func AppErrorFromConnectorCapabilityDenied(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConnectorCapabilityDenied.Error()))
-	return rerrors.NewAppError(code, "申请的能力不在此连接支持范围内", debugMessage).WithMetadata("connector_capability_denied", 403).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "申请的能力不在此连接支持范围内", debugMessage).WithMetadata("connector_capability_denied", 403).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromConnectorGrantReceiptInvalid returns *AppError for INTEGRATION.USER.connector_grant_receipt_invalid (user_message from errors.yaml).
 func AppErrorFromConnectorGrantReceiptInvalid(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConnectorGrantReceiptInvalid.Error()))
-	return rerrors.NewAppError(code, "授权结果已失效，请重新连接", debugMessage).WithMetadata("connector_grant_receipt_invalid", 409).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "授权结果已失效，请重新连接", debugMessage).WithMetadata("connector_grant_receipt_invalid", 409).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromConnectorConnectionRevisionConflict returns *AppError for INTEGRATION.USER.connector_connection_revision_conflict (user_message from errors.yaml).
 func AppErrorFromConnectorConnectionRevisionConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConnectorConnectionRevisionConflict.Error()))
-	return rerrors.NewAppError(code, "连接状态已变化，请刷新后重试", debugMessage).WithMetadata("connector_connection_revision_conflict", 409).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "连接状态已变化，请刷新后重试", debugMessage).WithMetadata("connector_connection_revision_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromConnectorConnectionIdempotencyConflict returns *AppError for INTEGRATION.USER.connector_connection_idempotency_conflict (user_message from errors.yaml).
 func AppErrorFromConnectorConnectionIdempotencyConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConnectorConnectionIdempotencyConflict.Error()))
-	return rerrors.NewAppError(code, "重复请求与原连接命令不一致", debugMessage).WithMetadata("connector_connection_idempotency_conflict", 409).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "重复请求与原连接命令不一致", debugMessage).WithMetadata("connector_connection_idempotency_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromConnectorGrantAuthorizationDenied returns *AppError for INTEGRATION.MIDDLEWARE.connector_grant_authorization_denied (user_message from errors.yaml).
 func AppErrorFromConnectorGrantAuthorizationDenied(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConnectorGrantAuthorizationDenied.Error()))
-	return rerrors.NewAppError(code, "当前服务无权读取连接授权", debugMessage).WithMetadata("connector_grant_authorization_denied", 403).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "当前服务无权读取连接授权", debugMessage).WithMetadata("connector_grant_authorization_denied", 403).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromConnectorConnectionUnavailable returns *AppError for INTEGRATION.SYSTEM.connector_connection_unavailable (user_message from errors.yaml).
 func AppErrorFromConnectorConnectionUnavailable(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConnectorConnectionUnavailable.Error()))
-	return rerrors.NewAppError(code, "连接服务暂不可用，请稍后重试", debugMessage).WithMetadata("connector_connection_unavailable", 503).WithRecovery("retry", 3)
+	return rerrors.NewAppError(code, "连接服务暂不可用，请稍后重试", debugMessage).WithMetadata("connector_connection_unavailable", 503).WithRecoveryDirective("retry", "snackbar", 3)
 }

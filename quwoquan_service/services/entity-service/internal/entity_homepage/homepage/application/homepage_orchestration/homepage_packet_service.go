@@ -338,6 +338,61 @@ func (s *HomepageService) ApplyReviewSummary(
 	return err
 }
 
+// HomepageLifecycleHandler is the Homepage-owned target for lifecycle facts.
+// Producer relays decode and checkpoint their own streams; this handler owns
+// the canonical Homepage mutations and keeps those relays out of private
+// aggregate storage.
+type HomepageLifecycleHandler struct {
+	service *HomepageService
+}
+
+func NewHomepageLifecycleHandler(service *HomepageService) *HomepageLifecycleHandler {
+	if service == nil {
+		panic("Homepage lifecycle handler requires HomepageService")
+	}
+	return &HomepageLifecycleHandler{service: service}
+}
+
+func (handler *HomepageLifecycleHandler) ApplyReviewSummary(
+	ctx context.Context,
+	homepageID string,
+	averageRating *float64,
+	ratingCount int,
+	highlightTags []string,
+) error {
+	return handler.service.ApplyReviewSummary(
+		ctx,
+		homepageID,
+		averageRating,
+		ratingCount,
+		highlightTags,
+	)
+}
+
+func (handler *HomepageLifecycleHandler) ApplyClaimRequestedProjection(
+	ctx context.Context,
+	eventID string,
+	homepageID string,
+) error {
+	return handler.service.ApplyClaimRequestedProjection(ctx, eventID, homepageID)
+}
+
+func (handler *HomepageLifecycleHandler) ApplyClaimReviewedProjection(
+	ctx context.Context,
+	eventID string,
+	homepageID string,
+	requesterPersonaID string,
+	approved bool,
+) error {
+	return handler.service.ApplyClaimReviewedProjection(
+		ctx,
+		eventID,
+		homepageID,
+		requesterPersonaID,
+		approved,
+	)
+}
+
 // ApplyClaimRequestedProjection 是 HomepageClaimRequested 的幂等消费端口。
 func (s *HomepageService) ApplyClaimRequestedProjection(
 	ctx context.Context,

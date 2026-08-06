@@ -2,10 +2,42 @@ package ports
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/domain/model"
 )
+
+var (
+	ErrOutboxClaimLost = errors.New("skill subscription outbox claim lost")
+	ErrOutboxInvalid   = errors.New("skill subscription outbox input is invalid")
+)
+
+// OutboxEvent is a redacted lifecycle envelope. The public subscription event
+// contract exposes only subscriptionId; trigger criteria and destination
+// details remain inside the aggregate store.
+type OutboxEvent struct {
+	EventID          string
+	EventType        string
+	AggregateID      string
+	AggregateVersion int64
+	Payload          []byte
+	OccurredAt       time.Time
+	AttemptCount     int
+}
+
+type TransactionalOutbox interface {
+	ClaimPendingOutbox(
+		context.Context,
+		string,
+		time.Time,
+		time.Duration,
+	) (OutboxEvent, bool, error)
+	MarkOutboxPublished(context.Context, string, string, time.Time) error
+	ScheduleOutboxRetry(
+		context.Context, string, string, time.Time, time.Time, string,
+	) error
+}
 
 // Store is the only persistence port allowed to mutate SkillSubscription.
 // External commands commit aggregate state, receipt, and outbox atomically;

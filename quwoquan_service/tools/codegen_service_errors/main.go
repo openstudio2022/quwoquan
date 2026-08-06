@@ -21,11 +21,7 @@ type errorEntry struct {
 	GoConst              string            `yaml:"go_const"`
 	RecoveryAction       string            `yaml:"recovery_action"`
 	RecoveryAfterSeconds int               `yaml:"recovery_after_seconds"`
-	Recovery             struct {
-		Action          string `yaml:"action"`
-		DisruptionLevel string `yaml:"disruptionLevel"`
-		AfterSeconds    int    `yaml:"afterSeconds"`
-	} `yaml:"recovery"`
+	DisruptionLevel      string            `yaml:"disruption_level"`
 	UserMessage          map[string]string `yaml:"user_message"`
 }
 
@@ -108,7 +104,10 @@ func collectErrors(
 		if err := source.Decode(path, &document); err != nil {
 			return nil, fmt.Errorf("decode %s: %w", path, err)
 		}
-		if !strings.EqualFold(strings.TrimSpace(document.Domain), domain) {
+		// Domain is derived from ContractGraph source path (<domain>/...).
+		// errors.yaml must not restate domain/aggregate after schema single-track.
+		declaredDomain := strings.TrimSpace(document.Domain)
+		if declaredDomain != "" && !strings.EqualFold(declaredDomain, domain) {
 			return nil, fmt.Errorf(
 				"%s domain %q does not match %q",
 				path,
@@ -196,15 +195,9 @@ func renderErrors(sourcePath string, entries []errorEntry) ([]byte, error) {
 			functionName,
 		)
 		fmt.Fprintf(&buffer, "\tcode, _ := rterr.ParseCode(%q)\n", entry.Code)
-		action := strings.TrimSpace(entry.Recovery.Action)
-		if action == "" {
-			action = strings.TrimSpace(entry.RecoveryAction)
-		}
-		afterSeconds := entry.Recovery.AfterSeconds
-		if afterSeconds <= 0 {
-			afterSeconds = entry.RecoveryAfterSeconds
-		}
-		disruptionLevel := strings.TrimSpace(entry.Recovery.DisruptionLevel)
+		action := strings.TrimSpace(entry.RecoveryAction)
+		afterSeconds := entry.RecoveryAfterSeconds
+		disruptionLevel := strings.TrimSpace(entry.DisruptionLevel)
 		if disruptionLevel == "" {
 			fmt.Fprintf(
 				&buffer,
@@ -247,7 +240,7 @@ func validateEntry(entry errorEntry) error {
 	case entry.HTTPStatus != nil &&
 		(*entry.HTTPStatus < 400 || *entry.HTTPStatus > 599):
 		return fmt.Errorf("%s http_status must be in 400..599", entry.Code)
-	case strings.TrimSpace(entry.RecoveryAction) == "" && strings.TrimSpace(entry.Recovery.Action) == "":
+	case strings.TrimSpace(entry.RecoveryAction) == "":
 		return fmt.Errorf("%s recovery_action is required", entry.Code)
 	case strings.TrimSpace(entry.UserMessage["zh"]) == "":
 		return fmt.Errorf("%s user_message.zh is required", entry.Code)

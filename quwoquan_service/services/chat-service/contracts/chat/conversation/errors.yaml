@@ -1,5 +1,3 @@
-domain: CHAT
-aggregate: Conversation
 description: 'chat 域结构化错误码声明。格式：MODULE.KIND.REASON。
 
   codegen 从本文件生成 Dart ChatErrorCode enum + ChatErrorMessages，
@@ -9,12 +7,12 @@ description: 'chat 域结构化错误码声明。格式：MODULE.KIND.REASON。
   '
 errors:
 - code: CHAT.USER.invalid_argument
-  kind: USER
   reason: invalid_argument
   emitted_by:
   - surface: http
     operations:
     - CreateConversation
+    - GetGatheringChatBoard
     - ListConversations
     - ListSelectableGroupConversations
     - ProjectGatheringConversation
@@ -25,13 +23,13 @@ errors:
     - chat.message.SendAssistantDeliveryMessage
   http_status: 400
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: invalidArgument
   go_const: ErrInvalidArgument
   user_message:
     zh: 请求参数无效
     en: Request parameters are invalid
 - code: CHAT.USER.source_managed_binding_write_forbidden
-  kind: USER
   reason: invalid_argument
   emitted_by:
   - surface: http
@@ -39,13 +37,13 @@ errors:
     - CreateConversation
   http_status: 400
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: sourceManagedBindingWriteForbidden
   go_const: ErrSourceManagedBindingWriteForbidden
   user_message:
     zh: 来源对象绑定只能由所属领域创建
     en: Source-managed bindings can only be created by their owning domain
 - code: CHAT.USER.gathering_binding_conflict
-  kind: USER
   reason: gathering_binding_conflict
   emitted_by:
   - surface: http
@@ -54,19 +52,20 @@ errors:
     - chat.conversation_membership.ProjectGatheringConversationMembership
   http_status: 409
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: gatheringBindingConflict
   go_const: ErrGatheringBindingConflict
   user_message:
     zh: 相聚会话绑定冲突
     en: Gathering conversation binding conflicts with the source fact
 - code: CHAT.USER.conversation_not_found
-  kind: USER
   reason: not_found
   emitted_by:
   - surface: http
     operations:
     - DissolveConversation
     - GetConversation
+    - GetGatheringChatBoard
     - GetGroupHome
     - ListSelectableGroupContactMembers
     - chat.conversation_membership.ProjectGatheringConversationMembership
@@ -89,13 +88,13 @@ errors:
     - chat.message.SyncMessages
   http_status: 404
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: conversationNotFound
   go_const: ErrConversationNotFound
   user_message:
     zh: 会话不存在
     en: Conversation not found
 - code: CHAT.USER.unauthorized
-  kind: USER
   reason: unauthorized
   emitted_by:
   - surface: http
@@ -104,6 +103,7 @@ errors:
     - CreateConversation
     - DissolveConversation
     - GetConversation
+    - GetGatheringChatBoard
     - GetGroupHome
     - chat.message_receipt_fact.GetReceipts
     - ListContactHome
@@ -115,6 +115,7 @@ errors:
     - ListMessageHome
     - ListSelectableGroupContactMembers
     - ListSelectableGroupConversations
+    - ProjectGatheringConversation
     - RecoverChatAccountClosureDeadLetter
     - UpdateAnnouncement
     - UpdateConversationTitle
@@ -125,6 +126,7 @@ errors:
     - chat.conversation_membership.ListMembers
     - chat.conversation_membership.RemoveAssistant
     - chat.conversation_membership.RemoveMember
+    - chat.conversation_membership.ProjectGatheringConversationMembership
     - chat.conversation_membership.ResolveAssistantDeliveryMembership
     - chat.conversation_membership.TransferOwnership
     - chat.conversation_membership.UpdateGroupAdmins
@@ -138,13 +140,13 @@ errors:
     - chat.message.SyncMessages
   http_status: 401
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: unauthorized
   go_const: ErrUnauthorized
   user_message:
     zh: 请先登录
     en: Please sign in
 - code: CHAT.USER.message_not_found
-  kind: USER
   reason: not_found
   emitted_by:
   - surface: http
@@ -154,13 +156,13 @@ errors:
     - chat.message.RecallMessage
   http_status: 404
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: messageNotFound
   go_const: ErrMessageNotFound
   user_message:
     zh: 消息不存在
     en: Message not found
 - code: CHAT.USER.message_recall_forbidden
-  kind: USER
   reason: forbidden
   emitted_by:
   - surface: http
@@ -168,13 +170,13 @@ errors:
     - chat.message.RecallMessage
   http_status: 403
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: messageRecallForbidden
   go_const: ErrMessageRecallForbidden
   user_message:
     zh: 只能撤回自己发送的消息
     en: Only the sender can recall a message
 - code: CHAT.USER.message_recall_expired
-  kind: USER
   reason: conflict
   emitted_by:
   - surface: http
@@ -182,13 +184,13 @@ errors:
     - chat.message.RecallMessage
   http_status: 409
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: messageRecallExpired
   go_const: ErrMessageRecallExpired
   user_message:
     zh: 消息已超过可撤回时间
     en: Message recall window has expired
 - code: CHAT.USER.message_idempotency_conflict
-  kind: USER
   reason: conflict
   emitted_by:
   - surface: http
@@ -197,13 +199,13 @@ errors:
     - chat.message.SendMessage
   http_status: 409
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: messageIdempotencyConflict
   go_const: ErrMessageIdempotencyConflict
   user_message:
     zh: 该消息请求标识已用于不同内容，请重新发送
     en: This message request identifier was already used for different content
 - code: CHAT.USER.conversation_idempotency_conflict
-  kind: USER
   reason: idempotency_conflict
   emitted_by:
   - surface: http
@@ -211,13 +213,13 @@ errors:
     - CreateConversation
   http_status: 409
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: conversationIdempotencyConflict
   go_const: ErrConversationIdempotencyConflict
   user_message:
     zh: 该建群请求标识已用于不同内容，请重新发起
     en: This conversation request identifier was already used for different content
 - code: CHAT.USER.message_too_long
-  kind: USER
   reason: invalid_argument
   emitted_by:
   - surface: http
@@ -227,13 +229,13 @@ errors:
     - chat.message.SendMessage
   http_status: 400
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: messageTooLong
   go_const: ErrMessageTooLong
   user_message:
     zh: 消息内容超出长度限制
     en: Message exceeds length limit
 - code: CHAT.USER.message_invalid
-  kind: USER
   reason: invalid_argument
   emitted_by:
   - surface: http
@@ -242,13 +244,13 @@ errors:
     - chat.message.SendMessage
   http_status: 400
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: messageInvalid
   go_const: ErrMessageInvalid
   user_message:
     zh: 消息内容不符合发送要求，请检查后重试
     en: Message content is invalid; review it and try again
 - code: CHAT.USER.message_media_invalid
-  kind: USER
   reason: invalid_argument
   emitted_by:
   - surface: http
@@ -256,13 +258,13 @@ errors:
     - chat.message.SendMessage
   http_status: 400
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: messageMediaInvalid
   go_const: ErrMessageMediaInvalid
   user_message:
     zh: 消息媒体不可用，请重新上传后再发送
     en: Message media is invalid; upload it again before sending
 - code: CHAT.SYSTEM.message_media_unavailable
-  kind: SYSTEM
   reason: dependency_unavailable
   emitted_by:
   - surface: http
@@ -270,6 +272,7 @@ errors:
     - chat.message.SendMessage
   http_status: 503
   recovery_action: retry
+  disruption_level: snackbar
   recovery_after_seconds: 3
   dart_const: messageMediaUnavailable
   go_const: ErrMessageMediaUnavailable
@@ -277,7 +280,6 @@ errors:
     zh: 媒体服务暂时不可用，请稍后重试
     en: Media service is temporarily unavailable; try again later
 - code: CHAT.USER.not_mutual
-  kind: USER
   reason: forbidden
   emitted_by:
   - surface: http
@@ -286,13 +288,13 @@ errors:
     - chat.message.SendMessage
   http_status: 403
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: notMutual
   go_const: ErrNotMutual
   user_message:
     zh: 互相关注后可进入正式私信
     en: Mutual follow is required to enter a formal direct conversation
 - code: CHAT.USER.greeting_required
-  kind: USER
   reason: forbidden
   emitted_by:
   - surface: http
@@ -300,18 +302,19 @@ errors:
     - CreateConversation
   http_status: 403
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: greetingRequired
   go_const: ErrGreetingRequired
   user_message:
     zh: 请先打招呼，等对方回复后再进入正式私信
     en: Send a greeting first and wait for a reply before entering formal direct conversation
 - code: CHAT.USER.blocked
-  kind: USER
   reason: forbidden
   emitted_by:
   - surface: http
     operations:
     - CreateConversation
+    - GetGatheringChatBoard
     - chat.message_receipt_fact.GetReceipts
     - chat.conversation_user_state.MarkAsRead
     - chat.message.ListAssistantGroundingMessages
@@ -320,13 +323,13 @@ errors:
     - chat.message.SendMessage
   http_status: 403
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: blocked
   go_const: ErrBlocked
   user_message:
     zh: 当前状态不能继续发送消息
     en: Current relationship does not allow messaging
 - code: CHAT.USER.group_member_not_mutual
-  kind: USER
   reason: forbidden
   emitted_by:
   - surface: http
@@ -335,13 +338,13 @@ errors:
     - chat.conversation_membership.AddMembers
   http_status: 403
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: groupMemberNotMutual
   go_const: ErrGroupMemberNotMutual
   user_message:
     zh: 只能邀请互相关注的好友加入群聊
     en: Only mutually-followed friends can be invited to a group
 - code: CHAT.USER.group_member_blocked
-  kind: USER
   reason: forbidden
   emitted_by:
   - surface: http
@@ -350,13 +353,13 @@ errors:
     - chat.conversation_membership.AddMembers
   http_status: 403
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: groupMemberBlocked
   go_const: ErrGroupMemberBlocked
   user_message:
     zh: 存在已屏蔽的成员，无法发起群聊
     en: Cannot start a group while some members are blocked
 - code: CHAT.USER.group_governance_forbidden
-  kind: USER
   reason: forbidden
   emitted_by:
   - surface: http
@@ -371,13 +374,13 @@ errors:
     - chat.conversation_membership.UpdateGroupAdmins
   http_status: 403
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: groupGovernanceForbidden
   go_const: ErrGroupGovernanceForbidden
   user_message:
     zh: 只有群主或管理员可以执行该操作
     en: Only the group owner or an admin can perform this action
 - code: CHAT.USER.source_managed_conversation
-  kind: USER
   reason: conflict
   emitted_by:
   - surface: http
@@ -395,24 +398,24 @@ errors:
     - chat.conversation_membership.UpdateGroupAdmins
   http_status: 409
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: sourceManagedConversation
   go_const: ErrSourceManagedConversation
   user_message:
     zh: 该会话由来源对象管理，请从来源对象操作
     en: This conversation is managed by its source object. Use the source object instead.
 - code: CHAT.SYSTEM.circle_group_binding_conflict
-  kind: SYSTEM
   reason: projection_conflict
   emitted_by:
   - surface: consumer
   recovery_action: retry
+  disruption_level: snackbar
   dart_const: circleGroupBindingConflict
   go_const: ErrCircleGroupBindingConflict
   user_message:
     zh: 圈群会话绑定状态异常，请稍后重试
     en: The circle group chat binding is inconsistent. Please try again later.
 - code: CHAT.USER.group_full
-  kind: USER
   reason: invalid_argument
   emitted_by:
   - surface: http
@@ -421,13 +424,13 @@ errors:
     - chat.conversation_membership.AddMembers
   http_status: 400
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: groupFull
   go_const: ErrGroupFull
   user_message:
     zh: 群成员已达上限
     en: The group has reached its member limit
 - code: CHAT.USER.conversation_dissolved
-  kind: USER
   reason: conflict
   emitted_by:
   - surface: http
@@ -440,13 +443,13 @@ errors:
     - chat.conversation_membership.RemoveMember
   http_status: 409
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: conversationDissolved
   go_const: ErrConversationDissolved
   user_message:
     zh: 该群聊已解散
     en: This group has been dissolved
 - code: CHAT.USER.group_owner_must_transfer_before_leave
-  kind: USER
   reason: conflict
   emitted_by:
   - surface: http
@@ -454,13 +457,13 @@ errors:
     - chat.conversation_membership.LeaveConversation
   http_status: 409
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: groupOwnerMustTransferBeforeLeave
   go_const: ErrGroupOwnerMustTransferBeforeLeave
   user_message:
     zh: 群主退群前需先转让群主
     en: Transfer ownership before leaving the group
 - code: CHAT.SYSTEM.internal_error
-  kind: SYSTEM
   reason: internal_error
   emitted_by:
   - surface: http
@@ -469,6 +472,7 @@ errors:
     - CreateConversation
     - DissolveConversation
     - GetConversation
+    - GetGatheringChatBoard
     - GetGroupHome
     - chat.message_receipt_fact.GetReceipts
     - ListContactHome
@@ -505,8 +509,24 @@ errors:
     - chat.message.SyncMessages
   http_status: 500
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: internalError
   go_const: ErrInternalError
   user_message:
     zh: 消息服务异常，请稍后重试
     en: Chat service error, please try again
+- code: CHAT.MIDDLEWARE.conversation_projection_unavailable
+  reason: unavailable
+  emitted_by:
+  - surface: consumer
+  recovery_action: retry
+  recovery_after_seconds: 5
+  disruption_level: snackbar
+  go_const: ErrConversationProjectionUnavailable
+  dart_const: conversationProjectionUnavailable
+  description: >-
+    圈群 / 相聚会话投影所需的 conversation reader 未装配，事件无法投影成唯一会话。
+    这是装配缺失而不是业务冲突，必须与 circle_group_binding_conflict 区分。
+  user_message:
+    zh: 群聊会话暂时不可用，请稍后重试
+    en: The group conversation is temporarily unavailable, please retry

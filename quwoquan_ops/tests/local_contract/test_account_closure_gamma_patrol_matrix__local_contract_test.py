@@ -11,9 +11,9 @@ SUITES_PATH = ROOT / "quwoquan_ops/environments/gamma/validation_suites.json"
 WORKFLOW_PATH = ROOT / ".github/workflows/app-env-device-matrix-self-hosted.yml"
 PLATFORM_WORKFLOW_PATH = ROOT / ".github/workflows/beta-device-platform.yml"
 MATRIX_RUNNER_PATH = ROOT / "quwoquan_ops/ci/run_mobile_platform_matrix.sh"
-GAMMA_RUNNER_PATH = ROOT / "quwoquan_app/scripts/gamma/run_local_gamma_t4.sh"
+GAMMA_RUNNER_PATH = ROOT / "quwoquan_app/scripts/gamma/run_local_gamma_device_uat.sh"
 UAT_PATH = ROOT / (
-    "quwoquan_app/test/user_acceptance/patrol/settings/"
+    "quwoquan_app/test/user_acceptance/journeys/account_closure/"
     "account_closure_journey__user_acceptance_test.dart"
 )
 
@@ -56,7 +56,7 @@ class AccountClosureGammaPatrolMatrixContractTest(unittest.TestCase):
             "resolve_patrol_target account_closure_patrol",
             workflow,
         )
-        self.assertIn("run_local_gamma_t4.sh", workflow)
+        self.assertIn("run_local_gamma_device_uat.sh", workflow)
         self.assertIn(
             'closure_install_id="account-closure-',
             workflow,

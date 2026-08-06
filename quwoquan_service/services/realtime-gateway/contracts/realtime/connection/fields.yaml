@@ -145,6 +145,19 @@ types:
       log_policy: hash
       api_exposure: none
       ops_exposure: drop
+  WebSocketUpgradeRequest:
+    description: WebSocket 升级的唯一 App 请求实体；只携带 IssueConnectionTicket 签发的一次性 ticket。
+    fields:
+    - name: ticket
+      source: ticket
+      type: string
+      constraints:
+      - NOT_NULL
+      - NOT_BLANK
+      classification: SENSITIVE
+      log_policy: hash
+      api_exposure: write
+      ops_exposure: none
   LongPollRequest:
     description: LongPoll 的唯一客户端 query 实体；cursor 是设备持久的 Redis stream 坐标，timeout 只表示本次 hold 上限。
     fields:

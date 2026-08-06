@@ -143,11 +143,11 @@ func TestMissingPageContextCannotEnterPrompt(t *testing.T) {
 	)
 	requested := map[string]any{
 		"capturedAt":    "2026-08-02T00:00:00Z",
-		"pageType":      "trip_timeline",
-		"pageObjects":   []any{map[string]any{"objectTypeRef": "travel.TripPlan", "objectId": "trip-secret"}},
-		"userActions":   []any{map[string]any{"action": "open_private_trip"}},
+		"pageType":      "gathering_detail",
+		"pageObjects":   []any{map[string]any{"objectTypeRef": "circle.Gathering", "objectId": "gathering-secret"}},
+		"userActions":   []any{map[string]any{"action": "open_private_gathering"}},
 		"consentMatrix": map[string]any{"canReadCurrentPage": true},
-		"tripId":        "trip-secret",
+		"gatheringId":   "gathering-secret",
 		"clientHint":    "preserved",
 	}
 	run, err := runapplication.NewUseCases(
@@ -172,7 +172,8 @@ func TestMissingPageContextCannotEnterPrompt(t *testing.T) {
 			t.Fatalf("untrusted %s entered run: %#v", key, run.ContextSnapshot)
 		}
 	}
-	if run.ContextSnapshot["clientHint"] != "preserved" || run.ContextSnapshot["tripId"] != "trip-secret" {
+	if run.ContextSnapshot["clientHint"] != "preserved" ||
+		run.ContextSnapshot["gatheringId"] != "gathering-secret" {
 		t.Fatalf("non-page client context was unexpectedly changed: %#v", run.ContextSnapshot)
 	}
 }
@@ -193,9 +194,9 @@ func TestCanonicalPageContextReplacesSpoofedClientValues(t *testing.T) {
 		nil,
 	)
 	resolved, err := resolver.Resolve(t.Context(), "account-1", "persona-1", map[string]any{
-		"pageType": "trip_timeline",
+		"pageType": "gathering_detail",
 		"pageObjects": []any{map[string]any{
-			"objectTypeRef": "travel.TripPlan", "objectId": "trip-secret",
+			"objectTypeRef": "circle.Gathering", "objectId": "gathering-secret",
 		}},
 		"userActions":   []any{map[string]any{"action": "spoofed"}},
 		"consentMatrix": map[string]any{"canReadCurrentPage": true},
@@ -207,7 +208,8 @@ func TestCanonicalPageContextReplacesSpoofedClientValues(t *testing.T) {
 		t.Fatalf("page type was not replaced: %#v", resolved)
 	}
 	encoded, _ := json.Marshal(resolved["pageObjects"])
-	if strings.Contains(string(encoded), "trip-secret") || !strings.Contains(string(encoded), "post-canonical") {
+	if strings.Contains(string(encoded), "gathering-secret") ||
+		!strings.Contains(string(encoded), "post-canonical") {
 		t.Fatalf("page objects were not replaced: %s", encoded)
 	}
 	if _, ok := resolved["userActions"]; ok {

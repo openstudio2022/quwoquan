@@ -57,14 +57,14 @@ func NewProjector(indexer *es.Indexer, reader ProfileReader) *Projector {
 // PublishUserEvent adapts the generic user-event boundary used by the
 // UserAccount lifecycle relay. Its caller is responsible for durable retry.
 func (p *Projector) PublishUserEvent(ctx context.Context, eventType, userID, _ string, _ map[string]any) error {
-	return p.ProjectUserProfileSearch(ctx, eventType, userID)
+	return p.PublishUserProfileSearch(ctx, eventType, userID)
 }
 
-// ProjectUserProfileSearch reconciles one durable profile projection
-// coordinate. Profile/avatar/registration events reconcile against current
+// PublishUserProfileSearch reconciles one durable profile projection
+// coordinate. Profile/avatar events reconcile against current
 // eligibility (upsert when discoverable, delete otherwise); counter-only events
 // are intentionally ignored.
-func (p *Projector) ProjectUserProfileSearch(
+func (p *Projector) PublishUserProfileSearch(
 	ctx context.Context,
 	eventType string,
 	userID string,
@@ -81,7 +81,7 @@ func (p *Projector) ProjectUserProfileSearch(
 		// UserAccountClosed reconciles to a delete: a closed account is no
 		// longer search eligible, so the read-back drops it from the index.
 		return p.reconcile(ctx, userID, eventType)
-	case event.UserProfileUpdated, event.UserAvatarUpdated, event.UserRegistered:
+	case event.UserProfileUpdated, event.UserAvatarUpdated:
 		return p.reconcile(ctx, userID, eventType)
 	default:
 		// Non-profile / counter-only events: nothing searchable changed.

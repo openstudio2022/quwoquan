@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Pageflip Backward Mainline (Native BACK)
 
-当任务触及 `quwoquan_app/lib/components/pageflip/**`、`quwoquan_app/lib/ui/content/article_reader/pageflip/**`、`quwoquan_app/test/**/pageflip/**` 时，必须遵守本规则。本规则是 [11-pageflip-geometry-guardrails.mdc](11-pageflip-geometry-guardrails.mdc) 在 BACK 方向上的强收紧版，凡两者冲突以本规则为准。
+当任务触及 `quwoquan_app/lib/design_system/pageflip/**`、`quwoquan_app/lib/service/content_service/content/post/presentation/article_reader/pageflip/**`、`quwoquan_app/test/**/pageflip/**` 时，必须遵守本规则。本规则是 [11-pageflip-geometry-guardrails.mdc](11-pageflip-geometry-guardrails.mdc) 在 BACK 方向上的强收紧版，凡两者冲突以本规则为准。
 
 ## 几何真相源（与业界 page-flip / 当前前翻代码逐点对齐）
 
@@ -103,6 +103,6 @@ L1 内部分段是同一张纸的分段，不是新增独立平面：
 
 ## 门禁
 
-- `python3 quwoquan_app/scripts/content/verify_pageflip_backward_mainline.py`（静态扫描禁用符号、固定 ValueKey、要求 forward-isomorphic visual geometry、禁止 display offset 与 full baseline 回归）。
+- `python3 quwoquan_app/scripts/content_service/content/post/verify_pageflip_backward_mainline.py`（静态扫描禁用符号、固定 ValueKey、要求 forward-isomorphic visual geometry、禁止 display offset 与 full baseline 回归）。
 - `make verify-app-pageflip-back-mainline`（合约 + 视觉不变量）。
 - 已串联 `make gate` → `quwoquan_ops/gate/gate_repo.sh`：静态扫描随 `run_app` 执行；测试随 L1 合约/视觉测试执行。

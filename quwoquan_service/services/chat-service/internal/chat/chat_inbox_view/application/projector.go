@@ -40,7 +40,11 @@ type StateAdvancer interface {
 	AdvanceUnread(context.Context, Identity, int64, int, int, time.Time) error
 }
 
-type Projector struct {
+// ChatInboxViewProjector owns the durable, replay-safe projection lifecycle for
+// chat.chat_inbox_view.  The explicit object-qualified name is also the
+// metadata lifecycle facet; transport composition must not invent a second
+// projector identity.
+type ChatInboxViewProjector struct {
 	store       Store
 	checkpoints CheckpointStore
 	snapshots   SnapshotSource
@@ -60,14 +64,14 @@ func NewProjector(
 	members MembershipReader,
 	states StateAdvancer,
 	sources map[string]EventSource,
-) *Projector {
-	return &Projector{
+) *ChatInboxViewProjector {
+	return &ChatInboxViewProjector{
 		store: store, checkpoints: checkpoints, snapshots: snapshots,
 		members: members, states: states, sources: sources,
 	}
 }
 
-func (projector *Projector) Drain(ctx context.Context, limit int) (int, error) {
+func (projector *ChatInboxViewProjector) Drain(ctx context.Context, limit int) (int, error) {
 	if projector == nil || projector.store == nil || projector.checkpoints == nil ||
 		projector.snapshots == nil || projector.members == nil || projector.states == nil ||
 		len(projector.sources) == 0 {
@@ -90,7 +94,7 @@ func (projector *Projector) Drain(ctx context.Context, limit int) (int, error) {
 	return processed, nil
 }
 
-func (projector *Projector) drainSource(
+func (projector *ChatInboxViewProjector) drainSource(
 	ctx context.Context,
 	sourceName string,
 	source EventSource,
@@ -120,7 +124,7 @@ func (projector *Projector) drainSource(
 	return len(events), nil
 }
 
-func (projector *Projector) apply(
+func (projector *ChatInboxViewProjector) apply(
 	ctx context.Context,
 	sourceName string,
 	sequence int64,
@@ -168,12 +172,33 @@ func (projector *Projector) apply(
 	}
 }
 
-func (projector *Projector) applyMessage(ctx context.Context, sequence int64, event Event) error {
+func (projector *ChatInboxViewProjector) applyMessage(ctx context.Context, sequence int64, event Event) error {
 	eventSeq := int64Payload(event.Payload["seq"])
 	if eventSeq <= 0 {
 		return errors.New("message seq must be positive")
 	}
 	conversationID := strings.TrimSpace(event.ConversationID)
+	if event.Type == "MessageRecalled" {
+		personaIDs, err := projector.members.ListPersonaIDs(ctx, conversationID)
+		if err != nil {
+			return err
+		}
+		for _, userID := range personaIDs {
+			if err := projector.refresh(
+				ctx,
+				Identity{UserID: userID, ConversationID: conversationID},
+				"message",
+				sequence,
+				"",
+			); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if event.Type != "MessageSent" {
+		return fmt.Errorf("unsupported message event %q", event.Type)
+	}
 	senderID := strings.TrimSpace(event.ActorID)
 	if senderID == "" {
 		senderID = stringPayload(event.Payload["senderId"])
@@ -209,7 +234,7 @@ func (projector *Projector) applyMessage(ctx context.Context, sequence int64, ev
 	return nil
 }
 
-func (projector *Projector) refresh(
+func (projector *ChatInboxViewProjector) refresh(
 	ctx context.Context,
 	identity Identity,
 	source string,
@@ -231,7 +256,7 @@ func (projector *Projector) refresh(
 	return err
 }
 
-func (projector *Projector) Rebuild(ctx context.Context, runID string, batchSize int) (int, error) {
+func (projector *ChatInboxViewProjector) Rebuild(ctx context.Context, runID string, batchSize int) (int, error) {
 	runID = strings.TrimSpace(runID)
 	if runID == "" {
 		return 0, errors.New("ChatInboxView rebuild runId is required")
@@ -265,7 +290,7 @@ func (projector *Projector) Rebuild(ctx context.Context, runID string, batchSize
 	return projected, nil
 }
 
-func (projector *Projector) Run(ctx context.Context, interval time.Duration) error {
+func (projector *ChatInboxViewProjector) Run(ctx context.Context, interval time.Duration) error {
 	if interval <= 0 {
 		interval = 200 * time.Millisecond
 	}
@@ -281,7 +306,7 @@ func (projector *Projector) Run(ctx context.Context, interval time.Duration) err
 	}
 }
 
-func (projector *Projector) Healthy(maxStaleness time.Duration) error {
+func (projector *ChatInboxViewProjector) Healthy(maxStaleness time.Duration) error {
 	if maxStaleness <= 0 {
 		maxStaleness = 5 * time.Second
 	}
@@ -299,14 +324,14 @@ func (projector *Projector) Healthy(maxStaleness time.Duration) error {
 	return nil
 }
 
-func (projector *Projector) recordSuccess() {
+func (projector *ChatInboxViewProjector) recordSuccess() {
 	projector.mu.Lock()
 	defer projector.mu.Unlock()
 	projector.lastSuccess = time.Now().UTC()
 	projector.lastFailure = nil
 }
 
-func (projector *Projector) recordFailure(err error) {
+func (projector *ChatInboxViewProjector) recordFailure(err error) {
 	projector.mu.Lock()
 	defer projector.mu.Unlock()
 	projector.lastFailure = err

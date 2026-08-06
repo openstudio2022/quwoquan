@@ -1,5 +1,5 @@
 // Code generated from canonical cross-domain enums. DO NOT EDIT.
-// ContractGraph SHA256: 93359367b8614f01bb5e1c51e37af383332b01f117cc1c6cf39e4fdf838e49d2
+// ContractGraph SHA256: 99a8a52d1ede68d6295d252a5c3cfd90ce40fa7e11b50e9fee2dad7a7afdf2b2
 
 library;
 
@@ -122,6 +122,29 @@ enum HomepageType {
       "route" => HomepageType.route,
       "photo_spot" => HomepageType.photoSpot,
       "gear" => HomepageType.gear,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum RelationshipState {
+  self("self"),
+  notFollowing("not_following"),
+  following("following"),
+  followedBy("followed_by"),
+  mutual("mutual");
+
+  const RelationshipState(this.wireName);
+
+  final String wireName;
+
+  static RelationshipState fromWire(Object? value, String path) {
+    return switch (value) {
+      "self" => RelationshipState.self,
+      "not_following" => RelationshipState.notFollowing,
+      "following" => RelationshipState.following,
+      "followed_by" => RelationshipState.followedBy,
+      "mutual" => RelationshipState.mutual,
       _ => throw FormatException('$path has an invalid enum value'),
     };
   }

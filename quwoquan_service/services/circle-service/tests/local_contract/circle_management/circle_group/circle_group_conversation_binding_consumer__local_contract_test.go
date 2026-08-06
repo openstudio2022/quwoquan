@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/circle-community/circle-collaboration-tools/circle-group-chat-binding-sync/spec.md#gwt-002
+// readiness_case: bind-circle-group-conversation-local
 package local_contract
 
 import (

@@ -16,12 +16,11 @@ import fcntl
 import hashlib
 import json
 import os
-from pathlib import Path
 import re
 import sys
 import tempfile
+from pathlib import Path
 from typing import Any, Mapping
-
 
 AUTHORITY = "prod-hosted-service-plane"
 REQUEST_SCHEMA = "prod-hosted-release-transition-request"
@@ -29,6 +28,9 @@ RECEIPT_SCHEMA = "prod-hosted-release-receipt"
 READBACK_SCHEMA = "prod-hosted-release-readback"
 RECEIPT_READBACK_SCHEMA = "prod-hosted-release-receipt-readback"
 STATE_SCHEMA = "prod-release-ledger"
+SOAK_REQUEST_SCHEMA = "prod-hosted-soak-request"
+SOAK_RECEIPT_SCHEMA = "prod-hosted-soak-receipt"
+SOAK_RECEIPT_READBACK_SCHEMA = "prod-hosted-soak-receipt-readback"
 SHA256_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 OCI_REF_RE = re.compile(r"^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$")
 SERVICE_RE = re.compile(r"^[a-z][a-z0-9-]{1,62}$")
@@ -130,6 +132,101 @@ RECEIPT_FIELDS = frozenset(
         "lastGoodCandidateDigest",
         "verifiedAt",
         "receiptId",
+    }
+)
+SOAK_REQUEST_FIELDS = frozenset(
+    {
+        "schema",
+        "service",
+        "environment",
+        "target",
+        "fullRolloutReceiptId",
+        "candidateId",
+        "rolloutArtifactDigest",
+        "artifactDigest",
+        "sourceGitSha",
+        "sourceTreeDigest",
+        "rolloutConfigDigest",
+        "configGraphDigest",
+        "contractGraphDigest",
+        "requiredSoakSeconds",
+        "soakPolicyDigest",
+        "credentialPolicyDigest",
+        "slo",
+        "alerts",
+        "health",
+        "credentials",
+        "approval",
+    }
+)
+SOAK_RECEIPT_FIELDS = frozenset(
+    (SOAK_REQUEST_FIELDS - {"schema"})
+    | {
+        "schema",
+        "authority",
+        "soakStartedAt",
+        "soakEndedAt",
+        "soakDurationSeconds",
+        "verifiedAt",
+        "receiptId",
+    }
+)
+SOAK_EVIDENCE_FIELDS = {
+    "slo": frozenset(
+        {
+            "source",
+            "observedAt",
+            "windowSeconds",
+            "minimumSamples",
+            "sampleCount",
+            "status",
+            "decision",
+            "values",
+            "receiptDigest",
+        }
+    ),
+    "alerts": frozenset(
+        {
+            "source",
+            "observedAt",
+            "status",
+            "activeFiring",
+            "receiptDigest",
+        }
+    ),
+    "health": frozenset(
+        {
+            "source",
+            "observedAt",
+            "target",
+            "scope",
+            "status",
+            "receiptDigest",
+        }
+    ),
+}
+SOAK_CREDENTIAL_FIELDS = frozenset(
+    {
+        "plane",
+        "account",
+        "reference",
+        "publicDigest",
+        "issuer",
+        "expiresAt",
+        "verifiedAt",
+    }
+)
+SOAK_APPROVAL_FIELDS = frozenset(
+    {
+        "kind",
+        "repository",
+        "sourceGitSha",
+        "artifactDigest",
+        "pullRequest",
+        "approvers",
+        "distinctPrincipals",
+        "receiptDigest",
+        "verifiedAt",
     }
 )
 
@@ -303,6 +400,233 @@ def _validate_request(value: object) -> dict[str, Any]:
         verified_at=value.get("verifiedAt"),
     )
     return dict(value)
+
+
+def _validate_soak_request(value: object) -> dict[str, Any]:
+    if not isinstance(value, dict) or set(value) != SOAK_REQUEST_FIELDS:
+        raise ValueError("hosted prod soak request has an invalid shape")
+    if value.get("schema") != SOAK_REQUEST_SCHEMA:
+        raise ValueError("hosted prod soak request schema is invalid")
+    if (
+        not isinstance(value.get("service"), str)
+        or SERVICE_RE.fullmatch(value["service"]) is None
+        or value.get("environment") != "prod"
+        or value.get("target") != "prod-hosted"
+    ):
+        raise ValueError("hosted prod soak request target is invalid")
+    if (
+        not isinstance(value.get("fullRolloutReceiptId"), str)
+        or RECEIPT_ID_RE.fullmatch(value["fullRolloutReceiptId"]) is None
+    ):
+        raise ValueError("fullRolloutReceiptId is invalid")
+    for field in (
+        "candidateId",
+        "rolloutArtifactDigest",
+        "artifactDigest",
+        "rolloutConfigDigest",
+        "configGraphDigest",
+        "contractGraphDigest",
+        "soakPolicyDigest",
+        "credentialPolicyDigest",
+    ):
+        if (
+            not isinstance(value.get(field), str)
+            or SHA256_RE.fullmatch(value[field]) is None
+        ):
+            raise ValueError(f"{field} must be sha256")
+    if (
+        not isinstance(value.get("sourceGitSha"), str)
+        or re.fullmatch(r"[0-9a-f]{40}", value["sourceGitSha"]) is None
+    ):
+        raise ValueError("sourceGitSha must be a lowercase 40-character Git SHA")
+    if (
+        not isinstance(value.get("sourceTreeDigest"), str)
+        or re.fullmatch(
+            r"(?:sha1:[0-9a-f]{40}|sha256:[0-9a-f]{64})",
+            value["sourceTreeDigest"],
+        )
+        is None
+    ):
+        raise ValueError("sourceTreeDigest must be immutable")
+    required_soak = value.get("requiredSoakSeconds")
+    if (
+        not isinstance(required_soak, int)
+        or isinstance(required_soak, bool)
+        or required_soak < 60
+    ):
+        raise ValueError("requiredSoakSeconds must be an integer >= 60")
+
+    for name, fields in SOAK_EVIDENCE_FIELDS.items():
+        evidence = value.get(name)
+        if not isinstance(evidence, dict) or set(evidence) != fields:
+            raise ValueError(f"{name} evidence has an invalid shape")
+        _require_timestamp(evidence.get("observedAt"), field=f"{name}.observedAt")
+        if (
+            not isinstance(evidence.get("receiptDigest"), str)
+            or SHA256_RE.fullmatch(evidence["receiptDigest"]) is None
+        ):
+            raise ValueError(f"{name}.receiptDigest must be sha256")
+        if evidence.get("status") != "passed":
+            raise ValueError(f"{name} evidence did not pass")
+
+    slo = value["slo"]
+    if slo.get("source") != "prometheus" or slo.get("decision") != "continue":
+        raise ValueError("SLO evidence must be a continuing Prometheus decision")
+    for field in ("windowSeconds", "minimumSamples", "sampleCount"):
+        raw = slo.get(field)
+        if not isinstance(raw, int) or isinstance(raw, bool) or raw < 1:
+            raise ValueError(f"slo.{field} must be a positive integer")
+    if slo["windowSeconds"] < required_soak:
+        raise ValueError("SLO observation window is shorter than required soak")
+    if slo["sampleCount"] < slo["minimumSamples"]:
+        raise ValueError("SLO sample count is below the required minimum")
+    values = slo.get("values")
+    if not isinstance(values, dict) or set(values) != {
+        "errorRate",
+        "p95Ms",
+        "redisErrorRate",
+    }:
+        raise ValueError("SLO values have an invalid shape")
+    for field, raw in values.items():
+        if (
+            not isinstance(raw, (int, float))
+            or isinstance(raw, bool)
+            or float(raw) < 0
+        ):
+            raise ValueError(f"slo.values.{field} must be non-negative")
+
+    alerts = value["alerts"]
+    if alerts.get("source") != "alertmanager" or alerts.get("activeFiring") != 0:
+        raise ValueError("alerts evidence must prove no active firing alerts")
+    health = value["health"]
+    if (
+        health.get("source") != "stackctl"
+        or health.get("target") != "prod-hosted"
+        or health.get("scope") != "full"
+    ):
+        raise ValueError("health evidence must be full prod-hosted stackctl health")
+
+    credentials = value.get("credentials")
+    if not isinstance(credentials, list) or not credentials:
+        raise ValueError("credentials evidence is missing")
+    seen_credentials: set[tuple[str, str]] = set()
+    for index, credential in enumerate(credentials):
+        if not isinstance(credential, dict) or set(credential) != SOAK_CREDENTIAL_FIELDS:
+            raise ValueError(f"credentials[{index}] has an invalid shape")
+        plane = _require_safe_string(
+            credential.get("plane"), field=f"credentials[{index}].plane"
+        )
+        account = _require_safe_string(
+            credential.get("account"), field=f"credentials[{index}].account"
+        )
+        reference = _require_safe_string(
+            credential.get("reference"), field=f"credentials[{index}].reference"
+        )
+        if "PRIVATE KEY" in reference or "\n" in reference:
+            raise ValueError("credential reference contains secret material")
+        if (
+            not isinstance(credential.get("publicDigest"), str)
+            or SHA256_RE.fullmatch(credential["publicDigest"]) is None
+        ):
+            raise ValueError("credential public digest is invalid")
+        _require_safe_string(
+            credential.get("issuer"), field=f"credentials[{index}].issuer"
+        )
+        _require_timestamp(
+            credential.get("expiresAt"), field=f"credentials[{index}].expiresAt"
+        )
+        _require_timestamp(
+            credential.get("verifiedAt"), field=f"credentials[{index}].verifiedAt"
+        )
+        identity = (plane, account)
+        if identity in seen_credentials:
+            raise ValueError(f"duplicate credential identity: {plane}/{account}")
+        seen_credentials.add(identity)
+
+    approval = value.get("approval")
+    if not isinstance(approval, dict) or set(approval) != SOAK_APPROVAL_FIELDS:
+        raise ValueError("approval evidence has an invalid shape")
+    if approval.get("kind") != "github-reviewed-mainline":
+        raise ValueError("approval must use canonical reviewed-mainline authority")
+    _require_safe_string(approval.get("repository"), field="approval.repository")
+    if approval.get("sourceGitSha") != value["sourceGitSha"]:
+        raise ValueError("approval sourceGitSha differs from soak source")
+    if approval.get("artifactDigest") != value["artifactDigest"]:
+        raise ValueError("approval artifactDigest differs from soak artifact")
+    if (
+        not isinstance(approval.get("pullRequest"), int)
+        or isinstance(approval.get("pullRequest"), bool)
+        or approval["pullRequest"] < 1
+    ):
+        raise ValueError("approval pullRequest must be positive")
+    approvers = approval.get("approvers")
+    if (
+        not isinstance(approvers, list)
+        or not approvers
+        or any(not isinstance(item, str) or not item.strip() for item in approvers)
+    ):
+        raise ValueError("approval approvers must be non-empty identities")
+    if (
+        not isinstance(approval.get("distinctPrincipals"), int)
+        or isinstance(approval.get("distinctPrincipals"), bool)
+        or approval["distinctPrincipals"] < 2
+    ):
+        raise ValueError("approval lacks author/approver separation")
+    if (
+        not isinstance(approval.get("receiptDigest"), str)
+        or SHA256_RE.fullmatch(approval["receiptDigest"]) is None
+    ):
+        raise ValueError("approval receipt digest is invalid")
+    _require_timestamp(approval.get("verifiedAt"), field="approval.verifiedAt")
+    return dict(value)
+
+
+def _load_hosted_soak_receipt(
+    root: Path,
+    *,
+    service: str,
+    receipt_id: str,
+) -> dict[str, Any]:
+    if RECEIPT_ID_RE.fullmatch(receipt_id) is None:
+        raise RuntimeError("hosted prod soak receipt id is invalid")
+    receipt_path = root / "soak-receipts" / f"{receipt_id}.json"
+    if not receipt_path.is_file() or receipt_path.is_symlink():
+        raise RuntimeError("hosted prod soak receipt is missing")
+    try:
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise RuntimeError("hosted prod soak receipt is not canonical JSON") from error
+    if (
+        not isinstance(receipt, dict)
+        or set(receipt) != SOAK_RECEIPT_FIELDS
+        or receipt.get("schema") != SOAK_RECEIPT_SCHEMA
+        or receipt.get("authority") != AUTHORITY
+        or receipt.get("service") != service
+        or receipt.get("receiptId") != receipt_id
+        or _receipt_id(receipt) != receipt_id
+    ):
+        raise RuntimeError("hosted prod soak receipt digest or ledger binding is invalid")
+    request = {
+        field: receipt[field] for field in SOAK_REQUEST_FIELDS if field != "schema"
+    }
+    request["schema"] = SOAK_REQUEST_SCHEMA
+    try:
+        _validate_soak_request(request)
+    except ValueError as error:
+        raise RuntimeError("hosted prod soak receipt payload is not canonical") from error
+    started_at = _require_timestamp(receipt.get("soakStartedAt"), field="soakStartedAt")
+    ended_at = _require_timestamp(receipt.get("soakEndedAt"), field="soakEndedAt")
+    verified_at = _require_timestamp(receipt.get("verifiedAt"), field="verifiedAt")
+    duration = receipt.get("soakDurationSeconds")
+    if (
+        not isinstance(duration, int)
+        or isinstance(duration, bool)
+        or duration != int((ended_at - started_at).total_seconds())
+        or duration < receipt["requiredSoakSeconds"]
+        or ended_at > verified_at
+    ):
+        raise RuntimeError("hosted prod soak receipt duration is invalid")
+    return receipt
 
 
 def _load_state(path: Path) -> dict[str, str]:
@@ -734,10 +1058,153 @@ def fetch_receipt(root: Path, service: str, receipt_id: str) -> dict[str, Any]:
         }
 
 
+def commit_soak(root: Path, request: object) -> dict[str, Any]:
+    payload = _validate_soak_request(request)
+    service = payload["service"]
+    now = dt.datetime.now(dt.timezone.utc)
+    with _ledger_lock(root):
+        readback = _validated_readback(root, service)
+        state = readback["state"]
+        if (
+            state.get("trigger_stage") != "full"
+            or state.get("stage") != "full"
+            or state.get("decision") != "continue"
+            or state.get("rollback_outcome") != "not_triggered"
+        ):
+            raise RuntimeError(
+                "GATE_BLOCK: prod soak requires current successful full rollout state"
+            )
+        full_receipt_id = state.get("full_receipt_id", "")
+        if full_receipt_id != payload["fullRolloutReceiptId"]:
+            raise RuntimeError("GATE_BLOCK: prod soak full rollout receipt drift")
+        full_receipt = _load_hosted_receipt(
+            root,
+            service=service,
+            receipt_id=full_receipt_id,
+        )
+        expected_bindings = {
+            "candidateId": full_receipt["toCandidateDigest"],
+            "rolloutArtifactDigest": full_receipt["artifactDigest"],
+            "rolloutConfigDigest": full_receipt["configDigest"],
+            "contractGraphDigest": full_receipt["contractGraphDigest"],
+        }
+        for field, expected in expected_bindings.items():
+            if payload[field] != expected:
+                raise RuntimeError(f"GATE_BLOCK: prod soak {field} drift")
+
+        started_at = _require_timestamp(
+            full_receipt["verifiedAt"], field="fullRolloutReceipt.verifiedAt"
+        )
+        duration = int((now - started_at).total_seconds())
+        if duration < payload["requiredSoakSeconds"]:
+            raise RuntimeError(
+                "GATE_BLOCK: authoritative prod soak window is incomplete"
+            )
+        for name in ("slo", "alerts", "health"):
+            observed_at = _require_timestamp(
+                payload[name]["observedAt"], field=f"{name}.observedAt"
+            )
+            if observed_at < started_at or observed_at > now:
+                raise RuntimeError(
+                    f"GATE_BLOCK: {name} observation is outside authoritative soak window"
+                )
+        for index, credential in enumerate(payload["credentials"]):
+            verified_at = _require_timestamp(
+                credential["verifiedAt"], field=f"credentials[{index}].verifiedAt"
+            )
+            expires_at = _require_timestamp(
+                credential["expiresAt"], field=f"credentials[{index}].expiresAt"
+            )
+            if verified_at < started_at or verified_at > now:
+                raise RuntimeError(
+                    "GATE_BLOCK: credential verification is outside soak window"
+                )
+            if expires_at <= now:
+                raise RuntimeError("GATE_BLOCK: prod credential is expired")
+        approval_at = _require_timestamp(
+            payload["approval"]["verifiedAt"], field="approval.verifiedAt"
+        )
+        if approval_at > now:
+            raise RuntimeError("GATE_BLOCK: prod approval verification is future-dated")
+
+        timestamp = now.isoformat().replace("+00:00", "Z")
+        receipt = {
+            "schema": SOAK_RECEIPT_SCHEMA,
+            "authority": AUTHORITY,
+            **{field: payload[field] for field in SOAK_REQUEST_FIELDS if field != "schema"},
+            "soakStartedAt": started_at.astimezone(dt.timezone.utc)
+            .isoformat()
+            .replace("+00:00", "Z"),
+            "soakEndedAt": timestamp,
+            "soakDurationSeconds": duration,
+            "verifiedAt": timestamp,
+        }
+        receipt_id = _receipt_id(receipt)
+        receipt["receiptId"] = receipt_id
+        receipt_path = root / "soak-receipts" / f"{receipt_id}.json"
+        receipt_bytes = json.dumps(
+            receipt,
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
+        ).encode("utf-8") + b"\n"
+        if receipt_path.exists():
+            if (
+                not receipt_path.is_file()
+                or receipt_path.is_symlink()
+                or receipt_path.read_bytes() != receipt_bytes
+            ):
+                raise RuntimeError("hosted prod soak receipt collision")
+        else:
+            receipt_path.parent.mkdir(parents=True, exist_ok=True)
+            with receipt_path.open("xb") as handle:
+                handle.write(receipt_bytes)
+                handle.flush()
+                os.fsync(handle.fileno())
+        verified = _load_hosted_soak_receipt(
+            root,
+            service=service,
+            receipt_id=receipt_id,
+        )
+        return {
+            "schema": SOAK_RECEIPT_READBACK_SCHEMA,
+            "authority": AUTHORITY,
+            "receipt": verified,
+            "receiptRef": f"receipt:hosted-soak:{receipt_id}",
+        }
+
+
+def fetch_soak_receipt(
+    root: Path,
+    service: str,
+    receipt_id: str,
+) -> dict[str, Any]:
+    if SERVICE_RE.fullmatch(service) is None:
+        raise ValueError("service is invalid")
+    if RECEIPT_ID_RE.fullmatch(receipt_id) is None:
+        raise ValueError("soak receipt id is invalid")
+    with _ledger_lock(root):
+        receipt = _load_hosted_soak_receipt(
+            root,
+            service=service,
+            receipt_id=receipt_id,
+        )
+        return {
+            "schema": SOAK_RECEIPT_READBACK_SCHEMA,
+            "authority": AUTHORITY,
+            "receipt": receipt,
+            "receiptRef": f"receipt:hosted-soak:{receipt_id}",
+        }
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", required=True)
-    parser.add_argument("--action", choices=("fetch", "commit", "receipt"), required=True)
+    parser.add_argument(
+        "--action",
+        choices=("fetch", "commit", "receipt", "soak-commit", "soak-receipt"),
+        required=True,
+    )
     parser.add_argument("--service", default="")
     parser.add_argument("--receipt-id", default="")
     parser.add_argument("--request-base64", default="")
@@ -754,10 +1221,16 @@ def main() -> int:
             result = fetch(root, args.service)
         elif args.action == "receipt":
             result = fetch_receipt(root, args.service, args.receipt_id)
+        elif args.action == "soak-receipt":
+            result = fetch_soak_receipt(root, args.service, args.receipt_id)
         else:
             raw = base64.b64decode(args.request_base64, validate=True)
             request = json.loads(raw.decode("utf-8"))
-            result = commit(root, request)
+            result = (
+                commit_soak(root, request)
+                if args.action == "soak-commit"
+                else commit(root, request)
+            )
     except (OSError, ValueError, RuntimeError, json.JSONDecodeError) as error:
         print(f"FAIL: {error}", file=sys.stderr)
         return 2

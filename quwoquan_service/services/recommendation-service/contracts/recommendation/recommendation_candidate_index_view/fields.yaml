@@ -33,3 +33,24 @@ types:
     - {name: subtitle, source: subtitle, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
     - {name: coverUrl, source: coverUrl, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
     - {name: tagRefs, source: tagRefs, type: '[]string', constraints: [NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read}
+  RecommendationGatheringCandidateProjection:
+    description: Circle GatheringPublicCard 的发现最小裁剪；sourceKey 始终为 gatheringId，不含参与、申请答案或精确私密地点。
+    fields:
+    - {name: objectKind, source: objectKind, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: sourceKey, source: sourceKey, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read, reference: true}
+    - {name: sourceVersion, source: sourceVersion, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read, semantic_type: aggregate_version}
+    - {name: cardDigest, source: cardDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
+    - {name: hostSubjectKind, source: hostSubjectKind, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: hostSubjectId, source: hostSubjectId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read, reference: true}
+    - {name: title, source: title, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: summary, source: summary, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: coverRef, source: coverRef, type: object, constraints: [NULLABLE], classification: PUBLIC, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+    - {name: tagRefs, source: tagRefs, type: '[]string', constraints: [NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read}
+    - {name: startAt, source: startAt, type: timestamp, constraints: [NULLABLE], classification: PUBLIC, log_policy: metadata_only, api_exposure: read, ops_exposure: read, semantic_type: instant}
+    - {name: endAt, source: endAt, type: timestamp, constraints: [NULLABLE], classification: PUBLIC, log_policy: metadata_only, api_exposure: read, ops_exposure: read, semantic_type: instant}
+    - {name: dateLabel, source: dateLabel, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: placeMode, source: placeMode, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: coarsePlaceRef, source: coarsePlaceRef, type: object, constraints: [NULLABLE], classification: PUBLIC, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+    - {name: coarsePlaceLabel, source: coarsePlaceLabel, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: lifecycleStatus, source: lifecycleStatus, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: updatedAt, source: updatedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: none, ops_exposure: read, semantic_type: instant}

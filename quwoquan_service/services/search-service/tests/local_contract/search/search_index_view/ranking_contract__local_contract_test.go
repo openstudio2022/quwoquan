@@ -2,6 +2,7 @@ package local_contract
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -101,7 +102,6 @@ func TestSearchRankingExperimentPolicyFailsClosed(t *testing.T) {
 	}
 }
 
-
 func TestSearchRankingExperimentAssignmentDegradesToControl(t *testing.T) {
 	disabled, err := application.NewExperiments(&assignmentPublisherSpy{})
 	if err != nil {
@@ -116,5 +116,41 @@ func TestSearchRankingExperimentAssignmentDegradesToControl(t *testing.T) {
 	}
 	if result.ExperimentBucket != application.BucketControl {
 		t.Fatalf("bucket = %q, want control", result.ExperimentBucket)
+	}
+}
+
+type failingAssignmentPublisher struct{}
+
+func (failingAssignmentPublisher) PublishExperimentAssignment(
+	context.Context,
+	application.AssignmentObservation,
+) error {
+	return errors.New("redis dns thrash")
+}
+
+func TestSearchExperimentAssignmentPublishFailureIsBestEffort(t *testing.T) {
+	experiments, err := application.NewExperiments(failingAssignmentPublisher{})
+	if err != nil {
+		t.Fatalf("NewExperiments() error = %v", err)
+	}
+	if err := experiments.ApplyPolicy(searchPolicy("running", 5000, 5000)); err != nil {
+		t.Fatalf("ApplyPolicy() error = %v", err)
+	}
+	bucket, err := experiments.Assign(context.Background(), "persona-publish-degrade")
+	if err != nil {
+		t.Fatalf("Assign() error = %v, want best-effort bucket despite publish failure", err)
+	}
+	if bucket != application.BucketControl && bucket != application.BucketTermHeat {
+		t.Fatalf("bucket = %q, want a valid ranking variant", bucket)
+	}
+	decorator := application.NewRankingDecorator(nil, experiments, 1, nil)
+	result, err := decorator.Decorate(context.Background(), rtsearch.RetrieveResponse{
+		Hits: []rtsearch.RetrieveHit{{Target: rtsearch.TargetArticle, ObjectID: "a", Title: "x", Score: 1}},
+	}, "成都", "persona-publish-degrade")
+	if err != nil {
+		t.Fatalf("Decorate() error = %v, want search to succeed when assignment publish fails", err)
+	}
+	if result.ExperimentBucket != bucket {
+		t.Fatalf("Decorate bucket = %q, want Assign bucket %q", result.ExperimentBucket, bucket)
 	}
 }

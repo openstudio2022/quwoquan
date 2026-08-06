@@ -3,6 +3,27 @@
 # observability/elasticsearch/product_telemetry_alerts.yaml 定义。
 
 groups:
+  - name: quwoquan_runtime_message_transport_recording
+    interval: 30s
+    rules:
+      - record: qwq_message_transport_publish_p95
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le, root, adapter) (
+              rate(qwq_message_transport_publish_duration_seconds_bucket[5m])
+            )
+          )
+
+      - record: qwq_message_transport_consume_p95
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le, root, adapter) (
+              rate(qwq_message_transport_consume_duration_seconds_bucket[5m])
+            )
+          )
+
   - name: quwoquan_l2_auth_login
     rules:
       - alert: AuthProviderErrorRateHigh
@@ -89,7 +110,7 @@ groups:
           (
             sum(rate(ops_login_operation_events_total{result="failure"}[10m])) by (operation)
             / clamp_min(sum(rate(ops_login_operation_events_total[10m])) by (operation), 0.001)
-          ) > 0.01
+          ) > 0.05
           and sum(increase(ops_login_operation_events_total[10m])) by (operation) >= 20
         for: 10m
         labels:
@@ -211,7 +232,49 @@ groups:
           domain: user-identity
         annotations:
           summary: "账号安全同步权威 P95 超过 150ms"
-          description: "延迟正在侵蚀 250–500ms 的 fail-closed 超时预算；核查 user-service 查询、连接池与服务网络，禁止引入可放行的本地缓存。"
+          description: "延迟正在侵蚀 fail-closed deadline；核查 user-service 查询、连接池与服务网络，禁止引入可放行的本地缓存。"
+
+      - alert: AccountSecurityAuthorityLatencyErrorBudgetBurn
+        expr: |
+          (
+            (
+              1 -
+              sum by (job, instance) (
+                rate(runtime_auth_account_security_authority_check_duration_seconds_bucket{le="0.15"}[5m])
+              )
+              /
+              clamp_min(
+                sum by (job, instance) (
+                  rate(runtime_auth_account_security_authority_check_duration_seconds_count[5m])
+                ),
+                1e-9
+              )
+            ) / 0.05
+          ) > 14.4
+          and
+          (
+            (
+              1 -
+              sum by (job, instance) (
+                rate(runtime_auth_account_security_authority_check_duration_seconds_bucket{le="0.15"}[1h])
+              )
+              /
+              clamp_min(
+                sum by (job, instance) (
+                  rate(runtime_auth_account_security_authority_check_duration_seconds_count[1h])
+                ),
+                1e-9
+              )
+            ) / 0.05
+          ) > 14.4
+        for: 2m
+        labels:
+          severity: critical
+          layer: l2
+          domain: user-identity
+        annotations:
+          summary: "账号安全同步权威 150ms 延迟预算快速燃烧"
+          description: "5m 与 1h 窗口均超过 14.4 倍 burn rate；deadline 可继续容纳慢成功，但必须停止放量并修复 user-service/网络延迟，禁止用缓存绕过 fail-closed 权威读取。"
 
       - alert: UserAccountClosedConsumerRetrying
         expr: |
@@ -2391,8 +2454,8 @@ groups:
 
       - alert: ContentBehaviorReportAvailabilityLow
         expr: |
-          sum(rate(quwoquan_content_contract_operation_requests_total{service="content-service",operation="content.post.ReportBehaviors",contract_metric="content_behavior_batch_report",status=~"5.."}[10m]))
-          / clamp_min(sum(rate(quwoquan_content_contract_operation_requests_total{service="content-service",operation="content.post.ReportBehaviors",contract_metric="content_behavior_batch_report"}[10m])), 0.001) > 0.001
+          sum(rate(quwoquan_content_contract_operation_requests_total{service="content-service",operation="content.content_behavior_fact.ReportBehaviors",contract_metric="content_behavior_batch_report",status=~"5.."}[10m]))
+          / clamp_min(sum(rate(quwoquan_content_contract_operation_requests_total{service="content-service",operation="content.content_behavior_fact.ReportBehaviors",contract_metric="content_behavior_batch_report"}[10m])), 0.001) > 0.001
         for: 10m
         labels: { severity: warning, layer: l2, domain: content }
         annotations:

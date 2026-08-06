@@ -21,16 +21,25 @@ fields:
 	routes.APIRoutes = []apiRoute{
 		{Operation: "GetNearbyLocations", Path: "/integration/location/nearby"},
 		{Operation: "SearchLocations", Path: "/integration/location/search"},
+		{Operation: "ReadLocationRoute", Path: "/integration/location/route"},
 	}
+	routeProjection := locationProjectionFile{}
+	routeProjection.Fields = append(routeProjection.Fields, struct {
+		Name string `yaml:"name"`
+	}{Name: "encodedPolyline"})
 	generated := renderLocationMetadata(
 		routes,
 		projection,
+		routeProjection,
 		"operations.yaml",
 		"projections/location_poi.yaml",
+		"projections/location_route.yaml",
 	)
 	for _, expected := range []string{
+		`const RoutePath = "/integration/location/route"`,
 		`const FieldKeyId = "id"`,
 		`const FieldKeyLatitude = "latitude"`,
+		`const FieldKeyEncodedPolyline = "encodedPolyline"`,
 	} {
 		if !strings.Contains(generated, expected) {
 			t.Fatalf("canonical projection field missing from generated metadata: %s", generated)

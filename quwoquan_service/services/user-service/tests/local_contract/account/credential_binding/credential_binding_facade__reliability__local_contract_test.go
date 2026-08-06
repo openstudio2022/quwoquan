@@ -1,5 +1,7 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity/spec.md#gwt-001
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/two-state-one-tap-login-commercial-login-entry/spec.md#gwt-003
+// readiness_case: list-credentials-local
+// readiness_case: unbind-credential-local
 package local_contract
 
 import (
@@ -223,6 +225,45 @@ func TestCredentialBindingFacadeKeepsEventTimeMonotonicAcrossClockSkew(
 			databaseNow,
 			lastEvent.OccurredAt,
 		)
+	}
+}
+
+func TestCredentialBindingQueryAndUnbindFacadesShareCanonicalState(t *testing.T) {
+	store := newFakeCredentialBindingStore()
+	commands := bindingapp.NewCredentialCommandFacade(store)
+	queries := bindingapp.NewCredentialQueryFacade(store)
+	ctx := credentialActorContext("account-readiness")
+
+	for _, command := range []bindingapp.BindCredentialCommand{
+		{
+			CredentialType: bindingmodel.CredentialTypePhone,
+			CredentialKey:  "sha256:672e81ba50de4f3c01a34e9dfe3ddca34cddfbd18bf9fbaa2549746c224a97ef",
+			DisplayLabel:   "138****0001",
+		},
+		{
+			CredentialType: bindingmodel.CredentialTypeFederatedSlotA,
+			CredentialKey:  "sha256:da46eb4c4d1ce1f0e6ae9892255b01d79e67641909097d3f6fba25ee29b34eeb",
+			DisplayLabel:   "Federated Account",
+		},
+	} {
+		if _, err := commands.BindVerifiedCredential(ctx, "account-readiness", command); err != nil {
+			t.Fatalf("seed CredentialBinding: %v", err)
+		}
+	}
+
+	items, err := queries.ListCredentials(ctx)
+	if err != nil || len(items) != 2 {
+		t.Fatalf("ListCredentials items=%+v err=%v", items, err)
+	}
+	revoked, err := commands.UnbindCredential(ctx, bindingapp.UnbindCredentialCommand{
+		CredentialType: bindingmodel.CredentialTypeFederatedSlotA,
+	})
+	if err != nil || revoked.IsActive {
+		t.Fatalf("UnbindCredential result=%+v err=%v", revoked, err)
+	}
+	items, err = queries.ListCredentials(ctx)
+	if err != nil || len(items) != 1 || items[0].CredentialType != string(bindingmodel.CredentialTypePhone) {
+		t.Fatalf("ListCredentials after unbind items=%+v err=%v", items, err)
 	}
 }
 

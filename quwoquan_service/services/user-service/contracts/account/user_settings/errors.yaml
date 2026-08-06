@@ -1,5 +1,3 @@
-domain: USER
-aggregate: UserSettings
 description: 'UserSettings 对象专属错误码。格式：MODULE.KIND.REASON。
 
   覆盖通话铃声/外观作用域校验与服务端内部 version CAS 冲突；
@@ -9,7 +7,6 @@ description: 'UserSettings 对象专属错误码。格式：MODULE.KIND.REASON�
   '
 errors:
 - code: USER.SETTING.invalid_call_ringtone
-  kind: SETTING
   reason: invalid_argument
   emitted_by:
   - surface: http
@@ -17,13 +14,13 @@ errors:
     - UpdateCallSettings
   http_status: 400
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: invalidCallRingtone
   go_const: ErrInvalidCallRingtone
   user_message:
     zh: 所选铃声不可用，请从官方铃声库中重新选择
     en: Selected ringtone is unavailable, please choose from the official library
 - code: USER.SETTING.invalid_appearance_scope
-  kind: SETTING
   reason: invalid_argument
   emitted_by:
   - surface: http
@@ -31,13 +28,13 @@ errors:
     - UpdateAppearanceSettings
   http_status: 400
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: invalidAppearanceScope
   go_const: ErrInvalidAppearanceScope
   user_message:
     zh: 外观设置作用范围无效，请重试
     en: Appearance settings scope is invalid, please try again
 - code: USER.SETTING.settings_version_conflict
-  kind: SETTING
   reason: conflict
   emitted_by:
   - surface: http
@@ -47,10 +44,8 @@ errors:
     - UpdateNotificationSettings
     - UpdatePrivacySettings
   http_status: 409
-  recovery:
-    action: retry
-    disruptionLevel: silent
-  l10n_key: userSettingVersionConflict
+  recovery_action: retry
+  disruption_level: silent
   dart_const: settingsVersionConflict
   go_const: ErrSettingsVersionConflict
   user_message:

@@ -13,6 +13,7 @@ import (
 	membershippersistence "quwoquan_service/services/chat-service/internal/chat/conversation_membership/infrastructure/persistence"
 	userstatemodel "quwoquan_service/services/chat-service/internal/chat/conversation_user_state/domain/model"
 	userstatepersistence "quwoquan_service/services/chat-service/internal/chat/conversation_user_state/infrastructure/persistence"
+	messageports "quwoquan_service/services/chat-service/internal/chat/message/domain/ports"
 )
 
 type chatInboxAggregateEventSource struct {
@@ -39,7 +40,7 @@ func (source chatInboxAggregateEventSource) ReadAfter(
 }
 
 type chatInboxMessageEventSource struct {
-	source conversationapp.MessageOutboxReader
+	source messageports.OutboxReader
 }
 
 func (source chatInboxMessageEventSource) ReadAfter(

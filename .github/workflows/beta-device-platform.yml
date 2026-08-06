@@ -25,22 +25,6 @@ on:
         required: false
         type: string
         default: ''
-      candidate_digest:
-        required: false
-        type: string
-        default: ''
-      artifact_digest:
-        required: false
-        type: string
-        default: ''
-      producer_workflow_run_id:
-        required: false
-        type: string
-        default: ''
-      source_git_sha:
-        required: false
-        type: string
-        default: ''
       event_name:
         required: true
         type: string
@@ -73,6 +57,8 @@ on:
         value: ${{ jobs.device.outputs.execution_started_at }}
       execution_ended_at:
         value: ${{ jobs.device.outputs.execution_ended_at }}
+      recovery_receipt_base64:
+        value: ${{ jobs.device.outputs.recovery_receipt_base64 }}
 
 permissions:
   contents: read
@@ -84,6 +70,7 @@ jobs:
     timeout-minutes: ${{ inputs.validation_profile == 'nightly_full' && 120 || (inputs.validation_profile == 'release_candidate' && 90 || 4) }}
     permissions:
       contents: read
+      attestations: read
       packages: write
     environment:
       name: ${{ contains(inputs.env_json, '"prod"') && 'production' || 'device-matrix' }}
@@ -96,6 +83,7 @@ jobs:
       lease_id: ${{ steps.lease.outputs.lease_id }}
       execution_started_at: ${{ steps.execution_start.outputs.started_at }}
       execution_ended_at: ${{ steps.execution_end.outputs.ended_at }}
+      recovery_receipt_base64: ${{ steps.recovery_receipt.outputs.receipt_base64 }}
     env:
       QWQ_OUTPUT_ROOT: ${{ runner.temp }}/quwoquan-device-matrix/${{ github.run_id }}/${{ github.run_attempt }}/${{ inputs.platform }}/.qwq_output
       PLATFORM_REPO_DIR: ${{ github.workspace }}/.qwq_output/env/repo/local/device-matrix/cache/checkouts/${{ github.run_id }}/${{ github.run_attempt }}/${{ inputs.platform }}
@@ -118,6 +106,14 @@ jobs:
           path: .qwq_output/env/repo/local/device-matrix/cache/checkouts/${{ github.run_id }}/${{ github.run_attempt }}/${{ inputs.platform }}
           clean: false
           persist-credentials: false
+      - name: Require exact clean candidate checkout
+        working-directory: ${{ env.PLATFORM_REPO_DIR }}
+        run: |
+          set -euo pipefail
+          EXPECTED_SOURCE="${{ inputs.checkout_ref }}"
+          [[ "$EXPECTED_SOURCE" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE"
+          test -z "$(git status --porcelain --untracked-files=all)"
       - name: Validate platform and preinstalled mobile tools
         working-directory: ${{ env.PLATFORM_REPO_DIR }}
         run: |
@@ -159,35 +155,40 @@ jobs:
           go-version-file: ${{ env.PLATFORM_REPO_DIR }}/quwoquan_service/go.mod
           cache: false
       - name: Login immutable candidate registry
-        if: ${{ inputs.validation_profile == 'mainline_auto_prod' }}
+        if: ${{ inputs.validation_profile != 'pr_light' }}
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Materialize and bind exact mainline candidate
-        if: ${{ inputs.validation_profile == 'mainline_auto_prod' }}
+      - name: Setup Buildx for release evidence verification
+        if: ${{ inputs.validation_profile != 'pr_light' }}
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+        with:
+          version: v0.35.0
+          cache-binary: false
+          clean: false
+      - id: release
+        name: Derive candidate identity and artifact closure
+        if: ${{ inputs.validation_profile != 'pr_light' }}
         working-directory: ${{ env.PLATFORM_REPO_DIR }}
         env:
-          EXPECTED_RELEASE_REF: ${{ inputs.release_evidence_ref }}
-          EXPECTED_CANDIDATE: ${{ inputs.candidate_digest }}
-          EXPECTED_ARTIFACT_DIGEST: ${{ inputs.artifact_digest }}
-          EXPECTED_WORKFLOW_RUN_ID: ${{ inputs.producer_workflow_run_id }}
-          EXPECTED_SOURCE_SHA: ${{ inputs.source_git_sha }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           ROOT="$QWQ_OUTPUT_ROOT/env/repo/runs/release-evidence-manifest"
-          python3 quwoquan_ops/cli/prod/fetch_mainline_release_artifact.py \
-            --ref "$EXPECTED_RELEASE_REF" \
-            --output-dir "$ROOT"
-          python3 quwoquan_ops/ci/verify_workflow_release_candidate.py \
-            --manifest "$ROOT/manifest.json" \
-            --expected-candidate "$EXPECTED_CANDIDATE" \
-            --expected-artifact-digest "$EXPECTED_ARTIFACT_DIGEST" \
-            --expected-workflow-run-id "$EXPECTED_WORKFLOW_RUN_ID" \
-            --expected-source-sha "$EXPECTED_SOURCE_SHA" \
-            --expected-repository "${{ github.repository }}" \
-            --expected-release-ref "$EXPECTED_RELEASE_REF"
+          case "${{ inputs.validation_profile }}" in
+            mainline_auto_prod|release_candidate) REQUIRED_STATUS=candidate-ready ;;
+            manual_full|nightly_full) REQUIRED_STATUS=released ;;
+            *) echo "::error::GATE_BLOCK: unsupported release validation profile"; exit 2 ;;
+          esac
+          python3 quwoquan_ops/ci/consume_released_release_evidence.py \
+            --ref "${{ inputs.release_evidence_ref }}" \
+            --repository "${{ github.repository }}" \
+            --require-status "$REQUIRED_STATUS" \
+            --expected-source-sha "${{ inputs.checkout_ref }}" \
+            --output-dir "$ROOT" \
+            --github-output "$GITHUB_OUTPUT"
           echo "QWQ_PROD_RELEASE_ARTIFACT_ROOT=$ROOT" >> "$GITHUB_ENV"
       - name: Install Flutter dependencies
         working-directory: ${{ env.PLATFORM_REPO_DIR }}/quwoquan_app
@@ -238,6 +239,25 @@ jobs:
           python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/chat-service/gate/verify_device_matrix_evidence.py \
             --artifact-root "$QWQ_OUTPUT_ROOT" \
             --report-glob "env/*/runs/device-matrix/**/*-${{ inputs.platform }}.json"
+      - id: recovery_receipt
+        name: Render and verify canonical recovery receipt
+        if: ${{ inputs.validation_profile == 'nightly_full' }}
+        working-directory: ${{ env.PLATFORM_REPO_DIR }}
+        run: |
+          set -euo pipefail
+          RECEIPT="$QWQ_OUTPUT_ROOT/env/gamma/runs/environment-stability/recovery-${{ inputs.platform }}.json"
+          python3 quwoquan_ops/ci/render_environment_stability_attested_receipt.py render-recovery \
+            --platform "${{ inputs.platform }}" \
+            --manifest "$QWQ_PROD_RELEASE_ARTIFACT_ROOT/manifest.json" \
+            --evidence "$QWQ_OUTPUT_ROOT/env/gamma/runs/device-matrix/runtime-recovery-${{ inputs.platform }}.json" \
+            --expected-candidate "${{ steps.release.outputs.candidate_digest }}" \
+            --expected-artifact-digest "${{ steps.release.outputs.artifact_digest }}" \
+            --expected-source-sha "${{ steps.release.outputs.source_git_sha }}" \
+            --output "$RECEIPT" \
+            --github-output "$GITHUB_OUTPUT"
+          python3 quwoquan_ops/ci/render_environment_stability_attested_receipt.py verify-case \
+            --kind "recovery.${{ inputs.platform }}" \
+            --receipt "$RECEIPT"
       - name: Seal direct-bound Beta platform evidence
         if: ${{ inputs.validation_profile == 'mainline_auto_prod' }}
         working-directory: ${{ env.PLATFORM_REPO_DIR }}

@@ -2,13 +2,44 @@ package main
 
 import (
 	"context"
+	"time"
 
 	"quwoquan_service/services/user-service/internal/account/user_account/adapters/inbound/mq"
 	followingevent "quwoquan_service/services/user-service/internal/profile_projection/following_subject/adapters/inbound/event"
 	followingapp "quwoquan_service/services/user-service/internal/profile_projection/following_subject/application"
+	visitmodel "quwoquan_service/services/user-service/internal/relationship/followed_subject_visit_state/domain/model"
 	relmodel "quwoquan_service/services/user-service/internal/relationship/persona_relationship/domain/model"
 	sfmodel "quwoquan_service/services/user-service/internal/relationship/subject_follow/domain/model"
 )
+
+// followedSubjectVisitFanout 消费 FollowedSubjectVisited outbox，把访问水位
+// 应用到 following_subjects 投影。投影 upsert 以 $max/清零实现，因此至少一次
+// 投递是安全的；投影失败不会标记事件已投递，下一轮 relay 会重放。
+type followedSubjectVisitFanout struct {
+	projection visitProjectionApplier
+}
+
+type visitProjectionApplier interface {
+	ApplyVisit(
+		ctx context.Context,
+		personaID, subjectType, subjectID string,
+		visitedAt time.Time,
+	) error
+}
+
+func (f *followedSubjectVisitFanout) PublishFollowedSubjectVisited(
+	ctx context.Context,
+	event visitmodel.OutboxEvent,
+) error {
+	payload := event.Payload
+	return f.projection.ApplyVisit(
+		ctx,
+		payload.PersonaID,
+		payload.SubjectType,
+		payload.SubjectID,
+		payload.LastVisitedAt,
+	)
+}
 
 // subjectFollowFanout 把已提交的 SubjectFollow 事实先追加到 Redis Stream，
 // 再 upsert following_subjects 投影；任一失败都不推进 outbox checkpoint，

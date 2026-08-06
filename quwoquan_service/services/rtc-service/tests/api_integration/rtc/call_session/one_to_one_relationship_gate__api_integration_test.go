@@ -14,7 +14,6 @@ import (
 	rtchttp "quwoquan_service/services/rtc-service/internal/rtc/call_session/adapters/inbound/http"
 	"quwoquan_service/services/rtc-service/internal/rtc/call_session/application"
 	"quwoquan_service/services/rtc-service/internal/rtc/call_session/application/commandmeta"
-	callsession "quwoquan_service/services/rtc-service/internal/rtc/call_session/domain"
 	rtccache "quwoquan_service/services/rtc-service/internal/rtc/call_session/infrastructure/cache"
 	"quwoquan_service/services/rtc-service/internal/rtc/call_session/infrastructure/persistence"
 )
@@ -23,7 +22,7 @@ func newGateTestOrchestrator(t *testing.T, gate application.RelationshipGate) *a
 	t.Helper()
 	callStore := persistence.NewMongoCallStore(requireMongoDB(t))
 	callCache := rtccache.NewCallStateCache(redisRouter.Scene("general"))
-	domainSvc := callsession.NewCallSessionService()
+	domainSvc := newAPITestCallSessionService()
 	return application.NewCallOrchestrator(
 		callStore,
 		callCache,

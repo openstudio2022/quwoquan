@@ -15,5 +15,5 @@ var (
 // AppErrorFromTurnViewUnauthorized returns *AppError for ASSISTANT.USER.turn_view_unauthorized (user_message from errors.yaml).
 func AppErrorFromTurnViewUnauthorized(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.turn_view_unauthorized")
-	return rterr.NewAppError(code, "请先登录后查看助手轮次", debugMessage).WithMetadata("turn_view_unauthorized", 401).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "请先登录后查看助手轮次", debugMessage).WithMetadata("turn_view_unauthorized", 401).WithRecoveryDirective("surface", "inlineCard", 0)
 }

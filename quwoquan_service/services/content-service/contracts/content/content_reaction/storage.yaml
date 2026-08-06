@@ -1,6 +1,7 @@
 backend: mongodb
 collections:
   content_reaction_aggregates:
+    publication_role: not_published
     entity: ContentReaction
     description: targetKind + targetId + actorDimension + actorId 唯一的互动关系权威集合
     indexes:
@@ -28,6 +29,7 @@ collections:
         version: 1
       unique: true
   content_reaction_command_receipts:
+    publication_role: not_published
     entity: ContentReaction
     description: 点赞命令的幂等 receipt；与关系状态和 outbox 在同一 Mongo transaction 提交
     indexes:
@@ -42,8 +44,9 @@ collections:
     - name: idx_content_reaction_receipt_expire
       keys:
         expiresAt: 1
-      expireAfterSeconds: 0
+      expire_after_seconds: 0
   content_reaction_outbox:
+    publication_role: transactional_outbox
     entity: ContentReaction
     description: ContentReaction 领域事实 outbox；只在聚合版本变化时追加
     indexes:
@@ -61,13 +64,16 @@ collections:
         outboxSequence: 1
       unique: true
   content_reaction_outbox_sequences:
+    publication_role: publication_accessory
     entity: ContentReaction
     description: 为 reaction outbox transaction 分配全局单调 sequence
   content_reaction_projection_checkpoints:
+    publication_role: publication_accessory
     entity: ContentReaction
     description: 每个外部投递或 projection consumer 的独立 durable checkpoint
 streams:
   events.content.reaction_lifecycle:
+    publication_role: publication_accessory
     entity: ContentReaction
     role: append_only
     idempotency_key: eventId

@@ -25,25 +25,80 @@ const (
 	sourceShare    = "outbound_share_fact"
 )
 
-type Projector struct {
+// ProfileInteractionActivityViewProjector is the single owning lifecycle
+// projector for every authored source event of the activity view.
+type ProfileInteractionActivityViewProjector struct {
 	sources activityports.ProjectionSourceReader
 	writer  activityports.ActivityProjectionWriter
 }
 
-func NewProjector(
+func NewProfileInteractionActivityViewProjector(
 	sources activityports.ProjectionSourceReader,
 	writer activityports.ActivityProjectionWriter,
-) *Projector {
+) *ProfileInteractionActivityViewProjector {
 	if sources == nil || writer == nil {
 		panic("ProfileInteractionActivity projector requires source reader and writer")
 	}
-	return &Projector{sources: sources, writer: writer}
+	return &ProfileInteractionActivityViewProjector{sources: sources, writer: writer}
 }
 
-type ReactionProjector struct{ projector *Projector }
+// ProfileInteractionActivityEvent is a typed one-of envelope used only inside
+// the owning object. Source-specific relay adapters must set exactly one field.
+type ProfileInteractionActivityEvent struct {
+	Reaction      *reactionports.OutboxFact
+	Comment       *commentports.OutboxEvent
+	OutboundShare *shareports.OutboxEvent
+	Post          *postports.OutboxEvent
+	ReadFact      *readfactports.OutboxEvent
+}
 
-func NewReactionProjector(projector *Projector) *ReactionProjector {
-	return &ReactionProjector{projector: projector}
+// Apply dispatches one typed source event to the owning projection behavior.
+func (p *ProfileInteractionActivityViewProjector) Apply(
+	ctx context.Context,
+	event ProfileInteractionActivityEvent,
+) error {
+	if p == nil || p.sources == nil || p.writer == nil {
+		return fmt.Errorf("ProfileInteractionActivityViewProjector is not configured")
+	}
+	count := 0
+	if event.Reaction != nil {
+		count++
+	}
+	if event.Comment != nil {
+		count++
+	}
+	if event.OutboundShare != nil {
+		count++
+	}
+	if event.Post != nil {
+		count++
+	}
+	if event.ReadFact != nil {
+		count++
+	}
+	if count != 1 {
+		return fmt.Errorf("ProfileInteractionActivity event must contain exactly one source fact")
+	}
+	switch {
+	case event.Reaction != nil:
+		return p.applyReaction(ctx, *event.Reaction)
+	case event.Comment != nil:
+		return p.applyComment(ctx, *event.Comment)
+	case event.OutboundShare != nil:
+		return p.applyOutboundShare(ctx, *event.OutboundShare)
+	case event.Post != nil:
+		return p.applyPost(ctx, *event.Post)
+	default:
+		return p.applyReadFact(ctx, *event.ReadFact)
+	}
+}
+
+type ReactionProjector struct {
+	handler *ProfileInteractionActivityViewProjector
+}
+
+func NewReactionProjector(handler *ProfileInteractionActivityViewProjector) *ReactionProjector {
+	return &ReactionProjector{handler: handler}
 }
 
 type reactionFact struct {
@@ -63,9 +118,16 @@ func (p *ReactionProjector) Publish(
 	ctx context.Context,
 	fact reactionports.OutboxFact,
 ) error {
-	if p == nil || p.projector == nil {
+	if p == nil || p.handler == nil {
 		return fmt.Errorf("ProfileInteraction reaction projector is not configured")
 	}
+	return p.handler.Apply(ctx, ProfileInteractionActivityEvent{Reaction: &fact})
+}
+
+func (p *ProfileInteractionActivityViewProjector) applyReaction(
+	ctx context.Context,
+	fact reactionports.OutboxFact,
+) error {
 	var payload reactionFact
 	if err := decodeStrict(fact.Payload, &payload); err != nil {
 		return fmt.Errorf("decode ContentReaction profile activity fact: %w", err)
@@ -83,7 +145,7 @@ func (p *ReactionProjector) Publish(
 		if fact.EventType == "ContentReactionCleared" {
 			reaction = "none"
 		}
-		return p.projector.writer.SetCommentViewerReaction(
+		return p.writer.SetCommentViewerReaction(
 			ctx,
 			payload.TargetID,
 			payload.ActorID,
@@ -95,7 +157,7 @@ func (p *ReactionProjector) Publish(
 		return nil
 	}
 	if fact.EventType == "ContentReactionCleared" || payload.Reaction == "none" {
-		post, found, err := p.projector.sources.FindPost(ctx, payload.TargetID)
+		post, found, err := p.sources.FindPost(ctx, payload.TargetID)
 		if err != nil {
 			return fmt.Errorf("load cleared reaction target post: %w", err)
 		}
@@ -104,7 +166,7 @@ func (p *ReactionProjector) Publish(
 			// 删除联动产生的 reaction clear 不能把历史行误删。
 			return nil
 		}
-		return p.projector.writer.DeactivateActivity(
+		return p.writer.DeactivateActivity(
 			ctx,
 			payload.ReactionID,
 			payload.Version,
@@ -113,14 +175,14 @@ func (p *ReactionProjector) Publish(
 	if fact.EventType != "ContentReactionSet" || payload.Reaction != "like" {
 		return nil
 	}
-	post, found, err := p.projector.sources.FindPost(ctx, payload.TargetID)
+	post, found, err := p.sources.FindPost(ctx, payload.TargetID)
 	if err != nil {
 		return fmt.Errorf("load reaction target post: %w", err)
 	}
 	if !found {
 		return fmt.Errorf("reaction target post %q is missing", payload.TargetID)
 	}
-	return p.projector.upsertPair(
+	return p.upsertPair(
 		ctx,
 		projectionSeed{
 			ActivityID:    payload.ReactionID,
@@ -135,10 +197,12 @@ func (p *ReactionProjector) Publish(
 	)
 }
 
-type CommentProjector struct{ projector *Projector }
+type CommentProjector struct {
+	handler *ProfileInteractionActivityViewProjector
+}
 
-func NewCommentProjector(projector *Projector) *CommentProjector {
-	return &CommentProjector{projector: projector}
+func NewCommentProjector(handler *ProfileInteractionActivityViewProjector) *CommentProjector {
+	return &CommentProjector{handler: handler}
 }
 
 type commentCreatedFact struct {
@@ -166,9 +230,16 @@ func (p *CommentProjector) Publish(
 	ctx context.Context,
 	event commentports.OutboxEvent,
 ) error {
-	if p == nil || p.projector == nil {
+	if p == nil || p.handler == nil {
 		return fmt.Errorf("ProfileInteraction comment projector is not configured")
 	}
+	return p.handler.Apply(ctx, ProfileInteractionActivityEvent{Comment: &event})
+}
+
+func (p *ProfileInteractionActivityViewProjector) applyComment(
+	ctx context.Context,
+	event commentports.OutboxEvent,
+) error {
 	switch event.EventType {
 	case "CommentDeleted":
 		var payload commentDeletedFact
@@ -180,7 +251,7 @@ func (p *CommentProjector) Publish(
 			payload.Version != event.AggregateVersion {
 			return fmt.Errorf("CommentDeleted profile activity identity is incomplete")
 		}
-		return p.projector.writer.DeactivateActivity(
+		return p.writer.DeactivateActivity(
 			ctx,
 			payload.CommentID,
 			payload.Version,
@@ -195,21 +266,21 @@ func (p *CommentProjector) Publish(
 			payload.Version != event.AggregateVersion {
 			return fmt.Errorf("CommentCreated profile activity identity is incomplete")
 		}
-		post, found, err := p.projector.sources.FindPost(ctx, payload.PostID)
+		post, found, err := p.sources.FindPost(ctx, payload.PostID)
 		if err != nil {
 			return fmt.Errorf("load comment target post: %w", err)
 		}
 		if !found {
 			return fmt.Errorf("comment target post %q is missing", payload.PostID)
 		}
-		comment, found, err := p.projector.sources.FindComment(ctx, payload.CommentID)
+		comment, found, err := p.sources.FindComment(ctx, payload.CommentID)
 		if err != nil {
 			return fmt.Errorf("load comment projection source: %w", err)
 		}
 		if !found {
 			return fmt.Errorf("comment projection source %q is missing", payload.CommentID)
 		}
-		return p.projector.upsertPair(
+		return p.upsertPair(
 			ctx,
 			projectionSeed{
 				ActivityID:    payload.CommentID,
@@ -228,10 +299,12 @@ func (p *CommentProjector) Publish(
 	}
 }
 
-type OutboundShareProjector struct{ projector *Projector }
+type OutboundShareProjector struct {
+	handler *ProfileInteractionActivityViewProjector
+}
 
-func NewOutboundShareProjector(projector *Projector) *OutboundShareProjector {
-	return &OutboundShareProjector{projector: projector}
+func NewOutboundShareProjector(handler *ProfileInteractionActivityViewProjector) *OutboundShareProjector {
+	return &OutboundShareProjector{handler: handler}
 }
 
 type outboundShareFact struct {
@@ -251,9 +324,16 @@ func (p *OutboundShareProjector) Publish(
 	ctx context.Context,
 	event shareports.OutboxEvent,
 ) error {
-	if p == nil || p.projector == nil {
+	if p == nil || p.handler == nil {
 		return fmt.Errorf("ProfileInteraction outbound share projector is not configured")
 	}
+	return p.handler.Apply(ctx, ProfileInteractionActivityEvent{OutboundShare: &event})
+}
+
+func (p *ProfileInteractionActivityViewProjector) applyOutboundShare(
+	ctx context.Context,
+	event shareports.OutboxEvent,
+) error {
 	if event.EventType != "OutboundShareRecorded" {
 		return nil
 	}
@@ -267,14 +347,14 @@ func (p *OutboundShareProjector) Publish(
 	if payload.ActorDimension != "persona" {
 		return nil
 	}
-	post, found, err := p.projector.sources.FindPost(ctx, payload.PostID)
+	post, found, err := p.sources.FindPost(ctx, payload.PostID)
 	if err != nil {
 		return fmt.Errorf("load outbound share target post: %w", err)
 	}
 	if !found {
 		return fmt.Errorf("outbound share target post %q is missing", payload.PostID)
 	}
-	return p.projector.upsertPair(
+	return p.upsertPair(
 		ctx,
 		projectionSeed{
 			ActivityID:           payload.EventID,
@@ -291,22 +371,29 @@ func (p *OutboundShareProjector) Publish(
 }
 
 type PostTargetProjector struct {
-	writer activityports.ActivityProjectionWriter
+	handler *ProfileInteractionActivityViewProjector
 }
 
 func NewPostTargetProjector(
-	writer activityports.ActivityProjectionWriter,
+	handler *ProfileInteractionActivityViewProjector,
 ) *PostTargetProjector {
-	return &PostTargetProjector{writer: writer}
+	return &PostTargetProjector{handler: handler}
 }
 
 func (p *PostTargetProjector) Publish(
 	ctx context.Context,
 	event postports.OutboxEvent,
 ) error {
-	if p == nil || p.writer == nil {
+	if p == nil || p.handler == nil {
 		return fmt.Errorf("ProfileInteraction post target projector is not configured")
 	}
+	return p.handler.Apply(ctx, ProfileInteractionActivityEvent{Post: &event})
+}
+
+func (p *ProfileInteractionActivityViewProjector) applyPost(
+	ctx context.Context,
+	event postports.OutboxEvent,
+) error {
 	if event.EventType != "PostDeleted" {
 		return nil
 	}
@@ -319,22 +406,29 @@ func (p *PostTargetProjector) Publish(
 }
 
 type ReadFactProjector struct {
-	writer activityports.ActivityProjectionWriter
+	handler *ProfileInteractionActivityViewProjector
 }
 
 func NewReadFactProjector(
-	writer activityports.ActivityProjectionWriter,
+	handler *ProfileInteractionActivityViewProjector,
 ) *ReadFactProjector {
-	return &ReadFactProjector{writer: writer}
+	return &ReadFactProjector{handler: handler}
 }
 
 func (p *ReadFactProjector) Publish(
 	ctx context.Context,
 	event readfactports.OutboxEvent,
 ) error {
-	if p == nil || p.writer == nil {
+	if p == nil || p.handler == nil {
 		return fmt.Errorf("ProfileInteraction read fact projector is not configured")
 	}
+	return p.handler.Apply(ctx, ProfileInteractionActivityEvent{ReadFact: &event})
+}
+
+func (p *ProfileInteractionActivityViewProjector) applyReadFact(
+	ctx context.Context,
+	event readfactports.OutboxEvent,
+) error {
 	if event.EventType != readfactports.EventTypeProfileInteractionReadFactAppended {
 		return nil
 	}
@@ -370,7 +464,7 @@ type projectionSeed struct {
 	OutboundShareEventID string
 }
 
-func (p *Projector) upsertPair(ctx context.Context, seed projectionSeed) error {
+func (p *ProfileInteractionActivityViewProjector) upsertPair(ctx context.Context, seed projectionSeed) error {
 	if strings.TrimSpace(seed.ActorID) == "" ||
 		strings.TrimSpace(seed.Post.AuthorPersonaID) == "" {
 		return fmt.Errorf("profile interaction actor and target owner are required")

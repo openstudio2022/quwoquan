@@ -25,7 +25,6 @@ business_rules:
 - Connector 活动仍由 integration.ConnectorInvocation/ConnectorConnection 拥有；本视图只返回 generated operation reference 供 App 联邦展示。
 - activityKind、displayKey 与 recoveryAction 只由 canonical 闭集状态投影产生；source owner 的未知状态必须 fail-closed，不得拼接新 key 或降级为任意字符串。
 lifecycle:
-  source_events: [AssistantRunStarted, AssistantRunCompleted, SkillConsentGranted, SkillConsentRevoked, SkillSubscriptionCreated, SkillSubscriptionStatusChanged, SkillSubscriptionTriggered, SkillDataControlRequested, SkillDataControlCompleted, SkillDataControlFailed]
-  checkpoint: source_owner_sequence_or_revision
+  checkpoint: source_owner_revision_and_visibility_watermark
   rebuild: reread_bounded_owner_journals_and_apply_visibility_watermark
   tombstone: hide_owner_skill_history_keep_source_owner_audit

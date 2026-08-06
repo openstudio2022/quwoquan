@@ -63,7 +63,7 @@ func TestIncludeReferencedOwnedTypesOnlyPromotesReachableValues(t *testing.T) {
 		},
 	}
 
-	promoted := includeReferencedOwnedTypes(&fields)
+	promoted := includeReferencedOwnedTypes(&fields, nil)
 	for _, name := range []string{"SourceAttribution", "RightsProof"} {
 		if _, ok := promoted[name]; !ok {
 			t.Fatalf("reachable value object %s was not promoted", name)
@@ -94,7 +94,7 @@ func TestIncludeReferencedOwnedTypesResolvesObjectRefAndTypes(t *testing.T) {
 		},
 	}
 
-	promoted := includeReferencedOwnedTypes(&fields)
+	promoted := includeReferencedOwnedTypes(&fields, nil)
 	for _, name := range []string{"GatheringTargetRef", "GatheringParticipant"} {
 		if _, ok := promoted[name]; !ok {
 			t.Fatalf("reachable owned type %s was not promoted", name)
@@ -102,6 +102,33 @@ func TestIncludeReferencedOwnedTypesResolvesObjectRefAndTypes(t *testing.T) {
 	}
 	if _, ok := promoted["CreateGatheringCommand"]; ok {
 		t.Fatal("unreferenced command DTO leaked into generated domain graph")
+	}
+}
+
+func TestIncludeReferencedOwnedTypesPromotesSharedGeoPointOnce(t *testing.T) {
+	t.Parallel()
+
+	fields := fieldsDocument{
+		Entities: map[string]domainEntityDocument{
+			"Post": {Fields: []domainField{{Name: "location", Type: "GeoPoint"}}},
+		},
+	}
+	sharedTypes := map[string]domainEntityDocument{
+		"GeoPoint": {Fields: []domainField{
+			{Name: "latitude", Type: "float64"},
+			{Name: "longitude", Type: "float64"},
+		}},
+	}
+
+	promoted := includeReferencedOwnedTypes(&fields, sharedTypes)
+	if _, ok := promoted["GeoPoint"]; !ok {
+		t.Fatal("shared GeoPoint was not promoted from _shared/types.yaml")
+	}
+	if _, ok := fields.Entities["GeoPoint"]; !ok {
+		t.Fatal("shared GeoPoint missing from entity graph")
+	}
+	if strings.Contains(goModelTemplate, "type GeoPoint struct") {
+		t.Fatal("goModelTemplate must not hardcode GeoPoint; shared types own the wire shape")
 	}
 }
 

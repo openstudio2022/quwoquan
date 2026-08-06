@@ -4,8 +4,23 @@ runtime_entrypoints:
 - name: AppendRecommendationExposure
   kind: subscription
   phase: event_ingest
-  source_events: [content.FeedPageDelivered]
-  idempotency: event_id
-  application: {kind: command, facet: RecommendationExposureFactAppender, method: append, object_owner: RecommendationExposureFact}
+  application: {kind: command, facet: FeedPageDeliveredConsumer, method: processOnce, object_owner: RecommendationExposureFact}
 consumers:
 - {name: feed-page-delivered, channel: events.content.feed_page_delivered, source_event: FeedPageDelivered, capabilities: [validate_window_attribution, append_exposure_facts]}
+readiness_cases:
+- case_id: append-exposure-local
+  spec_ref: specs/feature-tree/discovery-content/exposure-governance/served-dedup-write-behind/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target: {kind: object, id: recommendation.recommendation_exposure_fact}
+  runner_source_path: quwoquan_service/services/recommendation-service/tests/local_contract/recommendation/recommendation_exposure_fact/test_feed_page_delivered_consumer__durability__local_contract_test.py
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: append-exposure-api
+  spec_ref: specs/feature-tree/discovery-content/exposure-governance/served-dedup-write-behind/spec.md#gwt-001
+  producer: service
+  layer: api_integration
+  target: {kind: object, id: recommendation.recommendation_exposure_fact}
+  runner_source_path: quwoquan_service/services/recommendation-service/tests/api_integration/recommendation/recommendation_exposure_fact/test_mongo_exposure_fact__api_integration_test.py
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}

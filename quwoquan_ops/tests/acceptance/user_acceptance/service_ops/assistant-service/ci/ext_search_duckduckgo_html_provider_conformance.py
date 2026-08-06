@@ -14,7 +14,7 @@ from quwoquan_ops.ci.provider_conformance.native_case_result import run_native_h
 
 RESULT_PATH_ENV = "QWQ_PROVIDER_CONFORMANCE_RESULT_PATH"
 TARGET = 'ext-search-duckduckgo_html-user-acceptance'
-COMMAND = ('python3', 'quwoquan_ops/ci/provider_conformance/run_provider_patrol_uat.py', '--target', 'test/user_acceptance/patrol/assistant/public_search_provider__user_acceptance_test.dart', '--platform', 'android')
+COMMAND = ('python3', 'quwoquan_ops/ci/provider_conformance/run_provider_patrol_uat.py', '--target', 'test/user_acceptance/service/assistant_service/assistant/assistant_run/public_search_provider__user_acceptance_test.dart', '--platform', 'android')
 
 if __name__ == "__main__":
     raise SystemExit(run_native_harness(command=COMMAND, target=TARGET))

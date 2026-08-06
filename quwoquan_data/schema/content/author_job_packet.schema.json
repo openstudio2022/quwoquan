@@ -145,6 +145,29 @@
         "type": "object"
       }
     },
+    "articleSourceUnitFreeze": {
+      "anyOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "required": [
+            "receiptRef", "freezeDigest", "sourceUnitId", "sourceUnitRef",
+            "executionSourceDigest"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "receiptRef": {
+              "type": "string",
+              "pattern": "^0\\.plan/article_source_unit_freezes/[^/]+\\.json$"
+            },
+            "freezeDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+            "sourceUnitId": {"type": "string", "minLength": 1},
+            "sourceUnitRef": {"type": "string", "pattern": "^sources/[^/]+$"},
+            "executionSourceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+          }
+        }
+      ]
+    },
     "exitGates": {
       "type": "array",
       "items": {

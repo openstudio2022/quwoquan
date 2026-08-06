@@ -2,6 +2,26 @@
 """
 阻断 production lib、App pubspec 与运行入口对聚合 Mock/fixture 的依赖。
 
+## 替身判定按结构，不按类名
+
+替身可达性由三类结构事实判定：
+
+* **import 边**：`TEST_LIBRARY_IMPORT_PREFIXES` 与 `FORBIDDEN_PRODUCTION_IMPORT_TOKENS`。
+  Dart 必须先 import 才能引用，因此「production lib import 了测试框架/替身库/test 目录」
+  对这门语言既 sound 又 complete。
+* **声明位置**：production `lib/**/mock/*.dart` 这类 test-only 目录。
+* **配置与专有 token**：`RETIRED_PRODUCTION_FIXTURE_TOKENS`，判定对象本身就是这些字面量。
+
+刻意不判类名词汇（原 `class (Mock|Stub|Noop|Fake|Memory|InMemory)*Repository`）：
+assistant 长期记忆的 `MemoryProfileRepository` 一出现就会被误伤，而替身改名成
+`LocalPostRepository` 就直接逃逸——两个方向都错，且都不可复核。
+
+## 已知盲点
+
+「类型实现了 production port 但内部只返回字面量」这种**内联**替身，Dart 侧同样需要
+全程序类型分析才能判定；本门禁不做该判定，也不用类名近似它。该维度目前无覆盖，
+不假装通过。已验证的替代覆盖点是 test/support 物理隔离与 typed port override 契约测试。
+
 规格：feature-tree 的 app-cloud-business-object-commercial-closure REQ-004。
 
 用法（仓库根）:
@@ -17,7 +37,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 APP = ROOT / "quwoquan_app"
 APP_LIB = APP / "lib"
-PRODUCTION_SERVICE_MOCK_ROOT = APP_LIB / "cloud" / "services"
 RETIRED_AGGREGATE_MOCK_PACKAGE = APP / "packages/quwoquan_cloud_mock"
 RETIRED_PRODUCTION_FIXTURE_TOKENS = (
     "contract_fixture_runtime_loader",
@@ -40,10 +59,21 @@ FORBIDDEN_PRODUCTION_IMPORT_TOKENS = (
     "/test/support/",
     "/runners/alpha/",
 )
-BUSINESS_TEST_DOUBLE_CLASS_RE = re.compile(
-    r"\bclass\s+(?:Mock|Stub|Noop|Fake|Memory|InMemory)"
-    r"[A-Za-z0-9_]*(?:Repository|Query|Writer|Reader|Facet|Store|Service|Client|Adapter)\b"
+#: 测试框架与 mock 库：Dart 同样必须先 import 才能引用，判定对象是包名本身。
+#: production lib import 了它们，就是编译器可见的「替身可达」，与类名叫什么无关。
+TEST_LIBRARY_IMPORT_PREFIXES = (
+    "package:flutter_test/",
+    "package:test/",
+    "package:integration_test/",
+    "package:mockito/",
+    "package:mocktail/",
+    "package:patrol/",
+    "package:http/testing.dart",
 )
+DART_IMPORT_RE = re.compile(r"""(?m)^\s*(?:import|export)\s+['"]([^'"]+)['"]""")
+#: production lib 的测试库 import 豁免已归零。保留空集合供结构契约证明基线不得回潮；
+#: 新增任何条目或 production import 都必须 BLOCK。
+TEST_LIBRARY_IMPORT_BASELINE: frozenset[str] = frozenset()
 
 # package:quwoquan_app/.../mock/ 或 .../mock/xxx.dart
 IMPORT_MOCK = re.compile(
@@ -53,6 +83,15 @@ IMPORT_MOCK = re.compile(
 PROTOTYPE_RE = re.compile(
     r"\bprototype(Circles|Groups)\b",
 )
+
+def test_library_imports(text: str) -> list[str]:
+    """该 Dart 源文件 import 了哪些测试框架/替身库。类名长什么样与判定无关。"""
+    return [
+        target
+        for target in DART_IMPORT_RE.findall(text)
+        if target.startswith(TEST_LIBRARY_IMPORT_PREFIXES)
+    ]
+
 
 def scan_dart_files(base: Path) -> list[Path]:
     if not base.is_dir():
@@ -69,26 +108,24 @@ def main() -> int:
         errors.append("pubspec.yaml: dev_dependencies 也不得引用聚合 Mock package")
 
     # production lib 不得保留业务 Mock 源文件或顶层业务 test double。
-    if PRODUCTION_SERVICE_MOCK_ROOT.is_dir():
-        for path in sorted(PRODUCTION_SERVICE_MOCK_ROOT.glob("**/mock/*.dart")):
-            rel = path.relative_to(APP_LIB).as_posix()
-            errors.append(
-                f"{rel}: production lib 禁止保留 cloud/services/*/mock 源文件"
-            )
-        for path in scan_dart_files(PRODUCTION_SERVICE_MOCK_ROOT):
-            rel = path.relative_to(APP_LIB).as_posix()
-            text = path.read_text(encoding="utf-8")
-            if BUSINESS_TEST_DOUBLE_CLASS_RE.search(text):
-                errors.append(
-                    f"{rel}: production cloud/services 禁止业务 test double 顶层类"
-                )
-
+    for path in sorted(APP_LIB.glob("**/mock/*.dart")):
+        rel = path.relative_to(APP_LIB).as_posix()
+        errors.append(f"{rel}: production lib 禁止保留 mock 源文件")
     # P0: production lib（包括 generated）不能通过运行时 loader / resolver、
     # mock identity、环境变量或仓库相对路径读取 fixture，也不得承载 fixture
     # user/persona 数据。对象级 typed doubles 只能物理隔离在 test/support。
+    test_library_importers: set[str] = set()
     for path in scan_dart_files(APP_LIB):
         rel = path.relative_to(APP_LIB).as_posix()
         text = path.read_text(encoding="utf-8")
+        for target in test_library_imports(text):
+            test_library_importers.add(rel)
+            if rel in TEST_LIBRARY_IMPORT_BASELINE:
+                continue
+            errors.append(
+                f"{rel}: production lib 禁止 import 测试框架/替身库 {target!r}"
+                "（对象级 typed double 只能物理隔离在 test/support）"
+            )
         for token in FORBIDDEN_PRODUCTION_IMPORT_TOKENS:
             if token in text:
                 errors.append(
@@ -100,14 +137,9 @@ def main() -> int:
                     f"{rel}: production lib 禁止 fixture/Mock runtime token {token!r}"
                 )
 
-    # lib/cloud 纳入扫描：production adapter/provider 同样禁止 import …/mock/。
-    roots = [
-        APP_LIB / "ui",
-        APP_LIB / "app",
-        APP_LIB / "core",
-        APP_LIB / "cloud",
-    ]
-    for base in roots:
+    # canonical object/runtime/design-system roots 全量扫描；旧技术根不再是
+    # positive input，避免目录迁空后门禁假绿。
+    for base in (APP_LIB,):
         for path in scan_dart_files(base):
             rel = path.relative_to(APP_LIB).as_posix()
             text = path.read_text(encoding="utf-8")
@@ -121,6 +153,12 @@ def main() -> int:
                 errors.append(
                     f"{rel}: 禁止在 UI 模型中内嵌 prototypeCircles/prototypeGroups 等域名占位"
                 )
+
+    for stale in sorted(TEST_LIBRARY_IMPORT_BASELINE - test_library_importers):
+        errors.append(
+            f"{stale}: 已不再 import 测试框架/替身库，必须同步删除基线条目，"
+            "否则基线退化成永久豁免"
+        )
 
     if errors:
         print("ui_mock_isolation 校验失败:", file=sys.stderr)

@@ -32,6 +32,7 @@ from content.post.article.draft_io import write_agent_draft  # noqa: E402
 from core.io import read_json  # noqa: E402
 from core.paths import (  # noqa: E402
     execution_command_root,
+    execution_entity_object_dir,
     execution_root,
     ensure_execution_command_layout,
     ensure_execution_layout,
@@ -40,6 +41,7 @@ from content.execution.stage_reports import write_stage_result  # noqa: E402
 from content.post.materialize_apply import materialize_posts  # noqa: E402
 from content.post.materialize_contract import _materialized_asset_refs  # noqa: E402
 from content.post.materialize_residue_cleanup import prune_materialized_post_refs  # noqa: E402
+from content.source.source_unit import write_source_unit  # noqa: E402
 from support.execution_manifest_fixture import build_execution_fixture  # noqa: E402
 
 EXECUTION_ID = "20260711--travel-article-layout--test-region-b--pilot-001"
@@ -50,7 +52,7 @@ def _retarget_roots() -> None:
     os.environ["QWQ_OUTPUT_ROOT"] = str(_OUTPUT_ROOT)
 
 
-def _seed_post(ref: str, publish_title: str) -> None:
+def _seed_post(ref: str, publish_title: str, source_ref: str) -> None:
     article = f"# {publish_title}\n\n正文：{ref} 的真实内容展开。"
     register_content_object(EXECUTION_ID, ref, content_type="article", angle=ANGLE, title=publish_title)
     write_stage_result(EXECUTION_ID, "post", "review", ref, {"decision": "approved"})
@@ -65,6 +67,11 @@ def _seed_post(ref: str, publish_title: str) -> None:
             "entityRefs": [],
             "tagRefs": ["Topic/旅行", "Format/内容角度/攻略"],
             "assets": [],
+            "publishMediaMode": "text_only",
+            "baseSourceRef": source_ref,
+            "sourcePaths": [source_ref],
+            "sourceUrls": ["https://example.com/dujiangyan"],
+            "citedSourceRefs": [source_ref],
         },
     )
     write_agent_draft(
@@ -72,7 +79,7 @@ def _seed_post(ref: str, publish_title: str) -> None:
         ref,
         article,
         model="test-agent/post-dir-layout",
-        cited_source_paths=[],
+        cited_source_paths=[source_ref],
         covered_facts=[],
         agent_run_id=f"run-{ref}",
         agent_id="agent-post-dir-layout",
@@ -98,10 +105,24 @@ def _materialize() -> tuple[Path, list[Path]]:
     if post_results.exists():
         shutil.rmtree(post_results)
     build_execution_fixture(EXECUTION_ID)
+    source_manifest = write_source_unit(
+        execution_entity_object_dir(EXECUTION_ID, "地点", "景区", "都江堰"),
+        ordinal=1,
+        source_id="base",
+        source_md="# 都江堰来源\n\n用于文章目录布局契约的来源证据。",
+        clean_md="# 都江堰来源\n\n用于文章目录布局契约的来源证据。",
+        platform="curated",
+        source_category="overview_baike",
+        url="https://example.com/dujiangyan",
+        title="都江堰来源",
+        target_ref="/entity/地点/景区/都江堰",
+        execution_id=EXECUTION_ID,
+    )
+    source_ref = str(source_manifest["sourceRef"])
     # 同一 (type,angle,title) 两篇（ref 排序 a<b → 1,2），另一标题一篇。
-    _seed_post("露营地_a", "成都周边小众露营地实测")
-    _seed_post("露营地_b", "成都周边小众露营地实测")
-    _seed_post("都江堰_a", "都江堰一日游怎么玩")
+    _seed_post("露营地_a", "成都周边小众露营地实测", source_ref)
+    _seed_post("露营地_b", "成都周边小众露营地实测", source_ref)
+    _seed_post("都江堰_a", "都江堰一日游怎么玩", source_ref)
     materialized = materialize_posts(EXECUTION_ID, "article")
     return _posts_root(), materialized
 

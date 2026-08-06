@@ -125,6 +125,8 @@ jobs:
     permissions:
       contents: read
       actions: read
+      attestations: write
+      id-token: write
       packages: write
       pull-requests: read
     env:
@@ -435,6 +437,33 @@ jobs:
         run: |
           REF="ghcr.io/${{ github.repository }}/release-artifact@${{ steps.candidate_bundle.outputs.digest }}"
           echo "ref=$REF" >> "$GITHUB_OUTPUT"
+      - name: Extract candidate release artifact SPDX SBOM
+        run: |
+          python3 quwoquan_ops/cli/prod/oci_supply_chain.py extract-sbom \
+            --ref "${{ steps.candidate_bundle_ref.outputs.ref }}" \
+            --output "$RUNNER_TEMP/candidate-release-artifact.spdx.json"
+      - name: Sign candidate release artifact provenance with GitHub OIDC
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6
+        with:
+          subject-name: ghcr.io/${{ github.repository }}/release-artifact
+          subject-digest: ${{ steps.candidate_bundle.outputs.digest }}
+          push-to-registry: true
+      - name: Sign candidate release artifact SBOM with GitHub OIDC
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6
+        with:
+          subject-name: ghcr.io/${{ github.repository }}/release-artifact
+          subject-digest: ${{ steps.candidate_bundle.outputs.digest }}
+          sbom-path: ${{ runner.temp }}/candidate-release-artifact.spdx.json
+          push-to-registry: true
+      - name: Verify candidate release artifact OIDC identity and closure
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 quwoquan_ops/cli/prod/oci_supply_chain.py verify \
+            --ref "${{ steps.candidate_bundle_ref.outputs.ref }}" \
+            --repository "${{ github.repository }}" \
+            --signer-workflow "${{ github.repository }}/.github/workflows/deploy-prod-auto.yml" \
+            --source-digest "${{ needs.service_pipeline.outputs.source_git_sha }}"
       - name: Require reviewed PR release governance
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -711,24 +740,26 @@ jobs:
         name: Seal Alpha environment receipt from raw stackctl evidence
         run: |
           RECEIPT="$QWQ_OUTPUT_ROOT/env/alpha/runs/mainline-receipt"
-          RAW="$QWQ_OUTPUT_ROOT/env/alpha/runs/mainline-receipt/raw"
-          mkdir -p "$RAW"
-          for command in package up health verify; do
-            cp "$QWQ_OUTPUT_ROOT/env/alpha/runs/mainline-${command}/report.json" "$RAW/${command}.json"
-          done
+          mkdir -p "$RECEIPT"
           python3 quwoquan_ops/ci/render_environment_release_receipt.py \
             --manifest "$QWQ_PROD_RELEASE_ARTIFACT_ROOT/manifest.json" \
             --environment alpha \
-            --evidence "package=$RAW/package.json" \
-            --evidence "up=$RAW/up.json" \
-            --evidence "health=$RAW/health.json" \
-            --evidence "verify=$RAW/verify.json" \
+            --evidence "package=$QWQ_OUTPUT_ROOT/env/alpha/runs/mainline-package/report.json" \
+            --evidence "up=$QWQ_OUTPUT_ROOT/env/alpha/runs/mainline-up/report.json" \
+            --evidence "health=$QWQ_OUTPUT_ROOT/env/alpha/runs/mainline-health/report.json" \
+            --evidence "verify=$QWQ_OUTPUT_ROOT/env/alpha/runs/mainline-verify/report.json" \
+            --evidence "pilot-release=$QWQ_PROD_RELEASE_ARTIFACT_ROOT/evidence/release/pilot-release-attestation.json" \
+            --evidence "pilot-rollback=$QWQ_PROD_RELEASE_ARTIFACT_ROOT/evidence/release/pilot-rollback-attestation.json" \
+            --evidence "content-lifecycle=$QWQ_PROD_RELEASE_ARTIFACT_ROOT/evidence/release/lifecycle-exit-alpha.json" \
             --require-evidence package \
             --require-evidence up \
             --require-evidence health \
             --require-evidence verify \
+            --require-evidence pilot-release \
+            --require-evidence pilot-rollback \
+            --require-evidence content-lifecycle \
             --archive-prefix evidence/raw/environments/alpha/raw \
-            --output "$QWQ_OUTPUT_ROOT/env/alpha/runs/mainline-receipt/alpha.json"
+            --output "$RECEIPT/alpha.json"
       - name: Setup Buildx for Alpha evidence
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
         with:
@@ -781,16 +812,13 @@ jobs:
     permissions:
       contents: read
       actions: read
+      attestations: read
       packages: write
     uses: ./.github/workflows/app-env-device-matrix-self-hosted.yml
     with:
       checkout_ref: ${{ needs.prepare.outputs.checkout_ref }}
       validation_profile: mainline_auto_prod
       release_evidence_ref: ${{ needs.prepare.outputs.release_evidence_ref }}
-      candidate_digest: ${{ needs.prepare.outputs.candidate_digest }}
-      artifact_digest: ${{ needs.prepare.outputs.artifact_digest }}
-      producer_workflow_run_id: ${{ needs.prepare.outputs.service_pipeline_run_id }}
-      source_git_sha: ${{ needs.prepare.outputs.head_sha }}
     secrets: inherit
 
   gamma_local:
@@ -873,24 +901,26 @@ jobs:
         name: Seal Gamma environment receipt from raw stackctl evidence
         run: |
           RECEIPT="$QWQ_OUTPUT_ROOT/env/gamma/runs/mainline-receipt"
-          RAW="$QWQ_OUTPUT_ROOT/env/gamma/runs/mainline-receipt/raw"
-          mkdir -p "$RAW"
-          for command in package up health verify; do
-            cp "$QWQ_OUTPUT_ROOT/env/gamma/runs/mainline-${command}/report.json" "$RAW/${command}.json"
-          done
+          mkdir -p "$RECEIPT"
           python3 quwoquan_ops/ci/render_environment_release_receipt.py \
             --manifest "$QWQ_PROD_RELEASE_ARTIFACT_ROOT/manifest.json" \
             --environment gamma \
-            --evidence "package=$RAW/package.json" \
-            --evidence "up=$RAW/up.json" \
-            --evidence "health=$RAW/health.json" \
-            --evidence "verify=$RAW/verify.json" \
+            --evidence "package=$QWQ_OUTPUT_ROOT/env/gamma/runs/mainline-package/report.json" \
+            --evidence "up=$QWQ_OUTPUT_ROOT/env/gamma/runs/mainline-up/report.json" \
+            --evidence "health=$QWQ_OUTPUT_ROOT/env/gamma/runs/mainline-health/report.json" \
+            --evidence "verify=$QWQ_OUTPUT_ROOT/env/gamma/runs/mainline-verify/report.json" \
+            --evidence "pilot-release=$QWQ_PROD_RELEASE_ARTIFACT_ROOT/evidence/release/pilot-release-attestation.json" \
+            --evidence "pilot-rollback=$QWQ_PROD_RELEASE_ARTIFACT_ROOT/evidence/release/pilot-rollback-attestation.json" \
+            --evidence "content-lifecycle=$QWQ_PROD_RELEASE_ARTIFACT_ROOT/evidence/release/lifecycle-exit-gamma.json" \
             --require-evidence package \
             --require-evidence up \
             --require-evidence health \
             --require-evidence verify \
+            --require-evidence pilot-release \
+            --require-evidence pilot-rollback \
+            --require-evidence content-lifecycle \
             --archive-prefix evidence/raw/environments/gamma/raw \
-            --output "$QWQ_OUTPUT_ROOT/env/gamma/runs/mainline-receipt/gamma.json"
+            --output "$RECEIPT/gamma.json"
       - name: Setup Buildx for Gamma evidence
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
         with:
@@ -1071,7 +1101,8 @@ jobs:
     permissions:
       contents: read
       actions: read
-      attestations: read
+      attestations: write
+      id-token: write
       packages: write
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
@@ -1557,6 +1588,37 @@ jobs:
         if: ${{ always() && needs.prepare.outputs.dry_run != 'true' && steps.terminal_bundle.outcome == 'success' }}
         run: |
           echo "ref=ghcr.io/${{ github.repository }}/release-artifact@${{ steps.terminal_bundle.outputs.digest }}" >> "$GITHUB_OUTPUT"
+      - name: Extract released terminal SPDX SBOM
+        if: ${{ always() && steps.terminal_bundle.outcome == 'success' && steps.terminal_receipts.outputs.status == 'released' }}
+        run: |
+          python3 quwoquan_ops/cli/prod/oci_supply_chain.py extract-sbom \
+            --ref "${{ steps.terminal_bundle_ref.outputs.ref }}" \
+            --output "$RUNNER_TEMP/terminal-release-artifact.spdx.json"
+      - name: Sign released terminal provenance with GitHub OIDC
+        if: ${{ always() && steps.terminal_bundle.outcome == 'success' && steps.terminal_receipts.outputs.status == 'released' }}
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6
+        with:
+          subject-name: ghcr.io/${{ github.repository }}/release-artifact
+          subject-digest: ${{ steps.terminal_bundle.outputs.digest }}
+          push-to-registry: true
+      - name: Sign released terminal SBOM with GitHub OIDC
+        if: ${{ always() && steps.terminal_bundle.outcome == 'success' && steps.terminal_receipts.outputs.status == 'released' }}
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6
+        with:
+          subject-name: ghcr.io/${{ github.repository }}/release-artifact
+          subject-digest: ${{ steps.terminal_bundle.outputs.digest }}
+          sbom-path: ${{ runner.temp }}/terminal-release-artifact.spdx.json
+          push-to-registry: true
+      - name: Verify released terminal OIDC identity and closure
+        if: ${{ always() && steps.terminal_bundle.outcome == 'success' && steps.terminal_receipts.outputs.status == 'released' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 quwoquan_ops/cli/prod/oci_supply_chain.py verify \
+            --ref "${{ steps.terminal_bundle_ref.outputs.ref }}" \
+            --repository "${{ github.repository }}" \
+            --signer-workflow "${{ github.repository }}/.github/workflows/deploy-prod-auto.yml" \
+            --source-digest "${{ needs.prepare.outputs.head_sha }}"
       - name: Preserve terminal evidence but fail a non-release outcome
         if: ${{ always() && needs.prepare.outputs.dry_run != 'true' && steps.terminal_bundle.outcome == 'success' && steps.terminal_receipts.outputs.status != 'released' }}
         run: |
@@ -1580,6 +1642,171 @@ jobs:
         run: |
           echo "duration_seconds=$(( $(date +%s) - ${{ steps.start.outputs.started_at }} ))" >> "$GITHUB_OUTPUT"
 
+  prod_soak_acceptance:
+    name: Prod hosted soak authority
+    needs: [prepare, prod_rollout]
+    if: ${{ needs.prepare.outputs.dry_run != 'true' && needs.prod_rollout.result == 'success' && needs.prod_rollout.outputs.release_status == 'released' }}
+    runs-on: [self-hosted, macOS, prod-release]
+    environment: production
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      receipt_id: ${{ steps.commit.outputs.receipt_id }}
+      readback_digest: ${{ steps.commit.outputs.readback_digest }}
+    env:
+      PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
+      PROMETHEUS_URL: ${{ vars.PROD_PROMETHEUS_URL }}
+      ALERTMANAGER_URL: ${{ vars.PROD_ALERTMANAGER_URL }}
+      PROD_EDGE_SSH_KEY_REFERENCE: ${{ vars.PROD_EDGE_SSH_KEY_REFERENCE }}
+      PROD_EDGE_SSH_KEY_PUBLIC_DIGEST: ${{ vars.PROD_EDGE_SSH_KEY_PUBLIC_DIGEST }}
+      PROD_EDGE_SSH_KEY_ISSUER: ${{ vars.PROD_EDGE_SSH_KEY_ISSUER }}
+      PROD_EDGE_SSH_KEY_EXPIRES_AT: ${{ vars.PROD_EDGE_SSH_KEY_EXPIRES_AT }}
+      PROD_SERVICE_SSH_KEY_REFERENCE: ${{ vars.PROD_SERVICE_SSH_KEY_REFERENCE }}
+      PROD_SERVICE_SSH_KEY_PUBLIC_DIGEST: ${{ vars.PROD_SERVICE_SSH_KEY_PUBLIC_DIGEST }}
+      PROD_SERVICE_SSH_KEY_ISSUER: ${{ vars.PROD_SERVICE_SSH_KEY_ISSUER }}
+      PROD_SERVICE_SSH_KEY_EXPIRES_AT: ${{ vars.PROD_SERVICE_SSH_KEY_EXPIRES_AT }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ needs.prepare.outputs.checkout_ref }}
+      - name: Materialize hosted soak SSH credentials
+        env:
+          EDGE_KEY_MATERIAL: ${{ secrets.PROD_EDGE_SSH_KEY }}
+          SERVICE_KEY_MATERIAL: ${{ secrets.PROD_SERVICE_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          for binding in EDGE SERVICE; do
+            variable="${binding}_KEY_MATERIAL"
+            material="${!variable}"
+            if [[ -z "$material" || "$material" != *"PRIVATE KEY"* ]]; then
+              echo "::error::GATE_BLOCK: PROD_${binding}_SSH_KEY is missing or invalid"
+              exit 2
+            fi
+            if [[ "$binding" == "EDGE" ]]; then
+              key_file="$RUNNER_TEMP/prod-edge-ssh-key"
+            else
+              key_file="$RUNNER_TEMP/prod-service-ssh-key"
+            fi
+            (umask 077 && printf '%s\n' "$material" > "$key_file")
+            chmod 600 "$key_file"
+            echo "PROD_${binding}_SSH_KEY_FILE=$key_file" >> "$GITHUB_ENV"
+          done
+      - name: Login immutable release registry
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Materialize released terminal evidence
+        run: |
+          python3 quwoquan_ops/cli/prod/fetch_mainline_release_artifact.py \
+            --ref "${{ needs.prod_rollout.outputs.release_evidence_ref }}" \
+            --output-dir "$QWQ_OUTPUT_ROOT/env/repo/local/prod-soak/release-evidence"
+      - name: Fetch exact full-stage hosted receipt
+        run: |
+          ROOT="$QWQ_OUTPUT_ROOT/env/repo/local/prod-soak/release-evidence"
+          RECEIPT_ID="$(python3 - "$ROOT/manifest.json" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          manifest = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          if manifest.get("status") != "released":
+              raise SystemExit("GATE_BLOCK: prod soak requires released terminal evidence")
+          stage = (((manifest.get("rolloutReceipt") or {}).get("evidence") or {}).get("stages") or {}).get("full") or {}
+          receipt_id = str(stage.get("receiptId") or "")
+          if len(receipt_id) != 64:
+              raise SystemExit("GATE_BLOCK: released manifest lacks full hosted receipt")
+          print(receipt_id)
+          PY
+          )"
+          bash quwoquan_ops/cli/prod/sync_prod_plane_stack.sh \
+            --plane service \
+            --operation release-ledger-receipt \
+            --service prod-stack \
+            --receipt-id "$RECEIPT_ID" \
+            --output-path "$QWQ_OUTPUT_ROOT/env/repo/local/prod-soak/full-readback.json"
+      - name: Observe authoritative soak window
+        run: |
+          python3 quwoquan_ops/ci/collect_prod_soak_observations.py \
+            --full-readback "$QWQ_OUTPUT_ROOT/env/repo/local/prod-soak/full-readback.json" \
+            --service prod-stack \
+            --prometheus-url "$PROMETHEUS_URL" \
+            --alertmanager-url "$ALERTMANAGER_URL" \
+            --soak-policy quwoquan_ops/policies/config-release/slo_thresholds.yaml \
+            --health-report-dir "$QWQ_OUTPUT_ROOT/env/prod/runs/hosted-soak-health" \
+            --slo-output "$QWQ_OUTPUT_ROOT/env/repo/local/prod-soak/slo.json" \
+            --alerts-output "$QWQ_OUTPUT_ROOT/env/repo/local/prod-soak/alerts.json"
+      - name: Verify expiring credential references without secret material
+        run: |
+          python3 quwoquan_ops/cli/prod/validate_prod_plane_credentials.py \
+            --stage full \
+            --evidence-output "$QWQ_OUTPUT_ROOT/env/repo/local/prod-soak/credentials.json"
+      - name: Bind reviewed mainline approval to released artifact
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ROOT="$QWQ_OUTPUT_ROOT/env/repo/local/prod-soak/release-evidence"
+          python3 quwoquan_ops/ci/verify_release_governance.py \
+            --repository "${{ github.repository }}" \
+            --release-manifest "$ROOT/manifest.json" \
+            --minimum-approvals 1 \
+            --output "$ROOT/governance-receipt.json"
+      - name: Render canonical hosted soak request
+        run: |
+          ROOT="$QWQ_OUTPUT_ROOT/env/repo/local/prod-soak/release-evidence"
+          python3 quwoquan_ops/ci/render_release_lifecycle_receipts.py prod-soak-request \
+            --manifest "$ROOT/manifest.json" \
+            --service prod-stack \
+            --full-readback "$QWQ_OUTPUT_ROOT/env/repo/local/prod-soak/full-readback.json" \
+            --slo-observation "$QWQ_OUTPUT_ROOT/env/repo/local/prod-soak/slo.json" \
+            --alerts-observation "$QWQ_OUTPUT_ROOT/env/repo/local/prod-soak/alerts.json" \
+            --health-report "$QWQ_OUTPUT_ROOT/env/prod/runs/hosted-soak-health/report.json" \
+            --credential-evidence "$QWQ_OUTPUT_ROOT/env/repo/local/prod-soak/credentials.json" \
+            --credential-policy quwoquan_ops/environments/prod/access-isolation.yaml \
+            --governance-receipt "$ROOT/governance-receipt.json" \
+            --soak-policy quwoquan_ops/policies/config-release/slo_thresholds.yaml \
+            --output "$QWQ_OUTPUT_ROOT/env/repo/local/prod-soak/request.json"
+      - id: commit
+        name: Commit and read back immutable hosted soak receipt
+        run: |
+          REQUEST="$QWQ_OUTPUT_ROOT/env/repo/local/prod-soak/request.json"
+          COMMITTED="$QWQ_OUTPUT_ROOT/env/repo/local/prod-soak/committed-readback.json"
+          READBACK="$QWQ_OUTPUT_ROOT/env/repo/local/prod-soak/remote-readback.json"
+          bash quwoquan_ops/cli/prod/sync_prod_plane_stack.sh \
+            --plane service \
+            --operation release-ledger-soak-commit \
+            --service prod-stack \
+            --request-path "$REQUEST" \
+            --output-path "$COMMITTED"
+          RECEIPT_ID="$(python3 - "$COMMITTED" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+          print(json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))["receipt"]["receiptId"])
+          PY
+          )"
+          bash quwoquan_ops/cli/prod/sync_prod_plane_stack.sh \
+            --plane service \
+            --operation release-ledger-soak-receipt \
+            --service prod-stack \
+            --receipt-id "$RECEIPT_ID" \
+            --output-path "$READBACK"
+          cmp "$COMMITTED" "$READBACK"
+          python3 - "$READBACK" <<'PY' >> "$GITHUB_OUTPUT"
+          import hashlib
+          import json
+          import sys
+          from pathlib import Path
+
+          raw = Path(sys.argv[1]).read_bytes()
+          payload = json.loads(raw)
+          print(f"receipt_id={payload['receipt']['receiptId']}")
+          print(f"readback_digest=sha256:{hashlib.sha256(raw).hexdigest()}")
+          PY
+
   mainline_summary:
     name: 07. Deploy To Prod (Controlled)
     needs:
@@ -1593,6 +1820,7 @@ jobs:
       - gamma_local
       - preprod_evidence
       - prod_rollout
+      - prod_soak_acceptance
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -1921,6 +2149,7 @@ jobs:
           GAMMA_RESULT: ${{ needs.gamma_local.result }}
           PROD_RESULT: ${{ needs.prod_rollout.result }}
           PROD_RELEASE_STATUS: ${{ needs.prod_rollout.outputs.release_status }}
+          PROD_SOAK_RESULT: ${{ needs.prod_soak_acceptance.result }}
         run: |
           set -euo pipefail
           fail=0
@@ -1936,6 +2165,7 @@ jobs:
           expect_success "beta_device_matrix" "${BETA_RESULT}" "检查 beta-local self-hosted device matrix"
           expect_success "gamma_local" "${GAMMA_RESULT}" "检查 gamma-local release-fast package/up/health/verify"
           expect_success "prod_rollout" "${PROD_RESULT}" "检查单一 Prod 事务及真实 GATE_BLOCK"
+          expect_success "prod_soak_acceptance" "${PROD_SOAK_RESULT}" "检查真实 soak、告警、健康、凭据与审批 hosted readback"
           if [[ "${PROD_RELEASE_STATUS}" != "released" ]]; then
             echo "::error::prod_rollout terminal status expected released, got ${PROD_RELEASE_STATUS:-missing}. Rolled-back or rollback-failed evidence is preserved but cannot be promoted as green."
             fail=1

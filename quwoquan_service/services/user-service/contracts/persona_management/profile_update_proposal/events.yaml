@@ -1,10 +1,7 @@
 events:
 - name: ProfileUpdateProposalCreated
-  producer: user-service
-  consumers:
-  - projection-workers
-  - assistant-service
-  channel: events.user.profile_update_proposal
+  delivery_semantics: transactional_event_log
+  topic: events.user.profile_update_proposal
   payload_entity: ProfileUpdateProposal
   payload_fields:
   - id
@@ -20,12 +17,10 @@ events:
   - status
   - version
   - createdAt
+  no_consumer_reason: Proposal 创建与审核记录已在对象事务中持久化；事件只作为对象级审计日志保留，没有下游订阅方。
 - name: ProfileUpdateProposalConfirmed
-  producer: user-service
-  consumers:
-  - projection-workers
-  - assistant-service
-  channel: events.user.profile_update_proposal
+  delivery_semantics: transactional_event_log
+  topic: events.user.profile_update_proposal
   payload_entity: ProfileUpdateProposal
   payload_fields:
   - id
@@ -34,12 +29,10 @@ events:
   - version
   - reviewedBy
   - targetPersonaExpectedVersion
+  no_consumer_reason: Proposal 确认与审核记录已在对象事务中持久化；事件只作为对象级审计日志保留，没有下游订阅方。
 - name: ProfileUpdateProposalApplyStarted
-  producer: user-service
-  consumers:
-  - projection-workers
-  - assistant-service
-  channel: events.user.profile_update_proposal
+  delivery_semantics: transactional_event_log
+  topic: events.user.profile_update_proposal
   payload_entity: ProfileUpdateProposal
   payload_fields:
   - id
@@ -49,12 +42,10 @@ events:
   - applyActorPersonaId
   - applyRequestId
   - applyTraceId
+  no_consumer_reason: apply 启动态与审核记录已在对象事务中持久化；事件只作为对象级审计日志保留，没有下游订阅方。
 - name: ProfileUpdateProposalApplied
-  producer: user-service
-  consumers:
-  - projection-workers
-  - assistant-service
-  channel: events.user.profile_update_proposal
+  delivery_semantics: transactional_event_log
+  topic: events.user.profile_update_proposal
   payload_entity: ProfileUpdateProposal
   payload_fields:
   - id
@@ -64,12 +55,10 @@ events:
   - resolvedAt
   - applyAuditId
   - rollbackDeadline
+  no_consumer_reason: apply 终态与审核记录已在对象事务中持久化；事件只作为对象级审计日志保留，没有下游订阅方。
 - name: ProfileUpdateProposalRollbackStarted
-  producer: user-service
-  consumers:
-  - projection-workers
-  - assistant-service
-  channel: events.user.profile_update_proposal
+  delivery_semantics: transactional_event_log
+  topic: events.user.profile_update_proposal
   payload_entity: ProfileUpdateProposal
   payload_fields:
   - id
@@ -80,12 +69,10 @@ events:
   - rollbackActorPersonaId
   - rollbackRequestId
   - rollbackTraceId
+  no_consumer_reason: rollback 启动态与审核记录已在对象事务中持久化；事件只作为对象级审计日志保留，没有下游订阅方。
 - name: ProfileUpdateProposalRollbackAborted
-  producer: user-service
-  consumers:
-  - projection-workers
-  - assistant-service
-  channel: events.user.profile_update_proposal
+  delivery_semantics: transactional_event_log
+  topic: events.user.profile_update_proposal
   payload_entity: ProfileUpdateProposal
   payload_fields:
   - id
@@ -93,12 +80,10 @@ events:
   - status
   - version
   - applyAuditId
+  no_consumer_reason: rollback 中止态与审核记录已在对象事务中持久化；事件只作为对象级审计日志保留，没有下游订阅方。
 - name: ProfileUpdateProposalRolledBack
-  producer: user-service
-  consumers:
-  - projection-workers
-  - assistant-service
-  channel: events.user.profile_update_proposal
+  delivery_semantics: transactional_event_log
+  topic: events.user.profile_update_proposal
   payload_entity: ProfileUpdateProposal
   payload_fields:
   - id
@@ -108,12 +93,10 @@ events:
   - resolvedAt
   - applyAuditId
   - rollbackAuditId
+  no_consumer_reason: rollback 终态与审核记录已在对象事务中持久化；事件只作为对象级审计日志保留，没有下游订阅方。
 - name: ProfileUpdateProposalRejected
-  producer: user-service
-  consumers:
-  - projection-workers
-  - assistant-service
-  channel: events.user.profile_update_proposal
+  delivery_semantics: transactional_event_log
+  topic: events.user.profile_update_proposal
   payload_entity: ProfileUpdateProposal
   payload_fields:
   - id
@@ -122,12 +105,10 @@ events:
   - version
   - reviewedBy
   - resolvedAt
+  no_consumer_reason: Proposal 拒绝态与审核记录已在对象事务中持久化；事件只作为对象级审计日志保留，没有下游订阅方。
 - name: ProfileUpdateProposalExpired
-  producer: user-service
-  consumers:
-  - projection-workers
-  - assistant-service
-  channel: events.user.profile_update_proposal
+  delivery_semantics: transactional_event_log
+  topic: events.user.profile_update_proposal
   payload_entity: ProfileUpdateProposal
   payload_fields:
   - id
@@ -135,3 +116,4 @@ events:
   - status
   - version
   - resolvedAt
+  no_consumer_reason: Proposal 过期态与审核记录已在对象事务中持久化；事件只作为对象级审计日志保留，没有下游订阅方。

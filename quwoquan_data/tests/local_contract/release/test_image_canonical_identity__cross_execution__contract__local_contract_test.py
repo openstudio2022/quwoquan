@@ -15,15 +15,15 @@ for _path in (DATA_ROOT, SCRIPTS_ROOT):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
-from core.io import write_json  # noqa: E402
-from core.image_deduplication import perceptual_hash_distance  # noqa: E402
-from content.release.canonical.image_identity import (  # noqa: E402
+from content.release.canonical import post_promotion as subject
+from content.release.canonical.image_identity import (
     canonical_asset_manifest_row,
 )
-from content.release.canonical import post_promotion as subject  # noqa: E402
-from content.release.canonical.object_transaction_contract import (  # noqa: E402
+from content.release.canonical.object_transaction_contract import (
     ObjectTransactionError,
 )
+from core.image_deduplication import perceptual_hash_distance
+from core.io import write_json
 
 
 def _manifest(*, digest: str, perceptual_hash: str) -> dict[str, object]:

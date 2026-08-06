@@ -17,13 +17,11 @@ import re
 import subprocess
 import sys
 import time
+from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import Any, Callable, Sequence
+from typing import Any
 
-
-IMAGE_REF_PATTERN = re.compile(
-    r"ghcr\.io/[A-Za-z0-9._/-]+@sha256:[0-9a-f]{64}"
-)
+IMAGE_REF_PATTERN = re.compile(r"ghcr\.io/[A-Za-z0-9._/-]+@sha256:[0-9a-f]{64}")
 REPOSITORY_PATTERN = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 GIT_SHA_PATTERN = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
 OIDC_ISSUER = "https://token.actions.githubusercontent.com"
@@ -31,6 +29,12 @@ PREDICATES = {
     "slsaProvenance": "https://slsa.dev/provenance/v1",
     "spdxSbom": "https://spdx.dev/Document/v2.3",
 }
+CANONICAL_SIGNER_WORKFLOWS = frozenset(
+    {
+        "service_pipeline.yml",
+        "deploy-prod-auto.yml",
+    }
+)
 
 CommandRunner = Callable[..., subprocess.CompletedProcess[str]]
 
@@ -100,7 +104,9 @@ def inspect_buildkit_attestations(
     """Return the image's structured SPDX document after validating both predicates."""
 
     if IMAGE_REF_PATTERN.fullmatch(ref) is None:
-        raise ValueError("OCI supply-chain verification requires an exact GHCR digest ref")
+        raise ValueError(
+            "OCI supply-chain verification requires an exact GHCR digest ref"
+        )
     deadline = (
         time.monotonic() + timeout_seconds if timeout_seconds is not None else None
     )
@@ -110,7 +116,9 @@ def inspect_buildkit_attestations(
             return None
         value = int(deadline - time.monotonic())
         if value < 1:
-            raise subprocess.TimeoutExpired("OCI BuildKit attestation verification", timeout_seconds)
+            raise subprocess.TimeoutExpired(
+                "OCI BuildKit attestation verification", timeout_seconds
+            )
         return value
 
     sbom_result = _run(
@@ -128,7 +136,11 @@ def inspect_buildkit_attestations(
     )
     sbom_payload = _load_json_output(sbom_result, "structured BuildKit SBOM lookup")
     spdx = _find_spdx(sbom_payload)
-    if spdx is None or not isinstance(spdx.get("packages"), list) or not spdx["packages"]:
+    if (
+        spdx is None
+        or not isinstance(spdx.get("packages"), list)
+        or not spdx["packages"]
+    ):
         raise RuntimeError("OCI image has no structured SPDX SBOM")
 
     provenance_result = _run(
@@ -190,11 +202,18 @@ def verify_signed_attestations(
     """Cryptographically verify signed provenance and SBOM bundles from OCI."""
 
     if IMAGE_REF_PATTERN.fullmatch(ref) is None:
-        raise ValueError("signed attestation verification requires an exact GHCR digest ref")
+        raise ValueError(
+            "signed attestation verification requires an exact GHCR digest ref"
+        )
     if REPOSITORY_PATTERN.fullmatch(repository) is None:
         raise ValueError("signed attestation verification requires owner/repository")
-    expected_signer = f"{repository}/.github/workflows/service_pipeline.yml"
-    if signer_workflow != expected_signer:
+    canonical_signers = {
+        f"{repository}/.github/workflows/{workflow}"
+        for workflow in CANONICAL_SIGNER_WORKFLOWS
+    }
+    if "/release-artifact@" not in ref:
+        canonical_signers = {f"{repository}/.github/workflows/service_pipeline.yml"}
+    if signer_workflow not in canonical_signers:
         raise ValueError("signed attestation signer workflow is not canonical")
     if source_digest and GIT_SHA_PATTERN.fullmatch(source_digest) is None:
         raise ValueError("signed attestation source digest is invalid")
@@ -208,7 +227,9 @@ def verify_signed_attestations(
             return None
         value = int(deadline - time.monotonic())
         if value < 1:
-            raise subprocess.TimeoutExpired("OCI signed attestation verification", timeout_seconds)
+            raise subprocess.TimeoutExpired(
+                "OCI signed attestation verification", timeout_seconds
+            )
         return value
 
     verified: dict[str, str] = {}
@@ -268,7 +289,9 @@ def verify_oci_supply_chain(
             return None
         value = int(deadline - time.monotonic())
         if value < 1:
-            raise subprocess.TimeoutExpired("OCI supply-chain verification", timeout_seconds)
+            raise subprocess.TimeoutExpired(
+                "OCI supply-chain verification", timeout_seconds
+            )
         return value
 
     inspect_buildkit_attestations(
@@ -320,7 +343,11 @@ def main() -> int:
                 signer_workflow=args.signer_workflow,
                 source_digest=args.source_digest,
             )
-            print(json.dumps({"status": "passed", "attestations": verified}, sort_keys=True))
+            print(
+                json.dumps(
+                    {"status": "passed", "attestations": verified}, sort_keys=True
+                )
+            )
     except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired) as error:
         print(f"GATE_BLOCK: {error}", file=sys.stderr)
         return 2

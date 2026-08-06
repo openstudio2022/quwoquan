@@ -19,23 +19,23 @@ var (
 // AppErrorFromInvitationExpired returns *AppError for USER.INVITATION.expired (user_message from errors.yaml).
 func AppErrorFromInvitationExpired(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrInvitationExpired.Error()))
-	return rerrors.NewAppError(code, "邀请已过期", debugMessage).WithMetadata("expired", 410).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "邀请已过期", debugMessage).WithMetadata("expired", 410).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromInvitationNotFound returns *AppError for USER.INVITATION.not_found (user_message from errors.yaml).
 func AppErrorFromInvitationNotFound(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrInvitationNotFound.Error()))
-	return rerrors.NewAppError(code, "邀请不存在或已失效", debugMessage).WithMetadata("not_found", 404).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "邀请不存在或已失效", debugMessage).WithMetadata("not_found", 404).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromInvitationDailyLimitExceeded returns *AppError for USER.INVITATION.daily_limit_exceeded (user_message from errors.yaml).
 func AppErrorFromInvitationDailyLimitExceeded(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrInvitationDailyLimitExceeded.Error()))
-	return rerrors.NewAppError(code, "今日邀请次数已达上限", debugMessage).WithMetadata("daily_limit_exceeded", 429).WithRecovery("retry", 86400)
+	return rerrors.NewAppError(code, "今日邀请次数已达上限", debugMessage).WithMetadata("daily_limit_exceeded", 429).WithRecoveryDirective("retry", "snackbar", 86400)
 }
 
 // AppErrorFromInvitationInvalidTransition returns *AppError for USER.INVITATION.invalid_transition (user_message from errors.yaml).
 func AppErrorFromInvitationInvalidTransition(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrInvitationInvalidTransition.Error()))
-	return rerrors.NewAppError(code, "邀请状态已变化，请刷新后重试", debugMessage).WithMetadata("invalid_transition", 409).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "邀请状态已变化，请刷新后重试", debugMessage).WithMetadata("invalid_transition", 409).WithRecoveryDirective("surface", "inlineCard", 0)
 }

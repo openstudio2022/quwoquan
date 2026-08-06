@@ -1,6 +1,7 @@
 backend: mongodb
 collections:
   assistant_skill_package_releases:
+    publication_role: not_published
     entity: SkillPackageRelease
     role: authoritative
     description: 不可变 Skill Package release descriptor；资产正文留在 digest 寻址 artifact storage。
@@ -11,6 +12,7 @@ collections:
     - name: idx_assistant_skill_package_release_status
       keys: {packageId: 1, status: 1, stagedAt: -1}
   assistant_skill_package_activations:
+    publication_role: not_published
     entity: SkillPackageActivation
     role: authoritative
     description: 每个 packageId 唯一的 active/previous digest CAS 指针。
@@ -19,6 +21,7 @@ collections:
       keys: {packageId: 1}
       unique: true
   assistant_skill_package_command_receipts:
+    publication_role: not_published
     entity: SkillPackageActivation
     role: authoritative
     description: Stage、Activate 与 Rollback 的幂等命令回执。
@@ -27,6 +30,7 @@ collections:
       keys: {commandId: 1}
       unique: true
   assistant_skill_package_outbox:
+    publication_role: transactional_event_log
     entity: SkillPackageActivation
     role: append_only
     description: 与 active 指针原子提交的激活/回滚审计事件。

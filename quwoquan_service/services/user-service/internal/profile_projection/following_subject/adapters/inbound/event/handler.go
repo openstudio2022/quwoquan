@@ -7,9 +7,11 @@ import (
 	followingapp "quwoquan_service/services/user-service/internal/profile_projection/following_subject/application"
 )
 
-type Handler struct{ projector *followingapp.Projector }
+type Handler struct {
+	projector *followingapp.FollowingSubjectProjector
+}
 
-func NewHandler(projector *followingapp.Projector) *Handler {
+func NewHandler(projector *followingapp.FollowingSubjectProjector) *Handler {
 	if projector == nil {
 		panic("FollowingSubject event handler requires projector")
 	}

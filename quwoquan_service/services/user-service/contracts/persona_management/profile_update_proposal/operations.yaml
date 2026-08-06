@@ -386,6 +386,7 @@ api_routes:
   - method: GET
     path: /user/personas/{personaId}/profile-proposals
     operation: ListProfileUpdateProposals
+    pagination: {default_items: 20, maximum_items: 100}
     request_bindings:
       path:
         - name: personaId
@@ -488,3 +489,116 @@ contract_test:
         - rollback_window_enforced
         - rollback_requires_unchanged_persona_version
         - rollback_receipt_replay
+readiness_cases:
+  - case_id: create-profile-update-proposal-local
+    spec_ref: specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/proposal-create-review/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: CreateProfileUpdateProposal}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/persona_management/profile_update_proposal/facade__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: create-profile-update-proposal-api
+    spec_ref: specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/proposal-create-review/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: CreateProfileUpdateProposal}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/persona_management/profile_update_proposal/postgres_proposal__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+  - case_id: confirm-profile-update-proposal-local
+    spec_ref: specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/proposal-confirm-reject/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: ConfirmProposal}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/persona_management/profile_update_proposal/facade__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: confirm-profile-update-proposal-api
+    spec_ref: specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/proposal-confirm-reject/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: ConfirmProposal}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/persona_management/profile_update_proposal/postgres_proposal__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+  - case_id: apply-profile-update-proposal-local
+    spec_ref: specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/proposal-apply-audit/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: ApplyProposal}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/persona_management/profile_update_proposal/facade__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: apply-profile-update-proposal-api
+    spec_ref: specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/proposal-apply-audit/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: ApplyProposal}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/persona_management/profile_update_proposal/postgres_proposal__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+  - case_id: reject-profile-update-proposal-local
+    spec_ref: specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/proposal-confirm-reject/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: RejectProposal}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/persona_management/profile_update_proposal/facade__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: reject-profile-update-proposal-api
+    spec_ref: specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/proposal-confirm-reject/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: RejectProposal}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/persona_management/profile_update_proposal/postgres_proposal__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+  - case_id: rollback-profile-update-proposal-local
+    spec_ref: specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/proposal-apply-audit/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: RollbackProposal}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/persona_management/profile_update_proposal/facade__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: rollback-profile-update-proposal-api
+    spec_ref: specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/proposal-apply-audit/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: RollbackProposal}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/persona_management/profile_update_proposal/postgres_proposal__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+  - case_id: get-profile-update-proposal-local
+    spec_ref: specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/proposal-create-review/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: GetProfileUpdateProposal}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/persona_management/profile_update_proposal/facade__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: get-profile-update-proposal-api
+    spec_ref: specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/proposal-create-review/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: GetProfileUpdateProposal}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/persona_management/profile_update_proposal/postgres_proposal__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+  - case_id: list-profile-update-proposals-local
+    spec_ref: specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/proposal-create-review/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: ListProfileUpdateProposals}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/persona_management/profile_update_proposal/facade__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: list-profile-update-proposals-api
+    spec_ref: specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/proposal-create-review/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: ListProfileUpdateProposals}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/persona_management/profile_update_proposal/postgres_proposal__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}

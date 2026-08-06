@@ -34,14 +34,19 @@ type DefinitionOfDoneInput struct {
 	VerificationRequirements []string `json:"verificationRequirements"`
 }
 
-type ContinueToolUseInput struct {
-	Decision          string                             `json:"decision"`
-	ContinuationToken string                             `json:"continuationToken"`
-	ExecutionReceipt  *DeviceActionExecutionReceiptInput `json:"executionReceipt"`
+type ApproveToolUseInput struct {
+	Decision       string `json:"decision"`
+	ApprovalPermit string `json:"approvalPermit"`
+	InstallationID string `json:"installationId"`
+	DeviceID       string `json:"deviceId"`
 }
 
 type DeviceActionExecutionReceiptInput struct {
-	ActionKind     string    `json:"actionKind"`
+	InstallationID string    `json:"installationId"`
+	DeviceID       string    `json:"deviceId"`
+	Capability     string    `json:"capability"`
+	InputDigest    string    `json:"inputDigest"`
+	Permit         string    `json:"permit"`
 	IdempotencyKey string    `json:"idempotencyKey"`
 	Outcome        string    `json:"outcome"`
 	ExecutedAt     time.Time `json:"executedAt"`
@@ -210,34 +215,56 @@ func (s *UseCases) Steer(
 	return run, mapRunError(err)
 }
 
-func (s *UseCases) ContinueToolUse(
+func (s *UseCases) ApproveToolUse(
 	ctx context.Context,
 	userID string,
 	runID string,
-	toolUseID string,
+	toolInvocationID string,
 	commandID string,
-	input ContinueToolUseInput,
-) (runruntime.Run, error) {
-	var receipt *runruntime.DeviceActionExecutionReceipt
-	if input.ExecutionReceipt != nil {
-		receipt = &runruntime.DeviceActionExecutionReceipt{
-			ActionKind:     input.ExecutionReceipt.ActionKind,
-			IdempotencyKey: input.ExecutionReceipt.IdempotencyKey,
-			Outcome:        input.ExecutionReceipt.Outcome,
-			ExecutedAt:     input.ExecutionReceipt.ExecutedAt,
-			DeviceObjectID: input.ExecutionReceipt.DeviceObjectID,
-			FailureCode:    input.ExecutionReceipt.FailureCode,
-		}
-	}
-	run, err := s.runs.ContinueToolUse(ctx, runruntime.ContinueToolUseCommand{
-		UserID:            userID,
-		RunID:             runID,
-		ToolUseID:         toolUseID,
-		CommandID:         commandID,
-		Decision:          input.Decision,
-		ContinuationToken: input.ContinuationToken,
-		ExecutionReceipt:  receipt,
+	input ApproveToolUseInput,
+) (runruntime.Run, *runruntime.DeviceActionPermit, error) {
+	run, permit, err := s.runs.ApproveToolUse(ctx, runruntime.ApproveToolUseCommand{
+		UserID:           userID,
+		RunID:            runID,
+		ToolInvocationID: toolInvocationID,
+		CommandID:        commandID,
+		Decision:         input.Decision,
+		ApprovalPermit:   input.ApprovalPermit,
+		InstallationID:   input.InstallationID,
+		DeviceID:         input.DeviceID,
 	})
+	return run, permit, mapRunError(err)
+}
+
+func (s *UseCases) SubmitDeviceActionReceipt(
+	ctx context.Context,
+	userID string,
+	runID string,
+	toolInvocationID string,
+	commandID string,
+	input DeviceActionExecutionReceiptInput,
+) (runruntime.Run, error) {
+	run, err := s.runs.SubmitDeviceActionReceipt(
+		ctx,
+		runruntime.SubmitDeviceActionReceiptCommand{
+			UserID:           userID,
+			RunID:            runID,
+			ToolInvocationID: toolInvocationID,
+			CommandID:        commandID,
+			Receipt: runruntime.DeviceActionExecutionReceipt{
+				InstallationID: input.InstallationID,
+				DeviceID:       input.DeviceID,
+				Capability:     input.Capability,
+				InputDigest:    input.InputDigest,
+				Permit:         input.Permit,
+				IdempotencyKey: input.IdempotencyKey,
+				Outcome:        input.Outcome,
+				ExecutedAt:     input.ExecutedAt,
+				DeviceObjectID: input.DeviceObjectID,
+				FailureCode:    input.FailureCode,
+			},
+		},
+	)
 	return run, mapRunError(err)
 }
 
@@ -328,13 +355,7 @@ func mapRunError(err error) error {
 		errors.Is(err, runruntime.ErrLeaseConflict),
 		errors.Is(err, runruntime.ErrJournalGap),
 		errors.Is(err, runruntime.ErrJournalCorrupt):
-		appErr := rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleAssistant, rterr.KindUser, "run_revision_conflict"),
-			"执行状态已更新，请刷新后重试",
-			err.Error(),
-		)
-		appErr.HTTPStatus = http.StatusConflict
-		return appErr
+		return runerrors.AppErrorFromRunStateConflict(err.Error())
 	default:
 		appErr := rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleAssistant, rterr.KindSystem, "run_storage_unavailable"),

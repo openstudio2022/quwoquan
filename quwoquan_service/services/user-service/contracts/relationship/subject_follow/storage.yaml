@@ -1,20 +1,30 @@
 backend: postgres
 tables:
   subject_follows:
+    publication_role: not_published
     role: authoritative
-    primary_key: id
+    pk:
+    - id
     unique_constraints:
-    - - persona_id
+    - name: uq_subject_follows_persona_subject
+      columns:
+      - persona_id
       - subject_type
       - subject_id
   subject_follow_command_receipts:
+    publication_role: not_published
     role: authoritative
     unique_constraints:
-    - - persona_id
+    - name: uq_subject_follow_command_receipts_persona_key
+      columns:
+      - persona_id
       - idempotency_key
   subject_follow_outbox:
+    publication_role: transactional_outbox
     role: append_only
     unique_constraints:
-    - - aggregate_id
+    - name: uq_subject_follow_outbox_aggregate_version
+      columns:
+      - aggregate_id
       - aggregate_version
 role: authoritative

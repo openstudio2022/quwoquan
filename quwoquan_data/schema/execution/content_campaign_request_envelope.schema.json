@@ -15,13 +15,18 @@
     "count",
     "targetNames",
     "sourceProviders",
+    "semanticSelectionId",
     "retryOf",
     "rootExecutionId",
     "executionId",
     "gitBranch",
     "gitCommitSha",
+    "sourceRevision",
     "sourceDigest",
     "entityCatalogDigest",
+    "preAcquisitionHandoff",
+    "externalInputRefs",
+    "externalInputsDigest",
     "allowedStage",
     "operatorPrompt",
     "requestDigest",
@@ -63,11 +68,16 @@
       "uniqueItems": true,
       "items": { "type": "string", "minLength": 1 }
     },
+    "semanticSelectionId": { "enum": ["default", "cursor_auto"] },
+    "semanticPreflightReceipt": {
+      "$ref": "semantic_preflight_receipt_ref.schema.json"
+    },
     "retryOf": { "type": ["string", "null"] },
     "rootExecutionId": { "type": "string", "minLength": 1 },
     "executionId": { "type": "string", "minLength": 1 },
     "gitBranch": { "type": "string", "minLength": 1 },
     "gitCommitSha": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+    "sourceRevision": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
     "sourceDigest": {
       "type": "object",
       "required": ["algorithm", "digest", "inputs"],
@@ -86,78 +96,63 @@
       "type": "string",
       "pattern": "^sha256:[a-f0-9]{64}$"
     },
-    "imageScalePromotion": {
+    "preAcquisitionHandoff": {
       "type": "object",
-      "additionalProperties": false,
       "required": [
-        "predecessorExecutionId",
-        "receiptDigest",
-        "gitBranch",
-        "gitCommitSha",
-        "sourceDigest",
-        "entityCatalogDigest",
-        "qualifiedCount",
-        "finalizedCount"
+        "handoffId",
+        "handoffRevision",
+        "handoffRef",
+        "handoffDigest",
+        "handoffFileDigest"
       ],
+      "additionalProperties": false,
       "properties": {
-        "predecessorExecutionId": { "type": "string", "minLength": 1 },
-        "receiptDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
-        "gitBranch": { "type": "string", "minLength": 1 },
-        "gitCommitSha": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
-        "sourceDigest": {
-          "type": "object",
-          "required": ["algorithm", "digest", "inputs"],
-          "additionalProperties": false,
-          "properties": {
-            "algorithm": { "const": "sha256" },
-            "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
-            "inputs": {
-              "type": "array",
-              "minItems": 1,
-              "items": { "type": "string", "minLength": 1 }
-            }
-          }
+        "handoffId": { "type": "string", "minLength": 1 },
+        "handoffRevision": { "type": "integer", "minimum": 1 },
+        "handoffRef": { "type": "string", "minLength": 1 },
+        "handoffDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
         },
-        "entityCatalogDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
-        "qualifiedCount": { "type": "integer", "minimum": 100 },
-        "finalizedCount": { "type": "integer", "minimum": 100 }
+        "handoffFileDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        }
       }
     },
-    "videoScalePromotion": {
+    "externalInputRefs": {
+      "type": "array",
+      "items": { "$ref": "campaign_external_input_ref.schema.json" }
+    },
+    "externalInputsDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "predecessorReconciliation": {
+      "$ref": "campaign_submission_reconciliation_ref.schema.json"
+    },
+    "researchScalePromotion": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "predecessorExecutionId",
-        "receiptDigest",
-        "gitBranch",
-        "gitCommitSha",
+        "promotionId",
+        "releaseId",
+        "manifestDigest",
+        "sourceRevision",
         "sourceDigest",
         "entityCatalogDigest",
-        "qualifiedCount",
-        "finalizedCount"
+        "receiptRef",
+        "receiptDigest"
       ],
       "properties": {
-        "predecessorExecutionId": { "type": "string", "minLength": 1 },
-        "receiptDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
-        "gitBranch": { "type": "string", "minLength": 1 },
-        "gitCommitSha": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
-        "sourceDigest": {
-          "type": "object",
-          "required": ["algorithm", "digest", "inputs"],
-          "additionalProperties": false,
-          "properties": {
-            "algorithm": { "const": "sha256" },
-            "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
-            "inputs": {
-              "type": "array",
-              "minItems": 1,
-              "items": { "type": "string", "minLength": 1 }
-            }
-          }
-        },
+        "promotionId": { "type": "string", "minLength": 1 },
+        "releaseId": { "type": "string", "minLength": 1 },
+        "manifestDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "sourceRevision": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "sourceDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
         "entityCatalogDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
-        "qualifiedCount": { "type": "integer", "minimum": 100 },
-        "finalizedCount": { "type": "integer", "minimum": 100 }
+        "receiptRef": { "type": "string", "minLength": 1 },
+        "receiptDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
       }
     },
     "allowedStage": { "const": "submit-only" },
@@ -168,28 +163,23 @@
   "allOf": [
     {
       "if": {
-        "properties": {
-          "scale": { "const": "M1000" },
-          "vertical": { "const": "travel" },
-          "carrier": { "const": "image" }
-        },
-        "required": ["scale", "vertical", "carrier"]
+        "properties": { "semanticSelectionId": { "const": "cursor_auto" } },
+        "required": ["semanticSelectionId"]
       },
       "then": {
-        "required": ["imageScalePromotion"]
+        "required": ["semanticPreflightReceipt"]
       }
     },
     {
       "if": {
         "properties": {
           "scale": { "const": "M1000" },
-          "vertical": { "const": "travel" },
-          "carrier": { "const": "video" }
+          "vertical": { "const": "travel" }
         },
-        "required": ["scale", "vertical", "carrier"]
+        "required": ["scale", "vertical"]
       },
       "then": {
-        "required": ["videoScalePromotion"]
+        "required": ["researchScalePromotion"]
       }
     }
   ]

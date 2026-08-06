@@ -1,0 +1,65 @@
+# Code generated from quwoquan_service/generated/contract_graph.json.
+# Regenerate with verify_object_alert_coverage.py --write.
+groups:
+  - name: quwoquan_entity_contract_homepage_status_report
+    rules:
+      - record: quwoquan_entity_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="entity-service",method="POST",route=~"^/homepages/[^/]+/status-reports$"})
+        labels:
+          service: "entity-service"
+          operation: "entity.homepage_status_report.CreateHomepageStatusReport"
+          contract_metric: "entity_homepage_status_report_create"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_entity_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="entity-service",method="POST",route=~"^/homepages/[^/]+/status-reports$"})
+        labels:
+          service: "entity-service"
+          operation: "entity.homepage_status_report.CreateHomepageStatusReport"
+          contract_metric: "entity_homepage_status_report_create"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_entity_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="entity-service",method="GET",route="/homepage-status-reports"})
+        labels:
+          service: "entity-service"
+          operation: "entity.homepage_status_report.ListHomepageStatusReports"
+          contract_metric: "entity_homepage_status_report_queue"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_entity_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="entity-service",method="GET",route="/homepage-status-reports"})
+        labels:
+          service: "entity-service"
+          operation: "entity.homepage_status_report.ListHomepageStatusReports"
+          contract_metric: "entity_homepage_status_report_queue"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_entity_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="entity-service",method="POST",route=~"^/homepages/[^/]+/status-reports/[^/]+:review$"})
+        labels:
+          service: "entity-service"
+          operation: "entity.homepage_status_report.ReviewHomepageStatusReport"
+          contract_metric: "entity_homepage_status_report_review"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_entity_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="entity-service",method="POST",route=~"^/homepages/[^/]+/status-reports/[^/]+:review$"})
+        labels:
+          service: "entity-service"
+          operation: "entity.homepage_status_report.ReviewHomepageStatusReport"
+          contract_metric: "entity_homepage_status_report_review"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"

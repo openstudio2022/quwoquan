@@ -1,0 +1,58 @@
+read_model: RecommendationGatheringCandidateProjection
+description: >-
+  Circle 签发 GatheringPublicCard 在 RecommendationCandidateIndexView 内形成的
+  可重建发现索引。Recommendation 只保存排序所需公开裁剪，不拥有或修改 Gathering、
+  Participation、准入、容量、申请答案与精确私密地点事实。
+storage_backend: mongodb
+collection: rm_gathering_candidates
+source_entities:
+- Gathering
+source_events:
+- GatheringPublished
+- GatheringRevisionAppended
+- GatheringParticipationChanged
+- GatheringAdmissionControlChanged
+- GatheringCancelled
+- GatheringCompleted
+producers:
+- circle-service
+consumers:
+- ranked-recommendation-window
+checkpoint:
+  source: eventId_inbox_and_sourceVersion
+  rebuild: replay_events_circle_gathering
+  tombstone: remove_candidate_retain_gathering_sourceVersion_and_cardDigest
+fields:
+- {name: objectKind, type: string, description: Fixed gathering discriminator used by the shared ranked object-card source.}
+- {name: sourceKey, type: string, description: Canonical gatheringId and unique projection key.}
+- {name: sourceVersion, type: int64, description: Circle aggregateVersion monotonic watermark.}
+- {name: cardDigest, type: string, description: Circle-signed GatheringPublicCard digest.}
+- {name: hostSubjectKind, type: string}
+- {name: hostSubjectId, type: string}
+- {name: title, type: string}
+- {name: summary, type: string}
+- {name: coverRef, type: object, description: Canonical public cover reference; never synthesized into a media URL.}
+- {name: tagRefs, type: '[]string'}
+- {name: startAt, type: timestamp}
+- {name: endAt, type: timestamp}
+- {name: dateLabel, type: string}
+- {name: placeMode, type: string}
+- {name: coarsePlaceRef, type: object}
+- {name: coarsePlaceLabel, type: string}
+- {name: maxParticipants, type: int}
+- {name: occupiedSeats, type: int}
+- {name: remainingSeats, type: int}
+- {name: full, type: bool}
+- {name: admissionState, type: string}
+- {name: lifecycleStatus, type: string}
+- {name: updatedAt, type: timestamp}
+privacy:
+  allowed_source: GatheringPublicCardSlice
+  forbidden_fields:
+  - exactMeetingPoint
+  - Participation
+  - applicationAnswers
+  - answerText
+indexes:
+- {name: uq_recommendation_gathering_candidate_source, keys: {sourceKey: 1}, unique: true}
+- {name: idx_recommendation_gathering_candidate_rank_scan, keys: {updatedAt: -1, sourceKey: 1}}

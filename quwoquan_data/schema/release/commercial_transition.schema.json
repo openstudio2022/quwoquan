@@ -17,8 +17,10 @@
     "environmentCleanup",
     "unauthorizedReadbackCount",
     "cleanupEvidenceRef",
+    "cleanupEvidenceDigest",
     "passed",
-    "recordedAt"
+    "recordedAt",
+    "receiptDigest"
   ],
   "properties": {
     "schema": {"const": "quwoquan_data.commercial_transition"},
@@ -50,7 +52,7 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["environment", "cachePurged", "mediaCopiesPurged", "signedUrlsRevoked", "unauthorizedReadbackCount", "cleanupReceiptRef", "readbackReceiptRef"],
+        "required": ["environment", "cachePurged", "mediaCopiesPurged", "signedUrlsRevoked", "unauthorizedReadbackCount", "cleanupReceiptRef", "cleanupReceiptDigest", "readbackReceiptRef", "readbackReceiptDigest"],
         "properties": {
           "environment": {"enum": ["alpha", "beta", "gamma", "prod"]},
           "cachePurged": {"const": true},
@@ -58,13 +60,17 @@
           "signedUrlsRevoked": {"const": true},
           "unauthorizedReadbackCount": {"const": 0},
           "cleanupReceiptRef": {"type": "string", "minLength": 1},
-          "readbackReceiptRef": {"type": "string", "minLength": 1}
+          "cleanupReceiptDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+          "readbackReceiptRef": {"type": "string", "minLength": 1},
+          "readbackReceiptDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
         }
       }
     },
     "unauthorizedReadbackCount": {"const": 0},
     "cleanupEvidenceRef": {"type": "string", "minLength": 1},
+    "cleanupEvidenceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "passed": {"const": true},
-    "recordedAt": {"type": "string", "minLength": 1}
+    "recordedAt": {"type": "string", "minLength": 1},
+    "receiptDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
   }
 }

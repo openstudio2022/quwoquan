@@ -148,7 +148,9 @@ def test_homepage_independent_review__rejects_synthetic_contract_output_run_id__
         result_payload=response,
     )
 
-    assert issues == [f"{review_dir}: independent reviewer must bind a real Cursor SDK runId"]
+    assert issues == [
+        f"{review_dir}: independent reviewer must bind a real provider runId"
+    ]
     assert not (review_dir / "reviewer_result.json").exists()
 
 

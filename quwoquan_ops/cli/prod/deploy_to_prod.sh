@@ -150,6 +150,7 @@ run_remote_bash() {
 plan_args=(
   python3 quwoquan_ops/cli/prod/prod_hosted_topology.py
   --stage "$ROLLOUT_STAGE"
+  --require-release-redundancy
   --format tsv
 )
 if [[ -n "$SERVICE_FILTER" ]]; then

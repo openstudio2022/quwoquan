@@ -1,33 +1,45 @@
 events:
-- name: content.post_moderation_case.opened
-  description: 为指定 Post 版本与内容摘要创建 pending Case；当前只发布到 shared runtime event transport。
-  producer: content-service
-  consumers: [content-moderation-runtime-events]
-  channel: transactional_outbox
+- name: PostModerationCaseOpened
+  description: 为指定 Post 版本与内容摘要创建 pending Case；只写入对象事务审计日志，PostModerationCaseDecided 才投递给 Post lifecycle。
+  delivery_semantics: transactional_event_log
   payload_entity: PostModerationCaseOpenedPayload
   payload_shape: exact
-  payload_fields: [caseId, postId, postVersion, contentDigest]
-- name: content.post_moderation_case.reviewed
-  description: 审核员领取 Case 并迁移至 reviewed；当前只发布到 shared runtime event transport。
-  producer: content-service
-  consumers: [content-moderation-runtime-events]
-  channel: transactional_outbox
+  payload_fields:
+  - caseId
+  - postId
+  - postVersion
+  - contentDigest
+  no_consumer_reason: Case 创建只形成 PostModerationCase 聚合内的持久审核审计；只有 PostModerationCaseDecided 是下游 Post lifecycle 输入。
+- name: PostModerationCaseReviewed
+  description: 审核员领取 Case 并迁移至 reviewed；只写入对象事务审计日志，PostModerationCaseDecided 才投递给 Post lifecycle。
+  delivery_semantics: transactional_event_log
   payload_entity: PostModerationCaseReviewedPayload
   payload_shape: exact
-  payload_fields: [caseId, reviewerId]
-- name: content.post_moderation_case.decided
+  payload_fields:
+  - caseId
+  - reviewerId
+  no_consumer_reason: 审核领取只形成 PostModerationCase 聚合内的持久审核审计；只有 PostModerationCaseDecided 是下游 Post lifecycle 输入。
+- name: PostModerationCaseDecided
   description: 审核员批准或拒绝绑定版本与摘要的 Case；Post lifecycle 只消费此事实。
-  producer: content-service
-  consumers: [content-moderation-runtime-events, content-moderation-post-lifecycle]
-  channel: transactional_outbox
+  delivery_semantics: transactional_outbox
   payload_entity: PostModerationCaseDecidedPayload
   payload_shape: exact
-  payload_fields: [id, version, postId, postVersion, contentDigest, reviewerId, status, decidedAt]
-- name: content.post_moderation_case.superseded
-  description: Post 切换版本或摘要后旧 Case 失效；当前只发布到 shared runtime event transport。
-  producer: content-service
-  consumers: [content-moderation-runtime-events]
-  channel: transactional_outbox
+  payload_fields:
+  - id
+  - version
+  - postId
+  - postVersion
+  - contentDigest
+  - reviewerId
+  - status
+  - decidedAt
+- name: PostModerationCaseSuperseded
+  description: Post 切换版本或摘要后旧 Case 失效；只写入对象事务审计日志，PostModerationCaseDecided 才投递给 Post lifecycle。
+  delivery_semantics: transactional_event_log
   payload_entity: PostModerationCaseSupersededPayload
   payload_shape: exact
-  payload_fields: [caseId, postId, postVersion]
+  payload_fields:
+  - caseId
+  - postId
+  - postVersion
+  no_consumer_reason: Case 失效只形成 PostModerationCase 聚合内的持久审核审计；只有 PostModerationCaseDecided 是下游 Post lifecycle 输入。

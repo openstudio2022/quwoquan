@@ -40,13 +40,12 @@ relationships:
   reference_fields:
   - userId
   target_object: user.Persona
-capabilities:
-- append_only
-- queryable
 business_rules:
 - messageId + userId 在全局唯一；相同已读命令重放不得追加第二个事实
 - conversationId 必须与 Message.conversationId 一致，userId 必须是该 Conversation 的 active Persona 成员
 - 仅 receiptEnabled=true 的 Conversation 追加逐消息回执；否则只推进 ConversationUserState.readSeq
+- 事实只由 ConversationUserState 已读命令与 Message 在同一事务经 append sink 追加，事务身份即幂等键
 - readAt 由服务端可信时钟产生且不得早于 Message.timestamp
 lifecycle:
   immutable: true
+  idempotency: transaction_identity

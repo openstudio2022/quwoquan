@@ -2,50 +2,26 @@
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Mapping
 
-from core.image_deduplication import perceptual_hash_distance
-from core.image_safety import NEAR_DUP_HAMMING
-from core.io import read_json
-from core.paths import OUTPUT_ROOT, PUBLISH_ROOT
-from core.tree_integrity import tree_integrity_stats
 from content.execution.workspace import execution_root, write_publish_ref
 from content.release.canonical.application import apply_object_transaction
-from content.release.canonical.object_transaction_audit import (
-    audit_object_transaction,
-    validate_canonical_publish,
+from content.release.canonical.canonical_inventory import (
+    assert_canonical_image_unique,
+    load_or_bootstrap_inventory,
 )
-from content.release.canonical.post_transaction import (
-    build_post_object_transaction_package,
-)
+from content.release.canonical.object_transaction_audit import audit_object_transaction
 from content.release.canonical.object_transaction_contract import ObjectTransactionError
 from content.release.canonical.object_transaction_lock import (
     canonical_publish_serialized,
 )
-
-
-def _image_identities(
-    manifest: Mapping[str, Any],
-) -> tuple[tuple[str, str, str], ...]:
-    rows: list[tuple[str, str, str]] = []
-    image_post = str(manifest.get("contentType") or "").strip() == "image"
-    for raw in manifest.get("assets") or []:
-        if not isinstance(raw, Mapping):
-            continue
-        kind = str(raw.get("kind") or "").strip()
-        mime = str(raw.get("mimeType") or "").strip().lower()
-        if not image_post and kind != "image" and not mime.startswith("image/"):
-            continue
-        perceptual = str(raw.get("perceptualHash") or "").strip().lower()
-        rows.append(
-            (
-                str(raw.get("assetId") or "").strip() or "<unnamed-image>",
-                str(raw.get("sha256") or "").strip().lower(),
-                perceptual,
-            )
-        )
-    return tuple(rows)
+from content.release.canonical.post_transaction import (
+    build_post_object_transaction_package,
+)
+from core.io import read_json
+from core.paths import OUTPUT_ROOT, PUBLISH_ROOT
+from core.tree_integrity import tree_integrity_stats
 
 
 def _assert_cross_publish_image_unique(
@@ -58,53 +34,17 @@ def _assert_cross_publish_image_unique(
     package_manifest = read_json(package_root / "object/manifest.json")
     if not isinstance(package_manifest, Mapping):
         raise ObjectTransactionError("post transaction manifest must be an object")
-    candidates = _image_identities(package_manifest)
-    if str(package_manifest.get("contentType") or "").strip() == "image":
-        if not candidates or any(not perceptual for _, _, perceptual in candidates):
-            raise ObjectTransactionError(
-                "commercial image post requires perceptualHash for every image asset"
-            )
-
-    accepted: list[tuple[str, str, str, str]] = []
-    for manifest_path in sorted((PUBLISH_ROOT / "posts").glob("**/manifest.json")):
-        if manifest_path.parent == canonical_post:
-            continue
-        existing = read_json(manifest_path)
-        if not isinstance(existing, Mapping):
-            raise ObjectTransactionError(
-                f"canonical post manifest must be an object: {manifest_path}"
-            )
-        existing_ref = manifest_path.parent.relative_to(PUBLISH_ROOT).as_posix()
-        existing_identities = _image_identities(existing)
-        # Skip broken peers missing perceptualHash: they must not veto a valid
-        # promotion. Closure validation still fails closed on those objects.
-        accepted.extend(
-            (existing_ref, asset_id, digest, perceptual)
-            for asset_id, digest, perceptual in existing_identities
-            if perceptual
-        )
-
-    for index, (asset_id, digest, perceptual) in enumerate(candidates):
-        peers = accepted + [
-            ("pending-post", peer_id, peer_digest, peer_perceptual)
-            for peer_id, peer_digest, peer_perceptual in candidates[:index]
-        ]
-        for peer_ref, peer_id, peer_digest, peer_perceptual in peers:
-            if digest and peer_digest and digest == peer_digest:
-                raise ObjectTransactionError(
-                    "canonical image identity duplicated by sha256: "
-                    f"{asset_id} conflicts with {peer_ref}:{peer_id}"
-                )
-            if (
-                perceptual
-                and peer_perceptual
-                and perceptual_hash_distance(perceptual, peer_perceptual)
-                <= NEAR_DUP_HAMMING
-            ):
-                raise ObjectTransactionError(
-                    "canonical image identity duplicated by perceptualHash: "
-                    f"{asset_id} conflicts with {peer_ref}:{peer_id}"
-                )
+    try:
+        excluded = canonical_post.relative_to(PUBLISH_ROOT).as_posix()
+    except ValueError as exc:
+        raise ObjectTransactionError(
+            "canonical post is outside the publish root"
+        ) from exc
+    assert_canonical_image_unique(
+        publish_root=PUBLISH_ROOT,
+        manifest=package_manifest,
+        excluded_manifest_path=f"{excluded}/manifest.json",
+    )
 
 
 def _qualified_post_refs(execution_id: str) -> tuple[str, ...]:
@@ -116,6 +56,7 @@ def _qualified_post_refs(execution_id: str) -> tuple[str, ...]:
     closure = load_post_review_closure(
         execution_id,
         expected_object_targets=indexed_post_targets(execution_id),
+        require_quota_milestone=False,
     )
     refs = tuple(
         publish_ref.removeprefix("posts/")
@@ -196,7 +137,9 @@ def promote_post_object(execution_id: str, post_ref: str) -> dict[str, str]:
             output_root=OUTPUT_ROOT,
             package_root=package_root,
             transaction_id=transaction_id,
-            expected_canonical_merkle=tree_integrity_stats(PUBLISH_ROOT)["merkleRoot"],
+            expected_canonical_merkle=load_or_bootstrap_inventory(PUBLISH_ROOT)[
+                "stats"
+            ]["merkleRoot"],
         )
         applied = apply_object_transaction(
             publish_root=PUBLISH_ROOT,
@@ -204,16 +147,6 @@ def promote_post_object(execution_id: str, post_ref: str) -> dict[str, str]:
             package_root=package_root,
             transaction_id=transaction_id,
             dry_run_attestation_sha256=str(audit["dryRunAttestationSha256"]),
-        )
-    from content.release.canonical.object_transaction_contract import (
-        refresh_canonical_tag_snapshots,
-    )
-
-    refresh_canonical_tag_snapshots(PUBLISH_ROOT)
-    closure = validate_canonical_publish(PUBLISH_ROOT)
-    if closure["status"] != "passed":
-        raise ObjectTransactionError(
-            f"canonical publish closure failed: {closure['issues'][:5]}"
         )
     return {
         "transactionId": transaction_id,

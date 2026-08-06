@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/spec.md#sit-002
 package local_contract
 
 import (
@@ -80,6 +81,7 @@ func TestRtcMediaQoeSummaryUsesCanonicalDenominatorsAndUtcSeries(t *testing.T) {
 	assertFloatPointer(t, "previous.connectionLostRate", previous.ConnectionLostRate, 0)
 }
 
+// spec_ref: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/spec.md#sit-002
 func TestRtcMediaQoeSummaryReturnsNullForEmptyDenominators(t *testing.T) {
 	store := telemetrypersistence.NewMemoryTelemetryStore()
 	now := time.Now().UTC().Truncate(time.Hour).Add(15 * time.Minute)

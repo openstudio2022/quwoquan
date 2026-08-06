@@ -1,93 +1,91 @@
-entity: AssistantPolicyRollout
-domain: ASSISTANT
 description: AssistantPolicyRollout 激活、并发与回滚错误。
 errors:
 - code: ASSISTANT.USER.policy_rollout_invalid
-  kind: USER
   reason: policy_rollout_invalid
   http_status: 400
   emitted_by:
   - surface: http
     operations: [ActivateAssistantPolicyRollout]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: policyRolloutInvalid
   go_const: ErrPolicyRolloutInvalid
   user_message:
     zh: 助手策略灰度配置不合法
     en: Assistant policy rollout is invalid
 - code: ASSISTANT.USER.policy_rollout_release_not_found
-  kind: USER
   reason: policy_rollout_release_not_found
   http_status: 404
   emitted_by:
   - surface: http
     operations: [ActivateAssistantPolicyRollout]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: policyRolloutReleaseNotFound
   go_const: ErrPolicyRolloutReleaseNotFound
   user_message:
     zh: 助手策略发布不存在
     en: Assistant policy release was not found
 - code: ASSISTANT.USER.policy_rollout_not_found
-  kind: USER
   reason: policy_rollout_not_found
   http_status: 404
   emitted_by:
   - surface: http
     operations: [RollbackAssistantPolicyRollout]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: policyRolloutNotFound
   go_const: ErrPolicyRolloutNotFound
   user_message:
     zh: 助手策略灰度配置不存在
     en: Assistant policy rollout was not found
 - code: ASSISTANT.USER.policy_rollout_no_previous_mapping
-  kind: USER
   reason: policy_rollout_no_previous_mapping
   http_status: 409
   emitted_by:
   - surface: http
     operations: [RollbackAssistantPolicyRollout]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: policyRolloutNoPreviousMapping
   go_const: ErrPolicyRolloutNoPreviousMapping
   user_message:
     zh: 当前没有可回滚的上一版策略
     en: No previous assistant policy mapping is available
 - code: ASSISTANT.USER.policy_rollout_revision_conflict
-  kind: USER
   reason: policy_rollout_revision_conflict
   http_status: 409
   emitted_by:
   - surface: http
     operations: [ActivateAssistantPolicyRollout, RollbackAssistantPolicyRollout]
-  recovery_action: refresh
+  recovery_action: retry
+  disruption_level: snackbar
   dart_const: policyRolloutRevisionConflict
   go_const: ErrPolicyRolloutRevisionConflict
   user_message:
     zh: 助手策略灰度配置已更新，请刷新后重试
     en: Assistant policy rollout changed; refresh and retry
 - code: ASSISTANT.USER.policy_rollout_idempotency_conflict
-  kind: USER
   reason: policy_rollout_idempotency_conflict
   http_status: 409
   emitted_by:
   - surface: http
     operations: [ActivateAssistantPolicyRollout, RollbackAssistantPolicyRollout]
-  recovery_action: refresh
+  recovery_action: retry
+  disruption_level: snackbar
   dart_const: policyRolloutIdempotencyConflict
   go_const: ErrPolicyRolloutIdempotencyConflict
   user_message:
     zh: 重复灰度请求与原操作不一致
     en: Repeated rollout request differs from the original
 - code: ASSISTANT.SYSTEM.policy_rollout_storage_unavailable
-  kind: SYSTEM
   reason: policy_rollout_storage_unavailable
   http_status: 503
   emitted_by:
   - surface: http
     operations: [ActivateAssistantPolicyRollout, RollbackAssistantPolicyRollout]
   recovery_action: retry
+  disruption_level: snackbar
   recovery_after_seconds: 3
   dart_const: policyRolloutStorageUnavailable
   go_const: ErrPolicyRolloutStorageUnavailable

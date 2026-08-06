@@ -23,7 +23,8 @@ func (reader *Reader) List(
 	limit int,
 	cursor string,
 ) (Page, error) {
-	if strings.TrimSpace(userID) == "" {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
 		return Page{}, errors.New("ChatInboxView persona identity is required")
 	}
 	if limit <= 0 {

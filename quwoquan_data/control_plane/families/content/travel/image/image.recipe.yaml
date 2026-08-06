@@ -2,7 +2,7 @@ schema: quwoquan.content.recipe
 recipeId: content/travel/image/image
 title: 旅行图片作品执行（通用模板）
 presetRef: content/travel/image/base
-runtimeProfile: cursor_local_calibrated
+runtimeProfile: semantic_agent_local_calibrated
 selection:
   category: 景区
   entityHomepagesPerTarget: 0
@@ -12,14 +12,12 @@ selection:
 contract:
   requireActiveStatus: true
 execution:
-  model: auto
-  modelFamily: auto
+  model: gpt-5.6-terra
+  modelFamily: gpt
   modelParameters: []
-  reviewModel: auto
-  reviewModelFamily: auto
+  reviewModel: gpt-5.6-terra
+  reviewModelFamily: gpt
   reviewModelParameters: []
 readiness:
-  minPassRate: 1.0
-  mode: commercial
-  failOnNoGo: true
+  mode: research
   requireReviewed: true

@@ -1,0 +1,434 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quwoquan.local/ops-gate/environment_stability_final_acceptance.schema.json",
+  "title": "Authority-Backed Environment Stability Final Acceptance",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "generatedAt",
+    "verdict",
+    "artifactClosure",
+    "pilot",
+    "inputs",
+    "blockers",
+    "receiptDigest"
+  ],
+  "properties": {
+    "schema": {
+      "const": "qwq.environment_stability_final_acceptance"
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "verdict": {
+      "enum": [
+        "PROMOTABLE",
+        "GATE_BLOCK"
+      ]
+    },
+    "artifactClosure": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/artifactClosure"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "pilot": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/pilot"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "inputs": {
+      "$ref": "#/$defs/inputs"
+    },
+    "blockers": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/blocker"
+      }
+    },
+    "receiptDigest": {
+      "$ref": "#/$defs/digest"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "verdict": {
+            "const": "PROMOTABLE"
+          }
+        },
+        "required": [
+          "verdict"
+        ]
+      },
+      "then": {
+        "properties": {
+          "artifactClosure": {
+            "$ref": "#/$defs/artifactClosure"
+          },
+          "pilot": {
+            "$ref": "#/$defs/pilot"
+          },
+          "blockers": {
+            "maxItems": 0
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "blockers": {
+            "minItems": 1
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "fileBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "digest"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "artifactClosure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "root",
+        "manifest",
+        "candidateId",
+        "artifactDigest",
+        "providerEvidence",
+        "testEvidence",
+        "environmentReceipts",
+        "rolloutReceipt",
+        "rollbackReceipt"
+      ],
+      "properties": {
+        "root": {
+          "type": "string",
+          "minLength": 1
+        },
+        "manifest": {
+          "$ref": "#/$defs/fileBinding"
+        },
+        "candidateId": {
+          "$ref": "#/$defs/digest"
+        },
+        "artifactDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "providerEvidence": {
+          "$ref": "#/$defs/fileBinding"
+        },
+        "testEvidence": {
+          "$ref": "#/$defs/fileBinding"
+        },
+        "environmentReceipts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "alpha",
+            "beta",
+            "gamma",
+            "prod"
+          ],
+          "properties": {
+            "alpha": {
+              "$ref": "#/$defs/fileBinding"
+            },
+            "beta": {
+              "$ref": "#/$defs/fileBinding"
+            },
+            "gamma": {
+              "$ref": "#/$defs/fileBinding"
+            },
+            "prod": {
+              "$ref": "#/$defs/fileBinding"
+            }
+          }
+        },
+        "rolloutReceipt": {
+          "$ref": "#/$defs/fileBinding"
+        },
+        "rollbackReceipt": {
+          "$ref": "#/$defs/fileBinding"
+        }
+      }
+    },
+    "pilot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "releaseId",
+        "releaseDigest",
+        "rollbackReleaseId",
+        "rollbackDigest"
+      ],
+      "properties": {
+        "releaseId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "releaseDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "rollbackReleaseId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "rollbackDigest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "verificationDigest",
+        "claims"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "verificationDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "claims": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "descriptor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "path",
+        "digest",
+        "observedAt",
+        "role",
+        "authority"
+      ],
+      "properties": {
+        "schema": {
+          "type": "string",
+          "minLength": 1
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "observedAt": {
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "promotion",
+            "supporting",
+            "diagnostic_only"
+          ]
+        },
+        "authority": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/authority"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "optionalDescriptor": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/descriptor"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "releaseRollback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "release",
+        "rollback"
+      ],
+      "properties": {
+        "release": {
+          "$ref": "#/$defs/optionalDescriptor"
+        },
+        "rollback": {
+          "$ref": "#/$defs/optionalDescriptor"
+        }
+      }
+    },
+    "inputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pilot",
+        "contentLifecycle",
+        "localEnvGreenMatrix",
+        "recoveryUat",
+        "nightlyArtifact",
+        "prodSim",
+        "prodHosted"
+      ],
+      "properties": {
+        "pilot": {
+          "$ref": "#/$defs/releaseRollback"
+        },
+        "contentLifecycle": {
+          "$ref": "#/$defs/threeEnvironments"
+        },
+        "localEnvGreenMatrix": {
+          "$ref": "#/$defs/optionalDescriptor"
+        },
+        "recoveryUat": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "ios",
+            "android"
+          ],
+          "properties": {
+            "ios": {
+              "$ref": "#/$defs/optionalDescriptor"
+            },
+            "android": {
+              "$ref": "#/$defs/optionalDescriptor"
+            }
+          }
+        },
+        "nightlyArtifact": {
+          "$ref": "#/$defs/optionalDescriptor"
+        },
+        "prodSim": {
+          "$ref": "#/$defs/optionalDescriptor"
+        },
+        "prodHosted": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "rolloutReadback",
+            "rollbackReadback",
+            "soakReadback"
+          ],
+          "properties": {
+            "rolloutReadback": {
+              "$ref": "#/$defs/optionalDescriptor"
+            },
+            "rollbackReadback": {
+              "$ref": "#/$defs/optionalDescriptor"
+            },
+            "soakReadback": {
+              "$ref": "#/$defs/optionalDescriptor"
+            }
+          }
+        }
+      }
+    },
+    "threeEnvironments": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "alpha",
+        "beta",
+        "gamma"
+      ],
+      "properties": {
+        "alpha": {
+          "$ref": "#/$defs/optionalDescriptor"
+        },
+        "beta": {
+          "$ref": "#/$defs/optionalDescriptor"
+        },
+        "gamma": {
+          "$ref": "#/$defs/optionalDescriptor"
+        }
+      }
+    },
+    "blocker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "input",
+        "message"
+      ],
+      "properties": {
+        "code": {
+          "enum": [
+            "MISSING_INPUT",
+            "UNREADABLE_INPUT",
+            "UNSUPPORTED_INPUT",
+            "SCHEMA_MISMATCH",
+            "STATUS_NOT_PASSED",
+            "STALE_EVIDENCE",
+            "IDENTITY_MISMATCH",
+            "DIGEST_MISMATCH",
+            "NON_PROMOTABLE",
+            "LOCAL_ATTESTATION",
+            "EXPECTED_SKIP",
+            "ARTIFACT_CLOSURE_INVALID",
+            "UNVERIFIABLE_AUTHORITY",
+            "HOSTED_READBACK_INVALID"
+          ]
+        },
+        "input": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

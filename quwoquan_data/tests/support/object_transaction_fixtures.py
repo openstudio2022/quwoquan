@@ -63,7 +63,12 @@ def _review_attestation() -> dict:
     }
 
 
-def build_package(root: Path, canonical: Path) -> Path:
+def build_package(
+    root: Path,
+    canonical: Path,
+    *,
+    entity_extra: dict | None = None,
+) -> Path:
     package_root = root / "package"
     object_root = package_root / "object"
     image = package_root / "cas/image.jpg"
@@ -78,6 +83,7 @@ def build_package(root: Path, canonical: Path) -> Path:
     write_json(
         object_root / "_entity.json",
         {
+            **(entity_extra or {}),
             "label": "真实地点",
             "domain": "地点",
             "type": "景区",

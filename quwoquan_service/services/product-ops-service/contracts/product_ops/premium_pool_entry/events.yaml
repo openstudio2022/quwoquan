@@ -1,22 +1,64 @@
 events:
 - name: PremiumPoolEntryUpserted
   description: 全局精选池条目完成原子准入或重新准入。
-  producer: product-ops-service
-  consumers: [recommendation-service]
-  channel: events.ops.premium_pool_entry
+  delivery_semantics: transactional_outbox
+  topic: events.ops.premium_pool_entry
   payload_entity: PremiumPoolEntry
-  payload_fields: [id, contentId, scope, status, qualityScore, qualityAdmission, supplySource, sourceTaskId, auditId, rollbackToken, featuredAt, expiresAt, takedownEjected, revision, updatedAt]
+  payload_fields:
+  - id
+  - contentId
+  - scope
+  - status
+  - qualityScore
+  - qualityAdmission
+  - supplySource
+  - sourceTaskId
+  - auditId
+  - rollbackToken
+  - featuredAt
+  - expiresAt
+  - takedownEjected
+  - revision
+  - updatedAt
 - name: PremiumPoolEntryRolledBack
   description: 全局精选池条目由 active 原子回滚。
-  producer: product-ops-service
-  consumers: [recommendation-service]
-  channel: events.ops.premium_pool_entry
+  delivery_semantics: transactional_outbox
+  topic: events.ops.premium_pool_entry
   payload_entity: PremiumPoolEntry
-  payload_fields: [id, contentId, scope, status, qualityScore, qualityAdmission, supplySource, sourceTaskId, auditId, rollbackToken, featuredAt, expiresAt, takedownEjected, revision, updatedAt]
+  payload_fields:
+  - id
+  - contentId
+  - scope
+  - status
+  - qualityScore
+  - qualityAdmission
+  - supplySource
+  - sourceTaskId
+  - auditId
+  - rollbackToken
+  - featuredAt
+  - expiresAt
+  - takedownEjected
+  - revision
+  - updatedAt
 - name: PremiumPoolEntryTakedownEjected
   description: 全局精选池条目经两个不同 operator 对同一 revision 双签后不可变下架。
-  producer: product-ops-service
-  consumers: [recommendation-service]
-  channel: events.ops.premium_pool_entry
+  delivery_semantics: transactional_outbox
+  topic: events.ops.premium_pool_entry
   payload_entity: PremiumPoolEntry
-  payload_fields: [id, contentId, scope, status, qualityScore, qualityAdmission, supplySource, sourceTaskId, auditId, rollbackToken, featuredAt, expiresAt, takedownEjected, revision, updatedAt]
+  payload_fields:
+  - id
+  - contentId
+  - scope
+  - status
+  - qualityScore
+  - qualityAdmission
+  - supplySource
+  - sourceTaskId
+  - auditId
+  - rollbackToken
+  - featuredAt
+  - expiresAt
+  - takedownEjected
+  - revision
+  - updatedAt

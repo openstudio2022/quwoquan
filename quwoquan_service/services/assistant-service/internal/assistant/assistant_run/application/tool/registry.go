@@ -11,6 +11,7 @@ import (
 	"github.com/santhosh-tekuri/jsonschema/v6"
 
 	rtfailures "quwoquan_service/runtime/failures"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/presentation"
 )
 
 type Request struct {
@@ -20,10 +21,18 @@ type Request struct {
 	ToolName        string
 	Input           map[string]any
 	History         []string
+	RunID           string
+	AccountID       string
+	PersonaID       string
+	SurfaceKind     string
+	SurfaceID       string
+	DelegatedGrant  string
 }
 
 type Result struct {
-	Output map[string]any
+	Output         map[string]any
+	TypedProposal  any
+	ApprovalIntent *presentation.ActionIntent
 }
 
 type Handler func(context.Context, Request) (Result, error)

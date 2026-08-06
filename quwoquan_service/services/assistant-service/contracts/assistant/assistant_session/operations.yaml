@@ -1,8 +1,3 @@
-commercial_defaults:
-  block_reason: Mongo Store/outbox 与 generated transport 尚未完成生产装配
-  gap_id: ASSISTANT_SESSION_WIRING
-  status: blocked
-  target_story: app-cloud-business-object-commercial-closure
 description: AssistantSession 对象专属命令与查询 packet。
 externalDependencies:
   - capability: assistant.model.generation
@@ -112,10 +107,7 @@ api_routes:
       principal: persona
       ownership_policy: session_owner
     commercial:
-      status: blocked
-      block_reason: AssistantSession aggregate mutation does not yet commit its declared domain event through a transactional outbox
-      gap_id: ASSISTANT_SESSION_WIRING
-      target_story: app-cloud-business-object-commercial-closure
+      status: ready
     security:
       anonymous_policy: deny
       auth_mode: required
@@ -131,6 +123,7 @@ api_routes:
       slice: AssistantSessionListView
     method: GET
     operation: ListAssistantSessions
+    pagination: {default_items: 20, maximum_items: 50}
     path: /assistant/sessions
     description: owner Session 列表；updatedAt desc + sessionId tiebreak 的 keyset 分页，历史抽屉与最近 Session 的唯一数据源。
     request_bindings:
@@ -231,3 +224,84 @@ api_routes:
       visibility: private
     request_entity: AssistantSessionByIdQuery
     request_body_kind: none
+readiness_cases:
+  - case_id: create-assistant-session-local
+    spec_ref: specs/feature-tree/assistant-run-learning/assistant-runtime-foundation/assistant-object-runtime/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: CreateAssistantSession}
+    runner_source_path: quwoquan_service/services/assistant-service/tests/local_contract/assistant/assistant_session/session_http_operations__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: create-assistant-session-api
+    spec_ref: specs/feature-tree/assistant-run-learning/assistant-runtime-foundation/assistant-object-runtime/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: CreateAssistantSession}
+    runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/assistant_session/session_run_store__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: list-assistant-sessions-local
+    spec_ref: specs/feature-tree/assistant-run-learning/assistant-runtime-foundation/assistant-object-runtime/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: ListAssistantSessions}
+    runner_source_path: quwoquan_service/services/assistant-service/tests/local_contract/assistant/assistant_session/session_http_operations__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: list-assistant-sessions-api
+    spec_ref: specs/feature-tree/assistant-run-learning/assistant-runtime-foundation/assistant-object-runtime/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: ListAssistantSessions}
+    runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/assistant_session/session_run_store__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: get-assistant-session-local
+    spec_ref: specs/feature-tree/assistant-run-learning/assistant-runtime-foundation/assistant-object-runtime/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: GetAssistantSession}
+    runner_source_path: quwoquan_service/services/assistant-service/tests/local_contract/assistant/assistant_session/session_http_operations__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: get-assistant-session-api
+    spec_ref: specs/feature-tree/assistant-run-learning/assistant-runtime-foundation/assistant-object-runtime/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: GetAssistantSession}
+    runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/assistant_session/session_run_store__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: handle-assistant-mentioned-local
+    spec_ref: specs/feature-tree/runtime/runtime-assistant/assistant-mentioned-consumer/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: object, id: assistant.assistant_session}
+    runner_source_path: quwoquan_service/services/assistant-service/tests/local_contract/assistant/assistant_session/assistant_mentioned_chat_contract__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: handle-assistant-mentioned-api
+    spec_ref: specs/feature-tree/runtime/runtime-assistant/assistant-mentioned-consumer/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: object, id: assistant.assistant_session}
+    runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/assistant_session/assistant_mentioned_chat_integration__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: redis, digest_binding: candidate}
+  - case_id: compact-assistant-session-local
+    spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/long-term-memory-compaction/spec.md#gwt-002
+    producer: service
+    layer: local_contract
+    target: {kind: object, id: assistant.assistant_session}
+    runner_source_path: quwoquan_service/services/assistant-service/tests/local_contract/assistant/assistant_session/session_compaction__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: compact-assistant-session-api
+    spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/long-term-memory-compaction/spec.md#gwt-002
+    producer: service
+    layer: api_integration
+    target: {kind: object, id: assistant.assistant_session}
+    runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/assistant_session/session_run_store__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}

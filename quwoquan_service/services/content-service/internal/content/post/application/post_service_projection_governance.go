@@ -3,9 +3,9 @@ package post
 import (
 	"context"
 	"fmt"
+	"quwoquan_service/runtime/commandmeta"
 	rterr "quwoquan_service/runtime/errors"
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
-	"quwoquan_service/runtime/commandmeta"
 	postsemantic "quwoquan_service/services/content-service/internal/content/post/domain/semantic"
 	"strings"
 	"time"
@@ -73,11 +73,7 @@ func (s *PostService) ApplySemanticMentionGovernanceEvent(
 			projectionPayloadForPost(&post),
 			now,
 		); err != nil {
-			return report, rterr.NewAppError(
-				rterr.NewCode(rterr.ModuleContent, rterr.KindSystem, "update_failed"),
-				"语义标注回填失败",
-				err.Error(),
-			)
+			return report, contentgenerated.AppErrorFromStorageWriteFailed("semantic mention governance backfill: " + err.Error())
 		}
 	}
 	return report, nil

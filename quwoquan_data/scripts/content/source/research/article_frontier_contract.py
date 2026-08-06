@@ -241,7 +241,7 @@ class FileDailyPageBudget:
             # retaining a stale module-import constant.
             from core import paths
 
-            root = paths.DATA_LOCAL_ROOT
+            root = paths.DATA_WORKSPACE_ROOT
         self._root = Path(root) / "article-source-frontier"
 
     def reserve(

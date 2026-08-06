@@ -31,10 +31,86 @@ type Catalog struct {
 	RuntimeEntrypoints []RuntimeEntrypoint       `json:"runtimeEntrypoints"`
 	Projections        []Projection              `json:"projections"`
 	BusinessObjectMaps []BusinessObjectMap       `json:"businessObjectMaps"`
+	ReadinessCases     []ReadinessCaseContract   `json:"readinessCases"`
 	ReadinessEvidence  []ObjectReadinessEvidence `json:"readinessEvidence"`
 	Sources            []SourceDigest            `json:"sources"`
 	Documents          []SourceDocument          `json:"documents"`
 	Governance         MetadataGovernance        `json:"-"`
+}
+
+// ReadinessLayer is the closed set of dynamic acceptance layers that can bind
+// a runner result. The case contract is static metadata; pass/fail history is
+// deliberately absent from this AST.
+type ReadinessLayer string
+
+const (
+	ReadinessLayerLocalContract         ReadinessLayer = "local_contract"
+	ReadinessLayerAPIIntegration        ReadinessLayer = "api_integration"
+	ReadinessLayerUserAcceptance        ReadinessLayer = "user_acceptance"
+	ReadinessLayerEnvironmentAcceptance ReadinessLayer = "environment_acceptance"
+	ReadinessLayerRollback              ReadinessLayer = "rollback"
+	ReadinessLayerReplay                ReadinessLayer = "replay"
+)
+
+// ReadinessProducer identifies the system boundary that owns both the case
+// contract and its runner. Layer alone is not sufficient: service and App both
+// execute local_contract/api_integration cases, and one producer's receipt must
+// never satisfy the other producer's responsibility.
+type ReadinessProducer string
+
+const (
+	ReadinessProducerService ReadinessProducer = "service"
+	ReadinessProducerApp     ReadinessProducer = "app"
+	ReadinessProducerOps     ReadinessProducer = "ops"
+)
+
+type ReadinessTargetKind string
+
+const (
+	ReadinessTargetOperation ReadinessTargetKind = "operation"
+	ReadinessTargetPage      ReadinessTargetKind = "page"
+	ReadinessTargetObject    ReadinessTargetKind = "object"
+)
+
+type ReadinessDigestBinding string
+
+const (
+	ReadinessDigestCandidate ReadinessDigestBinding = "candidate"
+	ReadinessDigestRelease   ReadinessDigestBinding = "release"
+	ReadinessDigestEither    ReadinessDigestBinding = "candidate_or_release"
+)
+
+type ReadinessCaseTarget struct {
+	Kind ReadinessTargetKind `json:"kind"`
+	ID   string              `json:"id"`
+}
+
+// ReadinessExecutionRequirement is one exact runner responsibility. It is a
+// tuple rather than a cartesian product so that one provider/device result can
+// never satisfy another environment slot.
+type ReadinessExecutionRequirement struct {
+	Environment   string                 `json:"environment"`
+	Platform      string                 `json:"platform"`
+	DeviceClass   string                 `json:"deviceClass"`
+	Provider      string                 `json:"provider"`
+	DigestBinding ReadinessDigestBinding `json:"digestBinding"`
+}
+
+// ReadinessCaseContract comes only from the owning object's operations.yaml.
+// Operation targets are normalized to their fully-qualified operation ID by
+// load. RunnerSourcePath is the exact, verified test runner identity that a
+// receipt must attest; SourcePath preserves which object-local source authored
+// the contract.
+type ReadinessCaseContract struct {
+	ObjectID         string                          `json:"objectId"`
+	SpecRef          string                          `json:"specRef"`
+	CaseID           string                          `json:"caseId"`
+	Producer         ReadinessProducer               `json:"producer"`
+	Layer            ReadinessLayer                  `json:"layer"`
+	Target           ReadinessCaseTarget             `json:"target"`
+	RunnerSourcePath string                          `json:"runnerSourcePath"`
+	Executions       []ReadinessExecutionRequirement `json:"executions"`
+	SourcePath       string                          `json:"sourcePath"`
 }
 
 // EvidenceArtifact binds a readiness claim to the exact bytes consumed by the
@@ -45,41 +121,101 @@ type EvidenceArtifact struct {
 	SHA256 string `json:"sha256"`
 }
 
-// ObjectReadinessEvidence is an object-packet evidence declaration. It has no
-// writable status field: graph.Build derives the lifecycle stage from these
-// typed evidence sets and the canonical operation contract.
-type ObjectReadinessEvidence struct {
-	ObjectID       string                `json:"objectId"`
-	OperationIDs   []string              `json:"operationIds"`
-	DomainBehavior []EvidenceArtifact    `json:"domainBehavior"`
-	Store          []EvidenceArtifact    `json:"store"`
-	Outbox         []EvidenceArtifact    `json:"outbox"`
-	Reader         []EvidenceArtifact    `json:"reader"`
-	Transport      []EvidenceArtifact    `json:"transport"`
-	AppClient      []EvidenceArtifact    `json:"appClient"`
-	Page           []EvidenceArtifact    `json:"page"`
-	LocalContract  []EvidenceArtifact    `json:"localContract"`
-	APIIntegration []EvidenceArtifact    `json:"apiIntegration"`
-	UserAcceptance []EvidenceArtifact    `json:"userAcceptance"`
-	Environments   []EnvironmentEvidence `json:"environments"`
-	SourcePath     string                `json:"sourcePath"`
-}
-
-type EnvironmentEvidence struct {
-	Name     string           `json:"name"`
+// StorageEvidence binds a named storage seam to one artifact without adding
+// ownership fields to EvidenceArtifact. Artifact identity remains exactly
+// {path, sha256}; storage ownership is a separate, typed relationship.
+type StorageEvidence struct {
+	Storage  string           `json:"storage"`
 	Artifact EvidenceArtifact `json:"artifact"`
 }
 
+// ServiceStructureEvidence is the service-produced half of one object packet.
+// Every value is a repository file identity, never a pass/fail result.
+type ServiceStructureEvidence struct {
+	Domain         []EvidenceArtifact `json:"domain"`
+	Store          []EvidenceArtifact `json:"store"`
+	Outbox         []StorageEvidence  `json:"outbox"`
+	Reader         []EvidenceArtifact `json:"reader"`
+	Transport      []EvidenceArtifact `json:"transport"`
+	LocalContract  []EvidenceArtifact `json:"localContract"`
+	APIIntegration []EvidenceArtifact `json:"apiIntegration"`
+}
+
+// AppStructureEvidence is derived from the canonical object-shaped App tree.
+// PageParticipant is informational; only PageOwned can require presentation.
+// This prevents a multi-object page from forcing every participant to create a
+// second presentation root.
+type AppStructureEvidence struct {
+	Domain          []EvidenceArtifact `json:"domain"`
+	Application     []EvidenceArtifact `json:"application"`
+	Adapters        []EvidenceArtifact `json:"adapters"`
+	Presentation    []EvidenceArtifact `json:"presentation"`
+	LocalContract   []EvidenceArtifact `json:"localContract"`
+	APIIntegration  []EvidenceArtifact `json:"apiIntegration"`
+	UserAcceptance  []EvidenceArtifact `json:"userAcceptance"`
+	PageParticipant bool               `json:"pageParticipant"`
+	PageOwned       bool               `json:"pageOwned"`
+}
+
+// OpsStructureEvidence records only runner entrypoints. Runtime results live in
+// readiness.ReadinessResultBundle and are deliberately absent from ContractGraph.
+type OpsStructureEvidence struct {
+	EnvironmentAcceptance []EvidenceArtifact `json:"environmentAcceptance"`
+	RollbackRunner        []EvidenceArtifact `json:"rollbackRunner"`
+	ReplayRunner          []EvidenceArtifact `json:"replayRunner"`
+}
+
+// ObjectReadinessEvidence is a static, producer-separated structure packet.
+// graph.Build may derive at most the implemented stage from it. Environment
+// history and result status are forbidden here.
+type ObjectReadinessEvidence struct {
+	ObjectID     string                   `json:"objectId"`
+	OperationIDs []string                 `json:"operationIds"`
+	Service      ServiceStructureEvidence `json:"service"`
+	App          AppStructureEvidence     `json:"app"`
+	Ops          OpsStructureEvidence     `json:"ops"`
+	// PublicationStores 是该对象在自己的 `storage.yaml` 里标注为发布 seam
+	// （`transactional_outbox` / `transactional_event_log`）的存储名。它表达**归属**：
+	// 哪张存储归这个对象。Outbox 证据只针对这些存储去代码里取真，写入方所在目录是实现
+	// 细节——共享 store、参数化 store、装配处注入集合名都是正当形态。
+	PublicationStores []string `json:"publicationStores,omitempty"`
+	// DeliveryStores 是 PublicationStores 里被标注为 `transactional_outbox` 的子集：只有
+	// 它们需要投递实现。事务性事件表按定义没有具名消费者，不在此列。
+	DeliveryStores []string `json:"deliveryStores,omitempty"`
+	// PublicationDelivery 是存储名 → 投递实现位置（读取存储并推进进度）。判定既不看文件名
+	// 也不看契约声明的索引，只看实际行为，理由见 load/publication_evidence.go。
+	PublicationDelivery []StorageEvidence `json:"publicationDelivery,omitempty"`
+	// UnannotatedStores 是该对象声明了但没有标注 `publication_role` 的存储名。未标注不是
+	// 「不发布」，是判别位缺失，必须成为可见缺口。
+	UnannotatedStores []string `json:"unannotatedStores,omitempty"`
+	// UnresolvedPublicationWrites 是「关系名在服务里被绑定过，但写入发生在 Go AST 跟不动的
+	// 地方」的发布 seam。这是**维度盲点**不是缺口：解析器不跨函数跟踪构造参数注入的句柄与
+	// 调用方传入的事务上下文，报成缺口等于让人去补一份本来就存在的实现。
+	UnresolvedPublicationWrites []string `json:"unresolvedPublicationWrites,omitempty"`
+	// UnresolvedPublicationDelivery 是「投递实现在扫描范围之外」的发件箱：表名被参数化地
+	// 交给共享 dispatcher（`pgoutbox.NewDispatcher(pool, publisher, "product_ops_outbox")`），
+	// 服务树内看不到任何读取语句。同样是盲点不是缺口。
+	UnresolvedPublicationDelivery []string `json:"unresolvedPublicationDelivery,omitempty"`
+	// UndeclaredStorageWrites 是反方向的缺陷：对象实现树里有事务性写入，目标关系名却在全仓
+	// 任何 `storage.yaml` 里都没有声明位。它与「声明了但没观测到写入」修法不同，必须分开。
+	UndeclaredStorageWrites []string `json:"undeclaredStorageWrites,omitempty"`
+	// PythonImplementation 表示实现树里有 Python 生产代码。Go AST 对它完全不可见，该对象的
+	// 发布判定只能记盲点，既不判达标也不判缺口。
+	PythonImplementation bool   `json:"pythonImplementation,omitempty"`
+	SourcePath           string `json:"sourcePath"`
+}
+
 type Object struct {
-	ID             string     `json:"id"`
-	Domain         string     `json:"domain"`
-	Name           string     `json:"name"`
-	Kind           ObjectKind `json:"kind"`
-	KindExplicit   bool       `json:"kindExplicit"`
-	AggregateOwner string     `json:"aggregateOwner,omitempty"`
-	StorageBackend string     `json:"storageBackend,omitempty"`
-	SourcePath     string     `json:"sourcePath"`
-	Members        []Member   `json:"members,omitempty"`
+	ID             string               `json:"id"`
+	Domain         string               `json:"domain"`
+	Name           string               `json:"name"`
+	Kind           ObjectKind           `json:"kind"`
+	KindExplicit   bool                 `json:"kindExplicit"`
+	AggregateOwner string               `json:"aggregateOwner,omitempty"`
+	StorageBackend string               `json:"storageBackend,omitempty"`
+	SourcePath     string               `json:"sourcePath"`
+	Members        []Member             `json:"members,omitempty"`
+	Lifecycle      *LifecycleDefinition `json:"lifecycle,omitempty"`
 }
 
 type Member struct {
@@ -105,11 +241,7 @@ type RuntimeEntrypoint struct {
 	Facet           string        `json:"facet"`
 	FacadeMethod    string        `json:"facadeMethod"`
 	ObjectOwner     string        `json:"objectOwner"`
-	SourceEvents    []string      `json:"sourceEvents,omitempty"`
 	SourceObjects   []string      `json:"sourceObjects,omitempty"`
-	Checkpoint      string        `json:"checkpoint,omitempty"`
-	Rebuild         string        `json:"rebuild,omitempty"`
-	Tombstone       string        `json:"tombstone,omitempty"`
 	Idempotency     string        `json:"idempotency,omitempty"`
 	SourcePath      string        `json:"sourcePath"`
 }
@@ -127,6 +259,7 @@ type Operation struct {
 	FacadeMethod           string                   `json:"facadeMethod,omitempty"`
 	AggregateOwner         string                   `json:"aggregateOwner,omitempty"`
 	AppendSink             string                   `json:"appendSink,omitempty"`
+	LifecycleOwner         string                   `json:"lifecycleOwner,omitempty"`
 	MutationTarget         string                   `json:"mutationTarget,omitempty"`
 	InvariantTarget        string                   `json:"invariantTarget,omitempty"`
 	SessionOwner           string                   `json:"sessionOwner,omitempty"`
@@ -145,6 +278,7 @@ type Operation struct {
 	ResponseEntityRef      string                   `json:"responseEntityRef,omitempty"`
 	ResponseBody           string                   `json:"responseBody,omitempty"`
 	ResponseBodyKind       string                   `json:"responseBodyKind,omitempty"`
+	SuccessStatus          int                      `json:"successStatus,omitempty"`
 	SourcePath             string                   `json:"sourcePath"`
 	Security               map[string]string        `json:"security,omitempty"`
 	AuthMode               string                   `json:"authMode"`
@@ -212,12 +346,45 @@ type CommercialBinding struct {
 	TargetStory string `json:"targetStory,omitempty"`
 }
 
+// ReliabilityPolicy carries one operation's wall-clock and retry contract.
+//
+// TimeoutMilliseconds is the whole-request budget: admission until the response
+// is complete. It is the value runtime/auth turns into the request deadline and
+// the value the transport write ceiling is sized against.
+//
+// A streaming operation has no "response is complete" instant, so a single
+// budget cannot describe it. Such an operation declares StreamBudget instead,
+// and TimeoutMilliseconds is then derived from StreamBudget.MaxDurationMs by
+// load, never authored: the two must not be independently writable, or the
+// connection ceiling gains a second truth source.
 type ReliabilityPolicy struct {
-	TimeoutMilliseconds int    `json:"timeoutMilliseconds,omitempty"`
-	Cancellation        string `json:"cancellation,omitempty"`
-	RetryMode           string `json:"retryMode,omitempty"`
-	MaxAttempts         int    `json:"maxAttempts,omitempty"`
-	Idempotency         string `json:"idempotency,omitempty"`
+	TimeoutMilliseconds int                 `json:"timeoutMilliseconds,omitempty"`
+	TimeoutExplicit     bool                `json:"-"`
+	StreamBudget        *StreamBudgetPolicy `json:"streamBudget,omitempty"`
+	Cancellation        string              `json:"cancellation,omitempty"`
+	RetryMode           string              `json:"retryMode,omitempty"`
+	MaxAttempts         int                 `json:"maxAttempts,omitempty"`
+	Idempotency         string              `json:"idempotency,omitempty"`
+}
+
+// StreamBudgetPolicy is the three independent time limits of one long-lived
+// connection. They answer three different failure questions and none of them
+// can substitute for another:
+//
+//   - HandshakeMilliseconds: admission until the first byte of the stream is
+//     flushed. Bounds "the server accepted the connection and then produced
+//     nothing at all".
+//   - IdleMilliseconds: the gap between two consecutive payload frames. Bounds
+//     "the connection is open but the producer stopped making progress".
+//     Keep-alive comments deliberately do not reset it, otherwise a stalled
+//     producer looks identical to a healthy one.
+//   - MaxDurationMilliseconds: admission until the connection is closed no
+//     matter how healthy it is. Bounds "the underlying work legitimately never
+//     ends"; the client resumes through the declared streaming resume field.
+type StreamBudgetPolicy struct {
+	HandshakeMilliseconds   int `json:"handshakeMilliseconds"`
+	IdleMilliseconds        int `json:"idleMilliseconds"`
+	MaxDurationMilliseconds int `json:"maxDurationMilliseconds"`
 }
 
 type PaginationPolicy struct {
@@ -319,10 +486,29 @@ type ObjectGovernance struct {
 }
 
 type LifecycleDefinition struct {
-	States     []string
-	StateField string
-	Immutable  bool
-	SourcePath string
+	States         []string                 `json:"states,omitempty"`
+	StateField     string                   `json:"stateField,omitempty"`
+	Immutable      bool                     `json:"immutable,omitempty"`
+	SourceEvents   []string                 `json:"sourceEvents,omitempty"`
+	Checkpoint     string                   `json:"checkpoint,omitempty"`
+	Rebuild        string                   `json:"rebuild,omitempty"`
+	Tombstone      string                   `json:"tombstone,omitempty"`
+	Idempotency    string                   `json:"idempotency,omitempty"`
+	EventConsumers []LifecycleEventConsumer `json:"eventConsumers,omitempty"`
+	SourcePath     string                   `json:"-"`
+}
+
+// LifecycleEventConsumer records the object-local production handler for a
+// lifecycle source edge. The edge itself is authored once in
+// object.yaml#lifecycle.source_events; handler entries deliberately do not
+// repeat event lists and are not exposed as synthetic operations.
+type LifecycleEventConsumer struct {
+	Name           string            `json:"name"`
+	Kind           string            `json:"kind"`
+	Facet          string            `json:"facet"`
+	Method         string            `json:"method"`
+	Idempotency    string            `json:"idempotency"`
+	Implementation *EvidenceArtifact `json:"implementation,omitempty"`
 }
 
 type EnumOwnerLevel string
@@ -343,15 +529,17 @@ type EnumDefinition struct {
 }
 
 type FieldDefinition struct {
-	ObjectID     string
-	Domain       string
-	Entity       string
-	Name         string
-	Type         string
-	EnumRef      string
-	InlineValues []string
-	SemanticType string
-	SourcePath   string
+	ObjectID       string
+	Domain         string
+	Entity         string
+	Name           string
+	Type           string
+	EnumRef        string
+	InlineValues   []string
+	SemanticType   string
+	Classification string
+	LogPolicy      string
+	SourcePath     string
 }
 
 type ErrorEmission struct {
@@ -368,27 +556,28 @@ type ErrorDefinition struct {
 }
 
 type EventDefinition struct {
-	ObjectID         string
-	Name             string
-	Channel          string
-	PayloadEntity    string
-	PayloadShape     string
-	PayloadFields    []string
-	Consumers        []string
-	NoConsumerReason string
-	SourcePath       string
+	ObjectID string
+	Name     string
+	// DeliverySemantics 是受控投递保证，Topic 是该事件落在哪个具名主题上。
+	// 两者由 `channel` 拆出：那个字段没有值域，同时混装机制、topic 名和笔误。
+	DeliverySemantics     string
+	Topic                 string
+	PayloadEntity         string
+	PayloadShape          string
+	PayloadFields         []string
+	ClientWSType          string            `json:"clientWsType,omitempty"`
+	ClientPayloadDefaults map[string]string `json:"clientPayloadDefaults,omitempty"`
+	NoConsumerReason      string
+	SourcePath            string
 }
 
-// PrivacyDefinition 是对象 privacy.yaml 的 typed compiler view。字段与级联
-// 引用在 loader 中归一，validator 不重新解释 YAML/JSON 文档。
+// PrivacyDefinition binds a complete authored privacy document to the object
+// identity derived from its canonical path. Validators consume Document and do
+// not reparse SourceDocument or keep a second private YAML view.
 type PrivacyDefinition struct {
-	ObjectID            string
-	Aggregate           string
-	AppLogFields        []string
-	VisibilityFields    []string
-	AnonymizationFields []string
-	DeletionTargets     []string
-	SourcePath          string
+	ObjectID   string
+	Document   PrivacyDocument
+	SourcePath string
 }
 
 // BusinessObjectMap 是字段角色与对象边界的 typed canonical 输入。

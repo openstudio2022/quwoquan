@@ -117,7 +117,7 @@ func main() {
 			Content: mustFormatGo(renderGo(value)),
 		},
 		{
-			Path:    filepath.Join(root, "quwoquan_app", "lib", "core", "observability", "generated", "runtime_log_catalog.g.dart"),
+			Path:    appRuntimeLogCatalogOutputPath(root),
 			Content: renderDart(value),
 		},
 		{
@@ -133,6 +133,9 @@ func main() {
 			Content: renderTypeScript(value),
 		},
 	}
+	if *check {
+		exitIf(checkRetiredAppRuntimeLogCatalogOutput(root))
+	}
 
 	for _, item := range outputs {
 		if *check {
@@ -146,6 +149,61 @@ func main() {
 		exitIf(os.MkdirAll(filepath.Dir(item.Path), 0o755))
 		exitIf(os.WriteFile(item.Path, []byte(item.Content), 0o644))
 	}
+	if !*check {
+		exitIf(removeRetiredAppRuntimeLogCatalogOutput(root))
+	}
+}
+
+func appRuntimeLogCatalogOutputPath(root string) string {
+	return filepath.Join(
+		root,
+		"quwoquan_app",
+		"lib",
+		"runtime",
+		"observability",
+		"generated",
+		"runtime_log_catalog.g.dart",
+	)
+}
+
+func retiredAppRuntimeLogCatalogOutputPath(root string) string {
+	return filepath.Join(
+		root,
+		"quwoquan_app",
+		"lib",
+		"core",
+		"observability",
+		"generated",
+		"runtime_log_catalog.g.dart",
+	)
+}
+
+func checkRetiredAppRuntimeLogCatalogOutput(root string) error {
+	path := retiredAppRuntimeLogCatalogOutputPath(root)
+	if _, err := os.Lstat(path); err == nil {
+		return fmt.Errorf("retired generated observability catalog still exists: %s", path)
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("inspect retired generated observability catalog %s: %w", path, err)
+	}
+	return nil
+}
+
+func removeRetiredAppRuntimeLogCatalogOutput(root string) error {
+	path := retiredAppRuntimeLogCatalogOutputPath(root)
+	info, err := os.Lstat(path)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("inspect retired generated observability catalog %s: %w", path, err)
+	}
+	if info.IsDir() {
+		return fmt.Errorf("retired generated observability catalog path is a directory: %s", path)
+	}
+	if err := os.Remove(path); err != nil {
+		return fmt.Errorf("remove retired generated observability catalog %s: %w", path, err)
+	}
+	return nil
 }
 
 func validate(value catalog) error {

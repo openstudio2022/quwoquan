@@ -1,3 +1,9 @@
+// spec_ref: specs/feature-tree/gateway-orchestrator-foundation/realtime-gateway/realtime-channel-delivery/spec.md#gwt-001
+// spec_ref: specs/feature-tree/gateway-orchestrator-foundation/realtime-gateway/realtime-channel-delivery/spec.md#gwt-003
+// readiness_case: issue-connection-ticket-local
+// readiness_case: websocket-upgrade-local
+// readiness_case: long-poll-local
+// readiness_case: get-realtime-config-local
 package local_contract
 
 import (
@@ -16,6 +22,7 @@ import (
 
 	"github.com/coder/websocket"
 
+	operationsecurity "quwoquan_service/generated/operationsecurity"
 	rtauth "quwoquan_service/runtime/auth"
 	runtimemessaging "quwoquan_service/runtime/messaging"
 	"quwoquan_service/runtime/operation"
@@ -36,6 +43,25 @@ type gatewayHarness struct {
 
 func newGatewayHarness(t *testing.T) *gatewayHarness {
 	t.Helper()
+	return newGatewayHarnessWithConfig(t, gatewayHarnessConfig{
+		streamBudget: rtauth.OperationStreamBudget{
+			HandshakeMilliseconds:   5000,
+			IdleMilliseconds:        90000,
+			MaxDurationMilliseconds: 1800000,
+		},
+	})
+}
+
+type gatewayHarnessConfig struct {
+	streamBudget    rtauth.OperationStreamBudget
+	wrapTicketStore func(application.TicketStore) application.TicketStore
+}
+
+func newGatewayHarnessWithConfig(
+	t *testing.T,
+	config gatewayHarnessConfig,
+) *gatewayHarness {
+	t.Helper()
 	client := rtredis.NewMemoryClient()
 	authority := newTestAccountSecurityAuthority()
 	presenceProjection := newTestPresenceProjection(t, client)
@@ -44,8 +70,12 @@ func newGatewayHarness(t *testing.T) *gatewayHarness {
 		presenceProjection,
 	)
 	relay := redisstore.NewAccountSecurityRelay(client)
+	var ticketStore application.TicketStore = redisstore.NewTicketStore(client)
+	if config.wrapTicketStore != nil {
+		ticketStore = config.wrapTicketStore(ticketStore)
+	}
 	tickets, err := application.NewTicketService(
-		redisstore.NewTicketStore(client),
+		ticketStore,
 		authority,
 		securityStore,
 	)
@@ -79,14 +109,27 @@ func newGatewayHarness(t *testing.T) *gatewayHarness {
 	if err != nil {
 		t.Fatalf("new http handler: %v", err)
 	}
-	upgrade, err := wsadapter.NewHandler(tickets, hub, slog.Default())
+	operationDescriptors := realtimeOperationDescriptorsForTest(
+		config.streamBudget,
+	)
+	upgrade, err := wsadapter.NewHandler(
+		tickets,
+		hub,
+		slog.Default(),
+		operationDescriptors,
+	)
 	if err != nil {
 		t.Fatalf("new ws handler: %v", err)
 	}
-	mux := http.NewServeMux()
-	handler.Routes(mux)
-	mux.HandleFunc("GET /realtime/ws", upgrade.HandleUpgrade)
-	server := httptest.NewServer(withTestPrincipal(mux))
+	guarded := http.NewServeMux()
+	handler.Routes(guarded)
+	root := http.NewServeMux()
+	root.HandleFunc("GET /realtime/ws", upgrade.HandleUpgrade)
+	root.Handle(
+		"/",
+		rtauth.EnforceRuntimeOperationContract(operationDescriptors)(guarded),
+	)
+	server := httptest.NewServer(withTestPrincipal(root))
 	t.Cleanup(server.Close)
 	return &gatewayHarness{
 		client:    client,
@@ -95,6 +138,40 @@ func newGatewayHarness(t *testing.T) *gatewayHarness {
 		hub:       hub,
 		server:    server,
 	}
+}
+
+type delayedTicketStore struct {
+	application.TicketStore
+	delay time.Duration
+}
+
+func (store delayedTicketStore) Consume(
+	ctx context.Context,
+	ticket string,
+) (application.TicketClaims, error) {
+	timer := time.NewTimer(store.delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return application.TicketClaims{}, ctx.Err()
+	case <-timer.C:
+		return store.TicketStore.Consume(ctx, ticket)
+	}
+}
+
+func realtimeOperationDescriptorsForTest(
+	budget rtauth.OperationStreamBudget,
+) []rtauth.OperationSecurityDescriptor {
+	descriptors := operationsecurity.ForDomain("realtime")
+	for index := range descriptors {
+		descriptor := &descriptors[index]
+		if descriptor.CanonicalOperationID != "realtime.connection.WebSocketUpgrade" {
+			continue
+		}
+		descriptor.StreamBudget = &budget
+		descriptor.TimeoutMilliseconds = budget.MaxDurationMilliseconds
+	}
+	return descriptors
 }
 
 func mustTestResumableEventReader(
@@ -331,8 +408,30 @@ func TestIssueTicketRequiresTrustedPrincipal(t *testing.T) {
 	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
 		t.Fatal(err)
 	}
-	if body.Code != "REALTIME.USER.unauthorized" {
+	if body.Code != "GATEWAY.USER.unauthorized" {
 		t.Fatalf("anonymous ticket code = %q", body.Code)
+	}
+}
+
+func TestRealtimeConfigReturnsTheCanonicalBoundedTransportPolicy(t *testing.T) {
+	t.Parallel()
+	harness := newGatewayHarness(t)
+	response, err := harness.server.Client().Get(harness.server.URL + "/config/realtime")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("config status=%d", response.StatusCode)
+	}
+	var body httpadapter.RealtimeTransportConfig
+	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	want := httpadapter.DefaultTransportConfig()
+	if body != want || body.LongPollHoldSec <= 0 ||
+		body.ReconnectBaseDelayMs > body.ReconnectMaxDelayMs {
+		t.Fatalf("config=%+v want=%+v", body, want)
 	}
 }
 
@@ -375,6 +474,186 @@ func TestWebSocketUpgradeConsumesTicketAndAcks(t *testing.T) {
 	pong := readFrame(t, conn)
 	if pong["type"] != "pong" {
 		t.Fatalf("expected pong, got %v", pong)
+	}
+}
+
+func TestWebSocketHandshakeBudgetStartsBeforeTicketConsumption(t *testing.T) {
+	harness := newGatewayHarnessWithConfig(t, gatewayHarnessConfig{
+		streamBudget: rtauth.OperationStreamBudget{
+			HandshakeMilliseconds:   30,
+			IdleMilliseconds:        100,
+			MaxDurationMilliseconds: 500,
+		},
+		wrapTicketStore: func(store application.TicketStore) application.TicketStore {
+			return delayedTicketStore{TicketStore: store, delay: 100 * time.Millisecond}
+		},
+	})
+	ticket := issueTicket(t, harness, "acct-handshake", "persona-handshake", "device-handshake")
+	url := strings.Replace(harness.server.URL, "http://", "ws://", 1) +
+		"/realtime/ws?ticket=" + ticket
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	connection, response, err := websocket.Dial(ctx, url, nil)
+	if connection != nil {
+		_ = connection.Close(websocket.StatusNormalClosure, "unexpected admission")
+	}
+	if err == nil {
+		t.Fatal("WebSocket admission exceeded handshake budget but still upgraded")
+	}
+	if response == nil || response.StatusCode != http.StatusInternalServerError {
+		status := 0
+		if response != nil {
+			status = response.StatusCode
+		}
+		t.Fatalf("handshake budget status=%d err=%v", status, err)
+	}
+}
+
+func TestWebSocketHandlerFailsWiringWithoutGeneratedStreamBudget(t *testing.T) {
+	harness := newGatewayHarness(t)
+	descriptors := realtimeOperationDescriptorsForTest(rtauth.OperationStreamBudget{
+		HandshakeMilliseconds:   5000,
+		IdleMilliseconds:        90000,
+		MaxDurationMilliseconds: 1800000,
+	})
+	for index := range descriptors {
+		if descriptors[index].CanonicalOperationID == "realtime.connection.WebSocketUpgrade" {
+			descriptors[index].StreamBudget = nil
+		}
+	}
+	if _, err := wsadapter.NewHandler(
+		harness.tickets,
+		harness.hub,
+		slog.Default(),
+		descriptors,
+	); err == nil {
+		t.Fatal("WebSocket handler accepted a descriptor without stream_budget")
+	}
+}
+
+func TestWebSocketKeepAliveDoesNotExtendIdleBudget(t *testing.T) {
+	harness := newGatewayHarnessWithConfig(t, gatewayHarnessConfig{
+		streamBudget: rtauth.OperationStreamBudget{
+			HandshakeMilliseconds:   50,
+			IdleMilliseconds:        80,
+			MaxDurationMilliseconds: 500,
+		},
+	})
+	connection := dialWebSocket(t, harness, issueTicket(
+		t,
+		harness,
+		"acct-idle",
+		"persona-idle",
+		"device-idle",
+	))
+	if frame := readFrame(t, connection); frame["type"] != "auth_ack" {
+		t.Fatalf("auth_ack missing: %v", frame)
+	}
+	started := time.Now()
+	var closeErr error
+	for time.Since(started) < time.Second {
+		writeCtx, cancelWrite := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		err := connection.Write(writeCtx, websocket.MessageText, []byte(`{"type":"ping"}`))
+		cancelWrite()
+		if err != nil {
+			closeErr = err
+			break
+		}
+		readCtx, cancelRead := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		_, payload, err := connection.Read(readCtx)
+		cancelRead()
+		if err != nil {
+			closeErr = err
+			break
+		}
+		if !strings.Contains(string(payload), `"type":"pong"`) {
+			t.Fatalf("keepalive payload=%s", payload)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if closeErr == nil {
+		t.Fatal("ping/pong keepalive incorrectly kept an idle WebSocket alive")
+	}
+	if status := websocket.CloseStatus(closeErr); status != -1 && status != websocket.StatusGoingAway {
+		t.Fatalf("idle budget close status=%v err=%v", status, closeErr)
+	}
+	if elapsed := time.Since(started); elapsed > 400*time.Millisecond {
+		t.Fatalf("idle budget was not enforced promptly: %s", elapsed)
+	}
+}
+
+func TestWebSocketBusinessProgressCannotExtendMaximumDuration(t *testing.T) {
+	harness := newGatewayHarnessWithConfig(t, gatewayHarnessConfig{
+		streamBudget: rtauth.OperationStreamBudget{
+			HandshakeMilliseconds:   50,
+			IdleMilliseconds:        100,
+			MaxDurationMilliseconds: 250,
+		},
+	})
+	const accountID = "acct-max-duration"
+	connection := dialWebSocket(t, harness, issueTicket(
+		t,
+		harness,
+		accountID,
+		"persona-max-duration",
+		"device-max-duration",
+	))
+	if frame := readFrame(t, connection); frame["type"] != "auth_ack" {
+		t.Fatalf("auth_ack missing: %v", frame)
+	}
+	publishCtx, stopPublishing := context.WithCancel(context.Background())
+	publishErrors := make(chan error, 1)
+	defer stopPublishing()
+	go func() {
+		ticker := time.NewTicker(25 * time.Millisecond)
+		defer ticker.Stop()
+		for sequence := 0; ; sequence++ {
+			select {
+			case <-publishCtx.Done():
+				return
+			case <-ticker.C:
+				payload := fmt.Sprintf(`{"type":"chat.progress","seq":%d}`, sequence)
+				if err := harness.client.Publish(
+					publishCtx,
+					"rt:user:"+accountID,
+					payload,
+				); err != nil {
+					publishErrors <- err
+					return
+				}
+			}
+		}
+	}()
+	started := time.Now()
+	emitted := 0
+	var closeErr error
+	for time.Since(started) < time.Second {
+		readCtx, cancelRead := context.WithTimeout(context.Background(), 400*time.Millisecond)
+		_, _, err := connection.Read(readCtx)
+		cancelRead()
+		if err != nil {
+			closeErr = err
+			break
+		}
+		emitted++
+	}
+	stopPublishing()
+	select {
+	case err := <-publishErrors:
+		t.Fatalf("publish progress: %v", err)
+	default:
+	}
+	if closeErr == nil {
+		t.Fatal("business progress incorrectly extended the maximum connection duration")
+	}
+	if status := websocket.CloseStatus(closeErr); status != -1 && status != websocket.StatusGoingAway {
+		t.Fatalf("maximum-duration close status=%v err=%v", status, closeErr)
+	}
+	if elapsed := time.Since(started); elapsed < 150*time.Millisecond || elapsed > 600*time.Millisecond {
+		t.Fatalf("maximum-duration close elapsed=%s emitted=%d", elapsed, emitted)
+	}
+	if emitted < 3 {
+		t.Fatalf("maximum-duration test emitted only %d progress frames", emitted)
 	}
 }
 

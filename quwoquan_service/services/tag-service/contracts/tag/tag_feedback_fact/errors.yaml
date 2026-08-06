@@ -1,37 +1,35 @@
-entity: TagFeedbackFact
-domain: TAG
 errors:
 - code: TAG.USER.feedback_invalid_action
-  kind: USER
   reason: feedback_invalid_action
   http_status: 400
   emitted_by:
   - {surface: http, operations: [ReportTagFeedback]}
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: tagFeedbackInvalidAction
   go_const: ErrTagFeedbackInvalidAction
   user_message:
     zh: 标签反馈动作不合法
     en: Invalid tag feedback action
 - code: TAG.USER.feedback_idempotency_conflict
-  kind: USER
   reason: feedback_idempotency_conflict
   http_status: 409
   emitted_by:
   - {surface: http, operations: [ReportTagFeedback]}
-  recovery_action: refresh
+  recovery_action: retry
+  disruption_level: snackbar
   dart_const: tagFeedbackIdempotencyConflict
   go_const: ErrTagFeedbackIdempotencyConflict
   user_message:
     zh: 重复反馈与原请求不一致
     en: The repeated feedback differs from the original request
 - code: TAG.SYSTEM.feedback_storage_failed
-  kind: SYSTEM
   reason: feedback_storage_failed
   http_status: 500
   emitted_by:
   - {surface: http, operations: [ReportTagFeedback]}
   recovery_action: retry
+  disruption_level: snackbar
   recovery_after_seconds: 5
   dart_const: tagFeedbackStorageFailed
   go_const: ErrTagFeedbackStorageFailed

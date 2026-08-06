@@ -1,6 +1,6 @@
 tags:
   serial:
-  t4:
+  user-acceptance:
   chat:
   avatar:
   content:
@@ -46,4 +46,4 @@ tags:
   social-login:
   location:
   rtc:
-  b10:
+  two-device:

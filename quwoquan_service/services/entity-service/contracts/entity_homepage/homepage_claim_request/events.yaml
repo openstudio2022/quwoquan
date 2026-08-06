@@ -1,9 +1,6 @@
 events:
 - name: HomepageClaimRequested
-  producer: entity-service
-  consumers:
-  - platform-ops
-  channel: event_store
+  delivery_semantics: transactional_outbox
   payload_entity: HomepageClaimRequest
   payload_fields:
   - claimRequestId
@@ -14,11 +11,7 @@ events:
   - createdAt
   - version
 - name: HomepageClaimReviewed
-  producer: entity-service
-  consumers:
-  - platform-ops
-  - homepage-projection
-  channel: event_store
+  delivery_semantics: transactional_outbox
   payload_entity: HomepageClaimRequest
   payload_fields:
   - claimRequestId

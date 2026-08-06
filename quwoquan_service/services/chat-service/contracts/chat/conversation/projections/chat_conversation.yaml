@@ -27,6 +27,16 @@ fields:
   type: string
 - name: circleGroupId
   type: string
+- name: gatheringId
+  type: string
+- name: gatheringSourceVersion
+  type: int64
+- name: accessMode
+  type: enum
+  enum_ref: ConversationAccessMode
+- name: postingPolicy
+  type: enum
+  enum_ref: ConversationPostingPolicy
 - name: entityId
   type: string
 - name: originType

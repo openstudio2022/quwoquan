@@ -48,8 +48,8 @@ from core.image_asset_strategy import (
 )
 from core.io import read_json, write_json
 from core.python_environment import (
-    DEFAULT_CURSOR_STARTUP_TIMEOUT_SECONDS,
-    resolve_cursor_startup_timeout_seconds,
+    DEFAULT_SEMANTIC_AGENT_STARTUP_TIMEOUT_SECONDS,
+    resolve_semantic_agent_startup_timeout_seconds,
 )
 from core.source_plan_contract import source_plan_rule_signature
 from core.paths import release_root
@@ -72,7 +72,7 @@ from content.execution.recovery.download_hints import (
 from content.execution.context import (
     AUTO,
     CHECKPOINT,
-    DEFAULT_CURSOR_AGENT_MODEL,
+    DEFAULT_SEMANTIC_AGENT_MODEL,
     DEFAULT_MANAGED_AGENT_PROVIDER,
     DOWNLOAD_FETCH_ONLY_RETRY_LIMIT,
     MANAGED_AGENT_FUTURE_GRACE_SECONDS,

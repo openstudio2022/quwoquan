@@ -218,6 +218,7 @@ class RuntimeEnvironment(StrEnum):
 
 class AgentProvider(StrEnum):
     CURSOR_SDK = "cursor_sdk"
+    CODEX_SDK = "codex_sdk"
 
 
 class AgentRunStatus(StrEnum):
@@ -235,7 +236,7 @@ class ManagedAgentCheckpointStatus(StrEnum):
 
 
 class AgentFailureKind(StrEnum):
-    """Closed failure classes for Cursor SDK and its isolated subprocess."""
+    """Closed failure classes for managed semantic-agent adapters."""
 
     SDK_UNAVAILABLE = "sdk_unavailable"
     CREDENTIAL_INVALID = "credential_invalid"
@@ -248,6 +249,8 @@ class AgentFailureKind(StrEnum):
     SUBPROCESS_EXITED = "subprocess_exited"
     FUTURE_TIMEOUT = "future_timeout"
     CHECKPOINT_GATE = "checkpoint_gate"
+    AUTHENTICATION_REJECTED = "authentication_rejected"
+    CAPACITY_UNPROVEN = "capacity_unproven"
 
 
 class ReadinessMode(StrEnum):
@@ -289,6 +292,7 @@ class ExecutionStateStatus(StrEnum):
     WAITING_AGENT = "waiting_agent"
     REPAIRING = "repairing"
     MANUAL_REQUIRED = "manual_required"
+    INTERRUPTED = "interrupted"
     SUCCEEDED = "succeeded"
 
 

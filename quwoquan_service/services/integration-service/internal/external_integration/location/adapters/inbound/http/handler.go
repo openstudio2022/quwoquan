@@ -54,6 +54,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	})
 	mux.HandleFunc(locationgenerated.NearbyPath, h.handleNearby)
 	mux.HandleFunc(locationgenerated.SearchPath, h.handleSearch)
+	mux.HandleFunc(locationgenerated.RoutePath, h.handleRoute)
 }
 
 func (h *Handler) handleNearby(w http.ResponseWriter, r *http.Request) {
@@ -110,21 +111,150 @@ func (h *Handler) handleSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	lat, _ := parseOptionalFloat(r.URL.Query().Get(locationgenerated.QueryParamLat))
-	lng, _ := parseOptionalFloat(r.URL.Query().Get(locationgenerated.QueryParamLng))
+	rawLat := r.URL.Query().Get(locationgenerated.QueryParamLat)
+	rawLng := r.URL.Query().Get(locationgenerated.QueryParamLng)
+	lat, latPresent := parseOptionalFloat(rawLat)
+	lng, lngPresent := parseOptionalFloat(rawLng)
+	if latPresent != lngPresent ||
+		(strings.TrimSpace(rawLat) != "" && !latPresent) ||
+		(strings.TrimSpace(rawLng) != "" && !lngPresent) ||
+		(latPresent && (lat < -90 || lat > 90 || lng < -180 || lng > 180)) {
+		rerrors.WriteHTTPError(
+			w,
+			locationgenerated.AppErrorFromInvalidArgument(
+				"lat and lng must be a valid coordinate pair",
+			),
+			rerrors.HTTPWriteOptionsFromRequest(r),
+		)
+		return
+	}
 	limit := parsePositiveInt(r.URL.Query().Get(locationgenerated.QueryParamLimit), h.defaultSearchLimit)
 	items, serviceErr := h.service.Search(r.Context(), model.SearchRequestFact{
-		Query:    query,
-		CityCode: strings.TrimSpace(r.URL.Query().Get(locationgenerated.QueryParamCityCode)),
-		Lat:      lat,
-		Lng:      lng,
-		Limit:    limit,
+		Query:     query,
+		CityCode:  strings.TrimSpace(r.URL.Query().Get(locationgenerated.QueryParamCityCode)),
+		Lat:       lat,
+		Lng:       lng,
+		HasCenter: latPresent,
+		Limit:     limit,
 	})
 	if serviceErr != nil {
 		rerrors.WriteHTTPError(w, serviceErr, rerrors.HTTPWriteOptionsFromRequest(r))
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{locationgenerated.ResponseListKey: poiToClientItems(items)})
+}
+
+func (h *Handler) handleRoute(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		rerrors.WriteHTTPError(
+			w,
+			rerrors.NewInvalidArgument(
+				rerrors.ModuleIntegration,
+				"方法不支持",
+				"only GET",
+			),
+			rerrors.HTTPWriteOptionsFromRequest(r),
+		)
+		return
+	}
+	query, parseErr := parseRouteQuery(r)
+	if parseErr != nil {
+		rerrors.WriteHTTPError(
+			w,
+			locationgenerated.AppErrorFromInvalidArgument(parseErr.Error()),
+			rerrors.HTTPWriteOptionsFromRequest(r),
+		)
+		return
+	}
+	route, serviceErr := h.service.ReadRoute(r.Context(), query)
+	if serviceErr != nil {
+		rerrors.WriteHTTPError(
+			w,
+			serviceErr,
+			rerrors.HTTPWriteOptionsFromRequest(r),
+		)
+		return
+	}
+	writeJSON(w, http.StatusOK, routeToClientItem(route))
+}
+
+func parseRouteQuery(r *http.Request) (model.RouteQuery, error) {
+	originLat, err := parseRequiredFloat(
+		r.URL.Query().Get(locationgenerated.QueryParamOriginLat),
+		locationgenerated.QueryParamOriginLat,
+	)
+	if err != nil {
+		return model.RouteQuery{}, err
+	}
+	originLng, err := parseRequiredFloat(
+		r.URL.Query().Get(locationgenerated.QueryParamOriginLng),
+		locationgenerated.QueryParamOriginLng,
+	)
+	if err != nil {
+		return model.RouteQuery{}, err
+	}
+	destinationLat, err := parseRequiredFloat(
+		r.URL.Query().Get(locationgenerated.QueryParamDestinationLat),
+		locationgenerated.QueryParamDestinationLat,
+	)
+	if err != nil {
+		return model.RouteQuery{}, err
+	}
+	destinationLng, err := parseRequiredFloat(
+		r.URL.Query().Get(locationgenerated.QueryParamDestinationLng),
+		locationgenerated.QueryParamDestinationLng,
+	)
+	if err != nil {
+		return model.RouteQuery{}, err
+	}
+	if originLat < -90 || originLat > 90 ||
+		destinationLat < -90 || destinationLat > 90 ||
+		originLng < -180 || originLng > 180 ||
+		destinationLng < -180 || destinationLng > 180 {
+		return model.RouteQuery{}, rerrors.NewInvalidArgument(
+			rerrors.ModuleIntegration,
+			"路线坐标无效",
+			"route coordinates are out of range",
+		)
+	}
+	mode := model.TravelMode(
+		strings.TrimSpace(
+			r.URL.Query().Get(locationgenerated.QueryParamTravelMode),
+		),
+	)
+	if mode == "" {
+		mode = model.TravelModeDriving
+	}
+	switch mode {
+	case model.TravelModeWalking,
+		model.TravelModeCycling,
+		model.TravelModeDriving:
+	default:
+		return model.RouteQuery{}, rerrors.NewInvalidArgument(
+			rerrors.ModuleIntegration,
+			"路线模式无效",
+			"travelMode is not supported",
+		)
+	}
+	return model.RouteQuery{
+		OriginLat:      originLat,
+		OriginLng:      originLng,
+		DestinationLat: destinationLat,
+		DestinationLng: destinationLng,
+		TravelMode:     mode,
+	}, nil
+}
+
+func parseRequiredFloat(raw string, parameter string) (float64, error) {
+	value, ok := parseOptionalFloat(raw)
+	if !ok {
+		return 0, rerrors.NewInvalidArgument(
+			rerrors.ModuleIntegration,
+			"路线坐标无效",
+			"query parameter "+parameter+" must be numeric",
+		)
+	}
+	return value, nil
 }
 
 // poiToClientItems 按 integration/external_integration/location/projections/location_poi client_projection 输出，
@@ -147,6 +277,20 @@ func poiToClientItems(items []model.POI) []map[string]any {
 		out[i] = m
 	}
 	return out
+}
+
+func routeToClientItem(route model.Route) map[string]any {
+	return map[string]any{
+		locationgenerated.FieldKeyRouteRef:             route.RouteRef,
+		locationgenerated.FieldKeyOriginLatitude:       route.OriginLat,
+		locationgenerated.FieldKeyOriginLongitude:      route.OriginLng,
+		locationgenerated.FieldKeyDestinationLatitude:  route.DestinationLat,
+		locationgenerated.FieldKeyDestinationLongitude: route.DestinationLng,
+		locationgenerated.FieldKeyEncodedPolyline:      route.EncodedPolyline,
+		locationgenerated.FieldKeyDurationSeconds:      route.DurationSeconds,
+		locationgenerated.FieldKeyDistanceMeters:       route.DistanceMeters,
+		locationgenerated.FieldKeyTravelMode:           route.TravelMode,
+	}
 }
 
 func parseOptionalFloat(raw string) (float64, bool) {

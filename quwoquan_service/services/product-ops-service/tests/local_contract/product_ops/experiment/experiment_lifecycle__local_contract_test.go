@@ -7,6 +7,7 @@ import (
 	model "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/domain/model"
 )
 
+// spec_ref: specs/feature-tree/product-ops-growth/experiment-bucketing-and-rollout/spec.md#sit-001
 func TestExperimentLifecycleUsesDomainAggregateContract(t *testing.T) {
 	now := time.Date(2026, time.July, 14, 10, 0, 0, 0, time.UTC)
 	experiment := model.Experiment{

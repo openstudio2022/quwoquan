@@ -23,11 +23,13 @@ const (
 func TestContactDiscovery_InitiateAndGetLatest(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 	createTestProfile(t, "cd_owner", "cd_user")
+	headers := authHeaders("cd_owner")
+	headers["Idempotency-Key"] = "contact-discovery-initiate-replay"
+	payload := `{"hashedPhones":["` + phonematch.Hash(cdOpenPhone) + `"]}`
 
 	// 发起通讯录发现（无注册命中）
 	rec := doRequest(t, http.MethodPost, "/owner/contact-discovery",
-		`{"hashedPhones":["`+phonematch.Hash(cdOpenPhone)+`"]}`,
-		authHeaders("cd_owner"))
+		payload, headers)
 	if rec.Code != http.StatusAccepted {
 		t.Fatalf("initiate: expected 202, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -35,6 +37,23 @@ func TestContactDiscovery_InitiateAndGetLatest(t *testing.T) {
 	recordID, _ := result["id"].(string)
 	if recordID == "" {
 		t.Fatal("expected record id in response")
+	}
+	replay := doRequest(t, http.MethodPost, "/owner/contact-discovery", payload, headers)
+	if replay.Code != http.StatusAccepted {
+		t.Fatalf("replay: expected 202, got %d: %s", replay.Code, replay.Body.String())
+	}
+	if replayID, _ := parseJSON(t, replay)["id"].(string); replayID != recordID {
+		t.Fatalf("replay must return first record: got=%q want=%q", replayID, recordID)
+	}
+	conflict := doRequest(
+		t,
+		http.MethodPost,
+		"/owner/contact-discovery",
+		`{"hashedPhones":["changed-hash"]}`,
+		headers,
+	)
+	if conflict.Code != http.StatusBadRequest {
+		t.Fatalf("same key with changed payload must fail 400, got %d: %s", conflict.Code, conflict.Body.String())
 	}
 
 	// DB 验证：记录已创建
@@ -142,9 +161,15 @@ func TestContactDiscovery_Dismiss(t *testing.T) {
 	recordID, _ := result["id"].(string)
 
 	// 关闭
-	rec = doRequest(t, http.MethodDelete, "/owner/contact-discovery/"+recordID, "", authHeaders("dismiss_owner"))
+	dismissHeaders := authHeaders("dismiss_owner")
+	dismissHeaders["Idempotency-Key"] = "contact-discovery-dismiss-replay"
+	rec = doRequest(t, http.MethodDelete, "/owner/contact-discovery/"+recordID, "", dismissHeaders)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("dismiss: expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	replay := doRequest(t, http.MethodDelete, "/owner/contact-discovery/"+recordID, "", dismissHeaders)
+	if replay.Code != http.StatusOK {
+		t.Fatalf("dismiss replay: expected 200, got %d: %s", replay.Code, replay.Body.String())
 	}
 
 	// DB 验证：状态变为 dismissed

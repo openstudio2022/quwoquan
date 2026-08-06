@@ -25,6 +25,10 @@ slis:
     description: 已成功获取的网页证据能原子写入或读取 authoritative ledger 的比例。
     sli: 1 - (sum(rate(assistant_public_web_policy_boundary_total{reason="web_evidence_unavailable"}[5m])) / clamp_min(sum(rate(assistant_public_web_tool_total{tool=~"web_search|web_open|web_find"}[5m])), 0.001))
     objective: 0.999
+  - id: assistant_weather_public_provider_availability
+    description: weather_lookup 经受管 PublicProviderBinding 返回真实天气证据的成功率；binding unavailable、timeout、429 与 malformed 均计为失败，不得用合成天气补成功。
+    sli: sum(rate(assistant_public_web_tool_total{tool="weather_lookup",outcome="succeeded"}[5m])) / clamp_min(sum(rate(assistant_public_web_tool_total{tool="weather_lookup",outcome=~"succeeded|failed"}[5m])), 0.001)
+    objective: 0.99
 
 failure_semantics:
   web_target_rejected: do_not_retry_and_do_not_emit_target_details
@@ -43,3 +47,6 @@ alerts:
   evidence_availability:
     condition: 1 - (sum(rate(assistant_public_web_policy_boundary_total{reason="web_evidence_unavailable"}[10m])) / clamp_min(sum(rate(assistant_public_web_tool_total{tool=~"web_search|web_open|web_find"}[10m])), 0.001)) < 0.999
     severity: critical
+  weather_public_provider_availability:
+    condition: sum(rate(assistant_public_web_tool_total{tool="weather_lookup",outcome="succeeded"}[10m])) / clamp_min(sum(rate(assistant_public_web_tool_total{tool="weather_lookup",outcome=~"succeeded|failed"}[10m])), 0.001) < 0.99
+    severity: warning

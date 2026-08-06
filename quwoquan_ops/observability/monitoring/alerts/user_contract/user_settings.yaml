@@ -1,0 +1,185 @@
+# Code generated from quwoquan_service/generated/contract_graph.json.
+# Regenerate with verify_object_alert_coverage.py --write.
+groups:
+  - name: quwoquan_user_contract_user_settings
+    rules:
+      - record: quwoquan_user_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="user-service",method="GET",route="/user/settings/appearance"})
+        labels:
+          service: "user-service"
+          operation: "user.user_settings.GetAppearanceSettings"
+          contract_metric: "user_settings_appearance_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="user-service",method="GET",route="/user/settings/appearance"})
+        labels:
+          service: "user-service"
+          operation: "user.user_settings.GetAppearanceSettings"
+          contract_metric: "user_settings_appearance_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="user-service",method="GET",route="/user/settings/calls"})
+        labels:
+          service: "user-service"
+          operation: "user.user_settings.GetCallSettings"
+          contract_metric: "user_settings_calls_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="user-service",method="GET",route="/user/settings/calls"})
+        labels:
+          service: "user-service"
+          operation: "user.user_settings.GetCallSettings"
+          contract_metric: "user_settings_calls_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="user-service",method="GET",route="/user/settings/notifications"})
+        labels:
+          service: "user-service"
+          operation: "user.user_settings.GetNotificationSettings"
+          contract_metric: "user_settings_notifications_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="user-service",method="GET",route="/user/settings/notifications"})
+        labels:
+          service: "user-service"
+          operation: "user.user_settings.GetNotificationSettings"
+          contract_metric: "user_settings_notifications_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="user-service",method="GET",route="/user/settings/privacy"})
+        labels:
+          service: "user-service"
+          operation: "user.user_settings.GetPrivacySettings"
+          contract_metric: "user_settings_privacy_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="user-service",method="GET",route="/user/settings/privacy"})
+        labels:
+          service: "user-service"
+          operation: "user.user_settings.GetPrivacySettings"
+          contract_metric: "user_settings_privacy_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="user-service",method="GET",route=~"^/internal/user/accounts/[^/]+/assistant-delivery-policy$"})
+        labels:
+          service: "user-service"
+          operation: "user.user_settings.ResolveAssistantDeliveryPolicy"
+          contract_metric: "user_assistant_delivery_policy_resolve"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "400"
+          slo_availability_percent: "99.95"
+      - record: quwoquan_user_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="user-service",method="GET",route=~"^/internal/user/accounts/[^/]+/assistant-delivery-policy$"})
+        labels:
+          service: "user-service"
+          operation: "user.user_settings.ResolveAssistantDeliveryPolicy"
+          contract_metric: "user_assistant_delivery_policy_resolve"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "400"
+          slo_availability_percent: "99.95"
+      - record: quwoquan_user_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="user-service",method="PATCH",route="/user/settings/appearance"})
+        labels:
+          service: "user-service"
+          operation: "user.user_settings.UpdateAppearanceSettings"
+          contract_metric: "user_settings_appearance_update"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="user-service",method="PATCH",route="/user/settings/appearance"})
+        labels:
+          service: "user-service"
+          operation: "user.user_settings.UpdateAppearanceSettings"
+          contract_metric: "user_settings_appearance_update"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="user-service",method="PATCH",route="/user/settings/calls"})
+        labels:
+          service: "user-service"
+          operation: "user.user_settings.UpdateCallSettings"
+          contract_metric: "user_settings_calls_update"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="user-service",method="PATCH",route="/user/settings/calls"})
+        labels:
+          service: "user-service"
+          operation: "user.user_settings.UpdateCallSettings"
+          contract_metric: "user_settings_calls_update"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="user-service",method="PATCH",route="/user/settings/notifications"})
+        labels:
+          service: "user-service"
+          operation: "user.user_settings.UpdateNotificationSettings"
+          contract_metric: "user_settings_notifications_update"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="user-service",method="PATCH",route="/user/settings/notifications"})
+        labels:
+          service: "user-service"
+          operation: "user.user_settings.UpdateNotificationSettings"
+          contract_metric: "user_settings_notifications_update"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="user-service",method="PATCH",route="/user/settings/privacy"})
+        labels:
+          service: "user-service"
+          operation: "user.user_settings.UpdatePrivacySettings"
+          contract_metric: "user_settings_privacy_update"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="user-service",method="PATCH",route="/user/settings/privacy"})
+        labels:
+          service: "user-service"
+          operation: "user.user_settings.UpdatePrivacySettings"
+          contract_metric: "user_settings_privacy_update"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"

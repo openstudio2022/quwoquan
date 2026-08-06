@@ -77,15 +77,7 @@ consumers:
     capabilities:
       - project_tag_feedback_fact
 contract_test:
-  mock_strategy:
-    app_side:
-      mock_target: tag-service API
-      scenarios:
-        - name: feedback_append_accepted
-          route: POST /tag/feedback
-          assertions:
-            - status_200
-            - accepted_true
+  test_strategy:
     service_side:
       description: 真实 Mongo 验证 (actorId, idempotencyKey) 唯一约束与重放
       real_engines:
@@ -96,3 +88,21 @@ contract_test:
           assertions:
             - 同 actor 同 Idempotency-Key 重放只落一条事实
             - 同 key 不同 payload 返回 TAG.USER.feedback_idempotency_conflict
+
+readiness_cases:
+- case_id: report-tag-feedback-local
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/career-interest-profile-editor/spec.md#gwt-002
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ReportTagFeedback}
+  runner_source_path: quwoquan_service/services/tag-service/tests/local_contract/tag/tag_feedback_fact/tag_feedback_facade__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: report-tag-feedback-api
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/career-interest-profile-editor/spec.md#gwt-002
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ReportTagFeedback}
+  runner_source_path: quwoquan_service/services/tag-service/tests/api_integration/tag/tag_feedback_fact/tag_feedback_contract__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}

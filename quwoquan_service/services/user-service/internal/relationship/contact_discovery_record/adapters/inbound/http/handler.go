@@ -58,7 +58,9 @@ func (handler *Handler) handleInitiateContactDiscovery(w http.ResponseWriter, r 
 			phones = append(phones, s)
 		}
 	}
-	record, err := handler.service.Initiate(r.Context(), userID, phones)
+	record, err := handler.service.Initiate(
+		r.Context(), userID, phones, idempotencyKey(r),
+	)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -154,7 +156,9 @@ func (handler *Handler) handleDismissContactDiscovery(w http.ResponseWriter, r *
 		return
 	}
 	id := r.PathValue("id")
-	if err := handler.service.Dismiss(r.Context(), userID, id); err != nil {
+	if err := handler.service.Dismiss(
+		r.Context(), userID, id, idempotencyKey(r),
+	); err != nil {
 		writeHTTPError(w, r, err)
 		return
 	}
@@ -188,6 +192,14 @@ func actorAccountID(r *http.Request) string {
 		return ""
 	}
 	return strings.TrimSpace(current.Actor.AccountID)
+}
+
+func idempotencyKey(r *http.Request) string {
+	current, ok := operation.FromContext(r.Context())
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(current.IdempotencyKey)
 }
 
 func actorPersonaID(r *http.Request) (string, error) {

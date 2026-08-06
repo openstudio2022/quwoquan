@@ -23,9 +23,10 @@ collections:
         objectId: 1
         eventType: 1
         createdAt: -1
-    ttl:
-      field: createdAt
-      seconds: 7776000
+    - name: ttl_search_feedback_events
+      keys:
+        createdAt: 1
+      expire_after_seconds: 7776000
   search_feedback_command_receipts:
     entity: SearchFeedbackCommandReceipt
     role: authoritative
@@ -40,7 +41,7 @@ collections:
     - name: idx_search_feedback_receipt_expiry
       keys:
         expiresAt: 1
-      expireAfterSeconds: 0
+      expire_after_seconds: 0
   search_feedback_signal_deliveries:
     entity: SearchFeedbackSignalDelivery
     role: authoritative
@@ -53,4 +54,4 @@ collections:
     - name: idx_search_feedback_signal_delivery_expiry
       keys:
         expiresAt: 1
-      expireAfterSeconds: 0
+      expire_after_seconds: 0

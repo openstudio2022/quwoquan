@@ -150,8 +150,8 @@
 
 ## 7. 工程归属
 
-- App：`quwoquan_app/lib/ui/intersection`、`quwoquan_app/lib/components/object_page`
-- App（协作引用，不用于代码归属）：`quwoquan_app/lib/ui/entity`
+- App：`quwoquan_app/lib/design_system/object_page`
+- App（协作引用，不用于代码归属）：`quwoquan_app/lib/service/entity_service`、`quwoquan_app/lib/service/content_service`、`quwoquan_app/lib/service/circle_service`、`quwoquan_app/lib/service/user_service`
 - Contracts（协作引用，不用于代码归属）：`quwoquan_service/services/entity-service/contracts`
 - Contracts（协作引用，不用于代码归属）：`quwoquan_service/services/content-service/contracts`、`quwoquan_service/services/user-service/contracts`
 - Service（协作引用，不用于代码归属）：`quwoquan_service/services/recommendation-service`、`quwoquan_service/services/entity-service`、`quwoquan_service/services/content-service`、`quwoquan_service/services/user-service`

@@ -66,10 +66,23 @@ CREATE TABLE IF NOT EXISTS skill_user_setting_outbox (
   payload_json JSONB NOT NULL,
   occurred_at TIMESTAMPTZ NOT NULL,
   dispatched_at TIMESTAMPTZ NULL,
+	claim_owner TEXT NULL,
+	claimed_at TIMESTAMPTZ NULL,
+	next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	attempt_count INTEGER NOT NULL DEFAULT 0,
+	last_error_code TEXT NULL,
   UNIQUE(aggregate_id, aggregate_revision, event_type)
 );
+ALTER TABLE skill_user_setting_outbox
+  ADD COLUMN IF NOT EXISTS claim_owner TEXT NULL,
+  ADD COLUMN IF NOT EXISTS claimed_at TIMESTAMPTZ NULL,
+  ADD COLUMN IF NOT EXISTS next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  ADD COLUMN IF NOT EXISTS attempt_count INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS last_error_code TEXT NULL;
 CREATE INDEX IF NOT EXISTS idx_skill_user_setting_outbox_pending
   ON skill_user_setting_outbox(dispatched_at, occurred_at);
+CREATE INDEX IF NOT EXISTS idx_skill_user_setting_outbox_delivery_head
+  ON skill_user_setting_outbox(dispatched_at, next_attempt_at, occurred_at, event_id);
 `)
 	if err != nil {
 		return unavailable("ensure canonical schema", err)

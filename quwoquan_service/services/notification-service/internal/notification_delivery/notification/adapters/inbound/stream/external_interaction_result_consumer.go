@@ -11,7 +11,6 @@ import (
 
 	runtimemessaging "quwoquan_service/runtime/messaging"
 	"quwoquan_service/runtime/reliabletask"
-	notification "quwoquan_service/services/notification-service/internal/notification_delivery/notification/domain"
 	deliveryapplication "quwoquan_service/services/notification-service/internal/notification_delivery/notification_delivery_job/application"
 )
 
@@ -242,23 +241,23 @@ func (consumer *ExternalInteractionResultConsumer) ackAndClear(
 
 func decodeExternalInteractionResult(
 	fields []runtimemessaging.DurableField,
-) (notification.ExternalInteractionResultEvent, error) {
+) (deliveryapplication.ExternalInteractionResultEvent, error) {
 	values := durableFieldsToMap(fields)
 	if strings.TrimSpace(values["eventType"]) != "ExternalInteractionResultReported" ||
 		!strings.HasPrefix(strings.TrimSpace(values["requestId"]), "incoming-call-") {
-		return notification.ExternalInteractionResultEvent{}, errIrrelevantExternalInteractionResult
+		return deliveryapplication.ExternalInteractionResultEvent{}, errIrrelevantExternalInteractionResult
 	}
 	for _, forbidden := range []string{"providerRequestId", "callbackUrl", "payload", "secret"} {
 		if strings.TrimSpace(values[forbidden]) != "" {
-			return notification.ExternalInteractionResultEvent{},
+			return deliveryapplication.ExternalInteractionResultEvent{},
 				fmt.Errorf("external interaction result contains forbidden field %s", forbidden)
 		}
 	}
 	occurredAt, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(values["occurredAt"]))
 	if err != nil {
-		return notification.ExternalInteractionResultEvent{}, fmt.Errorf("invalid result occurredAt: %w", err)
+		return deliveryapplication.ExternalInteractionResultEvent{}, fmt.Errorf("invalid result occurredAt: %w", err)
 	}
-	event := notification.ExternalInteractionResultEvent{
+	event := deliveryapplication.ExternalInteractionResultEvent{
 		AttemptID: strings.TrimSpace(values["attemptId"]), RequestID: strings.TrimSpace(values["requestId"]),
 		Operation: strings.TrimSpace(values["operation"]), Status: strings.TrimSpace(values["status"]),
 		Provider: strings.TrimSpace(values["provider"]), ProviderRequestDigest: strings.TrimSpace(values["providerRequestDigest"]),
@@ -268,25 +267,25 @@ func decodeExternalInteractionResult(
 	if event.AttemptID == "" || event.Operation != reliabletask.ExternalInteractionOperationPush ||
 		event.Status == "" || event.Provider == "" || event.ProviderRequestDigest == "" ||
 		event.RecoveryAction == "" {
-		return notification.ExternalInteractionResultEvent{}, errors.New("external interaction result is incomplete")
+		return deliveryapplication.ExternalInteractionResultEvent{}, errors.New("external interaction result is incomplete")
 	}
 	if strings.TrimSpace(values["eventId"]) != event.AttemptID {
-		return notification.ExternalInteractionResultEvent{},
+		return deliveryapplication.ExternalInteractionResultEvent{},
 			errors.New("external interaction result eventId must equal attemptId")
 	}
 	switch event.Status {
 	case reliabletask.ExternalInteractionStatusSentUnconfirmed:
 		if event.RecoveryAction != "none" {
-			return notification.ExternalInteractionResultEvent{},
+			return deliveryapplication.ExternalInteractionResultEvent{},
 				errors.New("accepted provider result must have recoveryAction none")
 		}
 	case reliabletask.ExternalInteractionStatusFailed:
 		if event.RecoveryAction != "retry" && event.RecoveryAction != "escalate" {
-			return notification.ExternalInteractionResultEvent{},
+			return deliveryapplication.ExternalInteractionResultEvent{},
 				errors.New("failed provider result must declare retry or escalate")
 		}
 	default:
-		return notification.ExternalInteractionResultEvent{},
+		return deliveryapplication.ExternalInteractionResultEvent{},
 			fmt.Errorf("provider result status %q is not permitted", event.Status)
 	}
 	return event, nil

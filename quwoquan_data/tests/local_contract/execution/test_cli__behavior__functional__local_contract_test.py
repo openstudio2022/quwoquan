@@ -33,6 +33,46 @@ def test_task_help():
     assert "execute" in result.stdout
 
 
+def test_plan_images_help_has_side_effect_free_cold_start():
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-B",
+            str(CLI_PATH),
+            "task",
+            "plan-images",
+            "--help",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "usage: qwq-data task plan-images" in result.stdout
+
+
+def test_campaign_parser_import_has_side_effect_free_cold_start():
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-B",
+            "-c",
+            (
+                "import argparse; "
+                "from content.execution.handler import register_parser; "
+                "parser = argparse.ArgumentParser(); "
+                "register_parser(parser.add_subparsers(dest='command'))"
+            ),
+        ],
+        cwd=SCRIPTS_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "partially initialized module" not in result.stderr
+
+
 @pytest.mark.parametrize("retired_command", ["explore", "produce"])
 def test_retired_top_level_commands_are_rejected(retired_command: str):
     result = subprocess.run(

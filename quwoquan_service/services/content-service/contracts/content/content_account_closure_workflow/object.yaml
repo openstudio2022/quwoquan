@@ -10,14 +10,9 @@ access:
   cross_context: event_only
   queries: none
 relationships: []
-capabilities:
-- consume_event
-- idempotent_command
-- outbox
-- privacy_cleanup
 business_rules:
 - 工作流只消费 canonical UserAccountClosed；不得从 DLQ 摘要或客户端请求重建原始主体 payload。
-- 工作流只清理 Content 服务拥有的聚合、事实、投影、搜索文档与媒体对象；Recommendation、User、Search 等服务必须独立消费同一事件并清理各自数据，Content 禁止跨库代删。
+- 工作流只清理 Content 服务拥有的聚合、事实、投影、发件箱记录、搜索文档与媒体对象；清理兄弟对象的发件箱集合不等于本工作流拥有发件箱，工作流自身不产出事件。Recommendation、User、Search 等服务必须独立消费同一事件并清理各自数据，Content 禁止跨库代删。
 - Mongo、Search 与媒体公开切片全部完成后才能推进 completedAt 并 ACK source PEL。
 - 失败按有限重试收敛；terminal marker 不设 TTL，只能由受控恢复操作释放。
 - 防复活 tombstone 只存独立密钥 HMAC-SHA256(subjectId)，禁止保存 userId/personaId 原值且永久保留。

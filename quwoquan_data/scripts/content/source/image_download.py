@@ -1,76 +1,76 @@
 """Download image, source-unit cache and rejection helpers."""
 from __future__ import annotations
 
-import argparse
-from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
 import hashlib
-import json
-import os
+from collections.abc import Mapping, Sequence
+from datetime import datetime, timezone
 from pathlib import Path
-import shutil
-import sys
-import tempfile
-from threading import Lock
-from typing import Any, Mapping, Sequence
+from typing import Any
 
-from core.paths import ensure_execution_command_layout, execution_root
-from core.io import read_json, write_json
-from content.execution.runtime_state import write_execution_runtime_state, write_source_catalog
-from content.post.article.evidence_text import clean_source_markdown, score_source_markdown
-from governance.coverage.entity_extract import entity_ref as build_entity_ref, require_domain_etype
-from core.source_catalog import (
-    coverage_issues,
-    platform_category,
-    source_category_coverage,
-    source_unit_category_issues,
-    vertical_from_task_id,
-)
-from content.source.source_unit import (
-    find_source_unit_raw_snapshot,
-    iter_source_units,
-    remove_object_source_ref,
-    resolve_entity_object_dir,
-    write_source_unit,
-)
-from core.image_rules import MIN_ENTITY_IMAGES, pixel_size_issue, relevance_issue
-from core.image_safety import assess_image, assess_image_cached, dedupe_image_payloads
 from core.image_decode import probe_image_bytes
+from core.image_rules import pixel_size_issue, relevance_issue
+from core.image_safety import dedupe_image_payloads
 from core.page_media import (
     DownloadedPageAsset,
     PageImageDropCode,
     PageImagePlacement,
     PageImagePlacementType,
 )
-from content.execution.stage_reports import write_gate_report, write_stage_result
-from content.source.gate import download_requirements, gate_download
-from content.source.source_inputs import (
-    curated_sources_for_entity,
-    curated_images_for_entity,
-    manual_body_note,
-    source_plan_rights_issues,
-    source_frontmatter,
+from governance.coverage.distribution import (
+    AcquisitionStatus,
+    RightsStatus,
+    image_distribution_decision,
 )
-from content.source.fetch_payload import fetch_source_payload
-from content.source.fetch_images import fetch_image_payload, fetch_page_image_payload
-from content.source.prepare import prepare_source_plan, prepare_source_screen
 from governance.coverage.license import (
     normalize_rights_payload,
     validate_image_rights,
 )
-from content.source.contracts import MediaProvenance
 
-from content.source.handler_plan import SOURCE_UNIT_MAX_IMAGE_BYTES, _source_unit_lane_in_scope
+from content.source.contracts import MediaProvenance
+from content.source.fetch_images import fetch_image_payload, fetch_page_image_payload
+from content.source.handler_images import (
+    _assess_source_image,
+    _cached_source_image_payload,
+    _cleanup_image_check_temp_file,
+    _write_image_check_temp_file,
+)
+from content.source.handler_plan import (
+    SOURCE_UNIT_MAX_IMAGE_BYTES,
+)
 from content.source.source_asset_identity import (
-    source_screen_report_ref as _source_screen_report_ref,
     stable_source_image_collection_id,
 )
 
-from content.source.handler_images import (
-    _assess_source_image, _cached_source_image_payload,
-    _cleanup_image_check_temp_file, _write_image_check_temp_file,
-)
+
+def _acquired_asset_contract(
+    asset: Mapping[str, Any],
+    *,
+    provenance: MediaProvenance,
+    captured_at: str,
+) -> dict[str, Any]:
+    """Project one successful download through the governed asset policy."""
+
+    acquisition_status = AcquisitionStatus.ACQUIRED
+    rights_status = RightsStatus(provenance.rights_audit_status.value)
+    authorization_proof = str(asset.get("authorizationProof") or "").strip()
+    return {
+        "acquisitionStatus": acquisition_status.value,
+        "rightsStatus": rights_status.value,
+        "authorizationRequired": (
+            rights_status is not RightsStatus.VERIFIED or not authorization_proof
+        ),
+        "distributionDecision": image_distribution_decision(
+            acquisition_status=acquisition_status,
+            rights_status=rights_status,
+            authorization_proof=authorization_proof,
+            usage_scope=str(asset.get("usageScope") or ""),
+            model_release_status=str(asset.get("modelReleaseStatus") or ""),
+        ).value,
+        "capturedAt": captured_at,
+        "contentSha256": "sha256:"
+        + hashlib.sha256(bytes(asset["bytes"])).hexdigest(),
+        "rightsIssues": list(provenance.rights_audit_issues),
+    }
 
 def _download_source_unit_images(
     source: Mapping[str, Any],
@@ -153,20 +153,18 @@ def _download_source_unit_images(
             )
             continue
         spec = {
-            **{
-                "license": source.get("license") or "",
-                "credit": source.get("credit") or "",
-                "termsUrl": source.get("termsUrl") or "",
-                "licenseSnapshot": source.get("licenseSnapshot") or "",
-                "authorizationProof": source.get("authorizationProof") or "",
-                "usageScope": source.get("usageScope") or "",
-                "modelReleaseStatus": source.get("modelReleaseStatus") or "not_required",
-                "sourceUrl": source.get("url") or "",
-                "platform": source.get("platform") or "",
-                "sourceCollectionId": "",
-                "creator": source.get("credit") or "",
-                "collectionPageUrl": source.get("url") or "",
-            },
+            "license": source.get("license") or "",
+            "credit": source.get("credit") or "",
+            "termsUrl": source.get("termsUrl") or "",
+            "licenseSnapshot": source.get("licenseSnapshot") or "",
+            "authorizationProof": source.get("authorizationProof") or "",
+            "usageScope": source.get("usageScope") or "",
+            "modelReleaseStatus": source.get("modelReleaseStatus") or "not_required",
+            "sourceUrl": source.get("url") or "",
+            "platform": source.get("platform") or "",
+            "sourceCollectionId": "",
+            "creator": source.get("credit") or "",
+            "collectionPageUrl": source.get("url") or "",
             **{k: v for k, v in raw.items() if v not in ("", None)},
         }
         spec["sourceCollectionId"] = stable_source_image_collection_id(
@@ -177,7 +175,6 @@ def _download_source_unit_images(
         label = f"{entity_id}/{source_id}#{idx_img}"
         spec_url = str(spec.get("url") or "")
         provenance = MediaProvenance.from_mapping(spec, vertical=vertical)
-        rights_audit_issues = list(provenance.rights_audit_issues)
         admission_spec = {
             **spec,
             "modelReleaseStatus": provenance.model_release_status.value,
@@ -301,6 +298,12 @@ def _download_source_unit_images(
             )
             continue
         rights = normalize_rights_payload(spec)
+        captured_at = str(
+            spec.get("capturedAt")
+            or spec.get("collectedAt")
+            or source.get("fetchedAt")
+            or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        ).strip()
         asset_payload = {
                 "bytes": payload["bytes"],
                 "ext": payload["ext"],
@@ -322,6 +325,7 @@ def _download_source_unit_images(
                 "syntheticDisclosure": rights.get("syntheticDisclosure") or "",
                 "sourceCollectionId": spec.get("sourceCollectionId") or "",
                 "creator": spec.get("creator") or spec.get("credit") or "",
+                "platform": spec.get("platform") or source.get("platform") or "",
                 "collectionPageUrl": spec.get("collectionPageUrl") or spec.get("sourceUrl") or "",
                 "authorizationProof": spec.get("authorizationProof") or "",
                 **provenance.audit_fields(),
@@ -385,6 +389,13 @@ def _download_source_unit_images(
                 ),
             )
             asset_payload.update(typed_asset.as_dict())
+        asset_payload.update(
+            _acquired_asset_contract(
+                asset_payload,
+                provenance=provenance,
+                captured_at=captured_at,
+            )
+        )
         images.append(asset_payload)
     downloaded_images = images
     images, duplicates = dedupe_image_payloads(downloaded_images)
@@ -414,8 +425,10 @@ def _download_source_unit_images(
         return (
             images,
             [
-                "DATA.MEDIA.DOWNLOAD_INCOMPLETE: "
-                f"{len(incomplete_downloads)} structured page image(s) failed to download"
+                (
+                    "DATA.MEDIA.DOWNLOAD_INCOMPLETE: "
+                    f"{len(incomplete_downloads)} structured page image(s) failed to download"
+                )
             ],
             funnel,
         )

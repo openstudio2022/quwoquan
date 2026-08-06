@@ -11,8 +11,8 @@ import (
 	"time"
 
 	rtauth "quwoquan_service/runtime/auth"
-	userintegration "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/integration"
 	application "quwoquan_service/services/user-service/internal/account/user_account/application/account_orchestration"
+	userintegration "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/integration"
 )
 
 func TestSubmitSMSOTPSetsRequiredIdempotencyKeyHeader(t *testing.T) {

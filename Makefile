@@ -28,8 +28,8 @@
 .PHONY: verify-app-content-ui-boundaries
 .PHONY: verify-app-remote-config-contract
 .PHONY: verify-app-native-edge-navigation
-.PHONY: verify-app-pageflip-back-mainline
-.PHONY: verify-app-pageflip-backward-mainline
+.PHONY: verify-app-pageflip-backward-static
+.PHONY: verify-app-pageflip-backward-tests
 .PHONY: verify-app-page-abc-governance
 .PHONY: verify-app-page-abc-governance-enforce-a
 .PHONY: verify-app-page-abc-governance-enforce-b
@@ -38,6 +38,7 @@
 .PHONY: verify-app-ui-map-literal-budget
 .PHONY: verify-app-assistant-search-weak-typing-ratchet
 .PHONY: verify-app-assistant-old-stack-retired
+.PHONY: probe-avatar-user-pool-gateway
 .PHONY: verify-assistant-agent-replay-evaluation
 .PHONY: verify-retired-terms-zero
 .PHONY: verify-app-production-data-source-single-path
@@ -56,6 +57,15 @@
 .PHONY: verify-local-port-manifest
 .PHONY: verify-public-vs-upstream-url-contract
 .PHONY: verify-domain-governance
+.PHONY: verify-python-script-governance
+.PHONY: verify-vertical-architecture-ratchet
+.PHONY: test-vertical-architecture-ratchet-local-contract
+.PHONY: sync-page-object-source-paths verify-page-object-source-paths
+.PHONY: generate-service-supply-chain
+.PHONY: verify-gamma-local-prod-isomorphism verify-alpha-https-public-plane
+.PHONY: verify-app-generated-fixture-assets verify-environment-stability-final-acceptance
+.PHONY: verify-github-artifact-lifecycle
+.PHONY: verify-emitted-error-code-declaration
 .PHONY: verify-login-dependency-config
 .PHONY: verify-env-packaging
 .PHONY: verify-env-instance-isolation
@@ -66,6 +76,10 @@
 .PHONY: observability-es-smoke
 .PHONY: verify-reliable-task-topology
 .PHONY: verify-service-architecture
+.PHONY: verify-coverage-ratchet
+.PHONY: verify-coverage-ratchet-app
+.PHONY: verify-coverage-ratchet-service
+.PHONY: write-coverage-ratchet-baseline
 .PHONY: verify-metadata
 .PHONY: build-app-env
 .PHONY: build-service-env
@@ -80,18 +94,23 @@
 .PHONY: verify-commercial-contract-generation
 .PHONY: verify-behavior-event-type-contract
 .PHONY: verify-object-relation-edge-type-contract
+.PHONY: verify-object-alert-coverage
+.PHONY: verify-object-evidence-closure
+.PHONY: verify-app-domain-remote-api-integration
 .PHONY: verify-homepage-type-contract
 .PHONY: verify-app-cloud-runtime-single-path
 .PHONY: verify-app-cloud-security-cutovers
 .PHONY: accept-app-contract-handoff
 .PHONY: verify-app-contract-handoff
 .PHONY: verify-app-generated-manifest
+.PHONY: verify-app-shell-navigation
 .PHONY: verify-app-cloud-package-boundaries
 .PHONY: codegen
 .PHONY: codegen-observability-catalog
 .PHONY: verify-observability-catalog
 .PHONY: verify-runtime-log-governance
 .PHONY: codegen-app
+.PHONY: codegen-app-shell-navigation
 .PHONY: codegen-ops-portal
 .PHONY: codegen-control-plane-runtime
 .PHONY: codegen-content-service
@@ -152,17 +171,17 @@ verify-app-runtime-host-literals:
 	@python3 quwoquan_app/scripts/env/verify_runtime_host_literals.py
 
 verify-app-concept-naming:
-	@python3 quwoquan_app/scripts/runtime/verify_concept_naming.py
+	@python3 quwoquan_app/scripts/runtime/architecture/verify_concept_naming.py
 
 # 端云错误码全集一致：云 errors.yaml code 集 == 客户端生成 *ErrorCode 枚举集
 verify-app-error-endcloud-parity:
-	@python3 quwoquan_app/scripts/runtime/verify_error_code_endcloud_parity.py
+	@python3 quwoquan_app/scripts/runtime/error/verify_error_code_endcloud_parity.py
 
 verify-app-domain-error-code-registry:
-	@python3 quwoquan_app/scripts/runtime/verify_domain_error_code_registry.py
+	@python3 quwoquan_app/scripts/runtime/error/verify_domain_error_code_registry.py
 
 verify-app-behavior-error-stack-convergence:
-	@python3 quwoquan_app/scripts/runtime/verify_behavior_error_stack_convergence.py
+	@python3 quwoquan_app/scripts/runtime/error/verify_behavior_error_stack_convergence.py
 
 # recovery 对齐：errors.yaml recovery_action -> 生成 Go .WithRecovery（factory 风格域）
 verify-service-error-recovery-alignment:
@@ -170,16 +189,16 @@ verify-service-error-recovery-alignment:
 
 # API 鉴权契约：security.auth_mode 真相源与端侧鉴权快照一致，核心受限入口必须 required
 verify-app-auth-policy:
-	@python3 quwoquan_app/scripts/auth/verify_auth_policy_contract.py
+	@python3 quwoquan_app/scripts/runtime/auth/verify_auth_policy_contract.py
 
 verify-app-login-entry-loop-contract:
-	@python3 quwoquan_app/scripts/auth/verify_login_entry_loop_contract.py
+	@python3 quwoquan_app/scripts/runtime/auth/verify_login_entry_loop_contract.py
 
 verify-app-permission-coordinator-adoption:
-	@python3 quwoquan_app/scripts/runtime/verify_permission_coordinator_adoption.py
+	@python3 quwoquan_app/scripts/runtime/auth/verify_permission_coordinator_adoption.py
 
 verify-app-permission-primer-copy:
-	@python3 quwoquan_app/scripts/runtime/verify_permission_primer_copy.py
+	@python3 quwoquan_app/scripts/runtime/auth/verify_permission_primer_copy.py
 
 verify-app-startup-ttid:
 	@python3 quwoquan_ops/gate/verify_python_syntax.py \
@@ -188,16 +207,16 @@ verify-app-startup-ttid:
 		quwoquan_app/scripts/device/verify_startup_web.py \
 		quwoquan_app/scripts/device/verify_welcome_motion_frames.py
 	@python3 quwoquan_app/scripts/device/verify_startup_ttid_baseline.py
-	@python3 quwoquan_app/test/local_contract/app/startup_welcome_motion_probe__local_contract_test.py
+	@python3 quwoquan_app/test/local_contract/runtime/startup_welcome_motion_probe__local_contract_test.py
 
 verify-app-startup-environment-pr:
 	@python3 quwoquan_ops/gate/verify_python_syntax.py \
 		quwoquan_app/scripts/device/verify_flutter_run_defines.py \
 		quwoquan_app/scripts/device/verify_ios_hot_restart.py
-	@python3 quwoquan_app/scripts/runtime/verify_startup_environment_matrix.py
-	@python3 quwoquan_app/test/local_contract/app/ios_runtime_dart_defines__local_contract_test.py
-	@python3 quwoquan_app/test/local_contract/app/ios_hot_restart_launcher__local_contract_test.py
-	@python3 quwoquan_app/test/local_contract/app/startup_probe_parser__local_contract_test.py
+	@python3 quwoquan_app/scripts/runtime/platform/verify_startup_environment_matrix.py
+	@python3 quwoquan_app/test/local_contract/runtime/ios_runtime_dart_defines__local_contract_test.py
+	@python3 quwoquan_app/test/local_contract/runtime/ios_hot_restart_launcher__local_contract_test.py
+	@python3 quwoquan_app/test/local_contract/runtime/startup_probe_parser__local_contract_test.py
 
 verify-app-ios-hot-restart:
 	@test -n "$(IOS_SIMULATOR_ID)" || { echo "IOS_SIMULATOR_ID is required"; exit 2; }
@@ -211,7 +230,7 @@ verify-app-startup-environment-uat:
 	@test -n "$(STARTUP_RELEASE_ID)" || { echo "GATE_BLOCK: STARTUP_RELEASE_ID is required"; exit 2; }
 	@test -n "$(STARTUP_RELEASE_DIGEST)" || { echo "GATE_BLOCK: STARTUP_RELEASE_DIGEST is required"; exit 2; }
 	@REPORT_PATH="$$(cd "$(STARTUP_EVIDENCE_ROOT)" && pwd)/startup-environment-matrix-report.json"; \
-	python3 quwoquan_app/scripts/runtime/verify_startup_environment_matrix.py \
+	python3 quwoquan_app/scripts/runtime/platform/verify_startup_environment_matrix.py \
 		--evidence-root "$(STARTUP_EVIDENCE_ROOT)" \
 		--require-runtime-evidence \
 		--require-readback \
@@ -223,7 +242,7 @@ verify-app-startup-environment-uat:
 		--release-digest "$(STARTUP_RELEASE_DIGEST)" \
 		--report "$$REPORT_PATH" && \
 	cd quwoquan_app && flutter test \
-		test/user_acceptance/quality/performance/startup_dual_platform_matrix__user_acceptance_test.dart \
+		test/user_acceptance/journeys/app_startup/startup_dual_platform_matrix__user_acceptance_test.dart \
 		--dart-define=QWQ_STARTUP_MATRIX_REPORT="$$REPORT_PATH"
 
 verify-app-startup-observability-release:
@@ -231,7 +250,7 @@ verify-app-startup-observability-release:
 	@test -n "$(STARTUP_BASELINE_ID)" || { echo "GATE_BLOCK: STARTUP_BASELINE_ID is required"; exit 2; }
 	@test -n "$(STARTUP_RELEASE_ID)" || { echo "GATE_BLOCK: STARTUP_RELEASE_ID is required"; exit 2; }
 	@test -n "$(STARTUP_RELEASE_DIGEST)" || { echo "GATE_BLOCK: STARTUP_RELEASE_DIGEST is required"; exit 2; }
-	@python3 quwoquan_app/scripts/runtime/verify_startup_environment_matrix.py \
+	@python3 quwoquan_app/scripts/runtime/platform/verify_startup_environment_matrix.py \
 		--evidence-root "$(STARTUP_EVIDENCE_ROOT)" \
 		--require-runtime-evidence \
 		--require-readback \
@@ -243,15 +262,15 @@ verify-app-startup-observability-release:
 		--release-digest "$(STARTUP_RELEASE_DIGEST)"
 
 verify-app-experience-observability:
-	@python3 quwoquan_app/scripts/runtime/verify_ops_event_schema_completeness.py
+	@python3 quwoquan_app/scripts/runtime/observability/verify_ops_event_schema_completeness.py
 	@python3 -m unittest \
 		quwoquan_ops.tests.local_contract.test_app_experience_observability__contract__local_contract_test
 
 verify-app-recoverable-error-surface:
-	@python3 quwoquan_app/scripts/runtime/verify_app_recoverable_error_surface.py
+	@python3 quwoquan_app/scripts/runtime/error/verify_app_recoverable_error_surface.py
 
 verify-app-dual-platform-usability-baseline:
-	@python3 quwoquan_app/scripts/runtime/verify_dual_platform_usability_baseline.py
+	@python3 quwoquan_app/scripts/runtime/platform/verify_dual_platform_usability_baseline.py
 	@$(MAKE) verify-app-startup-environment-pr
 	@$(MAKE) verify-app-recoverable-error-surface
 	@$(MAKE) verify-app-page-horizontal-quality
@@ -265,22 +284,22 @@ build-app-startup-environment-matrix:
 		--ios-simulator-id "$(IOS_SIMULATOR_ID)"
 
 verify-app-lib-test-only-symbols:
-	@python3 quwoquan_app/scripts/runtime/verify_lib_no_test_only_symbols.py
+	@python3 quwoquan_app/scripts/runtime/architecture/verify_lib_no_test_only_symbols.py
 
 # lib 不得 import test/ 树；约束由门禁源码直接表达。
 verify-app-lib-no-test-import:
-	@python3 quwoquan_app/scripts/runtime/verify_lib_no_import_test_tree.py
+	@python3 quwoquan_app/scripts/runtime/architecture/verify_lib_no_import_test_tree.py
 
 verify-app-content-ui-boundaries:
-	@python3 quwoquan_app/scripts/content/verify_content_ui_directory_boundaries.py
+	@python3 quwoquan_app/scripts/content_service/verify_content_ui_directory_boundaries.py
 
 verify-app-remote-config-contract:
-	@python3 quwoquan_app/scripts/runtime/verify_app_remote_config_contract.py
+	@python3 quwoquan_app/scripts/runtime/cloud/verify_app_remote_config_contract.py
 
 verify-app-production-data-source-single-path:
-	@python3 quwoquan_app/scripts/runtime/verify_production_data_source_single_path.py
+	@python3 quwoquan_app/scripts/runtime/cloud/verify_production_data_source_single_path.py
 	@python3 -m unittest \
-		quwoquan_app.test.local_contract.app.production_release_artifact__local_contract_test
+		quwoquan_app.test.local_contract.runtime.production_release_artifact__local_contract_test
 
 verify-production-wiring-purity: verify-app-mock-isolation verify-app-lib-test-only-symbols verify-app-production-data-source-single-path verify-app-cloud-package-boundaries verify-provider-substitute-prod-purity
 
@@ -304,6 +323,10 @@ verify-app-web-offline-resources:
 
 verify-app-assistant-old-stack-retired:
 	@python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/assistant-service/gate/verify_assistant_old_stack_retired.py
+
+# 共享头像素材池经 beta gateway 的媒体派生探针（自带本地 media server + gateway，无需起环境）。
+probe-avatar-user-pool-gateway:
+	@python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/chat-service/smoke/probe_avatar_user_pool_gateway.py
 
 verify-quwoquan-data:
 	@python3 quwoquan_data/scripts/cli.py verify all
@@ -329,10 +352,10 @@ verify-login-dependency-config:
 	@python3 quwoquan_service/scripts/verify/verify_login_dependency_config.py
 
 verify-markdown-article-no-article-document:
-	@python3 quwoquan_app/scripts/content/verify_markdown_article_no_article_document.py
+	@python3 quwoquan_app/scripts/content_service/content/post/verify_markdown_article_no_article_document.py
 
 verify-article-contract-purity:
-	@python3 quwoquan_app/scripts/content/verify_article_contract_purity.py
+	@python3 quwoquan_app/scripts/content_service/content/post/verify_article_contract_purity.py
 
 verify-app-env-package:
 	@python3 quwoquan_ops/cli/stackctl.py --output-format json package --env alpha >/dev/null
@@ -365,13 +388,59 @@ verify-public-vs-upstream-url-contract:
 verify-domain-governance:
 	@python3 quwoquan_ops/gate/verify_domain_governance.py
 
+verify-python-script-governance:
+	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/gate/verify_python_script_governance.py --scope all --mode check
+
+# 垂类架构静态防回退：存量债务只减不增，已退役 travel-service 永久零缺口。
+verify-vertical-architecture-ratchet:
+	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/gate/verify_vertical_architecture_ratchet.py
+
+sync-page-object-source-paths:
+	@python3 quwoquan_service/scripts/contracts/sync_page_object_source_paths.py --with-gate
+
+verify-page-object-source-paths:
+	@python3 quwoquan_service/scripts/contracts/sync_page_object_source_paths.py --check --fail-on-review
+
+generate-service-supply-chain:
+	@test -n "$(SERVICE)" -a -n "$(ENV)" -a -n "$(PACKAGE_DIR)" || { \
+		echo "usage: make generate-service-supply-chain SERVICE=<service> ENV=<env> PACKAGE_DIR=<path>"; \
+		exit 2; \
+	}
+	@python3 quwoquan_service/scripts/runtime/generate_service_supply_chain.py \
+		--service "$(SERVICE)" --env "$(ENV)" --package-dir "$(PACKAGE_DIR)"
+
+verify-gamma-local-prod-isomorphism:
+	@python3 quwoquan_ops/environments/verify/verify_gamma_local_prod_isomorphism.py
+
+verify-alpha-https-public-plane:
+	@python3 quwoquan_ops/gate/verify_alpha_https_public_plane.py
+
+verify-app-generated-fixture-assets:
+	@python3 quwoquan_ops/gate/verify_app_generated_fixture_assets.py
+
+verify-environment-stability-final-acceptance:
+	@python3 quwoquan_ops/gate/verify_environment_stability_final_acceptance.py $(ENVIRONMENT_STABILITY_ARGS)
+
+verify-github-artifact-lifecycle:
+	@python3 quwoquan_ops/gate/verify_github_artifact_lifecycle.py
+
+# 反向错误码治理：实现发射了 stable code 但两个声明源都没有声明位。
+# 存量以显式基线清单登记、只减不增；新增未声明码与新增解析盲点立刻 BLOCK。
+verify-emitted-error-code-declaration:
+	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/gate/verify_emitted_error_code_declaration.py
+	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/tests/local_contract/test_emitted_error_code_declaration__contract__local_contract_test.py
+
 verify-env-packaging:
 	@deploy_work_root="$$(mktemp -d "$${TMPDIR:-/tmp}/quwoquan-deploy.XXXXXX")"; \
 	trap 'rm -rf "$$deploy_work_root"' EXIT; \
-	QWQ_DEPLOY_WORK_ROOT="$$deploy_work_root" python3 quwoquan_ops/cli/stackctl.py --output-format json package --env alpha --include-services >/dev/null && \
-	QWQ_DEPLOY_WORK_ROOT="$$deploy_work_root" python3 quwoquan_ops/cli/stackctl.py --output-format json package --env beta --include-services >/dev/null && \
-	QWQ_DEPLOY_WORK_ROOT="$$deploy_work_root" python3 quwoquan_ops/cli/stackctl.py --output-format json package --env gamma --include-services >/dev/null && \
-	QWQ_DEPLOY_WORK_ROOT="$$deploy_work_root" python3 quwoquan_ops/cli/stackctl.py --output-format json package --env prod --include-services >/dev/null && \
+	candidate="$$deploy_work_root/candidate-release.json"; \
+	rollback="$$deploy_work_root/rollback-release.json"; \
+	printf '%s\n' '{"schema":"quwoquan_data.release_attestation","releaseId":"packaging-contract-candidate","payloadSha256":"sha256:1111111111111111111111111111111111111111111111111111111111111111"}' >"$$candidate"; \
+	printf '%s\n' '{"schema":"quwoquan_data.release_attestation","releaseId":"packaging-contract-rollback","payloadSha256":"sha256:2222222222222222222222222222222222222222222222222222222222222222"}' >"$$rollback"; \
+	QWQ_DEPLOY_WORK_ROOT="$$deploy_work_root" python3 quwoquan_ops/cli/stackctl.py --output-format json package --env alpha --include-services --release-attestation "$$candidate" --rollback-release-attestation "$$rollback" >/dev/null && \
+	QWQ_DEPLOY_WORK_ROOT="$$deploy_work_root" python3 quwoquan_ops/cli/stackctl.py --output-format json package --env beta --include-services --release-attestation "$$candidate" --rollback-release-attestation "$$rollback" >/dev/null && \
+	QWQ_DEPLOY_WORK_ROOT="$$deploy_work_root" python3 quwoquan_ops/cli/stackctl.py --output-format json package --env gamma --include-services --release-attestation "$$candidate" --rollback-release-attestation "$$rollback" >/dev/null && \
+	QWQ_DEPLOY_WORK_ROOT="$$deploy_work_root" python3 quwoquan_ops/cli/stackctl.py --output-format json package --env prod --include-services --release-attestation "$$candidate" --rollback-release-attestation "$$rollback" >/dev/null && \
 	QWQ_DEPLOY_WORK_ROOT="$$deploy_work_root" python3 quwoquan_ops/gate/verify_environment_packaging_contract.py && \
 	QWQ_DEPLOY_WORK_ROOT="$$deploy_work_root" python3 quwoquan_ops/gate/verify_env_artifact_isolation.py && \
 	QWQ_DEPLOY_WORK_ROOT="$$deploy_work_root" python3 quwoquan_app/scripts/env/verify_prod_package_purity.py
@@ -394,14 +463,30 @@ observability-es-smoke:
 	@python3 quwoquan_ops/cli/stackctl.py --output-format json product-telemetry-log-sink --target "$(OBSERVABILITY_TARGET)" --action all
 
 verify-reliable-task-topology:
-	@python3 quwoquan_service/scripts/recommendation/verify_reliable_task_catalog.py
-	@python3 quwoquan_service/scripts/recommendation/verify_reliable_task_retention_policy.py
+	@python3 quwoquan_service/scripts/runtime/reliabletask/verify_reliable_task_catalog.py
+	@python3 quwoquan_service/scripts/runtime/reliabletask/verify_reliable_task_retention_policy.py
 	@python3 quwoquan_service/scripts/runtime/verify_module_permission_scope.py
-	@python3 quwoquan_service/scripts/recommendation/verify_reliable_task_migration.py
+	@python3 quwoquan_service/scripts/runtime/reliabletask/verify_reliable_task_migration.py
 
 verify-service-architecture:
 	@find . \( -path './.git' -o -path './.qwq_output' \) -prune -o -type d \( -name '__pycache__' -o -name '.pytest_cache' \) -exec rm -rf {} + ; true
 	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/gate/verify_service_architecture.py
+
+# 覆盖率棘轮（端侧行/分支 + 云侧语句，只增不减）。--collect 会真跑测试采集覆盖率，
+# 因此比纯静态门禁慢；已挂入 gate_repo.sh 的 run_app / run_service 分支。
+verify-coverage-ratchet:
+	@python3 quwoquan_ops/gate/verify_coverage_ratchet.py --collect
+
+verify-coverage-ratchet-app:
+	@python3 quwoquan_ops/gate/verify_coverage_ratchet.py --collect --scope app
+
+verify-coverage-ratchet-service:
+	@python3 quwoquan_ops/gate/verify_coverage_ratchet.py --collect --scope service
+
+# 覆盖率提升后收紧基线。SCOPE=app|service|all，或 UNIT=service:tag-service。
+write-coverage-ratchet-baseline:
+	@python3 quwoquan_ops/gate/verify_coverage_ratchet.py --collect --write-baseline \
+		$(if $(UNIT),--unit $(UNIT),--scope $(if $(SCOPE),$(SCOPE),all))
 
 verify-metadata:
 	@$(MAKE) -C quwoquan_service verify-metadata
@@ -529,51 +614,51 @@ beta-status:
 
 # 页面质量：磁盘页面、canonical page object、route/surface 与强类型展示契约一致。
 verify-app-page-horizontal-quality: verify-app-page-object-contract
-	@python3 quwoquan_app/scripts/runtime/verify_page_abc_governance.py --quiet
+	@python3 quwoquan_app/scripts/runtime/page/verify_page_abc_governance.py --quiet
 
 verify-app-page-object-contract:
-	@python3 quwoquan_app/scripts/runtime/verify_page_object_contract.py
+	@python3 quwoquan_app/scripts/runtime/page/verify_page_object_contract.py
 
 verify-app-native-edge-navigation:
-	@python3 quwoquan_app/scripts/runtime/verify_native_edge_navigation.py
+	@python3 quwoquan_app/scripts/runtime/page/verify_native_edge_navigation.py
 
-verify-app-pageflip-back-mainline:
-	@python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/local_contract/ui/components/pageflip/pageflip_contract__local_contract_test.dart test/local_contract/quality/shared/pageflip/pageflip_diagnostics_visual__local_contract_test.dart test/local_contract/ui/components/pageflip/pageflip_widget__local_contract_test.dart
+verify-app-pageflip-backward-tests:
+	@python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/local_contract/design_system/pageflip/pageflip_contract__local_contract_test.dart test/local_contract/design_system/pageflip/pageflip_diagnostics_visual__local_contract_test.dart test/local_contract/design_system/pageflip/pageflip_widget__local_contract_test.dart
 
 # 后翻路线 B 主线静态门禁（见 .cursor/rules/12-pageflip-backward-mainline.mdc）。
-verify-app-pageflip-backward-mainline:
-	@python3 quwoquan_app/scripts/content/verify_pageflip_backward_mainline.py
+verify-app-pageflip-backward-static:
+	@python3 quwoquan_app/scripts/content_service/content/post/verify_pageflip_backward_mainline.py
 
 # 页面 A/B/C 专项扫描；默认仅报告，按需加 --enforce-*。
 verify-app-page-abc-governance:
-	@python3 quwoquan_app/scripts/runtime/verify_page_abc_governance.py
+	@python3 quwoquan_app/scripts/runtime/page/verify_page_abc_governance.py
 
 verify-app-page-abc-governance-enforce-a:
-	@python3 quwoquan_app/scripts/runtime/verify_page_abc_governance.py --enforce-a
+	@python3 quwoquan_app/scripts/runtime/page/verify_page_abc_governance.py --enforce-a
 
 verify-app-page-abc-governance-enforce-b:
-	@python3 quwoquan_app/scripts/runtime/verify_page_abc_governance.py --enforce-b
+	@python3 quwoquan_app/scripts/runtime/page/verify_page_abc_governance.py --enforce-b
 
 verify-app-page-abc-governance-enforce-c:
-	@python3 quwoquan_app/scripts/runtime/verify_page_abc_governance.py --enforce-c
+	@python3 quwoquan_app/scripts/runtime/page/verify_page_abc_governance.py --enforce-c
 
 verify-app-page-abc-governance-enforce-all:
-	@python3 quwoquan_app/scripts/runtime/verify_page_abc_governance.py --enforce-a --enforce-b --enforce-c
+	@python3 quwoquan_app/scripts/runtime/page/verify_page_abc_governance.py --enforce-a --enforce-b --enforce-c
 
 # user_profile 头像 projection：凡暴露 avatar URL，必须显式带版本字段。
 verify-app-user-profile-avatar-projection-versions:
-	@python3 quwoquan_app/scripts/runtime/verify_user_profile_avatar_projection_versions.py
+	@python3 quwoquan_app/scripts/user_service/account/user_account/verify_user_profile_avatar_projection_versions.py
 
 # UI 层 Map<String,dynamic> 字面量防回退（见 quwoquan_ops/policies/gates/ui_map_literal_budget.json）
 verify-app-ui-map-literal-budget:
-	@python3 quwoquan_app/scripts/runtime/verify_ui_map_literal_budget.py
+	@python3 quwoquan_app/scripts/runtime/page/verify_ui_map_literal_budget.py
 
 verify-retired-terms-zero:
-	@python3 quwoquan_app/scripts/runtime/verify_retired_terms_zero.py
+	@python3 quwoquan_app/scripts/runtime/architecture/verify_retired_terms_zero.py
 
 # 推荐标签链路 StrictTyping：禁裸 Future<dynamic>/Future<Object?> 返回契约（cloud/services/tag）
 verify-app-cloud-tag-strict-typing:
-	@python3 quwoquan_app/scripts/runtime/verify_cloud_tag_strict_typing.py
+	@python3 quwoquan_app/scripts/tag_service/tag/verify_cloud_tag_strict_typing.py
 
 verify-global-increment-constraints:
 	@bash quwoquan_ops/gate/scaffold/verify_global_increment_constraints.sh
@@ -596,20 +681,43 @@ verify-behavior-event-type-contract:
 verify-object-relation-edge-type-contract:
 	@python3 quwoquan_ops/gate/verify_object_relation_edge_type_contract.py
 
+# 全域对象级告警覆盖：ContractGraph ready operation 必须有 recording rule +
+# alerting rule + dashboard PromQL 消费；--write 从 ContractGraph 重建派生产物。
+verify-object-alert-coverage:
+	@python3 quwoquan_service/scripts/verify/verify_object_alert_coverage.py
+	@python3 quwoquan_ops/tests/local_contract/test_object_alert_coverage__contract_graph_mapping__observability__local_contract_test.py
+
+# 对象 × 层 × 三层测试的 readiness 证据闭合：判定源是 metadata 装载/图构建管线派生的
+# ContractGraph（readinessEvidence + objectReadiness.missing），门禁只展开缺口，不重算
+# readiness 规则。缺省读 committed 图（其新鲜度由 quwoquan_service 的 qwq_contract check
+# 保证）；--derive 现场派生，--graph 指定任意图。存量缺口按维度 × kind 计数走棘轮基线。
+verify-object-evidence-closure:
+	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/gate/verify_object_evidence_closure.py
+	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/tests/local_contract/test_object_evidence_closure__ratchet_baseline__contract_graph__local_contract_test.py
+
+# 五域对象级 App api_integration 证据：ContractGraph 派生 generated Remote 用例与
+# service api_integration 配对，并以对象/文件计数单调棘轮阻断回退。
+verify-app-domain-remote-api-integration:
+	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/tests/local_contract/test_app_domain_remote_api_integration__ratchet__local_contract_test.py
+	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/gate/verify_app_domain_remote_api_integration.py
+
 verify-homepage-type-contract:
 	@python3 quwoquan_ops/gate/verify_homepage_type_contract.py
 
 verify-tag-collection-wiring:
 	@python3 quwoquan_ops/gate/verify_tag_collection_wiring.py
 
+verify-object-idempotency-dedup:
+	@python3 quwoquan_ops/gate/verify_object_idempotency_dedup.py
+
 verify-tag-closure-baseline:
 	@python3 quwoquan_data/scripts/cli.py governance taxonomy closure-scorecard --gate
 
 verify-app-cloud-runtime-single-path:
-	@python3 quwoquan_app/scripts/runtime/verify_cloud_runtime_single_path.py
+	@python3 quwoquan_app/scripts/runtime/cloud/verify_cloud_runtime_single_path.py
 
 verify-app-cloud-security-cutovers:
-	@python3 quwoquan_app/scripts/runtime/verify_cloud_security_cutovers.py
+	@python3 quwoquan_app/scripts/runtime/cloud/verify_cloud_security_cutovers.py
 
 accept-app-contract-handoff:
 	@python3 quwoquan_ops/cli/cloud_contract_handoff.py accept
@@ -618,10 +726,13 @@ verify-app-contract-handoff:
 	@python3 quwoquan_ops/cli/cloud_contract_handoff.py verify
 
 verify-app-generated-manifest:
-	@python3 quwoquan_app/scripts/runtime/verify_app_generated_manifest.py
+	@python3 quwoquan_app/scripts/runtime/codegen/verify_app_generated_manifest.py
+
+verify-app-shell-navigation:
+	@$(MAKE) -C quwoquan_service verify-app-shell-navigation
 
 verify-app-cloud-package-boundaries:
-	@python3 quwoquan_app/scripts/runtime/verify_cloud_package_boundaries.py
+	@python3 quwoquan_app/scripts/runtime/cloud/verify_cloud_package_boundaries.py
 
 # 助手手写（排除 generated）+ search_repository：Map/dynamic 只减不增棘轮。
 verify-app-assistant-search-weak-typing-ratchet:
@@ -652,7 +763,9 @@ gate:
 	@$(MAKE) verify-test-nonfunctional-coverage
 	# local_contract 只在 gate_repo scope 内跑一次，禁止与 test-local-contract 双跑。
 	@$(MAKE) verify-reliable-task-topology
-	@$(MAKE) verify-avatar-user-pool
+	# 原 verify-avatar-user-pool 依赖 app_*_seed_manifest.json / source_catalog.json，
+	# 随 seed manifest 退役一并删除；其治理职责由 gate_repo.sh 的
+	# verify_nonprod_business_data_provisioning.py 承接。
 	@$(MAKE) probe-avatar-user-pool-gateway
 	@$(MAKE) verify-markdown-article-no-article-document
 	@$(MAKE) verify-article-contract-purity
@@ -677,8 +790,8 @@ gate-local-gamma:
 		$(MAKE) verify-app-env-package; \
 		$(MAKE) verify-nonprod-business-data-provisioning; \
 		python3 quwoquan_ops/cli/stackctl.py up --env gamma --skip-app --workload full; \
-		python3 quwoquan_app/scripts/gamma/run_local_gamma_t3.py; \
-		bash quwoquan_app/scripts/gamma/run_local_gamma_t4.sh; \
+		python3 quwoquan_app/scripts/gamma/run_local_gamma_release_consumer_api.py; \
+		bash quwoquan_app/scripts/gamma/run_local_gamma_device_uat.sh; \
 		python3 quwoquan_app/scripts/gamma/verify_local_gamma_mirror.py; \
 	fi
 
@@ -729,12 +842,12 @@ verify:
 	@$(MAKE) verify-test-directory-layout
 	@$(MAKE) verify-test-nonfunctional-coverage
 	@$(MAKE) verify-feature-tree
-	@bash quwoquan_service/scripts/contract/verify_contract_metadata.sh
+	@bash quwoquan_service/scripts/verify/verify_contract_metadata.sh
 	@bash quwoquan_ops/environments/verify/verify_service_domain_layout.sh
 	@bash quwoquan_service/scripts/runtime/verify_runtime_packaging.sh
 	@bash quwoquan_ops/environments/verify/verify_ff_config_contract.sh
 	@$(MAKE) verify-reliable-task-topology
-	@bash quwoquan_service/scripts/recommendation/verify_recommendation_service_contract.sh
+	@bash quwoquan_service/scripts/recommendation-service/verify_recommendation_service_contract.sh
 	@$(MAKE) verify-quwoquan-data
 
 codegen:
@@ -752,7 +865,11 @@ verify-runtime-log-governance:
 codegen-app:
 	@$(MAKE) verify-app-contract-handoff
 	@$(MAKE) -C quwoquan_service codegen-app
+	@$(MAKE) codegen-app-shell-navigation
 	@$(MAKE) verify-app-generated-manifest
+
+codegen-app-shell-navigation:
+	@$(MAKE) -C quwoquan_service codegen-app-shell-navigation
 
 codegen-ops-portal:
 	@$(MAKE) -C quwoquan_service codegen-ops-portal
@@ -798,10 +915,28 @@ commit-gate:
 	@bash quwoquan_ops/gate/commit_gate.sh
 .PHONY: prepare-test-python verify-test-no-fake verify-test-nonfunctional-coverage verify-test-directory-layout verify-test-coverage-map
 .PHONY: verify-execution-profiles
-.PHONY: test-local-contract test-runtime-local-contract test-api-integration test-runtime-api-integration test-runtime-api-integration-gamma test-user-acceptance verify-homepage-performance-evidence
+.PHONY: test-local-contract test-app-python-local-contract test-runtime-local-contract test-api-integration test-runtime-api-integration test-runtime-api-integration-gamma test-user-acceptance verify-homepage-performance-evidence
 
 prepare-test-python:
 	@python3 quwoquan_ops/cli/prepare_test_python.py
+
+# 垂类架构唯一 local_contract 入口：target-only 控制面、永久零缺口与跨主题复用合同。
+test-vertical-architecture-ratchet-local-contract: prepare-test-python
+	@$(DATA_PYTHON) $(PYTEST_INTERPRETER_FLAGS) -c 'import pytest' || { \
+		echo "[test-vertical-architecture-ratchet-local-contract] FAIL: DATA_PYTHON missing pytest: $(DATA_PYTHON)"; \
+		exit 1; \
+	}
+	@$(PYTEST_RUNNER) $(PYTEST_INTERPRETER_FLAGS) -m pytest $(PYTEST_FLAGS) \
+		quwoquan_ops/tests/local_contract/test_travel_to_gathering_migration__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/test_vertical_architecture_ratchet__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/test_campus_gathering_reuse__metadata__local_contract_test.py \
+		-q
+
+# App Python local_contract 与 Flutter/Dart 使用同一 canonical layer 根；pytest
+# 只发现 *_test.py，因此不会重复执行同目录下的 Dart 测试。
+test-app-python-local-contract: prepare-test-python
+	@$(PYTEST_RUNNER) $(PYTEST_INTERPRETER_FLAGS) -m pytest $(PYTEST_FLAGS) \
+		quwoquan_app/test/local_contract -q
 
 verify-test-no-fake:
 	@python3 quwoquan_ops/gate/scaffold/verify_test_no_fake.py
@@ -846,9 +981,10 @@ test-local-contract:
 	@$(MAKE) verify-test-no-fake
 	@$(MAKE) verify-test-nonfunctional-coverage
 	@$(MAKE) verify-execution-profiles
-	@bash quwoquan_service/scripts/contract/verify_contract_metadata.sh
+	@bash quwoquan_service/scripts/verify/verify_contract_metadata.sh
 	@$(MAKE) test-runtime-local-contract
 	@python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/local_contract/
+	@$(MAKE) test-app-python-local-contract
 	@cd quwoquan_service && go test $$(go list ./services/... | grep -v '/tests/api_integration') -count=1 -p=$(GO_TEST_PACKAGE_PARALLELISM)
 	@mkdir -p "$(QWQ_OUTPUT_ROOT)/env/repo/runs/tests"
 	@rm -rf "$(QWQ_OUTPUT_ROOT)/env/repo/runs/tests"/data-local-contract.*
@@ -861,7 +997,7 @@ test-local-contract:
 		trap - EXIT; \
 		exit $$status
 	@rm -rf "$(QWQ_OUTPUT_ROOT)/env/repo/runs/tests"/data-local-contract.*
-	@python3 quwoquan_data/scripts/verify/verify_data_layout.py
+	@python3 -B quwoquan_data/scripts/cli.py verify all
 
 # api_integration：按统一环境名解析 HTTP 基址。API_CONTRACT_ENV 默认为 gamma。
 # 变量格式：{ALPHA|BETA|GAMMA|PROD}_BASE_URL 与 *_PRODUCT_OPS_BASE_URL。
@@ -878,15 +1014,27 @@ test-api-contract:
 		echo "[L3] FAIL: set $$(printf '%s' "$$ENV_NAME" | tr '[:lower:]-' '[:upper:]_')_BASE_URL and $$(printf '%s' "$$ENV_NAME" | tr '[:lower:]-' '[:upper:]_')_PRODUCT_OPS_BASE_URL"; \
 		exit 2; \
 	fi; \
-	python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/api_integration/cloud/content/api_contract_runner.dart \
+	python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py \
+		test/api_integration/content/content/post/content_post_remote__api_integration_test.dart \
+		test/api_integration/content/content/content_behavior_fact/content_behavior_fact_remote__api_integration_test.dart \
+		test/api_integration/content/trust_safety/report/content_report_remote__api_integration_test.dart \
+		test/api_integration/user/relationship/persona_relationship/persona_block_remote__api_integration_test.dart \
+		test/api_integration/user/account/user_settings/privacy_settings_remote__api_integration_test.dart \
 		--dart-define=API_CONTRACT_ENV=$$ENV_NAME \
 		--dart-define=API_CONTRACT_BASE_URL=$$BASE_URL \
 		--dart-define=LOCAL_GAMMA_T3_SCOPE=$${LOCAL_GAMMA_T3_SCOPE:-} \
 		--dart-define=TEST_AUTH_TOKEN=$$AUTH_TOKEN && \
-	python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/api_integration/cloud/user/user_api_contract_runner.dart \
+	python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py \
+		test/api_integration/user/account/account_session/account_session_remote__api_integration_test.dart \
+		test/api_integration/user/account/user_settings/user_settings_remote__api_integration_test.dart \
+		test/api_integration/user/account/user_account/account_closure_remote__api_integration_test.dart \
 		--dart-define=API_CONTRACT_ENV=$$ENV_NAME \
 		--dart-define=API_CONTRACT_BASE_URL=$$BASE_URL && \
-	python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/api_integration/cloud/ops/api_contract_runner.dart \
+	python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py \
+		test/api_integration/ops/product_ops/app_release/app_release_recovery_remote__api_integration_test.dart \
+		test/api_integration/ops/product_ops/event_record/event_record_remote__api_integration_test.dart \
+		test/api_integration/ops/product_ops/visit_record/visit_record_remote__api_integration_test.dart \
+		test/api_integration/ops/product_ops/recovery_failure/recovery_failure_remote__api_integration_test.dart \
 		--dart-define=API_CONTRACT_ENV=$$ENV_NAME \
 		--dart-define=API_CONTRACT_PRODUCT_OPS_BASE_URL=$$OPS_BASE_URL \
 		--dart-define=API_CONTRACT_AUTH_BASE_URL=$$BASE_URL
@@ -904,7 +1052,10 @@ test-api-contract-chat:
 		echo "[L3] FAIL: set $$(printf '%s' "$$ENV_NAME" | tr '[:lower:]-' '[:upper:]_')_BASE_URL"; \
 		exit 2; \
 	fi; \
-	python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/api_integration/cloud/chat/api_contract_runner.dart \
+	python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py \
+		test/api_integration/chat/chat/conversation/conversation_remote__api_integration_test.dart \
+		test/api_integration/chat/chat/message/message_remote__api_integration_test.dart \
+		test/api_integration/chat/chat/conversation_membership/conversation_membership_remote__api_integration_test.dart \
 		--dart-define=API_CONTRACT_ENV=$$ENV_NAME \
 		--dart-define=API_CONTRACT_BASE_URL=$$BASE_URL \
 		--dart-define=TEST_AUTH_TOKEN=$$AUTH_TOKEN
@@ -914,32 +1065,19 @@ test-app-api-integration:
 	case "$$ENV_NAME" in \
 		beta) BASE_URL="$${BETA_BASE_URL:-}"; AUTH_TOKEN="$${BETA_TEST_AUTH_TOKEN:-$${TEST_AUTH_TOKEN:-}}" ;; \
 		gamma) BASE_URL="$${GAMMA_BASE_URL:-}"; AUTH_TOKEN="$${GAMMA_TEST_AUTH_TOKEN:-$${TEST_AUTH_TOKEN:-}}" ;; \
-		prod) BASE_URL="$${PROD_BASE_URL:-}"; AUTH_TOKEN="$${PROD_TEST_AUTH_TOKEN:-$${TEST_AUTH_TOKEN:-}}" ;; \
-		*) echo "[api_integration] FAIL: ENV must be one of beta|gamma|prod, got $$ENV_NAME"; exit 2 ;; \
+		*) echo "[api_integration] FAIL: ENV must be beta or gamma; Prod requires a separately approved readiness-only flow, got $$ENV_NAME"; exit 2 ;; \
 	esac; \
 	if [ -z "$$BASE_URL" ]; then \
 		echo "[api_integration] FAIL: set $$(printf '%s' "$$ENV_NAME" | tr '[:lower:]-' '[:upper:]_')_BASE_URL"; \
 		exit 2; \
 	fi; \
-	python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/api_integration/cloud/assistant/personal_assistant_weather_ui__api_integration_test.dart test/api_integration/cloud/assistant/personal_assistant_official_sources__api_integration_test.dart test/api_integration/cloud/assistant/personal_assistant_multiturn__functional__api_integration_test.dart \
-		--dart-define=APP_RUNTIME_ENV=beta \
+	python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/api_integration \
+		--dart-define=API_CONTRACT_ENV=$$ENV_NAME \
+		--dart-define=API_CONTRACT_BASE_URL=$$BASE_URL \
+		--dart-define=APP_RUNTIME_ENV=$$ENV_NAME \
 		--dart-define=APP_DATA_SOURCE=remote \
 		--dart-define=CLOUD_GATEWAY_BASE_URL=$$BASE_URL \
-		--dart-define=TEST_AUTH_TOKEN=$$AUTH_TOKEN && \
-	ASSISTANT_SCENARIO_FIXTURE_B64="$$(python3 - <<'PY'\nimport base64\nfrom pathlib import Path\npath = Path('quwoquan_service/services/assistant-service/tests/support/contract_fixtures/scenarios/assistant_scenarios.json')\nprint(base64.b64encode(path.read_bytes()).decode('ascii'))\nPY\n)" && \
-	python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/api_integration/cloud/assistant/assistant_scenario_simulator__api_integration_test.dart \
-		--dart-define=APP_RUNTIME_ENV=beta \
-		--dart-define=APP_DATA_SOURCE=remote \
-		--dart-define=CLOUD_GATEWAY_BASE_URL=$$BASE_URL \
-		--dart-define=TEST_AUTH_TOKEN=$$AUTH_TOKEN \
-		--dart-define=ASSISTANT_SCENARIO_FIXTURE_JSON_B64=$$ASSISTANT_SCENARIO_FIXTURE_B64 && \
-	ASSISTANT_EVAL_FIXTURE_B64="$$(python3 - <<'PY'\nimport base64\nfrom pathlib import Path\npath = Path('quwoquan_service/services/assistant-service/tests/support/contract_fixtures/scenarios/assistant_skill_eval_scenarios.json')\nprint(base64.b64encode(path.read_bytes()).decode('ascii'))\nPY\n)" && \
-	python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/api_integration/cloud/assistant/assistant_skill_comparison__api_integration_test.dart \
-		--dart-define=APP_RUNTIME_ENV=beta \
-		--dart-define=APP_DATA_SOURCE=remote \
-		--dart-define=CLOUD_GATEWAY_BASE_URL=$$BASE_URL \
-		--dart-define=TEST_AUTH_TOKEN=$$AUTH_TOKEN \
-		--dart-define=ASSISTANT_SCENARIO_FIXTURE_JSON_B64=$$ASSISTANT_EVAL_FIXTURE_B64
+		--dart-define=TEST_AUTH_TOKEN=$$AUTH_TOKEN
 
 test-api-integration:
 	@$(MAKE) prepare-test-python

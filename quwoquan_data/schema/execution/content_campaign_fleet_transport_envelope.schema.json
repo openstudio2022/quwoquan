@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Content Campaign Fleet Transport Envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "rootExecutionId",
+    "planDigest",
+    "target",
+    "mongoUri",
+    "redisAddr",
+    "bindingDigest"
+  ],
+  "properties": {
+    "schema": {
+      "const": "quwoquan_data.content_campaign_fleet_transport_envelope"
+    },
+    "rootExecutionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "planDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "target": {
+      "type": "string",
+      "minLength": 1
+    },
+    "mongoUri": {
+      "type": "string",
+      "pattern": "^mongodb://.+$"
+    },
+    "redisAddr": {
+      "type": "string",
+      "pattern": "^[^:]+:[0-9]+$"
+    },
+    "bindingDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

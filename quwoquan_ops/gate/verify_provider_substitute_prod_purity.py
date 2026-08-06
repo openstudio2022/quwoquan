@@ -6,6 +6,8 @@ from __future__ import annotations
 from pathlib import Path
 import sys
 
+import yaml
+
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
@@ -68,11 +70,16 @@ def main() -> int:
 
     for token in FORBIDDEN:
         workload = ROOT / "quwoquan_ops" / "external" / token
-        compose = (workload / "deploy" / "compose.yaml").read_text(
-            encoding="utf-8"
-        )
-        if "profiles:" not in compose or "-debug:" not in compose:
-            issues.append(f"{token} must remain a debug-profile-only workload")
+        compose_path = workload / "deploy" / "compose.yaml"
+        compose = yaml.safe_load(compose_path.read_text(encoding="utf-8"))
+        services = compose.get("services") if isinstance(compose, dict) else None
+        service = services.get(token) if isinstance(services, dict) else None
+        profiles = service.get("profiles") if isinstance(service, dict) else None
+        expected_profile = f"nonprod-{token}"
+        if profiles != [expected_profile]:
+            issues.append(
+                f"{token} must remain isolated behind profile {expected_profile}"
+            )
         if (workload / "environments" / "prod").exists():
             issues.append(f"{token} must not have a Prod environment")
 

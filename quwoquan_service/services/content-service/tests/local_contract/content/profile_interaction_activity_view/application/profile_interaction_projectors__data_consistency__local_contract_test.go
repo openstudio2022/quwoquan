@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-009
+// readiness_case: project-profile-interaction-activity-local
 package profileinteraction_test
 
 import (
@@ -60,7 +62,7 @@ func TestProfileInteractionProjectionFailureDoesNotAdvanceCheckpoint(t *testing.
 	}}}
 	writer := newMemoryActivityWriter()
 	writer.failUpsert = true
-	projector := NewProjector(
+	projector := NewProfileInteractionActivityViewProjector(
 		staticProjectionSource{post: activityports.PostSlice{
 			ID: "post-profile-projection", Version: 1,
 			AuthorPersonaID: "profile-owner", ContentType: "image",
@@ -97,6 +99,47 @@ func TestProfileInteractionProjectionFailureDoesNotAdvanceCheckpoint(t *testing.
 	}
 }
 
+func TestProfileInteractionActivityViewProjectorApplyOwnsProjectionBehavior(t *testing.T) {
+	now := time.Date(2026, time.July, 20, 1, 30, 0, 0, time.UTC)
+	payload, err := json.Marshal(reactionFactPayload{
+		ReactionID:     "reaction-direct-apply",
+		Version:        1,
+		TargetKind:     "post",
+		TargetID:       "post-direct-apply",
+		TargetAuthorID: "profile-owner",
+		ActorDimension: "persona",
+		ActorID:        "profile-actor",
+		Reaction:       "like",
+		OccurredAt:     now,
+		IdempotencyKey: "profile-direct-apply",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	writer := newMemoryActivityWriter()
+	handler := NewProfileInteractionActivityViewProjector(
+		staticProjectionSource{post: activityports.PostSlice{
+			ID: "post-direct-apply", Version: 1,
+			AuthorPersonaID: "profile-owner", ContentType: "image",
+			Title: "direct projection", Status: "published", Visibility: "public",
+		}},
+		writer,
+	)
+	fact := reactionports.OutboxFact{
+		EventID: "reaction-direct-apply:1", EventType: reactionapp.EventTypeContentReactionSet,
+		AggregateID: "reaction-direct-apply", AggregateVersion: 1,
+		Payload: payload, OccurredAt: now,
+	}
+	if err := handler.Apply(context.Background(), ProfileInteractionActivityEvent{
+		Reaction: &fact,
+	}); err != nil {
+		t.Fatalf("apply canonical lifecycle event: %v", err)
+	}
+	if len(writer.rows) != 2 {
+		t.Fatalf("direct lifecycle apply rows=%d, want received+sent", len(writer.rows))
+	}
+}
+
 func TestProfileInteractionReadFactProjectionFailureKeepsCheckpoint(t *testing.T) {
 	now := time.Date(2026, time.July, 20, 2, 0, 0, 0, time.UTC)
 	fact, err := readfactmodel.New("read-owner", "read-activity", "read", now)
@@ -116,10 +159,14 @@ func TestProfileInteractionReadFactProjectionFailureKeepsCheckpoint(t *testing.T
 	}}}
 	writer := newMemoryActivityWriter()
 	writer.failReadState = true
+	handler := NewProfileInteractionActivityViewProjector(
+		staticProjectionSource{},
+		writer,
+	)
 	relay := readfactapp.NewReadFactOutboxRelay(
 		outbox,
 		outbox,
-		NewReadFactProjector(writer),
+		NewReadFactProjector(handler),
 		"profile-interaction-read-local-contract",
 	)
 

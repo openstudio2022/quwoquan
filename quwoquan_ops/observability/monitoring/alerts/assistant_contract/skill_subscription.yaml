@@ -1,0 +1,105 @@
+# Code generated from quwoquan_service/generated/contract_graph.json.
+# Regenerate with verify_object_alert_coverage.py --write.
+groups:
+  - name: quwoquan_assistant_contract_skill_subscription
+    rules:
+      - record: quwoquan_assistant_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="assistant-service",method="POST",route="/assistant/skill-subscriptions"})
+        labels:
+          service: "assistant-service"
+          operation: "assistant.skill_subscription.CreateSkillSubscription"
+          contract_metric: "assistant_skill_subscription_command"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_assistant_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="assistant-service",method="POST",route="/assistant/skill-subscriptions"})
+        labels:
+          service: "assistant-service"
+          operation: "assistant.skill_subscription.CreateSkillSubscription"
+          contract_metric: "assistant_skill_subscription_command"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_assistant_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="assistant-service",method="GET",route=~"^/assistant/skill-subscriptions/[^/]+$"})
+        labels:
+          service: "assistant-service"
+          operation: "assistant.skill_subscription.GetSkillSubscription"
+          contract_metric: "assistant_skill_subscription_query"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "300"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_assistant_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="assistant-service",method="GET",route=~"^/assistant/skill-subscriptions/[^/]+$"})
+        labels:
+          service: "assistant-service"
+          operation: "assistant.skill_subscription.GetSkillSubscription"
+          contract_metric: "assistant_skill_subscription_query"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "300"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_assistant_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="assistant-service",method="GET",route="/assistant/skill-subscriptions"})
+        labels:
+          service: "assistant-service"
+          operation: "assistant.skill_subscription.ListSkillSubscriptions"
+          contract_metric: "assistant_skill_subscription_query"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_assistant_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="assistant-service",method="GET",route="/assistant/skill-subscriptions"})
+        labels:
+          service: "assistant-service"
+          operation: "assistant.skill_subscription.ListSkillSubscriptions"
+          contract_metric: "assistant_skill_subscription_query"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_assistant_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="assistant-service",method="POST",route="/internal/assistant/skill-subscriptions:tick"})
+        labels:
+          service: "assistant-service"
+          operation: "assistant.skill_subscription.TickSkillSubscriptionCron"
+          contract_metric: "assistant_skill_subscription_cron"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "5000"
+          slo_availability_percent: "99.5"
+      - record: quwoquan_assistant_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="assistant-service",method="POST",route="/internal/assistant/skill-subscriptions:tick"})
+        labels:
+          service: "assistant-service"
+          operation: "assistant.skill_subscription.TickSkillSubscriptionCron"
+          contract_metric: "assistant_skill_subscription_cron"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "5000"
+          slo_availability_percent: "99.5"
+      - record: quwoquan_assistant_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="assistant-service",method="PATCH",route=~"^/assistant/skill-subscriptions/[^/]+/status$"})
+        labels:
+          service: "assistant-service"
+          operation: "assistant.skill_subscription.UpdateSkillSubscriptionStatus"
+          contract_metric: "assistant_skill_subscription_command"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_assistant_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="assistant-service",method="PATCH",route=~"^/assistant/skill-subscriptions/[^/]+/status$"})
+        labels:
+          service: "assistant-service"
+          operation: "assistant.skill_subscription.UpdateSkillSubscriptionStatus"
+          contract_metric: "assistant_skill_subscription_command"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"

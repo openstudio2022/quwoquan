@@ -81,7 +81,7 @@ func (e *DurableRunExecutor) Execute(
 	if receipt, completed := executionCompletedDeviceAction(request.Checkpoint); completed {
 		answer := "设备操作已完成。"
 		if provider, ok := e.loop.React.Tools.(ToolMetadataProvider); ok {
-			if metadata, found := provider.ToolMetadata(receipt.ActionKind); found &&
+			if metadata, found := provider.ToolMetadata(receipt.Capability); found &&
 				strings.TrimSpace(metadata.Confirmation.CompletionSummary) != "" {
 				answer = strings.TrimSpace(metadata.Confirmation.CompletionSummary)
 			}
@@ -275,7 +275,7 @@ func executionCompletedDeviceAction(
 	for index := len(checkpoint.DeviceActionReceipts) - 1; index >= 0; index-- {
 		receipt := checkpoint.DeviceActionReceipts[index]
 		if _, completed := completedRefs[strings.TrimSpace(receipt.IdempotencyKey)]; completed && strings.TrimSpace(receipt.Outcome) == "completed" &&
-			strings.TrimSpace(receipt.ActionKind) != "" {
+			strings.TrimSpace(receipt.Capability) != "" {
 			return receipt, true
 		}
 	}
@@ -310,8 +310,17 @@ func selectTemplateInput(
 func toolConfirmationPresentation(
 	pending map[string]any,
 ) (map[string]any, string, presentationpkg.ActionPolicy, error) {
+	runID := executionString(pending, "runId")
 	toolUseID := executionString(pending, "toolUseId")
 	continuationToken := executionString(pending, "continuationToken")
+	issuedAt, issuedErr := time.Parse(
+		time.RFC3339Nano,
+		executionString(pending, "issuedAt"),
+	)
+	expiresAt, expiresErr := time.Parse(
+		time.RFC3339Nano,
+		executionString(pending, "expiresAt"),
+	)
 	proposal := objectMap(pending["proposal"])
 	input := objectMap(proposal["input"])
 	confirmation := objectMap(proposal["confirmation"])
@@ -319,8 +328,11 @@ func toolConfirmationPresentation(
 	templateRef := executionString(confirmation, "templateRef")
 	title := executionString(confirmation, "title")
 	body := executionString(confirmation, "description")
-	if toolUseID == "" || continuationToken == "" || toolName == "" ||
-		templateRef == "" || title == "" || body == "" || len(input) == 0 {
+	if runID == "" || toolUseID == "" || continuationToken == "" ||
+		issuedErr != nil || expiresErr != nil ||
+		!expiresAt.After(issuedAt) ||
+		toolName == "" || templateRef == "" || title == "" ||
+		body == "" || len(input) == 0 {
 		return nil, "", nil, fmt.Errorf("invalid typed tool confirmation proposal")
 	}
 	rows := make([]any, 0)
@@ -341,30 +353,51 @@ func toolConfirmationPresentation(
 	if len(rows) == 0 {
 		return nil, "", nil, fmt.Errorf("typed tool confirmation has no displayable fields")
 	}
+	inputDigest, ok := presentationGroundingDigest(input)
+	if !ok {
+		return nil, "", nil, fmt.Errorf("tool confirmation input digest unavailable")
+	}
+	approvedContract := map[string]any{
+		"runId":            runID,
+		"toolInvocationId": toolUseID,
+		"decision":         "approved",
+		"capability":       toolName,
+		"inputDigest":      inputDigest,
+		"approvalPermit":   continuationToken,
+	}
+	approvedDigest, ok := presentationGroundingDigest(approvedContract)
+	if !ok {
+		return nil, "", nil, fmt.Errorf("approve tool intent digest unavailable")
+	}
+	rejectedContract := map[string]any{
+		"runId":            runID,
+		"toolInvocationId": toolUseID,
+		"decision":         "rejected",
+		"capability":       toolName,
+		"inputDigest":      inputDigest,
+		"approvalPermit":   continuationToken,
+	}
+	rejectedDigest, ok := presentationGroundingDigest(rejectedContract)
+	if !ok {
+		return nil, "", nil, fmt.Errorf("reject tool intent digest unavailable")
+	}
 	approved := map[string]any{
 		"intentId":      "approve_" + toolUseID,
-		"operation":     "ContinueAssistantToolUse",
-		"objectTypeRef": "assistant_tool_use",
-		"objectId":      toolUseID,
-		"payload": map[string]any{
-			"decision":          "approved",
-			"continuationToken": continuationToken,
-			"deviceAction": map[string]any{
-				"kind": toolName, "idempotencyKey": toolUseID,
-				"input": cloneObject(input),
-			},
-		},
-		"requiresConfirmation": true,
+		"kind":          string(presentationpkg.ActionIntentApproveTool),
+		"requestDigest": approvedDigest,
+		"jti":           "approve_" + toolUseID,
+		"issuedAt":      issuedAt.UTC().Format(time.RFC3339Nano),
+		"expiresAt":     expiresAt.UTC().Format(time.RFC3339Nano),
+		"approveTool":   approvedContract,
 	}
 	rejected := map[string]any{
 		"intentId":      "reject_" + toolUseID,
-		"operation":     "ContinueAssistantToolUse",
-		"objectTypeRef": "assistant_tool_use",
-		"objectId":      toolUseID,
-		"payload": map[string]any{
-			"decision": "rejected", "continuationToken": continuationToken,
-		},
-		"requiresConfirmation": true,
+		"kind":          string(presentationpkg.ActionIntentApproveTool),
+		"requestDigest": rejectedDigest,
+		"jti":           "reject_" + toolUseID,
+		"issuedAt":      issuedAt.UTC().Format(time.RFC3339Nano),
+		"expiresAt":     expiresAt.UTC().Format(time.RFC3339Nano),
+		"approveTool":   rejectedContract,
 	}
 	return map[string]any{
 			"title": title,
@@ -376,13 +409,18 @@ func toolConfirmationPresentation(
 			"approveAction": approved,
 			"rejectAction":  rejected,
 		}, templateRef, continuationActionPolicy{
-			ToolUseID: toolUseID, ContinuationToken: continuationToken,
+			RunID: runID, ToolUseID: toolUseID,
+			ContinuationToken: continuationToken,
+			Capability:        toolName, InputDigest: inputDigest,
 		}, nil
 }
 
 type continuationActionPolicy struct {
+	RunID             string
 	ToolUseID         string
 	ContinuationToken string
+	Capability        string
+	InputDigest       string
 }
 
 func (policy continuationActionPolicy) ValidateAction(
@@ -390,15 +428,17 @@ func (policy continuationActionPolicy) ValidateAction(
 	_ string,
 	action presentationpkg.ActionIntent,
 ) error {
-	if action.Operation != "ContinueAssistantToolUse" ||
-		action.ObjectTypeRef != "assistant_tool_use" ||
-		action.ObjectID != policy.ToolUseID || !action.RequiresConfirmation {
+	if action.Kind != presentationpkg.ActionIntentApproveTool ||
+		action.ApproveTool == nil ||
+		action.ApproveTool.RunID != policy.RunID ||
+		action.ApproveTool.ToolInvocationID != policy.ToolUseID ||
+		action.ApproveTool.Capability != policy.Capability ||
+		action.ApproveTool.InputDigest != policy.InputDigest ||
+		action.ApproveTool.ApprovalPermit != policy.ContinuationToken {
 		return presentationpkg.ErrActionRejected
 	}
-	decision := executionString(action.Payload, "decision")
-	token := executionString(action.Payload, "continuationToken")
-	if token != policy.ContinuationToken ||
-		(decision != "approved" && decision != "rejected") {
+	if action.ApproveTool.Decision != "approved" &&
+		action.ApproveTool.Decision != "rejected" {
 		return presentationpkg.ErrActionRejected
 	}
 	return nil

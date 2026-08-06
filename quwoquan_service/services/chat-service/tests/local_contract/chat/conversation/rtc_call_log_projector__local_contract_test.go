@@ -126,7 +126,7 @@ func (*rtcCallLogMessageStoreStub) SetMessageRecalled(
 
 func (*rtcCallLogMessageStoreStub) AppendMessageOutboxEvent(
 	context.Context,
-	MessageOutboxEvent,
+	messageports.OutboxEvent,
 	string,
 	int64,
 ) error {

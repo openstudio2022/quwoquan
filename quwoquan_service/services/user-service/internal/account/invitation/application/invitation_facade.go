@@ -44,12 +44,15 @@ func (facade *Facade) Generate(
 	inviterPersonaID string,
 	channel string,
 	inviteePhone string,
+	idempotencyKey string,
 ) (*invitationmodel.Invitation, error) {
 	actorAccountID = strings.TrimSpace(actorAccountID)
 	inviterPersonaID = strings.TrimSpace(inviterPersonaID)
 	channel = strings.TrimSpace(channel)
 	inviteePhone = strings.TrimSpace(inviteePhone)
-	if actorAccountID == "" || inviterPersonaID == "" || !validChannel(channel) {
+	idempotencyKey = strings.TrimSpace(idempotencyKey)
+	if actorAccountID == "" || inviterPersonaID == "" || !validChannel(channel) ||
+		idempotencyKey == "" || len(idempotencyKey) > 256 {
 		return nil, usergenerated.AppErrorFromInvalidArgument("invalid invitation command")
 	}
 	ownerAccountID, found, err := facade.personas.ResolveOwnerAccountID(
@@ -67,13 +70,14 @@ func (facade *Facade) Generate(
 	if err != nil {
 		return nil, usergenerated.AppErrorFromInternalError("generate invitation link code")
 	}
+	phoneHash := hashInviteePhone(inviteePhone)
 	candidate := &invitationmodel.Invitation{
 		ID:                    uuid.NewString(),
 		InviterPersonaID:      inviterPersonaID,
 		InviterOwnerAccountID: ownerAccountID,
 		Channel:               channel,
 		LinkCode:              linkCode,
-		InviteePhoneHash:      hashInviteePhone(inviteePhone),
+		InviteePhoneHash:      phoneHash,
 		Status:                invitationmodel.StatusGenerated,
 		ExpireAt:              now.Add(invitationTTL),
 		GeneratedAt:           now,
@@ -81,9 +85,24 @@ func (facade *Facade) Generate(
 	if err := candidate.ValidateNew(); err != nil {
 		return nil, usergenerated.AppErrorFromInvalidArgument("invalid invitation aggregate")
 	}
-	stored, _, err := facade.store.Generate(ctx, candidate, invitationDailyLimit)
+	stored, _, err := facade.store.Generate(
+		ctx,
+		candidate,
+		invitationDailyLimit,
+		invitationports.CommandIdentity{
+			Operation:      "GenerateInvitation",
+			OwnerAccountID: actorAccountID,
+			IdempotencyKey: idempotencyKey,
+			CommandDigest: invitationCommandDigest(
+				"GenerateInvitation", actorAccountID, inviterPersonaID, channel, phoneHash,
+			),
+		},
+	)
 	if errors.Is(err, invitationports.ErrDailyLimit) {
 		return nil, invitationgenerated.AppErrorFromInvitationDailyLimitExceeded(err.Error())
+	}
+	if errors.Is(err, invitationports.ErrIdempotencyConflict) {
+		return nil, usergenerated.AppErrorFromInvalidArgument(err.Error())
 	}
 	if err != nil {
 		return nil, usergenerated.AppErrorFromInternalError("persist invitation")
@@ -107,15 +126,37 @@ func (facade *Facade) Accept(
 	ctx context.Context,
 	actorAccountID string,
 	linkCode string,
+	idempotencyKey string,
 ) (*invitationmodel.Invitation, error) {
 	if strings.TrimSpace(actorAccountID) == "" {
 		return nil, usergenerated.AppErrorFromUnauthorized("authenticated account required")
 	}
 	linkCode = strings.TrimSpace(linkCode)
+	idempotencyKey = strings.TrimSpace(idempotencyKey)
 	if linkCode == "" {
 		return nil, invitationgenerated.AppErrorFromInvitationNotFound("invitation code missing")
 	}
-	record, err := facade.store.Accept(ctx, linkCode, facade.clock().UTC())
+	if idempotencyKey == "" || len(idempotencyKey) > 256 {
+		return nil, invitationgenerated.AppErrorFromInvitationInvalidTransition(
+			"stable idempotency key is required",
+		)
+	}
+	record, err := facade.store.Accept(
+		ctx,
+		linkCode,
+		facade.clock().UTC(),
+		invitationports.CommandIdentity{
+			Operation:      "AcceptInvitation",
+			OwnerAccountID: strings.TrimSpace(actorAccountID),
+			IdempotencyKey: idempotencyKey,
+			CommandDigest: invitationCommandDigest(
+				"AcceptInvitation", strings.TrimSpace(actorAccountID), linkCode,
+			),
+		},
+	)
+	if errors.Is(err, invitationports.ErrIdempotencyConflict) {
+		return nil, invitationgenerated.AppErrorFromInvitationInvalidTransition(err.Error())
+	}
 	return record, mapStoreError(err)
 }
 
@@ -200,4 +241,9 @@ func hashInviteePhone(value string) string {
 	}
 	sum := sha256.Sum256([]byte(value))
 	return hex.EncodeToString(sum[:])
+}
+
+func invitationCommandDigest(parts ...string) string {
+	digest := sha256.Sum256([]byte(strings.Join(parts, "\x00")))
+	return hex.EncodeToString(digest[:])
 }

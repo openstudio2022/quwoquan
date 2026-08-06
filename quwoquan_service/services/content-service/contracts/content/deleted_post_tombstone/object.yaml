@@ -31,10 +31,6 @@ relationships:
   reference_fields:
   - authorId
   target_object: user.Persona
-capabilities:
-- append_only
-- idempotent_append
-- queryable
 taggable: false
 vector_enabled: false
 business_rules:

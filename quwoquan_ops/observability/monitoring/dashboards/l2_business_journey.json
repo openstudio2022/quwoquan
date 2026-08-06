@@ -238,6 +238,28 @@
           "mode": "markdown",
           "content": "群聊产品漏斗来自 Elasticsearch `app-product-telemetry-chat-funnel-hourly`（`rowKind=chat_funnel`）：候选源打开/选择 → 建群或加成员结果 → @选择/发送 → 已读水位 → 群治理。按 `chatAction`、`chatOutcome`、来源与成员/未读分桶聚合；失败下钻使用 `failReasonCode`、`recoveryAction`。原始事件和聚合均禁止 conversationId、messageId、userId；Prometheus 面板只证明服务健康，不替代产品转化事实。"
         }
+      },
+      {
+        "title": "Message Transport Publish P95",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 96 },
+        "targets": [
+          {
+            "expr": "qwq_message_transport_publish_p95{root=\"chat.conversation.message_transport\"}",
+            "legendFormat": "{{adapter}}"
+          }
+        ]
+      },
+      {
+        "title": "Message Transport Consume P95",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 96 },
+        "targets": [
+          {
+            "expr": "qwq_message_transport_consume_p95{root=\"chat.conversation.message_transport\"}",
+            "legendFormat": "{{adapter}}"
+          }
+        ]
       }
     ]
   }

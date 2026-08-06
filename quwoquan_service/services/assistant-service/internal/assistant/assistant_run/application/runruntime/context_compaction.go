@@ -369,7 +369,8 @@ func validateContextExecutionState(state ContextExecutionState) error {
 		return errors.New("assistant context execution history is invalid")
 	}
 	if !validUniqueContextStrings(state.SourceIDs) ||
-		!validNonBlankContextStrings(state.ToolHistory) {
+		!validNonBlankContextStrings(state.ToolHistory) ||
+		!validNonBlankContextStrings(state.ModelHistory) {
 		return errors.New("assistant context execution ledger is invalid")
 	}
 	for _, observation := range state.RecentObservations {
@@ -401,6 +402,7 @@ func contextStateAtOrAfter(
 		next.ToolIteration < current.ToolIteration ||
 		next.ReflectionIteration < current.ReflectionIteration ||
 		!stringPrefix(next.ToolHistory, current.ToolHistory) ||
+		!stringPrefix(next.ModelHistory, current.ModelHistory) ||
 		!stringSetContains(next.SourceIDs, current.SourceIDs) {
 		return false
 	}
@@ -476,6 +478,7 @@ func cloneContextExecutionState(state ContextExecutionState) ContextExecutionSta
 	cloned := state
 	cloned.SourceIDs = append([]string(nil), state.SourceIDs...)
 	cloned.ToolHistory = append([]string(nil), state.ToolHistory...)
+	cloned.ModelHistory = append([]string(nil), state.ModelHistory...)
 	cloned.RecentObservations = make(
 		[]ContextObservationSnapshot,
 		len(state.RecentObservations),

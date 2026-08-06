@@ -1,0 +1,170 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TravelToGatheringMigrationReceipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "migrationId",
+    "command",
+    "environment",
+    "phase",
+    "status",
+    "executionMode",
+    "source",
+    "target",
+    "crosswalkDigest",
+    "inventory",
+    "mapping",
+    "dispositions",
+    "conflicts",
+    "blockers",
+    "piiRedaction",
+    "validation",
+    "parity",
+    "writeSet",
+    "cutover",
+    "rollback",
+    "receiptId",
+    "receiptDigest"
+  ],
+  "properties": {
+    "schema": {
+      "const": "qwq.travel_to_gathering.migration_receipt"
+    },
+    "migrationId": {
+      "const": "travel-to-gathering"
+    },
+    "command": {
+      "const": "stackctl migration travel-to-gathering"
+    },
+    "environment": {
+      "enum": [
+        "alpha",
+        "beta",
+        "gamma",
+        "prod"
+      ]
+    },
+    "phase": {
+      "enum": [
+        "inventory",
+        "dry-run",
+        "parity",
+        "cutover",
+        "rollback"
+      ]
+    },
+    "status": {
+      "enum": [
+        "passed",
+        "GATE_BLOCK"
+      ]
+    },
+    "executionMode": {
+      "enum": [
+        "read_only",
+        "zero_write",
+        "approval_plan",
+        "external_evidence_only"
+      ]
+    },
+    "source": {
+      "type": "object"
+    },
+    "target": {
+      "type": "object"
+    },
+    "crosswalkDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "inventory": {
+      "type": "object"
+    },
+    "mapping": {
+      "type": "object"
+    },
+    "dispositions": {
+      "type": "object"
+    },
+    "conflicts": {
+      "type": "object"
+    },
+    "blockers": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "piiRedaction": {
+      "type": "object"
+    },
+    "validation": {
+      "type": "object"
+    },
+    "parity": {
+      "type": "object"
+    },
+    "writeSet": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "stepId",
+          "plane",
+          "service",
+          "operation",
+          "candidateDigest",
+          "executionMode"
+        ],
+        "properties": {
+          "stepId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "plane": {
+            "enum": [
+              "target_application",
+              "target_config",
+              "target_snapshot"
+            ]
+          },
+          "service": {
+            "type": "string",
+            "minLength": 1
+          },
+          "operation": {
+            "type": "string",
+            "minLength": 1
+          },
+          "candidateDigest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "executionMode": {
+            "enum": [
+              "external_approval_only",
+              "externally_executed"
+            ]
+          }
+        }
+      }
+    },
+    "cutover": {
+      "type": "object"
+    },
+    "rollback": {
+      "type": "object"
+    },
+    "receiptId": {
+      "type": "string",
+      "pattern": "^travel-to-gathering:[a-z]+:(inventory|dry-run|parity|cutover|rollback):[0-9a-f]{64}$"
+    },
+    "receiptDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

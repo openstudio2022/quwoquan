@@ -26,65 +26,65 @@ var (
 // AppErrorFromConnectorInvocationUnauthorized returns *AppError for INTEGRATION.USER.connector_invocation_unauthorized (user_message from errors.yaml).
 func AppErrorFromConnectorInvocationUnauthorized(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConnectorInvocationUnauthorized.Error()))
-	return rerrors.NewAppError(code, "请先登录后查看连接活动", debugMessage).WithMetadata("connector_invocation_unauthorized", 401).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "请先登录后查看连接活动", debugMessage).WithMetadata("connector_invocation_unauthorized", 401).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromConnectorInvocationInvalidArgument returns *AppError for INTEGRATION.USER.connector_invocation_invalid_argument (user_message from errors.yaml).
 func AppErrorFromConnectorInvocationInvalidArgument(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConnectorInvocationInvalidArgument.Error()))
-	return rerrors.NewAppError(code, "连接调用参数有误", debugMessage).WithMetadata("connector_invocation_invalid_argument", 400).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "连接调用参数有误", debugMessage).WithMetadata("connector_invocation_invalid_argument", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromConnectorInvocationNotFound returns *AppError for INTEGRATION.USER.connector_invocation_not_found (user_message from errors.yaml).
 func AppErrorFromConnectorInvocationNotFound(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConnectorInvocationNotFound.Error()))
-	return rerrors.NewAppError(code, "此连接活动不存在或已清理", debugMessage).WithMetadata("connector_invocation_not_found", 404).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "此连接活动不存在或已清理", debugMessage).WithMetadata("connector_invocation_not_found", 404).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromInvocationConnectorConnectionNotFound returns *AppError for INTEGRATION.USER.invocation_connector_connection_not_found (user_message from errors.yaml).
 func AppErrorFromInvocationConnectorConnectionNotFound(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrInvocationConnectorConnectionNotFound.Error()))
-	return rerrors.NewAppError(code, "尚未连接所需应用，请先连接", debugMessage).WithMetadata("connector_connection_not_found", 404).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "尚未连接所需应用，请先连接", debugMessage).WithMetadata("connector_connection_not_found", 404).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromConnectorConnectionInactive returns *AppError for INTEGRATION.USER.connector_connection_inactive (user_message from errors.yaml).
 func AppErrorFromConnectorConnectionInactive(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConnectorConnectionInactive.Error()))
-	return rerrors.NewAppError(code, "连接已撤销或过期，请重新连接", debugMessage).WithMetadata("connector_connection_inactive", 409).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "连接已撤销或过期，请重新连接", debugMessage).WithMetadata("connector_connection_inactive", 409).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromInvocationConnectorCapabilityDenied returns *AppError for INTEGRATION.USER.invocation_connector_capability_denied (user_message from errors.yaml).
 func AppErrorFromInvocationConnectorCapabilityDenied(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrInvocationConnectorCapabilityDenied.Error()))
-	return rerrors.NewAppError(code, "此连接未授权所需能力", debugMessage).WithMetadata("connector_capability_denied", 403).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "此连接未授权所需能力", debugMessage).WithMetadata("connector_capability_denied", 403).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromConnectorConfirmationRequired returns *AppError for INTEGRATION.USER.connector_confirmation_required (user_message from errors.yaml).
 func AppErrorFromConnectorConfirmationRequired(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConnectorConfirmationRequired.Error()))
-	return rerrors.NewAppError(code, "请先确认此操作", debugMessage).WithMetadata("connector_confirmation_required", 409).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "请先确认此操作", debugMessage).WithMetadata("connector_confirmation_required", 409).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromConnectorInvocationRevisionConflict returns *AppError for INTEGRATION.USER.connector_invocation_revision_conflict (user_message from errors.yaml).
 func AppErrorFromConnectorInvocationRevisionConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConnectorInvocationRevisionConflict.Error()))
-	return rerrors.NewAppError(code, "连接操作状态已变化，请刷新后重试", debugMessage).WithMetadata("connector_invocation_revision_conflict", 409).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "连接操作状态已变化，请刷新后重试", debugMessage).WithMetadata("connector_invocation_revision_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromConnectorInvocationIdempotencyConflict returns *AppError for INTEGRATION.USER.connector_invocation_idempotency_conflict (user_message from errors.yaml).
 func AppErrorFromConnectorInvocationIdempotencyConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConnectorInvocationIdempotencyConflict.Error()))
-	return rerrors.NewAppError(code, "重复请求与原连接操作不一致", debugMessage).WithMetadata("connector_invocation_idempotency_conflict", 409).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "重复请求与原连接操作不一致", debugMessage).WithMetadata("connector_invocation_idempotency_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromConnectorProviderUnavailable returns *AppError for INTEGRATION.MIDDLEWARE.connector_provider_unavailable (user_message from errors.yaml).
 func AppErrorFromConnectorProviderUnavailable(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConnectorProviderUnavailable.Error()))
-	return rerrors.NewAppError(code, "外部应用暂不可用，请稍后重试", debugMessage).WithMetadata("connector_provider_unavailable", 503).WithRecovery("retry", 3)
+	return rerrors.NewAppError(code, "外部应用暂不可用，请稍后重试", debugMessage).WithMetadata("connector_provider_unavailable", 503).WithRecoveryDirective("retry", "snackbar", 3)
 }
 
 // AppErrorFromConnectorInvocationUnavailable returns *AppError for INTEGRATION.SYSTEM.connector_invocation_unavailable (user_message from errors.yaml).
 func AppErrorFromConnectorInvocationUnavailable(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConnectorInvocationUnavailable.Error()))
-	return rerrors.NewAppError(code, "连接调用服务暂不可用，请稍后重试", debugMessage).WithMetadata("connector_invocation_unavailable", 503).WithRecovery("retry", 3)
+	return rerrors.NewAppError(code, "连接调用服务暂不可用，请稍后重试", debugMessage).WithMetadata("connector_invocation_unavailable", 503).WithRecoveryDirective("retry", "snackbar", 3)
 }

@@ -14,7 +14,7 @@ collections:
     - name: idx_tombstone_expire
       keys:
         expireAt: 1
-      expireAfterSeconds: 0
+      expire_after_seconds: 0
 role: append_only
 codegen:
   enabled: true

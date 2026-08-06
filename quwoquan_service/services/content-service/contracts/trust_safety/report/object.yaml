@@ -56,8 +56,6 @@ relationships:
   reference_fields:
   - reviewerId
   target_object: user.UserAccount
-capabilities:
-- queryable
 taggable: false
 vector_enabled: false
 business_rules:

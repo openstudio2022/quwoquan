@@ -31,16 +31,12 @@ WORK_PACKAGE_DIRECTORIES = (
     "evidence",
 )
 _TRANSACTION_OBJECT_MARKERS = ("--entity-", "--post-")
-
-
 class ExecutionSourceDigestDriftError(ValueError):
     """The immutable execution was created from different repository inputs."""
 
 
 def transaction_workspace_root() -> Path:
     return core_paths.DATA_LOCAL_ROOT / "workspace" / "object-transactions"
-
-
 def frozen_target_archive_path(execution_id: str) -> Path:
     archive_root = core_paths.DATA_LOCAL_ROOT / "workspace" / "frozen-target-sets"
     return archive_root / f"{validate_execution_id(execution_id)}.json"
@@ -91,8 +87,6 @@ def execution_root(execution_id: str) -> Path:
 
 def execution_manifest_path(execution_id: str) -> Path:
     return execution_root(execution_id) / MANIFEST_FILENAME
-
-
 def execution_target_set_path(execution_id: str) -> Path:
     return execution_root(execution_id) / TARGET_SET_REF
 
@@ -400,6 +394,8 @@ def create_execution_manifest(
     target_set_ref: str,
     target_set_digest: str,
     retry_of: str | None = None,
+    semantic_selection_id: str = "default",
+    semantic_preflight_binding: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Create exactly one immutable execution manifest and work-package tree.
 
@@ -439,50 +435,52 @@ def create_execution_manifest(
     recipe_payload = yaml.safe_load(recipe_file.read_text(encoding="utf-8"))
     if not isinstance(recipe_payload, dict):
         raise ValueError(f"recipe must be an object: {recipe_file}")
-    execution_binding = recipe_payload.get("execution")
-    if not isinstance(execution_binding, dict):
-        raise ValueError(f"recipe execution binding is missing: {recipe_file}")
-    model_binding = {
-        "provider": str(execution_binding.get("agentProvider") or "cursor_sdk"),
-        "authorModel": str(execution_binding.get("model") or ""),
-        "authorModelFamily": str(execution_binding.get("modelFamily") or ""),
-        "authorModelParameters": list(
-            execution_binding.get("modelParameters") or []
-        ),
-        "reviewerModel": str(execution_binding.get("reviewModel") or ""),
-        "reviewerModelFamily": str(
-            execution_binding.get("reviewModelFamily") or ""
-        ),
-        "reviewerModelParameters": list(
-            execution_binding.get("reviewModelParameters") or []
-        ),
-    }
-    required_model_values = (
-        model_binding["provider"],
-        model_binding["authorModel"],
-        model_binding["authorModelFamily"],
-        model_binding["reviewerModel"],
-        model_binding["reviewerModelFamily"],
+    from content.execution.semantic_selection import semantic_manifest_identity
+
+    semantic_identity = semantic_manifest_identity(
+        recipe_payload,
+        semantic_selection_id=semantic_selection_id,
+        retry_of=normalized_retry_of,
     )
-    if not all(required_model_values):
-        raise ValueError(f"recipe model binding is incomplete: {recipe_file}")
+    existing_manifest = (
+        load_execution_manifest(identity.execution_id)
+        if manifest_path.is_file()
+        else None
+    )
+    from content.execution.semantic_preflight_admission import (
+        resolve_manifest_preflight_binding,
+    )
+
+    normalized_preflight_binding = resolve_manifest_preflight_binding(
+        existing_manifest=existing_manifest,
+        requested_binding=semantic_preflight_binding,
+        semantic_selection_id=semantic_selection_id,
+        output_root=core_paths.OUTPUT_ROOT,
+    )
     candidate = {
         "executionId": identity.execution_id,
         "familyRef": {"ref": recipe_ref, "sha256": _file_sha256(recipe_file)},
         "sourceDigest": current_source_digest().to_document(),
-        "modelBinding": model_binding,
+        **semantic_identity,
         "requestRef": REQUEST_REF,
         "targetSetRef": target_set_ref,
         "targetSetDigest": target_set_digest,
         "retryOf": normalized_retry_of,
     }
-    if manifest_path.is_file():
-        existing = load_execution_manifest(identity.execution_id)
+    if normalized_preflight_binding is not None:
+        candidate["semanticPreflightReceipt"] = normalized_preflight_binding
+    if existing_manifest is not None:
+        existing = existing_manifest
         immutable_keys = (
             "executionId",
             "familyRef",
             "sourceDigest",
             "modelBinding",
+            "runtimeProfileId",
+            "runtimeProfileDigest",
+            "semanticSelectionId",
+            "semanticRuntime",
+            "semanticPreflightReceipt",
             "requestRef",
             "targetSetRef",
             "targetSetDigest",

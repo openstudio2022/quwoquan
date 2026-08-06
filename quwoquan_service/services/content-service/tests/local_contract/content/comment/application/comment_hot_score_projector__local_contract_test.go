@@ -1,16 +1,20 @@
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-015
+// readiness_case: consume-comment-lifecycle-local
 package comment_test
 
 import (
 	"context"
 	"testing"
 
+	"quwoquan_service/runtime/commandmeta"
+	contentgenerated "quwoquan_service/services/content-service/generated/content/comment"
 	commentapp "quwoquan_service/services/content-service/internal/content/comment/application"
 	commentmodel "quwoquan_service/services/content-service/internal/content/comment/domain/model"
-	commentports "quwoquan_service/services/content-service/internal/content/comment/domain/ports"
 	reactiondomain "quwoquan_service/services/content-service/internal/content/content_reaction/domain/reaction"
+	reportports "quwoquan_service/services/content-service/internal/trust_safety/report/domain/ports"
 )
 
-func TestCommentHotScoreProjectorRecomputesParentAfterReplyModeration(t *testing.T) {
+func TestCommentHotScoreProjectionHandlerRecomputesParentAfterReplyModeration(t *testing.T) {
 	t.Parallel()
 
 	projection := &hotScoreProjectionFixture{
@@ -18,17 +22,14 @@ func TestCommentHotScoreProjectorRecomputesParentAfterReplyModeration(t *testing
 		likeCount:    3,
 		dislikeCount: 1,
 	}
-	projector := commentapp.NewCommentHotScoreProjector(
+	handler := commentapp.NewCommentHotScoreProjectionHandler(
 		projection,
 		projection,
 		projection,
 	)
 
-	err := projector.Publish(context.Background(), commentports.OutboxEvent{
-		EventType: "CommentModerated",
-		Payload: []byte(
-			`{"commentId":"reply-1","postId":"post-1","parentCommentId":"parent-1","action":"hide"}`,
-		),
+	err := handler.Apply(context.Background(), commentapp.CommentHotScoreProjection{
+		CommentID: "parent-1",
 	})
 	if err != nil {
 		t.Fatalf("投影回复治理事实失败：%v", err)
@@ -39,6 +40,58 @@ func TestCommentHotScoreProjectorRecomputesParentAfterReplyModeration(t *testing
 	// (3 - 1) + 2 * 2 = 6。
 	if projection.writtenScore != 6 {
 		t.Fatalf("重算 hotScore = %d，期望 6", projection.writtenScore)
+	}
+}
+
+func TestCommentReportResolutionHandlerHidesVerifiedComment(t *testing.T) {
+	t.Parallel()
+
+	commands := &commentModerationCommandsFixture{}
+	handler := commentapp.NewCommentReportResolutionHandler(commands)
+	if err := handler.HideComment(context.Background(), commentapp.ResolvedCommentReport{
+		ReportID:   "report-1",
+		CommentID:  "comment-1",
+		ReviewerID: "operator-1",
+	}); err != nil {
+		t.Fatalf("apply resolved Comment report: %v", err)
+	}
+	if commands.calls != 1 || commands.command.CommentID != "comment-1" ||
+		commands.command.OperatorID != "operator-1" ||
+		commands.command.Reason != "resolved_report:report-1" {
+		t.Fatalf("HideComment command drifted: calls=%d command=%+v", commands.calls, commands.command)
+	}
+	if commands.idempotencyKey != "report-comment-moderation:report-1" {
+		t.Fatalf("idempotency key=%q", commands.idempotencyKey)
+	}
+}
+
+func TestCommentReportResolutionPublisherFiltersNonRemovalAndAcknowledgesConvergedState(t *testing.T) {
+	t.Parallel()
+
+	commands := &commentModerationCommandsFixture{}
+	publisher := commentapp.NewReportResolutionPublisher(
+		commentapp.NewCommentReportResolutionHandler(commands),
+	)
+	if err := publisher.Publish(context.Background(), reportports.OutboxEvent{
+		EventID:   "report-event-warn",
+		EventType: "content.report.ReportResolved",
+		Payload:   []byte(`{"reportId":"report-warn","targetType":"comment","targetId":"comment-1","reviewerId":"operator-1","resolution":"warn"}`),
+	}); err != nil {
+		t.Fatalf("ignore non-removal resolution: %v", err)
+	}
+	if commands.calls != 0 {
+		t.Fatalf("non-removal resolution called HideComment %d times", commands.calls)
+	}
+
+	commands.err = contentgenerated.AppErrorFromCommentStatusTransitionInvalid(
+		"comment is already non-active",
+	)
+	if err := publisher.Publish(context.Background(), reportports.OutboxEvent{
+		EventID:   "report-event-replayed",
+		EventType: "content.report.ReportResolved",
+		Payload:   []byte(`{"reportId":"report-replayed","targetType":"comment","targetId":"comment-1","reviewerId":"operator-1","resolution":"delete_content"}`),
+	}); err != nil {
+		t.Fatalf("converged Comment removal must acknowledge replay: %v", err)
 	}
 }
 
@@ -103,4 +156,21 @@ func (f *hotScoreProjectionFixture) SetCommentHotScore(
 	f.writtenCommentID = commentID
 	f.writtenScore = score
 	return true, nil
+}
+
+type commentModerationCommandsFixture struct {
+	calls          int
+	command        commentapp.HideCommentCommand
+	idempotencyKey string
+	err            error
+}
+
+func (f *commentModerationCommandsFixture) HideComment(
+	ctx context.Context,
+	command commentapp.HideCommentCommand,
+) (commentapp.CommentCommandResult, error) {
+	f.calls++
+	f.command = command
+	f.idempotencyKey = commandmeta.IdempotencyKey(ctx)
+	return commentapp.CommentCommandResult{}, f.err
 }

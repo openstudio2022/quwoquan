@@ -7,6 +7,7 @@ from __future__ import annotations
 from quwoquan_ops.cli.lib.data_execution_fleet import (
     COMPOSE_PATH,
     DataExecutionFleetConfig,
+    _redis_writable,
     data_execution_fleet_status,
     load_data_execution_fleet_config,
     resolve_data_execution_fleet_endpoint,
@@ -55,6 +56,14 @@ def test_data_execution_fleet__dedicated_compose_owns_both_endpoints__contract__
         "quwoquan_ops.cli.lib.data_execution_fleet._compose_running_services",
         lambda _endpoint: frozenset({"mongodb", "redis"}),
     )
+    monkeypatch.setattr(
+        "quwoquan_ops.cli.lib.data_execution_fleet._mongo_writable",
+        lambda _endpoint: True,
+    )
+    monkeypatch.setattr(
+        "quwoquan_ops.cli.lib.data_execution_fleet._redis_writable",
+        lambda _endpoint: True,
+    )
 
     status = data_execution_fleet_status()
 
@@ -65,3 +74,48 @@ def test_data_execution_fleet__dedicated_compose_owns_both_endpoints__contract__
     assert "QWQ_DATA_FLEET_REDIS_PORT" in compose
     assert "postgres" not in compose
     assert "object-storage" not in compose
+
+
+def test_data_execution_fleet__tcp_without_writable_backends_is_not_ready__contract__local_contract(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        "quwoquan_ops.cli.lib.data_execution_fleet._socket_ready",
+        lambda _host, _port: True,
+    )
+    monkeypatch.setattr(
+        "quwoquan_ops.cli.lib.data_execution_fleet._compose_running_services",
+        lambda _endpoint: frozenset({"mongodb", "redis"}),
+    )
+    monkeypatch.setattr(
+        "quwoquan_ops.cli.lib.data_execution_fleet._mongo_writable",
+        lambda _endpoint: True,
+    )
+    monkeypatch.setattr(
+        "quwoquan_ops.cli.lib.data_execution_fleet._redis_writable",
+        lambda _endpoint: False,
+    )
+
+    status = data_execution_fleet_status()
+
+    assert status.ready is False
+    assert status.mongo is True
+    assert status.redis is False
+
+
+def test_data_execution_fleet__redis_probe_requires_exact_write_read_delete_result__contract__local_contract(
+    monkeypatch,
+) -> None:
+    endpoint = resolve_data_execution_fleet_endpoint()
+
+    class Result:
+        returncode = 0
+        stdout = "LOADING Redis is loading the dataset in memory\n"
+        stderr = ""
+
+    monkeypatch.setattr(
+        "quwoquan_ops.cli.lib.data_execution_fleet.subprocess.run",
+        lambda *_args, **_kwargs: Result(),
+    )
+
+    assert _redis_writable(endpoint) is False

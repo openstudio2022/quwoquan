@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-002
+// readiness_case: report-media-connected-api
 package api_integration
 
 import (
@@ -96,8 +98,8 @@ func TestReportMediaConnected_NonParticipantRejected(t *testing.T) {
 
 // ── 振铃超时 sweeper：no_answer 终态与 call.ended 事实 ──────────────────────
 //
-// 对应 contract.yaml scenario call_no_answer_timeout 与 storage.yaml
-// lifecycle_timers.ring_timeout；系统命令使用确定性幂等 key。
+// 对应 contract.yaml scenario call_no_answer_timeout 与 typed service
+// ring-timeout configuration；系统命令使用确定性幂等 key。
 
 func TestRingTimeoutSweep_NoAnswerEndsCall(t *testing.T) {
 	cleanAll(t)

@@ -1,20 +1,41 @@
 from __future__ import annotations
 
-from copy import deepcopy
-from pathlib import Path
 import tempfile
 import unittest
+from copy import deepcopy
+from pathlib import Path
 from unittest import mock
 
 import yaml
 
 from quwoquan_ops.cli.lib import external_provider_governance as governance
-
+from quwoquan_ops.gate import verify_external_provider_governance as provider_gate
 
 ROOT = Path(__file__).resolve().parents[3]
 
 
 class ExternalProviderGovernanceContractTest(unittest.TestCase):
+    def test_provider_runtime_has_one_package_bound_launch_track(self) -> None:
+        sources = {
+            relative: (ROOT / relative).read_text(encoding="utf-8")
+            for relative in provider_gate.PROVIDER_RUNTIME_SOURCE_REQUIREMENTS
+        }
+        self.assertEqual(
+            provider_gate.provider_runtime_single_track_issues(sources),
+            [],
+        )
+
+        stackctl_path = "quwoquan_ops/cli/stackctl.py"
+        sources[stackctl_path] += "\nQWQ_DEBUG_SMS_SUBSTITUTE_ENABLED\n"
+        self.assertTrue(
+            any(
+                "legacy Provider runtime selector is forbidden" in issue
+                for issue in provider_gate.provider_runtime_single_track_issues(
+                    sources
+                )
+            )
+        )
+
     def test_generated_output_directory_is_not_a_service_root(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             services_root = Path(temporary)
@@ -218,7 +239,91 @@ class ExternalProviderGovernanceContractTest(unittest.TestCase):
             )
         )
 
+    def test_message_transport_owner_declares_fixed_observability_metrics(self) -> None:
+        governance.load_registry.cache_clear()
+        registry = governance.load_registry()
+        runtime_transport = next(
+            capability
+            for capability in registry["capabilities"]
+            if capability["capability_id"] == "runtime.message.transport"
+        )
+        self.assertEqual(
+            tuple(runtime_transport.get("observability_metrics") or ()),
+            governance.MESSAGE_TRANSPORT_REQUIRED_METRICS,
+        )
+        issues = governance.registry_issues(registry)
+        self.assertFalse(
+            any(
+                "pending_lag/dead_letter/publish_p95/consume_p95" in issue.message
+                for issue in issues
+            )
+        )
+
+    def test_message_transport_p95_is_derived_from_histogram_samples(self) -> None:
+        runtime_source = (
+            ROOT
+            / "quwoquan_service/runtime/messaging/redis_message_transport_binding.go"
+        ).read_text(encoding="utf-8")
+        rules_document = yaml.safe_load(
+            (
+                ROOT
+                / "quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml"
+            ).read_text(encoding="utf-8")
+        )
+        dashboard_source = yaml.safe_load(
+            (
+                ROOT
+                / "quwoquan_ops/observability/monitoring/dashboards/l2_business_journey.json"
+            ).read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            provider_gate.message_transport_observability_issues(
+                runtime_source,
+                rules_document=rules_document,
+                dashboard_source=dashboard_source,
+            ),
+            [],
+        )
+
+        gauge_source = runtime_source.replace(
+            "messageTransportPublishLatency = promauto.NewHistogramVec",
+            "messageTransportPublishLatency = promauto.NewGaugeVec",
+            1,
+        )
+        self.assertTrue(
+            any(
+                "publish_duration_seconds must use HistogramVec" in issue
+                for issue in provider_gate.message_transport_observability_issues(
+                    gauge_source,
+                    rules_document=rules_document,
+                    dashboard_source=dashboard_source,
+                )
+            )
+        )
+
+        invalid_rules = deepcopy(rules_document)
+        publish_rule = next(
+            rule
+            for group in invalid_rules["groups"]
+            for rule in group["rules"]
+            if rule.get("record") == "qwq_message_transport_publish_p95"
+        )
+        publish_rule["expr"] = (
+            "qwq_message_transport_publish_duration_seconds_bucket"
+        )
+        self.assertTrue(
+            any(
+                "must calculate histogram_quantile(0.95" in issue
+                for issue in provider_gate.message_transport_observability_issues(
+                    runtime_source,
+                    rules_document=invalid_rules,
+                    dashboard_source=dashboard_source,
+                )
+            )
+        )
+
     def test_shared_capability_use_is_local_and_cannot_shadow_owner_selection(self) -> None:
+        governance.load_registry.cache_clear()
         registry = governance.load_registry()
         runtime_transport = next(
             capability
@@ -248,7 +353,6 @@ class ExternalProviderGovernanceContractTest(unittest.TestCase):
                 "rtc-service",
                 "search-service",
                 "tag-service",
-                "travel-service",
                 "user-service",
             },
         )
@@ -331,20 +435,30 @@ class ExternalProviderGovernanceContractTest(unittest.TestCase):
         registry = governance.load_registry()
         self.assertEqual(issues, [])
         self.assertEqual(compiled["capabilityCount"], len(registry["capabilities"]))
-        self.assertEqual(compiled["capabilityCount"], 17)
-        self.assertEqual(compiled["providerConformanceCapabilityCount"], 14)
+        self.assertEqual(
+            compiled["providerConformanceCapabilityCount"],
+            len(compiled["providerConformanceCapabilityIds"]),
+        )
+        expected_conformance_capabilities = {
+            capability_id
+            for environment_bindings in compiled["selectedBindings"].values()
+            for capability_id, binding in environment_bindings.items()
+            if (
+                binding["state"] != "not_required"
+                and binding.get("adapter_id")
+                and binding["adapter_id"]
+                != governance.FIRST_PARTY_AUTHORITY_ADAPTER
+            )
+        }
         self.assertEqual(
             set(compiled["providerConformanceCapabilityIds"]),
+            expected_conformance_capabilities,
+        )
+        self.assertTrue(
             {
-                capability["capability_id"]
-                for capability in registry["capabilities"]
-                if capability["capability_id"]
-                not in {
-                    "chat.conversation.membership.read",
-                    "circle.membership.self.read",
-                    "integration.connector_grant.read",
-                }
-            },
+                "location.poi.search",
+                "location.route.read",
+            }.isdisjoint(compiled["providerConformanceCapabilityIds"])
         )
         self.assertEqual(compiled["adapterCount"], len(registry["adapters"]))
         self.assertTrue(

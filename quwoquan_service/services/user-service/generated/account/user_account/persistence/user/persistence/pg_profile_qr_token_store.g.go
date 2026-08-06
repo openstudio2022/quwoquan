@@ -78,23 +78,3 @@ func (s *PGProfileQrTokenStoreBase) Delete(ctx context.Context, id string) error
 	_, err := s.pool.Exec(ctx, `DELETE FROM profile_qr_tokens WHERE token_id = $1`, id)
 	return err
 }
-
-// ListByOwnerUserID returns all ProfileQrToken records for the given foreign key.
-func (s *PGProfileQrTokenStoreBase) ListByOwnerUserID(ctx context.Context, fkID string) ([]model.ProfileQrToken, error) {
-	rows, err := s.pool.Query(ctx,
-		`SELECT `+ProfileQrTokenCols+` FROM profile_qr_tokens WHERE owner_user_id = $1 ORDER BY created_at DESC`, fkID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var result []model.ProfileQrToken
-	for rows.Next() {
-		var e model.ProfileQrToken
-		if err := rows.Scan(&e.TokenID, &e.TokenHash, &e.OwnerUserID, &e.PersonaID, &e.UserHandle, &e.Status, &e.ExpiresAt, &e.RevokedAt, &e.CreatedAt, &e.UpdatedAt); err != nil {
-			return nil, err
-		}
-		result = append(result, e)
-	}
-	return result, rows.Err()
-}

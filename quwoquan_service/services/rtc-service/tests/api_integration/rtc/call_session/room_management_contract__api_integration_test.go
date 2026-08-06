@@ -1,3 +1,8 @@
+// spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-002
+// spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-003
+// readiness_case: join-call-api
+// readiness_case: leave-call-api
+// readiness_case: invite-to-call-api
 package api_integration
 
 import (

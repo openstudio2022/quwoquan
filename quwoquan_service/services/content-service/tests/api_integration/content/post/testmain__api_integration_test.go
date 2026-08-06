@@ -483,7 +483,7 @@ func TestMain(m *testing.M) {
 	if err := profileReadFactStore.EnsureIndexes(ctx); err != nil {
 		panic(fmt.Errorf("ensure ProfileInteractionReadFact indexes: %w", err))
 	}
-	profileProjector := profileinteractionapp.NewProjector(
+	profileProjector := profileinteractionapp.NewProfileInteractionActivityViewProjector(
 		profileinteractioninfra.NewMongoProjectionSourceReader(mongoDB),
 		profileActivityStore,
 	)
@@ -521,13 +521,13 @@ func TestMain(m *testing.M) {
 	profileReadFactRelay = profileinteractionreadapp.NewReadFactOutboxRelay(
 		profileReadFactStore,
 		profileReadFactStore,
-		profileinteractionapp.NewReadFactProjector(profileActivityStore),
+		profileinteractionapp.NewReadFactProjector(profileProjector),
 		"api-integration-profile-interaction-read",
 	)
 	profilePostTargetRelay = postapp.NewOutboxRelay(
 		postStore,
 		postStore,
-		profileinteractionapp.NewPostTargetProjector(profileActivityStore),
+		profileinteractionapp.NewPostTargetProjector(profileProjector),
 		"api-integration-post-profile-interaction-target",
 	)
 	postServiceCore := postapp.NewPostService(
@@ -558,7 +558,9 @@ func TestMain(m *testing.M) {
 	commentCountProjectionRelay = commentapp.NewOutboxRelay(
 		commentStore,
 		commentStore,
-		commentapp.NewCommentCountProjector(commentStore, postStore),
+		postapp.NewCommentCountProjectionPublisher(
+			postapp.NewCommentCountProjectionHandler(commentStore, postStore),
+		),
 		"api-integration-comment-count",
 	)
 	dailyMetricsStore := behaviorpersistence.NewDailyMetricsStore(mongoDB, slog.Default())

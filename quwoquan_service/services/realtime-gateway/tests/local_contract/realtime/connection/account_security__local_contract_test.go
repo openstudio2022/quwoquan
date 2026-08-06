@@ -1,17 +1,21 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-004
+// readiness_case: recover-account-closure-dead-letter-local
 package local_contract
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	rtauth "quwoquan_service/runtime/auth"
+	rterr "quwoquan_service/runtime/errors"
 	runtimemessaging "quwoquan_service/runtime/messaging"
 	streamadapter "quwoquan_service/services/realtime-gateway/internal/realtime/connection/adapters/inbound/stream"
 	"quwoquan_service/services/realtime-gateway/internal/realtime/connection/application"
@@ -737,6 +741,87 @@ func TestAccountSecurityDeadLetterRecoveryReplaysOriginalPEL(t *testing.T) {
 		application.ErrTicketInvalid,
 	) {
 		t.Fatalf("recovered terminal event did not revoke ticket: %v", err)
+	}
+}
+
+func TestAccountClosureDeadLetterRecoveryHTTPReleasesOnlyTheRealPELMarker(
+	t *testing.T,
+) {
+	harness := newGatewayHarness(t)
+	transport, err := runtimemessaging.NewRedisMessageTransportForRoot(
+		"realtime-gateway-recovery-http-local-contract",
+		runtimemessaging.RedisMessageTransportFixture,
+		harness.client,
+		harness.client,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	failures := redisstore.NewAccountSecurityEventFailureStore(harness.client)
+	stateStore := redisstore.NewAccountSecurityStateStore(
+		harness.client,
+		newTestPresenceProjection(t, harness.client),
+	)
+	consumer, err := streamadapter.NewUserAccountSecurityConsumer(
+		transport,
+		stateStore,
+		redisstore.NewAccountSecurityRelay(harness.client),
+		harness.hub,
+		failures,
+		"recovery-http-local-contract",
+		nil,
+		streamadapter.DefaultUserAccountSecurityConsumerConfig(),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const messageID = "1710000000000-77"
+	if _, err := failures.RecordAccountSecurityFailure(
+		t.Context(),
+		"events.user.account",
+		messageID,
+		"event-recovery-http-local",
+		"dependency",
+		errors.New("controlled dependency failure"),
+	); err != nil {
+		t.Fatal(err)
+	}
+	if err := failures.MarkAccountSecurityDeadLettered(
+		t.Context(),
+		"events.user.account",
+		messageID,
+	); err != nil {
+		t.Fatal(err)
+	}
+	handler, err := runtimemessaging.WithDeadLetterRecoveryRoute(
+		http.NotFoundHandler(),
+		runtimemessaging.DeadLetterRecoveryRouteConfig{
+			Path:     "/internal/realtime/account-closure/dead-letters:recover",
+			Module:   rterr.ModuleRealtime,
+			Releaser: consumer,
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/internal/realtime/account-closure/dead-letters:recover",
+		bytes.NewBufferString(`{"sourceStreamId":"`+messageID+`"}`),
+	)
+	request.Header.Set("Idempotency-Key", "recover-realtime-local-77")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusAccepted {
+		t.Fatalf("recovery status=%d body=%s", response.Code, response.Body.String())
+	}
+	deadLettered, err := failures.IsAccountSecurityDeadLettered(
+		t.Context(),
+		"events.user.account",
+		messageID,
+	)
+	if err != nil || deadLettered {
+		t.Fatalf("recovery marker remains deadLettered=%t err=%v", deadLettered, err)
 	}
 }
 

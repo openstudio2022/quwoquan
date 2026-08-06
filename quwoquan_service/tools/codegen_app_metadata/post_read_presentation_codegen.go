@@ -27,17 +27,6 @@ type articleDetailWireKeysFile struct {
 	} `yaml:"keys"`
 }
 
-type readPresentationProjectionFile struct {
-	Version   int    `yaml:"version"`
-	DartClass string `yaml:"dart_class"`
-	Fields    []struct {
-		Name     string `yaml:"name"`
-		DartType string `yaml:"dart_type"`
-		PostBase string `yaml:"post_base"`
-		WireKey  string `yaml:"wire_key"`
-	} `yaml:"fields"`
-}
-
 func renderPostReadSurfaceIdDart(yamlBytes []byte) (string, error) {
 	var f readPresentationSurfacesFile
 	if err := yaml.Unmarshal(yamlBytes, &f); err != nil {
@@ -108,8 +97,94 @@ func writeWireKeysGeneratedFile(appDir, postProjectionsDir, yamlName, outName st
 		return err
 	}
 	writeFile(
-		filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "content", outName),
+		contentPostAdaptersOutputPath(appDir, outName),
 		out,
+	)
+	return nil
+}
+
+func readWireKeysFile(postProjectionsDir, yamlName string) (*articleDetailWireKeysFile, error) {
+	keysBytes, err := readMetadataDocument(filepath.Join(postProjectionsDir, yamlName))
+	if err != nil {
+		return nil, err
+	}
+	var file articleDetailWireKeysFile
+	if err := yaml.Unmarshal(keysBytes, &file); err != nil {
+		return nil, err
+	}
+	return &file, nil
+}
+
+func requiredWireKey(
+	file *articleDetailWireKeysFile,
+	constName string,
+) (string, error) {
+	for _, key := range file.Keys {
+		if key.ConstName == constName && strings.TrimSpace(key.JSONKey) != "" {
+			return strings.TrimSpace(key.JSONKey), nil
+		}
+	}
+	return "", fmt.Errorf(
+		"wire key %q is required by the Content Media public seam",
+		constName,
+	)
+}
+
+func writeContentMediaPostProjectionKeys(
+	appDir,
+	postProjectionsDir string,
+) error {
+	articleKeys, err := readWireKeysFile(
+		postProjectionsDir,
+		"article_detail_wire_keys.yaml",
+	)
+	if err != nil {
+		return err
+	}
+	immersiveKeys, err := readWireKeysFile(
+		postProjectionsDir,
+		"content_post_immersive_wire_keys.yaml",
+	)
+	if err != nil {
+		return err
+	}
+	required := []struct {
+		member string
+		source *articleDetailWireKeysFile
+	}{
+		{member: "articleMarkdown", source: articleKeys},
+		{member: "coverUrl", source: articleKeys},
+		{member: "description", source: immersiveKeys},
+		{member: "content", source: immersiveKeys},
+		{member: "caption", source: immersiveKeys},
+		{member: "visibility", source: immersiveKeys},
+	}
+	var b strings.Builder
+	b.WriteString("// GENERATED FILE — DO NOT EDIT BY HAND.\n")
+	b.WriteString("// Sources: content/post/projections/article_detail_wire_keys.yaml, content_post_immersive_wire_keys.yaml\n")
+	b.WriteString("// Regenerate: make codegen-app\n\n")
+	b.WriteString("/// Media Asset 消费 Post 投影时使用的最小稳定键集合。\n")
+	b.WriteString("abstract final class ContentMediaPostProjectionKeys {\n")
+	b.WriteString("  const ContentMediaPostProjectionKeys._();\n")
+	for _, key := range required {
+		value, err := requiredWireKey(key.source, key.member)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(
+			&b,
+			"\n  static const String %s = '%s';\n",
+			key.member,
+			value,
+		)
+	}
+	b.WriteString("}\n")
+	writeFile(
+		contentPostPublicGeneratedOutputPath(
+			appDir,
+			"content_media_post_projection_keys.g.dart",
+		),
+		b.String(),
 	)
 	return nil
 }
@@ -125,7 +200,10 @@ func writePostReadPresentationArtifacts(appDir, postProjectionsDir string) error
 		return err
 	}
 	writeFile(
-		filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "content", "post_read_surface_id.g.dart"),
+		contentPostPresentationOutputPath(
+			appDir,
+			"post_read_surface_id.g.dart",
+		),
 		surfOut,
 	)
 
@@ -145,57 +223,12 @@ func writePostReadPresentationArtifacts(appDir, postProjectionsDir string) error
 	); err != nil {
 		return err
 	}
+	if err := writeContentMediaPostProjectionKeys(
+		appDir,
+		postProjectionsDir,
+	); err != nil {
+		return err
+	}
 
-	presPath := filepath.Join(postProjectionsDir, "post_read_presentation.yaml")
-	presBytes, err := readMetadataDocument(presPath)
-	if err != nil {
-		return err
-	}
-	presOut, err := renderPostReadPresentationDtoDart(presBytes)
-	if err != nil {
-		return err
-	}
-	writeFile(
-		filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "content", "post_read_presentation.g.dart"),
-		presOut,
-	)
 	return nil
-}
-
-func renderPostReadPresentationDtoDart(yamlBytes []byte) (string, error) {
-	var f readPresentationProjectionFile
-	if err := yaml.Unmarshal(yamlBytes, &f); err != nil {
-		return "", err
-	}
-	class := f.DartClass
-	if class == "" {
-		class = "PostReadPresentation"
-	}
-	var b strings.Builder
-	b.WriteString("// GENERATED FILE — DO NOT EDIT BY HAND.\n")
-	b.WriteString("// Source: services/content-service/contracts/content/post/projections/post_read_presentation.yaml\n")
-	b.WriteString("// Regenerate: make codegen-app\n\n")
-	b.WriteString("/// 帖子只读投影；字段与类型只来自 canonical metadata。\n")
-	fmt.Fprintf(&b, "class %s {\n", class)
-	fmt.Fprintf(&b, "  const %s({\n", class)
-	for _, fld := range f.Fields {
-		if fld.Name == "" {
-			continue
-		}
-		fmt.Fprintf(&b, "    required this.%s,\n", fld.Name)
-	}
-	fmt.Fprintf(&b, "  });\n\n")
-	for _, fld := range f.Fields {
-		if fld.Name == "" {
-			continue
-		}
-		dt := fld.DartType
-		if dt == "" {
-			dt = "String"
-		}
-		fmt.Fprintf(&b, "  final %s %s;\n", dt, fld.Name)
-	}
-
-	fmt.Fprintf(&b, "}\n")
-	return b.String(), nil
 }

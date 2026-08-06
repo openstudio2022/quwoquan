@@ -32,9 +32,65 @@ type OperationSecurityDescriptor struct {
 	Permissions          []string
 	OwnershipPolicy      string
 	TimeoutMilliseconds  int
+	StreamBudget         *OperationStreamBudget
 	Idempotency          string
 	VersionPrecondition  string
 	CommercialStatus     string
+}
+
+// OperationStreamBudget is the generated reliability.stream_budget of one
+// streaming operation. A long-lived connection needs three independent bounds
+// and TimeoutMilliseconds can only carry one of them, so a streaming
+// descriptor derives TimeoutMilliseconds from MaxDurationMilliseconds and
+// keeps the handshake and idle bounds here for the stream writer to enforce.
+type OperationStreamBudget struct {
+	HandshakeMilliseconds   int
+	IdleMilliseconds        int
+	MaxDurationMilliseconds int
+}
+
+// Handshake bounds admission until the first flushed byte of the stream.
+func (budget OperationStreamBudget) Handshake() time.Duration {
+	return time.Duration(budget.HandshakeMilliseconds) * time.Millisecond
+}
+
+// Idle bounds the gap between two consecutive payload frames.
+func (budget OperationStreamBudget) Idle() time.Duration {
+	return time.Duration(budget.IdleMilliseconds) * time.Millisecond
+}
+
+// MaxDuration bounds admission until the connection is closed regardless of
+// how healthy it is. Clients resume through the declared streaming resume
+// field, so this is a connection lifetime, not a work deadline.
+func (budget OperationStreamBudget) MaxDuration() time.Duration {
+	return time.Duration(budget.MaxDurationMilliseconds) * time.Millisecond
+}
+
+// StreamBudgetForOperation returns the declared stream budget of one canonical
+// operation ID. It panics when the operation is absent or non-streaming: a
+// stream handler that cannot find its own contract must fail at wiring time
+// rather than fall back to a hand-written duration, which is how the transport
+// becomes a second truth source.
+func StreamBudgetForOperation(
+	descriptors []OperationSecurityDescriptor,
+	canonicalOperationID string,
+) OperationStreamBudget {
+	for _, descriptor := range descriptors {
+		if descriptor.CanonicalOperationID != canonicalOperationID {
+			continue
+		}
+		if descriptor.StreamBudget == nil {
+			panic(
+				"operation declares no reliability.stream_budget: " +
+					canonicalOperationID,
+			)
+		}
+		return *descriptor.StreamBudget
+	}
+	panic(
+		"operation missing from the generated descriptor table: " +
+			canonicalOperationID,
+	)
 }
 
 type compiledOperationDescriptor struct {
@@ -75,6 +131,24 @@ func NewOperationPathTemplateResolver(
 	}
 }
 
+// operationBoundary selects which contract clauses one guard mount enforces.
+// The public boundary is the only place that may refuse traffic for commercial
+// status, because that status is release evidence about an object, not a
+// property of the request.
+type operationBoundary int
+
+const (
+	// publicOperationBoundary is api-edge: the single externally reachable
+	// boundary. Blocked operations must fail closed here.
+	publicOperationBoundary operationBoundary = iota
+	// runtimeOperationBoundary is an owner service process. It enforces the
+	// request-level contract (authn/authz/idempotency/precondition/deadline)
+	// and deliberately lets blocked operations through, so the candidate
+	// evidence that turns them ready can still be produced against a real
+	// service.
+	runtimeOperationBoundary
+)
+
 // RequireGeneratedOperationAuthorization applies a generated, default-deny
 // route table. Unknown, blocked, or malformed operations never reach handlers.
 func RequireGeneratedOperationAuthorization(
@@ -93,7 +167,48 @@ func RequireGeneratedOperationAuthorization(
 				)
 				return
 			}
-			authorizeGeneratedOperation(w, r, descriptor, next)
+			authorizeGeneratedOperation(
+				w,
+				r,
+				descriptor,
+				publicOperationBoundary,
+				next,
+			)
+		})
+	}
+}
+
+// EnforceRuntimeOperationContract applies the generated descriptor table on an
+// owner service's own inbound boundary: verified principal, scopes and
+// permissions, Idempotency-Key, If-Match and the declared
+// reliability.timeout_ms deadline.
+//
+// It differs from RequireGeneratedOperationAuthorization in exactly two ways,
+// both required for an internal boundary:
+//   - commercial status is not a gate here (see runtimeOperationBoundary);
+//   - unmatched paths pass through, because this middleware is not the routing
+//     authority for probes or for object routes that are still migrating.
+//
+// api-edge must keep using RequireGeneratedOperationAuthorization: it is the
+// public boundary and stays default-deny plus commercial fail-closed.
+func EnforceRuntimeOperationContract(
+	descriptors []OperationSecurityDescriptor,
+) func(http.Handler) http.Handler {
+	compiled := mustCompileOperationDescriptors(descriptors)
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			descriptor, ok := matchOperation(compiled, r.Method, r.URL.Path)
+			if !ok {
+				next.ServeHTTP(w, r)
+				return
+			}
+			authorizeGeneratedOperation(
+				w,
+				r,
+				descriptor,
+				runtimeOperationBoundary,
+				next,
+			)
 		})
 	}
 }
@@ -143,7 +258,13 @@ func EnforceGeneratedOperationAuthorization(
 				next.ServeHTTP(w, r)
 				return
 			}
-			authorizeGeneratedOperation(w, r, descriptor, next)
+			authorizeGeneratedOperation(
+				w,
+				r,
+				descriptor,
+				publicOperationBoundary,
+				next,
+			)
 		})
 	}
 }
@@ -252,9 +373,20 @@ func authorizeGeneratedOperation(
 	w http.ResponseWriter,
 	r *http.Request,
 	descriptor compiledOperationDescriptor,
+	boundary operationBoundary,
 	next http.Handler,
 ) {
-	if descriptor.CommercialStatus != "ready" || descriptor.AuthMode == "deny" {
+	if descriptor.AuthMode == "deny" {
+		writeOperationGuardError(
+			w,
+			r,
+			"forbidden",
+			"operation denies all callers",
+		)
+		return
+	}
+	if boundary == publicOperationBoundary &&
+		descriptor.CommercialStatus != "ready" {
 		writeOperationGuardError(
 			w,
 			r,
@@ -270,6 +402,22 @@ func authorizeGeneratedOperation(
 			r,
 			"unauthorized",
 			"verified principal is required",
+		)
+		return
+	}
+	if hasPrincipal &&
+		!isSafeReadMethod(r.Method) &&
+		principal.TokenType == TokenTypeAccess &&
+		strings.TrimSpace(principal.Actor.PersonaID) != "" &&
+		(strings.HasPrefix(
+			strings.TrimSpace(principal.Actor.AccountID),
+			"service:",
+		) || containsAny(principal.Roles, []string{"service"})) {
+		writeOperationGuardError(
+			w,
+			r,
+			"forbidden",
+			"legacy delegated persona credentials are read-only",
 		)
 		return
 	}
@@ -328,6 +476,15 @@ func authorizeGeneratedOperation(
 		)
 		return
 	}
+	if err := consumePendingDelegatedCommand(r.Context()); err != nil {
+		writeOperationGuardError(
+			w,
+			r,
+			"forbidden",
+			"delegated command grant cannot be consumed: "+err.Error(),
+		)
+		return
+	}
 	ctx := context.WithValue(
 		r.Context(),
 		operationDescriptorContextKey{},
@@ -342,6 +499,12 @@ func authorizeGeneratedOperation(
 		current.Actor = operation.ActorContext{}
 	}
 	ctx = operation.WithContext(ctx, current)
+	// For a unary operation this is the whole-request budget. For a streaming
+	// operation TimeoutMilliseconds is the derived connection lifetime
+	// (stream_budget.max_duration_ms), so the same deadline closes a stream
+	// whose underlying work never terminates. The handshake and idle bounds
+	// cannot be expressed as a request deadline and are enforced by the stream
+	// writer from the same descriptor.
 	if descriptor.TimeoutMilliseconds > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(
@@ -522,17 +685,37 @@ func containsAny(availableValues []string, expectedValues []string) bool {
 	return false
 }
 
+// operationGuardUserMessages mirrors the baseline user_message of the gateway
+// admission errors declared in
+// services/api-edge/contracts/edge_security/operation_admission_decision/errors.yaml.
+// The guard runs in runtime and is mounted by every service, so it cannot
+// import one service's generated error package; the contract remains the
+// declaring authority and TestOperationGuardUserMessagesMatchContract fails the
+// build as soon as the two drift.
+//
+//nolint:gochecknoglobals
+var operationGuardUserMessages = map[string]string{
+	"route_not_found":  "接口不存在或已下线",
+	"unauthorized":     "请先登录后再继续",
+	"forbidden":        "当前账号没有该操作权限",
+	"invalid_argument": "请求参数不完整，请重试",
+}
+
 func writeOperationGuardError(
 	w http.ResponseWriter,
 	r *http.Request,
 	reason string,
 	debugMessage string,
 ) {
+	userMessage, declared := operationGuardUserMessages[reason]
+	if !declared {
+		panic("operation guard rejection reason has no declared user message: " + reason)
+	}
 	rterr.WriteHTTPError(
 		w,
 		rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleGateway, rterr.KindUser, reason),
-			"请求未获授权",
+			userMessage,
 			debugMessage,
 		),
 		rterr.HTTPWriteOptionsFromRequest(r),
@@ -548,7 +731,7 @@ func writeOperationRequestError(
 		w,
 		rterr.NewInvalidArgument(
 			rterr.ModuleGateway,
-			"请求参数不完整",
+			operationGuardUserMessages["invalid_argument"],
 			debugMessage,
 		),
 		rterr.HTTPWriteOptionsFromRequest(r),

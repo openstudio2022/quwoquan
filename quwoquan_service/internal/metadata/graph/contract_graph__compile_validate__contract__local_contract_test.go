@@ -18,7 +18,7 @@ import (
 
 func TestContractGraphCompilesObjectFirstPacket(t *testing.T) {
 	metadataDir := t.TempDir()
-	writeObjectFixture(t, metadataDir, "content/content/post", aggregateObject("Post"), commercialQuery("Post", "GetPost", "/content/posts/{postId}"))
+	writeObjectFixture(t, metadataDir, "content/content/post", aggregateObject("Post"), commandOperation("Post", "CreatePost", "/content/posts"))
 
 	sourceCatalog, err := load.Load(metadataDir)
 	if err != nil {
@@ -98,9 +98,15 @@ func TestContractGraphRejectsDuplicateTransport(t *testing.T) {
 	}
 }
 
-func TestContractGraphPreservesCanonicalSSETransport(t *testing.T) {
-	metadataDir := t.TempDir()
-	operation := commercialQuery("AssistantRun", "StreamEvents", "/assistant/runs/{runId}/events")
+// streamingOperationFixture turns the shared query fixture into the canonical
+// streaming shape: SSE transport, resume/terminal policy, per-frame budget and
+// the three-part stream budget that replaces the scalar timeout.
+func streamingOperationFixture(reliability string) string {
+	operation := commercialQuery(
+		"AssistantRun",
+		"StreamEvents",
+		"/assistant/runs/{runId}/events",
+	)
 	operation = strings.Replace(
 		operation,
 		"    actor: persona_or_device\n",
@@ -113,7 +119,86 @@ func TestContractGraphPreservesCanonicalSSETransport(t *testing.T) {
 		"        - {name: runId, field: runId}\n      query:\n        - {name: resumeToken, field: resumeToken, required: false}\n",
 		1,
 	)
-	writeObjectFixture(t, metadataDir, "assistant/assistant/assistant_run", aggregateObject("AssistantRun"), operation)
+	return strings.Replace(
+		operation,
+		"    reliability: {timeout_ms: 1000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}\n",
+		"    reliability: {"+reliability+", cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}\n",
+		1,
+	)
+}
+
+func streamingOperationIssues(t *testing.T, reliability string) []validate.Issue {
+	t.Helper()
+	metadataDir := t.TempDir()
+	writeObjectFixture(
+		t,
+		metadataDir,
+		"assistant/assistant/assistant_run",
+		aggregateObject("AssistantRun"),
+		streamingOperationFixture(reliability),
+	)
+	catalog, err := load.Load(metadataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return validate.Run(graph.Build(catalog), validate.ProfileBaseline)
+}
+
+func webSocketUpgradeFixture(reliability string) string {
+	return `
+api_routes:
+  - method: GET
+    path: /realtime/ws
+    operation: WebSocketUpgrade
+    actor: persona
+    request_body_kind: none
+    response_body_kind: upgrade
+    security: {auth_mode: required}
+    application: {kind: session, facet: ConnectionSessionFacet, method: openWebSocket, session_owner: Connection}
+    authorization: {principal: account, ownership_policy: ticket_self}
+    commercial: {status: ready}
+    reliability: {` + reliability + `, cancellation: supported, retry_mode: none, max_attempts: 1, idempotency: none}
+    error_codes: [CONTENT.SYSTEM.unavailable]
+    privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
+    telemetry: {metric: realtime_upgrade, trace: true}
+    slo: {latency_p95_ms: 300, availability_percent: 99.9}
+`
+}
+
+func webSocketUpgradeIssues(t *testing.T, reliability string) []validate.Issue {
+	t.Helper()
+	metadataDir := t.TempDir()
+	writeObjectFixture(
+		t,
+		metadataDir,
+		"realtime/realtime/connection",
+		`
+kind: runtime_session
+description: transient connection
+identity: {fields: [id], version_source: session}
+access: {commands: session_owner, queries: named_reader, cross_context: public_contract_only}
+relationships: []
+`,
+		webSocketUpgradeFixture(reliability),
+	)
+	catalog, err := load.Load(metadataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return validate.Run(graph.Build(catalog), validate.ProfileBaseline)
+}
+
+func TestContractGraphPreservesCanonicalSSETransport(t *testing.T) {
+	metadataDir := t.TempDir()
+	writeObjectFixture(
+		t,
+		metadataDir,
+		"assistant/assistant/assistant_run",
+		aggregateObject("AssistantRun"),
+		streamingOperationFixture(
+			"stream_budget: {handshake_ms: 5000, idle_ms: 60000, max_duration_ms: 600000}",
+		),
+	)
 	catalog, err := load.Load(metadataDir)
 	if err != nil {
 		t.Fatal(err)
@@ -122,11 +207,110 @@ func TestContractGraphPreservesCanonicalSSETransport(t *testing.T) {
 	if len(contractGraph.Operations) != 1 {
 		t.Fatalf("operations=%d, want 1", len(contractGraph.Operations))
 	}
-	if got := contractGraph.Operations[0].Transport; got != "sse" {
-		t.Fatalf("transport=%q, want sse", got)
+	operation := contractGraph.Operations[0]
+	if operation.Transport != "sse" {
+		t.Fatalf("transport=%q, want sse", operation.Transport)
+	}
+	budget := operation.Reliability.StreamBudget
+	if budget == nil {
+		t.Fatal("streaming operation lost its declared stream budget")
+	}
+	if budget.HandshakeMilliseconds != 5000 ||
+		budget.IdleMilliseconds != 60000 ||
+		budget.MaxDurationMilliseconds != 600000 {
+		t.Fatalf("stream budget drifted: %#v", budget)
+	}
+	// The connection ceiling stays one number so every existing timeout
+	// consumer keeps working, but it is derived rather than authored.
+	if operation.Reliability.TimeoutMilliseconds != 600000 {
+		t.Fatalf(
+			"timeout_ms=%d must be derived from max_duration_ms",
+			operation.Reliability.TimeoutMilliseconds,
+		)
 	}
 	if issues := validate.Run(contractGraph, validate.ProfileBaseline); len(issues) != 0 {
 		t.Fatalf("valid SSE operation rejected: %+v", issues)
+	}
+}
+
+func TestContractGraphAcceptsUpgradeResponseWithStreamBudget(t *testing.T) {
+	issues := webSocketUpgradeIssues(
+		t,
+		"stream_budget: {handshake_ms: 5000, idle_ms: 90000, max_duration_ms: 1800000}",
+	)
+	if len(issues) != 0 {
+		t.Fatalf("valid WebSocket upgrade stream budget rejected: %+v", issues)
+	}
+}
+
+func TestContractGraphRejectsUpgradeResponseWithoutStreamBudget(t *testing.T) {
+	issues := webSocketUpgradeIssues(t, "timeout_ms: 1000")
+	if !hasIssueCode(issues, "CONTRACT.RELIABILITY.STREAM_BUDGET_REQUIRED") {
+		t.Fatalf("WebSocket upgrade without stream budget accepted: %+v", issues)
+	}
+}
+
+func TestContractGraphRejectsUpgradeResponseWithScalarTimeout(t *testing.T) {
+	issues := webSocketUpgradeIssues(
+		t,
+		"timeout_ms: 1000, stream_budget: {handshake_ms: 5000, idle_ms: 90000, max_duration_ms: 1800000}",
+	)
+	if !hasIssueCode(issues, "CONTRACT.RELIABILITY.STREAM_TIMEOUT_FORBIDDEN") {
+		t.Fatalf("WebSocket upgrade authored both timeout vocabularies: %+v", issues)
+	}
+}
+
+// A streaming operation with only a scalar timeout is the defect shape: one
+// number silently stands in for handshake, idle and connection lifetime.
+func TestContractGraphRejectsStreamingOperationWithoutStreamBudget(t *testing.T) {
+	issues := streamingOperationIssues(t, "timeout_ms: 190000")
+	if !hasIssueCode(issues, "CONTRACT.RELIABILITY.STREAM_BUDGET_REQUIRED") {
+		t.Fatalf("streaming operation without stream budget accepted: %+v", issues)
+	}
+}
+
+// Authoring both is the second-truth-source shape: two independently writable
+// connection ceilings that can disagree.
+func TestContractGraphRejectsStreamingOperationWithScalarTimeout(t *testing.T) {
+	issues := streamingOperationIssues(
+		t,
+		"timeout_ms: 190000, stream_budget: {handshake_ms: 5000, idle_ms: 60000, max_duration_ms: 600000}",
+	)
+	if !hasIssueCode(issues, "CONTRACT.RELIABILITY.STREAM_TIMEOUT_FORBIDDEN") {
+		t.Fatalf("streaming operation authored a scalar timeout: %+v", issues)
+	}
+}
+
+// A bound at or above the connection lifetime can never fire, so it reads like
+// enforcement without being it.
+func TestContractGraphRejectsUnreachableStreamBudget(t *testing.T) {
+	issues := streamingOperationIssues(
+		t,
+		"stream_budget: {handshake_ms: 5000, idle_ms: 600000, max_duration_ms: 600000}",
+	)
+	if !hasIssueCode(issues, "CONTRACT.RELIABILITY.UNREACHABLE_STREAM_BUDGET") {
+		t.Fatalf("unreachable idle bound accepted: %+v", issues)
+	}
+}
+
+// The stream budget vocabulary must stay off unary operations, otherwise a
+// request with one budget gains three more that nothing enforces.
+func TestContractGraphRejectsStreamBudgetOnUnaryOperation(t *testing.T) {
+	metadataDir := t.TempDir()
+	operation := strings.Replace(
+		commercialQuery("Post", "GetPost", "/content/posts/{postId}"),
+		"    reliability: {timeout_ms: 1000,",
+		"    reliability: {timeout_ms: 1000, stream_budget: {handshake_ms: 100, idle_ms: 200, max_duration_ms: 300},",
+		1,
+	)
+	writeObjectFixture(t, metadataDir, "content/content/post", aggregateObject("Post"), operation)
+	catalog, err := load.Load(metadataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	issues := validate.Run(graph.Build(catalog), validate.ProfileBaseline)
+	if !hasIssueCode(issues, "CONTRACT.RELIABILITY.STREAM_BUDGET_FORBIDDEN") {
+		t.Fatalf("unary operation declared a stream budget: %+v", issues)
 	}
 }
 
@@ -343,14 +527,15 @@ func writeObjectFixture(t *testing.T, metadataDir, relativeDir, object, operatio
 		writeFile(t, filepath.Join(metadataDir, relativeDir, "errors.yaml"), `
 errors:
   - code: `+errorCode+`
-    kind: SYSTEM
     reason: `+errorReason+`
     http_status: 503
     emitted_by:
       - surface: http
         operations:
 `+operationBindings.String()+`    recovery_action: retry
+    disruption_level: snackbar
     recovery_after_seconds: 1
+    user_message: {zh: "暂时不可用，请稍后重试", en: "Temporarily unavailable, please retry"}
 `)
 	}
 	writeFile(t, filepath.Join(metadataDir, relativeDir, "fields.yaml"), `
@@ -377,12 +562,10 @@ enums:
 	writeFile(t, filepath.Join(metadataDir, relativeDir, "events.yaml"), `
 events:
   - name: FixtureObjectHydrated
-    producer: fixture
-    consumers: [fixture-projector]
-    channel: event_store
+    delivery_semantics: transactional_event_log
+    no_consumer_reason: fixture event remains in the transactional event log
     payload_entity: `+pascalCaseFixtureObject(parts[len(parts)-1])+`
     payload_fields: [id, status]
-subscriptions: [FixtureObjectHydrated]
 `)
 }
 

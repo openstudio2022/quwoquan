@@ -552,6 +552,7 @@ api_routes:
 '
     method: GET
     operation: SearchSocialRelations
+    pagination: {default_items: 20, maximum_items: 50}
     commercial:
       status: ready
     path: /user/search/social-relations
@@ -1315,48 +1316,7 @@ contract_test:
     元数据驱动：从 fields.yaml + service.yaml 自动生成 mock 数据和断言。
 
 '
-  mock_strategy:
-    app_side:
-      data_source: fields.yaml
-      description: App 自身不依赖云端的测试
-      generation: 从 fields.yaml 生成符合 constraints/classification 的 mock JSON
-      mock_target: user-service API
-      scenarios:
-        - assertions:
-            - status_200
-            - response_matches_schema
-            - pii_fields_filtered
-          mock_response: auto_from_fields
-          name: get_profile_success
-          route: GET /user/profile/{userId}
-        - assertions:
-            - status_200
-            - updated_fields_reflected
-          mock_request: auto_from_request_entity
-          name: update_profile_success
-          route: PATCH /user/profile
-        - assertions:
-            - status_200
-            - only_one_active
-          name: persona_activate
-          route: POST /user/personas/{personaId}/activate
-        - assertions:
-            - status_200
-            - tokens_returned
-          name: login_flow
-          route: POST /user/auth/login
-        - assertions:
-            - status_200
-            - response_matches_schema
-          mock_response: auto_from_fields
-          name: get_appearance_settings
-          route: GET /user/settings/appearance
-        - assertions:
-            - status_200
-            - updated_fields_reflected
-          mock_request: auto_from_request_entity
-          name: update_appearance_settings
-          route: PATCH /user/settings/appearance
+  test_strategy:
     service_side:
       data_management:
         cleanup: TRUNCATE user_profiles, personas, user_auth, user_devices, user_settings, profile_update_proposals CASCADE
@@ -1373,7 +1333,6 @@ contract_test:
             - SELECT * FROM user_profiles WHERE user_id = ? → row exists
             - SELECT * FROM user_auth WHERE user_id = ? → row exists
             - SELECT * FROM user_settings WHERE user_id = ? → defaults correct
-            - eventSpy.AssertPublished('UserRegistered', {userId, nickname})
           command: RegisterUser
           name: create_user_aggregate
           seed:
@@ -1430,3 +1389,340 @@ contract_test:
             - fixture.NewUserAuth()
       spy_targets:
         - event_publisher
+readiness_cases:
+  - case_id: materialize-active-persona-profile-local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/spec.md#dom-001
+    producer: service
+    layer: local_contract
+    target: {kind: object, id: user.user_account}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/account/user_account/persona_profile_projector__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: materialize-active-persona-profile-api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/spec.md#dom-001
+    producer: service
+    layer: api_integration
+    target: {kind: object, id: user.user_account}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/user_account/persona_contract__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgres, digest_binding: candidate}
+  - case_id: list-personas-local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: ListPersonas}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/account/user_account/operation_queries__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: list-personas-api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: ListPersonas}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/user_account/persona_contract__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgres, digest_binding: candidate}
+  - case_id: get-persona-management-summary-local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: GetPersonaManagementSummary}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/account/user_account/operation_queries__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: get-persona-management-summary-api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: GetPersonaManagementSummary}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/user_account/operation_queries__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgres, digest_binding: candidate}
+  - case_id: get-active-persona-context-local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: GetActivePersonaContext}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/account/user_account/operation_queries__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: get-active-persona-context-api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: GetActivePersonaContext}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/user_account/active_persona_context_contract__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgres, digest_binding: candidate}
+  - case_id: get-persona-lifecycle-guard-local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/spec.md#gwt-003
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: GetPersonaLifecycleGuard}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/account/user_account/operation_queries__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: get-persona-lifecycle-guard-api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/spec.md#gwt-003
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: GetPersonaLifecycleGuard}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/user_account/operation_queries__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgres, digest_binding: candidate}
+  - case_id: get-persona-profile-local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-profile-subject-and-visibility/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: GetPersonaProfile}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/account/user_account/operation_queries__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: get-persona-profile-api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-profile-subject-and-visibility/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: GetPersonaProfile}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/user_account/persona_view_contract__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgres, digest_binding: candidate}
+  - case_id: get-user-homepage-bundle-local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-profile-subject-and-visibility/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: GetUserHomepageBundle}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/account/user_account/operation_queries__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: get-user-homepage-bundle-api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-profile-subject-and-visibility/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: GetUserHomepageBundle}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/user_account/homepage_bundle_contract__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgres, digest_binding: candidate}
+  - case_id: get-me-profile-local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/profile-read-update/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: GetMeProfile}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/account/user_account/operation_queries__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: get-me-profile-api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/profile-read-update/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: GetMeProfile}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/user_account/persona_view_contract__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgres, digest_binding: candidate}
+  - case_id: search-social-relations-local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/social-graph-read/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: SearchSocialRelations}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/account/user_account/operation_queries__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: search-social-relations-api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/social-graph-read/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: SearchSocialRelations}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/user_account/persona_view_contract__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgres, digest_binding: candidate}
+  - case_id: pull-user-sync-local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/user-service-cloud-delivery/remote-profile-delivery/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: PullUserSync}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/account/user_account/operation_queries__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: pull-user-sync-api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/user-service-cloud-delivery/remote-profile-delivery/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: PullUserSync}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/user_account/profile_sync_contract__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgres, digest_binding: candidate}
+  - case_id: get-user-profile-local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/profile-read-update/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: GetUserProfile}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/account/user_account/operation_queries__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: get-user-profile-api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/profile-read-update/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: GetUserProfile}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/user_account/profile_crud_contract__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgres, digest_binding: candidate}
+  - case_id: get-profile-edit-snapshot-local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/profile-read-update/spec.md#gwt-002
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: GetProfileEditSnapshot}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/account/user_account/operation_queries__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: get-profile-edit-snapshot-api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/profile-read-update/spec.md#gwt-002
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: GetProfileEditSnapshot}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/user_account/profile_crud_contract__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgres, digest_binding: candidate}
+  - case_id: get-profile-qr-card-local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/profile-read-update/spec.md#gwt-002
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: GetProfileQrCard}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/account/user_account/operation_queries__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: get-profile-qr-card-api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/profile-read-update/spec.md#gwt-002
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: GetProfileQrCard}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/user_account/profile_crud_contract__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgres, digest_binding: candidate}
+  - case_id: resolve-profile-qr-token-local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/profile-read-update/spec.md#gwt-002
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: ResolveProfileQrToken}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/account/user_account/operation_queries__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: resolve-profile-qr-token-api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/profile-read-update/spec.md#gwt-002
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: ResolveProfileQrToken}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/user_account/profile_crud_contract__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgres, digest_binding: candidate}
+  - case_id: get-user-interest-profile-local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/career-interest-profile-editor/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: GetUserInterestProfile}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/account/user_account/interest_profile_contract__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: get-user-interest-profile-api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/career-interest-profile-editor/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: GetUserInterestProfile}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/user_account/operation_queries__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: close-account-local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: CloseAccount}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/account/user_account/close_account_facade__lifecycle__contract__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: close-account-api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: CloseAccount}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/user_account/close_account_contract__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgres, digest_binding: candidate}
+  - case_id: suspend-account-local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-suspension-and-appeal-lifecycle/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: SuspendAccount}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/account/user_account/account_enforcement_facade__lifecycle__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: suspend-account-api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-suspension-and-appeal-lifecycle/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: SuspendAccount}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/user_account/account_enforcement_http__security__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgres, digest_binding: candidate}
+  - case_id: restore-account-local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-suspension-and-appeal-lifecycle/spec.md#gwt-003
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: RestoreAccount}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/account/user_account/account_enforcement_facade__lifecycle__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: restore-account-api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-suspension-and-appeal-lifecycle/spec.md#gwt-003
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: RestoreAccount}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/user_account/account_enforcement_http__security__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgres, digest_binding: candidate}
+  - case_id: read-account-security-local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-004
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: ReadAccountSecurity}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/account/user_account/account_security_operations__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: read-account-security-api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-004
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: ReadAccountSecurity}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/user_account/account_security_authority_contract__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgres, digest_binding: candidate}
+  - case_id: check-account-security-authority-local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/spec.md#sit-003
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: CheckAccountSecurityAuthority}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/account/user_account/account_security_operations__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: check-account-security-authority-api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/spec.md#sit-003
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: CheckAccountSecurityAuthority}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/user_account/account_security_authority_contract__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgres, digest_binding: candidate}
+  - case_id: user_account_get_active_persona_context_app_local
+    spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/commercial-remote-only-message-system/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: GetActivePersonaContext}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/account/user_account/user_account_remote_contract__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: user_account_pull_user_sync_app_local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/user-service-cloud-delivery/remote-profile-delivery/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: PullUserSync}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/account/user_account/user_sync_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}

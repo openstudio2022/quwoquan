@@ -32,8 +32,7 @@
       ],
       "consentScopes": [
         {"id": "assistant.memory.preferences.read", "displayText": "读取已确认的旅行偏好", "description": "只读取用户主动确认保留的偏好"},
-        {"id": "assistant.learning.feedback_context.read", "displayText": "使用脱敏的助手反馈摘要", "description": "仅在个人小趣中使用经策略筛选的聚合计数和质量指标，不读取原始提问、回答或评价文字"},
-        {"id": "travel.trip.read", "displayText": "读取有权访问的行程", "description": "用于规划、变化提醒和行程时间线服务"}
+        {"id": "assistant.learning.feedback_context.read", "displayText": "使用脱敏的助手反馈摘要", "description": "仅在个人小趣中使用经策略筛选的聚合计数和质量指标，不读取原始提问、回答或评价文字"}
       ],
       "valueDescription": "把群聊里的需求、吃玩住行计划、现场变化和随拍串成一条共同旅行时间线",
       "examples": [
@@ -59,8 +58,47 @@
           "templateRef": "assistant.answer.default"
         }
       ],
-      "dataUseSummary": "仅在当前个人或共享场景授权范围内读取行程、消息、内容与公开网页；经单独授权的脱敏反馈摘要只用于个人小趣，私人记忆和个人 Connector 不进入共享回答",
-      "assetDigest": "sha256:003ea0a21ce41025a6b80c06b2640c276fd44edb97fc6420278c58d531e7ad36"
+      "dataUseSummary": "仅经 Circle canonical Gathering/GatheringPlan generated client 读取当前活动与协作计划，并在当前个人或共享场景授权范围内使用消息、内容与公开网页；经单独授权的脱敏反馈摘要只用于个人小趣，私人记忆和个人 Connector 不进入共享回答",
+      "assetDigest": "sha256:d2e7d496cbedff56260386c1217d3e0d0415589385e132aa6e8485cb0b783aaf"
+    },
+    {
+      "profileId": "catalog.gathering_coordinator",
+      "visibility": "listed",
+      "iconToken": "people",
+      "catalogGroup": {
+        "id": "social_coordination",
+        "displayText": "聚会与共同活动",
+        "description": "从共同兴趣来源形成需确认的聚会承诺与 Circle room/chat"
+      },
+      "targetAudiences": [
+        {"id": "direct_chat_pair", "displayText": "一对一约伴"},
+        {"id": "group_organizer", "displayText": "多人聚会组织者"},
+        {"id": "group_participant", "displayText": "聚会参与者"}
+      ],
+      "surfaceKinds": [
+        {"id": "personal", "displayText": "个人小趣"},
+        {"id": "conversation", "displayText": "一对一或多人会话"}
+      ],
+      "consentScopes": [],
+      "valueDescription": "把内容来源、共同承诺与地点天气等辅助事实整理成可确认的聚会草稿",
+      "examples": [
+        {
+          "exampleId": "content_to_gathering",
+          "title": "从内容发起聚会",
+          "summary": "保留内容来源，补齐时间、地点披露和人数后生成草稿。",
+          "iconToken": "people",
+          "templateRef": "assistant.answer.default"
+        },
+        {
+          "exampleId": "availability_watch",
+          "title": "关注聚会名额",
+          "summary": "在确认后创建一次名额提醒，不自动加入或占座。",
+          "iconToken": "bell",
+          "templateRef": "assistant.tool_confirmation"
+        }
+      ],
+      "dataUseSummary": "仅使用当前会话授权的 Gathering、canonical 内容来源和公共 Provider 事实；参与者身份、申请答案、审核备注、grant 与 permit 不进入回答",
+      "assetDigest": "sha256:070c02e629a96aa14a06b3dd59a6acb33a96d550843166553b2a45b7d4d41d2d"
     }
   ],
   "activationProfiles": [
@@ -68,6 +106,15 @@
       "profileId": "activation.reactive",
       "mode": "reactive",
       "assetDigest": "sha256:7c1b0c55b64776c019302c54d67fcf0d95bb4db7d95d0b97a15dc2107b851de2"
+    },
+    {
+      "profileId": "activation.gathering_coordinator",
+      "mode": "reactive",
+      "allowedSurfaceKinds": [
+        "personal",
+        "conversation"
+      ],
+      "assetDigest": "sha256:83606cfd4098d5af2dacfd0849b80926a3c2a272cdcfa916bfe23d64d225988e"
     },
     {
       "profileId": "activation.proactive",

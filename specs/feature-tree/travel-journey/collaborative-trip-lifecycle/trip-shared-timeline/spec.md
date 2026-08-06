@@ -1,4 +1,4 @@
-# L3 Story：共同时间线、地图与分享 (`trip-shared-timeline`)
+# L3 Story：共同时间线、地图、日历与回顾 (`trip-shared-timeline`)
 
 > 所属能力：[共同旅行全生命周期](../spec.md)
 >
@@ -14,52 +14,58 @@
 
 ### In Scope
 
-- Timeline/Map projection、route segment semantic、ShareSnapshot、隐私裁剪、LocalPostDraft 请求与来源引用。
+- 从 Gathering Outcome、GatheringPlan current/历史 Revision、typed item 与 Experience/Content references 生成 Timeline/Map projection。
+- Calendar 导出/提醒 capability、route segment 安全语义、分段分享 scope、隐私裁剪、LocalPostDraft 请求与来源引用。
+- legacy TripTimelineView/TripMapView/TripShareSnapshot 到目标投影与 Content draft source 的历史 crosswalk。
 
 ### Out of Scope
 
 - 地图 Provider 参数、任意 URL/scheme、自动发布、连续轨迹和内容编辑器实现。
+- 独立 Travel Timeline/Map 页面真相、ShareSnapshot aggregate、Provider 成功伪造或旧 `travel.*` route/surface fallback。
 
 ## 3. 行为要求
 
 <a id="req-001"></a>
-### REQ-001 时间线、地图与分享必须源于同一冻结事实
+### REQ-001 时间线、地图、日历与回顾必须源于同一目标事实
 
-- Timeline 和 Map 必须以同一 Trip Revision、Item、Moment、Revision event 与 Content link 投影；离线时明确 freshness。
-- ShareSnapshot 必须冻结范围、source revision、引用与隐私策略 digest，支持 full/day/item/route/moment_collection 类型。
+- Timeline 和 Map 必须以同一 Gathering、Plan Revision、typed item、Experience 与 Content reference 投影；离线时明确 freshness。
+- 分享/回顾请求必须冻结 scope、source Revision/reference 与隐私策略 digest，支持整段、单日、单点、路线和 Experience 集合，但不创建 Travel-owned ShareSnapshot。
+- Calendar 只消费 canonical schedule/Plan reference；设备、OAuth Connector 或 Provider unavailable 时返回结构化终态，不改变 Gathering 或 Plan。
 - 公开输出必须服务端移除私人住宿细节、联系方式、成员名单和实时精确位置；生成 LocalPostDraft 后仍需用户确认发布。
+- legacy Timeline/Map/ShareSnapshot ID 只用于审计 crosswalk，不进入 production route、projection key 或 Content command。
 
 ## 4. 契约引用
 
-- object / projection：`travel.TripTimelineView`、`travel.TripMapView`、`travel.TripShareSnapshot`
-- surface / route：`assistant.presentation.route_map`、`travel.timeline`、`travel.map`
+- current target：Circle Gathering/Plan/Experience projection、Chat Board section、Content LocalPostDraft/Post reference 与 Integration typed Map/Calendar intent。
+- Presentation：只使用 active Assistant safe semantic presentation 与 canonical owner route，不使用已删除的 `travel.timeline`、`travel.map`。
+- historical crosswalk：`TripTimelineView/TripMapView -> Gathering Plan/Experience projection`，`TripShareSnapshot -> immutable draft source refs + privacy policy digest`。
 
 ## 5. 验收场景
 
 <a id="gwt-001"></a>
-### GWT-001 七日行程可分段分享且隐私一致
+### GWT-001 七日 Gathering 可分段回顾且隐私一致
 
-- GIVEN 已结束的七日 Trip 含 Revision 变化、Moment、Post link、住宿和成员信息。
+- GIVEN 已形成 Outcome 的七日 Gathering 含 Plan Revision 变化、Experience、Post reference、住宿和参与者信息。
 - WHEN 用户分别生成完整、第一天、单个地点和路线分享，并请求游记草稿。
-- THEN 每份快照绑定同一可追溯来源版本，只包含所选范围，Timeline/Map/草稿引用一致。
+- THEN 每个 draft source 绑定同一可追溯 Gathering/Plan source version，只包含所选范围，Board、Timeline/Map 与草稿引用一致。
 - AND 公开结果不含禁止字段，未知 `route_map` 的旧客户端降级为地点顺序列表和静态摘要，不白屏、不崩溃。
-- AND 只有 Content owner 返回 `published` receipt 后，发布队列才按快照 scope 以稳定幂等键创建 Trip/Day/Item ContentLink；待审核、拒绝或 continuation 失败不得提前删除草稿，进程重启后继续同一来源引用。
+- AND 只有 Content owner 返回 `published` receipt 后，目标 owner 才按 scope 以稳定幂等键建立 Gathering/Plan item/Experience 与 Post reference；待审核、拒绝或 continuation 失败不得提前删除草稿，进程重启后继续同一来源引用。
 
 ## 6. 依赖
 
-- 前置要求：Timeline/Map projector、Content LocalPostDraft command、Assistant Presentation renderer 可用。
-- 上游事实：Trip/Revision/Item/Moment/Content link 与分享范围。
-- 下游结果：App 页面、分享落地、游记草稿与传播归因。
-- 父级设计：`DEC-001`
+- 前置要求：Gathering/Plan/Experience projector、Content LocalPostDraft command、Integration Map/Calendar capability 与 Assistant Presentation renderer 可用。
+- 上游事实：Gathering Outcome、Plan Revision/item、Experience/Content reference 与分享范围。
+- 下游结果：Chat Board/owner 页面、分享落地、回顾草稿与传播归因。
+- 父级设计：`DEC-001`、`DEC-002`
 
 ## 7. 开放事项
 
 <a id="open-001"></a>
-### OPEN-001 时间线/地图/分享尚未完整落地
+### OPEN-001 Board 时间线/地图/日历/回顾尚未闭合
 
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：尚缺实现：照片/视频素材装配。尚缺验收证据：真实跨域 API integration、Flutter golden/a11y 和 Android/iPhone 真机自适应。当前隐私 ShareSnapshot 已可确定性生成 Content 本地可编辑文章草稿并进入编辑器，私密快照不会携带公开实体引用；发布队列在 `published` receipt 后以不可变 snapshot reference 和稳定幂等键续接 TripPlanContentLink，失败保留草稿/任务并支持跨进程恢复。Timeline/Map projection、`route_map` 安全语义渲染、隐私 ShareSnapshot 与事件重放已落地。
-- 完成判定：`GWT-001` 具有 local_contract/schema snapshot、跨域 api_integration、Flutter golden/a11y 和 Android/iPhone user_acceptance 直接 `spec_ref`。
-- 依赖：Travel projector、Content draft/share、Assistant Presentation 与地图 typed intent。
+- 影响或价值：尚缺 Chat Board 中的 Timeline/Map/Calendar/回顾 production Remote、Circle Experience projection、真实地图/日历 Provider/Connector、Content draft/share continuation、离线恢复与隐私裁剪的跨域 API integration；旧 Travel Timeline/Map 页面与 ShareSnapshot runtime 已退役，不能作为当前实现。
+- 完成判定：`GWT-001` 由目标 owner local_contract、Circle/Chat/Content/Integration 跨域 api_integration、Flutter golden/a11y 和 Android/iPhone user_acceptance 直接覆盖；Provider unavailable 结构化降级，published 前零关联，公开禁止字段为零。
+- 依赖：Chat Board、Circle Plan/Experience projector、Content draft/share、Assistant safe Presentation、Integration Map/Calendar Provider 与 App production Remote。

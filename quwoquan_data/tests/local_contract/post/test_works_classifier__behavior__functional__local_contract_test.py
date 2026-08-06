@@ -1,7 +1,7 @@
 """WorksClassifier 红绿契约 + 行为测试（作品 vs 随记判定）。
 
-T1 契约：verdict 结构/枚举/policyDigest 与 schema 对齐。
-T2 行为：专业长文→work/article、社交碎片→moment、探针/推广→abandoned、
+Contract 契约：verdict 结构/枚举/policyDigest 与 schema 对齐。
+Behavior 行为：专业长文→work/article、社交碎片→moment、探针/推广→abandoned、
         图片集合→work/image、图不足→abandoned、权利受阻→abandoned。
 """
 from __future__ import annotations

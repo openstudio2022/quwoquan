@@ -1,6 +1,6 @@
 dart_class: AssistantSkillManifestRegistry
-library_path: assistant/generated/contracts/assistant_skill_manifest_registry.g.dart
-output_path: assistant/generated/contracts/assistant_skill_manifest_registry.g.dart
+library_path: package:quwoquan_cloud_contracts/src/generated/assistant/assistant_skill_manifest_registry.g.dart
+output_path: packages/quwoquan_cloud_contracts/lib/src/generated/assistant/assistant_skill_manifest_registry.g.dart
 contract: assistant_skills
 kind: shared_manifest_registry
 description: Assistant skill manifest directory registry. Individual skill manifests live as JSON fixtures under this directory.

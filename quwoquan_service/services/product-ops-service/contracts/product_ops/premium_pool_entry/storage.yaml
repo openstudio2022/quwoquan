@@ -2,9 +2,11 @@ backend: postgres
 role: authoritative
 tables:
   premium_pool_entries:
+    publication_role: not_published
     entity: PremiumPoolEntry
     role: authoritative
-    pk: content_id
+    pk:
+    - content_id
     columns:
     - {name: content_id, type: VARCHAR(128), constraints: [PK, NOT_NULL]}
     - {name: scope, type: VARCHAR(16), constraints: [NOT_NULL]}
@@ -21,11 +23,12 @@ tables:
     - {name: updated_at, type: TIMESTAMPTZ, constraints: [NOT_NULL]}
     indexes:
     - {name: idx_premium_pool_entries_status_expiry, columns: [status, expires_at, updated_at]}
-    optimistic_lock: revision
   premium_pool_entry_workflows:
+    publication_role: not_published
     entity: PremiumPoolEntry
     role: authoritative
-    pk: content_id
+    pk:
+    - content_id
     columns:
     - {name: content_id, type: VARCHAR(128), constraints: [PK, NOT_NULL]}
     - {name: state, type: VARCHAR(32), constraints: [NOT_NULL]}
@@ -33,9 +36,14 @@ tables:
     - {name: body, type: JSONB, constraints: [NOT_NULL]}
     - {name: updated_at, type: TIMESTAMPTZ, constraints: [NOT_NULL]}
   premium_pool_entry_approvals:
+    publication_role: not_published
     entity: PremiumPoolEntry
     role: append_only
-    pk: [content_id, payload_digest, decision, actor_id]
+    pk:
+    - content_id
+    - payload_digest
+    - decision
+    - actor_id
     columns:
     - {name: content_id, type: VARCHAR(128), constraints: [PK, NOT_NULL]}
     - {name: payload_digest, type: VARCHAR(64), constraints: [PK, NOT_NULL]}
@@ -44,9 +52,11 @@ tables:
     - {name: revision, type: BIGINT, constraints: [NOT_NULL]}
     - {name: approved_at, type: TIMESTAMPTZ, constraints: [NOT_NULL]}
   premium_pool_entry_audits:
+    publication_role: not_published
     entity: PremiumPoolEntry
     role: append_only
-    pk: audit_event_id
+    pk:
+    - audit_event_id
     columns:
     - {name: audit_event_id, type: VARCHAR(160), constraints: [PK, NOT_NULL]}
     - {name: content_id, type: VARCHAR(128), constraints: [NOT_NULL]}
@@ -59,9 +69,12 @@ tables:
     - {name: after_state, type: JSONB, constraints: [NOT_NULL]}
     - {name: occurred_at, type: TIMESTAMPTZ, constraints: [NOT_NULL]}
   premium_pool_entry_command_receipts:
+    publication_role: not_published
     entity: PremiumPoolEntry
     role: authoritative
-    pk: [content_id, idempotency_key]
+    pk:
+    - content_id
+    - idempotency_key
     columns:
     - {name: content_id, type: VARCHAR(128), constraints: [PK, NOT_NULL]}
     - {name: idempotency_key, type: VARCHAR(160), constraints: [PK, NOT_NULL]}
@@ -72,9 +85,11 @@ tables:
     - {name: result_snapshot, type: JSONB, constraints: [NOT_NULL]}
     - {name: committed_at, type: TIMESTAMPTZ, constraints: [NOT_NULL]}
   premium_pool_entry_outbox:
+    publication_role: transactional_outbox
     entity: PremiumPoolEntry
     role: append_only
-    pk: event_id
+    pk:
+    - event_id
     columns:
     - {name: event_id, type: VARCHAR(128), constraints: [PK, NOT_NULL]}
     - {name: event_type, type: VARCHAR(128), constraints: [NOT_NULL]}
@@ -92,6 +107,7 @@ tables:
     - {name: idx_premium_pool_entry_outbox_ready, columns: [dispatched_at, next_attempt_at, occurred_at]}
 streams:
   events.ops.premium_pool_entry:
+    publication_role: publication_accessory
     entity: PremiumPoolEntry
     role: append_only
     idempotency_key: eventId

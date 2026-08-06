@@ -6,6 +6,7 @@ import (
 	"time"
 
 	rterr "quwoquan_service/runtime/errors"
+	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	"quwoquan_service/services/content-service/internal/content/post/application/ports"
 )
 
@@ -72,11 +73,7 @@ func (s *BehaviorService) GetEntityWishlistState(
 		)
 	}
 	if s.wishlistReader == nil {
-		return EntityWishlistState{}, rterr.NewUnavailable(
-			rterr.ModuleContent,
-			"想去状态暂不可用",
-			"wishlist state reader is not configured",
-		)
+		return EntityWishlistState{}, contentgenerated.AppErrorFromRequiredDependencyUnavailable("wishlist state reader is not configured")
 	}
 	wishlisted, err := s.wishlistReader.IsWishlisted(
 		ctx,

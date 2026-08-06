@@ -5,8 +5,11 @@ import os
 import shutil
 import sys
 import tempfile
+from dataclasses import replace
 from itertools import count
 from pathlib import Path
+
+import pytest
 
 DATA_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data")
 SCRIPTS_ROOT = DATA_ROOT / "scripts"
@@ -34,6 +37,7 @@ from content.source.image_scale_proof import (  # noqa: E402
     build_open_license_scale_proof,
     write_open_license_scale_proof,
 )
+from governance.coverage import distribution  # noqa: E402
 
 _SEQUENCE = count(1)
 
@@ -237,11 +241,9 @@ def test_open_license_scale_proof_scores_below_desired_without_failing_soft_poli
     assert report["averageImageCountScore"] == 0.75
 
 
-def test_media_scale_proof_filters_incomplete_travel_rights():
-    execution_id = _make_task("旅行图片授权强制门", ["景区甲"])
-    _write_image_plan(execution_id, "景区甲", 2)
+def _remove_distribution_rights_fields(execution_id: str, entity_id: str) -> None:
     plan_path = (
-        resolve_entity_object_dir(execution_id, "景区甲", etype_hint="地点/景区")
+        resolve_entity_object_dir(execution_id, entity_id, etype_hint="地点/景区")
         / STAGE_DOWNLOAD
         / "image_source_plan.json"
     )
@@ -254,14 +256,45 @@ def test_media_scale_proof_filters_incomplete_travel_rights():
                 image.pop(field, None)
     write_json(plan_path, plan)
 
+
+def test_media_scale_proof_audits_incomplete_travel_rights_in_research():
+    execution_id = _make_task("旅行图片授权强制门", ["景区甲"])
+    _write_image_plan(execution_id, "景区甲", 2)
+    _remove_distribution_rights_fields(execution_id, "景区甲")
+
     report = build_open_license_scale_proof(execution_id)
 
-    # score_bonus allows the task to continue, but rights-invalid assets never
-    # count as publishable evidence.
+    # Research admission preserves the rights gaps as audit evidence without
+    # pretending that the assets are commercially cleared.
+    assert report["passed"] is True
+    assert report["proof"]["publishableImageAssets"] == 2
+    assert report["rightsAuditIssueCount"] > 0
+    assert report["rightsAuditIssueSample"]
+
+
+def test_media_scale_proof_filters_incomplete_travel_rights_in_commercial(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    execution_id = _make_task("旅行图片商业授权强制门", ["景区甲"])
+    _write_image_plan(execution_id, "景区甲", 2)
+    _remove_distribution_rights_fields(execution_id, "景区甲")
+    research_policy = distribution.load_content_distribution_policy()
+    commercial_policy = replace(
+        research_policy,
+        product_lifecycle_state=distribution.ProductLifecycleState.COMMERCIAL,
+        release_class=distribution.ReleaseClass.COMMERCIAL,
+    )
+    monkeypatch.setattr(
+        distribution,
+        "load_content_distribution_policy",
+        lambda: commercial_policy,
+    )
+
+    report = build_open_license_scale_proof(execution_id)
+
     assert report["passed"] is True
     assert report["proof"]["publishableImageAssets"] == 0
     assert report["rightsAuditIssueCount"] > 0
-    assert report["rightsAuditIssueSample"]
 
 
 def test_open_license_scale_proof_fails_when_hard_quota_entity_lacks_required_images():

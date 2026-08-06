@@ -3,26 +3,35 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log"
 	"log/slog"
-	"strings"
 	"time"
 
-	assistantgenerated "quwoquan_service/services/assistant-service/generated/assistant/assistant_session"
-	learningmodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/domain/model"
+	learningapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/application"
 	learningmessaging "quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/infrastructure/messaging"
 	learningprojection "quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/infrastructure/projection"
 	policymessaging "quwoquan_service/services/assistant-service/internal/assistant/assistant_policy_release/infrastructure/messaging"
+	rolloutmessaging "quwoquan_service/services/assistant-service/internal/assistant/assistant_policy_rollout/infrastructure/messaging"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
+	runmessaging "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/infrastructure/messaging"
+	sessionstream "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/adapters/inbound/stream"
 	sessioncompaction "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/compaction"
+	sessionports "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/ports"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/messaging"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/scheduling"
 	datacontrolapplication "quwoquan_service/services/assistant-service/internal/assistant/skill_data_control_request/application"
+	datacontrolports "quwoquan_service/services/assistant-service/internal/assistant/skill_data_control_request/domain/ports"
 	datacontrol "quwoquan_service/services/assistant-service/internal/assistant/skill_data_control_request/infrastructure/control"
+	datacontrolmessaging "quwoquan_service/services/assistant-service/internal/assistant/skill_data_control_request/infrastructure/messaging"
 	subscriptionapplication "quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/application"
+	subscriptionports "quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/domain/ports"
+	subscriptionmessaging "quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/infrastructure/messaging"
 	placementapplication "quwoquan_service/services/assistant-service/internal/assistant/skill_surface_placement/application"
+	placementports "quwoquan_service/services/assistant-service/internal/assistant/skill_surface_placement/domain/ports"
 	placementmessaging "quwoquan_service/services/assistant-service/internal/assistant/skill_surface_placement/infrastructure/messaging"
+	settingapplication "quwoquan_service/services/assistant-service/internal/assistant/skill_user_setting/application"
+	settingports "quwoquan_service/services/assistant-service/internal/assistant/skill_user_setting/domain/ports"
+	settingmessaging "quwoquan_service/services/assistant-service/internal/assistant/skill_user_setting/infrastructure/messaging"
 )
 
 const (
@@ -48,46 +57,40 @@ func startAssistantBackgroundWorkers(
 			errors.New("assistant learning projection is required"),
 		)
 	}
+	runTerminalPublisher, err := runmessaging.NewTerminalEventPublisher(
+		infrastructure.messageTransport,
+	)
+	if err != nil {
+		return nil, dependencyError(
+			"assistant-run-terminal-event-stream",
+			"initialization",
+			err,
+		)
+	}
 	runTerminalRelay := runruntime.NewTerminalRunRelay(
 		deps.runRepository,
+		runTerminalPublisher,
 		[]runruntime.TerminalEventHandler{
 			runruntime.TerminalEventHandlerFunc(func(
 				ctx context.Context,
 				event runruntime.TerminalEvent,
 			) error {
-				value := 0.0
-				if event.Outcome == "completed" {
-					value = 1.0
-				}
-				_, appendErr := assistant.learningFactService.AppendServiceFact(
+				_, appendErr := assistant.learningFactService.AppendTerminalRun(
 					ctx,
-					learningmodel.AppendCommand{
-						EventID:          "turn:" + event.RunID + ":completion",
-						FactType:         learningmodel.FactTypeServiceScorecard,
-						AssistantTurnID:  event.RunID,
-						ReferralSource:   "service",
-						DomainID:         event.DomainID,
-						MetricID:         "turn_completion",
-						MetricValue:      value,
-						MetricSource:     "service_auto",
-						TrainingEligible: false,
-						OccurredAt:       event.OccurredAt,
+					learningapplication.TerminalRunEvent{
+						RunID:      event.RunID,
+						DomainID:   event.DomainID,
+						Outcome:    event.Outcome,
+						OccurredAt: event.OccurredAt,
 					},
 				)
 				return appendErr
 			}),
-			runruntime.TerminalEventHandlerFunc(func(
-				ctx context.Context,
-				event runruntime.TerminalEvent,
-			) error {
-				return compactAssistantSessionFromTerminalEvent(
-					ctx,
-					event,
-					deps.runRepository,
-					assistant.sessionCompactor,
-					assistant.runHooks,
-				)
-			}),
+			sessioncompaction.NewAssistantRunTerminalCoordinator(
+				deps.runRepository,
+				assistant.sessionCompactor,
+				assistant.runHooks,
+			),
 		},
 		runtime.instanceID+":assistant-run-terminal-learning",
 		learningOutboxRelayInterval,
@@ -147,8 +150,7 @@ func startAssistantBackgroundWorkers(
 			err,
 		)
 	}
-	policyRolloutOutboxRelay, err := policymessaging.NewOutboxRelay(
-		"rollout",
+	policyRolloutOutboxRelay, err := rolloutmessaging.NewOutboxRelay(
 		deps.policyRolloutStore,
 		infrastructure.messageTransport,
 		learningOutboxRelayInterval,
@@ -162,7 +164,147 @@ func startAssistantBackgroundWorkers(
 			err,
 		)
 	}
-	consumer := messaging.NewAssistantMentionedConsumerWithTransport(
+	sessionOutboxStore, ok := deps.sessionStore.(sessionports.SessionOutboxStore)
+	if !ok {
+		return nil, dependencyError(
+			"mongodb.assistant_session_outbox",
+			"wiring",
+			errors.New(
+				"assistant session store must own the transactional outbox",
+			),
+		)
+	}
+	sessionOutboxRelay, err := messaging.NewSessionOutboxRelay(
+		sessionOutboxStore,
+		infrastructure.messageTransport,
+		learningOutboxRelayInterval,
+		128,
+		slog.Default(),
+	)
+	if err != nil {
+		return nil, dependencyError(
+			"assistant-session-outbox-relay",
+			"initialization",
+			err,
+		)
+	}
+	placementOutbox, ok := deps.placementStore.(placementports.TransactionalOutbox)
+	if !ok {
+		return nil, dependencyError(
+			"postgres.skill_surface_placement_outbox",
+			"wiring",
+			errors.New("skill surface placement store must own the transactional outbox"),
+		)
+	}
+	placementEventPublisher, err := placementmessaging.NewEventPublisher(
+		infrastructure.messageTransport,
+	)
+	if err != nil {
+		return nil, dependencyError(
+			"assistant-skill-surface-placement-event-stream",
+			"initialization",
+			err,
+		)
+	}
+	placementOutboxRelay, err := placementapplication.NewOutboxRelay(
+		placementOutbox,
+		placementEventPublisher,
+	)
+	if err != nil {
+		return nil, dependencyError(
+			"assistant-skill-surface-placement-outbox-relay",
+			"initialization",
+			err,
+		)
+	}
+	settingOutbox, ok := deps.settingStore.(settingports.TransactionalOutbox)
+	if !ok {
+		return nil, dependencyError(
+			"postgres.skill_user_setting_outbox",
+			"wiring",
+			errors.New("skill user setting store must own the transactional outbox"),
+		)
+	}
+	settingEventPublisher, err := settingmessaging.NewEventPublisher(
+		infrastructure.messageTransport,
+	)
+	if err != nil {
+		return nil, dependencyError(
+			"assistant-skill-user-setting-event-stream",
+			"initialization",
+			err,
+		)
+	}
+	settingOutboxRelay, err := settingapplication.NewOutboxRelay(
+		settingOutbox,
+		settingEventPublisher,
+	)
+	if err != nil {
+		return nil, dependencyError(
+			"assistant-skill-user-setting-outbox-relay",
+			"initialization",
+			err,
+		)
+	}
+	if deps.dataControlStore == nil {
+		return nil, dependencyError(
+			"mongodb.skill_data_control_outbox",
+			"wiring",
+			errors.New("skill data control store must own the transactional outbox"),
+		)
+	}
+	var dataControlOutbox datacontrolports.TransactionalOutbox = deps.dataControlStore
+	dataControlEventPublisher, err := datacontrolmessaging.NewEventPublisher(
+		infrastructure.messageTransport,
+	)
+	if err != nil {
+		return nil, dependencyError(
+			"assistant-skill-data-control-event-stream",
+			"initialization",
+			err,
+		)
+	}
+	dataControlOutboxRelay, err := datacontrolapplication.NewOutboxRelay(
+		dataControlOutbox,
+		dataControlEventPublisher,
+	)
+	if err != nil {
+		return nil, dependencyError(
+			"assistant-skill-data-control-outbox-relay",
+			"initialization",
+			err,
+		)
+	}
+	subscriptionOutbox, ok := deps.subscriptionStore.(subscriptionports.TransactionalOutbox)
+	if !ok {
+		return nil, dependencyError(
+			"mongodb.skill_subscription_outbox",
+			"wiring",
+			errors.New("skill subscription store must own the transactional outbox"),
+		)
+	}
+	subscriptionEventPublisher, err := subscriptionmessaging.NewEventPublisher(
+		infrastructure.messageTransport,
+	)
+	if err != nil {
+		return nil, dependencyError(
+			"assistant-skill-subscription-event-stream",
+			"initialization",
+			err,
+		)
+	}
+	subscriptionOutboxRelay, err := subscriptionapplication.NewOutboxRelay(
+		subscriptionOutbox,
+		subscriptionEventPublisher,
+	)
+	if err != nil {
+		return nil, dependencyError(
+			"assistant-skill-subscription-outbox-relay",
+			"initialization",
+			err,
+		)
+	}
+	consumer := sessionstream.NewAssistantMentionedConsumerWithTransport(
 		infrastructure.messageTransport,
 		assistant.service,
 		runtime.instanceID,
@@ -283,6 +425,64 @@ func startAssistantBackgroundWorkers(
 			},
 		},
 		{
+			name: "assistant_session_outbox_relay",
+			run:  sessionOutboxRelay.Run,
+			health: func(ctx context.Context) error {
+				return sessionOutboxRelay.Healthy(
+					ctx,
+					3*learningOutboxRelayInterval,
+				)
+			},
+		},
+		{
+			name: "assistant_skill_surface_placement_outbox_relay",
+			run: func(ctx context.Context) {
+				placementOutboxRelay.Run(ctx, learningOutboxRelayInterval)
+			},
+			health: func(ctx context.Context) error {
+				return placementOutboxRelay.Healthy(
+					ctx,
+					3*learningOutboxRelayInterval,
+				)
+			},
+		},
+		{
+			name: "assistant_skill_user_setting_outbox_relay",
+			run: func(ctx context.Context) {
+				settingOutboxRelay.Run(ctx, learningOutboxRelayInterval)
+			},
+			health: func(ctx context.Context) error {
+				return settingOutboxRelay.Healthy(
+					ctx,
+					3*learningOutboxRelayInterval,
+				)
+			},
+		},
+		{
+			name: "assistant_skill_data_control_outbox_relay",
+			run: func(ctx context.Context) {
+				dataControlOutboxRelay.Run(ctx, learningOutboxRelayInterval)
+			},
+			health: func(ctx context.Context) error {
+				return dataControlOutboxRelay.Healthy(
+					ctx,
+					3*learningOutboxRelayInterval,
+				)
+			},
+		},
+		{
+			name: "assistant_skill_subscription_outbox_relay",
+			run: func(ctx context.Context) {
+				subscriptionOutboxRelay.Run(ctx, learningOutboxRelayInterval)
+			},
+			health: func(ctx context.Context) error {
+				return subscriptionOutboxRelay.Healthy(
+					ctx,
+					3*learningOutboxRelayInterval,
+				)
+			},
+		},
+		{
 			name: "assistant_mentioned_consumer",
 			run: func(ctx context.Context) {
 				consumer.Run(ctx, assistantConsumerPollInterval)
@@ -356,6 +556,83 @@ func startAssistantBackgroundWorkers(
 			err,
 		)
 	}
+	if err := infrastructure.messageTransport.SetDurableRetention(
+		preflightCtx,
+		runmessaging.AssistantRunEventStream,
+		runmessaging.AssistantRunEventRetention,
+	); err != nil {
+		return nil, dependencyError(
+			"assistant-run-event-stream",
+			"retention",
+			err,
+		)
+	}
+	if err := infrastructure.messageTransport.SetDurableRetention(
+		preflightCtx,
+		rolloutmessaging.PolicyRolloutAuditStream,
+		rolloutmessaging.PolicyRolloutAuditStreamRetention,
+	); err != nil {
+		return nil, dependencyError(
+			"assistant-policy-rollout-event-stream",
+			"retention",
+			err,
+		)
+	}
+	if err := infrastructure.messageTransport.SetDurableRetention(
+		preflightCtx,
+		datacontrolmessaging.SkillDataControlEventStream,
+		datacontrolmessaging.SkillDataControlEventRetention,
+	); err != nil {
+		return nil, dependencyError(
+			"assistant-skill-data-control-event-stream",
+			"retention",
+			err,
+		)
+	}
+	if err := infrastructure.messageTransport.SetDurableRetention(
+		preflightCtx,
+		subscriptionmessaging.SkillSubscriptionEventStream,
+		subscriptionmessaging.SkillSubscriptionEventRetention,
+	); err != nil {
+		return nil, dependencyError(
+			"assistant-skill-subscription-event-stream",
+			"retention",
+			err,
+		)
+	}
+	if err := infrastructure.messageTransport.SetDurableRetention(
+		preflightCtx,
+		messaging.SessionEventStream,
+		messaging.SessionEventStreamRetention,
+	); err != nil {
+		return nil, dependencyError(
+			"assistant-session-event-stream",
+			"retention",
+			err,
+		)
+	}
+	if err := infrastructure.messageTransport.SetDurableRetention(
+		preflightCtx,
+		placementmessaging.SkillSurfacePlacementEventStream,
+		placementmessaging.SkillSurfacePlacementEventRetention,
+	); err != nil {
+		return nil, dependencyError(
+			"assistant-skill-surface-placement-event-stream",
+			"retention",
+			err,
+		)
+	}
+	if err := infrastructure.messageTransport.SetDurableRetention(
+		preflightCtx,
+		settingmessaging.SkillUserSettingEventStream,
+		settingmessaging.SkillUserSettingEventRetention,
+	); err != nil {
+		return nil, dependencyError(
+			"assistant-skill-user-setting-event-stream",
+			"retention",
+			err,
+		)
+	}
 	if err := consumer.EnsureGroup(preflightCtx); err != nil {
 		return nil, dependencyError(
 			"assistant-mentioned-consumer",
@@ -398,9 +675,34 @@ func startAssistantBackgroundWorkers(
 		learningOutboxRelayInterval,
 	)
 	log.Printf(
+		"assistant-service session outbox relay enabled stream=%s interval=%s",
+		messaging.SessionEventStream,
+		learningOutboxRelayInterval,
+	)
+	log.Printf(
+		"assistant-service SkillSurfacePlacement outbox relay enabled stream=%s interval=%s",
+		placementmessaging.SkillSurfacePlacementEventStream,
+		learningOutboxRelayInterval,
+	)
+	log.Printf(
+		"assistant-service SkillUserSetting outbox relay enabled stream=%s interval=%s",
+		settingmessaging.SkillUserSettingEventStream,
+		learningOutboxRelayInterval,
+	)
+	log.Printf(
+		"assistant-service SkillDataControlRequest outbox relay enabled stream=%s interval=%s",
+		datacontrolmessaging.SkillDataControlEventStream,
+		learningOutboxRelayInterval,
+	)
+	log.Printf(
+		"assistant-service SkillSubscription outbox relay enabled stream=%s interval=%s",
+		subscriptionmessaging.SkillSubscriptionEventStream,
+		learningOutboxRelayInterval,
+	)
+	log.Printf(
 		"assistant-service assistant mentioned consumer enabled stream=%s group=%s",
-		messaging.AssistantMentionedStream,
-		messaging.AssistantMentionedConsumerGroup,
+		sessionstream.AssistantMentionedStream,
+		sessionstream.AssistantMentionedConsumerGroup,
 	)
 	log.Printf(
 		"assistant-service assistant membership consumer enabled stream=%s group=%s",
@@ -417,117 +719,4 @@ func startAssistantBackgroundWorkers(
 		skillDataControlLeaseTTL,
 	)
 	return workers, nil
-}
-
-func compactAssistantSessionFromTerminalEvent(
-	ctx context.Context,
-	event runruntime.TerminalEvent,
-	runs runruntime.Repository,
-	compactor *sessioncompaction.Service,
-	hooks *runruntime.HookRegistry,
-) error {
-	if event.Outcome != "completed" {
-		return nil
-	}
-	if runs == nil || compactor == nil || hooks == nil {
-		return errors.New("assistant session terminal compaction is not configured")
-	}
-	run, err := runs.Load(ctx, event.RunID)
-	if err != nil {
-		return err
-	}
-	if run.RunID != event.RunID || run.SessionID != event.SessionID ||
-		run.UserID != event.UserID || run.State != assistantgenerated.AssistantRunStateCompleted {
-		return errors.New("assistant terminal event does not match completed Run")
-	}
-	switch strings.ToLower(strings.TrimSpace(run.RequestContext.SurfaceKind)) {
-	case "conversation", "circle":
-		return nil
-	}
-	answerText := ""
-	if run.TerminalSnapshot != nil {
-		answerText = run.TerminalSnapshot.AnswerText
-	}
-	source := sessioncompaction.CompletedRunSource{
-		CompletionEventID: event.EventID,
-		RunID:             run.RunID,
-		SessionID:         run.SessionID,
-		UserID:            run.UserID,
-		CurrentGoal:       run.EffectiveGoal(),
-		UserInput:         run.InputText,
-		AnswerText:        strings.TrimSpace(answerText),
-		PendingItems:      pendingSessionItems(run.TaskGraph),
-		ConfirmedSlots:    run.ConfirmedSlotSnapshot(),
-		CompletedAt:       event.OccurredAt,
-	}
-	hookCtx := runruntime.WithExecutionHooks(ctx, hooks, run)
-	preCompact, err := runruntime.InvokeExecutionHook(
-		hookCtx,
-		runruntime.HookPreCompact,
-		"task_root",
-		"",
-		map[string]any{
-			"userInput":  source.UserInput,
-			"answerText": source.AnswerText,
-		},
-	)
-	if err != nil {
-		return err
-	}
-	if preCompact.Decision != runruntime.HookAllow {
-		return fmt.Errorf(
-			"pre_compact hook %s: %s",
-			preCompact.Decision,
-			strings.TrimSpace(preCompact.Reason),
-		)
-	}
-	if value, ok := preCompact.Data["userInput"].(string); ok &&
-		strings.TrimSpace(value) != "" {
-		source.UserInput = strings.TrimSpace(value)
-	}
-	if value, ok := preCompact.Data["answerText"].(string); ok &&
-		strings.TrimSpace(value) != "" {
-		source.AnswerText = strings.TrimSpace(value)
-	}
-	summary, err := compactor.CompactCompletedRun(ctx, source)
-	if err != nil {
-		return err
-	}
-	postCompact, err := runruntime.InvokeExecutionHook(
-		hookCtx,
-		runruntime.HookPostCompact,
-		"task_root",
-		"",
-		map[string]any{
-			"summaryId": summary.SummaryID,
-			"turnCount": summary.TurnCount,
-			"textRunes": len([]rune(summary.Text)),
-		},
-	)
-	if err != nil {
-		return err
-	}
-	if postCompact.Decision != runruntime.HookAllow {
-		return fmt.Errorf(
-			"post_compact hook %s: %s",
-			postCompact.Decision,
-			strings.TrimSpace(postCompact.Reason),
-		)
-	}
-	return nil
-}
-
-func pendingSessionItems(graph runruntime.TaskGraph) []string {
-	items := make([]string, 0, len(graph.Tasks))
-	for _, task := range graph.Tasks {
-		switch task.Status {
-		case assistantgenerated.AssistantTaskStatusCompleted,
-			assistantgenerated.AssistantTaskStatusCancelled:
-			continue
-		}
-		if value := strings.TrimSpace(task.Goal); value != "" {
-			items = append(items, value)
-		}
-	}
-	return items
 }

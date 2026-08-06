@@ -7,13 +7,18 @@ import (
 
 	"quwoquan_service/runtime/reliabletask"
 	"quwoquan_service/services/integration-service/internal/external_integration/external_interaction/application"
-	integrationsupport "quwoquan_service/services/integration-service/tests/support"
+	attemptadapter "quwoquan_service/services/integration-service/internal/external_integration/external_interaction_attempt_fact/adapters/inbound/runtime"
+	deadletteradapter "quwoquan_service/services/integration-service/internal/external_integration/external_interaction_dead_letter_fact/adapters/inbound/runtime"
+	deadletterpersistence "quwoquan_service/services/integration-service/internal/external_integration/external_interaction_dead_letter_fact/infrastructure/persistence"
 )
 
 func TestExternalInteractionDeadLetterUsesCanonicalTaskAndAttemptFacts(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now().UTC().Truncate(time.Millisecond)
-	store := integrationsupport.NewMemoryExternalStore(reliabletask.NewMemoryStore())
+	store := deadletteradapter.NewRuntimeStore(
+		attemptadapter.NewRuntimeStore(reliabletask.NewMemoryStore()),
+		deadletterpersistence.NewMemoryRepository(),
+	)
 	service, err := application.NewExternalInteractionService(
 		store,
 		map[string]reliabletask.ExternalProvider{

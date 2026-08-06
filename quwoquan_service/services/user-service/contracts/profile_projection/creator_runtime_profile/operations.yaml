@@ -5,15 +5,10 @@ commercial_defaults:
   target_story: app-cloud-business-object-commercial-closure
 api_routes: []
 runtime_entrypoints:
-- name: ProjectCreatorRuntimeProfile
+- name: ProjectCreatorRuntimeProfileAccountClosure
   kind: projector
   phase: event_projection
-  source_events: [user.CreatorReleaseActivated, user.CreatorReleaseRetired, user.PersonaUpdated, user.UserAccountClosed]
-  checkpoint: creator_release_digest_and_persona_sequence
-  rebuild: import_active_creator_release_then_replay_persona_events
-  tombstone: remove_public_profile_keep_release_audit
-  idempotency: aggregate_version
-  application: {kind: command, facet: CreatorRuntimeProfileProjector, method: apply, object_owner: CreatorRuntimeProfile}
+  application: {kind: command, facet: AccountClosureProjector, method: apply, object_owner: CreatorRuntimeProfile}
 consumers:
 - name: user-profile-api
   capabilities:
@@ -21,3 +16,20 @@ consumers:
 - name: user-work-api
   capabilities:
   - read_creator_work_refs
+readiness_cases:
+- case_id: project-creator-runtime-profile-account-closure-local
+  spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target: {kind: object, id: user.creator_runtime_profile}
+  runner_source_path: quwoquan_service/services/user-service/tests/local_contract/profile_projection/creator_runtime_profile/event_source_binding__contract__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: project-creator-runtime-profile-account-closure-api
+  spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-001
+  producer: service
+  layer: api_integration
+  target: {kind: object, id: user.creator_runtime_profile}
+  runner_source_path: quwoquan_service/services/user-service/tests/api_integration/profile_projection/creator_runtime_profile/mongo_projection__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}

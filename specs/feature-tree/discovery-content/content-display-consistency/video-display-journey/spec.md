@@ -62,16 +62,16 @@
 
 - canonical：`quwoquan_service/services/content-service/contracts/content/post/projections/discovery_feed.yaml`
 - canonical：`quwoquan_service/services/content-service/contracts/content/post/projections/video_post.yaml`
-- canonical：`quwoquan_app/lib/ui/discovery/widgets/home_multi_form_feed_media_grid.dart`
-- canonical：`quwoquan_app/lib/components/media/video/player/video_player_widget.dart`
-- canonical：`quwoquan_app/lib/ui/discovery/widgets/works_immersive_viewer.dart`
-- canonical：`quwoquan_app/lib/ui/discovery/widgets/works_immersive_viewer_canvas.dart`
-- canonical：`quwoquan_app/lib/ui/content/comments/providers/comment_provider.dart`
+- canonical：`quwoquan_app/lib/service/content_service/content/post/presentation/home_multi_form_feed_media_grid.dart`
+- canonical：`quwoquan_app/lib/service/content_service/media/media_asset/presentation/video_player_widget.dart`
+- canonical：`quwoquan_app/lib/service/content_service/media/media_asset/presentation/works_immersive_viewer.dart`
+- canonical：`quwoquan_app/lib/service/content_service/media/media_asset/presentation/works_immersive_viewer_canvas.dart`
+- canonical：`quwoquan_app/lib/service/content_service/content/comment/application/comment_provider.dart`
 - canonical：`quwoquan_data/schema/content/post_manifest.schema.json`
 - canonical：`quwoquan_service/services/content-service/cmd/import/main.go`
-- canonical：`quwoquan_app/lib/cloud/runtime/models/content_post_view_data.dart`
-- canonical：`quwoquan_app/lib/components/media/video/player/video_playback_session.dart`
-- canonical：`quwoquan_app/lib/ui/discovery/widgets/works_immersive_viewer_controls.dart`
+- canonical：`quwoquan_app/lib/service/content_service/content/post/application/public/content_post_view_data.dart`
+- canonical：`quwoquan_app/lib/service/content_service/media/media_asset/presentation/video_playback_session.dart`
+- canonical：`quwoquan_app/lib/service/content_service/media/media_asset/presentation/works_immersive_viewer_controls.dart`
 - canonical：`specs/feature-tree/runtime/runtime-media/design.md`
 
 ## 5. 验收场景

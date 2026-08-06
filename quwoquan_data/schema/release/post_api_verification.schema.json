@@ -14,8 +14,6 @@
     "creatorImportReportRef",
     "apiBaseUrl",
     "mediaDeliveryBaseUrl",
-    "guestActorHash",
-    "guestLogin",
     "verifiedAt",
     "passed",
     "feedQueries",
@@ -38,6 +36,7 @@
       "description": "Path-free environment CDN origin. Release publicSliceKey owns the single media/avatar|image|video path."
     },
     "guestActorHash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "internalSubjectHash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "guestLogin": {
       "allOf": [
         {"$ref": "#/$defs/operationEvidence"},
@@ -157,6 +156,25 @@
     "issues": {"type": "array", "maxItems": 0}
   },
   "allOf": [
+    {
+      "if": {
+        "properties": {"readinessPhase": {"const": "research"}},
+        "required": ["readinessPhase"]
+      },
+      "then": {
+        "required": ["internalSubjectHash"],
+        "not": {
+          "anyOf": [
+            {"required": ["guestActorHash"]},
+            {"required": ["guestLogin"]}
+          ]
+        }
+      },
+      "else": {
+        "required": ["guestActorHash", "guestLogin"],
+        "not": {"required": ["internalSubjectHash"]}
+      }
+    },
     {
       "if": {
         "properties": {"readinessPhase": {"enum": ["research", "commercial"]}},

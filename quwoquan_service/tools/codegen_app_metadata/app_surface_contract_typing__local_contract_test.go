@@ -12,6 +12,68 @@ import (
 	"quwoquan_service/internal/testsupport/contractsview"
 )
 
+func validateAppSurfaceResponseContract(operation appExposedOperation) error {
+	client := operation.ClientContract
+	if client == nil {
+		return fmt.Errorf("%s has no source-derived client ABI", operation.CanonicalOperationID)
+	}
+
+	responseBodyKind := strings.TrimSpace(operation.ResponseBodyKind)
+	responseEntity := strings.TrimSpace(operation.ResponseEntity)
+	if responseBodyKind == "upgrade" {
+		if responseEntity != "" {
+			return fmt.Errorf(
+				"%s upgrade must not declare response_entity %s",
+				operation.CanonicalOperationID,
+				responseEntity,
+			)
+		}
+		if client.ResponseType != "void" ||
+			client.ResponseDecoder != "decodeEmptyResponse" {
+			return fmt.Errorf(
+				"%s upgrade client ABI %s/%s must be void/decodeEmptyResponse",
+				operation.CanonicalOperationID,
+				client.ResponseType,
+				client.ResponseDecoder,
+			)
+		}
+		return nil
+	}
+
+	if responseEntity == "" {
+		if responseBodyKind != "ack" {
+			return fmt.Errorf(
+				"%s has no response_entity for response_body_kind %s",
+				operation.CanonicalOperationID,
+				responseBodyKind,
+			)
+		}
+		if client.ResponseType != "void" ||
+			client.ResponseDecoder != "decodeEmptyResponse" {
+			return fmt.Errorf(
+				"%s empty ack client ABI %s/%s must be void/decodeEmptyResponse",
+				operation.CanonicalOperationID,
+				client.ResponseType,
+				client.ResponseDecoder,
+			)
+		}
+		return nil
+	}
+
+	expectedDecoder := "decode" + responseEntity
+	if client.ResponseType != responseEntity ||
+		client.ResponseDecoder != expectedDecoder {
+		return fmt.Errorf(
+			"%s client ABI %s/%s is not derived from response_entity %s",
+			operation.CanonicalOperationID,
+			client.ResponseType,
+			client.ResponseDecoder,
+			responseEntity,
+		)
+	}
+	return nil
+}
+
 // TestEveryAppSurfaceOperationHasOneSourceDerivedTypedOwner proves the source
 // inputs accepted by the App generator, without writing any generated file.
 // It intentionally includes commercial-blocked operations: readiness controls
@@ -123,20 +185,8 @@ func TestEveryAppSurfaceOperationHasOneSourceDerivedTypedOwner(t *testing.T) {
 			failures = append(failures, operationID+" has no request_entity")
 			continue
 		}
-		if strings.TrimSpace(operation.ResponseEntity) == "" {
-			failures = append(failures, operationID+" has no response_entity")
-		} else {
-			expectedDecoder := "decode" + operation.ResponseEntity
-			if operation.ClientContract.ResponseType != operation.ResponseEntity ||
-				operation.ClientContract.ResponseDecoder != expectedDecoder {
-				failures = append(failures, fmt.Sprintf(
-					"%s client ABI %s/%s is not derived from response_entity %s",
-					operationID,
-					operation.ClientContract.ResponseType,
-					operation.ClientContract.ResponseDecoder,
-					operation.ResponseEntity,
-				))
-			}
+		if responseErr := validateAppSurfaceResponseContract(operation); responseErr != nil {
+			failures = append(failures, responseErr.Error())
 		}
 		if len(operation.ErrorCodes) == 0 {
 			failures = append(failures, operationID+" has no canonical error_codes")
@@ -193,4 +243,99 @@ func TestEveryAppSurfaceOperationHasOneSourceDerivedTypedOwner(t *testing.T) {
 		len(unique),
 		blocked,
 	)
+}
+
+// spec_ref: specs/feature-tree/runtime/runtime-codegen/struct-repo-handler-migration-generation/spec.md#gwt-001
+func TestAppSurfaceResponseContractDistinguishesJSONAckAndUpgrade(t *testing.T) {
+	typed := &appClientContract{
+		ResponseType:    "ResponseView",
+		ResponseDecoder: "decodeResponseView",
+	}
+	empty := &appClientContract{
+		ResponseType:    "void",
+		ResponseDecoder: "decodeEmptyResponse",
+	}
+	tests := []struct {
+		name      string
+		operation appExposedOperation
+		wantError string
+	}{
+		{
+			name: "object response derives its JSON decoder",
+			operation: appExposedOperation{
+				CanonicalOperationID: "example.object.Get",
+				ResponseBodyKind:     "object",
+				ResponseEntity:       "ResponseView",
+				ClientContract:       typed,
+			},
+		},
+		{
+			name: "ack may carry a typed JSON receipt",
+			operation: appExposedOperation{
+				CanonicalOperationID: "example.command.Apply",
+				ResponseBodyKind:     "ack",
+				ResponseEntity:       "ResponseView",
+				ClientContract:       typed,
+			},
+		},
+		{
+			name: "empty ack uses the canonical void decoder",
+			operation: appExposedOperation{
+				CanonicalOperationID: "example.command.Report",
+				ResponseBodyKind:     "ack",
+				ClientContract:       empty,
+			},
+		},
+		{
+			name: "upgrade has a typed request descriptor and no JSON response",
+			operation: appExposedOperation{
+				CanonicalOperationID: "example.connection.Upgrade",
+				ResponseBodyKind:     "upgrade",
+				ClientContract:       empty,
+			},
+		},
+		{
+			name: "object cannot silently lose its response entity",
+			operation: appExposedOperation{
+				CanonicalOperationID: "example.object.Missing",
+				ResponseBodyKind:     "object",
+				ClientContract:       empty,
+			},
+			wantError: "has no response_entity",
+		},
+		{
+			name: "empty ack cannot pretend to decode JSON",
+			operation: appExposedOperation{
+				CanonicalOperationID: "example.command.Invalid",
+				ResponseBodyKind:     "ack",
+				ClientContract:       typed,
+			},
+			wantError: "must be void/decodeEmptyResponse",
+		},
+		{
+			name: "upgrade cannot declare a JSON response entity",
+			operation: appExposedOperation{
+				CanonicalOperationID: "example.connection.Invalid",
+				ResponseBodyKind:     "upgrade",
+				ResponseEntity:       "ResponseView",
+				ClientContract:       empty,
+			},
+			wantError: "must not declare response_entity",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := validateAppSurfaceResponseContract(test.operation)
+			if test.wantError == "" {
+				if err != nil {
+					t.Fatal(err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), test.wantError) {
+				t.Fatalf("error = %v, want substring %q", err, test.wantError)
+			}
+		})
+	}
 }

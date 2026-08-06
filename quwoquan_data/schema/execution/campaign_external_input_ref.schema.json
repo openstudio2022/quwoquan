@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/campaign_external_input_ref.schema.json",
+  "type": "object",
+  "required": [
+    "schema", "kind", "carrier", "acquisitionRootRef", "manifestId", "manifestRef",
+    "manifestDigest", "manifestFileDigest", "receiptRef", "receiptDigest",
+    "receiptFileDigest", "sourceRevision", "sourceDigest",
+    "entityCatalogDigest", "blobRefs", "refDigest"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {"const": "quwoquan_data.campaign_external_input_ref"},
+    "kind": {
+      "enum": [
+        "professional_image_acquisition",
+        "professional_video_acquisition"
+      ]
+    },
+    "carrier": {"enum": ["homepage", "article", "image", "video"]},
+    "acquisitionRootRef": {"enum": [".", "video"]},
+    "manifestId": {"type": "string", "minLength": 1},
+    "manifestRef": {"type": "string", "minLength": 1},
+    "manifestDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "manifestFileDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "receiptRef": {"type": "string", "minLength": 1},
+    "receiptDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "receiptFileDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "sourceRevision": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "sourceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "entityCatalogDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "blobRefs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["blobRef", "contentSha256", "sizeBytes"],
+        "additionalProperties": false,
+        "properties": {
+          "blobRef": {"type": "string", "minLength": 1},
+          "contentSha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+          "sizeBytes": {"type": "integer", "minimum": 1}
+        }
+      }
+    },
+    "refDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

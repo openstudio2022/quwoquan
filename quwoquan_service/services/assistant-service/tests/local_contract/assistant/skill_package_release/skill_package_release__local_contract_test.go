@@ -1,4 +1,8 @@
 // spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/skill-context-proactive-runtime/spec.md#gwt-001
+// spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/active-skill-package-catalog/spec.md#gwt-001
+// readiness_case: stage-assistant-skill-package-release-local
+// readiness_case: activate-assistant-skill-package-release-local
+// readiness_case: rollback-assistant-skill-package-release-local
 package skill_package_release_test
 
 import (
@@ -445,7 +449,7 @@ func signedRelease(
 		},
 		CapabilityGrants: []model.CapabilityGrant{
 			{CapabilityID: "tool.web_search", Scope: "read_public"},
-			{CapabilityID: "context.trip", Scope: "read_with_consent"},
+			{CapabilityID: "context.gathering", Scope: "read_with_consent"},
 		},
 	}
 	resignRelease(t, &release, privateKey)

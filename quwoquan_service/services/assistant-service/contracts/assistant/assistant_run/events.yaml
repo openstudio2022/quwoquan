@@ -1,10 +1,7 @@
 events:
 - name: AssistantRunStarted
   description: 助手执行开始
-  producer: assistant-service
-  consumers: []
-  no_consumer_reason: aggregate_event_journal_only
-  channel: event_store
+  delivery_semantics: not_published
   payload_entity: AssistantRun
   payload_fields:
   - _id
@@ -15,12 +12,12 @@ events:
   - skillId
   - triggerType
   - pageType
+  no_consumer_reason: aggregate_event_journal_only
 - name: AssistantRunCompleted
-  description: 助手执行完成
-  producer: assistant-service
-  consumers:
-  - recommendation-engine
-  channel: event_store
+  description: '助手执行完成
+
+    非 canonical 结构字段迁移注记：recommend_impact="assistant_quality_signal"。'
+  delivery_semantics: transactional_outbox
   payload_entity: AssistantRun
   payload_fields:
   - _id
@@ -33,13 +30,9 @@ events:
   - llmTokensUsed
   - latencyMs
   - satisfactionScore
-  recommend_impact: assistant_quality_signal
 - name: ToolCalled
   description: Tool 被调用
-  producer: assistant-service
-  consumers: []
-  no_consumer_reason: aggregate_event_journal_only
-  channel: event_store
+  delivery_semantics: not_published
   payload_entity: AssistantToolCallEventPayload
   payload_fields:
   - runId
@@ -47,12 +40,12 @@ events:
   - toolName
   - latencyMs
   - success
+  no_consumer_reason: aggregate_event_journal_only
 - name: SuggestedActionClicked
-  description: 用户点击建议操作
-  producer: assistant-service
-  consumers:
-  - recommendation-engine
-  channel: direct
+  description: '用户点击建议操作
+
+    非 canonical 结构字段迁移注记：recommend_impact="engagement_signal"。'
+  delivery_semantics: synchronous_call
   payload_entity: AssistantSuggestedActionClickEventPayload
   payload_fields:
   - runId
@@ -60,4 +53,5 @@ events:
   - actionId
   - pageType
   - pageObjectId
-  recommend_impact: engagement_signal
+  no_consumer_reason: 当前没有 canonical object.yaml.lifecycle.source_events 反向边；若 delivery_semantics 要求投递，commercial closure 保持
+    GATE_BLOCK。

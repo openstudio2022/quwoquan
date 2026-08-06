@@ -24,9 +24,6 @@ relationships:
   consistency: runtime
   access: external_port
   on_delete: detach
-capabilities:
-- reliable_async
-- auditable
 taggable: false
 vector_enabled: false
 business_rules:

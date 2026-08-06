@@ -61,7 +61,6 @@ type assistantExternalClients struct {
 	deliveryPolicyReader   *orchestration.UserDeliveryPolicyClient
 	canonicalSearch        *searchclient.Client
 	intersectionEvidence   runports.IntersectionEvidenceReader
-	travelContextReader    *domainreader.TravelClient
 	canonicalDomainReaders domainreader.CanonicalReaders
 	connectorGrantGateway  *connectorgateway.Client
 	interestReader         runports.ProactiveInterestReader
@@ -224,33 +223,6 @@ func buildAssistantExternalClients(
 			)
 		})
 	}
-	travelAuthorization, err := rtauth.NewHS256DelegatedPersonaAuthorizationProvider(
-		runtime.accessTokenConfig,
-		"assistant-service",
-		[]string{"travel.trip.read"},
-	)
-	if err != nil {
-		return nil, dependencyError("travel-service", "credentials", err)
-	}
-	travelHTTPClient := newObservedEgressClient(
-		"assistant-service.travel-context",
-		runtime.config.TravelService.TimeoutMs,
-	)
-	travelContextReader, err := domainreader.NewTravelClient(
-		runtime.config.TravelService.BaseURL,
-		travelHTTPClient,
-		travelAuthorization,
-	)
-	if err != nil {
-		return nil, dependencyError("travel-service", "context-reader", err)
-	}
-	infrastructure.healthChecker.Register("travel_service", func(ctx context.Context) error {
-		return checkServiceHealth(
-			ctx,
-			travelHTTPClient,
-			runtime.config.TravelService.BaseURL,
-		)
-	})
 	connectorGrantScope, err := connectorgateway.RequiredScope()
 	if err != nil {
 		return nil, dependencyError("integration-service", "operation-contract", err)
@@ -301,7 +273,6 @@ func buildAssistantExternalClients(
 		deliveryPolicyReader:   deliveryPolicyReader,
 		canonicalSearch:        canonicalSearch,
 		intersectionEvidence:   intersectionEvidence,
-		travelContextReader:    travelContextReader,
 		canonicalDomainReaders: canonicalDomainReaders,
 		connectorGrantGateway:  connectorGrantGateway,
 		interestReader:         interestReader,

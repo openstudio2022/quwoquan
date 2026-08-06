@@ -52,7 +52,7 @@ func NewCommandFacade(
 func NewQueryFacade(reader ports.Reader) *QueryFacade {
 	return &QueryFacade{
 		reader: reader,
-		now: func() time.Time { return time.Now().UTC() },
+		now:    func() time.Time { return time.Now().UTC() },
 	}
 }
 
@@ -111,6 +111,10 @@ func (facade *CommandFacade) Create(
 		input.RequestedCapabilities,
 	)
 	if err != nil {
+		return model.MutationResult{}, model.ErrGrantReceiptInvalid
+	}
+	if definition.AuthorizationMode == definitionmodel.AuthorizationOAuth2 &&
+		!model.ValidProviderAccountSubjectDigest(grant.ProviderAccountSubjectDigest) {
 		return model.MutationResult{}, model.ErrGrantReceiptInvalid
 	}
 	command, err := model.NewCreateCommand(input, grant, facade.now())
@@ -179,8 +183,8 @@ func (facade *QueryFacade) ResolveCapability(
 	}
 	decision := model.CapabilityGrantDecision{
 		CapabilityKey: normalized.CapabilityKey,
-		SurfaceKind: normalized.SurfaceKind,
-		Reason: model.CapabilityReasonNoConnection,
+		SurfaceKind:   normalized.SurfaceKind,
+		Reason:        model.CapabilityReasonNoConnection,
 	}
 	now := facade.now().UTC()
 	for _, connectionRef := range normalized.ConnectionRefs {
@@ -209,6 +213,13 @@ func (facade *QueryFacade) ResolveCapability(
 		}
 		if !definition.Grants(normalized.CapabilityKey) {
 			decision.Reason = model.CapabilityReasonCapabilityDenied
+			continue
+		}
+		if definition.AuthorizationMode == definitionmodel.AuthorizationOAuth2 &&
+			!model.ValidProviderAccountSubjectDigest(
+				connection.ProviderAccountSubjectDigest,
+			) {
+			decision.Reason = model.CapabilityReasonConnectionInactive
 			continue
 		}
 		if !definition.SupportsSurface(normalized.SurfaceKind) {

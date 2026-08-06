@@ -59,7 +59,6 @@ tables:
   device_push_endpoints:
     entity: DevicePushEndpoint
     role: owned
-    aggregate_owner: DeviceRegistration
     description: DeviceRegistration owned endpoint 子表；父 identity + endpoint_kind 唯一， active token fingerprint
       全局唯一，所有变更与父 version CAS 同事务提交。
     columns:

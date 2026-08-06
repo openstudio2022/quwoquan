@@ -87,3 +87,52 @@ api_routes:
 consumers:
 - name: assistant-skill-package-publish-pipeline
   capabilities: [stage, activate, rollback]
+readiness_cases:
+- case_id: stage-assistant-skill-package-release-local
+  spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/active-skill-package-catalog/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: StageAssistantSkillPackageRelease}
+  runner_source_path: quwoquan_service/services/assistant-service/tests/local_contract/assistant/skill_package_release/skill_package_release__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: stage-assistant-skill-package-release-api
+  spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/active-skill-package-catalog/spec.md#gwt-001
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: StageAssistantSkillPackageRelease}
+  runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/skill_package_release/skill_package_release__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb-immutable-skill-package, digest_binding: candidate}
+- case_id: activate-assistant-skill-package-release-local
+  spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/active-skill-package-catalog/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ActivateAssistantSkillPackageRelease}
+  runner_source_path: quwoquan_service/services/assistant-service/tests/local_contract/assistant/skill_package_release/skill_package_release__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: activate-assistant-skill-package-release-api
+  spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/active-skill-package-catalog/spec.md#gwt-001
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ActivateAssistantSkillPackageRelease}
+  runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/skill_package_release/skill_package_release__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb-immutable-skill-package, digest_binding: candidate}
+- case_id: rollback-assistant-skill-package-release-local
+  spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/active-skill-package-catalog/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: RollbackAssistantSkillPackageRelease}
+  runner_source_path: quwoquan_service/services/assistant-service/tests/local_contract/assistant/skill_package_release/skill_package_release__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: rollback-assistant-skill-package-release-api
+  spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/active-skill-package-catalog/spec.md#gwt-001
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: RollbackAssistantSkillPackageRelease}
+  runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/skill_package_release/skill_package_release__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb-immutable-skill-package, digest_binding: candidate}

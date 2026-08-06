@@ -17,9 +17,6 @@ access:
   cross_context: event_only
   queries: named_reader
 relationships: []
-capabilities:
-- queryable
-- aggregatable
 taggable: false
 vector_enabled: false
 lifecycle:

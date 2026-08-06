@@ -10,6 +10,7 @@ collections:
     - name: idx_search_queries_created
       keys:
         createdAt: -1
+      expire_after_seconds: 7776000
     - name: idx_search_queries_query_created
       keys:
         query: 1
@@ -18,9 +19,6 @@ collections:
       keys:
         viewerId: 1
         createdAt: -1
-    ttl:
-      field: createdAt
-      seconds: 7776000
   search_user_account_closed_inbox:
     entity: UserAccountClosedProjectionInbox
     role: append_only
@@ -45,15 +43,11 @@ collections:
     - name: ttl_search_user_account_closed_failures
       keys:
         expireAt: 1
-      expireAfterSeconds: 0
+      expire_after_seconds: 0
   rm_search_term_heat:
-    backend: mongodb
     entity: SearchTermHeatView
     role: projection
     description: 搜索词热力/相关性聚合；仅由 SearchRequestFact 与 SearchFeedbackFact typed reader 重建，不直接读取兄弟集合。
-    write_source:
-    - search_queries
-    - SearchFeedbackFact.HeatReader
     indexes:
     - name: idx_search_term_heat_term
       keys:
@@ -65,11 +59,5 @@ collections:
     - name: idx_search_term_heat_ttl
       keys:
         updatedAt: 1
-    ttl:
-      field: updatedAt
-      seconds: 86400
-external_read_index:
-  backend: elasticsearch
-  index: quwoquan_objects
-  note: 派生检索读库，由 search-service indexer 从各业务域 change-stream 灌入；可重建/回放。
+      expire_after_seconds: 86400
 role: append_only

@@ -1,4 +1,9 @@
 # spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-003
+# readiness_case: list-subject-intersections-local
+# readiness_case: list-object-intersections-local
+# readiness_case: get-intersection-supply-local
+# readiness_case: get-author-impact-local
+# readiness_case: list-author-impact-evidence-local
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -24,6 +29,7 @@ from internal.recommendation.recommendation_feature_profile_view.application.int
     SubjectIntersectionSnapshot,
 )
 from security.service_authorization import AuthorizationFailure
+from tests.support.intersection_reason import canonical_intersection_reason
 
 
 class _Store:
@@ -111,6 +117,62 @@ class _OpenSubjects:
         return False
 
 
+class _IntersectionStore:
+    def read_subject_intersections(
+        self, subject_id: str, intersection_class: str, channel: str
+    ) -> SubjectIntersectionSnapshot:
+        return SubjectIntersectionSnapshot(
+            subject_id=subject_id,
+            intersection_class=intersection_class,
+            channel=channel,
+            reasons=(canonical_intersection_reason(subject_id=subject_id),),
+            generated_at=datetime(2026, 8, 2, 12, tzinfo=timezone.utc),
+        )
+
+    def read_object_intersections(
+        self, subject_id: str, object_type: str, object_id: str
+    ) -> ObjectIntersectionSnapshot:
+        return ObjectIntersectionSnapshot(
+            subject_id=subject_id,
+            object_type=object_type,
+            object_id=object_id,
+            reasons=(canonical_intersection_reason(subject_id=subject_id),),
+            generated_at=datetime(2026, 8, 2, 12, tzinfo=timezone.utc),
+        )
+
+    def read_intersection_supply(self, supply_key: str) -> IntersectionSupplySnapshot:
+        return IntersectionSupplySnapshot(
+            supply_key=supply_key,
+            distinct_object_count=3,
+            computed_at=datetime(2026, 8, 2, 12, tzinfo=timezone.utc),
+        )
+
+    def subject_intersection_evidence_digest(self, _subject_id: str) -> str:
+        return "a" * 64
+
+    def object_intersection_evidence_digest(
+        self, _subject_id: str, _object_type: str, _object_id: str
+    ) -> str:
+        return "b" * 64
+
+    def intersection_supply_evidence_digest(self) -> str:
+        return "c" * 64
+
+
+class _RecordingMaterializer:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    def rebuild_subject(self, **_kwargs) -> None:
+        self.calls.append("subject")
+
+    def rebuild_object(self, **_kwargs) -> None:
+        self.calls.append("object")
+
+    def rebuild_supplies(self, **_kwargs) -> None:
+        self.calls.append("supply")
+
+
 def _client() -> tuple[TestClient, _Store]:
     store = _Store()
     reader = Reader(store)
@@ -132,6 +194,46 @@ def _client() -> tuple[TestClient, _Store]:
 
 def _headers() -> dict[str, str]:
     return {"Authorization": "Bearer content-service"}
+
+
+def test_intersection_http_uses_all_three_typed_query_contracts() -> None:
+    author_store = _Store()
+    store = _IntersectionStore()
+    materializer = _RecordingMaterializer()
+    app = FastAPI()
+    app.include_router(
+        build_router(
+            reader_provider=lambda _request: Reader(author_store),
+            intersection_reader_provider=lambda _request: IntersectionReader(
+                store, materializer, _OpenSubjects()
+            ),
+            token_verifier=_Verifier(),
+        )
+    )
+    client = TestClient(app)
+
+    subject = client.get(
+        "/internal/recommendation/subjects/persona-001/intersections",
+        headers=_headers(),
+        params={"intersectionClass": "fact", "channel": "feed"},
+    )
+    assert subject.status_code == 200
+    assert subject.json()["reasons"][0]["intersectionId"] == "intersection-001"
+
+    object_result = client.get(
+        "/internal/recommendation/subjects/persona-001/objects/post/post-001/intersections",
+        headers=_headers(),
+    )
+    assert object_result.status_code == 200
+    assert object_result.json()["objectId"] == "post-001"
+
+    supply = client.get(
+        "/internal/recommendation/intersection-supply/circle_membership",
+        headers=_headers(),
+    )
+    assert supply.status_code == 200
+    assert supply.json()["distinctObjectCount"] == 3
+    assert materializer.calls == ["subject", "object", "supply"]
 
 
 def test_author_impact_http_uses_typed_summary_and_evidence_contracts() -> None:

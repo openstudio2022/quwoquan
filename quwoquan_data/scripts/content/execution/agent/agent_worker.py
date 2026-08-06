@@ -1,13 +1,19 @@
 """Execution service extracted from the retired monolithic runner."""
 from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from core.cursor_model import CursorModelSelection
 from core.runtime_policy import active_runtime_policy
 from content.execution.support import Callable, ExecutionContext, MANAGED_AGENT_TIMEOUT_SECONDS, Path, _MANAGED_AGENT_SUBPROCESS_LOCK, _MANAGED_AGENT_SUBPROCESS_PIDS, _normalize_managed_agent_provider, _resolve_managed_model, json, os, signal, subprocess, sys, tempfile, time
 
+if TYPE_CHECKING:
+    from content.execution.agent.outcome import AgentRunOutcome
+
 _PROCESS_TERMINATION_TIMEOUT_SECONDS = active_runtime_policy().process_termination_timeout_seconds
 
 def _managed_agent_worker_main() -> None:
-    """Subprocess entrypoint for one real Cursor job.
+    """Subprocess entrypoint for one real semantic-agent job.
     Parent orchestration cannot cancel a thread blocked inside Agent.prompt, so
     production managed runs execute each SDK call in a short-lived subprocess.
     Fake test runners still bypass this path through ctx.agent_runner.
@@ -17,9 +23,13 @@ def _managed_agent_worker_main() -> None:
     output_path = Path(sys.argv[2])
     payload = json.loads(input_path.read_text(encoding="utf-8"))
     ctx_payload = payload.get("ctx") or {}
-    agent_provider = _normalize_managed_agent_provider(
-        str(ctx_payload.get("agentProvider") or "cursor_sdk")
-    )
+    raw_provider = str(ctx_payload.get("agentProvider") or "").strip()
+    if not raw_provider:
+        raise ValueError("agent_worker.ctx.agentProvider is required")
+    semantic_role = str(ctx_payload.get("semanticRole") or "").strip()
+    if not semantic_role:
+        raise ValueError("agent_worker.ctx.semanticRole is required")
+    agent_provider = _normalize_managed_agent_provider(raw_provider)
     model_selection = CursorModelSelection.from_config(
         ctx_payload.get("model"),
         ctx_payload.get("modelParameters"),
@@ -35,6 +45,7 @@ def _managed_agent_worker_main() -> None:
         model=_resolve_managed_model(agent_provider, model_selection.model_id),
         model_parameters=model_selection.parameters,
         agent_provider=agent_provider,
+        semantic_role=semantic_role,
         release_only=bool(ctx_payload.get("releaseOnly")),
     )
     outcome = _managed_agent_runner_for_provider(ctx, str(payload.get("prompt") or ""))
@@ -88,11 +99,15 @@ def _default_managed_agent_runner_isolated(
     completion_probe: Callable[[], bool] | None = None,
     completion_grace_seconds: float = 0,
 ) -> "AgentRunOutcome":
-    """Run the real Cursor SDK worker in a killable subprocess with a hard deadline."""
+    """Run one provider adapter in a killable subprocess with a hard deadline."""
     from content.execution.agent.agent_runner import _redact_managed_secret
     from content.execution.agent.outcome import AgentRunOutcome
     from core.control_types import AgentFailureKind, AgentProvider
     from content.execution.workspace import execution_root
+
+    provider = ctx.agent_provider
+    if not isinstance(provider, AgentProvider):
+        provider = AgentProvider(str(provider))
 
     agent_workspace = execution_root(ctx.execution_id)
     agent_workspace.mkdir(parents=True, exist_ok=True)
@@ -112,6 +127,7 @@ def _default_managed_agent_runner_isolated(
                         "model": ctx.model,
                         "modelParameters": ctx.model_selection.parameters_document(),
                         "agentProvider": _normalize_managed_agent_provider(ctx.agent_provider),
+                        "semanticRole": ctx.semantic_role,
                         "releaseOnly": ctx.release_only,
                     },
                     "prompt": prompt,
@@ -173,7 +189,7 @@ def _default_managed_agent_runner_isolated(
                                 pass
                             stdout, stderr = proc.communicate()
                         return AgentRunOutcome.finished(
-                            provider=AgentProvider.CURSOR_SDK,
+                            provider=provider,
                             run_id=f"contract-output:{ctx.execution_id}",
                             completion_mode="contract_output",
                             stdout_tail=_redact_managed_secret(stdout)[-1200:],
@@ -201,7 +217,7 @@ def _default_managed_agent_runner_isolated(
                     stdout, stderr = proc.communicate()
                 return AgentRunOutcome.failed(
                     AgentFailureKind.SUBPROCESS_TIMEOUT,
-                    provider=AgentProvider.CURSOR_SDK,
+                    provider=provider,
                     message=f"agent subprocess timed out after {MANAGED_AGENT_TIMEOUT_SECONDS}s",
                     retryable=True,
                     stdout_tail=_redact_managed_secret(stdout)[-1200:],
@@ -215,7 +231,7 @@ def _default_managed_agent_runner_isolated(
                 except (OSError, ValueError, TypeError) as exc:
                     return AgentRunOutcome.failed(
                         AgentFailureKind.SUBPROCESS_OUTPUT_INVALID,
-                        provider=AgentProvider.CURSOR_SDK,
+                        provider=provider,
                         message=f"agent subprocess wrote unreadable output: {type(exc).__name__}",
                         retryable=True,
                     )
@@ -224,14 +240,14 @@ def _default_managed_agent_runner_isolated(
                 except ValueError as exc:
                     return AgentRunOutcome.failed(
                         AgentFailureKind.SUBPROCESS_OUTPUT_INVALID,
-                        provider=AgentProvider.CURSOR_SDK,
+                        provider=provider,
                         message=f"agent subprocess wrote invalid output: {exc}",
                         retryable=True,
                     )
                 return decoded
             return AgentRunOutcome.failed(
                 AgentFailureKind.SUBPROCESS_EXITED,
-                provider=AgentProvider.CURSOR_SDK,
+                provider=provider,
                 message=(
                     f"agent subprocess exited {proc.returncode} without outcome; "
                     f"stderr={_redact_managed_secret(stderr)[-1200:]}"

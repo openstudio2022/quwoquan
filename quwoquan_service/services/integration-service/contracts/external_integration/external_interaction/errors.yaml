@@ -1,115 +1,104 @@
-aggregate: ExternalInteraction
-domain: INTEGRATION
 description: ExternalInteraction HTTP 受理/查询与异步 provider worker 的对象本地稳定错误语义。
 errors:
 - code: INTEGRATION.USER.invalid_external_request
-  kind: USER
   reason: invalid_argument
   http_status: 400
   emitted_by:
   - {surface: http, operations: [SubmitExternalInteractionRequest, GetExternalInteractionRequest, ListExternalInteractionAttempts, ListExternalInteractionDeadLetters, RecoverExternalInteractionDeadLetter]}
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: invalidExternalRequest
-  l10n_key: externalInteractionInvalidRequest
   go_const: ErrInvalidExternalRequest
   user_message:
     zh: 外部请求参数不完整
     en: External request is invalid
 - code: INTEGRATION.USER.unsupported_operation
-  kind: USER
   reason: unsupported_operation
   http_status: 400
   emitted_by:
   - {surface: http, operations: [SubmitExternalInteractionRequest]}
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: unsupportedOperation
-  l10n_key: externalInteractionUnsupportedOperation
   go_const: ErrUnsupportedOperation
   user_message:
     zh: 暂不支持该外部交互能力
     en: External interaction operation is not supported
 - code: INTEGRATION.USER.dead_letter_recovery_conflict
-  kind: USER
   reason: dead_letter_recovery_conflict
   http_status: 409
   emitted_by:
   - {surface: http, operations: [RecoverExternalInteractionDeadLetter]}
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: deadLetterRecoveryConflict
-  l10n_key: externalInteractionDeadLetterRecoveryConflict
   go_const: ErrDeadLetterRecoveryConflict
   user_message:
     zh: 该恢复请求与已确认的任务不一致
     en: The recovery request conflicts with the confirmed command receipt
 - code: INTEGRATION.MIDDLEWARE.provider_timeout
-  kind: MIDDLEWARE
   reason: timeout
   emitted_by: [worker]
   recovery_action: retry
+  disruption_level: snackbar
   recovery_after_seconds: 5
   dart_const: providerTimeout
-  l10n_key: externalInteractionProviderTimeout
   go_const: ErrProviderTimeout
   user_message:
     zh: 外部供应商响应超时，请稍后重试
     en: External provider timed out, please retry
 - code: INTEGRATION.MIDDLEWARE.provider_rejected
-  kind: MIDDLEWARE
   reason: upstream_rejected
   emitted_by: [worker]
   recovery_action: retry
+  disruption_level: snackbar
   recovery_after_seconds: 5
   dart_const: providerRejected
-  l10n_key: externalInteractionProviderRejected
   go_const: ErrProviderRejected
   user_message:
     zh: 外部供应商暂时拒绝请求，请稍后重试
     en: External provider rejected the request
 - code: INTEGRATION.SYSTEM.external_interaction_internal_error
-  kind: SYSTEM
   reason: internal_error
   http_status: 500
   emitted_by:
   - {surface: http, operations: [SubmitExternalInteractionRequest, GetExternalInteractionRequest, ListExternalInteractionAttempts, ListExternalInteractionDeadLetters, RecoverExternalInteractionDeadLetter, GetExternalInteractionMetricsSnapshot]}
   recovery_action: retry
+  disruption_level: snackbar
   recovery_after_seconds: 5
   dart_const: externalInteractionInternalError
-  l10n_key: externalInteractionInternalError
   go_const: ErrExternalInteractionInternalError
   user_message:
     zh: 外部集成网关异常，请稍后重试
     en: External integration gateway internal error
 - code: INTEGRATION.MIDDLEWARE.sms_provider_timeout
-  kind: MIDDLEWARE
   reason: timeout
   emitted_by: [worker]
   recovery_action: retry
+  disruption_level: snackbar
   recovery_after_seconds: 5
   dart_const: smsProviderTimeout
-  l10n_key: smsProviderTimeout
   go_const: ErrSmsProviderTimeout
   user_message:
     zh: 短信供应商响应超时，请稍后重试
     en: SMS provider timed out
 - code: INTEGRATION.MIDDLEWARE.sms_provider_rejected
-  kind: MIDDLEWARE
   reason: upstream_rejected
   emitted_by: [worker]
   recovery_action: retry
+  disruption_level: snackbar
   recovery_after_seconds: 5
   dart_const: smsProviderRejected
-  l10n_key: smsProviderRejected
   go_const: ErrSmsProviderRejected
   user_message:
     zh: 短信供应商暂时不可用，请稍后重试
     en: SMS provider is temporarily unavailable
 - code: INTEGRATION.SYSTEM.sms_otp_code_ref_invalid
-  kind: SYSTEM
   reason: secret_invalid
   emitted_by: [worker]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: smsOtpCodeRefInvalid
-  l10n_key: smsOtpCodeRefInvalid
   go_const: ErrSmsOtpCodeRefInvalid
   user_message:
     zh: 验证码投递凭据无效，请重新获取验证码

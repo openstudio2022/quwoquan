@@ -215,7 +215,19 @@ func TestEnumOwnerHierarchyRejectsShadowDuplicateAndDeadDefinitions(t *testing.T
 func TestErrorEventAndProjectionGovernanceUseSurfaceAwareRules(t *testing.T) {
 	status := 500
 	contractGraph := &graph.ContractGraph{
-		Objects: []ast.Object{{ID: "content.post", Domain: "content", Name: "Post"}},
+		Objects: []ast.Object{
+			{ID: "content.post", Domain: "content", Name: "Post"},
+			{
+				ID: "content.post_view", Domain: "content", Name: "PostView",
+				Lifecycle: &ast.LifecycleDefinition{
+					SourceEvents: []string{"content.post.PostObserved"},
+					EventConsumers: []ast.LifecycleEventConsumer{{
+						Name: "ProjectPostObserved", Kind: "projector",
+						Facet: "PostViewProjector", Method: "apply", Idempotency: "event_id",
+					}},
+				},
+			},
+		},
 		Operations: []ast.Operation{{
 			ID: "content.post.GetPost", LocalID: "GetPost", ObjectID: "content.post",
 			ErrorCodes: []string{"CONTENT.SYSTEM.failed"},
@@ -234,8 +246,8 @@ func TestErrorEventAndProjectionGovernanceUseSurfaceAwareRules(t *testing.T) {
 					{Code: "CONTENT.SYSTEM.unbound", SourcePath: "content/content/post/errors.yaml"},
 				},
 				Events: []ast.EventDefinition{
-					{Name: "PostChanged", Channel: "outbox.domain", SourcePath: "content/content/post/events.yaml"},
-					{Name: "PostObserved", Channel: "direct", PayloadEntity: "Post", Consumers: []string{"reader"}, NoConsumerReason: "retired", SourcePath: "content/content/post/events.yaml"},
+					{Name: "PostChanged", DeliverySemantics: "transactional_outbox", SourcePath: "content/content/post/events.yaml"},
+					{Name: "PostObserved", DeliverySemantics: "synchronous_call", PayloadEntity: "Post", NoConsumerReason: "retired", SourcePath: "content/content/post/events.yaml"},
 				},
 			}},
 		},
@@ -423,11 +435,10 @@ func TestEventPayloadFieldsMustExactlyMatchObjectLocalPayloadType(t *testing.T) 
 			Objects: []ast.ObjectGovernance{{
 				ObjectID: "content.post",
 				Events: []ast.EventDefinition{{
-					Name: "PostChanged", Channel: "transactional_outbox",
+					Name: "PostChanged", DeliverySemantics: "transactional_outbox",
 					PayloadEntity: "PostChangedPayload",
 					PayloadShape:  "exact",
 					PayloadFields: []string{"postId", "postId", "unknown"},
-					Consumers:     []string{"post-projector"},
 					SourcePath:    "content/content/post/events.yaml",
 				}},
 			}},
@@ -440,18 +451,73 @@ func TestEventPayloadFieldsMustExactlyMatchObjectLocalPayloadType(t *testing.T) 
 	)
 }
 
+// consumer 强制按 `delivery_semantics` 的**精确取值**判定。旧实现用
+// `strings.Contains(channel, "outbox")`：那是没有值域时的将就写法，任何含 `outbox` 字样的
+// topic 名或拼写变体都能改变判定。这里把两个方向都钉死——含 `outbox` 字样但不是受控取值的
+// 值不再被当成发件箱，受控取值不再靠字样而靠自身成立。
+func TestOutboxConsumerRuleUsesExactDeliverySemanticsNotSubstring(t *testing.T) {
+	newGraph := func(events ...ast.EventDefinition) *graph.ContractGraph {
+		return &graph.ContractGraph{
+			Objects: []ast.Object{{ID: "content.post", Domain: "content", Name: "Post"}},
+			Governance: ast.MetadataGovernance{
+				Objects: []ast.ObjectGovernance{{ObjectID: "content.post", Events: events}},
+			},
+		}
+	}
+	source := "content/content/post/events.yaml"
+
+	// `outbox.domain` 是 topic 形状的名字，不是投递保证。子串匹配会把它当发件箱；
+	// 精确匹配把它归为未知取值，仍 fail-safe 到要求 consumer 一侧，但触发原因不同：
+	// 它不是「发件箱缺收件人」，而是「取值根本不在值域内」。
+	assertGovernanceIssueCodes(t, validateEventGovernance(newGraph(ast.EventDefinition{
+		Name: "PostChanged", DeliverySemantics: "outbox.domain",
+		PayloadEntity: "Post", SourcePath: source,
+	})),
+		"CONTRACT.EVENT.OUTBOX_WITHOUT_CONSUMER",
+	)
+
+	// 事务性事件表零消费者 + 理由是完整声明，不得再被当成发件箱要求 consumer。
+	// 子串匹配下 `transactional_event_log` 不含 `outbox`，靠的是「碰巧不含」；
+	// 精确匹配下它靠自身取值成立。
+	assertGovernanceIssueCodes(t, validateEventGovernance(newGraph(ast.EventDefinition{
+		Name: "PostJournaled", DeliverySemantics: "transactional_event_log",
+		PayloadEntity: "Post", NoConsumerReason: "append-only audit journal",
+		SourcePath: source,
+	})))
+
+	// 反方向：有具名消费者却标成事务性事件表，等于把「投递断了」洗成「本来就不用投递」。
+	// 这条互斥由 DESIGN.md 第 9.2 节在存储侧确立，这里是它在事件侧的执行。
+	eventLogWithConsumer := newGraph(ast.EventDefinition{
+		Name: "PostJournaled", DeliverySemantics: "transactional_event_log",
+		PayloadEntity: "Post",
+		SourcePath:    source,
+	})
+	eventLogWithConsumer.Objects = []ast.Object{{
+		ID: "content.post_view", SourcePath: "content/read/post_view/object.yaml",
+		Lifecycle: &ast.LifecycleDefinition{
+			SourceEvents: []string{"content.post.PostJournaled"},
+			EventConsumers: []ast.LifecycleEventConsumer{{
+				Name: "ProjectPostJournal", Kind: "projector", Facet: "PostJournalProjector",
+				Method: "apply", Idempotency: "event_id",
+			}},
+		},
+	}}
+	assertGovernanceIssueCodes(t, validateEventGovernance(eventLogWithConsumer),
+		"CONTRACT.EVENT.EVENT_LOG_WITH_CONSUMER",
+	)
+}
+
 func TestEventSubscriptionMustResolveToCanonicalProducer(t *testing.T) {
 	contractGraph := &graph.ContractGraph{
 		Objects: []ast.Object{{
-			ID: "user.following_subject", Domain: "user", Name: "FollowingSubject",
-			SourcePath: "user/profile_projection/following_subject/object.yaml",
-		}},
-		BusinessObjectMaps: []ast.BusinessObjectMap{{
-			Domain: "user",
-			Objects: []ast.BusinessObjectBoundary{{
-				CanonicalObject: "FollowingSubject",
-				EventConsumers:  []string{"FollowedSubjectVisited", "MissingEvent"},
-			}},
+			ID: "user.following_subject", SourcePath: "user/profile_projection/following_subject/object.yaml",
+			Lifecycle: &ast.LifecycleDefinition{SourceEvents: []string{
+				"user.followed_subject_visit_state.FollowedSubjectVisited",
+				"user.missing_source.MissingEvent",
+			}, EventConsumers: []ast.LifecycleEventConsumer{{
+				Name: "ProjectFollowingSubject", Kind: "projector", Facet: "FollowingSubjectProjector",
+				Method: "apply", Idempotency: "event_id",
+			}}},
 		}},
 		Governance: ast.MetadataGovernance{Objects: []ast.ObjectGovernance{{
 			ObjectID: "user.followed_subject_visit_state",
@@ -462,10 +528,10 @@ func TestEventSubscriptionMustResolveToCanonicalProducer(t *testing.T) {
 	assertGovernanceIssueCodes(
 		t,
 		issues,
-		"CONTRACT.EVENT.SUBSCRIPTION_WITHOUT_PRODUCER",
+		"CONTRACT.EVENT.SOURCE_WITHOUT_PRODUCER",
 	)
 	for _, current := range issues {
-		if current.Code == "CONTRACT.EVENT.SUBSCRIPTION_WITHOUT_PRODUCER" &&
+		if current.Code == "CONTRACT.EVENT.SOURCE_WITHOUT_PRODUCER" &&
 			!strings.Contains(current.Message, "MissingEvent") {
 			t.Fatalf("resolved subscription must not be reported: %+v", issues)
 		}
@@ -474,16 +540,13 @@ func TestEventSubscriptionMustResolveToCanonicalProducer(t *testing.T) {
 
 func TestEventNameMustHaveOneCanonicalProducer(t *testing.T) {
 	contractGraph := &graph.ContractGraph{
-		Governance: ast.MetadataGovernance{Objects: []ast.ObjectGovernance{
-			{
-				ObjectID: "user.subject_follow",
-				Events:   []ast.EventDefinition{{Name: "SubjectFollowStateChanged"}},
+		Governance: ast.MetadataGovernance{Objects: []ast.ObjectGovernance{{
+			ObjectID: "user.subject_follow",
+			Events: []ast.EventDefinition{
+				{Name: "SubjectFollowStateChanged"},
+				{Name: "SubjectFollowStateChanged"},
 			},
-			{
-				ObjectID: "entity.homepage_follow",
-				Events:   []ast.EventDefinition{{Name: "SubjectFollowStateChanged"}},
-			},
-		}},
+		}}},
 	}
 	assertGovernanceIssueCodes(
 		t,
@@ -492,7 +555,146 @@ func TestEventNameMustHaveOneCanonicalProducer(t *testing.T) {
 	)
 }
 
+func TestCanonicalEventIdentityIncludesProducingObject(t *testing.T) {
+	contractGraph := &graph.ContractGraph{
+		Objects: []ast.Object{
+			{
+				ID: "search.post_view", SourcePath: "search/search/post_view/object.yaml",
+				Lifecycle: &ast.LifecycleDefinition{
+					SourceEvents: []string{"content.post.Changed"},
+					EventConsumers: []ast.LifecycleEventConsumer{{
+						Name: "ProjectPost", Kind: "projector", Facet: "PostViewProjector",
+						Method: "apply", Idempotency: "event_id",
+					}},
+				},
+			},
+			{
+				ID: "search.comment_view", SourcePath: "search/search/comment_view/object.yaml",
+				Lifecycle: &ast.LifecycleDefinition{
+					SourceEvents: []string{"content.comment.Changed"},
+					EventConsumers: []ast.LifecycleEventConsumer{{
+						Name: "ProjectComment", Kind: "projector", Facet: "CommentViewProjector",
+						Method: "apply", Idempotency: "event_id",
+					}},
+				},
+			},
+		},
+		Governance: ast.MetadataGovernance{Objects: []ast.ObjectGovernance{
+			{
+				ObjectID: "content.post",
+				Events: []ast.EventDefinition{{
+					Name: "Changed", DeliverySemantics: "transactional_outbox",
+					PayloadEntity: "Post", SourcePath: "content/content/post/events.yaml",
+				}},
+			},
+			{
+				ObjectID: "content.comment",
+				Events: []ast.EventDefinition{{
+					Name: "Changed", DeliverySemantics: "transactional_outbox",
+					PayloadEntity: "Comment", SourcePath: "content/content/comment/events.yaml",
+				}},
+			},
+		}},
+	}
+	for _, current := range validateEventGovernance(contractGraph) {
+		if current.Code == "CONTRACT.EVENT.DUPLICATE_PRODUCER" {
+			t.Fatalf("object-qualified event refs must not collide: %+v", current)
+		}
+	}
+}
+
+func TestEventConsumerRejectsDomainOnlyInferenceAndUnknownProducer(t *testing.T) {
+	contractGraph := &graph.ContractGraph{
+		Objects: []ast.Object{{
+			ID: "search.post_view", SourcePath: "search/search/post_view/object.yaml",
+			Lifecycle: &ast.LifecycleDefinition{SourceEvents: []string{
+				"content.PostChanged",
+				"content.missing.PostChanged",
+			}, EventConsumers: []ast.LifecycleEventConsumer{{
+				Name: "ProjectPost", Kind: "projector", Facet: "PostViewProjector", Method: "apply", Idempotency: "event_id",
+			}}},
+		}},
+	}
+	assertGovernanceIssueCodes(t, validateEventGovernance(contractGraph),
+		"CONTRACT.EVENT.INVALID_SOURCE_REF",
+		"CONTRACT.EVENT.SOURCE_WITHOUT_PRODUCER",
+	)
+}
+
+func TestEventClientPayloadDefaultsMustNamePayloadFields(t *testing.T) {
+	contractGraph := &graph.ContractGraph{Governance: ast.MetadataGovernance{
+		Objects: []ast.ObjectGovernance{{
+			ObjectID: "rtc.call_session",
+			Events: []ast.EventDefinition{{
+				Name: "CallRinging", DeliverySemantics: "not_published",
+				PayloadEntity: "CallEventPayload", PayloadFields: []string{"callType"},
+				ClientWSType: "call.ringing",
+				ClientPayloadDefaults: map[string]string{
+					"callType": "audio",
+					"unknown":  "value",
+				},
+				NoConsumerReason: "client-only typed signal",
+				SourcePath:       "rtc/rtc/call_session/events.yaml",
+			}},
+		}},
+	}}
+	assertGovernanceIssueCodes(t, validateEventGovernance(contractGraph),
+		"CONTRACT.EVENT.CLIENT_DEFAULT_UNKNOWN_FIELD",
+	)
+}
+
+func TestEventReverseIndexRejectsDuplicateAndStaleConsumerDeclarations(t *testing.T) {
+	contractGraph := &graph.ContractGraph{
+		Objects: []ast.Object{{
+			ID: "search.post_view", SourcePath: "search/search/post_view/object.yaml",
+			Lifecycle: &ast.LifecycleDefinition{SourceEvents: []string{
+				"content.post.PostPublished",
+				"content.post.PostPublished",
+			}, EventConsumers: []ast.LifecycleEventConsumer{{
+				Name: "ProjectPost", Kind: "projector", Facet: "PostViewProjector", Method: "apply", Idempotency: "event_id",
+			}}},
+		}},
+		Governance: ast.MetadataGovernance{Objects: []ast.ObjectGovernance{{
+			ObjectID: "content.post",
+			Events: []ast.EventDefinition{{
+				Name: "PostPublished", DeliverySemantics: "transactional_outbox",
+				PayloadEntity:    "Post",
+				NoConsumerReason: "stale producer-side declaration",
+				SourcePath:       "content/content/post/events.yaml",
+			}},
+		}}},
+	}
+	assertGovernanceIssueCodes(t, validateEventGovernance(contractGraph),
+		"CONTRACT.EVENT.DUPLICATE_SOURCE_EVENT",
+		"CONTRACT.EVENT.STALE_NO_CONSUMER_REASON",
+	)
+}
+
+func TestEventClientWSTypeHasOneCanonicalOwner(t *testing.T) {
+	contractGraph := &graph.ContractGraph{Governance: ast.MetadataGovernance{
+		Objects: []ast.ObjectGovernance{
+			{ObjectID: "rtc.call_session", Events: []ast.EventDefinition{{
+				Name: "CallRinging", DeliverySemantics: "not_published",
+				PayloadEntity: "CallEventPayload", ClientWSType: "call.ringing",
+				NoConsumerReason: "client-only typed signal",
+				SourcePath:       "rtc/rtc/call_session/events.yaml",
+			}}},
+			{ObjectID: "notification.notification", Events: []ast.EventDefinition{{
+				Name: "IncomingCallRinging", DeliverySemantics: "not_published",
+				PayloadEntity: "IncomingCallPayload", ClientWSType: "call.ringing",
+				NoConsumerReason: "client-only typed signal",
+				SourcePath:       "notification/notification_delivery/notification/events.yaml",
+			}}},
+		},
+	}}
+	assertGovernanceIssueCodes(t, validateEventGovernance(contractGraph),
+		"CONTRACT.EVENT.DUPLICATE_CLIENT_WS_TYPE",
+	)
+}
+
 func TestPrivacyReferencesMustResolveToCanonicalFieldsAndObjects(t *testing.T) {
+	retentionDays := 365
+	deletionOnRequest := true
 	contractGraph := &graph.ContractGraph{
 		Objects: []ast.Object{
 			{ID: "user.user_account", Domain: "user", Name: "UserAccount"},
@@ -500,19 +702,38 @@ func TestPrivacyReferencesMustResolveToCanonicalFieldsAndObjects(t *testing.T) {
 		},
 		Governance: ast.MetadataGovernance{
 			Fields: []ast.FieldDefinition{{
-				ObjectID: "user.user_account",
-				Entity:   "UserAccount",
-				Name:     "phone",
+				ObjectID:       "user.user_account",
+				Entity:         "UserAccount",
+				Name:           "phone",
+				Classification: "PII",
+				LogPolicy:      "mask",
 			}},
 			Objects: []ast.ObjectGovernance{{
 				ObjectID: "user.user_account",
 				Privacy: &ast.PrivacyDefinition{
-					Aggregate:           "UserProfile",
-					AppLogFields:        []string{"phone", "birthday"},
-					VisibilityFields:    []string{"phone"},
-					AnonymizationFields: []string{"location"},
-					DeletionTargets:     []string{"Persona", "UserDevice"},
-					SourcePath:          "user/account/user_account/privacy.yaml",
+					ObjectID: "user.user_account",
+					Document: ast.PrivacyDocument{
+						Description: "fixture privacy",
+						AppLogPolicy: []ast.PrivacyAppLogPolicy{
+							{Field: "phone", Classification: ast.PrivacyClassificationPII, AppLog: ast.PrivacyAppLogDrop},
+							{Field: "birthday", Classification: ast.PrivacyClassificationPII, AppLog: ast.PrivacyAppLogDrop},
+						},
+						FieldVisibility: []ast.PrivacyFieldVisibility{{
+							Field: "phone", Visibility: []string{"user-service-internal"},
+						}},
+						DataLifecycle: &ast.PrivacyDataLifecycle{
+							RetentionDays:         &retentionDays,
+							DeletionOnUserRequest: &deletionOnRequest,
+							DeletionCascade: []ast.PrivacyDeletionCascade{
+								{ObjectID: "user.persona", Strategy: ast.PrivacyDeletionHardDelete},
+								{ObjectID: "user.user_device", Strategy: ast.PrivacyDeletionHardDelete},
+							},
+							AnonymizationOnDelete: []ast.PrivacyAnonymization{{
+								Field: "location", Strategy: ast.PrivacyAnonymizationDrop,
+							}},
+						},
+					},
+					SourcePath: "user/account/user_account/privacy.yaml",
 				},
 			}},
 		},
@@ -520,7 +741,6 @@ func TestPrivacyReferencesMustResolveToCanonicalFieldsAndObjects(t *testing.T) {
 	assertGovernanceIssueCodes(
 		t,
 		validatePrivacyGovernance(contractGraph),
-		"CONTRACT.PRIVACY.AGGREGATE_MISMATCH",
 		"CONTRACT.PRIVACY.UNKNOWN_FIELD",
 		"CONTRACT.PRIVACY.UNKNOWN_DELETION_TARGET",
 	)

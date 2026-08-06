@@ -1,20 +1,27 @@
 dart_class: AssistantTurnOutput
-library_path: assistant/contracts/assistant_turn_contract.dart
-output_path: assistant/generated/contracts/assistant_turn.g.dart
+library_path: service/assistant_service/assistant/assistant_turn_view/domain/assistant_turn_contract.dart
+output_path: service/assistant_service/assistant/assistant_turn_view/domain/generated/assistant_turn.g.dart
 contract: assistant_turn
 kind: output_contract
 imports:
-  - package:quwoquan_app/assistant/contracts/assistant_journey.dart
-  - package:quwoquan_app/assistant/contracts/aggregation_state.dart
-  - package:quwoquan_app/assistant/contracts/orchestrator_state_contract.dart
-  - package:quwoquan_app/assistant/contracts/skill_run.dart
-  - package:quwoquan_app/assistant/contracts/run_artifacts.dart
-  - package:quwoquan_app/assistant/contracts/task_graph_contract.dart
-  - package:quwoquan_app/assistant/contracts/turn_synthesis_state_contract.dart
-  - package:quwoquan_app/assistant/contracts/understanding_result_contract.dart
+  - package:quwoquan_app/service/assistant_service/assistant/assistant_preference/application/public/assistant_preference_snapshot_view.dart
+  - package:quwoquan_app/service/assistant_service/assistant/assistant_run/application/public/assistant_run_persisted_value_types.dart
+  - package:quwoquan_app/service/assistant_service/assistant/assistant_run/application/public/orchestrator_state_contract.dart
+  - package:quwoquan_app/service/assistant_service/assistant/assistant_task_view/application/public/task_graph_view.dart
+  - package:quwoquan_app/service/assistant_service/assistant/assistant_turn_view/domain/turn_synthesis_state_contract.dart
   - package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart
-  - package:quwoquan_app/assistant/generated/contracts/assistant_presentation_document.g.dart
-  - package:quwoquan_app/assistant/generated/contracts/assistant_run_runtime.g.dart
+ref_imports:
+  AggregationState: package:quwoquan_app/service/assistant_service/assistant/assistant_run/application/public/assistant_run_persisted_value_types.dart
+  AssistantDisplayState: package:quwoquan_app/service/assistant_service/assistant/assistant_run/application/public/assistant_run_persisted_value_types.dart
+  AssistantJourney: package:quwoquan_app/service/assistant_service/assistant/assistant_run/application/public/assistant_run_persisted_value_types.dart
+  AssistantPreferenceSnapshot: package:quwoquan_app/service/assistant_service/assistant/assistant_preference/application/public/assistant_preference_snapshot_view.dart
+  RetrievalProcessingSnapshot: package:quwoquan_app/service/assistant_service/assistant/assistant_run/application/public/assistant_run_persisted_value_types.dart
+  SessionOrchestratorState: package:quwoquan_app/service/assistant_service/assistant/assistant_run/application/public/orchestrator_state_contract.dart
+  SkillRun: package:quwoquan_app/service/assistant_service/assistant/assistant_run/application/public/assistant_run_persisted_value_types.dart
+  SlotStateSnapshot: package:quwoquan_app/service/assistant_service/assistant/assistant_run/application/public/assistant_run_persisted_value_types.dart
+  SubagentPlan: package:quwoquan_app/service/assistant_service/assistant/assistant_run/application/public/assistant_run_persisted_value_types.dart
+  TaskGraph: package:quwoquan_app/service/assistant_service/assistant/assistant_task_view/application/public/task_graph_view.dart
+  UnderstandingResult: package:quwoquan_app/service/assistant_service/assistant/assistant_run/application/public/assistant_run_persisted_value_types.dart
 fields:
   - name: contractId
     source: contractId

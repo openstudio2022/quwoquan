@@ -17,6 +17,17 @@ import (
 type CircleHandler struct {
 	circleService  *application.CircleService
 	circleCommands *application.CircleCommandFacade
+	hostAuthority  *application.HostAuthorityEvaluator
+}
+
+func (h *CircleHandler) WithHostAuthorityEvaluator(
+	evaluator *application.HostAuthorityEvaluator,
+) *CircleHandler {
+	if evaluator == nil {
+		panic("Circle Host authority evaluator is required")
+	}
+	h.hostAuthority = evaluator
+	return h
 }
 
 func NewCircleHandler(
@@ -38,6 +49,7 @@ func (h *CircleHandler) Routes() http.Handler {
 	mux.HandleFunc("GET /circles/discovery-feed", h.handleCircleDiscoveryFeed)
 	mux.HandleFunc("GET /circles/search", h.handleSearchCircles)
 	mux.HandleFunc("/circles/", h.handleCircleSubRoutes)
+	mux.HandleFunc("/internal/circle/circles/", h.handleInternalCircleRoute)
 
 	return mux
 }

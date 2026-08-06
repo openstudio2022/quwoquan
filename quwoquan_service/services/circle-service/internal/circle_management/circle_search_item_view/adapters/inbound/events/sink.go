@@ -9,19 +9,23 @@ import (
 	viewapp "quwoquan_service/services/circle-service/internal/circle_management/circle_search_item_view/application"
 )
 
-type Sink struct {
+// CircleSearchItemViewProjector is the object-owned lifecycle adapter.  It
+// resolves the current authoritative snapshot before applying an idempotent
+// index mutation, so a transport relay cannot bypass visibility/tombstone
+// semantics.
+type CircleSearchItemViewProjector struct {
 	projector *viewapp.Projector
 	snapshots viewapp.SnapshotReader
 }
 
-func NewSink(projector *viewapp.Projector, snapshots viewapp.SnapshotReader) *Sink {
+func NewSink(projector *viewapp.Projector, snapshots viewapp.SnapshotReader) *CircleSearchItemViewProjector {
 	if projector == nil || snapshots == nil {
 		panic("CircleSearchItemView event sink requires projector and snapshot reader")
 	}
-	return &Sink{projector: projector, snapshots: snapshots}
+	return &CircleSearchItemViewProjector{projector: projector, snapshots: snapshots}
 }
 
-func (sink *Sink) Apply(ctx context.Context, event viewapp.LifecycleEvent) error {
+func (sink *CircleSearchItemViewProjector) Apply(ctx context.Context, event viewapp.LifecycleEvent) error {
 	circleID := strings.TrimSpace(event.CircleID)
 	version := event.SourceVersion
 	if circleID == "" || version <= 0 {
@@ -50,4 +54,4 @@ func (sink *Sink) Apply(ctx context.Context, event viewapp.LifecycleEvent) error
 	}
 }
 
-var _ viewapp.EventHandler = (*Sink)(nil)
+var _ viewapp.EventHandler = (*CircleSearchItemViewProjector)(nil)

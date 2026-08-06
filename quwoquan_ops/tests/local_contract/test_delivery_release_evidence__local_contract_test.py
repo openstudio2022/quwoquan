@@ -3,6 +3,9 @@ from __future__ import annotations
 import unittest
 
 from quwoquan_ops.ci.render_delivery_release_evidence import canonical_digest, render
+from quwoquan_ops.ci.render_environment_release_receipt import (
+    RELEASE_CLOSURE_PATHS,
+)
 
 
 class DeliveryReleaseEvidenceTest(unittest.TestCase):
@@ -69,6 +72,15 @@ class DeliveryReleaseEvidenceTest(unittest.TestCase):
             "generated_at": "2026-07-28T00:00:00Z",
             "user_acceptance_source": self._user_acceptance_source(),
             "user_acceptance_transport_digest": "sha256:" + "c" * 64,
+            "evidence_files": {
+                label: {
+                    "path": path,
+                    "digest": "sha256:" + f"{index + 10:064x}",
+                }
+                for index, (label, path) in enumerate(
+                    sorted(RELEASE_CLOSURE_PATHS.items())
+                )
+            },
         }
         values.update(overrides)
         return render(**values)
@@ -89,6 +101,24 @@ class DeliveryReleaseEvidenceTest(unittest.TestCase):
             ],
             "sha256:" + "c" * 64,
         )
+        self.assertEqual(
+            set(payload["evidence"]["files"]),
+            set(RELEASE_CLOSURE_PATHS),
+        )
+
+    def test_missing_green_matrix_exact_file_binding_is_rejected(self) -> None:
+        files = {
+            label: {
+                "path": path,
+                "digest": "sha256:" + f"{index + 20:064x}",
+            }
+            for index, (label, path) in enumerate(
+                sorted(RELEASE_CLOSURE_PATHS.items())
+            )
+        }
+        files.pop("green-matrix")
+        with self.assertRaisesRegex(ValueError, "file set is incomplete"):
+            self._render(evidence_files=files)
 
     def test_skipped_or_failed_result_cannot_be_promoted(self) -> None:
         with self.assertRaisesRegex(ValueError, "api_integration is not passed"):

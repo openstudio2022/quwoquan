@@ -4,9 +4,12 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Callable, Mapping
+
+from core.control_types import AgentProvider, ExecutionStage
+from core.runtime_policy import active_runtime_policy
 
 from content.execution.baseline_packet import load_baseline_packet
 from content.execution.coverage import coverage_entity_ids
@@ -16,8 +19,6 @@ from content.execution.support import (
     save_execution_state,
     store,
 )
-from core.control_types import AgentProvider, ExecutionStage
-from core.runtime_policy import active_runtime_policy
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,11 +37,17 @@ class ControllerRequest:
 
 def run_controlled_execution(request: ControllerRequest) -> None:
     from content.execution.agent.agent_managed import run_managed_controller
-    from content.execution.agent.agent_runner import _managed_local_workspace_guard
+    from content.execution.agent.managed_workspace import managed_local_workspace_guard
     from content.execution.controller.control import _execution_signal_guard
     from content.execution.controller.orchestrator import run_controller
-    from content.execution.controller.preflight import _managed_preflight, _write_managed_env_ready_report
-    from content.execution.recovery.stage_reset import _clear_manual_repair_rewind_if_resuming, reset_stage_retries
+    from content.execution.controller.preflight import (
+        _managed_preflight,
+        _write_managed_env_ready_report,
+    )
+    from content.execution.recovery.stage_reset import (
+        _clear_manual_repair_rewind_if_resuming,
+        reset_stage_retries,
+    )
     execution_id = request.execution_id
     if not execution_id:
         print("[execution run] ERROR: executionId is required", file=sys.stderr)
@@ -52,19 +59,19 @@ def run_controlled_execution(request: ControllerRequest) -> None:
         raise SystemExit(2)
     managed = request.managed
     policy = active_runtime_policy()
-    agent_provider = policy.cursor_provider.value
-    from content.execution.model_contract import execution_model_pair_for_execution
+    from content.execution.model_contract import (
+        semantic_execution_binding_for_execution,
+    )
 
-    author_model = execution_model_pair_for_execution(execution_id).author
-    if author_model.selection != policy.cursor_model_selection:
-        raise RuntimeError(
-            "recipe author model selection must match the active runtime policy"
-        )
+    semantic_binding = semantic_execution_binding_for_execution(execution_id)
+    model_pair = semantic_binding.pair
+    author_model = model_pair.author
+    agent_provider = author_model.provider.value
     managed_model = author_model.model_id
     preflight_args = argparse.Namespace(
         agent_provider=agent_provider,
         until=request.until.value if request.until else None,
-        runtime=policy.cursor_runtime.value,
+        runtime=semantic_binding.runtime.value,
         agent_runner=request.agent_runner,
         force_clean_workspace_agent_state=request.force_clean_workspace_agent_state,
         model=managed_model,
@@ -110,8 +117,8 @@ def run_controlled_execution(request: ControllerRequest) -> None:
         spec=spec, baseline_packet=baseline_packet, baseline_packet_path=baseline_packet_path,
         until=request.until,
         managed=managed,
-        runtime=policy.cursor_runtime,
-        max_workers=min(policy.author_workers, policy.cursor_bridge_instances),
+        runtime=semantic_binding.runtime,
+        max_workers=policy.author_workers,
         model=managed_model,
         model_parameters=author_model.parameters,
         agent_provider=AgentProvider(agent_provider),
@@ -139,7 +146,7 @@ def run_controlled_execution(request: ControllerRequest) -> None:
                     }
                     state.heartbeat_at = store.now_iso()
                     save_execution_state(state)
-                    with _managed_local_workspace_guard(run_ctx):
+                    with managed_local_workspace_guard(run_ctx):
                         code = run_managed_controller(run_ctx)
             else:
                 code = run_controller(ctx)

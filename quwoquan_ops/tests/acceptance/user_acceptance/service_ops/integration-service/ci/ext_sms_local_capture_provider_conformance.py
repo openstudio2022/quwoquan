@@ -14,7 +14,7 @@ from quwoquan_ops.ci.provider_conformance.native_case_result import run_native_h
 
 RESULT_PATH_ENV = "QWQ_PROVIDER_CONFORMANCE_RESULT_PATH"
 TARGET = 'ext-sms-local_capture-user-acceptance'
-COMMAND = ('python3', 'quwoquan_ops/ci/provider_conformance/run_provider_patrol_uat.py', '--target', 'test/user_acceptance/patrol/user/sms_otp_provider__user_acceptance_test.dart', '--platform', 'android', '--unauthenticated', '--local-capture-otp-broker', '--define-key', 'QWQ_PROVIDER_UAT_SMS_PHONE')
+COMMAND = ('python3', 'quwoquan_ops/ci/provider_conformance/run_provider_patrol_uat.py', '--target', 'test/user_acceptance/service/user_service/account/authentication_challenge/sms_otp_provider__user_acceptance_test.dart', '--platform', 'android', '--unauthenticated', '--local-capture-otp-broker', '--define-key', 'QWQ_PROVIDER_UAT_SMS_PHONE')
 
 if __name__ == "__main__":
     raise SystemExit(run_native_harness(command=COMMAND, target=TARGET))

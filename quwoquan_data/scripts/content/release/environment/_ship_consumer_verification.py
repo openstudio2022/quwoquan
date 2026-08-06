@@ -18,6 +18,9 @@ from content.release.environment.readiness import ShipReadinessPhase
 from content.release.environment.release_readiness import (
     EnvironmentReleaseReadinessError,
 )
+from content.release.environment.research_isolation_verification import (
+    ResearchIsolationVerificationError,
+)
 from content.release.environment.topology import EnvironmentReleaseMode
 from content.release.model import ReleaseKind
 from core.control_types import ReleaseRunKind, ReleaseRunStatus
@@ -36,7 +39,8 @@ def verify_release_consumers(
     target = dependencies.resolve_environment_release_target(env)
     if target.mode is EnvironmentReleaseMode.PROJECTION_ONLY:
         raise SystemExit(
-            f"[ship] {env} is projection-only and has no imported homepage API to verify"
+            f"[ship] {env} is projection-only and has no imported homepage API "
+            "to verify"
         )
     if not target.api_base_url:
         raise SystemExit(f"[ship] {env} topology does not declare an API base URL")
@@ -74,7 +78,12 @@ def verify_release_consumers(
         kind=ReleaseRunKind.VERIFY,
     )
 
-    def record_failure(stage: str, error: Exception) -> None:
+    def record_failure(
+        stage: str,
+        error: Exception,
+        *,
+        evidence: dict[str, str] | None = None,
+    ) -> None:
         dependencies.write_verification_result(
             run / "result.json",
             {
@@ -87,6 +96,7 @@ def verify_release_consumers(
                 "status": ReleaseRunStatus.FAILED,
                 "failedStage": stage,
                 "error": str(error),
+                **dict(evidence or {}),
             },
         )
 
@@ -156,6 +166,58 @@ def verify_release_consumers(
         raise SystemExit(
             "[ship] --readiness-phase must be research, consumer or commercial"
         )
+    lifecycle_exit_ref = str(
+        getattr(args, "lifecycle_exit_ref", "") or ""
+    ).strip()
+    if readiness_phase == "commercial" and not lifecycle_exit_ref:
+        raise SystemExit(
+            f"[ship] GATE_BLOCK {env}/commercial: lifecycleExitRef is required"
+        )
+    research_isolation_report: Path | None = None
+    if readiness_phase == "research":
+        try:
+            research_isolation_report = (
+                dependencies.write_research_isolation_verification(
+                    environment=env,
+                    release_id=release_id,
+                    verify_run_id=run_id,
+                    release_root=release,
+                    output_root=dependencies.output_root,
+                    output_path=(
+                        run / "research-isolation-verification.json"
+                    ),
+                )
+            )
+            isolation = read_json(research_isolation_report)
+        except (
+            ResearchIsolationVerificationError,
+            OSError,
+            TypeError,
+            ValueError,
+        ) as exc:
+            record_failure("research_isolation_verification", exc)
+            raise SystemExit(
+                f"[ship] {env} research isolation verification failed: {exc}"
+            ) from exc
+        if isolation.get("outcome") != "PASS":
+            blocker = isolation.get("blocker")
+            code = (
+                str(blocker.get("code") or "DATA.RESEARCH.RUNTIME_PROOF_INCOMPLETE")
+                if isinstance(blocker, dict)
+                else "DATA.RESEARCH.RUNTIME_PROOF_INCOMPLETE"
+            )
+            error = ResearchIsolationVerificationError(
+                f"{code}: GATE_BLOCK research runtime isolation proof is unavailable"
+            )
+            isolation_ref = research_isolation_report.relative_to(
+                dependencies.output_root
+            ).as_posix()
+            record_failure(
+                "research_isolation_verification",
+                error,
+                evidence={"researchIsolationVerificationRef": isolation_ref},
+            )
+            raise SystemExit(f"[ship] {env} {error}")
     post_report: Path | None = None
     if dependencies.release_has_posts(contract):
         try:
@@ -180,7 +242,8 @@ def verify_release_consumers(
     case_manifest = import_run / "homepage_verification_cases.json"
     if not case_manifest.is_file():
         raise SystemExit(
-            f"[ship] homepage verification cases missing from import run: {case_manifest}"
+            "[ship] homepage verification cases missing from import run: "
+            f"{case_manifest}"
         )
     if (
         import_result.get("homepageVerificationCasesRef")
@@ -219,6 +282,9 @@ def verify_release_consumers(
                 tag_consumer_verification_path=tag_report,
                 homepage_api_verification_path=homepage_report,
                 post_api_verification_path=post_report,
+                research_isolation_verification_path=(
+                    research_isolation_report
+                ),
                 output_root=dependencies.output_root,
                 output_path=run / "release-readiness.json",
                 readiness_phase=readiness_phase,
@@ -237,9 +303,7 @@ def verify_release_consumers(
                 release_id=release_id,
                 verify_run_id=run_id,
                 manifest_digest=payload_digest(release),
-                lifecycle_exit_ref=str(
-                    getattr(args, "lifecycle_exit_ref", "") or ""
-                ).strip(),
+                lifecycle_exit_ref=lifecycle_exit_ref,
             )
         except SystemExit as exc:
             readiness_error = RuntimeError(str(exc))
@@ -261,6 +325,14 @@ def verify_release_consumers(
             dependencies.output_root
         ).as_posix(),
     }
+    if lifecycle_exit_ref:
+        result["lifecycleExitRef"] = lifecycle_exit_ref
+    if research_isolation_report is not None:
+        result["researchIsolationVerificationRef"] = (
+            research_isolation_report.relative_to(
+                dependencies.output_root
+            ).as_posix()
+        )
     if post_report is not None:
         result["postApiVerificationRef"] = post_report.relative_to(
             dependencies.output_root

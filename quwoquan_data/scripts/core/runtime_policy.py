@@ -1,58 +1,55 @@
 """Strict loader for the single data runtime-policy truth source."""
 from __future__ import annotations
 
+import hashlib
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping
 
 import yaml
 
-from core.paths import CONTROL_PLANE_SHARED_ROOT
 from core.control_types import AgentProvider, RuntimeEnvironment
 from core.cursor_model import CursorModelParameter, CursorModelSelection
+from core.paths import CONTROL_PLANE_SHARED_ROOT
+from core.runtime_policy_types import (
+    CoverageDiscoveryPolicy,
+    ExplicitSemanticSelection,
+    ProviderTimeouts,
+    RuntimeEvidencePolicy,
+    SemanticAgentBinding,
+    SemanticCalibrationPolicy,
+    SemanticCapacityPolicy,
+)
+from core.runtime_policy_types import (
+    explicit_semantic_selections as _explicit_semantic_selections,
+)
+from core.runtime_policy_types import (
+    mapping as _mapping,
+)
+from core.runtime_policy_types import (
+    non_empty_string as _non_empty_string,
+)
+from core.runtime_policy_types import (
+    non_empty_string_tuple as _non_empty_string_tuple,
+)
+from core.runtime_policy_types import (
+    semantic_binding as _semantic_binding,
+)
 
-
-DEFAULT_RUNTIME_PROFILE_ID = "cursor_local_calibrated"
-
-
-@dataclass(frozen=True, slots=True)
-class ProviderTimeouts:
-    encyclopedia_seconds: int
-    mediawiki_seconds: int
-    qunar_seconds: int
-    openverse_seconds: int
-    overpass_seconds: int
-
-
-@dataclass(frozen=True, slots=True)
-class CoverageDiscoveryPolicy:
-    saturation_threshold: float
-    saturation_rounds: int
-    max_pages_per_cell: int
-    max_candidates_per_city_source: int
-    max_new_per_cell: int
-    request_budget: int
-    max_total_candidates: int
-    required_empty_pages: int
-    request_timeout_seconds: int
-    rate_limit_per_second: float
-    wiki_category_depth: int
-    retry_backoff_multiplier: float
-    wikidata_sparql_endpoint: str
-    wikidata_result_limit: int
-    overpass_concurrency: int
-    overpass_result_limit: int
-    overpass_endpoints: tuple[str, ...]
+DEFAULT_RUNTIME_PROFILE_ID = "semantic_agent_local_calibrated"
 
 
 @dataclass(frozen=True, slots=True)
 class RuntimePolicy:
     profile_id: str
-    cursor_provider: AgentProvider
-    cursor_model: str
-    cursor_model_parameters: tuple[CursorModelParameter, ...]
-    cursor_runtime: RuntimeEnvironment
+    semantic_author: SemanticAgentBinding
+    semantic_reviewer: SemanticAgentBinding
+    semantic_calibration: SemanticCalibrationPolicy
+    semantic_capacity: SemanticCapacityPolicy
+    runtime_evidence: RuntimeEvidencePolicy
+    explicit_semantic_selections: tuple[ExplicitSemanticSelection, ...]
+    semantic_fallback_policy: str
+    semantic_agent_runtime: RuntimeEnvironment
     author_workers: int
     reviewer_workers: int
     research_workers: int
@@ -134,17 +131,46 @@ class RuntimePolicy:
     coverage_discovery: CoverageDiscoveryPolicy
 
     @property
-    def cursor_model_selection(self) -> CursorModelSelection:
-        return CursorModelSelection(
-            model_id=self.cursor_model,
-            parameters=self.cursor_model_parameters,
-        )
+    def semantic_agent_provider(self) -> AgentProvider:
+        """Primary author provider used by legacy-neutral orchestration call sites."""
+        return self.semantic_author.provider
+
+    @property
+    def semantic_agent_model(self) -> str:
+        return self.semantic_author.model
+
+    @property
+    def semantic_agent_model_parameters(self) -> tuple[CursorModelParameter, ...]:
+        return self.semantic_author.model_parameters
+
+    @property
+    def semantic_agent_model_selection(self) -> CursorModelSelection:
+        return self.semantic_author.selection
+
+    def explicit_semantic_selection(
+        self,
+        selection_id: str,
+    ) -> ExplicitSemanticSelection:
+        normalized = str(selection_id or "").strip()
+        matches = [
+            selection
+            for selection in self.explicit_semantic_selections
+            if selection.selection_id == normalized
+        ]
+        if len(matches) != 1:
+            raise ValueError(f"unknown explicit semantic selection: {normalized}")
+        return matches[0]
 
     def process_environment(self) -> dict[str, str]:
         """Translate typed policy to SDK/process variables at the process boundary."""
         return {
-            "QWQ_CURSOR_AGENT_MODEL": self.cursor_model,
-            "QWQ_MANAGED_LOCAL_CURSOR_MAX_WORKERS": str(self.author_workers),
+            "QWQ_SEMANTIC_AGENT_PROVIDER": self.semantic_agent_provider.value,
+            "QWQ_SEMANTIC_AGENT_MODEL": self.semantic_agent_model,
+            "QWQ_SEMANTIC_REVIEWER_PROVIDER": self.semantic_reviewer.provider.value,
+            "QWQ_SEMANTIC_REVIEWER_MODEL": self.semantic_reviewer.model,
+            "QWQ_SEMANTIC_CALIBRATION_PROVIDER": self.semantic_calibration.binding.provider.value,
+            "QWQ_SEMANTIC_CALIBRATION_MODEL": self.semantic_calibration.binding.model,
+            "QWQ_MANAGED_LOCAL_SEMANTIC_AGENT_MAX_WORKERS": str(self.author_workers),
             "QWQ_CURSOR_BRIDGE_INSTANCES": str(self.cursor_bridge_instances),
             "QWQ_MANAGED_AGENT_TIMEOUT_SECONDS": str(self.agent_timeout_seconds),
             "QWQ_ORCHESTRATE_AGENT_TIMEOUT_SECONDS": str(self.agent_timeout_seconds),
@@ -196,35 +222,15 @@ def _oversample_factor(value: object, *, label: str) -> float:
     return float(value)
 
 
-def _mapping(value: object, *, label: str) -> Mapping[str, object]:
-    if not isinstance(value, Mapping):
-        raise ValueError(f"runtime policy {label} must be an object")
-    return value
-
-
-def _non_empty_string(value: object, *, label: str) -> str:
-    if not isinstance(value, str) or not value.strip():
-        raise ValueError(f"runtime policy {label} must be a non-empty string")
-    return value.strip()
-
-
-def _non_empty_string_tuple(value: object, *, label: str) -> tuple[str, ...]:
-    if not isinstance(value, list) or not value:
-        raise ValueError(f"runtime policy {label} must be a non-empty list")
-    items = tuple(
-        _non_empty_string(item, label=f"{label}[{index}]")
-        for index, item in enumerate(value)
-    )
-    if len(set(items)) != len(items):
-        raise ValueError(f"runtime policy {label} must not contain duplicates")
-    return items
-
-
 def runtime_profile_path(profile_id: str) -> Path:
     normalized = str(profile_id or "").strip()
     if not normalized or not normalized.replace("_", "").isalnum():
         raise ValueError("runtime profile id is invalid")
     return CONTROL_PLANE_SHARED_ROOT / f"{normalized}.runtime.yaml"
+
+
+def runtime_profile_digest(profile_id: str) -> str:
+    return "sha256:" + hashlib.sha256(runtime_profile_path(profile_id).read_bytes()).hexdigest()
 
 
 def load_runtime_policy(profile_id: str) -> RuntimePolicy:
@@ -240,30 +246,117 @@ def load_runtime_policy(profile_id: str) -> RuntimePolicy:
     if doc.get("profileId") != profile_id:
         raise ValueError("runtime policy profileId does not match its file name")
     policy = _mapping(doc.get("policy"), label="policy")
-    cursor = _mapping(policy.get("cursor"), label="policy.cursor")
-    cursor_model_selection = CursorModelSelection.from_config(
-        cursor.get("model"),
-        cursor.get("modelParameters"),
-        label="policy.cursor",
+    semantic_agent = _mapping(
+        policy.get("semanticAgent"),
+        label="policy.semanticAgent",
+    )
+    semantic_author = _semantic_binding(
+        semantic_agent.get("author"),
+        label="policy.semanticAgent.author",
+    )
+    semantic_reviewer = _semantic_binding(
+        semantic_agent.get("reviewer"),
+        label="policy.semanticAgent.reviewer",
+    )
+    calibration = _mapping(
+        semantic_agent.get("calibration"),
+        label="policy.semanticAgent.calibration",
+    )
+    capacity = _mapping(
+        semantic_agent.get("capacity"),
+        label="policy.semanticAgent.capacity",
     )
     workers = _mapping(policy.get("workers"), label="policy.workers")
     selection = _mapping(policy.get("selection"), label="policy.selection")
     budgets = _mapping(policy.get("budgets"), label="policy.budgets")
     network = _mapping(policy.get("network"), label="policy.network")
     coverage = _mapping(policy.get("coverageDiscovery"), label="policy.coverageDiscovery")
+    runtime_evidence = _mapping(
+        policy.get("runtimeEvidence"), label="policy.runtimeEvidence"
+    )
     timeouts = _mapping(network.get("providerTimeoutSeconds"), label="policy.network.providerTimeoutSeconds")
-    expected_top = {"cursor", "workers", "selection", "budgets", "network", "coverageDiscovery"}
+    expected_top = {
+        "semanticAgent",
+        "workers",
+        "selection",
+        "budgets",
+        "network",
+        "coverageDiscovery",
+        "runtimeEvidence",
+    }
     if set(policy) != expected_top:
         raise ValueError("runtime policy contains unknown or missing policy sections")
     return RuntimePolicy(
         profile_id=profile_id,
-        cursor_provider=AgentProvider(
-            _non_empty_string(cursor.get("provider"), label="cursor.provider")
+        semantic_author=semantic_author,
+        semantic_reviewer=semantic_reviewer,
+        semantic_calibration=SemanticCalibrationPolicy(
+            binding=_semantic_binding(
+                calibration,
+                label="policy.semanticAgent.calibration",
+            ),
+            sample_rate=_positive_float(
+                calibration.get("sampleRate"),
+                label="semanticAgent.calibration.sampleRate",
+            ),
+            minimum_sample_count=_positive_int(
+                calibration.get("minimumSampleCount"),
+                label="semanticAgent.calibration.minimumSampleCount",
+            ),
+            small_batch_policy=_non_empty_string(
+                calibration.get("smallBatchPolicy"),
+                label="semanticAgent.calibration.smallBatchPolicy",
+            ),
         ),
-        cursor_model=cursor_model_selection.model_id,
-        cursor_model_parameters=cursor_model_selection.parameters,
-        cursor_runtime=RuntimeEnvironment(
-            _non_empty_string(cursor.get("runtime"), label="cursor.runtime")
+        semantic_capacity=SemanticCapacityPolicy(
+            account_scope_id=_non_empty_string(
+                capacity.get("accountScopeId"),
+                label="semanticAgent.capacity.accountScopeId",
+            ),
+            host_scope_id=_non_empty_string(
+                capacity.get("hostScopeId"),
+                label="semanticAgent.capacity.hostScopeId",
+            ),
+            requests_per_minute=_positive_int(
+                capacity.get("requestsPerMinute"),
+                label="semanticAgent.capacity.requestsPerMinute",
+            ),
+            burst_limit=_positive_int(
+                capacity.get("burstLimit"),
+                label="semanticAgent.capacity.burstLimit",
+            ),
+            lane_concurrency_limit=_positive_int(
+                capacity.get("laneConcurrencyLimit"),
+                label="semanticAgent.capacity.laneConcurrencyLimit",
+            ),
+            receipt_ttl_seconds=_positive_int(
+                capacity.get("receiptTtlSeconds"),
+                label="semanticAgent.capacity.receiptTtlSeconds",
+            ),
+        ),
+        runtime_evidence=RuntimeEvidencePolicy(
+            process_inspection_timeout_seconds=_positive_float(
+                runtime_evidence.get("processInspectionTimeoutSeconds"),
+                label="runtimeEvidence.processInspectionTimeoutSeconds",
+            ),
+            queue_fault_event_timeout_seconds=_positive_float(
+                runtime_evidence.get("queueFaultEventTimeoutSeconds"),
+                label="runtimeEvidence.queueFaultEventTimeoutSeconds",
+            ),
+        ),
+        explicit_semantic_selections=_explicit_semantic_selections(
+            semantic_agent.get("explicitSelections"),
+            label="policy.semanticAgent.explicitSelections",
+        ),
+        semantic_fallback_policy=_non_empty_string(
+            semantic_agent.get("fallbackPolicy"),
+            label="semanticAgent.fallbackPolicy",
+        ),
+        semantic_agent_runtime=RuntimeEnvironment(
+            _non_empty_string(
+                semantic_agent.get("runtime"),
+                label="semanticAgent.runtime",
+            )
         ),
         author_workers=_positive_int(workers.get("author"), label="workers.author"),
         reviewer_workers=_positive_int(workers.get("reviewer"), label="workers.reviewer"),
@@ -481,11 +574,17 @@ def apply_runtime_policy(policy: RuntimePolicy) -> None:
 
 __all__ = [
     "DEFAULT_RUNTIME_PROFILE_ID",
-    "ProviderTimeouts",
     "CoverageDiscoveryPolicy",
+    "ExplicitSemanticSelection",
+    "ProviderTimeouts",
+    "RuntimeEvidencePolicy",
     "RuntimePolicy",
+    "SemanticAgentBinding",
+    "SemanticCalibrationPolicy",
+    "SemanticCapacityPolicy",
     "active_runtime_policy",
     "apply_runtime_policy",
     "load_runtime_policy",
+    "runtime_profile_digest",
     "runtime_profile_path",
 ]

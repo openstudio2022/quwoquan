@@ -7,6 +7,11 @@
 ## 服务端硬约束
 
 - 先 metadata，后 verify/codegen，再写实现；不要直接手改生成文件。
+- Python/Shell 脚本只落在 `scripts/{contracts,codegen,runtime,verify,tools}/` 或 `scripts/<kebab-service>/[<context>/<object>/]`；`contracts/` 只放 build/sync/generate，禁止 pure verifier；`verify/` 禁止写回 metadata。详见 `scripts/README.md`。
+- `scripts/contracts/build_service_contract_view.py` 产出的 contract view 是指向仓库的 symlink 树，写入 view 会直接改穿真实 contracts；做契约负例验证必须先 `cp -rL` 出真实副本再改副本。
+- 校验契约图只用 `make verify-contract-graph`，它按 `--metadata-dir "$(CONTRACT_VIEW)" --profile baseline` 调用 `tools/qwq_contract validate`。裸调 `go run ./tools/qwq_contract validate --repo-root <repo>`（不给 metadata-dir 与 profile）会落到另一套默认口径，产出数百条 `CONTRACT.APP_SURFACE.UNKNOWN_OPERATION` 与 `CONTRACT.ENUM.DEAD_DEFINITION`——这些与真实契约状态无关，不是 operation 断链，不要据此追查或改契约。
+- 判定「契约声明了某实现事实但无实现」时，不得以声明专用标识符在实现中查无作为依据：实现从不包含声明专用词（`cdn_purge` 的实现是 `DELETE FROM user_devices`，`sanitizeForLog` 之外另有 `AppLogRedactor` 与元数据生成的 `runtime_log_catalog.g.dart` 在做同一件事）。必须先枚举该行为在本库可能的实现形态——同义标识符、上层封装名、另一条 codegen 管线、SQL/DDL 等不含业务词的形式、`generated/**` 内的生成实现（`storage.yaml` 的 indexes 直接生成 `SetName(...)`、errors 有数据驱动目录发射）、以及 `quwoquan_app/**` 内的端侧实现——全部落空后缺失才成立。手工推翻自动判定时必须写明所依据的搜索范围，否则范围性遗漏不可见。已按此判据推翻多例误报，其真实性质均为「逐对象手写或生成实现已存在，缺的是一致性与可验证性」。
+- 上一条的失效方式已固定成一种形态，反复出现五次且**每次都往「有缺口」偏**：只覆盖了声明侧或实现侧的**一种命名/存放形态**就下结论。五次的具体形态是——只扫 `.sql` 而漏掉 Go/Python 内嵌的建表字符串（`skill_surface_placements`、`reports` 等的 DDL 就在 Go 里）；同名表在仓内有多处 `CREATE TABLE` 时用首个正则命中锁错表体；`collections:` 下是 YAML key 而非带 `name` 的列表项；事件声明用 PascalCase 而实现发射点分串；只看 `CREATE TABLE` 而漏掉后续 `ALTER TABLE ... RENAME COLUMN`（`045_persona_actor_single_track.up.sql` 把 8 个已退役 actor 词汇的列名逐个改成 `*_persona_id`，只看建表会得出 8 条不存在的列名漂移）。所以下结论前必须问：这个事实在**声明侧**有几种写法、在**实现侧**有几种存放位置，两侧都枚举完了吗。反过来，拿一条**不可能为真的结果**去反推方法是最有效的自检——「`personas` 表缺 `persona_id` 列」这种结果一出现就说明方法坏了，而不是仓库坏了。
 - codegen 输入只来自对象自己的 contracts；禁止新增服务级 `codegen_*manifest*`、对象路径清单或输出路径注册表。
 - 一旦服务生成 errors，必须为每个 `contracts/<context>/<object>/errors.yaml` 生成独立的 `generated/<context>/<object>/errors.*`；禁止将整个 domain 的错误聚合到主对象包。
 - 跨服务公共契约可生成到实际消费对象，但 header 必须指向存在的外部对象契约；这只是可重建客户端，不得复制或改写外部真相源。

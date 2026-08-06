@@ -1,6 +1,7 @@
 backend: mongodb
 collections:
   circle_group_memberships:
+    publication_role: not_published
     entity: CircleGroupMembership
     role: authoritative
     indexes:
@@ -16,18 +17,21 @@ collections:
         joinedAt: 1
         _id: 1
   circle_group_membership_capacity_counters:
+    publication_role: not_published
     entity: CircleGroupMembership
     role: authoritative
     description: 每个 groupId 一条的事务容量账本；与成员状态、命令回执和 outbox 同一 Mongo transaction 提交，用于串行化 active 成员上限检查。
   circle_group_membership_command_receipts:
+    publication_role: not_published
     entity: CircleGroupMembershipCommandReceipt
     role: authoritative
     indexes:
     - name: idx_circle_group_membership_receipt_expiry
       keys:
         expiresAt: 1
-      expireAfterSeconds: 0
+      expire_after_seconds: 0
   circle_group_membership_outbox:
+    publication_role: transactional_outbox
     entity: CircleGroupMembershipOutbox
     role: append_only
     indexes:
@@ -41,9 +45,11 @@ collections:
         outboxSequence: 1
       unique: true
   circle_group_membership_outbox_sequences:
+    publication_role: publication_accessory
     entity: CircleGroupMembershipOutboxSequence
     role: authoritative
   circle_group_membership_projection_checkpoints:
+    publication_role: publication_accessory
     entity: CircleGroupMembershipProjectionCheckpoint
     role: projection
 role: authoritative

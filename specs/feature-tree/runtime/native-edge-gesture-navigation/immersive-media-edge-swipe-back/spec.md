@@ -37,8 +37,8 @@
 
 ## 4. 契约引用
 
-- canonical：`quwoquan_app/lib/app/navigation/native_back_navigation.dart#AppBackDisposition`
-- canonical：`quwoquan_app/lib/app/navigation/native_back_navigation.dart#supportedBackEdges`
+- canonical：`quwoquan_app/lib/runtime/shell/navigation/native_back_navigation.dart#AppBackDisposition`
+- canonical：`quwoquan_app/lib/runtime/shell/navigation/native_back_navigation.dart#supportedBackEdges`
 
 ## 5. 验收场景
 

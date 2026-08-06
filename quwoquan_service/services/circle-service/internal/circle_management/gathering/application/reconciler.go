@@ -4,11 +4,13 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
 
+	gatheringevent "quwoquan_service/services/circle-service/generated/circle_management/gathering/contract/event"
 	model "quwoquan_service/services/circle-service/internal/circle_management/gathering/domain/model"
 	ports "quwoquan_service/services/circle-service/internal/circle_management/gathering/domain/ports"
 )
@@ -94,67 +96,153 @@ func (reconciler *Reconciler) Healthy(maxStaleness time.Duration) error {
 
 func (reconciler *Reconciler) reconcile(ctx context.Context, value model.Gathering) error {
 	now := reconciler.now().UTC()
-	if reevaluated := model.Reevaluate(value, now); reevaluated.Version != value.Version {
-		committed, err := reconciler.commitSystem(ctx, value, "expire", "GatheringCompleted", func(current *model.Gathering) (model.Gathering, error) {
-			return model.Reevaluate(*current, now), nil
-		})
-		if err != nil {
-			return err
+	if value.RoomBindingStatus == model.GatheringRoomBindingStatusReady {
+		if strings.TrimSpace(value.ConversationID) == "" {
+			return fmt.Errorf("Gathering %s has ready room binding without conversationId", value.ID)
 		}
-		value = committed
 	}
-	if strings.TrimSpace(value.ConversationID) == "" {
-		conversationID, err := reconciler.conversations.EnsureGroupConversation(
-			ctx, value.ID, value.Title, value.CreatorPersonaID, value.Capacity,
-			"gathering:"+value.ID+":conversation",
+	if value.RoomBindingStatus != model.GatheringRoomBindingStatusPending &&
+		value.RoomBindingStatus != model.GatheringRoomBindingStatusFailed &&
+		value.RoomBindingStatus != model.GatheringRoomBindingStatusReady {
+		return fmt.Errorf(
+			"Gathering %s has unsupported room binding status %q",
+			value.ID,
+			value.RoomBindingStatus,
 		)
-		if err != nil {
-			return err
-		}
-		committed, err := reconciler.commitSystem(ctx, value, "binding:"+conversationID, "GatheringConversationBound", func(current *model.Gathering) (model.Gathering, error) {
-			return model.BindConversation(*current, conversationID, now)
-		})
-		if err != nil {
-			return err
-		}
-		value = committed
 	}
 
-	for _, participant := range value.Participants {
-		desiredState := ""
-		switch {
-		case participant.State == model.ParticipantStateJoined:
-			desiredState = "joined"
-		case participant.State == model.ParticipantStatePending && value.JoinPolicy == model.JoinPolicyOpen:
-			desiredState = "joined"
-		case participant.State == model.ParticipantStateLeft || participant.State == model.ParticipantStateRejected:
-			desiredState = "left"
-		default:
-			// Approval-pending participants never owned Chat membership; do not
-			// advance the Chat watermark with a fabricated leave projection.
-			continue
+	accessMode, postingPolicy := gatheringConversationPolicy(value)
+	sourceEventID := fmt.Sprintf("gathering:%s:room:v%d", value.ID, value.Version)
+	conversationID, ensureErr := reconciler.conversations.EnsureGatheringConversation(
+		ctx,
+		ports.EnsureGatheringConversationCommand{
+			GatheringID:    value.ID,
+			SourceEventID:  sourceEventID,
+			SourceVersion:  value.Version,
+			OwnerPersonaID: primaryOrganizerPersonaID(value),
+			Title:          value.Purpose.Title,
+			AccessMode:     accessMode,
+			PostingPolicy:  postingPolicy,
+		},
+	)
+	if ensureErr != nil {
+		if value.RoomBindingStatus == model.GatheringRoomBindingStatusPending {
+			if _, commitErr := reconciler.commitSystem(
+				ctx,
+				value,
+				fmt.Sprintf("room-failed:%d", value.Version),
+				gatheringevent.GatheringRoomBindingChanged,
+				func(current *model.Gathering) (model.Gathering, error) {
+					return model.MarkGatheringRoomFailed(*current, now)
+				},
+			); commitErr != nil {
+				return errors.Join(ensureErr, commitErr)
+			}
 		}
-		operationKey := fmt.Sprintf(
-			"gathering:%s:reconcile:%d:%s:%s",
-			value.ID, value.Version, participant.PersonaID, desiredState,
+		return ensureErr
+	}
+	if value.RoomBindingStatus == model.GatheringRoomBindingStatusReady {
+		if value.ConversationID != conversationID {
+			return fmt.Errorf(
+				"Gathering %s room projection rebound from %s to %s",
+				value.ID,
+				value.ConversationID,
+				conversationID,
+			)
+		}
+	} else {
+		committed, err := reconciler.commitSystem(
+			ctx,
+			value,
+			fmt.Sprintf("room-ready:%d:%s", value.Version, conversationID),
+			gatheringevent.GatheringRoomBindingChanged,
+			func(current *model.Gathering) (model.Gathering, error) {
+				return model.MarkGatheringRoomReady(*current, conversationID, now)
+			},
 		)
-		if err := reconciler.conversations.ProjectParticipant(
-			ctx, value.ID, value.CreatorPersonaID, participant.PersonaID, desiredState,
-			membershipSourceSequence(value.Version), operationKey,
+		if err != nil {
+			return err
+		}
+		value = committed
+	}
+	if err := reconciler.projectMemberships(ctx, value); err != nil {
+		return err
+	}
+	return reconciler.candidates.SaveReconciliationCheckpoint(ctx, value.ID, value.Version, now)
+}
+
+func (reconciler *Reconciler) projectMemberships(
+	ctx context.Context,
+	value model.Gathering,
+) error {
+	for _, assignment := range value.OrganizerAssignments {
+		state := "active"
+		if !assignment.RevokedAt.IsZero() {
+			state = "revoked"
+		}
+		sourceEventID := fmt.Sprintf(
+			"gathering:%s:organizer:%s:v%d",
+			value.ID,
+			assignment.PersonaID,
+			assignment.Version,
+		)
+		if err := reconciler.conversations.ProjectGatheringMembership(
+			ctx,
+			ports.ProjectGatheringMembershipCommand{
+				GatheringID:   value.ID,
+				PersonaID:     assignment.PersonaID,
+				SourceEventID: sourceEventID,
+				SourceVersion: assignment.Version,
+				SourceType:    "organizer_assignment",
+				State:         state,
+			},
 		); err != nil {
 			return err
 		}
-		if desiredState == "joined" && participant.State == model.ParticipantStatePending {
-			committed, err := reconciler.commitSystem(ctx, value, fmt.Sprintf("confirm:%d:%s", value.Version, participant.PersonaID), "GatheringParticipantStateChanged", func(current *model.Gathering) (model.Gathering, error) {
-				return model.ConfirmJoin(*current, participant.PersonaID, now)
-			})
-			if err != nil {
-				return err
-			}
-			value = committed
+	}
+	for _, participation := range value.Participations {
+		state := "closed"
+		if participation.State == model.ParticipationStateActive {
+			state = "active"
+		}
+		sourceEventID := fmt.Sprintf(
+			"gathering:%s:participation:%s:v%d",
+			value.ID,
+			participation.PersonaID,
+			participation.Version,
+		)
+		if err := reconciler.conversations.ProjectGatheringMembership(
+			ctx,
+			ports.ProjectGatheringMembershipCommand{
+				GatheringID:   value.ID,
+				PersonaID:     participation.PersonaID,
+				SourceEventID: sourceEventID,
+				SourceVersion: participation.Version,
+				SourceType:    "participation",
+				State:         state,
+			},
+		); err != nil {
+			return err
 		}
 	}
-	return reconciler.candidates.SaveReconciliationCheckpoint(ctx, value.ID, value.Version, now)
+	return nil
+}
+
+func gatheringConversationPolicy(value model.Gathering) (string, string) {
+	if value.LifecycleStatus == model.GatheringLifecycleStatusCancelled ||
+		value.LifecycleStatus == model.GatheringLifecycleStatusCompleted {
+		return "read_only", "announcements_only"
+	}
+	return "active", "member_chat"
+}
+
+func primaryOrganizerPersonaID(value model.Gathering) string {
+	for _, assignment := range value.OrganizerAssignments {
+		if assignment.Role == "primary_organizer" && assignment.RevokedAt.IsZero() {
+			return strings.TrimSpace(assignment.PersonaID)
+		}
+	}
+	return strings.TrimSpace(value.CreatedByPersonaID)
 }
 
 func (reconciler *Reconciler) commitSystem(
@@ -164,11 +252,16 @@ func (reconciler *Reconciler) commitSystem(
 	eventType string,
 	mutate ports.Mutation,
 ) (model.Gathering, error) {
-	receiptKey := "system:gathering-reconcile:" + value.ID + ":" + action
+	receiptKey := fmt.Sprintf(
+		"system:gathering-reconcile:%s:%d:%s",
+		value.ID,
+		value.Version,
+		action,
+	)
 	digest := sha256.Sum256([]byte(receiptKey))
 	receipt, err := reconciler.store.Commit(ctx, ports.CommitRequest{
 		GatheringID: value.ID, ReceiptKey: receiptKey,
-		CommandDigest: hex.EncodeToString(digest[:]), ReceiptExpiresAt: reconciler.now().UTC().Add(receiptRetention),
+		CommandDigest: hex.EncodeToString(digest[:]), ReceiptExpiresAt: reconciler.now().UTC().Add(lifecycleReceiptRetention),
 		EventType: eventType,
 		Mutate: func(current *model.Gathering) (model.Gathering, error) {
 			if current == nil {

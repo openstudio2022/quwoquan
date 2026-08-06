@@ -287,3 +287,36 @@ def test_ranker_freezes_object_cards_from_candidate_snapshot_and_entity_affinity
     assert {card.recall_path for card in result.object_cards} == {
         "entity_card_affinity"
     }
+
+
+def test_ranker_uses_shared_object_card_source_for_gathering_candidates() -> None:
+    candidates = _Candidates(
+        object_card_candidates=[
+            {
+                "objectKind": "gathering",
+                "sourceKey": "gathering-001",
+                "sourceVersion": 7,
+                "cardDigest": "a" * 64,
+                "title": "周末山野徒步",
+                "summary": "公开摘要",
+                "tagRefs": ["Topic/徒步", "Topic/徒步"],
+            }
+        ]
+    )
+
+    result = _ranker(
+        _Scoring(),
+        candidates=candidates,
+    ).rank(
+        subject_id="persona-viewer",
+        scenario="content_feed",
+        session_id="window-gathering-card",
+        limit=300,
+    )
+
+    assert len(result.object_cards) == 1
+    card = result.object_cards[0]
+    assert card.object_kind == "gathering"
+    assert card.object_id == "gathering-001"
+    assert card.tag_refs == ("Topic/徒步",)
+    assert card.recall_path == "gathering_candidate_index"

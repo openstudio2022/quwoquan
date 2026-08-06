@@ -23,9 +23,6 @@ collections:
       no-op receipt。 personaId 用于 UserAccountClosed 定向擦除；expiresAt 承载 24 小时重放窗口。
 
       '
-    ttl:
-      field: expiresAt
-      seconds: 86400
     indexes:
     - name: idx_recent_search_receipts_persona
       keys:
@@ -33,7 +30,7 @@ collections:
     - name: idx_recent_search_receipts_expire
       keys:
         expiresAt: 1
-      expireAfterSeconds: 0
+      expire_after_seconds: 0
 transaction:
   scope:
   - recent_search_states

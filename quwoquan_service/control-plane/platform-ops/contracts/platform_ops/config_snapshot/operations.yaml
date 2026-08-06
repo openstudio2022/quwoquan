@@ -326,8 +326,185 @@ contract_test:
   - 未知 service/environment 返回 config_snapshot_not_found 或 config_invalid
   current_evidence:
     local_contract:
-    - control-plane/platform-ops/tests/local_contract/ops/platform_ops/config_snapshot/config_layer_http_boundary__local_contract_test.go
+    - control-plane/platform-ops/tests/local_contract/platform_ops/config_snapshot/config_layer_http_boundary__local_contract_test.go
     api_integration:
-    - control-plane/platform-ops/tests/api_integration/ops/platform_ops/config_snapshot/config_layer_http_boundary__api_integration_test.go
+    - control-plane/platform-ops/tests/api_integration/platform_ops/config_snapshot/config_layer_http_boundary__api_integration_test.go
     real_engines:
       postgres: embedded-postgres
+readiness_cases:
+- case_id: list-service-configs-local
+  spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-006
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ListServiceConfigs}
+  runner_source_path: quwoquan_service/control-plane/platform-ops/tests/local_contract/platform_ops/config_snapshot/config_layer_http_boundary__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: repository-release-package, digest_binding: candidate}
+- case_id: list-service-configs-api
+  spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-006
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ListServiceConfigs}
+  runner_source_path: quwoquan_service/control-plane/platform-ops/tests/api_integration/platform_ops/config_snapshot/config_layer_http_boundary__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: repository-release-package, digest_binding: candidate}
+- case_id: resolve-effective-config-local
+  spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-006
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ResolveEffectiveConfig}
+  runner_source_path: quwoquan_service/control-plane/platform-ops/tests/local_contract/platform_ops/config_snapshot/config_layer_http_boundary__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: repository-release-package, digest_binding: candidate}
+- case_id: resolve-effective-config-api
+  spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-006
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ResolveEffectiveConfig}
+  runner_source_path: quwoquan_service/control-plane/platform-ops/tests/api_integration/platform_ops/config_snapshot/config_layer_http_boundary__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: repository-release-package, digest_binding: candidate}
+- case_id: resolve-effective-config-for-instance-local
+  spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-006
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ResolveEffectiveConfigForInstance}
+  runner_source_path: quwoquan_service/control-plane/platform-ops/tests/local_contract/platform_ops/config_snapshot/config_layer_http_boundary__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: repository-release-package, digest_binding: candidate}
+- case_id: resolve-effective-config-for-instance-api
+  spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-006
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ResolveEffectiveConfigForInstance}
+  runner_source_path: quwoquan_service/control-plane/platform-ops/tests/api_integration/platform_ops/config_snapshot/config_layer_http_boundary__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: repository-release-package, digest_binding: candidate}
+- case_id: get-config-snapshot-local
+  spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-006
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: GetConfigSnapshot}
+  runner_source_path: quwoquan_service/control-plane/platform-ops/tests/local_contract/platform_ops/config_snapshot/config_layer_http_boundary__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: repository-release-package, digest_binding: candidate}
+- case_id: get-config-snapshot-api
+  spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-006
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: GetConfigSnapshot}
+  runner_source_path: quwoquan_service/control-plane/platform-ops/tests/api_integration/platform_ops/config_snapshot/config_layer_http_boundary__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: repository-release-package, digest_binding: candidate}
+- case_id: list-config-domains-local
+  spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-006
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ListConfigDomains}
+  runner_source_path: quwoquan_service/control-plane/platform-ops/tests/local_contract/platform_ops/config_snapshot/config_layer_http_boundary__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: repository-release-package, digest_binding: candidate}
+- case_id: list-config-domains-api
+  spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-006
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ListConfigDomains}
+  runner_source_path: quwoquan_service/control-plane/platform-ops/tests/api_integration/platform_ops/config_snapshot/config_layer_http_boundary__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: repository-release-package, digest_binding: candidate}
+- case_id: list-service-catalog-entries-local
+  spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-006
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ListServiceCatalogEntries}
+  runner_source_path: quwoquan_service/control-plane/platform-ops/tests/local_contract/platform_ops/config_snapshot/config_layer_http_boundary__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: repository-release-package, digest_binding: candidate}
+- case_id: list-service-catalog-entries-api
+  spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-006
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ListServiceCatalogEntries}
+  runner_source_path: quwoquan_service/control-plane/platform-ops/tests/api_integration/platform_ops/config_snapshot/config_layer_http_boundary__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: repository-release-package, digest_binding: candidate}
+- case_id: list-plane-bindings-local
+  spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-006
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ListPlaneBindings}
+  runner_source_path: quwoquan_service/control-plane/platform-ops/tests/local_contract/platform_ops/config_snapshot/config_layer_http_boundary__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: repository-release-package, digest_binding: candidate}
+- case_id: list-plane-bindings-api
+  spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-006
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ListPlaneBindings}
+  runner_source_path: quwoquan_service/control-plane/platform-ops/tests/api_integration/platform_ops/config_snapshot/config_layer_http_boundary__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: repository-release-package, digest_binding: candidate}
+- case_id: get-prod-plane-access-isolation-local
+  spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-006
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: GetProdPlaneAccessIsolation}
+  runner_source_path: quwoquan_service/control-plane/platform-ops/tests/local_contract/platform_ops/config_snapshot/config_layer_http_boundary__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: repository-release-package, digest_binding: candidate}
+- case_id: get-prod-plane-access-isolation-api
+  spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-006
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: GetProdPlaneAccessIsolation}
+  runner_source_path: quwoquan_service/control-plane/platform-ops/tests/api_integration/platform_ops/config_snapshot/config_layer_http_boundary__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: repository-release-package, digest_binding: candidate}
+- case_id: get-gray-routing-policy-local
+  spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-006
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: GetGrayRoutingPolicy}
+  runner_source_path: quwoquan_service/control-plane/platform-ops/tests/local_contract/platform_ops/config_snapshot/config_layer_http_boundary__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: repository-release-package, digest_binding: candidate}
+- case_id: get-gray-routing-policy-api
+  spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-006
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: GetGrayRoutingPolicy}
+  runner_source_path: quwoquan_service/control-plane/platform-ops/tests/api_integration/platform_ops/config_snapshot/config_layer_http_boundary__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: repository-release-package, digest_binding: candidate}
+- case_id: list-environment-topologies-local
+  spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-006
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ListEnvironmentTopologies}
+  runner_source_path: quwoquan_service/control-plane/platform-ops/tests/local_contract/platform_ops/config_snapshot/config_layer_http_boundary__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: repository-release-package, digest_binding: candidate}
+- case_id: list-environment-topologies-api
+  spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-006
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ListEnvironmentTopologies}
+  runner_source_path: quwoquan_service/control-plane/platform-ops/tests/api_integration/platform_ops/config_snapshot/config_layer_http_boundary__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: repository-release-package, digest_binding: candidate}
+- case_id: list-runtime-clusters-local
+  spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-006
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ListRuntimeClusters}
+  runner_source_path: quwoquan_service/control-plane/platform-ops/tests/local_contract/platform_ops/config_snapshot/config_layer_http_boundary__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: repository-release-package, digest_binding: candidate}
+- case_id: list-runtime-clusters-api
+  spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-006
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ListRuntimeClusters}
+  runner_source_path: quwoquan_service/control-plane/platform-ops/tests/api_integration/platform_ops/config_snapshot/config_layer_http_boundary__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: repository-release-package, digest_binding: candidate}

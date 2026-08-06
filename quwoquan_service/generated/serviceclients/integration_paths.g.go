@@ -23,6 +23,14 @@ const (
 // Integration stable error codes consumed by cross-service callers
 // (from integration errors.yaml; strings are the wire contract).
 const (
+	IntegrationCapabilityProviderUnavailableCode             = "INTEGRATION.MIDDLEWARE.capability_provider_unavailable"
+	IntegrationConnectorAuthorizationRevokedCode             = "INTEGRATION.USER.connector_authorization_revoked"
+	IntegrationDeviceCapabilityUnavailableCode               = "INTEGRATION.USER.device_capability_unavailable"
+	IntegrationDevicePermissionDeniedCode                    = "INTEGRATION.USER.device_permission_denied"
+	IntegrationCapabilityConfirmationRequiredCode            = "INTEGRATION.USER.capability_confirmation_required"
+	IntegrationCapabilityPermitRequiredCode                  = "INTEGRATION.USER.capability_permit_required"
+	IntegrationCapabilityIdempotencyRequiredCode             = "INTEGRATION.USER.capability_idempotency_required"
+	IntegrationCapabilityBindingInvalidCode                  = "INTEGRATION.SYSTEM.capability_binding_invalid"
 	IntegrationConnectorAuthorizationInvalidArgumentCode     = "INTEGRATION.USER.connector_authorization_invalid_argument"
 	IntegrationAuthorizationConnectorDefinitionNotFoundCode  = "INTEGRATION.USER.authorization_connector_definition_not_found"
 	IntegrationConnectorAuthorizationNotFoundCode            = "INTEGRATION.USER.connector_authorization_not_found"
@@ -78,6 +86,8 @@ const (
 	IntegrationLocationPermissionRequiredCode                = "INTEGRATION.USER.location_permission_required"
 	IntegrationUpstreamTimeoutCode                           = "INTEGRATION.MIDDLEWARE.upstream_timeout"
 	IntegrationLocationProviderUnavailableCode               = "INTEGRATION.MIDDLEWARE.location_provider_unavailable"
+	IntegrationLocationProviderRateLimitedCode               = "INTEGRATION.MIDDLEWARE.location_provider_rate_limited"
+	IntegrationLocationProviderInvalidResponseCode           = "INTEGRATION.MIDDLEWARE.location_provider_invalid_response"
 	IntegrationLocationInternalErrorCode                     = "INTEGRATION.SYSTEM.location_internal_error"
 	IntegrationPushDeliveryInvalidRequestCode                = "INTEGRATION.USER.push_delivery_invalid_request"
 	IntegrationPushEndpointResolutionFailedCode              = "INTEGRATION.MIDDLEWARE.push_endpoint_resolution_failed"

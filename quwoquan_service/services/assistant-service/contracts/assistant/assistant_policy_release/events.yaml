@@ -1,12 +1,10 @@
 events:
 - name: AssistantPolicyReleaseStaged
-  producer: assistant-service
-  consumers:
-  - platform-ops
-  channel: outbox
+  delivery_semantics: transactional_event_log
   payload_entity: AssistantPolicyRelease
   payload_fields:
   - policyId
   - releaseDigest
   - defaultTemplateId
   - stagedAt
+  no_consumer_reason: 事件经事务 outbox 追加到耐久 policy audit stream，仅用于受限策略发布审计，没有下游订阅者。

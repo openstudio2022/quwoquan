@@ -44,9 +44,11 @@ jobs:
         target: [alpha-local, beta-local, gamma-local, prod-sim]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+      - name: Setup Go without implicit cache
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
           go-version: "1.24.x"
+          cache: false
       - name: Install pinned DNS-01 and encryption clients
         run: |
           go install github.com/go-acme/lego/v4/cmd/lego@v4.25.2

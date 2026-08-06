@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/execution_queue_backend_envelope.schema.json",
+  "type": "object",
+  "required": [
+    "schema",
+    "executionId",
+    "scaleClass",
+    "approvedQuota",
+    "queueBackend",
+    "queuePolicyDigest",
+    "executionManifestDigest",
+    "sourceDigest",
+    "targetSetDigest",
+    "envelopeDigest"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {"const": "quwoquan_data.execution_queue_backend_envelope"},
+    "executionId": {"type": "string", "minLength": 1},
+    "scaleClass": {"enum": ["BELOW_M100", "M100_PLUS"]},
+    "approvedQuota": {"type": "integer", "minimum": 1},
+    "queueBackend": {"enum": ["local_file", "reliabletask"]},
+    "queuePolicyDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "executionManifestDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "sourceDigest": {
+      "type": "object",
+      "required": ["algorithm", "digest", "inputs"],
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {"const": "sha256"},
+        "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "inputs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "targetSetDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "observerBinaryRef": {
+      "type": "string",
+      "pattern": "^data/local/cache/reliabletask-observer-binaries/[0-9a-f]{64}/data-content-worker$"
+    },
+    "observerBinarySha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "envelopeDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"queueBackend": {"const": "reliabletask"}},
+        "required": ["queueBackend"]
+      },
+      "then": {
+        "required": ["observerBinaryRef", "observerBinarySha256"]
+      },
+      "else": {
+        "not": {
+          "anyOf": [
+            {"required": ["observerBinaryRef"]},
+            {"required": ["observerBinarySha256"]}
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"scaleClass": {"const": "M100_PLUS"}},
+        "required": ["scaleClass"]
+      },
+      "then": {"properties": {"queueBackend": {"const": "reliabletask"}}}
+    }
+  ]
+}

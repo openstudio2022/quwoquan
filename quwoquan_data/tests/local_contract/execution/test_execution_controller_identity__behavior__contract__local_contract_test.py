@@ -103,10 +103,10 @@ def test_controller_entrypoint_loads_coverage_and_baseline_through_execution_bou
 
 
 def test_execution_guards_are_real_context_managers():
-    from content.execution.agent.agent_runner import _managed_local_workspace_guard
+    from content.execution.agent.managed_workspace import managed_local_workspace_guard
+    from content.execution.context import ExecutionContext
     from content.execution.controller.control import _execution_signal_guard
     from content.execution.controller.preflight import _cursor_bridge_launch_guard
-    from content.execution.context import ExecutionContext
 
     ctx = ExecutionContext(
         execution_id="20260715--travel-homepage-coverage--test-region-a--pilot-001",
@@ -116,7 +116,7 @@ def test_execution_guards_are_real_context_managers():
         ).spec(),
         managed=False,
     )
-    with _execution_signal_guard(ctx), _managed_local_workspace_guard(ctx), _cursor_bridge_launch_guard():
+    with _execution_signal_guard(ctx), managed_local_workspace_guard(ctx), _cursor_bridge_launch_guard():
         pass
 
 

@@ -72,17 +72,26 @@ type workDocument struct {
 }
 
 type terminalOutboxDocument struct {
-	ID          string     `bson:"_id"`
-	RunID       string     `bson:"runId"`
-	UserID      string     `bson:"userId"`
-	PersonaID   string     `bson:"personaId"`
-	SessionID   string     `bson:"sessionId"`
-	DomainID    string     `bson:"domainId"`
-	Outcome     string     `bson:"outcome"`
-	OccurredAt  time.Time  `bson:"occurredAt"`
-	ClaimOwner  string     `bson:"claimOwner,omitempty"`
-	ClaimUntil  *time.Time `bson:"claimUntil,omitempty"`
-	ProcessedAt *time.Time `bson:"processedAt,omitempty"`
+	ID                    string     `bson:"_id"`
+	RunID                 string     `bson:"runId"`
+	UserID                string     `bson:"userId"`
+	PersonaID             string     `bson:"personaId"`
+	PersonaContextVersion *int64     `bson:"personaContextVersion"`
+	SessionID             string     `bson:"sessionId"`
+	DomainID              string     `bson:"domainId"`
+	Outcome               string     `bson:"outcome"`
+	ToolsCalled           *[]string  `bson:"toolsCalled"`
+	LLMModel              *string    `bson:"llmModel"`
+	LLMTokensUsed         *int64     `bson:"llmTokensUsed"`
+	LatencyMS             *int64     `bson:"latencyMs"`
+	SatisfactionScore     *float64   `bson:"satisfactionScore"`
+	OccurredAt            time.Time  `bson:"occurredAt"`
+	ClaimOwner            string     `bson:"claimOwner,omitempty"`
+	ClaimUntil            *time.Time `bson:"claimUntil,omitempty"`
+	NextAttemptAt         *time.Time `bson:"nextAttemptAt,omitempty"`
+	AttemptCount          int        `bson:"attemptCount,omitempty"`
+	LastErrorCode         string     `bson:"lastErrorCode,omitempty"`
+	ProcessedAt           *time.Time `bson:"processedAt,omitempty"`
 }
 
 // MongoRunRepository is the authoritative AssistantRun snapshot, ordered
@@ -191,6 +200,7 @@ func (r *MongoRunRepository) EnsureIndexes(ctx context.Context) error {
 	if _, err := r.terminalOutbox.Indexes().CreateOne(ctx, mongo.IndexModel{
 		Keys: bson.D{
 			{Key: "processedAt", Value: 1},
+			{Key: "nextAttemptAt", Value: 1},
 			{Key: "claimUntil", Value: 1},
 			{Key: "occurredAt", Value: 1},
 		},
@@ -379,7 +389,64 @@ func (r *MongoRunRepository) load(
 		}
 		return runruntime.Run{}, fmt.Errorf("load assistant run: %w", err)
 	}
+	document.Snapshot.Trigger = normalizeBSONMap(document.Snapshot.Trigger)
+	document.Snapshot.ContextSnapshot = normalizeBSONMap(
+		document.Snapshot.ContextSnapshot,
+	)
+	document.Snapshot.SurfaceCapabilities = normalizeBSONMap(
+		document.Snapshot.SurfaceCapabilities,
+	)
+	document.Snapshot.PresentationDocument = normalizeBSONMap(
+		document.Snapshot.PresentationDocument,
+	)
+	for index := range document.Snapshot.Items {
+		document.Snapshot.Items[index].Payload = normalizeBSONMap(
+			document.Snapshot.Items[index].Payload,
+		)
+	}
 	return document.Snapshot, nil
+}
+
+// normalizeBSONMap converts Mongo driver's generic bson.D/bson.A values back
+// to the JSON-shaped maps and slices owned by AssistantRun. Without this
+// repository-boundary normalization, a persisted PresentationDocument can be
+// read successfully but its typed action cannot be inspected by the domain
+// command service after a restart or a later HTTP request.
+func normalizeBSONMap(document map[string]any) map[string]any {
+	if document == nil {
+		return nil
+	}
+	for key, value := range document {
+		document[key] = normalizeBSONValue(value)
+	}
+	return document
+}
+
+func normalizeBSONValue(value any) any {
+	switch current := value.(type) {
+	case bson.D:
+		document := make(map[string]any, len(current))
+		for _, element := range current {
+			document[element.Key] = normalizeBSONValue(element.Value)
+		}
+		return document
+	case bson.A:
+		values := make([]any, len(current))
+		for index, element := range current {
+			values[index] = normalizeBSONValue(element)
+		}
+		return values
+	case map[string]any:
+		return normalizeBSONMap(current)
+	case []any:
+		values := make([]any, len(current))
+		for index, element := range current {
+			values[index] = normalizeBSONValue(element)
+		}
+		return values
+	default:
+		return value
+	}
 }
 
 func (r *MongoRunRepository) Commit(
@@ -521,15 +588,41 @@ func terminalOutboxFromRun(run runruntime.Run) *terminalOutboxDocument {
 	if domainID == "" {
 		domainID = "assistant"
 	}
+	var toolsCalled *[]string
+	var llmModel *string
+	var llmTokensUsed *int64
+	if run.Checkpoint != nil {
+		tools := make([]string, len(run.Checkpoint.ContextState.ToolHistory))
+		copy(tools, run.Checkpoint.ContextState.ToolHistory)
+		toolsCalled = &tools
+		tokens := run.Checkpoint.BudgetConsumption.Tokens
+		llmTokensUsed = &tokens
+		modelHistory := run.Checkpoint.ContextState.ModelHistory
+		if len(modelHistory) > 0 {
+			modelID := strings.TrimSpace(modelHistory[len(modelHistory)-1])
+			if modelID != "" {
+				llmModel = &modelID
+			}
+		}
+	}
+	var latencyMS *int64
+	if !run.CreatedAt.IsZero() && !run.CompletedAt.Before(run.CreatedAt) {
+		latency := run.CompletedAt.Sub(run.CreatedAt).Milliseconds()
+		latencyMS = &latency
+	}
 	return &terminalOutboxDocument{
-		ID:         strings.TrimSpace(run.RunID) + ":terminal",
-		RunID:      strings.TrimSpace(run.RunID),
-		UserID:     strings.TrimSpace(run.UserID),
-		PersonaID:  strings.TrimSpace(run.PersonaID),
-		SessionID:  strings.TrimSpace(run.SessionID),
-		DomainID:   domainID,
-		Outcome:    outcome,
-		OccurredAt: run.CompletedAt.UTC(),
+		ID:            strings.TrimSpace(run.RunID) + ":terminal",
+		RunID:         strings.TrimSpace(run.RunID),
+		UserID:        strings.TrimSpace(run.UserID),
+		PersonaID:     strings.TrimSpace(run.PersonaID),
+		SessionID:     strings.TrimSpace(run.SessionID),
+		DomainID:      domainID,
+		Outcome:       outcome,
+		ToolsCalled:   toolsCalled,
+		LLMModel:      llmModel,
+		LLMTokensUsed: llmTokensUsed,
+		LatencyMS:     latencyMS,
+		OccurredAt:    run.CompletedAt.UTC(),
 	}
 }
 
@@ -820,17 +913,18 @@ func (r *MongoRunRepository) CompleteClaim(
 func (r *MongoRunRepository) ClaimPendingTerminalEvents(
 	ctx context.Context,
 	ownerID string,
+	now time.Time,
 	lease time.Duration,
 	limit int,
 ) ([]runruntime.TerminalEvent, error) {
 	ownerID = strings.TrimSpace(ownerID)
-	if ownerID == "" || lease <= 0 {
+	now = now.UTC()
+	if ownerID == "" || now.IsZero() || lease <= 0 {
 		return nil, runruntime.ErrInvalidRun
 	}
 	if limit <= 0 || limit > 1000 {
 		limit = 128
 	}
-	now := time.Now().UTC()
 	events := make([]runruntime.TerminalEvent, 0, limit)
 	for len(events) < limit {
 		claimUntil := now.Add(lease)
@@ -839,15 +933,24 @@ func (r *MongoRunRepository) ClaimPendingTerminalEvents(
 			ctx,
 			bson.M{
 				"processedAt": bson.M{"$exists": false},
-				"$or": []bson.M{
-					{"claimUntil": bson.M{"$exists": false}},
-					{"claimUntil": bson.M{"$lte": now}},
+				"$and": bson.A{
+					bson.M{"$or": bson.A{
+						bson.M{"nextAttemptAt": bson.M{"$exists": false}},
+						bson.M{"nextAttemptAt": bson.M{"$lte": now}},
+					}},
+					bson.M{"$or": bson.A{
+						bson.M{"claimUntil": bson.M{"$exists": false}},
+						bson.M{"claimUntil": bson.M{"$lte": now}},
+					}},
 				},
 			},
-			bson.M{"$set": bson.M{
-				"claimOwner": ownerID,
-				"claimUntil": claimUntil,
-			}},
+			bson.M{
+				"$set": bson.M{
+					"claimOwner": ownerID,
+					"claimUntil": claimUntil,
+				},
+				"$inc": bson.M{"attemptCount": 1},
+			},
 			options.FindOneAndUpdate().
 				SetSort(bson.D{{Key: "occurredAt", Value: 1}, {Key: "_id", Value: 1}}).
 				SetReturnDocument(options.After),
@@ -859,20 +962,21 @@ func (r *MongoRunRepository) ClaimPendingTerminalEvents(
 			return nil, fmt.Errorf("claim assistant run terminal outbox: %w", err)
 		}
 		events = append(events, runruntime.TerminalEvent{
-			EventID:    document.ID,
-			RunID:      document.RunID,
-			UserID:     document.UserID,
-			PersonaID:  document.PersonaID,
-			SessionID:  document.SessionID,
-			DomainID:   document.DomainID,
-			Outcome:    document.Outcome,
-			OccurredAt: document.OccurredAt,
+			EventID: document.ID, RunID: document.RunID,
+			UserID: document.UserID, PersonaID: document.PersonaID,
+			PersonaContextVersion: document.PersonaContextVersion,
+			SessionID:             document.SessionID, DomainID: document.DomainID,
+			Outcome: document.Outcome, ToolsCalled: document.ToolsCalled,
+			LLMModel: document.LLMModel, LLMTokensUsed: document.LLMTokensUsed,
+			LatencyMS:         document.LatencyMS,
+			SatisfactionScore: document.SatisfactionScore,
+			OccurredAt:        document.OccurredAt, AttemptCount: document.AttemptCount,
 		})
 	}
 	return events, nil
 }
 
-func (r *MongoRunRepository) MarkTerminalEventProcessed(
+func (r *MongoRunRepository) AcknowledgeTerminalEvent(
 	ctx context.Context,
 	eventID string,
 	ownerID string,
@@ -887,13 +991,14 @@ func (r *MongoRunRepository) MarkTerminalEventProcessed(
 		bson.M{
 			"_id":         strings.TrimSpace(eventID),
 			"claimOwner":  strings.TrimSpace(ownerID),
+			"claimUntil":  bson.M{"$gt": processedAt.UTC()},
 			"processedAt": bson.M{"$exists": false},
 		},
 		bson.M{
 			"$set": bson.M{"processedAt": processedAt.UTC()},
 			"$unset": bson.M{
-				"claimOwner": "",
-				"claimUntil": "",
+				"claimOwner": "", "claimUntil": "", "nextAttemptAt": "",
+				"lastErrorCode": "",
 			},
 		},
 	)
@@ -904,6 +1009,51 @@ func (r *MongoRunRepository) MarkTerminalEventProcessed(
 		return runruntime.ErrTerminalEventClaimLost
 	}
 	return nil
+}
+
+func (r *MongoRunRepository) ScheduleTerminalEventRetry(
+	ctx context.Context,
+	eventID string,
+	ownerID string,
+	failedAt time.Time,
+	nextAttemptAt time.Time,
+	failureCode string,
+) error {
+	if strings.TrimSpace(eventID) == "" || strings.TrimSpace(ownerID) == "" ||
+		failedAt.IsZero() || nextAttemptAt.IsZero() || nextAttemptAt.Before(failedAt) {
+		return runruntime.ErrInvalidRun
+	}
+	result, err := r.terminalOutbox.UpdateOne(
+		ctx,
+		bson.M{
+			"_id":         strings.TrimSpace(eventID),
+			"claimOwner":  strings.TrimSpace(ownerID),
+			"claimUntil":  bson.M{"$gt": failedAt.UTC()},
+			"processedAt": bson.M{"$exists": false},
+		},
+		bson.M{
+			"$set": bson.M{
+				"nextAttemptAt": nextAttemptAt.UTC(),
+				"lastErrorCode": boundedTerminalFailureCode(failureCode),
+			},
+			"$unset": bson.M{"claimOwner": "", "claimUntil": ""},
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("schedule assistant run terminal outbox retry: %w", err)
+	}
+	if result.MatchedCount != 1 {
+		return runruntime.ErrTerminalEventClaimLost
+	}
+	return nil
+}
+
+func boundedTerminalFailureCode(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" || len(value) > 64 {
+		return "delivery_failed"
+	}
+	return value
 }
 
 func (r *MongoRunRepository) ReleaseTerminalEventClaim(

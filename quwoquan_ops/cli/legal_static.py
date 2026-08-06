@@ -273,12 +273,8 @@ def _refresh_current_pointer(
         current.unlink()
     elif current.exists():
         remove_deployment_tree(target_name, "packages", "legal-static", "current")
-    try:
-        os.symlink(package_dir.name, current, target_is_directory=True)
-        return relpath(current)
-    except OSError:
-        shutil.copytree(package_dir, current)
-        return relpath(current)
+    shutil.copytree(package_dir, current)
+    return relpath(current)
 
 
 def build_package(
@@ -437,6 +433,54 @@ def verify_package(
         )
 
 
+def _verify_current_snapshot(
+    package_dir: Path,
+    *,
+    issues: list[str],
+) -> None:
+    """Require ``current/`` to be a full physical byte-exact copy of the version."""
+    current = package_dir.parent / "current"
+    if current.is_symlink():
+        issues.append(
+            f"legal-static current must be a physical directory, not a symlink: "
+            f"{relpath(current)}"
+        )
+        return
+    if not current.is_dir():
+        issues.append(f"missing legal-static current snapshot: {relpath(current)}")
+        return
+
+    version_files = {
+        path.relative_to(package_dir).as_posix(): path
+        for path in package_dir.rglob("*")
+        if path.is_file()
+    }
+    current_files = {
+        path.relative_to(current).as_posix(): path
+        for path in current.rglob("*")
+        if path.is_file()
+    }
+    for relative in sorted(set(version_files) | set(current_files)):
+        version_path = version_files.get(relative)
+        current_path = current_files.get(relative)
+        if version_path is None:
+            issues.append(f"current snapshot has unexpected file: {relative}")
+            continue
+        if current_path is None:
+            issues.append(f"current snapshot missing file: {relative}")
+            continue
+        if current_path.is_symlink() or not current_path.is_file():
+            issues.append(
+                f"current snapshot path is unsafe or not a regular file: {relative}"
+            )
+            continue
+        if _sha256_file(version_path) != _sha256_file(current_path):
+            issues.append(
+                f"current snapshot digest drift for {relative}: "
+                f"{_sha256_file(current_path)} != {_sha256_file(version_path)}"
+            )
+
+
 def _verify_package_locked(
     env_name: str,
     *,
@@ -498,6 +542,7 @@ def _verify_package_locked(
                 title = str(doc.get("title") or "").strip()
                 if title and title not in stable_text:
                     issues.append(f"{slug}: published document is missing its title")
+    _verify_current_snapshot(package_dir, issues=issues)
     return {
         "status": "ok" if not issues else "failed",
         "env": env_name,

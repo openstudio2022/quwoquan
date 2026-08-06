@@ -1,0 +1,33 @@
+commercial_defaults:
+  status: blocked
+  block_reason: ResolvedCapabilityGrant 仅允许受信 runtime 内部解析，不开放通用 HTTP Connector 接口
+  gap_id: INTEGRATION_CAPABILITY_GRANT_PUBLIC_OPERATION_FORBIDDEN
+  target_story: user-connector-capability-gateway
+description: 四类能力 binding 的内部 typed 解析结果；无公共 API route，调用方在各自执行边界重验。
+api_routes: []
+runtime_entrypoints:
+- name: ResolveCapabilityGrant
+  kind: middleware
+  phase: post_authorization_pre_owner_proxy
+  application:
+    kind: session
+    facet: CapabilityGrantSessionFacade
+    method: resolve
+    object_owner: CapabilityGrant
+readiness_cases:
+- case_id: resolve-capability-grant-local
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ResolveCapabilityGrant}
+  runner_source_path: quwoquan_service/services/integration-service/tests/local_contract/external_integration/capability_grant/capability_grant__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: resolve-capability-grant-api
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-001
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ResolveCapabilityGrant}
+  runner_source_path: quwoquan_service/services/integration-service/tests/api_integration/external_integration/capability_grant/runtime_entrypoint__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: none, digest_binding: candidate}

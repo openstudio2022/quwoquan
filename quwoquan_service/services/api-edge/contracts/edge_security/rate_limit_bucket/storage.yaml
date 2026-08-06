@@ -6,7 +6,7 @@ redis_cache:
 - key: edge:rate:{environment}:{subjectDigest}:{operationDigest}
   ttl_seconds: 86400
   type: string
-  scene: admission
+  scene: general
   description: >-
     value 为当前窗口计数且最多保持 limit+1；实际 TTL 由 operation policy window_seconds
     决定并受 86400 秒硬上限约束。subjectDigest 与 operationDigest 均为完整 SHA-256 十六进制，

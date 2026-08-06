@@ -19,11 +19,20 @@ func main() {
 	var citationDestinationsGoOutput string
 	var checkCitationDestinationsGo bool
 	var realtimeContractsOnly bool
+	var shellNavigationMetadataOnly bool
+	var checkShellNavigationMetadata bool
+	var shellNavigationManifestPath string
 	flag.StringVar(&metadataDir, "metadata-dir", "contracts/metadata", "metadata root directory")
 	flag.StringVar(&appDir, "app-dir", "../quwoquan_app", "app root directory")
 	flag.StringVar(&contractGraphPath, "contract-graph", "generated/contract_graph.json", "fixed ContractGraph JSON bundle")
 	flag.StringVar(&contractGraphLockPath, "contract-graph-lock", "../quwoquan_app/tool/cloud_codegen/contract_graph.lock.json", "accepted App ContractGraph lock")
 	flag.StringVar(&generatedManifestPath, "generated-manifest", "../quwoquan_app/tool/cloud_codegen/generated_manifest.json", "App generated output manifest")
+	flag.StringVar(
+		&shellNavigationManifestPath,
+		"shell-navigation-manifest",
+		"",
+		"shell/navigation metadata-only generated output manifest",
+	)
 	flag.StringVar(
 		&assistantRuntimeEnumsGoOutput,
 		"assistant-runtime-enums-go-output",
@@ -54,6 +63,18 @@ func main() {
 		false,
 		"generate only the cloud-contracts realtime payloads and tagged event catalog without accepting or rewriting global ContractGraph outputs",
 	)
+	flag.BoolVar(
+		&shellNavigationMetadataOnly,
+		"shell-navigation-metadata-only",
+		false,
+		"generate only App shell/navigation metadata outputs without reading the App ContractGraph handoff lock",
+	)
+	flag.BoolVar(
+		&checkShellNavigationMetadata,
+		"check-shell-navigation-metadata",
+		false,
+		"verify shell/navigation metadata-only outputs and manifest are current",
+	)
 	flag.Parse()
 	if checkAssistantRuntimeEnumsGo && assistantRuntimeEnumsGoOutput == "" {
 		exitErr(fmt.Errorf(
@@ -69,6 +90,27 @@ func main() {
 		assistantRuntimeEnumsGoOutput != "" ||
 			citationDestinationsGoOutput != "" ||
 			realtimeContractsOnly
+	if checkShellNavigationMetadata && !shellNavigationMetadataOnly {
+		exitErr(fmt.Errorf(
+			"--check-shell-navigation-metadata requires --shell-navigation-metadata-only",
+		))
+	}
+	if shellNavigationMetadataOnly && serviceOutputRequested {
+		exitErr(fmt.Errorf(
+			"--shell-navigation-metadata-only cannot be combined with service output modes",
+		))
+	}
+	if shellNavigationMetadataOnly {
+		if err := runShellNavigationMetadataMode(
+			metadataDir,
+			appDir,
+			shellNavigationManifestPath,
+			checkShellNavigationMetadata,
+		); err != nil {
+			exitErr(err)
+		}
+		return
+	}
 	if serviceOutputRequested {
 		if err := initializeMetadataSourceForServiceOutput(metadataDir); err != nil {
 			exitErr(err)
@@ -132,14 +174,6 @@ func main() {
 	if err != nil && !os.IsNotExist(err) {
 		exitErr(err)
 	}
-	linkTemplates, err := readLinkTemplates(filepath.Join(metadataDir, "_shared", "link_templates.yaml"))
-	if err != nil && !os.IsNotExist(err) {
-		exitErr(fmt.Errorf("read link_templates.yaml: %w", err))
-	}
-	uiSurfaces, err := readUISurfaces(filepath.Join(metadataDir, "_shared", "ui_surfaces.yaml"))
-	if err != nil && !os.IsNotExist(err) {
-		exitErr(err)
-	}
 	appPages, err := readAppPages(filepath.Join(metadataDir, "_shared", "app_pages.yaml"))
 	if err != nil {
 		exitErr(fmt.Errorf("read app_pages.yaml: %w", err))
@@ -167,6 +201,16 @@ func main() {
 	if err != nil && !os.IsNotExist(err) {
 		exitErr(err)
 	}
+	if (searchContract == nil) != (searchObjects == nil) {
+		exitErr(fmt.Errorf(
+			"canonical Search metadata requires both search_contract.yaml and search_objects.yaml",
+		))
+	}
+	if searchContract != nil {
+		if err := validateCanonicalSearchMetadata(searchContract, searchObjects); err != nil {
+			exitErr(err)
+		}
+	}
 	// Domain-centric path: services/content-service/contracts/content/post/
 	postDir := filepath.Join(metadataDir, "content", "content", "post")
 	fields, err := readFields(filepath.Join(postDir, "fields.yaml"))
@@ -176,6 +220,16 @@ func main() {
 	service, err := readService(filepath.Join(postDir, "operations.yaml"))
 	if err != nil {
 		exitErr(err)
+	}
+	uiDef, uiErr := readUIConfig(
+		filepath.Join(postDir, "ui_config.yaml"),
+		true,
+	)
+	if uiErr != nil {
+		exitErr(fmt.Errorf("read ui_config.yaml: %w", uiErr))
+	}
+	if uiDef == nil {
+		exitErr(fmt.Errorf("content ui_config.yaml is empty"))
 	}
 	// discovery_feed projection: services/content-service/contracts/content/post/projections/
 	feedProjPath := filepath.Join(postDir, "projections", "discovery_feed.yaml")
@@ -200,12 +254,22 @@ func main() {
 		contentTypes = []string{"image", "video", "micro", "article"}
 	}
 	contentTypeMapping := buildContentTypeToRender(contentTypes)
-	feedCategoryToType, appTabToCategory := buildDiscoveryMappings(contentTypes)
+	_, appTabToCategory := buildDiscoveryMappings(contentTypes)
+	feedCategoryToType := uiDef.FeedRequestTypeByCategory
 	feedRoute := findRoute(service.APIRoutes, "GetFeed")
 	getPostRoute := findRoute(service.APIRoutes, "GetPost")
 	feedDefaultLimit := paginationLimitDefault(shared, 20)
 	likeRoutes := buildMutationRoutes(service.APIRoutes,
 		[]string{"LikePost", "UnlikePost", "FavoritePost", "UnfavoritePost"})
+
+	if err := writeCanonicalContentMetadata(
+		appDir,
+		feedCategoryToType,
+		contentTypes,
+		postSnapshotFieldByteLimits,
+	); err != nil {
+		exitErr(err)
+	}
 
 	// 1. 生成 content_metadata.g.dart（原 post_runtime_metadata.g.dart）
 	metaOut := renderContentMetadataDart(
@@ -220,12 +284,12 @@ func main() {
 		feedDefaultLimit,
 		likeRoutes,
 	)
-	metaPath := filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "content", "content_metadata.g.dart")
+	metaPath := contentPostApplicationOutputPath(
+		appDir,
+		"content_metadata.g.dart",
+	)
 	writeFile(metaPath, metaOut)
 	generatedStandaloneProjectionPaths := map[string]bool{}
-
-	contentGenDir := filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "content")
-	writeFile(filepath.Join(contentGenDir, "report_create_request_wire.g.dart"), renderCreateReportRequestWireDart())
 
 	if err := writePostReadPresentationArtifacts(appDir, filepath.Join(postDir, "projections")); err != nil {
 		exitErr(err)
@@ -242,7 +306,7 @@ func main() {
 	chatConversationDir := filepath.Join(metadataDir, "chat", "chat", "conversation")
 	if chatErrsDef, err := readErrors(filepath.Join(chatConversationDir, "errors.yaml")); err == nil {
 		out := renderChatErrorsDart(chatErrsDef)
-		writeFile(filepath.Join(appDir, "lib", "cloud", "chat", "generated", "chat_errors.g.dart"), out)
+		writeFile(runtimeErrorOutputPath(appDir, "chat", "chat_errors.g.dart"), out)
 	}
 
 	// 3a3. 生成 assistant/circle/entity 客户端 *ErrorCode 枚举（端云错误码全集一致）。
@@ -250,7 +314,7 @@ func main() {
 	// 统一通过 renderSimpleErrorsDart 生成，唯一真相源各自 errors.yaml。
 	if assistantErrs, err := readErrors(filepath.Join(metadataDir, "assistant", "assistant", "assistant_run", "errors.yaml")); err == nil {
 		writeFile(
-			filepath.Join(appDir, "lib", "cloud", "assistant", "generated", "assistant_errors.g.dart"),
+			runtimeErrorOutputPath(appDir, "assistant", "assistant_errors.g.dart"),
 			renderSimpleErrorsDart("AssistantErrorCode", "assistant/assistant/assistant_run/errors.yaml", "找私助暂时不可用，请稍后重试", assistantErrs),
 		)
 	}
@@ -266,7 +330,7 @@ func main() {
 		exitErr(fmt.Errorf("read Circle errors metadata: %w", err))
 	}
 	writeFile(
-		filepath.Join(appDir, "lib", "cloud", "circle", "generated", "circle_errors.g.dart"),
+		runtimeErrorOutputPath(appDir, "circle", "circle_errors.g.dart"),
 		renderSimpleErrorsDart("CircleErrorCode", "circle/circle_management/circle/errors.yaml", "圈子服务异常，请稍后重试", circleErrs),
 	)
 	circleMembershipErrorsPath := filepath.Join(
@@ -281,7 +345,7 @@ func main() {
 		exitErr(fmt.Errorf("read CircleMembership errors metadata: %w", err))
 	}
 	writeFile(
-		filepath.Join(appDir, "lib", "cloud", "circle", "generated", "circle_membership_errors.g.dart"),
+		runtimeErrorOutputPath(appDir, "circle", "circle_membership_errors.g.dart"),
 		renderSimpleErrorsDart("CircleMembershipErrorCode", "circle/circle_management/circle_membership/errors.yaml", "圈子成员关系暂时不可用，请稍后重试", circleMembershipErrs),
 	)
 	if entityErrs, err := readMergedErrors([]string{
@@ -291,13 +355,13 @@ func main() {
 		filepath.Join(metadataDir, "entity", "entity_homepage", "homepage_status_report", "errors.yaml"),
 	}); err == nil {
 		writeFile(
-			filepath.Join(appDir, "lib", "cloud", "entity", "generated", "entity_errors.g.dart"),
+			runtimeErrorOutputPath(appDir, "entity", "entity_errors.g.dart"),
 			renderSimpleErrorsDart("EntityErrorCode", "entity/*/errors.yaml", "主页服务异常，请稍后重试", entityErrs),
 		)
 	}
 	if notificationErrs, err := readErrors(filepath.Join(metadataDir, "notification", "notification_delivery", "notification", "errors.yaml")); err == nil {
 		writeFile(
-			filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "notification", "notification_errors.g.dart"),
+			runtimeErrorOutputPath(appDir, "notification", "notification_errors.g.dart"),
 			renderSimpleErrorsDart("NotificationErrorCode", "notification/notification_delivery/notification/errors.yaml", "通知服务异常，请稍后重试", notificationErrs),
 		)
 	}
@@ -308,7 +372,7 @@ func main() {
 		exitErr(fmt.Errorf("read ops event-record errors: %w", err))
 	}
 	writeFile(
-		filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "ops", "ops_event_record_errors.g.dart"),
+		runtimeErrorOutputPath(appDir, "ops", "ops_event_record_errors.g.dart"),
 		renderSimpleErrorsDart("OpsEventRecordErrorCode", "ops/product_ops/event_record/errors.yaml", "启动诊断暂时不可用，请稍后重试", opsEventErrs),
 	)
 	if searchErrs, err := readMergedErrors([]string{
@@ -316,7 +380,7 @@ func main() {
 		filepath.Join(metadataDir, "search", "search", "recent_search_state", "errors.yaml"),
 	}); err == nil {
 		writeFile(
-			filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "search", "search_errors.g.dart"),
+			runtimeErrorOutputPath(appDir, "search", "search_errors.g.dart"),
 			renderSimpleErrorsDart("SearchErrorCode", "search/**/errors.yaml", "搜索服务异常，请稍后重试", searchErrs),
 		)
 	}
@@ -326,42 +390,28 @@ func main() {
 		filepath.Join(metadataDir, "tag", "tag", "tag_taxonomy_release", "errors.yaml"),
 	}); err == nil {
 		writeFile(
-			filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "tag", "tag_errors.g.dart"),
+			runtimeErrorOutputPath(appDir, "tag", "tag_errors.g.dart"),
 			renderSimpleErrorsDart("TagErrorCode", "tag/**/errors.yaml", "标签服务异常，请稍后重试", tagErrs),
 		)
 	}
 
-	// 3b. 生成 content_behaviors.g.dart（ContentBehaviorTracker）。
-	// 行为事实是独立对象（content_behavior_fact），不是 post 的子文档：一次行为事件的
-	// 生命周期与可见性与被作用的帖子无关，因此契约归 content_behavior_fact 而非 post。
-	behaviorsPath := filepath.Join(metadataDir, "content", "content", "content_behavior_fact", "behaviors.yaml")
-	behDef, err := readBehaviors(behaviorsPath)
+	// 3b. 生成 content_ui_config.g.dart（ContentUIConfig + DiscoveryTabConfig）
+	out := renderContentUIConfigDart(uiDef)
+	writeFile(
+		contentPostPresentationOutputPath(appDir, "content_ui_config.g.dart"),
+		out,
+	)
+	contentMediaPlaybackPolicy, err := renderContentMediaPlaybackPolicyDart(uiDef)
 	if err != nil {
-		exitErr(fmt.Errorf("read content behaviors.yaml: %w", err))
+		exitErr(err)
 	}
 	writeFile(
-		filepath.Join(appDir, "lib", "cloud", "content", "generated", "content_behaviors.g.dart"),
-		renderContentBehaviorsDart(behDef),
+		contentPostPublicGeneratedOutputPath(
+			appDir,
+			"content_media_playback_policy.g.dart",
+		),
+		contentMediaPlaybackPolicy,
 	)
-
-	// 3c. 生成 content_privacy_policy.g.dart（sanitizeForLog）
-	if privDef, err := readPrivacy(filepath.Join(postDir, "privacy.yaml")); err == nil {
-		out := renderContentPrivacyDart(privDef)
-		writeFile(filepath.Join(appDir, "lib", "cloud", "content", "generated", "content_privacy_policy.g.dart"), out)
-	}
-
-	// 3d. 生成 content_ui_config.g.dart（ContentUIConfig + DiscoveryTabConfig）
-	uiDef, uiErr := readUIConfig(
-		filepath.Join(postDir, "ui_config.yaml"),
-		true,
-	)
-	if uiErr != nil {
-		exitErr(fmt.Errorf("read ui_config.yaml: %w", uiErr))
-	}
-	if uiDef != nil {
-		out := renderContentUIConfigDart(uiDef)
-		writeFile(filepath.Join(appDir, "lib", "cloud", "content", "generated", "content_ui_config.g.dart"), out)
-	}
 
 	publicationPolicy, policyErr := readContentPublicationPolicy(
 		filepath.Join(postDir, "publication_policy.yaml"),
@@ -370,12 +420,8 @@ func main() {
 		exitErr(fmt.Errorf("read content publication policy: %w", policyErr))
 	}
 	writeFile(
-		filepath.Join(
+		contentPostDomainOutputPath(
 			appDir,
-			"lib",
-			"cloud",
-			"content",
-			"generated",
 			"content_publication_policy.g.dart",
 		),
 		renderContentPublicationPolicyDart(publicationPolicy),
@@ -394,13 +440,8 @@ func main() {
 		exitErr(fmt.Errorf("read content media upload policy: %w", mediaUploadPolicyErr))
 	}
 	writeFile(
-		filepath.Join(
+		contentMediaUploadSessionApplicationOutputPath(
 			appDir,
-			"lib",
-			"application",
-			"content",
-			"media",
-			"generated",
 			"content_media_upload_policy.g.dart",
 		),
 		renderContentMediaUploadPolicyDart(mediaUploadPolicy),
@@ -419,13 +460,8 @@ func main() {
 		exitErr(fmt.Errorf("read content image variant policy: %w", imageVariantPolicyErr))
 	}
 	writeFile(
-		filepath.Join(
+		contentMediaAssetApplicationOutputPath(
 			appDir,
-			"lib",
-			"application",
-			"content",
-			"media",
-			"generated",
 			"content_image_variant_policy.g.dart",
 		),
 		renderContentImageVariantPolicyDart(imageVariantPolicy),
@@ -441,28 +477,28 @@ func main() {
 	}
 	if userUIDef != nil {
 		out := renderUserProfileUIConfigDart(userUIDef)
-		writeFile(filepath.Join(appDir, "lib", "cloud", "user", "generated", "user_profile_ui_config.g.dart"), out)
+		writeFile(
+			userAccountPresentationOutputPath(
+				appDir,
+				"user_profile_ui_config.g.dart",
+			),
+			out,
+		)
 	}
 	writeEntityCircleUIConfigs(metadataDir, appDir)
 	if userErrsDef, err := readUserDomainErrors(metadataDir); err == nil {
 		writeFile(
-			filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "user", "user_errors.g.dart"),
+			runtimeErrorOutputPath(appDir, "user", "user_errors.g.dart"),
 			renderUserErrorsDart(userErrsDef),
 		)
 	}
 
-	// 2b. 生成 integration/external_integration/location 元数据（路径、response key）
+	// 2b. 生成 integration/external_integration/location 客户端 errors；
+	// 路径、方法与鉴权统一由 canonical operation registry 提供。
 	locDir := filepath.Join(metadataDir, "integration", "external_integration", "location")
-	if locSvc, err := readIntegrationLocationService(filepath.Join(locDir, "operations.yaml")); err == nil {
-		locOut := renderIntegrationLocationMetadataDart(locSvc)
-		writeFile(filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "integration", "integration_location_metadata.g.dart"), locOut)
-
-	}
-
-	// 2b2. 生成 integration/external_integration/location 客户端 errors；Service 产物由领域 codegen 所有。
 	if locErrs, err := readErrors(filepath.Join(locDir, "errors.yaml")); err == nil {
 		locErrOut := renderIntegrationLocationErrorsDart(locErrs)
-		writeFile(filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "integration", "integration_location_errors.g.dart"), locErrOut)
+		writeFile(runtimeErrorOutputPath(appDir, "integration", "integration_location_errors.g.dart"), locErrOut)
 	}
 
 	// 3b. 生成其他 domain projections（无 base_class 的 standalone DTO，如 chat inbox）。
@@ -504,25 +540,19 @@ func main() {
 	if err != nil {
 		exitErr(err)
 	}
-	responseModelByReadModel, err := collectProjectionReadModelDartClass(metadataDir)
-	if err != nil {
-		exitErr(err)
-	}
 	defaultsOut := renderCloudAPIDefaultsDart(feedDefaultLimit)
-	writeFile(filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "cloud_api_defaults.g.dart"), defaultsOut)
 	writeFile(
-		filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "auth", "auth_policy.g.dart"),
-		renderCanonicalAuthPolicyDart(activeContractLock),
+		runtimeTransportSharedOutputPath(appDir, "cloud_api_defaults.g.dart"),
+		defaultsOut,
 	)
 	for domain, routes := range domainRoutes {
-		metaOut := renderDomainAPIMetadataDart(domain, routes, responseModelByReadModel)
 		pageIDsOut := renderDomainRequestPageIDsDart(domain, routes)
 		writeFile(
-			filepath.Join(appDir, "lib", "cloud", "runtime", "generated", domain, fmt.Sprintf("%s_api_metadata.g.dart", domain)),
-			metaOut,
-		)
-		writeFile(
-			filepath.Join(appDir, "lib", "cloud", "runtime", "generated", domain, fmt.Sprintf("%s_request_page_ids.g.dart", domain)),
+			runtimeTransportOutputPath(
+				appDir,
+				domain,
+				fmt.Sprintf("%s_request_page_ids.g.dart", domain),
+			),
 			pageIDsOut,
 		)
 	}
@@ -538,64 +568,52 @@ func main() {
 	if err := writeRealtimeEventCatalog(appDir); err != nil {
 		exitErr(err)
 	}
-	if err := writeIntersectionKindMetadata(appDir, metadataDir); err != nil {
+	intersectionSource, intersectionRegistry, err :=
+		readIntersectionGeneratedMetadata(metadataDir)
+	if err != nil {
 		exitErr(err)
 	}
+	writeIntersectionFeedbackContracts(
+		appDir,
+		intersectionSource,
+		intersectionRegistry,
+	)
+	writeCanonicalIntersectionMetadata(
+		appDir,
+		intersectionSource,
+		intersectionRegistry,
+	)
 	if err := writeImpactHelpTypeMetadata(appDir, metadataDir); err != nil {
 		exitErr(err)
 	}
 	// RTC 客户端 errors；Service 产物由领域 codegen 所有。
 	if rtcErrs, err := readErrors(filepath.Join(metadataDir, "rtc", "rtc", "call_session", "errors.yaml")); err == nil {
 		writeFile(
-			filepath.Join(appDir, "lib", "cloud", "rtc", "generated", "rtc_errors.g.dart"),
+			runtimeErrorOutputPath(appDir, "rtc", "rtc_errors.g.dart"),
 			renderRtcErrorsDart(rtcErrs),
 		)
 	}
 	writeFile(
-		filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "app_request_page_ids.g.dart"),
-		renderStandaloneRequestPageIDsDart(sharedRequestContext.StandalonePageIDs),
-	)
-	if appRoutes != nil {
-		writeFile(
-			filepath.Join(appDir, "lib", "app", "navigation", "generated", "app_route_paths.g.dart"),
-			renderAppRoutePathsDart(appRoutes.Routes),
-		)
-	}
-	if linkTemplates != nil {
-		if appRoutes == nil {
-			exitErr(fmt.Errorf("link_templates.yaml requires app_routes.yaml"))
-		}
-		if err := validateLinkTemplates(appRoutes, linkTemplates); err != nil {
-			exitErr(err)
-		}
-		writeFile(
-			filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "link_templates.g.dart"),
-			renderLinkTemplatesDart(linkTemplates, appRoutes),
-		)
-	}
-	if uiSurfaces != nil {
-		writeFile(
-			filepath.Join(appDir, "lib", "app", "navigation", "generated", "app_ui_surfaces.g.dart"),
-			renderAppUISurfacesDart(uiSurfaces.Surfaces),
-		)
-	}
-	writeFile(
-		filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "ops", "app_telemetry_catalog.g.dart"),
+		runtimeObservabilityOutputPath(appDir, "app_telemetry_catalog.g.dart"),
 		renderAppTelemetryCatalogDart(telemetryCatalog),
-	)
-	writeFile(
-		filepath.Join(appDir, "lib", "app", "navigation", "generated", "app_pages.g.dart"),
-		renderAppPagesDart(appPages, appRoutes),
-	)
-	writeFile(
-		filepath.Join(appDir, "lib", "app", "navigation", "generated", "page_access_internal_routes.g.dart"),
-		renderPageAccessInternalRoutesDart(appPages),
 	)
 	if searchContract != nil {
 		writeFile(
-			filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "search", "search_contract.g.dart"),
+			searchIndexViewApplicationOutputPath(
+				appDir,
+				"search_contract.g.dart",
+			),
 			renderSearchContractDart(searchContract),
 		)
+	}
+	if searchContract != nil {
+		if err := writeCanonicalSearchMetadata(
+			appDir,
+			searchContract,
+			searchObjects,
+		); err != nil {
+			exitErr(err)
+		}
 	}
 	if feedbackEventTypes := shared.Enums["SearchFeedbackEventType"]; len(feedbackEventTypes) > 0 {
 		writeFile(
@@ -619,7 +637,10 @@ func main() {
 	}
 	if searchObjects != nil {
 		writeFile(
-			filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "search", "search_registry.g.dart"),
+			searchIndexViewApplicationOutputPath(
+				appDir,
+				"search_registry.g.dart",
+			),
 			renderSearchRegistryDart(searchObjects),
 		)
 	}
@@ -669,7 +690,7 @@ func writeContentErrorsDart(metadataDir string, appDir string) error {
 		return fmt.Errorf("read Content errors metadata: %w", err)
 	}
 	writeFile(
-		filepath.Join(appDir, "lib", "cloud", "content", "generated", "content_errors.g.dart"),
+		runtimeErrorOutputPath(appDir, "content", "content_errors.g.dart"),
 		renderContentErrorsDart(errorsDefinition),
 	)
 	return nil

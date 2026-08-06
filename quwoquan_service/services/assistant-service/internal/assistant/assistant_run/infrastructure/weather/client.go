@@ -3,6 +3,7 @@ package weather
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,27 +16,41 @@ import (
 )
 
 type Config struct {
-	GeocodingURL string
-	ForecastURL  string
+	GeocodingURL  string
+	ForecastURL   string
+	AllowInsecure bool
+	MaxAttempts   int
+	RetryBackoff  time.Duration
 }
 
 type Client struct {
 	http         *http.Client
 	geocodingURL string
 	forecastURL  string
+	maxAttempts  int
+	retryBackoff time.Duration
 }
 
 func New(cfg Config, httpClient *http.Client) (*Client, error) {
-	if !isAbsoluteURL(cfg.GeocodingURL) || !isAbsoluteURL(cfg.ForecastURL) {
-		return nil, fmt.Errorf("weather endpoint urls must be absolute")
+	if !isProviderURL(cfg.GeocodingURL, cfg.AllowInsecure) ||
+		!isProviderURL(cfg.ForecastURL, cfg.AllowInsecure) {
+		return nil, fmt.Errorf("weather endpoint urls must be absolute, credential-free HTTPS urls")
 	}
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: 8 * time.Second}
+	}
+	if cfg.MaxAttempts <= 0 {
+		cfg.MaxAttempts = 1
+	}
+	if cfg.RetryBackoff < 0 {
+		return nil, fmt.Errorf("weather retry backoff must not be negative")
 	}
 	return &Client{
 		http:         httpClient,
 		geocodingURL: strings.TrimSpace(cfg.GeocodingURL),
 		forecastURL:  strings.TrimSpace(cfg.ForecastURL),
+		maxAttempts:  cfg.MaxAttempts,
+		retryBackoff: cfg.RetryBackoff,
 	}, nil
 }
 
@@ -178,8 +193,7 @@ func (c *Client) lookupCandidate(
 		forecast.Current.Time,
 		timezone,
 	)
-	summary = authoritySummary(candidate, placeName, summary)
-	references := authorityReferences(candidate, placeName)
+	references := providerReferences(c.geocodingURL, c.forecastURL)
 	return normalizeResult(summary, references), nil
 }
 
@@ -189,7 +203,7 @@ func (c *Client) get(
 	userAgent string,
 ) ([]byte, int, error) {
 	var lastErr error
-	for attempt := 0; attempt < 2; attempt++ {
+	for attempt := 0; attempt < c.maxAttempts; attempt++ {
 		request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 		if err != nil {
 			return nil, 0, ports.ProviderFailure{
@@ -205,17 +219,19 @@ func (c *Client) get(
 				return body, response.StatusCode, nil
 			}
 			lastErr = readErr
-			if attempt == 1 && readErr == nil {
+			if attempt == c.maxAttempts-1 && readErr == nil {
 				return body, response.StatusCode, nil
 			}
 		} else {
 			lastErr = err
 		}
-		if attempt == 0 {
+		if attempt < c.maxAttempts-1 {
+			timer := time.NewTimer(c.retryBackoff)
 			select {
 			case <-ctx.Done():
+				timer.Stop()
 				return nil, 0, weatherFailure(ctx.Err())
-			case <-time.After(100 * time.Millisecond):
+			case <-timer.C:
 			}
 		}
 	}
@@ -223,7 +239,7 @@ func (c *Client) get(
 }
 
 func weatherFailure(err error) ports.ProviderFailure {
-	if err == context.DeadlineExceeded {
+	if errors.Is(err, context.DeadlineExceeded) {
 		return ports.ProviderFailure{
 			Capability: "weather", Reason: ports.ProviderFailureTimeout,
 		}
@@ -263,16 +279,13 @@ func locationCandidate(query, location string) string {
 	return candidate
 }
 
-func authoritySummary(query, place, summary string) string {
-	if len(authorityReferences(query, place)) == 0 {
-		return summary
-	}
-	return "天气证据优先按国家级气象服务入口与可解析的省/自治区/直辖市气象局排序；" + summary
-}
-
-func isAbsoluteURL(raw string) bool {
+func isProviderURL(raw string, allowInsecure bool) bool {
 	parsed, err := url.Parse(strings.TrimSpace(raw))
-	return err == nil && parsed.Scheme != "" && parsed.Host != ""
+	if err != nil || parsed.Host == "" || parsed.User != nil {
+		return false
+	}
+	return parsed.Scheme == "https" ||
+		(allowInsecure && parsed.Scheme == "http")
 }
 
 func queryURL(raw string, values url.Values) (string, error) {
@@ -294,43 +307,31 @@ func queryURL(raw string, values url.Values) (string, error) {
 	return parsed.String(), nil
 }
 
-func authorityReferences(query, place string) []ports.ExternalReference {
-	references := []ports.ExternalReference{
-		{Title: "中国天气网", URL: "https://www.weather.com.cn/", Source: "weather_com_cn", Snippet: "中国天气网为国家级天气服务入口。"},
-		{Title: "中央气象台", URL: "https://www.nmc.cn/", Source: "national_meteorological_center", Snippet: "中央气象台提供全国天气预报和预警。"},
-		{Title: "中国气象局", URL: "https://www.cma.gov.cn/", Source: "china_meteorological_administration", Snippet: "中国气象局为国家气象主管机构入口。"},
-	}
-	if regional, ok := regionalAuthority(query + " " + place); ok {
-		references = append(references, regional)
+func providerReferences(endpoints ...string) []ports.ExternalReference {
+	references := make([]ports.ExternalReference, 0, len(endpoints))
+	seen := make(map[string]struct{}, len(endpoints))
+	for _, raw := range endpoints {
+		parsed, err := url.Parse(strings.TrimSpace(raw))
+		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+			continue
+		}
+		parsed.Path = "/"
+		parsed.RawPath = ""
+		parsed.RawQuery = ""
+		parsed.Fragment = ""
+		publicURL := parsed.String()
+		if _, found := seen[publicURL]; found {
+			continue
+		}
+		seen[publicURL] = struct{}{}
+		references = append(references, ports.ExternalReference{
+			Title:   "天气公共 Provider",
+			URL:     publicURL,
+			Source:  "weather_public_provider",
+			Snippet: "该引用是本次天气事实实际调用的受管公共 Provider 协议入口。",
+		})
 	}
 	return references
-}
-
-func regionalAuthority(raw string) (ports.ExternalReference, bool) {
-	normalized := strings.ToLower(raw)
-	regions := []struct {
-		keywords []string
-		title    string
-		url      string
-		source   string
-	}{
-		{[]string{"北京", "beijing"}, "北京市气象局", "https://bj.cma.gov.cn/", "beijing_meteorological_bureau"},
-		{[]string{"上海", "shanghai"}, "上海市气象局", "https://sh.cma.gov.cn/", "shanghai_meteorological_bureau"},
-		{[]string{"浙江", "zhejiang", "杭州", "hangzhou"}, "浙江省气象局", "https://zj.cma.gov.cn/", "zhejiang_meteorological_bureau"},
-		{[]string{"广东", "guangdong", "深圳", "shenzhen"}, "广东省气象局", "https://gd.cma.gov.cn/", "guangdong_meteorological_bureau"},
-		{[]string{"四川", "sichuan", "成都", "chengdu"}, "四川省气象局", "https://sc.cma.gov.cn/", "sichuan_meteorological_bureau"},
-	}
-	for _, region := range regions {
-		for _, keyword := range region.keywords {
-			if strings.Contains(normalized, keyword) {
-				return ports.ExternalReference{
-					Title: region.title, URL: region.url, Source: region.source,
-					Snippet: region.title + "为区域气象服务入口。",
-				}, true
-			}
-		}
-	}
-	return ports.ExternalReference{}, false
 }
 
 func weatherCode(code int) string {

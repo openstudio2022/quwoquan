@@ -724,7 +724,7 @@ func TestSkillSubscriptionDeliveryFailsClosedForConsentAndGroupMembership(
 						Requirements: []skillpkg.ContextRequirement{{
 							SlotID:        "trip_context",
 							Required:      true,
-							ConsentScopes: []string{"travel.trip.read"},
+							ConsentScopes: []string{"assistant.learning.feedback_context.read"},
 						}},
 					},
 				}},

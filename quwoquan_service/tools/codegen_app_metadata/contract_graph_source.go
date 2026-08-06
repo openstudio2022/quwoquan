@@ -56,6 +56,7 @@ type appExposedOperation struct {
 	ResponseBodyKind     string                      `json:"responseBodyKind"`
 	ResponseEntity       string                      `json:"responseEntity"`
 	ResponseEntityRef    string                      `json:"responseEntityRef"`
+	SuccessStatus        *int                        `json:"successStatus"`
 	Scopes               []string                    `json:"scopes"`
 	SLO                  appSLOPolicy                `json:"slo"`
 	SourcePath           string                      `json:"sourcePath"`
@@ -97,11 +98,18 @@ type appCommercialBinding struct {
 }
 
 type appReliabilityPolicy struct {
-	Cancellation        string `json:"cancellation"`
-	Idempotency         string `json:"idempotency"`
-	MaxAttempts         int    `json:"maxAttempts"`
-	RetryMode           string `json:"retryMode"`
-	TimeoutMilliseconds int    `json:"timeoutMilliseconds"`
+	Cancellation        string                 `json:"cancellation"`
+	Idempotency         string                 `json:"idempotency"`
+	MaxAttempts         int                    `json:"maxAttempts"`
+	RetryMode           string                 `json:"retryMode"`
+	TimeoutMilliseconds int                    `json:"timeoutMilliseconds"`
+	StreamBudget        *appStreamBudgetPolicy `json:"streamBudget"`
+}
+
+type appStreamBudgetPolicy struct {
+	HandshakeMilliseconds   int `json:"handshakeMilliseconds"`
+	IdleMilliseconds        int `json:"idleMilliseconds"`
+	MaxDurationMilliseconds int `json:"maxDurationMilliseconds"`
 }
 
 type appPaginationPolicy struct {
@@ -154,6 +162,22 @@ func initializeMetadataSourceForServiceOutput(metadataDir string) error {
 	source, err := contractcodegen.NewSource(metadataDir, validate.ProfileBaseline)
 	if err != nil {
 		return fmt.Errorf("compile ContractGraph: %w", err)
+	}
+	activeMetadataSource = source
+	activeMetadataRoot = filepath.Clean(metadataDir)
+	return nil
+}
+
+func initializeMetadataDocumentSource(
+	metadataDir string,
+	relativePaths []string,
+) error {
+	source, err := contractcodegen.NewDocumentSource(
+		metadataDir,
+		relativePaths,
+	)
+	if err != nil {
+		return fmt.Errorf("load canonical metadata documents: %w", err)
 	}
 	activeMetadataSource = source
 	activeMetadataRoot = filepath.Clean(metadataDir)

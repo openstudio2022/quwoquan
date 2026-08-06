@@ -29,11 +29,17 @@ type commandReceipt struct {
 }
 
 type outboxRecord struct {
-	ID            string    `bson:"_id"`
-	EventType     string    `bson:"eventType"`
-	ConnectorID   string    `bson:"connectorId"`
-	ReleaseDigest string    `bson:"releaseDigest"`
-	OccurredAt    time.Time `bson:"occurredAt"`
+	ID                 string    `bson:"_id"`
+	EventType          string    `bson:"eventType"`
+	ConnectorID        string    `bson:"connectorId"`
+	Capabilities       []string  `bson:"capabilities"`
+	AuthorizationMode  string    `bson:"authorizationMode"`
+	ConfirmationPolicy string    `bson:"confirmationPolicy"`
+	DataClassification string    `bson:"dataClassification"`
+	Status             string    `bson:"status"`
+	ReleaseDigest      string    `bson:"releaseDigest"`
+	PublishedAt        time.Time `bson:"publishedAt"`
+	OccurredAt         time.Time `bson:"occurredAt"`
 }
 
 func NewMongoStore(database *mongo.Database) *MongoStore {
@@ -173,11 +179,17 @@ func (store *MongoStore) Publish(
 		}
 		outboxID := command.Definition.ConnectorID + ":" + command.Definition.ReleaseDigest
 		if _, insertErr := store.outbox.InsertOne(txCtx, outboxRecord{
-			ID:            outboxID,
-			EventType:     "ConnectorDefinitionPublished",
-			ConnectorID:   command.Definition.ConnectorID,
-			ReleaseDigest: command.Definition.ReleaseDigest,
-			OccurredAt:    command.Definition.PublishedAt,
+			ID:                 outboxID,
+			EventType:          "ConnectorDefinitionPublished",
+			ConnectorID:        command.Definition.ConnectorID,
+			Capabilities:       append([]string(nil), command.Definition.Capabilities...),
+			AuthorizationMode:  command.Definition.AuthorizationMode,
+			ConfirmationPolicy: command.Definition.ConfirmationPolicy,
+			DataClassification: command.Definition.DataClassification,
+			Status:             command.Definition.Status,
+			ReleaseDigest:      command.Definition.ReleaseDigest,
+			PublishedAt:        command.Definition.PublishedAt,
+			OccurredAt:         command.Definition.PublishedAt,
 		}); insertErr != nil {
 			return nil, insertErr
 		}

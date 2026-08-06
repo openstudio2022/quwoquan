@@ -725,6 +725,17 @@
   "@replyToPrefix": {
     "description": "Reply-to prefix between usernames in comment thread (with spaces)"
   },
+  "content_createEntryPublishContent": "Post content",
+  "content_createEntryChooseActionSubtitle": "Choose what you want to start.",
+  "content_createEntryChooseContentSubtitle": "Start with photos, video, or text.",
+  "circle_createEntryStartGathering": "Start an activity",
+  "chat_createEntryStartGroupChat": "Start a group chat",
+  "circle_authGateTitleStartGathering": "Sign in to start an activity",
+  "circle_authGateSubtitleStartGathering": "The activity will be created with your account and keep participation and group collaboration connected.",
+  "circle_authGatePromptStartGathering": "Sign in to start an activity",
+  "circle_authContinuationStartGathering": "Your activity setup will continue after sign-in",
+  "circle_gatheringCreateUnavailableTitle": "Activity creation is unavailable",
+  "circle_gatheringCreateUnavailableMessage": "This version cannot open activity creation right now. Please try again later.",
   "createMaxImagesToastTemplate": "You can add at most {count} photos",
   "@createMaxImagesToastTemplate": {
     "description": "Toast when user exceeds max image count on create flow",

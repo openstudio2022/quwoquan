@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	runtimemessaging "quwoquan_service/runtime/messaging"
@@ -82,7 +83,11 @@ func (p *EventPublisher) AppendUserAccountEvent(
 	if p == nil || p.transport == nil {
 		return fmt.Errorf("UserAccount event publisher is unavailable")
 	}
-	body, err := json.Marshal(payload)
+	if strings.TrimSpace(event.EventID) == "" || strings.TrimSpace(event.AccountID) == "" ||
+		event.AccountVersion <= 0 || strings.TrimSpace(event.EventType) == "" || event.OccurredAt.IsZero() {
+		return fmt.Errorf("UserAccount event identity is invalid")
+	}
+	body, err := canonicalUserAccountPayload(event, payload)
 	if err != nil {
 		return fmt.Errorf("marshal UserAccount event payload: %w", err)
 	}
@@ -100,6 +105,47 @@ func (p *EventPublisher) AppendUserAccountEvent(
 		return fmt.Errorf("append UserAccount event stream: %w", err)
 	}
 	return nil
+}
+
+func canonicalUserAccountPayload(
+	event accountports.UserAccountOutboxEvent,
+	payload map[string]any,
+) ([]byte, error) {
+	fieldsByEvent := map[string][]string{
+		"UserAccountClosed":      {"userId", "personaIds", "accountState", "updatedAt"},
+		"UserSuspended":          {"userId", "personaIds", "accountState", "authEpoch", "decisionRef", "occurredAt"},
+		"UserRestored":           {"userId", "personaIds", "accountState", "authEpoch", "decisionRef", "occurredAt"},
+		"UserProfileTagsChanged": {"userId", "tagRefs", "taxonomyReleaseId", "profileVersion", "occurredAt"},
+	}
+	fields, supported := fieldsByEvent[event.EventType]
+	if !supported {
+		return nil, fmt.Errorf("UserAccount event type %q is not canonical", event.EventType)
+	}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("marshal UserAccount event payload: %w", err)
+	}
+	var source map[string]json.RawMessage
+	if err := json.Unmarshal(encoded, &source); err != nil {
+		return nil, fmt.Errorf("decode UserAccount event payload: %w", err)
+	}
+	canonical := make(map[string]json.RawMessage, len(fields))
+	for _, field := range fields {
+		value, found := source[field]
+		if !found || len(value) == 0 || string(value) == "null" {
+			return nil, fmt.Errorf("UserAccount %s payload is missing %s", event.EventType, field)
+		}
+		canonical[field] = value
+	}
+	var payloadUserID string
+	if err := json.Unmarshal(canonical["userId"], &payloadUserID); err != nil || payloadUserID != event.AccountID {
+		return nil, fmt.Errorf("UserAccount payload identity does not match aggregate")
+	}
+	body, err := json.Marshal(canonical)
+	if err != nil {
+		return nil, fmt.Errorf("marshal UserAccount canonical payload: %w", err)
+	}
+	return body, nil
 }
 
 // PublishPersonaRelationship writes the replayable relationship stream before
@@ -164,19 +210,34 @@ func (p *EventPublisher) PublishGreetingEvent(
 		return fmt.Errorf("invalid greeting event")
 	}
 	values := map[string]string{
-		"eventId":                      event.EventID,
-		"eventName":                    event.EventName,
-		"id":                           event.GreetingID,
-		"requesterPersonaId":           event.RequesterPersonaID,
-		"targetPersonaId":              event.TargetPersonaID,
-		"targetAllowsStrangerGreeting": strconv.FormatBool(event.TargetAllowsStrangerGreeting),
-		"occurredAt":                   event.OccurredAt.UTC().Format(time.RFC3339Nano),
+		"eventId":            event.EventID,
+		"eventName":          event.EventName,
+		"id":                 event.GreetingID,
+		"requesterPersonaId": event.RequesterPersonaID,
+		"targetPersonaId":    event.TargetPersonaID,
+		"occurredAt":         event.OccurredAt.UTC().Format(time.RFC3339Nano),
 	}
-	if event.Source != "" {
+	switch event.EventName {
+	case "GreetingRequestSent":
+		if event.Source == "" || event.ExpireAt == "" {
+			return fmt.Errorf("invalid GreetingRequestSent payload")
+		}
 		values["source"] = event.Source
-	}
-	if event.PromotedConversationID != "" {
+		values["expireAt"] = event.ExpireAt
+		values["targetAllowsStrangerGreeting"] = strconv.FormatBool(event.TargetAllowsStrangerGreeting)
+	case "GreetingRequestReplied":
+		if event.PromotedConversationID == "" {
+			return fmt.Errorf("invalid GreetingRequestReplied payload")
+		}
 		values["promotedConversationId"] = event.PromotedConversationID
+	case "GreetingRequestIgnored":
+		if event.DecisionAt == "" {
+			return fmt.Errorf("invalid GreetingRequestIgnored payload")
+		}
+		values["decisionAt"] = event.DecisionAt
+	case "GreetingRequestCancelled":
+	default:
+		return fmt.Errorf("invalid greeting event type %q", event.EventName)
 	}
 	if _, err := p.transport.AppendDurable(
 		ctx,

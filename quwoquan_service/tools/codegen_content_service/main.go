@@ -450,8 +450,8 @@ func RegisterGeneratedRoutes(mux *http.ServeMux, h *ContentHandler) {
 			rterr.WriteHTTPError(
 				w,
 				rterr.NewAppError(
-					rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "route_not_found"),
-					"接口不存在",
+					rterr.NewCode(rterr.ModuleGateway, rterr.KindUser, "route_not_found"),
+					"接口不存在或已下线",
 					"generated content route not found",
 				),
 				rterr.HTTPWriteOptionsFromRequest(r),

@@ -325,34 +325,44 @@ func TestCalendarContinuationUsesRunIdentityAndRequiresNativeExecutionReceipt(
 		)
 	}
 
-	_, err = commands.ContinueToolUse(
+	approved, permit, err := commands.ApproveToolUse(
 		t.Context(),
-		runruntime.ContinueToolUseCommand{
-			UserID:            "user-calendar",
-			RunID:             run.RunID,
-			ToolUseID:         toolUseID,
-			CommandID:         "continue-without-receipt",
-			Decision:          "approved",
-			ContinuationToken: token,
+		runruntime.ApproveToolUseCommand{
+			UserID:           "user-calendar",
+			RunID:            run.RunID,
+			ToolInvocationID: toolUseID,
+			CommandID:        "approve-device-action",
+			Decision:         "approved",
+			ApprovalPermit:   token,
+			InstallationID:   "installation-calendar-1",
+			DeviceID:         "device-calendar-1",
 		},
 	)
-	if !errors.Is(err, runruntime.ErrInvalidRun) {
-		t.Fatalf("approval without native receipt err=%v", err)
+	if err != nil || permit == nil ||
+		approved.State != generated.AssistantRunStateWaitingExternal {
+		t.Fatalf(
+			"approval did not yield a pending device permit: run=%+v permit=%+v err=%v",
+			approved,
+			permit,
+			err,
+		)
 	}
 
 	executedAt := time.Now().UTC()
-	continued, err := commands.ContinueToolUse(
+	continued, err := commands.SubmitDeviceActionReceipt(
 		t.Context(),
-		runruntime.ContinueToolUseCommand{
-			UserID:            "user-calendar",
-			RunID:             run.RunID,
-			ToolUseID:         toolUseID,
-			CommandID:         "continue-with-receipt",
-			Decision:          "approved",
-			ContinuationToken: token,
-			ExecutionReceipt: &runruntime.DeviceActionExecutionReceipt{
-				ActionKind:     "calendar_create_reminder",
-				IdempotencyKey: toolUseID,
+		runruntime.SubmitDeviceActionReceiptCommand{
+			UserID:           "user-calendar",
+			RunID:            run.RunID,
+			ToolInvocationID: toolUseID,
+			CommandID:        toolUseID,
+			Receipt: runruntime.DeviceActionExecutionReceipt{
+				InstallationID: permit.InstallationID,
+				DeviceID:       permit.DeviceID,
+				Capability:     permit.Capability,
+				InputDigest:    permit.InputDigest,
+				Permit:         permit.Permit,
+				IdempotencyKey: permit.IdempotencyKey,
 				Outcome:        "completed",
 				ExecutedAt:     executedAt,
 				DeviceObjectID: "calendar-event-1",
@@ -377,18 +387,20 @@ func TestCalendarContinuationUsesRunIdentityAndRequiresNativeExecutionReceipt(
 		t.Fatalf("native execution receipt was not durably preserved: %+v", completed.Checkpoint)
 	}
 
-	replayed, err := commands.ContinueToolUse(
+	replayed, err := commands.SubmitDeviceActionReceipt(
 		t.Context(),
-		runruntime.ContinueToolUseCommand{
-			UserID:            "user-calendar",
-			RunID:             run.RunID,
-			ToolUseID:         toolUseID,
-			CommandID:         "continue-with-receipt",
-			Decision:          "approved",
-			ContinuationToken: token,
-			ExecutionReceipt: &runruntime.DeviceActionExecutionReceipt{
-				ActionKind:     "calendar_create_reminder",
-				IdempotencyKey: toolUseID,
+		runruntime.SubmitDeviceActionReceiptCommand{
+			UserID:           "user-calendar",
+			RunID:            run.RunID,
+			ToolInvocationID: toolUseID,
+			CommandID:        toolUseID,
+			Receipt: runruntime.DeviceActionExecutionReceipt{
+				InstallationID: permit.InstallationID,
+				DeviceID:       permit.DeviceID,
+				Capability:     permit.Capability,
+				InputDigest:    permit.InputDigest,
+				Permit:         permit.Permit,
+				IdempotencyKey: permit.IdempotencyKey,
 				Outcome:        "completed",
 				ExecutedAt:     executedAt,
 				DeviceObjectID: "calendar-event-1",
@@ -417,12 +429,17 @@ func waitForCalendarRunState(
 		time.Sleep(10 * time.Millisecond)
 	}
 	run, err := commands.Get(t.Context(), "user-calendar", runID)
+	var terminalFailure any
+	if run.TerminalSnapshot != nil {
+		terminalFailure = run.TerminalSnapshot.Failure
+	}
 	t.Fatalf(
-		"run %s did not reach %s: state=%s terminal=%#v err=%v",
+		"run %s did not reach %s: state=%s terminal=%#v failure=%+v err=%v",
 		runID,
 		expected,
 		run.State,
 		run.TerminalSnapshot,
+		terminalFailure,
 		err,
 	)
 	return runruntime.Run{}
@@ -431,8 +448,8 @@ func waitForCalendarRunState(
 func calendarContinuationToken(presentation map[string]any) string {
 	for _, node := range presentationNodes(presentation["nodes"]) {
 		action, _ := node["action"].(map[string]any)
-		payload, _ := action["payload"].(map[string]any)
-		if token, _ := payload["continuationToken"].(string); token != "" {
+		approveTool, _ := action["approveTool"].(map[string]any)
+		if token, _ := approveTool["approvalPermit"].(string); token != "" {
 			return token
 		}
 	}

@@ -1,6 +1,6 @@
 dart_class: ContextContinuityPolicy
-library_path: assistant/contracts/context_continuity_policy.dart
-output_path: assistant/generated/contracts/context_continuity_policy.g.dart
+library_path: service/assistant_service/assistant/assistant_run/domain/context_continuity_policy.dart
+output_path: service/assistant_service/assistant/assistant_run/domain/generated/context_continuity_policy.g.dart
 contract: context_continuity_policy
 kind: runtime_context_contract
 fields:

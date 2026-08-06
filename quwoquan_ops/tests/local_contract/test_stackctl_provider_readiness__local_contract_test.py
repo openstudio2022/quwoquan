@@ -9,6 +9,8 @@ from subprocess import CompletedProcess
 from unittest import mock
 
 from quwoquan_ops.cli import stackctl
+from quwoquan_ops.cli.lib import external_provider_governance
+from quwoquan_ops.cli.lib import provider_conformance
 
 
 def _provider_report(
@@ -158,11 +160,37 @@ class StackctlProviderReadinessContractTest(unittest.TestCase):
                 report_dir=str(Path(temporary) / "matrix"),
             )
             runner = mock.Mock()
-            runner.main.return_value = 0
             conformance = mock.Mock()
             conformance.discover_test_sources.return_value = ({}, [])
-            conformance.load_validate_and_derive.return_value = ({}, [])
-            conformance.readiness_issues.return_value = []
+            compiled, governance_issues = external_provider_governance.load_and_compile()
+            self.assertEqual(governance_issues, [])
+            expected_cells = provider_conformance.expected_required_cell_keys(compiled)
+            expected_environment_cells = {
+                cell for cell in expected_cells if cell[1] == "gamma"
+            }
+            expected_count = len(expected_environment_cells)
+            attempt_paths = [
+                Path(temporary) / f"provider-evidence-{index}.json"
+                for index in range(expected_count)
+            ]
+            execution_index = 0
+
+            def execute_cell(
+                _argv: list[str],
+                *,
+                evidence_paths_out: list[Path],
+            ) -> int:
+                nonlocal execution_index
+                evidence_paths_out.append(attempt_paths[execution_index])
+                execution_index += 1
+                return 0
+
+            runner.main.side_effect = execute_cell
+            conformance.load_validate_local_functional_readiness.return_value = (
+                [{} for _ in range(expected_count)],
+                [],
+            )
+            conformance.expected_required_cell_keys.return_value = expected_cells
             with (
                 mock.patch.object(
                     stackctl,
@@ -178,12 +206,27 @@ class StackctlProviderReadinessContractTest(unittest.TestCase):
                 result = stackctl.command_provider_conformance(args)
 
         self.assertEqual(result["exitCode"], 0)
-        self.assertEqual(result["bindingCapabilityCount"], 17)
-        self.assertEqual(result["capabilityCount"], 14)
-        self.assertEqual(result["expectedCells"], 42)
-        self.assertEqual(result["executed"], 42)
+        self.assertEqual(
+            result["bindingCapabilityCount"], compiled["capabilityCount"]
+        )
+        self.assertEqual(
+            result["capabilityCount"],
+            len(provider_conformance.provider_conformance_capability_ids(compiled)),
+        )
+        self.assertEqual(result["expectedCells"], expected_count)
+        self.assertEqual(result["executed"], expected_count)
+        self.assertEqual(result["attemptEvidenceCount"], expected_count)
+        self.assertEqual(result["readinessScope"], "local_functional")
+        self.assertFalse(result["releasePromotionClaimed"])
         runner.preflight_environment_matrix.assert_called_once()
-        self.assertEqual(runner.main.call_count, 42)
+        self.assertEqual(runner.main.call_count, expected_count)
+        conformance.load_validate_local_functional_readiness.assert_called_once()
+        local_validation = (
+            conformance.load_validate_local_functional_readiness.call_args
+        )
+        self.assertEqual(set(local_validation.args[0]), set(attempt_paths))
+        self.assertEqual(local_validation.kwargs["environment"], "gamma")
+        conformance.evidence_files.assert_not_called()
         self.assertFalse(
             any(
                 call.args[0][1] == "ext.first_party.http_authority"
@@ -227,7 +270,7 @@ class StackctlProviderReadinessContractTest(unittest.TestCase):
                     mock.patch.object(stackctl, "_selected_profile_commands", return_value=[]),
                     mock.patch.object(
                         stackctl,
-                        "_runtime_media_t4_evidence",
+                        "_runtime_media_playback_evidence",
                         return_value={"status": "passed"},
                     ),
                     mock.patch.object(stackctl, "_write_summary_bundle"),
@@ -336,6 +379,10 @@ class StackctlProviderReadinessContractTest(unittest.TestCase):
                 raise AssertionError(f"unexpected subprocess: {argv}")
 
             with (
+                mock.patch.object(
+                    stackctl,
+                    "require_prod_hosted_release_redundancy",
+                ),
                 mock.patch.object(stackctl, "run", side_effect=run_preflight_then_package),
                 mock.patch.object(
                     stackctl,
@@ -399,6 +446,10 @@ class StackctlProviderReadinessContractTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             report_dir = Path(temporary) / "report"
             with (
+                mock.patch.object(
+                    stackctl,
+                    "require_prod_hosted_release_redundancy",
+                ),
                 mock.patch.object(
                     stackctl,
                     "run",

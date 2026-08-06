@@ -1,5 +1,5 @@
 # Code generated from quwoquan_service/generated/contract_graph.json.
-# Regenerate with verify_content_object_alert_coverage.py --write-recording-rules.
+# Regenerate with verify_object_alert_coverage.py --write.
 groups:
   - name: quwoquan_content_contract_media_original_access_fact
     rules:

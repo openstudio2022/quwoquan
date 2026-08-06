@@ -1,4 +1,7 @@
 // spec_ref: specs/feature-tree/chat-conversation/message-reliability-foundation/chat-offline-push-delivery/spec.md#gwt-002
+// readiness_case: get-notification-delivery-job-metrics-api
+// readiness_case: list-notification-delivery-job-dead-letters-api
+// readiness_case: recover-notification-delivery-job-api
 package api_integration
 
 import (
@@ -107,6 +110,23 @@ func TestDeliveryJobDeadLetterAndRecoveryUseOneAtomicAggregatePacket(t *testing.
 	handler, err := deliveryhttp.NewHandler(commands, queries)
 	if err != nil {
 		t.Fatal(err)
+	}
+	metricsRecorder := httptest.NewRecorder()
+	handler.Routes().ServeHTTP(
+		metricsRecorder,
+		httptest.NewRequest(
+			http.MethodGet,
+			"/internal/notifications/delivery-jobs/metrics",
+			nil,
+		),
+	)
+	if metricsRecorder.Code != http.StatusOK {
+		t.Fatalf("metrics status=%d body=%s", metricsRecorder.Code, metricsRecorder.Body.String())
+	}
+	var metrics deliverydomain.NotificationDeliveryJobMetricsSnapshot
+	if err := json.Unmarshal(metricsRecorder.Body.Bytes(), &metrics); err != nil ||
+		metrics.DeadJobs != 1 {
+		t.Fatalf("delivery-job metrics=%+v err=%v", metrics, err)
 	}
 
 	listRecorder := httptest.NewRecorder()

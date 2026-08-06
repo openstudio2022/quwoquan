@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Mapping
 
-from core.control_types import AgentProvider, QueueBackend, QueueJobStage
+from core.control_types import QueueBackend, QueueJobStage
 from core.io import read_json
 from core.paths import OUTPUT_ROOT, execution_root
 from core.schema import assert_valid
@@ -21,7 +21,7 @@ from content.execution.agent.outcome import (
 )
 from content.execution.context import ExecutionContext
 from content.execution.coverage import coverage_entity_ids
-from content.execution.model_contract import execution_model_pair_for_execution
+from content.execution.model_contract import semantic_execution_binding_for_execution
 from content.execution.production_contracts import (
     assert_envelope_matches_job,
     validate_agent_result_envelope,
@@ -104,17 +104,18 @@ def _execution_context(execution_id: str) -> ExecutionContext:
 
     spec = store.load_spec(execution_id)
     policy = active_runtime_policy()
-    model = execution_model_pair_for_execution(execution_id).author
+    semantic_binding = semantic_execution_binding_for_execution(execution_id)
+    model = semantic_binding.pair.author
     return ExecutionContext(
         execution_id=execution_id,
         entity_ids=tuple(coverage_entity_ids(spec)),
         spec=spec,
         managed=True,
-        runtime=policy.cursor_runtime,
+        runtime=semantic_binding.runtime,
         max_workers=policy.author_workers,
         model=model.model_id,
         model_parameters=model.parameters,
-        agent_provider=AgentProvider(policy.cursor_provider.value),
+        agent_provider=model.provider,
     )
 
 

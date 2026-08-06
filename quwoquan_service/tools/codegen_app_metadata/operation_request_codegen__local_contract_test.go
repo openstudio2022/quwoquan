@@ -2,7 +2,7 @@ package main
 
 import (
 	"encoding/json"
-	"os"
+	"fmt"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -228,6 +228,7 @@ func TestApplyOperationPaginationContractAddsOneCanonicalLimitBoundary(
 				ClientDefault: "GeneratedContentPostGetFeedPolicy.defaultItems",
 			}},
 		},
+		"none",
 		appRequestBindings{Query: []appRequestBinding{{
 			Name:  "limit",
 			Field: "limit",
@@ -252,6 +253,7 @@ func TestApplyOperationPaginationContractOwnsNumericClientDefault(t *testing.T) 
 			Name:   "ListHotQueriesQuery",
 			Fields: []fieldDef{{Name: "limit", Type: "int"}},
 		},
+		"none",
 		appRequestBindings{Query: []appRequestBinding{{
 			Name: "limit", Field: "limit",
 		}}},
@@ -272,6 +274,7 @@ func TestApplyOperationPaginationContractOwnsNumericClientDefault(t *testing.T) 
 				Name: "limit", Type: "int", ClientDefault: "9",
 			}},
 		},
+		"none",
 		appRequestBindings{Query: []appRequestBinding{{
 			Name: "limit", Field: "limit",
 		}}},
@@ -279,6 +282,80 @@ func TestApplyOperationPaginationContractOwnsNumericClientDefault(t *testing.T) 
 	)
 	if err == nil || !strings.Contains(err.Error(), "differs from policy default") {
 		t.Fatalf("pagination accepted a conflicting numeric client default: %v", err)
+	}
+}
+
+func TestApplyOperationPaginationContractAcceptsCanonicalObjectBodyLimit(
+	t *testing.T,
+) {
+	model, err := applyOperationPaginationContract(
+		"chat.message.SyncMessages",
+		requestModelSpec{
+			Name: "ChatSyncMessagesQuery",
+			Fields: []fieldDef{{
+				Name:          "limit",
+				Type:          "int",
+				ClientDefault: "500",
+			}},
+		},
+		"object",
+		appRequestBindings{},
+		&appPaginationPolicy{DefaultItems: 500, MaximumItems: 500},
+	)
+	if err != nil {
+		t.Fatalf("applyOperationPaginationContract() error = %v", err)
+	}
+	for _, required := range []string{"POSITIVE", "MAX_500"} {
+		if !containsString(model.Fields[0].Constraints, required) {
+			t.Fatalf(
+				"object-body pagination constraints = %#v, missing %q",
+				model.Fields[0].Constraints,
+				required,
+			)
+		}
+	}
+	if model.Pagination == nil ||
+		model.Pagination.Field != "limit" ||
+		model.Pagination.DefaultItems != 500 ||
+		model.Pagination.MaximumItems != 500 {
+		t.Fatalf("object-body pagination metadata = %#v", model.Pagination)
+	}
+
+	var rendered strings.Builder
+	if err := renderRequestModel(&rendered, model, nil); err != nil {
+		t.Fatalf("renderRequestModel() error = %v", err)
+	}
+	for _, expected := range []string{
+		"static const int defaultLimit = 500;",
+		"static const int maximumLimit = 500;",
+	} {
+		if !strings.Contains(rendered.String(), expected) {
+			t.Fatalf(
+				"generated request model misses %q:\n%s",
+				expected,
+				rendered.String(),
+			)
+		}
+	}
+}
+
+func TestRenderRequestModelRejectsDetachedPaginationConstants(t *testing.T) {
+	var rendered strings.Builder
+	err := renderRequestModel(
+		&rendered,
+		requestModelSpec{
+			Name:   "DetachedPaginationQuery",
+			Fields: []fieldDef{{Name: "cursor", Type: "string"}},
+			Pagination: &requestPaginationSpec{
+				Field:        "limit",
+				DefaultItems: 20,
+				MaximumItems: 20,
+			},
+		},
+		nil,
+	)
+	if err == nil || !strings.Contains(err.Error(), "field limit is absent") {
+		t.Fatalf("detached pagination constants error = %v", err)
 	}
 }
 
@@ -925,26 +1002,170 @@ func TestValidateCanonicalRequestEnumFieldUsesEnumRefAsSingleTruth(t *testing.T)
 	}
 }
 
-func TestAcceptedAppRequestTypedEnumsAreCanonicalSingleTrack(t *testing.T) {
-	lockPath := filepath.Join(
-		"..",
-		"..",
-		"..",
-		"quwoquan_app",
-		"tool",
-		"cloud_codegen",
-		"contract_graph.lock.json",
-	)
+func currentSourceAppOperations(t *testing.T) []appExposedOperation {
+	t.Helper()
 	initializeTestContractGraph(t)
-	lockBytes, err := os.ReadFile(lockPath)
+	sourceOperations := activeMetadataSource.Graph().Operations
+	payload, err := json.Marshal(sourceOperations)
 	if err != nil {
-		t.Fatalf("read accepted App operation lock: %v", err)
+		t.Fatalf("encode current source operation catalog: %v", err)
 	}
-	var lock appContractLock
-	if err := json.Unmarshal(lockBytes, &lock); err != nil {
-		t.Fatalf("decode accepted App operation lock: %v", err)
+	var operations []appExposedOperation
+	if err := json.Unmarshal(payload, &operations); err != nil {
+		t.Fatalf("decode current source operation catalog: %v", err)
 	}
-	activeContractLock = lock
+	for index := range operations {
+		operations[index].CanonicalOperationID = sourceOperations[index].ID
+		operations[index].LocalOperationID = sourceOperations[index].LocalID
+	}
+	return operations
+}
+
+func currentSourceAppClientContractLock(t *testing.T) appContractLock {
+	t.Helper()
+	lock := appContractLock{}
+	for _, operation := range currentSourceAppOperations(t) {
+		if operation.ClientContract == nil {
+			continue
+		}
+		lock.AppExposedOperations = append(
+			lock.AppExposedOperations,
+			operation,
+		)
+	}
+	if len(lock.AppExposedOperations) == 0 {
+		t.Fatal("current source catalog contains no App client contract")
+	}
+	return lock
+}
+
+// spec_ref: specs/feature-tree/runtime/runtime-codegen/struct-repo-handler-migration-generation/spec.md#gwt-001
+func TestCurrentSourceSearchOwnersAreCanonicalAndInternalRecoveryIsNotAppExposed(t *testing.T) {
+	const currentHomepageSearchID = "entity.homepage.SearchHomepages"
+	const retiredHomepageSearchID = "entity.homepage_search_item_view.SearchHomepages"
+	const currentRecoveryID = "search.search_request_fact.RecoverSearchAccountClosureDeadLetter"
+	const retiredRecoveryID = "search.recent_search_state.RecoverSearchAccountClosureDeadLetter"
+
+	operations := currentSourceAppOperations(t)
+	var homepageSearch *appExposedOperation
+	var recovery *appExposedOperation
+	for index := range operations {
+		operation := &operations[index]
+		switch operation.CanonicalOperationID {
+		case currentHomepageSearchID:
+			homepageSearch = operation
+		case currentRecoveryID:
+			recovery = operation
+		case retiredHomepageSearchID, retiredRecoveryID:
+			t.Fatalf(
+				"current source catalog retained retired operation owner %s",
+				operation.CanonicalOperationID,
+			)
+		}
+	}
+	if homepageSearch == nil {
+		t.Fatalf("current source catalog is missing %s", currentHomepageSearchID)
+	}
+	if homepageSearch.ObjectID != "entity.homepage" || homepageSearch.ClientContract == nil {
+		t.Fatalf(
+			"%s owner/client contract = %s/%v, want entity.homepage/non-nil",
+			currentHomepageSearchID,
+			homepageSearch.ObjectID,
+			homepageSearch.ClientContract,
+		)
+	}
+	if recovery == nil {
+		t.Fatalf("current source catalog is missing %s", currentRecoveryID)
+	}
+	if recovery.ObjectID != "search.search_request_fact" ||
+		recovery.Principal != "operator" ||
+		recovery.ClientContract != nil {
+		t.Fatalf(
+			"%s owner/principal/client contract = %s/%s/%v, want search.search_request_fact/operator/nil",
+			currentRecoveryID,
+			recovery.ObjectID,
+			recovery.Principal,
+			recovery.ClientContract,
+		)
+	}
+
+	appSurface := currentSourceAppClientContractLock(t)
+	seenHomepageSearch := false
+	var feedOperation *appExposedOperation
+	for _, operation := range appSurface.AppExposedOperations {
+		switch operation.CanonicalOperationID {
+		case currentHomepageSearchID:
+			seenHomepageSearch = true
+		case "content.post.GetFeed":
+			operation := operation
+			feedOperation = &operation
+		case currentRecoveryID, retiredHomepageSearchID, retiredRecoveryID:
+			t.Fatalf(
+				"non-App or retired operation entered App codegen surface: %s",
+				operation.CanonicalOperationID,
+			)
+		}
+	}
+	if !seenHomepageSearch {
+		t.Fatalf("App codegen surface is missing %s", currentHomepageSearchID)
+	}
+	if feedOperation == nil {
+		t.Fatal("App codegen surface is missing content.post.GetFeed policy owner")
+	}
+
+	appDir := t.TempDir()
+	if err := writeGeneratedOperationContracts(
+		appDir,
+		appContractLock{AppExposedOperations: []appExposedOperation{
+			*homepageSearch,
+			*feedOperation,
+		}},
+		map[string]operationRequestArtifact{
+			currentHomepageSearchID: {
+				RequestType: homepageSearch.RequestEntity,
+				Encoder: generatedOperationRequestEncoder(
+					currentHomepageSearchID,
+				),
+			},
+			"content.post.GetFeed": {
+				RequestType: feedOperation.RequestEntity,
+				Encoder: generatedOperationRequestEncoder(
+					"content.post.GetFeed",
+				),
+			},
+		},
+	); err != nil {
+		t.Fatal(err)
+	}
+	generated := readGeneratedTestFile(t, filepath.Join(
+		appDir,
+		"packages/quwoquan_cloud_contracts/lib/src/generated/operation_contracts.g.dart",
+	))
+	for _, expected := range []string{
+		`static const String entityHomepageSearchHomepages = "entity.homepage.SearchHomepages";`,
+		`entityHomepageSearchHomepages(`,
+		`"entity.homepage.SearchHomepages": CloudOperationContract(`,
+		`encodeEntityHomepageSearchHomepagesGeneratedRequest`,
+	} {
+		if !strings.Contains(generated, expected) {
+			t.Fatalf("canonical homepage search App surface is missing %q", expected)
+		}
+	}
+	for _, forbidden := range []string{
+		retiredHomepageSearchID,
+		currentRecoveryID,
+		retiredRecoveryID,
+		"entityHomepageSearchItemViewSearchHomepages",
+		"searchSearchRequestFactRecoverSearchAccountClosureDeadLetter",
+	} {
+		if strings.Contains(generated, forbidden) {
+			t.Fatalf("App codegen surface retained non-App or retired operation %q", forbidden)
+		}
+	}
+}
+
+func TestCurrentSourceAppRequestTypedEnumsAreCanonicalSingleTrack(t *testing.T) {
+	lock := currentSourceAppClientContractLock(t)
 	enumValues, err := loadCanonicalRequestEnumValues()
 	if err != nil {
 		t.Fatalf("load canonical request enums: %v", err)
@@ -953,10 +1174,7 @@ func TestAcceptedAppRequestTypedEnumsAreCanonicalSingleTrack(t *testing.T) {
 		t.Fatal("canonical enum catalog misses CircleGroupVisibility")
 	}
 	violations := make([]string, 0)
-	for _, operation := range activeContractLock.AppExposedOperations {
-		if operation.ClientContract == nil {
-			continue
-		}
+	for _, operation := range lock.AppExposedOperations {
 		model, _, err := loadOperationRequestModel(
 			operation,
 			strings.TrimSpace(operation.RequestEntity),
@@ -982,31 +1200,10 @@ func TestAcceptedAppRequestTypedEnumsAreCanonicalSingleTrack(t *testing.T) {
 	}
 }
 
-func TestAcceptedAppRequestDefaultsAreConsistent(t *testing.T) {
-	lockPath := filepath.Join(
-		"..",
-		"..",
-		"..",
-		"quwoquan_app",
-		"tool",
-		"cloud_codegen",
-		"contract_graph.lock.json",
-	)
-	initializeTestContractGraph(t)
-	lockBytes, err := os.ReadFile(lockPath)
-	if err != nil {
-		t.Fatalf("read accepted App operation lock: %v", err)
-	}
-	var lock appContractLock
-	if err := json.Unmarshal(lockBytes, &lock); err != nil {
-		t.Fatalf("decode accepted App operation lock: %v", err)
-	}
-	activeContractLock = lock
+func TestCurrentSourceAppRequestDefaultsAreConsistent(t *testing.T) {
+	lock := currentSourceAppClientContractLock(t)
 	violations := make([]string, 0)
-	for _, operation := range activeContractLock.AppExposedOperations {
-		if operation.ClientContract == nil {
-			continue
-		}
+	for _, operation := range lock.AppExposedOperations {
 		model, _, err := loadOperationRequestModel(
 			operation,
 			strings.TrimSpace(operation.RequestEntity),
@@ -1027,6 +1224,97 @@ func TestAcceptedAppRequestDefaultsAreConsistent(t *testing.T) {
 			"App request defaults are contradictory:\n%s",
 			strings.Join(violations, "\n"),
 		)
+	}
+}
+
+// spec_ref: specs/feature-tree/runtime/runtime-codegen/struct-repo-handler-migration-generation/spec.md#gwt-001
+func TestCurrentSourcePaginationPublishesPerRequestLimits(t *testing.T) {
+	want := map[string]struct {
+		requestType string
+		defaultItem int
+		maximumItem int
+	}{
+		"chat.chat_inbox_view.ListInbox": {
+			requestType: "ChatListInboxQuery",
+			defaultItem: 50,
+			maximumItem: 50,
+		},
+		"chat.message.SyncMessages": {
+			requestType: "ChatSyncMessagesQuery",
+			defaultItem: 500,
+			maximumItem: 500,
+		},
+		"content.post.GetFeed": {
+			requestType: "ContentDiscoveryFeedQuery",
+			defaultItem: 20,
+			maximumItem: 20,
+		},
+	}
+	seen := map[string]struct{}{}
+	for _, operation := range currentSourceAppClientContractLock(t).AppExposedOperations {
+		expected, exists := want[operation.CanonicalOperationID]
+		if !exists {
+			continue
+		}
+		model, _, err := loadOperationRequestModel(
+			operation,
+			strings.TrimSpace(operation.RequestEntity),
+		)
+		if err != nil {
+			t.Fatalf("load %s request model: %v", operation.CanonicalOperationID, err)
+		}
+		bindings := appRequestBindings{}
+		if operation.RequestBindings != nil {
+			bindings = *operation.RequestBindings
+		}
+		model = projectClientRequestModel(model, bindings)
+		model, err = applyOperationPaginationContract(
+			operation.CanonicalOperationID,
+			model,
+			operation.RequestBodyKind,
+			bindings,
+			operation.Pagination,
+		)
+		if err != nil {
+			t.Fatalf("apply %s pagination: %v", operation.CanonicalOperationID, err)
+		}
+		if model.Name != expected.requestType || model.Pagination == nil ||
+			model.Pagination.Field != "limit" ||
+			model.Pagination.DefaultItems != expected.defaultItem ||
+			model.Pagination.MaximumItems != expected.maximumItem {
+			t.Fatalf(
+				"%s request/pagination = %s/%#v, want %s/%d/%d",
+				operation.CanonicalOperationID,
+				model.Name,
+				model.Pagination,
+				expected.requestType,
+				expected.defaultItem,
+				expected.maximumItem,
+			)
+		}
+		var rendered strings.Builder
+		if err := renderRequestModel(&rendered, model, nil); err != nil {
+			t.Fatalf("render %s request model: %v", operation.CanonicalOperationID, err)
+		}
+		for _, constant := range []string{
+			fmt.Sprintf("static const int defaultLimit = %d;", expected.defaultItem),
+			fmt.Sprintf("static const int maximumLimit = %d;", expected.maximumItem),
+		} {
+			if !strings.Contains(rendered.String(), constant) {
+				t.Fatalf("%s generated request misses %q", operation.CanonicalOperationID, constant)
+			}
+		}
+		seen[operation.CanonicalOperationID] = struct{}{}
+	}
+	if len(seen) != len(want) {
+		missing := make([]string, 0, len(want)-len(seen))
+		for operationID := range want {
+			if _, exists := seen[operationID]; !exists {
+				missing = append(missing, operationID)
+			}
+		}
+		sort.Strings(missing)
+		t.Fatalf("current App source misses pagination operations: %v", missing)
 	}
 }
 

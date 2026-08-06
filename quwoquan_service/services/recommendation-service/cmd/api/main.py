@@ -6,7 +6,7 @@ import os
 import time
 from urllib.parse import urlparse
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from prometheus_client import Counter, Histogram, make_asgi_app
 from pymongo import MongoClient
 from redis import Redis
@@ -19,7 +19,12 @@ from runtime_contract import bootstrap_runtime_contract_or_die
 
 runtime_config = bootstrap_runtime_contract_or_die()
 
-from api.score import get_scoring_facade, router as score_router  # noqa: E402
+from api.metrics import observe_score_duration, record_rec_request  # noqa: E402
+from api.score import get_scoring_facade, reload_scorers  # noqa: E402
+from internal.recommendation.recommendation_candidate_index_view.adapters.inbound.stream.gathering_lifecycle_consumer import (  # noqa: E402
+    CircleGatheringPublicReader,
+    GatheringLifecycleConsumer as CandidateGatheringLifecycleConsumer,
+)
 from internal.recommendation.recommendation_candidate_index_view.adapters.inbound.stream.post_lifecycle_consumer import (  # noqa: E402
     PostLifecycleConsumer as CandidatePostLifecycleConsumer,
 )
@@ -95,11 +100,26 @@ from internal.recommendation.recommendation_feedback_fact.infrastructure.mongo_s
 from internal.recommendation.recommendation_model_release.adapters.inbound.http.router import (  # noqa: E402
     build_router as build_model_release_router,
 )
+from internal.recommendation.recommendation_model_release.adapters.inbound.http.scoring_router import (  # noqa: E402
+    build_scoring_router,
+)
 from internal.recommendation.recommendation_model_release.application.command_facade import (  # noqa: E402
     RecommendationModelReleaseCommandFacade,
 )
+from internal.recommendation.recommendation_model_release.application.outbox_relay import (  # noqa: E402
+    RecommendationModelReleaseOutboxRelay,
+)
+from internal.recommendation.recommendation_model_release.application.model_runtime_coordinator import (  # noqa: E402
+    RecommendationModelRuntimeCoordinator,
+)
+from internal.recommendation.recommendation_model_release.adapters.inbound.stream.model_release_runtime_consumer import (  # noqa: E402
+    ModelReleaseRuntimeConsumer,
+)
 from internal.recommendation.recommendation_model_release.infrastructure.mongo_release_store import (  # noqa: E402
     MongoRecommendationModelReleaseStore,
+)
+from internal.recommendation.recommendation_model_release.infrastructure.redis_event_publisher import (  # noqa: E402
+    RedisRecommendationModelReleaseEventPublisher,
 )
 from internal.recommendation.recommendation_subject_closure_fact.adapters.inbound.stream.user_account_closed_consumer import (  # noqa: E402
     UserAccountClosedConsumer,
@@ -243,6 +263,12 @@ def _build_redis_client(scene: str):
     )
 
 
+def _reload_model_runtime() -> None:
+    reload_scorers()
+    refresh_rec_model_loaded_gauges()
+    refresh_capacity_metrics()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     refresh_rec_model_loaded_gauges()
@@ -260,6 +286,7 @@ async def lifespan(app: FastAPI):
     general_redis_client = _build_redis_client("general")
     recommendation_redis_client = _build_redis_client("rec")
     post_lifecycle_consumer = None
+    gathering_lifecycle_consumer = None
     premium_pool_consumer = None
     user_account_closed_consumer = None
     user_account_restriction_consumer = None
@@ -272,6 +299,8 @@ async def lifespan(app: FastAPI):
     tag_feedback_consumer = None
     feed_page_delivered_consumer = None
     experiment_policy_consumer = None
+    model_release_outbox_relay = None
+    model_release_runtime_consumer = None
     try:
         mongo_client.admin.command("ping")
         general_redis_client.ping()
@@ -308,6 +337,22 @@ async def lifespan(app: FastAPI):
         app.state.model_release_command_facade = (
             RecommendationModelReleaseCommandFacade(model_release_store)
         )
+        model_release_outbox_relay = RecommendationModelReleaseOutboxRelay(
+            model_release_store,
+            RedisRecommendationModelReleaseEventPublisher(general_redis_client),
+        )
+        model_release_outbox_relay.start()
+        app.state.model_release_outbox_relay = model_release_outbox_relay
+        model_release_runtime_consumer = ModelReleaseRuntimeConsumer(
+            redis_client=general_redis_client,
+            coordinator=RecommendationModelRuntimeCoordinator(_reload_model_runtime),
+            consumer=os.getenv(
+                "SERVICE_INSTANCE_ID",
+                "recommendation-model-runtime",
+            ),
+        )
+        model_release_runtime_consumer.start()
+        app.state.model_release_runtime_consumer = model_release_runtime_consumer
         experiment_policy_store = MongoExperimentPolicyStore(database)
         experiment_policy_store.ensure_indexes()
         experiment_assignments = ExperimentAssignments(
@@ -371,6 +416,28 @@ async def lifespan(app: FastAPI):
         )
         post_lifecycle_consumer.start()
         app.state.candidate_post_lifecycle_consumer = post_lifecycle_consumer
+        circle_service_base_url = (
+            os.getenv("CIRCLE_SERVICE_BASE_URL", "").strip()
+            or os.getenv("GATEWAY_BASE_URL", "").strip()
+        )
+        if not circle_service_base_url:
+            raise RuntimeError(
+                "recommendation-service requires CIRCLE_SERVICE_BASE_URL "
+                "or GATEWAY_BASE_URL for Gathering PublicCard projection"
+            )
+        gathering_lifecycle_consumer = CandidateGatheringLifecycleConsumer(
+            redis_client=general_redis_client,
+            projection=candidate_store,
+            public_cards=CircleGatheringPublicReader(circle_service_base_url),
+            consumer=os.getenv(
+                "SERVICE_INSTANCE_ID",
+                "recommendation-candidate-gathering",
+            ),
+        )
+        gathering_lifecycle_consumer.start()
+        app.state.candidate_gathering_lifecycle_consumer = (
+            gathering_lifecycle_consumer
+        )
         premium_pool_consumer = PremiumPoolConsumer(
             redis_client=general_redis_client,
             store=candidate_store,
@@ -490,6 +557,10 @@ async def lifespan(app: FastAPI):
         app.state.tag_feedback_consumer = tag_feedback_consumer
         yield
     finally:
+        if model_release_runtime_consumer is not None:
+            model_release_runtime_consumer.stop()
+        if model_release_outbox_relay is not None:
+            model_release_outbox_relay.stop()
         if feature_post_lifecycle_consumer is not None:
             feature_post_lifecycle_consumer.stop()
         if feature_content_behavior_consumer is not None:
@@ -514,6 +585,8 @@ async def lifespan(app: FastAPI):
             user_account_closed_consumer.stop()
         if post_lifecycle_consumer is not None:
             post_lifecycle_consumer.stop()
+        if gathering_lifecycle_consumer is not None:
+            gathering_lifecycle_consumer.stop()
         if premium_pool_consumer is not None:
             premium_pool_consumer.stop()
         recommendation_redis_client.close()
@@ -602,7 +675,68 @@ async def observe_http(request: Request, call_next):
     return response
 
 
-app.include_router(score_router)
+@app.get("/health")
+def health(request: Request) -> dict[str, str]:
+    candidate_consumer = getattr(request.app.state, "candidate_post_lifecycle_consumer", None)
+    gathering_consumer = getattr(
+        request.app.state,
+        "candidate_gathering_lifecycle_consumer",
+        None,
+    )
+    premium_consumer = getattr(request.app.state, "candidate_premium_pool_consumer", None)
+    experiment_policy_consumer = getattr(request.app.state, "experiment_policy_consumer", None)
+    closure_consumer = getattr(request.app.state, "user_account_closed_consumer", None)
+    feedback_consumer = getattr(request.app.state, "content_behavior_consumer", None)
+    exposure_consumer = getattr(request.app.state, "feed_page_delivered_consumer", None)
+    ranked_window_facade = getattr(request.app.state, "ranked_window_facade", None)
+    model_release_facade = getattr(request.app.state, "model_release_command_facade", None)
+    model_release_outbox_relay = getattr(request.app.state, "model_release_outbox_relay", None)
+    model_release_runtime_consumer = getattr(request.app.state, "model_release_runtime_consumer", None)
+    common_runtime_unready = (
+        model_release_facade is None
+        or model_release_outbox_relay is None
+        or model_release_runtime_consumer is None
+        or candidate_consumer is None
+        or gathering_consumer is None
+        or premium_consumer is None
+        or closure_consumer is None
+        or feedback_consumer is None
+        or exposure_consumer is None
+        or not candidate_consumer.healthy()
+        or not gathering_consumer.healthy()
+        or not premium_consumer.healthy()
+        or not closure_consumer.healthy()
+        or not feedback_consumer.healthy()
+        or not exposure_consumer.healthy()
+        or not model_release_outbox_relay.healthy()
+        or not model_release_runtime_consumer.healthy()
+    )
+    content_slice_only = getattr(request.app.state, "runtime_workload", "full") in {
+        "content-release",
+        "content-commercial",
+    }
+    scoring_runtime_unready = (
+        ranked_window_facade is None
+        or experiment_policy_consumer is None
+        or not experiment_policy_consumer.healthy()
+    )
+    if common_runtime_unready:
+        raise HTTPException(status_code=503, detail={"status": "not_ready"})
+    if scoring_runtime_unready and content_slice_only:
+        return {"status": "content_release_only"}
+    if scoring_runtime_unready:
+        raise HTTPException(status_code=503, detail={"status": "not_ready"})
+    return {"status": "ok"}
+
+
+app.include_router(
+    build_scoring_router(
+        facade=get_scoring_facade(),
+        token_verifier=ServiceTokenVerifier.from_env(),
+        record_request=record_rec_request,
+        observe_duration=observe_score_duration,
+    )
+)
 app.include_router(
     build_model_release_router(
         facade_provider=_model_release_command_facade,

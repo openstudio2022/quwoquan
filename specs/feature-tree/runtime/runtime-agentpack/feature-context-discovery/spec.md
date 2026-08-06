@@ -27,6 +27,7 @@
 ### REQ-001 唯一 owner 与最小父链
 
 - 同优先级多个 L1 认领路径时必须阻断；成功输出不得依赖 tracked index、registry 或状态文件。
+- canonical App 对象测试 `test/<layer>/<domain>/<context>/<object>/...` 必须投影到同 domain 的 production engineering root 决定 owner；`quwoquan_app` 项目级构建归属不得吞并业务对象测试，legacy/未知 domain 必须 `GATE_BLOCK`。
 
 ## 4. 契约引用
 
@@ -40,6 +41,7 @@
 - GIVEN 一个存在且被某 L1 工程根唯一认领的代码路径。
 - WHEN Agent 生成 feature context。
 - THEN 输出唯一 L1 与目标父链、相关验收和当前 OPEN；若存在同优先级重复 owner 则返回 GATE_BLOCK。
+- AND canonical App 对象测试与同 domain production source 得到相同 L1 owner，项目级 App fallback 不得改变该结果。
 
 ## 6. 依赖
 

@@ -4,27 +4,27 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
-from PIL import Image
 import pytest
 import yaml
-
 from content.release.canonical import creator_projection
 from content.release.canonical.application import apply_object_transaction
+from content.release.canonical.canonical_inventory import load_or_bootstrap_inventory
 from content.release.canonical.object_transaction_audit import (
     audit_object_transaction,
-    validate_canonical_publish,
+    validate_publish_invariants,
 )
 from content.release.canonical.post_transaction import (
     ObjectTransactionError,
     build_post_object_transaction_package,
 )
-from core.source_digest import current_source_digest
 from core.schema import validate_result
-from core.tree_integrity import tree_integrity_stats
-
+from core.source_digest import current_source_digest
+from governance.coverage import distribution
+from PIL import Image
 
 EXECUTION_ID = "20260718--travel-image-cold-start--test-region-a--scale-901"
 POST_REF = "image/西湖/光影"
@@ -72,6 +72,20 @@ def _write_json(path: Path, payload: object) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
 
 
+def _force_commercial_lifecycle(monkeypatch: pytest.MonkeyPatch) -> None:
+    research_policy = distribution.load_content_distribution_policy()
+    commercial_policy = replace(
+        research_policy,
+        product_lifecycle_state=distribution.ProductLifecycleState.COMMERCIAL,
+        release_class=distribution.ReleaseClass.COMMERCIAL,
+    )
+    monkeypatch.setattr(
+        distribution,
+        "load_content_distribution_policy",
+        lambda: commercial_policy,
+    )
+
+
 def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str]:
     execution = tmp_path / "tasks" / EXECUTION_ID
     post = execution / "posts" / POST_REF
@@ -106,6 +120,7 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str]:
                     "license": "CC BY 4.0",
                     "platform": "Wikimedia Commons",
                     "fetchedAt": "2026-07-18T04:00:00Z",
+                    "usageScope": "app_publish",
                     "modelReleaseStatus": "not_required",
                 }
             ]
@@ -144,6 +159,8 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str]:
                     "license": "CC BY 4.0",
                     "termsUrl": "https://creativecommons.org/licenses/by/4.0/",
                     "authorizationProof": "https://commons.wikimedia.org/wiki/File:Example.jpg",
+                    "usageScope": "app_publish",
+                    "modelReleaseStatus": "not_required",
                     "rightsAuditStatus": "verified",
                     "rightsAuditIssues": [],
                     "sha256": digest,
@@ -177,7 +194,6 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str]:
         (publish / relative).mkdir(parents=True, exist_ok=True)
     _copy_creator_avatar_cas(publish)
     package = execution / "evidence/object-transactions" / transaction_id
-    output = tmp_path / "output"
     return execution, package, publish, transaction_id
 
 
@@ -195,7 +211,9 @@ def test_post_transaction_atomically_projects_creator_and_post(tmp_path: Path) -
         output_root=output,
         package_root=package,
         transaction_id=transaction_id,
-        expected_canonical_merkle=tree_integrity_stats(publish)["merkleRoot"],
+        expected_canonical_merkle=load_or_bootstrap_inventory(publish)["stats"][
+            "merkleRoot"
+        ],
     )
     apply_object_transaction(
         publish_root=publish,
@@ -212,7 +230,7 @@ def test_post_transaction_atomically_projects_creator_and_post(tmp_path: Path) -
     )
     assert datetime.fromisoformat(published_manifest["publishedAt"]).tzinfo is not None
     assert published_manifest["sourceTaskId"] == EXECUTION_ID
-    assert validate_canonical_publish(publish)["status"] == "passed"
+    assert validate_publish_invariants(publish)["status"] == "passed"
 
 
 def test_text_only_post_transaction_does_not_require_media_asset(tmp_path: Path) -> None:
@@ -240,7 +258,9 @@ def test_text_only_post_transaction_does_not_require_media_asset(tmp_path: Path)
 
 def test_travel_commercial_asset_blocks_unverified_rights(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    _force_commercial_lifecycle(monkeypatch)
     execution, package, _publish, transaction_id = _fixture(tmp_path)
     manifest_path = execution / "posts" / POST_REF / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -280,7 +300,9 @@ def test_travel_commercial_asset_blocks_unverified_rights(
 
 def test_travel_commercial_asset_blocks_unverified_collection_page_rights(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    _force_commercial_lifecycle(monkeypatch)
     execution, package, _publish, transaction_id = _fixture(tmp_path)
     manifest_path = execution / "posts" / POST_REF / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -442,6 +464,7 @@ def test_video_transaction_closes_poster_cas_and_path_bound_source_rights(
                     "license": "CC BY 4.0",
                     "platform": "Wikimedia Commons",
                     "fetchedAt": "2026-07-18T04:00:00Z",
+                    "usageScope": "app_publish",
                     "modelReleaseStatus": "not_required",
                 }
             ]
@@ -500,6 +523,8 @@ def test_video_transaction_closes_poster_cas_and_path_bound_source_rights(
                     "mimeType": "video/mp4",
                     "width": 1080,
                         "height": 1920,
+                        "usageScope": "app_publish",
+                        "modelReleaseStatus": "not_required",
                         "rightsAuditStatus": "verified",
                         "rightsAuditIssues": [],
                 },
@@ -511,6 +536,8 @@ def test_video_transaction_closes_poster_cas_and_path_bound_source_rights(
                     "sourceAssetRefs": [frame_ref],
                     "sha256": "sha256:" + hashlib.sha256(poster.read_bytes()).hexdigest(),
                         "mimeType": "image/webp",
+                        "usageScope": "app_publish",
+                        "modelReleaseStatus": "not_required",
                         "rightsAuditStatus": "verified",
                         "rightsAuditIssues": [],
                 },
@@ -570,7 +597,9 @@ def test_video_transaction_closes_poster_cas_and_path_bound_source_rights(
         output_root=output,
         package_root=package_root,
         transaction_id=transaction_id,
-        expected_canonical_merkle=tree_integrity_stats(publish)["merkleRoot"],
+        expected_canonical_merkle=load_or_bootstrap_inventory(publish)["stats"][
+            "merkleRoot"
+        ],
     )
     apply_object_transaction(
         publish_root=publish,
@@ -579,4 +608,4 @@ def test_video_transaction_closes_poster_cas_and_path_bound_source_rights(
         transaction_id=transaction_id,
         dry_run_attestation_sha256=str(audit["dryRunAttestationSha256"]),
     )
-    assert validate_canonical_publish(publish)["status"] == "passed"
+    assert validate_publish_invariants(publish)["status"] == "passed"

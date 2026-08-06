@@ -1,4 +1,5 @@
 # spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-suspension-and-appeal-lifecycle/spec.md#gwt-003
+# readiness_case: project-candidate-account-restriction-local
 import json
 
 from internal.recommendation.recommendation_candidate_index_view.adapters.inbound.stream.user_account_restriction_consumer import (

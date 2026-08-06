@@ -60,13 +60,23 @@ class GammaCommercialRunnersLocalContractTest(unittest.TestCase):
         api_runner = (ROOT / case["path"]).read_text(encoding="utf-8")
         device_runner = (
             ROOT
-            / "quwoquan_app/scripts/gamma/run_local_gamma_onboarding_author_impact_uat.sh"
+            / "quwoquan_app/scripts/tools/gamma/onboarding_author_impact_uat.sh"
         ).read_text(encoding="utf-8")
 
         self.assertIn("health --target", api_runner)
-        self.assertIn("run_local_gamma_t3.py", api_runner)
+        self.assertIn("run_local_gamma_release_consumer_api.py", api_runner)
         self.assertIn("open_reference_acceptance_session", api_runner)
         self.assertIn(
+            "test/api_integration/service/content_service/content/content_behavior_fact/"
+            "onboarding_interest_gamma__api_integration_test.dart",
+            api_runner,
+        )
+        self.assertIn(
+            "test/api_integration/service/content_service/content/post/"
+            "author_impact_gamma__api_integration_test.dart",
+            api_runner,
+        )
+        self.assertNotIn(
             "onboarding_author_impact_gamma__api_integration_test.dart",
             api_runner,
         )

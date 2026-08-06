@@ -1,8 +1,22 @@
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-006
+// readiness_case: resolve-tag-local
+// readiness_case: list-tag-children-local
+// readiness_case: shared-tags-local
+// readiness_case: inverted-objects-local
+// readiness_case: list-dimensions-local
+// readiness_case: suggest-tags-local
+// readiness_case: validate-tag-refs-local
+// readiness_case: search-tags-local
+// readiness_case: related-tags-local
+// readiness_case: search-by-tags-local
+// readiness_case: tag-cooccurrence-local
+// readiness_case: related-objects-local
 package local_contract
 
 import (
 	"context"
 	"reflect"
+	"strings"
 	"testing"
 
 	indexmodel "quwoquan_service/services/tag-service/internal/tag/object_tag_index_view/domain/model"
@@ -85,28 +99,68 @@ func (r migratedActiveReleaseReader) ActiveReleaseID(context.Context) (string, b
 	return r.releaseID, r.found, nil
 }
 
-type migratedObjectTagIndexReader struct{}
+type migratedObjectTagIndexReader struct {
+	indexes []indexmodel.ObjectTagIndex
+}
 
-func (migratedObjectTagIndexReader) FindByObject(context.Context, string, string) (*indexmodel.ObjectTagIndex, error) {
+func (r migratedObjectTagIndexReader) FindByObject(
+	_ context.Context,
+	objectID string,
+	objectType string,
+) (*indexmodel.ObjectTagIndex, error) {
+	for _, index := range r.indexes {
+		if index.ObjectID == objectID && index.ObjectType == objectType {
+			found := index
+			return &found, nil
+		}
+	}
 	return nil, nil
 }
 
-func (migratedObjectTagIndexReader) FindObjectsByTagRef(
-	context.Context,
-	string,
-	string,
-	int64,
+func (r migratedObjectTagIndexReader) FindObjectsByTagRef(
+	_ context.Context,
+	tagRef string,
+	objectType string,
+	limit int64,
 ) ([]indexmodel.ObjectTagIndex, error) {
-	return nil, nil
+	return r.findByTag(tagRef, objectType, limit, false), nil
 }
 
-func (migratedObjectTagIndexReader) FindObjectsByTagRefSubtree(
-	context.Context,
-	string,
-	string,
-	int64,
+func (r migratedObjectTagIndexReader) FindObjectsByTagRefSubtree(
+	_ context.Context,
+	tagRef string,
+	objectType string,
+	limit int64,
 ) ([]indexmodel.ObjectTagIndex, error) {
-	return nil, nil
+	return r.findByTag(tagRef, objectType, limit, true), nil
+}
+
+func (r migratedObjectTagIndexReader) findByTag(
+	tagRef string,
+	objectType string,
+	limit int64,
+	includeDescendants bool,
+) []indexmodel.ObjectTagIndex {
+	out := make([]indexmodel.ObjectTagIndex, 0)
+	for _, index := range r.indexes {
+		if objectType != "" && index.ObjectType != objectType {
+			continue
+		}
+		matched := false
+		for _, candidate := range index.TagRefs {
+			if candidate == tagRef || (includeDescendants && strings.HasPrefix(candidate, tagRef+"/")) {
+				matched = true
+				break
+			}
+		}
+		if matched {
+			out = append(out, index)
+			if limit > 0 && int64(len(out)) >= limit {
+				break
+			}
+		}
+	}
+	return out
 }
 
 func TestTagNodeViewResolvesThroughApplicationPorts(t *testing.T) {
@@ -225,5 +279,80 @@ func TestValidateTagRefsAcceptsOnlyActiveLeaves(t *testing.T) {
 	}
 	if len(mismatch.Valid) != 0 || !reflect.DeepEqual(mismatch.Invalid, []string{"Topic/leaf"}) {
 		t.Fatalf("release mismatch must fail closed, got %#v", mismatch)
+	}
+}
+
+func TestTagNodeViewExercisesEveryCanonicalQueryFacade(t *testing.T) {
+	const releaseID = "release-readiness"
+	const food = "Topic/旅行/美食"
+	const hiking = "Topic/旅行/徒步"
+	nodes := map[string]*model.TagNode{
+		"Topic/旅行": {
+			TagRef: "Topic/旅行", Group: "Topic", Label: "旅行",
+			ReleaseID: releaseID, LifecycleStatus: "active",
+		},
+		food: {
+			TagRef: food, ParentTagRef: "Topic/旅行", Group: "Topic",
+			Label: "美食", LabelEn: "Food", ReleaseID: releaseID,
+			LifecycleStatus: "active",
+		},
+		hiking: {
+			TagRef: hiking, ParentTagRef: "Topic/旅行", Group: "Topic",
+			Label: "徒步", LabelEn: "Hiking", ReleaseID: releaseID,
+			LifecycleStatus: "active",
+		},
+		"Topic/旅行/玩法": {
+			TagRef: "Topic/旅行/玩法", ParentTagRef: "Topic/旅行", Group: "Topic",
+			NodeKind: "dimension", Label: "玩法", LabelEn: "Activities",
+			MaxDepth: 2, PathPolicy: "any-depth", ReleaseID: releaseID,
+			LifecycleStatus: "active",
+		},
+	}
+	objects := migratedObjectTagIndexReader{indexes: []indexmodel.ObjectTagIndex{
+		{ObjectID: "post-a", ObjectType: "post", TagRefs: []string{food, hiking}},
+		{ObjectID: "post-b", ObjectType: "post", TagRefs: []string{food}},
+	}}
+	service := application.NewTagService(
+		migratedTagNodeReader{nodes: nodes},
+		objects,
+		migratedActiveReleaseReader{releaseID: releaseID, found: true},
+	)
+	ctx := context.Background()
+
+	if got, err := service.Resolve(ctx, food); err != nil || got == nil {
+		t.Fatalf("Resolve() = %+v, %v", got, err)
+	}
+	if got, err := service.ListChildren(ctx, "Topic/旅行", 10); err != nil || len(got) < 3 {
+		t.Fatalf("ListChildren() = %+v, %v", got, err)
+	}
+	if got, err := service.SharedTags(ctx, "post-a", "post", "post-b", "post", 10); err != nil || len(got) != 1 {
+		t.Fatalf("SharedTags() = %+v, %v", got, err)
+	}
+	if got, err := service.Inverted(ctx, food, "post", 10, false); err != nil || got.ObjectCount != 2 {
+		t.Fatalf("Inverted() = %+v, %v", got, err)
+	}
+	if got, err := service.ListDimensions(ctx); err != nil || len(got) != 1 {
+		t.Fatalf("ListDimensions() = %+v, %v", got, err)
+	}
+	if got, err := service.Suggest(ctx, "美食", "Topic", 10); err != nil || len(got) != 1 {
+		t.Fatalf("Suggest() = %+v, %v", got, err)
+	}
+	if got, err := service.ValidateTagRefs(ctx, releaseID, []string{food}); err != nil || len(got.Valid) != 1 {
+		t.Fatalf("ValidateTagRefs() = %+v, %v", got, err)
+	}
+	if got, err := service.SearchTags(ctx, "美食", "Topic", 10); err != nil || len(got) != 1 {
+		t.Fatalf("SearchTags() = %+v, %v", got, err)
+	}
+	if got, err := service.RelatedTags(ctx, food, 10); err != nil || len(got) != 1 {
+		t.Fatalf("RelatedTags() = %+v, %v", got, err)
+	}
+	if got, err := service.SearchByTags(ctx, []string{food, hiking}, "post", 10); err != nil || len(got) != 2 {
+		t.Fatalf("SearchByTags() = %+v, %v", got, err)
+	}
+	if got, err := service.TagCooccurrence(ctx, food, 1, 10); err != nil || len(got) != 1 {
+		t.Fatalf("TagCooccurrence() = %+v, %v", got, err)
+	}
+	if got, err := service.RelatedObjects(ctx, "post-a", "post", 10); err != nil || len(got) != 1 {
+		t.Fatalf("RelatedObjects() = %+v, %v", got, err)
 	}
 }

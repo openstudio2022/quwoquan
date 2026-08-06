@@ -25,55 +25,55 @@ var (
 // AppErrorFromInvalidExternalRequest returns *AppError for INTEGRATION.USER.invalid_external_request (user_message from errors.yaml).
 func AppErrorFromInvalidExternalRequest(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrInvalidExternalRequest.Error()))
-	return rerrors.NewAppError(code, "外部请求参数不完整", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "外部请求参数不完整", debugMessage).WithMetadata("invalid_argument", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromUnsupportedOperation returns *AppError for INTEGRATION.USER.unsupported_operation (user_message from errors.yaml).
 func AppErrorFromUnsupportedOperation(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrUnsupportedOperation.Error()))
-	return rerrors.NewAppError(code, "暂不支持该外部交互能力", debugMessage).WithMetadata("unsupported_operation", 400).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "暂不支持该外部交互能力", debugMessage).WithMetadata("unsupported_operation", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromDeadLetterRecoveryConflict returns *AppError for INTEGRATION.USER.dead_letter_recovery_conflict (user_message from errors.yaml).
 func AppErrorFromDeadLetterRecoveryConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrDeadLetterRecoveryConflict.Error()))
-	return rerrors.NewAppError(code, "该恢复请求与已确认的任务不一致", debugMessage).WithMetadata("dead_letter_recovery_conflict", 409).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "该恢复请求与已确认的任务不一致", debugMessage).WithMetadata("dead_letter_recovery_conflict", 409).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromProviderTimeout returns *AppError for INTEGRATION.MIDDLEWARE.provider_timeout (user_message from errors.yaml).
 func AppErrorFromProviderTimeout(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrProviderTimeout.Error()))
-	return rerrors.NewAppError(code, "外部供应商响应超时，请稍后重试", debugMessage).WithMetadata("timeout", 0).WithRecovery("retry", 5)
+	return rerrors.NewAppError(code, "外部供应商响应超时，请稍后重试", debugMessage).WithMetadata("timeout", 0).WithRecoveryDirective("retry", "snackbar", 5)
 }
 
 // AppErrorFromProviderRejected returns *AppError for INTEGRATION.MIDDLEWARE.provider_rejected (user_message from errors.yaml).
 func AppErrorFromProviderRejected(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrProviderRejected.Error()))
-	return rerrors.NewAppError(code, "外部供应商暂时拒绝请求，请稍后重试", debugMessage).WithMetadata("upstream_rejected", 0).WithRecovery("retry", 5)
+	return rerrors.NewAppError(code, "外部供应商暂时拒绝请求，请稍后重试", debugMessage).WithMetadata("upstream_rejected", 0).WithRecoveryDirective("retry", "snackbar", 5)
 }
 
 // AppErrorFromExternalInteractionInternalError returns *AppError for INTEGRATION.SYSTEM.external_interaction_internal_error (user_message from errors.yaml).
 func AppErrorFromExternalInteractionInternalError(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrExternalInteractionInternalError.Error()))
-	return rerrors.NewAppError(code, "外部集成网关异常，请稍后重试", debugMessage).WithMetadata("internal_error", 500).WithRecovery("retry", 5)
+	return rerrors.NewAppError(code, "外部集成网关异常，请稍后重试", debugMessage).WithMetadata("internal_error", 500).WithRecoveryDirective("retry", "snackbar", 5)
 }
 
 // AppErrorFromSmsProviderTimeout returns *AppError for INTEGRATION.MIDDLEWARE.sms_provider_timeout (user_message from errors.yaml).
 func AppErrorFromSmsProviderTimeout(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrSmsProviderTimeout.Error()))
-	return rerrors.NewAppError(code, "短信供应商响应超时，请稍后重试", debugMessage).WithMetadata("timeout", 0).WithRecovery("retry", 5)
+	return rerrors.NewAppError(code, "短信供应商响应超时，请稍后重试", debugMessage).WithMetadata("timeout", 0).WithRecoveryDirective("retry", "snackbar", 5)
 }
 
 // AppErrorFromSmsProviderRejected returns *AppError for INTEGRATION.MIDDLEWARE.sms_provider_rejected (user_message from errors.yaml).
 func AppErrorFromSmsProviderRejected(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrSmsProviderRejected.Error()))
-	return rerrors.NewAppError(code, "短信供应商暂时不可用，请稍后重试", debugMessage).WithMetadata("upstream_rejected", 0).WithRecovery("retry", 5)
+	return rerrors.NewAppError(code, "短信供应商暂时不可用，请稍后重试", debugMessage).WithMetadata("upstream_rejected", 0).WithRecoveryDirective("retry", "snackbar", 5)
 }
 
 // AppErrorFromSmsOtpCodeRefInvalid returns *AppError for INTEGRATION.SYSTEM.sms_otp_code_ref_invalid (user_message from errors.yaml).
 func AppErrorFromSmsOtpCodeRefInvalid(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrSmsOtpCodeRefInvalid.Error()))
-	return rerrors.NewAppError(code, "验证码投递凭据无效，请重新获取验证码", debugMessage).WithMetadata("secret_invalid", 0).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "验证码投递凭据无效，请重新获取验证码", debugMessage).WithMetadata("secret_invalid", 0).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // IsTimeout reports context deadline exhaustion for provider calls.

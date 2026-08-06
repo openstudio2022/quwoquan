@@ -4,13 +4,24 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Mapping
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
+from content.release.canonical.release_header import validate_release_header
 from content.release.environment.app_uat_envelope import (
     AppUatEnvelopeError,
     build_app_uat_envelope,
+)
+from content.release.environment.release_readiness_closure import (
+    ReleaseReadinessClosureError,
+    validate_readiness_closure,
+)
+from content.release.environment.research_isolation_verification import (
+    ResearchIsolationVerificationError,
+    load_research_isolation_verification,
+    research_isolation_file_digest,
 )
 from content.release.model import DataSourceOwner, ReleaseKind
 from core.io import read_json, write_json
@@ -74,6 +85,7 @@ def write_environment_release_readiness(
     post_api_verification_path: Path,
     output_root: Path,
     output_path: Path,
+    research_isolation_verification_path: Path | None = None,
     readiness_phase: str = "commercial",
 ) -> Path:
     """Write append-only, release-bound proof for Ops readiness composition."""
@@ -113,7 +125,10 @@ def write_environment_release_readiness(
         (post_report, "post_api_verification", "post API verification"),
     ):
         try:
-            assert_valid(document, "release", schema_name, label=label)
+            if schema_name == "release_header":
+                validate_release_header(document, label=label)
+            else:
+                assert_valid(document, "release", schema_name, label=label)
         except (FileNotFoundError, TypeError, ValueError) as exc:
             raise EnvironmentReleaseReadinessError(str(exc)) from exc
     if any(
@@ -132,6 +147,7 @@ def write_environment_release_readiness(
         )
     ):
         raise EnvironmentReleaseReadinessError("readiness evidence releaseId drift")
+    actual_payload_digest = payload_digest(release_root)
     if header.get("releaseKind") != ReleaseKind.CONTENT:
         raise EnvironmentReleaseReadinessError("readiness receipt requires a content release")
     release_class = str(header.get("releaseClass") or "")
@@ -157,6 +173,9 @@ def write_environment_release_readiness(
         document.get(field) != header.get(field)
         for document in (attestation, asset_admission)
         for field in lifecycle_fields
+    ) or any(
+        attestation.get(field) != header.get(field)
+        for field in ("sourceRevision", "sourceDigest", "entityCatalogDigest")
     ):
         raise EnvironmentReleaseReadinessError(
             "release lifecycle/admission projection drift"
@@ -167,6 +186,28 @@ def write_environment_release_readiness(
     ):
         raise EnvironmentReleaseReadinessError(
             "commercial readiness cannot contain authorization-required assets"
+        )
+    research_isolation: dict[str, Any] | None = None
+    if readiness_phase == "research":
+        if research_isolation_verification_path is None:
+            raise EnvironmentReleaseReadinessError(
+                "DATA.RESEARCH.RUNTIME_PROOF_INCOMPLETE: research readiness "
+                "requires canonical isolation verification"
+            )
+        try:
+            research_isolation = load_research_isolation_verification(
+                research_isolation_verification_path,
+                environment=environment,
+                release_id=release_id,
+                verify_run_id=verify_run_id,
+                manifest_digest=actual_payload_digest,
+                require_pass=True,
+            )
+        except ResearchIsolationVerificationError as exc:
+            raise EnvironmentReleaseReadinessError(str(exc)) from exc
+    elif research_isolation_verification_path is not None:
+        raise EnvironmentReleaseReadinessError(
+            "research isolation verification is research-only"
         )
     if (
         header.get("sourceOwner") != DataSourceOwner.QWQ_DATA
@@ -227,39 +268,20 @@ def write_environment_release_readiness(
         raise EnvironmentReleaseReadinessError(
             "post media probe count drifts from typed evidence"
         )
-    creator_evidence = [
-        row
-        for row in post_report.get("creators") or []
-        if isinstance(row, Mapping)
-    ]
-    verified_creator_refs = sorted(
-        str(row.get("creatorRef") or "") for row in creator_evidence
-    )
-    avatar_asset_ids = sorted(
-        str(row.get("avatarAssetId") or "") for row in creator_evidence
-    )
-    if (
-        verified_creator_refs != creator_ids
-        or not avatar_asset_ids
-        or any(not item for item in avatar_asset_ids)
-        or len(avatar_asset_ids) != len(set(avatar_asset_ids))
-        or any(
-            row.get("profileStatus") != 200
-            or row.get("avatarMediaReady") is not True
-            or row.get("avatarProbeCount") != 1
-            for row in creator_evidence
-        )
-    ):
-        raise EnvironmentReleaseReadinessError(
-            "creator avatar verification drifts from release creators"
-        )
-
     feed_queries = post_report.get("feedQueries")
     if not isinstance(feed_queries, list):
         raise EnvironmentReleaseReadinessError("post verification lacks feedQueries")
     guest_actor_hash = str(post_report.get("guestActorHash") or "").strip()
     guest_login = post_report.get("guestLogin")
-    if not guest_actor_hash or not isinstance(guest_login, Mapping):
+    if research_isolation is not None and post_report.get(
+        "internalSubjectHash"
+    ) != research_isolation.get("subjectHash"):
+        raise EnvironmentReleaseReadinessError(
+            "research post readback subject drifts from isolation identity"
+        )
+    if readiness_phase != "research" and (
+        not guest_actor_hash or not isinstance(guest_login, Mapping)
+    ):
         raise EnvironmentReleaseReadinessError(
             "post verification lacks fresh guest identity evidence"
         )
@@ -281,6 +303,30 @@ def write_environment_release_readiness(
         raise EnvironmentReleaseReadinessError(
             "feedQueries do not match the declared readiness phase"
         )
+    try:
+        closure = validate_readiness_closure(
+            release_root=release_root,
+            header=header,
+            desired={
+                "entities": entity_refs,
+                "posts": post_refs,
+                "creators": creator_ids,
+                "tags": tag_refs,
+            },
+            attestation=attestation,
+            asset_admission=asset_admission,
+            media_manifest=media_manifest,
+            import_report=import_report,
+            creator_report=creator_report,
+            homepage_report=homepage_report,
+            post_report=post_report,
+        )
+    except ReleaseReadinessClosureError as exc:
+        raise EnvironmentReleaseReadinessError(str(exc)) from exc
+    avatar_asset_ids = sorted(closure["avatarAssetIds"])
+    verified_image_asset_ids = set(closure["imageAssetIds"])
+    verified_playable_video_ids = set(closure["playableVideoIds"])
+    media_asset_ids = sorted(closure["mediaAssetIds"])
     video_ids = {
         str(row.get("postId") or "")
         for row in bindings
@@ -299,20 +345,12 @@ def write_environment_release_readiness(
         raise EnvironmentReleaseReadinessError(
             "identity=work&type=video does not prove a release-bound video postId"
         )
-    if readiness_phase in {"research", "commercial"}:
-        if not premium_ids or not premium_ids.issubset(release_post_ids):
-            raise EnvironmentReleaseReadinessError(
-                "premium_stream does not prove a release-bound postId"
-            )
-    verified_playable_video_ids = {
-        str(row.get("postId") or "")
-        for row in post_report.get("posts") or []
-        if isinstance(row, Mapping)
-        and row.get("contentType") == "video"
-        and row.get("detailStatus") == 200
-        and row.get("mediaReady") is True
-        and int(row.get("mediaProbeCount") or 0) >= 2
-    }
+    if readiness_phase in {"research", "commercial"} and (
+        not premium_ids or not premium_ids.issubset(release_post_ids)
+    ):
+        raise EnvironmentReleaseReadinessError(
+            "premium_stream does not prove a release-bound postId"
+        )
     premium_playable_video_ids = premium_ids & video_ids & verified_playable_video_ids
     if readiness_phase in {"research", "commercial"} and not premium_playable_video_ids:
         raise EnvironmentReleaseReadinessError(
@@ -333,42 +371,14 @@ def write_environment_release_readiness(
                 homepage_report=homepage_report,
                 queries_by_name=queries_by_name,
                 verified_playable_video_ids=verified_playable_video_ids,
+                illustrated_article_ids=set(closure["illustratedArticleIds"]),
+                verified_image_work_ids=set(closure["verifiedImageWorkIds"]),
                 release_class=release_class,
                 product_lifecycle_state=product_lifecycle_state,
             )
         except AppUatEnvelopeError as exc:
             raise EnvironmentReleaseReadinessError(str(exc)) from exc
 
-    assets = media_manifest.get("assets")
-    if not isinstance(assets, list):
-        raise EnvironmentReleaseReadinessError("release media manifest assets must be an array")
-    media_asset_ids = sorted(
-        str(row.get("assetId") or "") for row in assets if isinstance(row, Mapping)
-    )
-    if not media_asset_ids or any(not item for item in media_asset_ids) or len(media_asset_ids) != len(set(media_asset_ids)):
-        raise EnvironmentReleaseReadinessError("release media assetIds must be unique and non-empty")
-    verified_image_asset_ids = {
-        str(probe.get("assetId") or "")
-        for row in post_report.get("posts") or []
-        if isinstance(row, Mapping)
-        for probe in row.get("mediaProbes") or []
-        if isinstance(probe, Mapping)
-        and probe.get("kind") == "image"
-        and probe.get("status") == 200
-        and str(probe.get("mimeType") or "").startswith("image/")
-        and probe.get("hashVerified") is True
-        and probe.get("sha256") == probe.get("expectedSha256")
-        and probe.get("bytes") == probe.get("expectedBytes")
-    }
-    if (
-        not verified_image_asset_ids
-        or "" in verified_image_asset_ids
-        or not verified_image_asset_ids.issubset(set(media_asset_ids))
-    ):
-        raise EnvironmentReleaseReadinessError(
-            "release image delivery lacks hash-bound public evidence"
-        )
-    actual_payload_digest = payload_digest(release_root)
     if attestation.get("payloadSha256") != actual_payload_digest:
         raise EnvironmentReleaseReadinessError("attestation payloadSha256 drift")
     if import_report.get("manifestDigest") != actual_payload_digest:
@@ -376,6 +386,19 @@ def write_environment_release_readiness(
             "content import manifestDigest drift from immutable payload"
         )
     media_manifest_digest = f"sha256:{hashlib.sha256(media_manifest_path.read_bytes()).hexdigest()}"
+    if research_isolation is not None:
+        readback = research_isolation.get("positiveReadback")
+        if not isinstance(readback, Mapping) or any(
+            (
+                readback.get("releaseId") != release_id,
+                readback.get("entityRefs") != entity_refs,
+                readback.get("postIds") != post_ids,
+                readback.get("mediaAssetIds") != media_asset_ids,
+            )
+        ):
+            raise EnvironmentReleaseReadinessError(
+                "research isolation exact release readback drifts from release closure"
+            )
 
     document: dict[str, Any] = {
         "schema": "quwoquan_data.environment_release_readiness",
@@ -396,13 +419,14 @@ def write_environment_release_readiness(
         "commercialAcceptedCount": int(
             header.get("commercialAcceptedCount") or 0
         ),
+        "sourceRevision": str(header["sourceRevision"]),
+        "sourceDigest": str(header["sourceDigest"]),
+        "entityCatalogDigest": str(header["entityCatalogDigest"]),
         "readinessPhase": readiness_phase,
         "manifestDigest": actual_payload_digest,
         "mediaManifestDigest": media_manifest_digest,
         "importRunId": import_run_id,
         "verifyRunId": verify_run_id,
-        "guestActorHash": guest_actor_hash,
-        "guestLogin": dict(guest_login),
         "counts": {
             "entities": len(entity_refs),
             "posts": len(post_ids),
@@ -429,6 +453,19 @@ def write_environment_release_readiness(
         "verifiedAt": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "passed": True,
     }
+    if research_isolation is not None:
+        document["internalSubjectHash"] = research_isolation["subjectHash"]
+        document["researchIsolationVerificationRef"] = _relative(
+            research_isolation_verification_path,
+            output_root=output_root,
+            label="research isolation verification",
+        )
+        document["researchIsolationVerificationDigest"] = (
+            research_isolation_file_digest(research_isolation_verification_path)
+        )
+    else:
+        document["guestActorHash"] = guest_actor_hash
+        document["guestLogin"] = dict(guest_login)
     if app_uat_envelope is not None:
         document["appUatEnvelope"] = app_uat_envelope
     document["verificationChecksum"] = _checksum(document)

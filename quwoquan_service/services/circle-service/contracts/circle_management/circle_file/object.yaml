@@ -54,10 +54,6 @@ relationships:
   reference_fields:
   - uploaderPersonaId
   target_object: user.Persona
-capabilities:
-- commandable
-- queryable
-- idempotent_commands
 business_rules:
 - circleId、groupId、fileType、assetId 与 uploaderPersonaId 创建后不可变
 - file 必须绑定同一 Persona 所有且 processingStatus=ready 的 MediaAsset；folder 禁止绑定 assetId

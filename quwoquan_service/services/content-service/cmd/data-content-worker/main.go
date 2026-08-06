@@ -63,7 +63,42 @@ func run() error {
 		false,
 		"确认删除 --discard-execution 指定的远端状态",
 	)
+	observeExecutionID := flag.String(
+		"observe-execution",
+		"",
+		"只读观察一个冻结 Data execution 的 Mongo+Redis 队列状态",
+	)
+	observeCarrier := flag.String(
+		"observe-carrier",
+		"",
+		"--observe-execution 绑定的四载体类型",
+	)
+	observeBindingDigest := flag.String(
+		"observe-binding-digest",
+		"",
+		"Data 冻结 execution-envelope 集合的 sha256 绑定",
+	)
 	flag.Parse()
+	if strings.TrimSpace(*observeExecutionID) != "" {
+		if strings.TrimSpace(*requestPath) != "" ||
+			strings.TrimSpace(*reportPath) != "" ||
+			strings.TrimSpace(*discardExecutionID) != "" || *confirmDiscard {
+			return errors.New(
+				"--observe-execution cannot be combined with mutation modes",
+			)
+		}
+		return observeExecutionState(
+			strings.TrimSpace(*observeExecutionID),
+			strings.TrimSpace(*observeCarrier),
+			strings.TrimSpace(*observeBindingDigest),
+		)
+	}
+	if strings.TrimSpace(*observeCarrier) != "" ||
+		strings.TrimSpace(*observeBindingDigest) != "" {
+		return errors.New(
+			"--observe-carrier and --observe-binding-digest require --observe-execution",
+		)
+	}
 	if strings.TrimSpace(*discardExecutionID) != "" {
 		if strings.TrimSpace(*requestPath) != "" || strings.TrimSpace(*reportPath) != "" {
 			return errors.New("--discard-execution cannot be combined with --request or --report")

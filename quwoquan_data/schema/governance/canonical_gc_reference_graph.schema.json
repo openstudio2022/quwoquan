@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/governance/canonical_gc_reference_graph.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "nodeCount",
+    "edgeCount",
+    "nodes",
+    "edges",
+    "protectedArtifactRefs",
+    "unresolvedReferenceCount",
+    "unresolvedReferences"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.canonical_gc_reference_graph"},
+    "nodeCount": {"type": "integer", "minimum": 0},
+    "edgeCount": {"type": "integer", "minimum": 0},
+    "nodes": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/node"}
+    },
+    "edges": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/edge"}
+    },
+    "protectedArtifactRefs": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/protectedArtifact"}
+    },
+    "unresolvedReferenceCount": {"const": 0},
+    "unresolvedReferences": {"const": []}
+  },
+  "$defs": {
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "kind"],
+      "properties": {
+        "ref": {"type": "string", "minLength": 1},
+        "kind": {"type": "string", "minLength": 1}
+      }
+    },
+    "edge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fromRef", "toRef", "relation"],
+      "properties": {
+        "fromRef": {"type": "string", "minLength": 1},
+        "toRef": {"type": "string", "minLength": 1},
+        "relation": {"type": "string", "minLength": 1}
+      }
+    },
+    "protectedArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "kind", "reasons"],
+      "properties": {
+        "ref": {"type": "string", "minLength": 1},
+        "kind": {"type": "string", "minLength": 1},
+        "reasons": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  }
+}

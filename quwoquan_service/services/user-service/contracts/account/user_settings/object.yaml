@@ -27,10 +27,6 @@ relationships:
   reference_fields:
   - defaultIncomingCallRingtoneId
   target_object: content.MediaAsset
-capabilities:
-- commandable
-- queryable
-- idempotent_commands
 business_rules:
 - identity 固定为 accountId，同一账号只有一个 UserSettings
 - Persona override 与 account default 分离，读取时由 named Reader 组装

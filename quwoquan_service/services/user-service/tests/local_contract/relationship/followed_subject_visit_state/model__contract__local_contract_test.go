@@ -1,3 +1,5 @@
+// readiness_case: mark-followed-subject-visited-local
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/spec.md#sit-001
 package local_contract
 
 import (

@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 93359367b8614f01bb5e1c51e37af383332b01f117cc1c6cf39e4fdf838e49d2
+// ContractGraph SHA256: 99a8a52d1ede68d6295d252a5c3cfd90ce40fa7e11b50e9fee2dad7a7afdf2b2
 
 part of '../../../circle/circle_operation_contracts.g.dart';
 
@@ -58,6 +58,14 @@ int _generatedRequestInt(Object? value, String path) {
 bool _generatedRequestBool(Object? value, String path) {
   if (value is bool) return value;
   throw FormatException('$path must be a boolean');
+}
+
+
+DateTime _generatedRequestTimestamp(Object? value, String path) {
+  if (value is! String) throw FormatException('$path must be a timestamp');
+  final parsed = DateTime.tryParse(value);
+  if (parsed == null) throw FormatException('$path must be a timestamp');
+  return parsed.toUtc();
 }
 
 
@@ -125,6 +133,44 @@ final class ApplyCircleGroupMembershipCommand {
   };
 }
 
+final class ApplyToGatheringCommand {
+  ApplyToGatheringCommand({
+    required String gatheringId,
+    required int expectedGatheringVersion,
+    required int expectedParticipationVersion,
+    required List<GatheringApplicationAnswer> answers,
+  }) : gatheringId = gatheringId,
+       expectedGatheringVersion = expectedGatheringVersion,
+       expectedParticipationVersion = expectedParticipationVersion,
+       answers = List.unmodifiable(answers) {
+    if (this.gatheringId.isEmpty) {
+      throw ArgumentError.value(this.gatheringId, "gatheringId", 'must not be blank');
+    }
+  }
+
+  final String gatheringId;
+  final int expectedGatheringVersion;
+  final int expectedParticipationVersion;
+  final List<GatheringApplicationAnswer> answers;
+
+  factory ApplyToGatheringCommand.fromWire(Map<String, Object?> map, [String path = "ApplyToGatheringCommand"]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{"gatheringId", "expectedGatheringVersion", "expectedParticipationVersion", "answers"}, path);
+    return ApplyToGatheringCommand(
+      gatheringId: _generatedRequestString(map["gatheringId"], '$path.gatheringId'),
+      expectedGatheringVersion: _generatedRequestInt(map["expectedGatheringVersion"], '$path.expectedGatheringVersion'),
+      expectedParticipationVersion: _generatedRequestInt(map["expectedParticipationVersion"], '$path.expectedParticipationVersion'),
+      answers: List<GatheringApplicationAnswer>.unmodifiable(_generatedRequestList(map["answers"], '$path.answers').asMap().entries.map((entry) => GatheringApplicationAnswer.fromWire(_generatedRequestObject(entry.value, '$path.answers' + '[${entry.key}]'), '$path.answers' + '[${entry.key}]'))),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "gatheringId": this.gatheringId,
+    "expectedGatheringVersion": this.expectedGatheringVersion,
+    "expectedParticipationVersion": this.expectedParticipationVersion,
+    "answers": this.answers.map((value) => value.toWire()).toList(growable: false),
+  };
+}
+
 final class ArchiveCircleCommand {
   ArchiveCircleCommand({
     required String circleId,
@@ -179,6 +225,82 @@ final class ArchiveCircleGroupCommand {
   };
 }
 
+final class ChangeGatheringAdmissionCommand {
+  ChangeGatheringAdmissionCommand({
+    required String gatheringId,
+    String? reasonRef,
+    required int expectedGatheringVersion,
+    required int expectedAdmissionControlVersion,
+  }) : gatheringId = gatheringId,
+       reasonRef = reasonRef,
+       expectedGatheringVersion = expectedGatheringVersion,
+       expectedAdmissionControlVersion = expectedAdmissionControlVersion {
+    if (this.gatheringId.isEmpty) {
+      throw ArgumentError.value(this.gatheringId, "gatheringId", 'must not be blank');
+    }
+  }
+
+  final String gatheringId;
+  final String? reasonRef;
+  final int expectedGatheringVersion;
+  final int expectedAdmissionControlVersion;
+
+  factory ChangeGatheringAdmissionCommand.fromWire(Map<String, Object?> map, [String path = "ChangeGatheringAdmissionCommand"]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{"gatheringId", "reasonRef", "expectedGatheringVersion", "expectedAdmissionControlVersion"}, path);
+    return ChangeGatheringAdmissionCommand(
+      gatheringId: _generatedRequestString(map["gatheringId"], '$path.gatheringId'),
+      reasonRef: map["reasonRef"] == null ? null : _generatedRequestString(map["reasonRef"], '$path.reasonRef'),
+      expectedGatheringVersion: _generatedRequestInt(map["expectedGatheringVersion"], '$path.expectedGatheringVersion'),
+      expectedAdmissionControlVersion: _generatedRequestInt(map["expectedAdmissionControlVersion"], '$path.expectedAdmissionControlVersion'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "gatheringId": this.gatheringId,
+    if (this.reasonRef != null) "reasonRef": this.reasonRef!,
+    "expectedGatheringVersion": this.expectedGatheringVersion,
+    "expectedAdmissionControlVersion": this.expectedAdmissionControlVersion,
+  };
+}
+
+final class ChangeGatheringCapacityCommand {
+  ChangeGatheringCapacityCommand({
+    required String gatheringId,
+    required int maxParticipants,
+    required int expectedGatheringVersion,
+    DateTime? acknowledgementDeadlineAt,
+  }) : gatheringId = gatheringId,
+       maxParticipants = maxParticipants,
+       expectedGatheringVersion = expectedGatheringVersion,
+       acknowledgementDeadlineAt = acknowledgementDeadlineAt {
+    if (this.gatheringId.isEmpty) {
+      throw ArgumentError.value(this.gatheringId, "gatheringId", 'must not be blank');
+    }
+  }
+
+  final String gatheringId;
+  final int maxParticipants;
+  final int expectedGatheringVersion;
+  final DateTime? acknowledgementDeadlineAt;
+
+  factory ChangeGatheringCapacityCommand.fromWire(Map<String, Object?> map, [String path = "ChangeGatheringCapacityCommand"]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{"gatheringId", "maxParticipants", "expectedGatheringVersion", "acknowledgementDeadlineAt"}, path);
+    return ChangeGatheringCapacityCommand(
+      gatheringId: _generatedRequestString(map["gatheringId"], '$path.gatheringId'),
+      maxParticipants: _generatedRequestInt(map["maxParticipants"], '$path.maxParticipants'),
+      expectedGatheringVersion: _generatedRequestInt(map["expectedGatheringVersion"], '$path.expectedGatheringVersion'),
+      acknowledgementDeadlineAt: map["acknowledgementDeadlineAt"] == null ? null : _generatedRequestTimestamp(map["acknowledgementDeadlineAt"], '$path.acknowledgementDeadlineAt'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "gatheringId": this.gatheringId,
+    "maxParticipants": this.maxParticipants,
+    "expectedGatheringVersion": this.expectedGatheringVersion,
+    if (this.acknowledgementDeadlineAt != null) "acknowledgementDeadlineAt": this.acknowledgementDeadlineAt!.toUtc().toIso8601String(),
+  };
+}
+
 final class CircleDetailQuery {
   const CircleDetailQuery({
     required String circleId,
@@ -199,7 +321,10 @@ final class CircleDetailQuery {
 }
 
 final class CircleDiscoveryFeedQuery {
-  const CircleDiscoveryFeedQuery({
+  static const int defaultLimit = 20;
+  static const int maximumLimit = 50;
+
+  CircleDiscoveryFeedQuery({
     String? category,
     String? subCategory,
     CircleDiscoveryFeedScope scope = CircleDiscoveryFeedScope.recommended,
@@ -211,7 +336,14 @@ final class CircleDiscoveryFeedQuery {
        scope = scope,
        cursor = cursor,
        limit = limit,
-       sort = sort;
+       sort = sort {
+    if (this.limit <= 0) {
+      throw ArgumentError.value(this.limit, "limit", "must be positive");
+    }
+    if (this.limit > 50) {
+      throw ArgumentError.value(this.limit, "limit", "must not exceed 50");
+    }
+  }
 
   final String? category;
   final String? subCategory;
@@ -287,6 +419,9 @@ final class CircleFeedQuery {
 }
 
 final class CircleFileListQuery {
+  static const int defaultLimit = 20;
+  static const int maximumLimit = 100;
+
   CircleFileListQuery({
     required String circleId,
     String? groupId,
@@ -300,6 +435,12 @@ final class CircleFileListQuery {
        limit = limit {
     if (this.circleId.isEmpty) {
       throw ArgumentError.value(this.circleId, "circleId", 'must not be blank');
+    }
+    if (this.limit <= 0) {
+      throw ArgumentError.value(this.limit, "limit", "must be positive");
+    }
+    if (this.limit > 100) {
+      throw ArgumentError.value(this.limit, "limit", "must not exceed 100");
     }
   }
 
@@ -361,6 +502,9 @@ final class CircleFileQuery {
 }
 
 final class CircleGroupListQuery {
+  static const int defaultLimit = 20;
+  static const int maximumLimit = 100;
+
   CircleGroupListQuery({
     required String circleId,
     CircleGroupType? groupType,
@@ -378,6 +522,12 @@ final class CircleGroupListQuery {
        limit = limit {
     if (this.circleId.isEmpty) {
       throw ArgumentError.value(this.circleId, "circleId", 'must not be blank');
+    }
+    if (this.limit <= 0) {
+      throw ArgumentError.value(this.limit, "limit", "must be positive");
+    }
+    if (this.limit > 100) {
+      throw ArgumentError.value(this.limit, "limit", "must not exceed 100");
     }
   }
 
@@ -414,6 +564,9 @@ final class CircleGroupListQuery {
 }
 
 final class CircleGroupMembershipListQuery {
+  static const int defaultLimit = 20;
+  static const int maximumLimit = 100;
+
   CircleGroupMembershipListQuery({
     required String circleId,
     required String groupId,
@@ -430,6 +583,12 @@ final class CircleGroupMembershipListQuery {
     }
     if (this.groupId.isEmpty) {
       throw ArgumentError.value(this.groupId, "groupId", 'must not be blank');
+    }
+    if (this.limit <= 0) {
+      throw ArgumentError.value(this.limit, "limit", "must be positive");
+    }
+    if (this.limit > 100) {
+      throw ArgumentError.value(this.limit, "limit", "must not exceed 100");
     }
   }
 
@@ -491,6 +650,9 @@ final class CircleGroupQuery {
 }
 
 final class CircleGroupSearchQuery {
+  static const int defaultLimit = 20;
+  static const int maximumLimit = 100;
+
   CircleGroupSearchQuery({
     required String circleId,
     required String query,
@@ -509,6 +671,12 @@ final class CircleGroupSearchQuery {
     }
     if (this.query.isEmpty) {
       throw ArgumentError.value(this.query, "query", 'must not be blank');
+    }
+    if (this.limit <= 0) {
+      throw ArgumentError.value(this.limit, "limit", "must be positive");
+    }
+    if (this.limit > 100) {
+      throw ArgumentError.value(this.limit, "limit", "must not exceed 100");
     }
   }
 
@@ -605,6 +773,9 @@ final class CircleListQuery {
 }
 
 final class CircleMembershipListQuery {
+  static const int defaultLimit = 20;
+  static const int maximumLimit = 100;
+
   CircleMembershipListQuery({
     required String circleId,
     String? cursor,
@@ -614,6 +785,12 @@ final class CircleMembershipListQuery {
        limit = limit {
     if (this.circleId.isEmpty) {
       throw ArgumentError.value(this.circleId, "circleId", 'must not be blank');
+    }
+    if (this.limit <= 0) {
+      throw ArgumentError.value(this.limit, "limit", "must be positive");
+    }
+    if (this.limit > 100) {
+      throw ArgumentError.value(this.limit, "limit", "must not exceed 100");
     }
   }
 
@@ -931,6 +1108,50 @@ final class CreateCircleGroupCommand {
   };
 }
 
+final class CreateGatheringDraftCommand {
+  const CreateGatheringDraftCommand({
+    required HostBinding hostBinding,
+    required bool creatorParticipates,
+    required GatheringPurpose purpose,
+    required GatheringSchedule schedule,
+    required GatheringPlace place,
+    required GatheringPolicySet policySet,
+  }) : hostBinding = hostBinding,
+       creatorParticipates = creatorParticipates,
+       purpose = purpose,
+       schedule = schedule,
+       place = place,
+       policySet = policySet;
+
+  final HostBinding hostBinding;
+  final bool creatorParticipates;
+  final GatheringPurpose purpose;
+  final GatheringSchedule schedule;
+  final GatheringPlace place;
+  final GatheringPolicySet policySet;
+
+  factory CreateGatheringDraftCommand.fromWire(Map<String, Object?> map, [String path = "CreateGatheringDraftCommand"]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{"hostBinding", "creatorParticipates", "purpose", "schedule", "place", "policySet"}, path);
+    return CreateGatheringDraftCommand(
+      hostBinding: HostBinding.fromWire(_generatedRequestObject(map["hostBinding"], '$path.hostBinding'), '$path.hostBinding'),
+      creatorParticipates: _generatedRequestBool(map["creatorParticipates"], '$path.creatorParticipates'),
+      purpose: GatheringPurpose.fromWire(_generatedRequestObject(map["purpose"], '$path.purpose'), '$path.purpose'),
+      schedule: GatheringSchedule.fromWire(_generatedRequestObject(map["schedule"], '$path.schedule'), '$path.schedule'),
+      place: GatheringPlace.fromWire(_generatedRequestObject(map["place"], '$path.place'), '$path.place'),
+      policySet: GatheringPolicySet.fromWire(_generatedRequestObject(map["policySet"], '$path.policySet'), '$path.policySet'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "hostBinding": this.hostBinding.toWire(),
+    "creatorParticipates": this.creatorParticipates,
+    "purpose": this.purpose.toWire(),
+    "schedule": this.schedule.toWire(),
+    "place": this.place.toWire(),
+    "policySet": this.policySet.toWire(),
+  };
+}
+
 final class DecideCircleGroupMembershipCommand {
   DecideCircleGroupMembershipCommand({
     required String circleId,
@@ -1001,6 +1222,44 @@ final class DecideCircleMembershipCommand {
   };
 }
 
+final class DeclareGatheringAttendanceCommand {
+  DeclareGatheringAttendanceCommand({
+    required String gatheringId,
+    required List<CanonicalObjectRef> evidenceRefs,
+    required int expectedGatheringVersion,
+    required int expectedParticipationVersion,
+  }) : gatheringId = gatheringId,
+       evidenceRefs = List.unmodifiable(evidenceRefs),
+       expectedGatheringVersion = expectedGatheringVersion,
+       expectedParticipationVersion = expectedParticipationVersion {
+    if (this.gatheringId.isEmpty) {
+      throw ArgumentError.value(this.gatheringId, "gatheringId", 'must not be blank');
+    }
+  }
+
+  final String gatheringId;
+  final List<CanonicalObjectRef> evidenceRefs;
+  final int expectedGatheringVersion;
+  final int expectedParticipationVersion;
+
+  factory DeclareGatheringAttendanceCommand.fromWire(Map<String, Object?> map, [String path = "DeclareGatheringAttendanceCommand"]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{"gatheringId", "evidenceRefs", "expectedGatheringVersion", "expectedParticipationVersion"}, path);
+    return DeclareGatheringAttendanceCommand(
+      gatheringId: _generatedRequestString(map["gatheringId"], '$path.gatheringId'),
+      evidenceRefs: List<CanonicalObjectRef>.unmodifiable(_generatedRequestList(map["evidenceRefs"], '$path.evidenceRefs').asMap().entries.map((entry) => CanonicalObjectRef.fromWire(_generatedRequestObject(entry.value, '$path.evidenceRefs' + '[${entry.key}]'), '$path.evidenceRefs' + '[${entry.key}]'))),
+      expectedGatheringVersion: _generatedRequestInt(map["expectedGatheringVersion"], '$path.expectedGatheringVersion'),
+      expectedParticipationVersion: _generatedRequestInt(map["expectedParticipationVersion"], '$path.expectedParticipationVersion'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "gatheringId": this.gatheringId,
+    "evidenceRefs": this.evidenceRefs.map((value) => value.toWire()).toList(growable: false),
+    "expectedGatheringVersion": this.expectedGatheringVersion,
+    "expectedParticipationVersion": this.expectedParticipationVersion,
+  };
+}
+
 final class DeleteCircleFileCommand {
   DeleteCircleFileCommand({
     required String circleId,
@@ -1065,6 +1324,243 @@ final class FeatureCirclePostCommand {
     "circleId": this.circleId,
     "placementId": this.placementId,
     "enabled": this.enabled,
+  };
+}
+
+final class GatheringApplicationAnswer {
+  GatheringApplicationAnswer({
+    required String questionId,
+    String? answerText,
+    required List<String> selectedOptionIds,
+  }) : questionId = questionId,
+       answerText = answerText,
+       selectedOptionIds = List.unmodifiable(selectedOptionIds) {
+    if (this.questionId.isEmpty) {
+      throw ArgumentError.value(this.questionId, "questionId", 'must not be blank');
+    }
+  }
+
+  final String questionId;
+  final String? answerText;
+  final List<String> selectedOptionIds;
+
+  factory GatheringApplicationAnswer.fromWire(Map<String, Object?> map, [String path = "GatheringApplicationAnswer"]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{"questionId", "answerText", "selectedOptionIds"}, path);
+    return GatheringApplicationAnswer(
+      questionId: _generatedRequestString(map["questionId"], '$path.questionId'),
+      answerText: map["answerText"] == null ? null : _generatedRequestString(map["answerText"], '$path.answerText'),
+      selectedOptionIds: List<String>.unmodifiable(_generatedRequestList(map["selectedOptionIds"], '$path.selectedOptionIds').asMap().entries.map((entry) => _generatedRequestString(entry.value, '$path.selectedOptionIds' + '[${entry.key}]'))),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "questionId": this.questionId,
+    if (this.answerText != null) "answerText": this.answerText!,
+    "selectedOptionIds": this.selectedOptionIds.map((value) => value).toList(growable: false),
+  };
+}
+
+final class GatheringAvailabilityWatchCommand {
+  GatheringAvailabilityWatchCommand({
+    required String gatheringId,
+    required int expectedGatheringVersion,
+    required int expectedWatchVersion,
+  }) : gatheringId = gatheringId,
+       expectedGatheringVersion = expectedGatheringVersion,
+       expectedWatchVersion = expectedWatchVersion {
+    if (this.gatheringId.isEmpty) {
+      throw ArgumentError.value(this.gatheringId, "gatheringId", 'must not be blank');
+    }
+  }
+
+  final String gatheringId;
+  final int expectedGatheringVersion;
+  final int expectedWatchVersion;
+
+  factory GatheringAvailabilityWatchCommand.fromWire(Map<String, Object?> map, [String path = "GatheringAvailabilityWatchCommand"]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{"gatheringId", "expectedGatheringVersion", "expectedWatchVersion"}, path);
+    return GatheringAvailabilityWatchCommand(
+      gatheringId: _generatedRequestString(map["gatheringId"], '$path.gatheringId'),
+      expectedGatheringVersion: _generatedRequestInt(map["expectedGatheringVersion"], '$path.expectedGatheringVersion'),
+      expectedWatchVersion: _generatedRequestInt(map["expectedWatchVersion"], '$path.expectedWatchVersion'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "gatheringId": this.gatheringId,
+    "expectedGatheringVersion": this.expectedGatheringVersion,
+    "expectedWatchVersion": this.expectedWatchVersion,
+  };
+}
+
+final class GatheringIDQuery {
+  GatheringIDQuery({
+    required String gatheringId,
+  }) : gatheringId = gatheringId {
+    if (this.gatheringId.isEmpty) {
+      throw ArgumentError.value(this.gatheringId, "gatheringId", 'must not be blank');
+    }
+  }
+
+  final String gatheringId;
+
+  factory GatheringIDQuery.fromWire(Map<String, Object?> map, [String path = "GatheringIDQuery"]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{"gatheringId"}, path);
+    return GatheringIDQuery(
+      gatheringId: _generatedRequestString(map["gatheringId"], '$path.gatheringId'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "gatheringId": this.gatheringId,
+  };
+}
+
+final class GatheringParticipationVersionCommand {
+  GatheringParticipationVersionCommand({
+    required String gatheringId,
+    required int expectedGatheringVersion,
+    required int expectedParticipationVersion,
+  }) : gatheringId = gatheringId,
+       expectedGatheringVersion = expectedGatheringVersion,
+       expectedParticipationVersion = expectedParticipationVersion {
+    if (this.gatheringId.isEmpty) {
+      throw ArgumentError.value(this.gatheringId, "gatheringId", 'must not be blank');
+    }
+  }
+
+  final String gatheringId;
+  final int expectedGatheringVersion;
+  final int expectedParticipationVersion;
+
+  factory GatheringParticipationVersionCommand.fromWire(Map<String, Object?> map, [String path = "GatheringParticipationVersionCommand"]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{"gatheringId", "expectedGatheringVersion", "expectedParticipationVersion"}, path);
+    return GatheringParticipationVersionCommand(
+      gatheringId: _generatedRequestString(map["gatheringId"], '$path.gatheringId'),
+      expectedGatheringVersion: _generatedRequestInt(map["expectedGatheringVersion"], '$path.expectedGatheringVersion'),
+      expectedParticipationVersion: _generatedRequestInt(map["expectedParticipationVersion"], '$path.expectedParticipationVersion'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "gatheringId": this.gatheringId,
+    "expectedGatheringVersion": this.expectedGatheringVersion,
+    "expectedParticipationVersion": this.expectedParticipationVersion,
+  };
+}
+
+final class GatheringReasonCommand {
+  GatheringReasonCommand({
+    required String gatheringId,
+    required String reasonRef,
+    required List<CanonicalObjectRef> evidenceRefs,
+    required int expectedGatheringVersion,
+  }) : gatheringId = gatheringId,
+       reasonRef = reasonRef,
+       evidenceRefs = List.unmodifiable(evidenceRefs),
+       expectedGatheringVersion = expectedGatheringVersion {
+    if (this.gatheringId.isEmpty) {
+      throw ArgumentError.value(this.gatheringId, "gatheringId", 'must not be blank');
+    }
+    if (this.reasonRef.isEmpty) {
+      throw ArgumentError.value(this.reasonRef, "reasonRef", 'must not be blank');
+    }
+  }
+
+  final String gatheringId;
+  final String reasonRef;
+  final List<CanonicalObjectRef> evidenceRefs;
+  final int expectedGatheringVersion;
+
+  factory GatheringReasonCommand.fromWire(Map<String, Object?> map, [String path = "GatheringReasonCommand"]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{"gatheringId", "reasonRef", "evidenceRefs", "expectedGatheringVersion"}, path);
+    return GatheringReasonCommand(
+      gatheringId: _generatedRequestString(map["gatheringId"], '$path.gatheringId'),
+      reasonRef: _generatedRequestString(map["reasonRef"], '$path.reasonRef'),
+      evidenceRefs: List<CanonicalObjectRef>.unmodifiable(_generatedRequestList(map["evidenceRefs"], '$path.evidenceRefs').asMap().entries.map((entry) => CanonicalObjectRef.fromWire(_generatedRequestObject(entry.value, '$path.evidenceRefs' + '[${entry.key}]'), '$path.evidenceRefs' + '[${entry.key}]'))),
+      expectedGatheringVersion: _generatedRequestInt(map["expectedGatheringVersion"], '$path.expectedGatheringVersion'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "gatheringId": this.gatheringId,
+    "reasonRef": this.reasonRef,
+    "evidenceRefs": this.evidenceRefs.map((value) => value.toWire()).toList(growable: false),
+    "expectedGatheringVersion": this.expectedGatheringVersion,
+  };
+}
+
+final class GatheringVersionCommand {
+  GatheringVersionCommand({
+    required String gatheringId,
+    required int expectedGatheringVersion,
+  }) : gatheringId = gatheringId,
+       expectedGatheringVersion = expectedGatheringVersion {
+    if (this.gatheringId.isEmpty) {
+      throw ArgumentError.value(this.gatheringId, "gatheringId", 'must not be blank');
+    }
+  }
+
+  final String gatheringId;
+  final int expectedGatheringVersion;
+
+  factory GatheringVersionCommand.fromWire(Map<String, Object?> map, [String path = "GatheringVersionCommand"]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{"gatheringId", "expectedGatheringVersion"}, path);
+    return GatheringVersionCommand(
+      gatheringId: _generatedRequestString(map["gatheringId"], '$path.gatheringId'),
+      expectedGatheringVersion: _generatedRequestInt(map["expectedGatheringVersion"], '$path.expectedGatheringVersion'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "gatheringId": this.gatheringId,
+    "expectedGatheringVersion": this.expectedGatheringVersion,
+  };
+}
+
+final class InviteToGatheringCommand {
+  InviteToGatheringCommand({
+    required String gatheringId,
+    required String participantPersonaId,
+    required DateTime seatHoldUntil,
+    required int expectedGatheringVersion,
+    required int expectedParticipationVersion,
+  }) : gatheringId = gatheringId,
+       participantPersonaId = participantPersonaId,
+       seatHoldUntil = seatHoldUntil,
+       expectedGatheringVersion = expectedGatheringVersion,
+       expectedParticipationVersion = expectedParticipationVersion {
+    if (this.gatheringId.isEmpty) {
+      throw ArgumentError.value(this.gatheringId, "gatheringId", 'must not be blank');
+    }
+    if (this.participantPersonaId.isEmpty) {
+      throw ArgumentError.value(this.participantPersonaId, "participantPersonaId", 'must not be blank');
+    }
+  }
+
+  final String gatheringId;
+  final String participantPersonaId;
+  final DateTime seatHoldUntil;
+  final int expectedGatheringVersion;
+  final int expectedParticipationVersion;
+
+  factory InviteToGatheringCommand.fromWire(Map<String, Object?> map, [String path = "InviteToGatheringCommand"]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{"gatheringId", "participantPersonaId", "seatHoldUntil", "expectedGatheringVersion", "expectedParticipationVersion"}, path);
+    return InviteToGatheringCommand(
+      gatheringId: _generatedRequestString(map["gatheringId"], '$path.gatheringId'),
+      participantPersonaId: _generatedRequestString(map["participantPersonaId"], '$path.participantPersonaId'),
+      seatHoldUntil: _generatedRequestTimestamp(map["seatHoldUntil"], '$path.seatHoldUntil'),
+      expectedGatheringVersion: _generatedRequestInt(map["expectedGatheringVersion"], '$path.expectedGatheringVersion'),
+      expectedParticipationVersion: _generatedRequestInt(map["expectedParticipationVersion"], '$path.expectedParticipationVersion'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "gatheringId": this.gatheringId,
+    "participantPersonaId": this.participantPersonaId,
+    "seatHoldUntil": this.seatHoldUntil.toUtc().toIso8601String(),
+    "expectedGatheringVersion": this.expectedGatheringVersion,
+    "expectedParticipationVersion": this.expectedParticipationVersion,
   };
 }
 
@@ -1200,6 +1696,9 @@ final class MyCircleMembershipQuery {
 }
 
 final class PendingCircleMembershipListQuery {
+  static const int defaultLimit = 20;
+  static const int maximumLimit = 100;
+
   PendingCircleMembershipListQuery({
     required String circleId,
     String? cursor,
@@ -1209,6 +1708,12 @@ final class PendingCircleMembershipListQuery {
        limit = limit {
     if (this.circleId.isEmpty) {
       throw ArgumentError.value(this.circleId, "circleId", 'must not be blank');
+    }
+    if (this.limit <= 0) {
+      throw ArgumentError.value(this.limit, "limit", "must be positive");
+    }
+    if (this.limit > 100) {
+      throw ArgumentError.value(this.limit, "limit", "must not exceed 100");
     }
   }
 
@@ -1233,6 +1738,9 @@ final class PendingCircleMembershipListQuery {
 }
 
 final class PersonaCircleListQuery {
+  static const int defaultLimit = 20;
+  static const int maximumLimit = 100;
+
   PersonaCircleListQuery({
     required String personaId,
     String? query,
@@ -1244,6 +1752,12 @@ final class PersonaCircleListQuery {
        limit = limit {
     if (this.personaId.isEmpty) {
       throw ArgumentError.value(this.personaId, "personaId", 'must not be blank');
+    }
+    if (this.limit <= 0) {
+      throw ArgumentError.value(this.limit, "limit", "must be positive");
+    }
+    if (this.limit > 100) {
+      throw ArgumentError.value(this.limit, "limit", "must not exceed 100");
     }
   }
 
@@ -1409,6 +1923,103 @@ final class RemoveCirclePostCommand {
   Map<String, Object?> toWire() => <String, Object?>{
     "circleId": this.circleId,
     "placementId": this.placementId,
+  };
+}
+
+final class ReviewGatheringApplicationCommand {
+  ReviewGatheringApplicationCommand({
+    required String gatheringId,
+    required String participantPersonaId,
+    required GatheringApplicationReviewDecision decision,
+    String? reasonRef,
+    required int expectedGatheringVersion,
+    required int expectedParticipationVersion,
+  }) : gatheringId = gatheringId,
+       participantPersonaId = participantPersonaId,
+       decision = decision,
+       reasonRef = reasonRef,
+       expectedGatheringVersion = expectedGatheringVersion,
+       expectedParticipationVersion = expectedParticipationVersion {
+    if (this.gatheringId.isEmpty) {
+      throw ArgumentError.value(this.gatheringId, "gatheringId", 'must not be blank');
+    }
+    if (this.participantPersonaId.isEmpty) {
+      throw ArgumentError.value(this.participantPersonaId, "participantPersonaId", 'must not be blank');
+    }
+  }
+
+  final String gatheringId;
+  final String participantPersonaId;
+  final GatheringApplicationReviewDecision decision;
+  final String? reasonRef;
+  final int expectedGatheringVersion;
+  final int expectedParticipationVersion;
+
+  factory ReviewGatheringApplicationCommand.fromWire(Map<String, Object?> map, [String path = "ReviewGatheringApplicationCommand"]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{"gatheringId", "participantPersonaId", "decision", "reasonRef", "expectedGatheringVersion", "expectedParticipationVersion"}, path);
+    return ReviewGatheringApplicationCommand(
+      gatheringId: _generatedRequestString(map["gatheringId"], '$path.gatheringId'),
+      participantPersonaId: _generatedRequestString(map["participantPersonaId"], '$path.participantPersonaId'),
+      decision: switch (map["decision"]) { "approve" => GatheringApplicationReviewDecision.approve, "reject" => GatheringApplicationReviewDecision.reject, _ => throw FormatException('$path.decision' + ' has an invalid enum value'), },
+      reasonRef: map["reasonRef"] == null ? null : _generatedRequestString(map["reasonRef"], '$path.reasonRef'),
+      expectedGatheringVersion: _generatedRequestInt(map["expectedGatheringVersion"], '$path.expectedGatheringVersion'),
+      expectedParticipationVersion: _generatedRequestInt(map["expectedParticipationVersion"], '$path.expectedParticipationVersion'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "gatheringId": this.gatheringId,
+    "participantPersonaId": this.participantPersonaId,
+    "decision": this.decision.wireName,
+    if (this.reasonRef != null) "reasonRef": this.reasonRef!,
+    "expectedGatheringVersion": this.expectedGatheringVersion,
+    "expectedParticipationVersion": this.expectedParticipationVersion,
+  };
+}
+
+final class TargetGatheringParticipationCommand {
+  TargetGatheringParticipationCommand({
+    required String gatheringId,
+    required String participantPersonaId,
+    String? reasonRef,
+    required int expectedGatheringVersion,
+    required int expectedParticipationVersion,
+  }) : gatheringId = gatheringId,
+       participantPersonaId = participantPersonaId,
+       reasonRef = reasonRef,
+       expectedGatheringVersion = expectedGatheringVersion,
+       expectedParticipationVersion = expectedParticipationVersion {
+    if (this.gatheringId.isEmpty) {
+      throw ArgumentError.value(this.gatheringId, "gatheringId", 'must not be blank');
+    }
+    if (this.participantPersonaId.isEmpty) {
+      throw ArgumentError.value(this.participantPersonaId, "participantPersonaId", 'must not be blank');
+    }
+  }
+
+  final String gatheringId;
+  final String participantPersonaId;
+  final String? reasonRef;
+  final int expectedGatheringVersion;
+  final int expectedParticipationVersion;
+
+  factory TargetGatheringParticipationCommand.fromWire(Map<String, Object?> map, [String path = "TargetGatheringParticipationCommand"]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{"gatheringId", "participantPersonaId", "reasonRef", "expectedGatheringVersion", "expectedParticipationVersion"}, path);
+    return TargetGatheringParticipationCommand(
+      gatheringId: _generatedRequestString(map["gatheringId"], '$path.gatheringId'),
+      participantPersonaId: _generatedRequestString(map["participantPersonaId"], '$path.participantPersonaId'),
+      reasonRef: map["reasonRef"] == null ? null : _generatedRequestString(map["reasonRef"], '$path.reasonRef'),
+      expectedGatheringVersion: _generatedRequestInt(map["expectedGatheringVersion"], '$path.expectedGatheringVersion'),
+      expectedParticipationVersion: _generatedRequestInt(map["expectedParticipationVersion"], '$path.expectedParticipationVersion'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "gatheringId": this.gatheringId,
+    "participantPersonaId": this.participantPersonaId,
+    if (this.reasonRef != null) "reasonRef": this.reasonRef!,
+    "expectedGatheringVersion": this.expectedGatheringVersion,
+    "expectedParticipationVersion": this.expectedParticipationVersion,
   };
 }
 
@@ -1761,6 +2372,64 @@ final class UpdateCircleSectionsCommand {
   Map<String, Object?> toWire() => <String, Object?>{
     "circleId": this.circleId,
     "sections": this.sections.map((value) => value.toWire()).toList(growable: false),
+  };
+}
+
+final class UpdateGatheringCommand {
+  UpdateGatheringCommand({
+    required String gatheringId,
+    required int expectedGatheringVersion,
+    required GatheringPurpose purpose,
+    required GatheringSchedule schedule,
+    required GatheringPlace place,
+    required GatheringPolicySet policySet,
+    required HostBinding hostBinding,
+    DateTime? acknowledgementDeadlineAt,
+  }) : gatheringId = gatheringId,
+       expectedGatheringVersion = expectedGatheringVersion,
+       purpose = purpose,
+       schedule = schedule,
+       place = place,
+       policySet = policySet,
+       hostBinding = hostBinding,
+       acknowledgementDeadlineAt = acknowledgementDeadlineAt {
+    if (this.gatheringId.isEmpty) {
+      throw ArgumentError.value(this.gatheringId, "gatheringId", 'must not be blank');
+    }
+  }
+
+  final String gatheringId;
+  final int expectedGatheringVersion;
+  final GatheringPurpose purpose;
+  final GatheringSchedule schedule;
+  final GatheringPlace place;
+  final GatheringPolicySet policySet;
+  final HostBinding hostBinding;
+  final DateTime? acknowledgementDeadlineAt;
+
+  factory UpdateGatheringCommand.fromWire(Map<String, Object?> map, [String path = "UpdateGatheringCommand"]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{"gatheringId", "expectedGatheringVersion", "purpose", "schedule", "place", "policySet", "hostBinding", "acknowledgementDeadlineAt"}, path);
+    return UpdateGatheringCommand(
+      gatheringId: _generatedRequestString(map["gatheringId"], '$path.gatheringId'),
+      expectedGatheringVersion: _generatedRequestInt(map["expectedGatheringVersion"], '$path.expectedGatheringVersion'),
+      purpose: GatheringPurpose.fromWire(_generatedRequestObject(map["purpose"], '$path.purpose'), '$path.purpose'),
+      schedule: GatheringSchedule.fromWire(_generatedRequestObject(map["schedule"], '$path.schedule'), '$path.schedule'),
+      place: GatheringPlace.fromWire(_generatedRequestObject(map["place"], '$path.place'), '$path.place'),
+      policySet: GatheringPolicySet.fromWire(_generatedRequestObject(map["policySet"], '$path.policySet'), '$path.policySet'),
+      hostBinding: HostBinding.fromWire(_generatedRequestObject(map["hostBinding"], '$path.hostBinding'), '$path.hostBinding'),
+      acknowledgementDeadlineAt: map["acknowledgementDeadlineAt"] == null ? null : _generatedRequestTimestamp(map["acknowledgementDeadlineAt"], '$path.acknowledgementDeadlineAt'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "gatheringId": this.gatheringId,
+    "expectedGatheringVersion": this.expectedGatheringVersion,
+    "purpose": this.purpose.toWire(),
+    "schedule": this.schedule.toWire(),
+    "place": this.place.toWire(),
+    "policySet": this.policySet.toWire(),
+    "hostBinding": this.hostBinding.toWire(),
+    if (this.acknowledgementDeadlineAt != null) "acknowledgementDeadlineAt": this.acknowledgementDeadlineAt!.toUtc().toIso8601String(),
   };
 }
 
@@ -2291,6 +2960,257 @@ CloudOperationRequestPayload encodeCircleCirclePostPlacementRemovePostFromCircle
     pathParameters: <String, String>{
       "circleId": request.circleId,
       "placementId": request.placementId,
+    },
+  );
+}
+
+CloudOperationRequestPayload encodeCircleGatheringAcceptGatheringInvitationGeneratedRequest(GatheringParticipationVersionCommand request) {
+  return CloudOperationRequestPayload(
+    pathParameters: <String, String>{
+      "gatheringId": request.gatheringId,
+    },
+    body: <String, Object?>{
+      "expectedGatheringVersion": request.expectedGatheringVersion,
+      "expectedParticipationVersion": request.expectedParticipationVersion,
+    },
+  );
+}
+
+CloudOperationRequestPayload encodeCircleGatheringApplyToGatheringGeneratedRequest(ApplyToGatheringCommand request) {
+  return CloudOperationRequestPayload(
+    pathParameters: <String, String>{
+      "gatheringId": request.gatheringId,
+    },
+    body: <String, Object?>{
+      "expectedGatheringVersion": request.expectedGatheringVersion,
+      "expectedParticipationVersion": request.expectedParticipationVersion,
+      "answers": request.answers.map((value) => value.toWire()).toList(growable: false),
+    },
+  );
+}
+
+CloudOperationRequestPayload encodeCircleGatheringCancelGatheringGeneratedRequest(GatheringReasonCommand request) {
+  return CloudOperationRequestPayload(
+    pathParameters: <String, String>{
+      "gatheringId": request.gatheringId,
+    },
+    body: <String, Object?>{
+      "reasonRef": request.reasonRef,
+      "evidenceRefs": request.evidenceRefs.map((value) => value.toWire()).toList(growable: false),
+      "expectedGatheringVersion": request.expectedGatheringVersion,
+    },
+  );
+}
+
+CloudOperationRequestPayload encodeCircleGatheringChangeGatheringCapacityGeneratedRequest(ChangeGatheringCapacityCommand request) {
+  return CloudOperationRequestPayload(
+    pathParameters: <String, String>{
+      "gatheringId": request.gatheringId,
+    },
+    body: <String, Object?>{
+      "maxParticipants": request.maxParticipants,
+      "expectedGatheringVersion": request.expectedGatheringVersion,
+      if (request.acknowledgementDeadlineAt != null) "acknowledgementDeadlineAt": request.acknowledgementDeadlineAt!.toUtc().toIso8601String(),
+    },
+  );
+}
+
+CloudOperationRequestPayload encodeCircleGatheringCompleteGatheringGeneratedRequest(GatheringVersionCommand request) {
+  return CloudOperationRequestPayload(
+    pathParameters: <String, String>{
+      "gatheringId": request.gatheringId,
+    },
+    body: <String, Object?>{
+      "expectedGatheringVersion": request.expectedGatheringVersion,
+    },
+  );
+}
+
+CloudOperationRequestPayload encodeCircleGatheringCompleteGatheringSelfGeneratedRequest(DeclareGatheringAttendanceCommand request) {
+  return CloudOperationRequestPayload(
+    pathParameters: <String, String>{
+      "gatheringId": request.gatheringId,
+    },
+    body: <String, Object?>{
+      "evidenceRefs": request.evidenceRefs.map((value) => value.toWire()).toList(growable: false),
+      "expectedGatheringVersion": request.expectedGatheringVersion,
+      "expectedParticipationVersion": request.expectedParticipationVersion,
+    },
+  );
+}
+
+CloudOperationRequestPayload encodeCircleGatheringCreateGatheringDraftGeneratedRequest(CreateGatheringDraftCommand request) {
+  return CloudOperationRequestPayload(
+    body: <String, Object?>{
+      "hostBinding": request.hostBinding.toWire(),
+      "creatorParticipates": request.creatorParticipates,
+      "purpose": request.purpose.toWire(),
+      "schedule": request.schedule.toWire(),
+      "place": request.place.toWire(),
+      "policySet": request.policySet.toWire(),
+    },
+  );
+}
+
+CloudOperationRequestPayload encodeCircleGatheringEndGatheringEarlyGeneratedRequest(GatheringReasonCommand request) {
+  return CloudOperationRequestPayload(
+    pathParameters: <String, String>{
+      "gatheringId": request.gatheringId,
+    },
+    body: <String, Object?>{
+      "reasonRef": request.reasonRef,
+      "evidenceRefs": request.evidenceRefs.map((value) => value.toWire()).toList(growable: false),
+      "expectedGatheringVersion": request.expectedGatheringVersion,
+    },
+  );
+}
+
+CloudOperationRequestPayload encodeCircleGatheringGetGatheringGeneratedRequest(GatheringIDQuery request) {
+  return CloudOperationRequestPayload(
+    pathParameters: <String, String>{
+      "gatheringId": request.gatheringId,
+    },
+  );
+}
+
+CloudOperationRequestPayload encodeCircleGatheringGetPublicGatheringGeneratedRequest(GatheringIDQuery request) {
+  return CloudOperationRequestPayload(
+    pathParameters: <String, String>{
+      "gatheringId": request.gatheringId,
+    },
+  );
+}
+
+CloudOperationRequestPayload encodeCircleGatheringInviteToGatheringGeneratedRequest(InviteToGatheringCommand request) {
+  return CloudOperationRequestPayload(
+    pathParameters: <String, String>{
+      "gatheringId": request.gatheringId,
+    },
+    body: <String, Object?>{
+      "participantPersonaId": request.participantPersonaId,
+      "seatHoldUntil": request.seatHoldUntil.toUtc().toIso8601String(),
+      "expectedGatheringVersion": request.expectedGatheringVersion,
+      "expectedParticipationVersion": request.expectedParticipationVersion,
+    },
+  );
+}
+
+CloudOperationRequestPayload encodeCircleGatheringJoinOpenGatheringGeneratedRequest(GatheringParticipationVersionCommand request) {
+  return CloudOperationRequestPayload(
+    pathParameters: <String, String>{
+      "gatheringId": request.gatheringId,
+    },
+    body: <String, Object?>{
+      "expectedGatheringVersion": request.expectedGatheringVersion,
+      "expectedParticipationVersion": request.expectedParticipationVersion,
+    },
+  );
+}
+
+CloudOperationRequestPayload encodeCircleGatheringPauseGatheringAdmissionGeneratedRequest(ChangeGatheringAdmissionCommand request) {
+  return CloudOperationRequestPayload(
+    pathParameters: <String, String>{
+      "gatheringId": request.gatheringId,
+    },
+    body: <String, Object?>{
+      if (request.reasonRef != null) "reasonRef": request.reasonRef!,
+      "expectedGatheringVersion": request.expectedGatheringVersion,
+      "expectedAdmissionControlVersion": request.expectedAdmissionControlVersion,
+    },
+  );
+}
+
+CloudOperationRequestPayload encodeCircleGatheringPublishGatheringGeneratedRequest(GatheringVersionCommand request) {
+  return CloudOperationRequestPayload(
+    pathParameters: <String, String>{
+      "gatheringId": request.gatheringId,
+    },
+    body: <String, Object?>{
+      "expectedGatheringVersion": request.expectedGatheringVersion,
+    },
+  );
+}
+
+CloudOperationRequestPayload encodeCircleGatheringRemoveGatheringParticipantGeneratedRequest(TargetGatheringParticipationCommand request) {
+  return CloudOperationRequestPayload(
+    pathParameters: <String, String>{
+      "gatheringId": request.gatheringId,
+    },
+    body: <String, Object?>{
+      "participantPersonaId": request.participantPersonaId,
+      if (request.reasonRef != null) "reasonRef": request.reasonRef!,
+      "expectedGatheringVersion": request.expectedGatheringVersion,
+      "expectedParticipationVersion": request.expectedParticipationVersion,
+    },
+  );
+}
+
+CloudOperationRequestPayload encodeCircleGatheringResumeGatheringAdmissionGeneratedRequest(ChangeGatheringAdmissionCommand request) {
+  return CloudOperationRequestPayload(
+    pathParameters: <String, String>{
+      "gatheringId": request.gatheringId,
+    },
+    body: <String, Object?>{
+      if (request.reasonRef != null) "reasonRef": request.reasonRef!,
+      "expectedGatheringVersion": request.expectedGatheringVersion,
+      "expectedAdmissionControlVersion": request.expectedAdmissionControlVersion,
+    },
+  );
+}
+
+CloudOperationRequestPayload encodeCircleGatheringReviewGatheringApplicationGeneratedRequest(ReviewGatheringApplicationCommand request) {
+  return CloudOperationRequestPayload(
+    pathParameters: <String, String>{
+      "gatheringId": request.gatheringId,
+    },
+    body: <String, Object?>{
+      "participantPersonaId": request.participantPersonaId,
+      "decision": request.decision.wireName,
+      if (request.reasonRef != null) "reasonRef": request.reasonRef!,
+      "expectedGatheringVersion": request.expectedGatheringVersion,
+      "expectedParticipationVersion": request.expectedParticipationVersion,
+    },
+  );
+}
+
+CloudOperationRequestPayload encodeCircleGatheringSafetyTerminateGatheringGeneratedRequest(GatheringReasonCommand request) {
+  return CloudOperationRequestPayload(
+    pathParameters: <String, String>{
+      "gatheringId": request.gatheringId,
+    },
+    body: <String, Object?>{
+      "reasonRef": request.reasonRef,
+      "evidenceRefs": request.evidenceRefs.map((value) => value.toWire()).toList(growable: false),
+      "expectedGatheringVersion": request.expectedGatheringVersion,
+    },
+  );
+}
+
+CloudOperationRequestPayload encodeCircleGatheringUpdateGatheringGeneratedRequest(UpdateGatheringCommand request) {
+  return CloudOperationRequestPayload(
+    pathParameters: <String, String>{
+      "gatheringId": request.gatheringId,
+    },
+    body: <String, Object?>{
+      "expectedGatheringVersion": request.expectedGatheringVersion,
+      "purpose": request.purpose.toWire(),
+      "schedule": request.schedule.toWire(),
+      "place": request.place.toWire(),
+      "policySet": request.policySet.toWire(),
+      "hostBinding": request.hostBinding.toWire(),
+      if (request.acknowledgementDeadlineAt != null) "acknowledgementDeadlineAt": request.acknowledgementDeadlineAt!.toUtc().toIso8601String(),
+    },
+  );
+}
+
+CloudOperationRequestPayload encodeCircleGatheringWatchGatheringAvailabilityGeneratedRequest(GatheringAvailabilityWatchCommand request) {
+  return CloudOperationRequestPayload(
+    pathParameters: <String, String>{
+      "gatheringId": request.gatheringId,
+    },
+    body: <String, Object?>{
+      "expectedGatheringVersion": request.expectedGatheringVersion,
+      "expectedWatchVersion": request.expectedWatchVersion,
     },
   );
 }

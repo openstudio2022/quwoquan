@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 import yaml
-
+from content.execution import store
 from content.execution.selection import (
     build_execution_spec,
     select_targets,
@@ -16,12 +16,10 @@ from content.execution.source_selection import (
     TargetSourceCandidate,
     TargetSourceQualification,
 )
-from content.source.contracts import HomepageAuthorityProvider, QualifiedHomepageSource
-from core.data_issue import DataIssueCode, DataIssueError
-from core.control_types import TargetSelector
-from content.execution import store
 from content.execution.spec_contract import ExecutionSpec
-
+from content.source.contracts import HomepageAuthorityProvider, QualifiedHomepageSource
+from core.control_types import TargetSelector
+from core.data_issue import DataIssueCode, DataIssueError
 
 DATA_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data")
 EXECUTION_ID = "20260711--travel-homepage-coverage--test-region-a--pilot-001"
@@ -136,6 +134,135 @@ def test_select_targets_preserves_leaf_name_as_canonical_alias(tmp_path: Path):
     assert targets[0]["name"] == "杭州金沙湖"
     assert targets[0]["sourceName"] == "金沙湖"
     assert targets[0]["aliases"] == ["金沙湖", "金沙湖公园"]
+
+
+def test_retry_source_name_resolves_to_canonical_work_identity(tmp_path: Path) -> None:
+    path = tmp_path / "杭州市.yaml"
+    path.write_text(
+        yaml.safe_dump(
+            {
+                "districts": [
+                    {
+                        "district": "西湖区",
+                        "leaves": [
+                            {
+                                "name": "西湖",
+                                "canonicalName": "杭州西湖",
+                                "entityType": "地点/景区",
+                                "aliases": ["西湖风景名胜区"],
+                            }
+                        ],
+                    }
+                ]
+            },
+            allow_unicode=True,
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    targets, report = select_targets(
+        discovery_path=path,
+        limit=1,
+        quota=1,
+        target_selector=TargetSelector.ALL,
+        target_names=("西湖",),
+    )
+
+    assert [target["name"] for target in targets] == ["杭州西湖"]
+    assert targets[0]["sourceName"] == "西湖"
+    assert report["requestedTargetNames"] == ["西湖"]
+
+
+def test_source_ready_retry_qualifies_resolved_canonical_work(tmp_path: Path) -> None:
+    path = tmp_path / "杭州来源预选市.yaml"
+    path.write_text(
+        yaml.safe_dump(
+            {
+                "districts": [
+                    {
+                        "district": "西湖区",
+                        "leaves": [
+                            {
+                                "name": "西湖",
+                                "canonicalName": "杭州西湖",
+                                "entityType": "地点/景区",
+                            }
+                        ],
+                    }
+                ]
+            },
+            allow_unicode=True,
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    qualified: list[TargetSourceCandidate] = []
+
+    def qualify(target: TargetSourceCandidate) -> TargetSourceQualification:
+        qualified.append(target)
+        return TargetSourceQualification(
+            True,
+            QualifiedHomepageSource(
+                provider=HomepageAuthorityProvider.WIKIPEDIA,
+                title=target.name,
+                url="https://zh.wikipedia.org/wiki/西湖",
+            ),
+        )
+
+    targets, report = select_targets(
+        discovery_path=path,
+        limit=1,
+        quota=1,
+        target_selector=TargetSelector.SOURCE_READY_PRIORITY,
+        source_qualifier=qualify,
+        target_names=("西湖",),
+    )
+
+    assert [target["name"] for target in targets] == ["杭州西湖"]
+    assert qualified == [
+        TargetSourceCandidate(name="杭州西湖", aliases=("西湖",), geo_tag_ref="")
+    ]
+    assert report["requestedTargetNames"] == ["西湖"]
+
+
+def test_retry_alias_ambiguity_fails_closed(tmp_path: Path) -> None:
+    path = tmp_path / "歧义市.yaml"
+    path.write_text(
+        yaml.safe_dump(
+            {
+                "districts": [
+                    {
+                        "district": "甲区",
+                        "leaves": [
+                            {
+                                "name": "景区甲",
+                                "canonicalName": "杭州景区甲",
+                                "aliases": ["共享别名"],
+                            },
+                            {
+                                "name": "景区乙",
+                                "canonicalName": "杭州景区乙",
+                                "aliases": ["共享别名"],
+                            },
+                        ],
+                    }
+                ]
+            },
+            allow_unicode=True,
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="requested target is ambiguous"):
+        select_targets(
+            discovery_path=path,
+            limit=1,
+            quota=1,
+            target_selector=TargetSelector.ALL,
+            target_names=("共享别名",),
+        )
 
 
 def test_select_targets_filters_to_declared_category(tmp_path: Path) -> None:

@@ -1,18 +1,15 @@
-domain: ASSISTANT
-aggregate: AssistantTurnView
 description: AssistantTurnView 对象专属查询错误码。
 errors:
 - code: ASSISTANT.USER.turn_view_unauthorized
-  kind: USER
   reason: turn_view_unauthorized
   http_status: 401
   emitted_by:
   - surface: http
     operations: [ListSessionTurns]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: turnViewUnauthorized
   go_const: ErrTurnViewUnauthorized
-  l10n_key: assistant.error.turn_view_unauthorized
   user_message:
     zh: 请先登录后查看助手轮次
     en: Please sign in to view assistant turns

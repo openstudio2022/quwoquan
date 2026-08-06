@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	useraccountapp "quwoquan_service/services/user-service/internal/account/user_account/application/account_orchestration"
 	usermodel "quwoquan_service/services/user-service/internal/account/user_account/domain/user/model"
 	useraccountpersistence "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/persistence"
 	userpersistence "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/user/persistence"
@@ -18,7 +19,7 @@ import (
 type creatorPersonaMaterializer struct {
 	reader    *userpersistence.PgPersonaStore
 	commands  personaports.PersonaCommandStore
-	projector *useraccountpersistence.PersonaProfileProjector
+	projector *useraccountapp.PersonaProfileProjector
 }
 
 var _ releaseimport.CreatorPersonaMaterializer = (*creatorPersonaMaterializer)(nil)
@@ -30,7 +31,11 @@ func newCreatorPersonaMaterializer(
 	if err != nil {
 		return nil, err
 	}
-	projector, err := useraccountpersistence.NewPersonaProfileProjector(pool)
+	projectionStore, err := useraccountpersistence.NewPersonaProfileProjector(pool)
+	if err != nil {
+		return nil, err
+	}
+	projector, err := useraccountapp.NewPersonaProfileProjector(projectionStore)
 	if err != nil {
 		return nil, err
 	}

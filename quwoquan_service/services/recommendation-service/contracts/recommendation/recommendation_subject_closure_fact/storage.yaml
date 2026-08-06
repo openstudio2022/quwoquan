@@ -13,7 +13,7 @@ collections:
     role: reliable_task
     description: events.user.account 消费失败的有界尝试计数；成功或进入脱敏 DLQ 后立即删除。
     indexes:
-    - {name: ttl_recommendation_subject_closure_failures, keys: {updatedAt: 1}, ttl_days: 7}
+    - {name: ttl_recommendation_subject_closure_failures, keys: {updatedAt: 1}, expire_after_seconds: 604800}
 streams:
   events.user.account.recommendation-service.dlq:
     entity: RecommendationSubjectClosureFact

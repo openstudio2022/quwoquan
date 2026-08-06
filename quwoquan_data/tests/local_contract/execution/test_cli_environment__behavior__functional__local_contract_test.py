@@ -1,4 +1,5 @@
-"""Current qwq-data CLI and key-file environment contracts."""
+"""Current qwq-data CLI and semantic-agent environment contracts."""
+
 from __future__ import annotations
 
 import argparse
@@ -11,18 +12,32 @@ from pathlib import Path
 
 import pytest
 
-
-DATA_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data")
+DATA_ROOT = next(
+    parent
+    for parent in Path(__file__).resolve().parents
+    if parent.name == "quwoquan_data"
+)
 SCRIPTS_ROOT = DATA_ROOT / "scripts"
 CLI = SCRIPTS_ROOT / "cli.py"
 if str(SCRIPTS_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_ROOT))
 
-from core import cursor_credentials, cursor_startup_probe, python_environment, python_network, python_runtime  # noqa: E402
 from content.execution.preflight import handler as preflight_handler  # noqa: E402
+from content.execution.preflight import semantic_provider  # noqa: E402
+from content.execution.preflight.evidence import compact_ready_evidence  # noqa: E402
+from core import (  # noqa: E402
+    cursor_credentials,
+    cursor_startup_probe,
+    cursor_workspace_probe,
+    python_environment,
+    python_network,
+)
+from core.control_types import AgentProvider  # noqa: E402
 
 
-def _key_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, value: str | None = None) -> Path:
+def _key_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, value: str | None = None
+) -> Path:
     path = tmp_path / "cursor_api_key"
     path.write_text(value or ("crsr_" + "x" * 32), encoding="utf-8")
     path.chmod(0o600)
@@ -39,8 +54,69 @@ def test_cli_exposes_only_durable_task_facades():
         check=False,
     )
     assert task.returncode == 0, task.stderr
-    command_rows = [line.strip().split(maxsplit=1)[0] for line in task.stdout.splitlines() if line.startswith("    ")]
-    assert command_rows == ["preflight", "execute", "discard"]
+    choices = next(
+        line.strip()[1:-1]
+        for line in task.stdout.splitlines()
+        if line.strip().startswith("{") and line.strip().endswith("}")
+    )
+    assert choices.split(",") == [
+        "preflight",
+        "prepare-campaign",
+        "execute",
+        "discard",
+        "supersede-execution",
+        "plan-images",
+        "probe-images",
+        "acquire-images",
+        "acquire-videos",
+        "review-asset",
+        "reconcile-stale",
+        "reconcile-submissions",
+        "runtime-evidence",
+    ]
+
+    runtime_evidence = subprocess.run(
+        [sys.executable, str(CLI), "task", "runtime-evidence", "--help"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert runtime_evidence.returncode == 0, runtime_evidence.stderr
+    compact_help = "".join(runtime_evidence.stdout.split())
+    assert (
+        "{create-session,sample,inject-worker-termination,inject-lease-expiry,"
+        "inject-redis-restart,inject-mongo-reconnect,inject-provider-timeout,"
+        "inject-provider-rate-limit,finalize}"
+    ) in compact_help
+
+    inject = subprocess.run(
+        [
+            sys.executable,
+            str(CLI),
+            "task",
+            "runtime-evidence",
+            "inject-worker-termination",
+            "--help",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert inject.returncode == 0, inject.stderr
+    assert "--confirm-active-worker-termination" in inject.stdout
+    for forbidden in (
+        "--environment",
+        "--output-root",
+        "--run-id",
+        "--generation",
+        "--fencing-token",
+        "--fault-type",
+        "--provider",
+        "--command",
+        "--argv",
+        "--shell",
+    ):
+        assert forbidden not in inject.stdout
 
     preflight = subprocess.run(
         [sys.executable, str(CLI), "task", "preflight", "--help"],
@@ -49,8 +125,17 @@ def test_cli_exposes_only_durable_task_facades():
         check=False,
     )
     assert preflight.returncode == 0, preflight.stderr
-    for name in ("--json", "--no-network", "--no-cursor-key", "--report-out"):
+    for name in (
+        "--json",
+        "--no-network",
+        "--no-semantic-agent-credential",
+        "--report-out",
+        "--semantic-selection-id",
+        "--soak",
+        "--receipt-out",
+    ):
         assert name in preflight.stdout
+    assert "--no-cursor-key" not in preflight.stdout
     for name in (
         "--python",
         "--requirements",
@@ -61,8 +146,76 @@ def test_cli_exposes_only_durable_task_facades():
     ):
         assert name not in preflight.stdout
 
+    prepare = subprocess.run(
+        [sys.executable, str(CLI), "task", "prepare-campaign", "--help"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert prepare.returncode == 0, prepare.stderr
+    for name in (
+        "--phase",
+        "--scale",
+        "--region-ref",
+        "--run-date",
+        "--sequence",
+        "--handoff-id",
+        "--handoff-revision",
+        "--supersedes-handoff-ref",
+        "--handoff-ref",
+        "--semantic-selection-id",
+        "--semantic-preflight-receipt",
+        "--homepage-image-input",
+        "--image-input",
+        "--video-input",
+    ):
+        assert name in prepare.stdout
+    for forbidden in (
+        "--output-root",
+        "--kind",
+        "--acquisition-root-ref",
+        "--article-image-input",
+    ):
+        assert forbidden not in prepare.stdout
 
-def test_python_runtime_prefers_data_venv_when_current_lacks_cursor_sdk(monkeypatch):
+    for command in ("acquire-images", "acquire-videos"):
+        acquisition = subprocess.run(
+            [sys.executable, str(CLI), "task", command, "--help"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert acquisition.returncode == 0, acquisition.stderr
+        assert "--handoff-ref" in acquisition.stdout
+
+    review = subprocess.run(
+        [sys.executable, str(CLI), "task", "review-asset", "--help"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert review.returncode == 0, review.stderr
+    for name in (
+        "--acquisition-receipt",
+        "--asset-kind",
+        "--asset-id",
+        "--execution-manifest",
+        "--author-evidence",
+        "--reviewer-evidence",
+        "--object-ref",
+        "--judgment",
+    ):
+        assert name in review.stdout
+    for forbidden in (
+        "--provider",
+        "--model",
+        "--run-id",
+        "--output-root",
+    ):
+        assert forbidden not in review.stdout
+
+
+def test_python_runtime_prefers_data_venv_when_current_lacks_agent_modules(monkeypatch):
     current = Path("/usr/bin/python3")
     data_python = python_environment.DATA_VENV_PYTHON
     monkeypatch.setattr(
@@ -73,9 +226,15 @@ def test_python_runtime_prefers_data_venv_when_current_lacks_cursor_sdk(monkeypa
     monkeypatch.setattr(
         python_environment,
         "python_has_modules",
-        lambda python, modules: (Path(python) == data_python, [] if Path(python) == data_python else ["missing"]),
+        lambda python, modules: (
+            Path(python) == data_python,
+            [] if Path(python) == data_python else ["missing"],
+        ),
     )
-    assert python_environment.resolve_data_agent_python(include_current=True) == data_python
+    assert (
+        python_environment.resolve_data_agent_python(include_current=True)
+        == data_python
+    )
 
 
 def test_python_tool_cache_rejects_disposable_output_root() -> None:
@@ -98,8 +257,12 @@ def test_agent_reexec_keeps_bytecode_out_of_the_source_tree(
 
     monkeypatch.delenv(python_environment.BOOTSTRAP_ENV, raising=False)
     monkeypatch.delenv("PYTHONDONTWRITEBYTECODE", raising=False)
-    monkeypatch.setattr(python_environment, "agent_command_needs_bootstrap", lambda _argv: True)
-    monkeypatch.setattr(python_environment, "python_has_modules", lambda *_args: (False, ["missing"]))
+    monkeypatch.setattr(
+        python_environment, "agent_command_needs_bootstrap", lambda _argv: True
+    )
+    monkeypatch.setattr(
+        python_environment, "python_has_modules", lambda *_args: (False, ["missing"])
+    )
     monkeypatch.setattr(
         python_environment,
         "resolve_data_agent_python",
@@ -160,7 +323,9 @@ def test_data_python_tool_cache_is_rebuilt_from_repo_truth(
         "python_has_modules",
         lambda _python, _modules: (True, []),
     )
-    monkeypatch.setattr(python_environment.shutil, "which", lambda _name: "/usr/bin/tool")
+    monkeypatch.setattr(
+        python_environment.shutil, "which", lambda _name: "/usr/bin/tool"
+    )
 
     first = python_environment.prepare_data_runtime_cache(cache_dir=cache_dir)
     shutil.rmtree(cache_dir)
@@ -177,29 +342,45 @@ def test_data_python_tool_cache_is_rebuilt_from_repo_truth(
 def test_environment_preflight_requires_restricted_key_file(monkeypatch, tmp_path):
     monkeypatch.delenv("QWQ_CURSOR_API_KEY_FILE", raising=False)
     monkeypatch.delenv("CURSOR_API_KEY", raising=False)
-    monkeypatch.setattr(cursor_credentials, "DEFAULT_CURSOR_API_KEY_FILE", tmp_path / "missing")
-    monkeypatch.setattr(python_runtime, "runtime_report", lambda: {"ready": True})
+    monkeypatch.setattr(
+        cursor_credentials, "DEFAULT_CURSOR_API_KEY_FILE", tmp_path / "missing"
+    )
+    monkeypatch.setattr(semantic_provider, "runtime_report", lambda: {"ready": True})
 
-    missing = python_runtime.environment_preflight(check_network=True)
+    missing = semantic_provider.semantic_agent_environment_preflight(
+        provider=AgentProvider.CURSOR_SDK,
+        check_network=True,
+    )
     assert missing["ready"] is False
-    assert missing["cursorApiKey"]["source"] == "missing"
+    assert missing["semanticAgentCredential"]["source"] == "missing"
     assert missing["network"]["skipped"] is True
     assert "cursor API key file missing or unreadable" in missing["issues"]
 
     key_file = _key_file(tmp_path, monkeypatch)
     key_file.chmod(0o644)
-    permissive = python_runtime.environment_preflight(check_network=True)
+    permissive = semantic_provider.semantic_agent_environment_preflight(
+        provider=AgentProvider.CURSOR_SDK,
+        check_network=True,
+    )
     assert permissive["ready"] is False
     assert any("permissions" in issue for issue in permissive["issues"])
 
 
-def test_environment_preflight_never_exports_key_to_parent_environment(monkeypatch, tmp_path):
+def test_environment_preflight_never_exports_key_to_parent_environment(
+    monkeypatch, tmp_path
+):
     key_file = _key_file(tmp_path, monkeypatch, "crsr_" + "a" * 32)
-    monkeypatch.setattr(python_runtime, "runtime_report", lambda: {"ready": True})
+    monkeypatch.setattr(semantic_provider, "runtime_report", lambda: {"ready": True})
     monkeypatch.setattr(
-        python_runtime,
+        semantic_provider,
         "check_network_endpoints",
-        lambda **kwargs: {"checked": True, "skipped": False, "ready": True, "endpoints": [], "issues": []},
+        lambda **kwargs: {
+            "checked": True,
+            "skipped": False,
+            "ready": True,
+            "endpoints": [],
+            "issues": [],
+        },
     )
     seen: list[str] = []
 
@@ -207,20 +388,38 @@ def test_environment_preflight_never_exports_key_to_parent_environment(monkeypat
         seen.append(os.environ.get("CURSOR_API_KEY", ""))
         return {"checked": True, "ready": True, "started": True, "issues": []}
 
-    monkeypatch.setattr(python_runtime, "cached_cursor_startup_probe", startup_probe)
-    first = python_runtime.environment_preflight(check_network=True, check_cursor_startup=True)
+    monkeypatch.setattr(
+        semantic_provider,
+        "semantic_agent_startup_probe",
+        startup_probe,
+    )
+    first = semantic_provider.semantic_agent_environment_preflight(
+        provider=AgentProvider.CURSOR_SDK,
+        check_network=True,
+        check_startup=True,
+        startup_model="auto",
+        startup_runtime="local",
+    )
     key_file.write_text("crsr_" + "b" * 32, encoding="utf-8")
-    second = python_runtime.environment_preflight(check_network=True, check_cursor_startup=True)
+    second = semantic_provider.semantic_agent_environment_preflight(
+        provider=AgentProvider.CURSOR_SDK,
+        check_network=True,
+        check_startup=True,
+        startup_model="auto",
+        startup_runtime="local",
+    )
 
     assert first["ready"] is True and second["ready"] is True
     assert seen == ["", ""]
     assert "CURSOR_API_KEY" not in os.environ
-    assert second["cursorApiKey"] == {
+    assert second["semanticAgentCredential"] == {
+        "provider": "cursor_sdk",
         "source": "key_file",
         "present": True,
         "valid": True,
         "issues": [],
     }
+
 
 def test_cursor_key_redaction_covers_hyphen_and_underscore_suffixes():
     value = "cursor crsr_fake-key_value failed"
@@ -272,10 +471,54 @@ def test_cursor_startup_probe_preserves_redacted_diagnostics(monkeypatch, tmp_pa
     assert report["attemptCount"] == len(calls)
     assert len(calls) > 1
     assert key not in json.dumps(report)
-    assert launch["kwargs"]["input"] == f"{key}\n"
+    assert "input" not in launch["kwargs"]
+    assert launch["kwargs"]["stdin"] is subprocess.DEVNULL
+    assert launch["kwargs"]["pass_fds"]
     assert "CURSOR_API_KEY" not in launch["kwargs"]["env"]
+    assert key not in json.dumps(launch["kwargs"]["env"])
     assert key not in "\n".join(launch["args"][0])
-    assert "allow_api_key_env_fallback=False" in launch["args"][0][2]
+    assert "sys.stdin" not in launch["args"][0][2]
+    assert "QWQ_CURSOR_API_KEY_FD" in launch["args"][0][2]
+    assert "protected_cursor_client" in launch["args"][0][2]
+    assert "Client.launch_bridge(" not in launch["args"][0][2]
+
+
+def test_cursor_model_catalog_uses_protected_fd_without_secret_process_fields(
+    monkeypatch, tmp_path
+):
+    key = "crsr_" + "y" * 32
+    _key_file(tmp_path, monkeypatch, key)
+    monkeypatch.setattr(
+        cursor_workspace_probe,
+        "resolve_data_agent_python",
+        lambda include_current=True: Path(sys.executable),
+    )
+
+    class Completed:
+        returncode = 0
+        stderr = ""
+        stdout = json.dumps(
+            {"ready": True, "sdkVersion": "1.0.26", "modelIds": ["default"]}
+        )
+
+    launch: dict = {}
+
+    def run(*args, **kwargs):
+        launch.update({"args": args, "kwargs": kwargs})
+        return Completed()
+
+    monkeypatch.setattr(cursor_workspace_probe.subprocess, "run", run)
+    report = cursor_workspace_probe.cursor_model_catalog()
+
+    assert report["ready"] is True
+    assert "input" not in launch["kwargs"]
+    assert launch["kwargs"]["stdin"] is subprocess.DEVNULL
+    assert launch["kwargs"]["pass_fds"]
+    assert "CURSOR_API_KEY" not in launch["kwargs"]["env"]
+    assert key not in json.dumps(launch["kwargs"]["env"])
+    assert key not in "\n".join(launch["args"][0])
+    assert "sys.stdin" not in launch["args"][0][2]
+    assert "QWQ_CURSOR_API_KEY_FD" in launch["args"][0][2]
 
 
 def test_network_probe_falls_back_from_head_to_get(monkeypatch):
@@ -293,7 +536,9 @@ def test_network_probe_falls_back_from_head_to_get(monkeypatch):
     def open_request(request, timeout):  # noqa: ARG001
         methods.append(request.get_method())
         if request.get_method() == "HEAD":
-            raise python_network.urlerror.HTTPError(request.full_url, 500, "head failed", None, None)
+            raise python_network.urlerror.HTTPError(
+                request.full_url, 500, "head failed", None, None
+            )
         return Response()
 
     monkeypatch.setattr(python_network.urlrequest, "urlopen", open_request)
@@ -308,72 +553,105 @@ def test_env_ready_writes_compact_failure_evidence(monkeypatch, tmp_path):
     monkeypatch.setattr(
         preflight_handler,
         "prepare_data_runtime_cache",
-        lambda **_kwargs: {"ready": True, "python": sys.executable, "missing": [], "stdoutTail": "noisy"},
+        lambda **_kwargs: {
+            "ready": True,
+            "python": sys.executable,
+            "missing": [],
+            "stdoutTail": "noisy",
+        },
+    )
+    monkeypatch.setattr(
+        "content.execution.preflight.runtime.python_has_modules",
+        lambda *_args: (True, []),
     )
     monkeypatch.setattr(
         preflight_handler,
         "_preflight_in_python",
         lambda _args, _python: {
+            "provider": "codex_sdk",
             "ready": False,
             "issues": ["cursor API key file missing or unreadable"],
             "runtime": {"ready": True, "resolvedPython": sys.executable},
-            "cursorApiKey": {
+            "semanticAgentCredential": {
+                "provider": "codex_sdk",
                 "source": "missing",
                 "present": False,
                 "valid": False,
                 "issues": ["cursor API key file missing or unreadable"],
             },
             "network": {"checked": False, "ready": True, "issues": []},
-            "cursorStartup": {"checked": False, "ready": True, "runtime": "local", "model": "composer"},
+            "semanticAgentStartup": {
+                "checked": False,
+                "ready": True,
+                "provider": "codex_sdk",
+                "runtime": "local",
+                "model": "gpt-5.6-terra",
+            },
         },
     )
     args = argparse.Namespace(
         python=None,
         requirements=None,
         json=True,
-        no_cursor_key=False,
+        no_semantic_agent_credential=False,
         no_network=False,
         endpoint=None,
         timeout_seconds=5.0,
-        no_cursor_startup=False,
-        cursor_startup=True,
-        model="composer",
-        runtime="local",
-        startup_timeout_seconds=30.0,
+        no_semantic_agent_startup=False,
+        semantic_agent_startup=True,
         report_out=str(report_out),
     )
     with pytest.raises(SystemExit):
         preflight_handler.handle_ready(args)
     evidence = json.loads(report_out.read_text(encoding="utf-8"))
     assert evidence["ready"] is False
+    assert evidence["provider"] == "codex_sdk"
+    assert evidence["credential"]["provider"] == "codex_sdk"
     assert evidence["credential"]["source"] == "missing"
     assert evidence["issues"] == ["cursor API key file missing or unreadable"]
     assert evidence["network"]["ready"] is False
-    assert evidence["cursorStartup"]["ready"] is False
+    assert evidence["semanticAgentStartup"]["ready"] is False
     assert "stdoutTail" not in json.dumps(evidence)
 
 
 def test_compact_preflight_evidence_preserves_reliabletask_fleet_receipt() -> None:
-    evidence = preflight_handler._compact_ready_evidence(
+    evidence = compact_ready_evidence(
         {
             "ready": True,
+            "provider": "codex_sdk",
             "prepare": {"ready": True, "python": sys.executable},
             "preflight": {
                 "ready": True,
                 "runtime": {"ready": True, "resolvedPython": sys.executable},
-                "cursorApiKey": {"source": "key_file", "present": True, "valid": True},
+                "semanticAgentCredential": {
+                    "provider": "codex_sdk",
+                    "source": "codex_cli",
+                    "present": True,
+                    "valid": True,
+                },
                 "network": {"checked": True, "ready": True},
-                "cursorStartup": {"checked": True, "ready": True},
+                "semanticAgentStartup": {"checked": True, "ready": True},
                 "reliableTaskFleet": {
                     "checked": True,
                     "ready": True,
                     "target": "beta-local",
                     "mongo": True,
                     "redis": True,
+                    "owned": True,
                     "issues": [],
                 },
             },
-            "cursorStartup": {"checked": True, "ready": True},
+            "semanticAgentCredential": {
+                "provider": "codex_sdk",
+                "source": "codex_cli",
+                "present": True,
+                "valid": True,
+            },
+            "semanticAgentStartup": {
+                "provider": "codex_sdk",
+                "checked": True,
+                "ready": True,
+            },
         }
     )
 
@@ -383,8 +661,11 @@ def test_compact_preflight_evidence_preserves_reliabletask_fleet_receipt() -> No
         "target": "beta-local",
         "mongo": True,
         "redis": True,
+        "owned": True,
         "issues": [],
     }
+    assert evidence["provider"] == "codex_sdk"
+    assert evidence["semanticAgentStartup"]["provider"] == "codex_sdk"
 
 
 def test_env_ready_does_not_repeat_runtime_child_fleet_reconciliation(
@@ -400,26 +681,32 @@ def test_env_ready_does_not_repeat_runtime_child_fleet_reconciliation(
         },
     )
     monkeypatch.setattr(
+        "content.execution.preflight.runtime.python_has_modules",
+        lambda *_args: (True, []),
+    )
+    monkeypatch.setattr(
         preflight_handler,
         "_preflight_in_python",
         lambda _args, _python: {
             "ready": True,
             "issues": [],
             "runtime": {"ready": True, "resolvedPython": sys.executable},
-            "cursorApiKey": {
+            "semanticAgentCredential": {
+                "provider": "codex_sdk",
                 "source": "key_file",
                 "present": True,
                 "valid": True,
                 "issues": [],
             },
             "network": {"checked": False, "ready": True, "issues": []},
-            "cursorStartup": {"checked": False, "ready": True},
+            "semanticAgentStartup": {"checked": False, "ready": True},
             "reliableTaskFleet": {
                 "checked": True,
                 "ready": True,
                 "target": "beta-local",
                 "mongo": True,
                 "redis": True,
+                "owned": True,
                 "issues": [],
             },
         },
@@ -434,17 +721,13 @@ def test_env_ready_does_not_repeat_runtime_child_fleet_reconciliation(
         python=None,
         requirements=None,
         json=True,
-        no_cursor_key=False,
+        no_semantic_agent_credential=False,
         no_network=True,
         endpoint=None,
         timeout_seconds=5.0,
-        no_cursor_startup=True,
-        cursor_startup=False,
-        model="auto",
-        runtime="local",
-        startup_timeout_seconds=30.0,
+        no_semantic_agent_startup=True,
+        semantic_agent_startup=False,
         report_out=None,
-        require_reliabletask_fleet=True,
         workspace_smoke=False,
         soak=0,
     )
@@ -460,7 +743,17 @@ def test_preflight_evidence_rejects_retired_data_local_branch(monkeypatch, tmp_p
     monkeypatch.setattr(preflight_handler, "DATA_EXECUTIONS_ROOT", tasks_root)
     monkeypatch.setattr(preflight_handler, "DATA_LOCAL_ROOT", local_root)
 
-    assert preflight_handler._report_output_path(tasks_root / "execution" / "evidence" / "ready.json").name == "ready.json"
-    assert preflight_handler._report_output_path(local_root / "cache" / "preflight" / "ready.json").name == "ready.json"
+    assert (
+        preflight_handler._report_output_path(
+            tasks_root / "execution" / "evidence" / "ready.json"
+        ).name
+        == "ready.json"
+    )
+    assert (
+        preflight_handler._report_output_path(
+            local_root / "cache" / "preflight" / "ready.json"
+        ).name
+        == "ready.json"
+    )
     with pytest.raises(SystemExit, match="data/local/cache"):
         preflight_handler._report_output_path(local_root / "preflight" / "ready.json")

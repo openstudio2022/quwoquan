@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/source/professional_image_discovery_probe.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "planId", "planDigest", "probedAt", "overallReady",
+    "providerProbeCounts", "probes", "receiptDigest"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.professional_image_discovery_probe"},
+    "planId": {"type": "string", "minLength": 1},
+    "planDigest": {"$ref": "#/$defs/digest"},
+    "probedAt": {"type": "string", "minLength": 1},
+    "overallReady": {"type": "boolean"},
+    "providerProbeCounts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["provider", "plannedProbeCount", "reachableProbeCount"],
+        "properties": {
+          "provider": {"type": "string", "minLength": 1},
+          "plannedProbeCount": {"type": "integer", "minimum": 1},
+          "reachableProbeCount": {"type": "integer", "minimum": 0}
+        }
+      }
+    },
+    "probes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "candidateId", "provider", "url", "reachable", "statusCode",
+          "errorCode", "errorDetail"
+        ],
+        "properties": {
+          "candidateId": {"type": "string", "minLength": 1},
+          "provider": {"type": "string", "minLength": 1},
+          "url": {"type": "string", "pattern": "^https://"},
+          "reachable": {"type": "boolean"},
+          "statusCode": {"type": ["integer", "null"]},
+          "errorCode": {
+            "enum": ["", "dns_unavailable", "timeout", "access_controlled", "http_error", "network_error"]
+          },
+          "errorDetail": {"type": "string"}
+        }
+      }
+    },
+    "receiptDigest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

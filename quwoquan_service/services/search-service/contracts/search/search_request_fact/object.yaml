@@ -29,11 +29,16 @@ relationships:
 local_identity_reasons:
   searchRequestId: immutable correlation or idempotency key scoped to this fact or command; it is not
     a business-object reference
-capabilities:
-- queryable
-- searchable
 lifecycle:
   immutable: true
+  source_events:
+  - user.user_account.UserAccountClosed
+  event_consumers:
+  - name: ApplySearchRequestAccountClosure
+    kind: subscription
+    facet: UserAccountClosedConsumer
+    method: processOnce
+    idempotency: event_id
 taggable: false
 vector_enabled: false
 business_rules:

@@ -4,8 +4,23 @@ runtime_entrypoints:
 - name: AppendRecommendationFeedback
   kind: subscription
   phase: event_ingest
-  source_events: [content.ContentBehaviorRecorded]
-  idempotency: event_id
-  application: {kind: command, facet: RecommendationFeedbackFactAppender, method: append, object_owner: RecommendationFeedbackFact}
+  application: {kind: command, facet: ContentBehaviorConsumer, method: processOnce, object_owner: RecommendationFeedbackFact}
 consumers:
 - {name: content-behavior-facts, channel: events.content.behavior_facts, source_event: ContentBehaviorRecorded, capabilities: [resolve_exposure, append_feedback_fact]}
+readiness_cases:
+- case_id: append-feedback-local
+  spec_ref: specs/feature-tree/recommendation-platform/spec.md#dom-001
+  producer: service
+  layer: local_contract
+  target: {kind: object, id: recommendation.recommendation_feedback_fact}
+  runner_source_path: quwoquan_service/services/recommendation-service/tests/local_contract/recommendation/recommendation_feedback_fact/test_content_behavior_consumer__durability__local_contract_test.py
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: append-feedback-api
+  spec_ref: specs/feature-tree/recommendation-platform/spec.md#dom-001
+  producer: service
+  layer: api_integration
+  target: {kind: object, id: recommendation.recommendation_feedback_fact}
+  runner_source_path: quwoquan_service/services/recommendation-service/tests/api_integration/recommendation/recommendation_feedback_fact/test_mongo_feedback_fact__api_integration_test.py
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}

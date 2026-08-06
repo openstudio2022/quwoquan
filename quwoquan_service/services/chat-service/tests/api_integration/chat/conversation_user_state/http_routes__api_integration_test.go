@@ -1,4 +1,7 @@
 // spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-003
+// spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+// readiness_case: mark-as-read-api
+// readiness_case: update-conversation-settings-api
 package api_integration
 
 import (
@@ -48,6 +51,21 @@ func TestConversationUserStateHTTPUsesTrustedPersonaAndStrictWire(t *testing.T) 
 		backend.settings.ConversationId != "conversation-1" || backend.settings.Muted == nil ||
 		!*backend.settings.Muted {
 		t.Fatalf("typed settings command drifted: status=%d request=%+v", response.Code, backend.settings)
+	}
+
+	readRequest := httptest.NewRequest(
+		http.MethodPost,
+		"/chat/conversations/conversation-1/messages/message-7/read",
+		nil,
+	)
+	readRequest = readRequest.WithContext(rtauth.WithPrincipal(readRequest.Context(), rtauth.Principal{
+		Actor: operation.ActorContext{PersonaID: "trusted-persona"},
+	}))
+	readResponse := httptest.NewRecorder()
+	routes.ServeHTTP(readResponse, readRequest)
+	if readResponse.Code != http.StatusOK || backend.read.ConversationId != "conversation-1" ||
+		backend.read.MessageId != "message-7" || backend.read.UserId != "trusted-persona" {
+		t.Fatalf("typed read command drifted: status=%d request=%+v", readResponse.Code, backend.read)
 	}
 
 	invalid := httptest.NewRequest(

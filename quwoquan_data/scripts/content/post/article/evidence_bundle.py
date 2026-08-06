@@ -191,6 +191,7 @@ def load_source_records(
     base_source_ref: str = "",
 ) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
+    seen_source_dirs: set[Path] = set()
     base_ref = str(base_source_ref or "").strip()
     if base_ref:
         source_path = Path(base_ref)
@@ -208,7 +209,9 @@ def load_source_records(
             if target_refs:
                 entity_name = target_refs[0].rstrip("/").rsplit("/", 1)[-1]
         row = _source_record_from_dir(execution_id, source_path.parent, entity_name=entity_name)
-        return [row] if row is not None else []
+        if row is not None:
+            records.append(row)
+            seen_source_dirs.add(source_path.parent.resolve())
     ref_by_name: dict[str, str] = {}
     for raw_ref in entity_refs or []:
         ref = str(raw_ref or "").strip()
@@ -221,9 +224,13 @@ def load_source_records(
             entity_name,
             entity_ref=ref_by_name.get(entity_name, ""),
         ):
+            resolved_source_dir = source_dir.resolve()
+            if resolved_source_dir in seen_source_dirs:
+                continue
             row = _source_record_from_dir(execution_id, source_dir, entity_name=entity_name)
             if row is not None:
                 records.append(row)
+                seen_source_dirs.add(resolved_source_dir)
     return records
 
 def build_route_evidence_bundle(
@@ -490,4 +497,3 @@ def json_safe_dump(value: Any) -> str:
     if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
         return " ".join(json_safe_dump(item) for item in value)
     return str(value or "")
-

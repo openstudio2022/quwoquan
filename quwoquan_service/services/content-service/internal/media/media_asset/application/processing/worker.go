@@ -17,12 +17,11 @@ import (
 )
 
 const (
-	defaultConsumer         = "content-media-processing"
-	maxBatchSize            = 10
-	assetCreatedEventType   = "content.media_asset.created"
-	assetDiscardedEventType = "content.media_asset.discarded"
-	mediaAssetAggregate     = "MediaAsset"
-	defaultLeaseTTL         = 30 * time.Second
+	defaultConsumer             = "content-media-processing"
+	maxBatchSize                = 10
+	mediaAssetAggregate         = "MediaAsset"
+	mediaUploadSessionAggregate = "MediaUploadSession"
+	defaultLeaseTTL             = 30 * time.Second
 
 	poisonReasonInvalidEventMetadata = "invalid_event_metadata"
 	poisonReasonInvalidAssetSnapshot = "invalid_asset_snapshot"
@@ -31,9 +30,31 @@ const (
 	poisonReasonInvalidSourceCursor  = "invalid_source_cursor"
 )
 
+type mediaOutboxEventType string
+
+const (
+	assetCreatedEventType             mediaOutboxEventType = "content.media_asset.created"
+	assetProcessingUpdatedEventType   mediaOutboxEventType = "content.media_asset.processing_updated"
+	assetAccessPolicyUpdatedEventType mediaOutboxEventType = "content.media_asset.access_policy_updated"
+	assetDiscardedEventType           mediaOutboxEventType = "content.media_asset.discarded"
+	uploadInitializedEventType        mediaOutboxEventType = "content.media_upload.initialized"
+	uploadCompletedEventType          mediaOutboxEventType = "content.media_upload.completed"
+	uploadAbortedEventType            mediaOutboxEventType = "content.media_upload.aborted"
+)
+
+type processingEventDisposition uint8
+
+const (
+	processingEventUnknown processingEventDisposition = iota
+	processingEventCreateAsset
+	processingEventDiscardAsset
+	processingEventDeclaredNoop
+)
+
 var errMediaProcessingLeaseLost = errors.New("media processing worker lease lost")
 
-// Worker is the sole production consumer of the media outbox. It fulfils the
+// Worker is the sole production consumer of media-processing work in the media
+// outbox. It fulfils the
 // `MediaAssetCreated -> media-processing` contract declared in
 // services/content-service/contracts/media/media_asset/events.yaml: every uploaded image or
 // video asset is probed, normalized and recorded ready/rejected, so publication
@@ -245,16 +266,22 @@ func (w *Worker) handleEvent(
 	ctx context.Context,
 	event mediaports.OutboxEvent,
 ) error {
-	if event.AggregateType != mediaAssetAggregate {
-		return w.quarantine(ctx, event, poisonReasonUnexpectedTarget)
-	}
 	if strings.TrimSpace(event.AggregateID) == "" {
 		return w.quarantine(ctx, event, poisonReasonInvalidEventMetadata)
 	}
-	if event.EventType == assetDiscardedEventType {
+	switch classifyProcessingEvent(event.AggregateType, event.EventType) {
+	case processingEventDeclaredNoop:
+		// The media outbox is shared by the processing-work consumer and the
+		// domain-event publication boundary. A declared domain fact which does
+		// not request processing work is valid input, not poison. This consumer
+		// advances only its own durable cursor; each publication consumer must
+		// own an independent checkpoint once its canonical identity is declared.
+		return nil
+	case processingEventDiscardAsset:
 		return w.cleanupDiscardedAsset(ctx, event)
-	}
-	if event.EventType != assetCreatedEventType {
+	case processingEventCreateAsset:
+		// Continue below and process the authoritative MediaAsset snapshot.
+	default:
 		return w.quarantine(ctx, event, poisonReasonUnexpectedTarget)
 	}
 	asset, found, err := w.assets.LoadMediaAsset(ctx, event.AggregateID)
@@ -326,6 +353,35 @@ func (w *Worker) handleEvent(
 		w.observe(asset.MediaType(), inputSizeClass(asset.FileSize()), "infrastructure_error", duration)
 		return fmt.Errorf("process media asset %q: %w", asset.ID(), err)
 	}
+}
+
+// classifyProcessingEvent is the typed allowlist projected from the currently
+// declared MediaAsset and MediaUploadSession event contracts. Unknown event or
+// aggregate pairs remain fail-closed and are quarantined; adding a new domain
+// event requires updating its contract and this explicit processing boundary.
+func classifyProcessingEvent(
+	aggregateType string,
+	eventType string,
+) processingEventDisposition {
+	switch strings.TrimSpace(aggregateType) {
+	case mediaAssetAggregate:
+		switch mediaOutboxEventType(strings.TrimSpace(eventType)) {
+		case assetCreatedEventType:
+			return processingEventCreateAsset
+		case assetDiscardedEventType:
+			return processingEventDiscardAsset
+		case assetProcessingUpdatedEventType, assetAccessPolicyUpdatedEventType:
+			return processingEventDeclaredNoop
+		}
+	case mediaUploadSessionAggregate:
+		switch mediaOutboxEventType(strings.TrimSpace(eventType)) {
+		case uploadInitializedEventType,
+			uploadCompletedEventType,
+			uploadAbortedEventType:
+			return processingEventDeclaredNoop
+		}
+	}
+	return processingEventUnknown
 }
 
 func (w *Worker) cleanupDiscardedAsset(

@@ -1,62 +1,60 @@
-domain: OPS
-aggregate: Experiment
 description: Experiment 生命周期、分配事实和运营 Reader 的稳定错误语义。
 errors:
 - code: OPS.USER.experiment_invalid_argument
-  kind: USER
   reason: experiment_invalid_argument
   http_status: 400
   emitted_by:
   - {surface: http, operations: [CreateExperiment, UpdateExperimentRollout]}
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: invalidArgument
   go_const: ErrInvalidArgument
   user_message:
     zh: 实验请求参数无效
     en: Invalid experiment request
 - code: OPS.USER.experiment_not_found
-  kind: USER
   reason: experiment_not_found
   http_status: 404
   emitted_by:
   - {surface: http, operations: [UpdateExperimentRollout]}
-  recovery_action: refresh
+  recovery_action: retry
+  disruption_level: snackbar
   dart_const: experimentNotFound
   go_const: ErrExperimentNotFound
   user_message:
     zh: 实验不存在
     en: Experiment not found
 - code: OPS.USER.version_conflict
-  kind: USER
   reason: version_conflict
   http_status: 409
   emitted_by:
   - {surface: http, operations: [CreateExperiment, UpdateExperimentRollout]}
-  recovery_action: refresh
+  recovery_action: retry
+  disruption_level: snackbar
   dart_const: versionConflict
   go_const: ErrVersionConflict
   user_message:
     zh: 实验已更新，请刷新后重试
     en: Experiment changed, refresh and retry
 - code: OPS.USER.idempotency_conflict
-  kind: USER
   reason: idempotency_conflict
   http_status: 409
   emitted_by:
   - {surface: http, operations: [CreateExperiment, UpdateExperimentRollout]}
-  recovery_action: refresh
+  recovery_action: retry
+  disruption_level: snackbar
   dart_const: idempotencyConflict
   go_const: ErrIdempotencyConflict
   user_message:
     zh: 重复请求与原操作不一致
     en: The repeated request differs from the original operation
 - code: OPS.SYSTEM.experiment_storage_read_failed
-  kind: SYSTEM
   reason: experiment_storage_read_failed
   http_status: 500
   emitted_by:
   - {surface: http, operations: [ListExperiments, UpdateExperimentRollout]}
   recovery_action: retry
+  disruption_level: snackbar
   recovery_after_seconds: 2
   dart_const: storageReadFailed
   go_const: ErrStorageReadFailed
@@ -64,12 +62,12 @@ errors:
     zh: 实验读取失败，请稍后重试
     en: Experiment read failed, please retry
 - code: OPS.SYSTEM.experiment_storage_write_failed
-  kind: SYSTEM
   reason: experiment_storage_write_failed
   http_status: 500
   emitted_by:
   - {surface: http, operations: [CreateExperiment, UpdateExperimentRollout]}
   recovery_action: retry
+  disruption_level: snackbar
   recovery_after_seconds: 2
   dart_const: storageWriteFailed
   go_const: ErrStorageWriteFailed

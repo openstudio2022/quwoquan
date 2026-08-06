@@ -152,6 +152,7 @@ def load_writing_intent_overrides(execution_id: str) -> dict[str, dict[str, Any]
             "carrier",
             "sourceCollectionId",
             "assetRefs",
+            "articleSourceUnitFreeze",
             "authorId",
             "creatorProfileId",
             "creatorArchetype",

@@ -65,7 +65,7 @@ class UserProfileGammaPatrolMatrixContractTest(unittest.TestCase):
             "workflow 必须从 gamma registry 解析用户主页 Patrol target",
         )
         self.assertIn(
-            "run_local_gamma_t4.sh",
+            "run_local_gamma_device_uat.sh",
             workflow,
             "workflow 必须经统一 Gamma Patrol runner 记录设备证据",
         )

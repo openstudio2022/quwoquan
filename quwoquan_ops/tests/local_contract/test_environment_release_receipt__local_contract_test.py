@@ -1,13 +1,21 @@
 # spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-004
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from quwoquan_ops.ci.render_environment_release_receipt import render
+from quwoquan_ops.ci.render_environment_release_receipt import (
+    RELEASE_CLOSURE_PATHS,
+    _canonical_digest,
+    archive_environment_evidence,
+    archive_exact_files,
+    render,
+    validate_release_closure_sources,
+)
 
 
 class EnvironmentReleaseReceiptTest(unittest.TestCase):
@@ -88,6 +96,38 @@ class EnvironmentReleaseReceiptTest(unittest.TestCase):
             }
         return evidence
 
+    def _release_closure(self, environment: str) -> dict[str, dict]:
+        candidate = {
+            "schema": "quwoquan_data.release_attestation",
+            "releaseId": "pilot-003",
+            "payloadSha256": "sha256:" + "6" * 64,
+            "recordedAt": "2026-07-28T00:00:05Z",
+        }
+        rollback = {
+            "schema": "quwoquan_data.release_attestation",
+            "releaseId": "pilot-002",
+            "payloadSha256": "sha256:" + "7" * 64,
+            "recordedAt": "2026-07-28T00:00:04Z",
+        }
+        lifecycle = {
+            "schema": "quwoquan_data.environment_release_lifecycle_exit",
+            "environment": environment,
+            "passed": True,
+            "sourceOwner": "qwq_data",
+            "originalReleaseId": candidate["releaseId"],
+            "originalManifestDigest": candidate["payloadSha256"],
+            "replayManifestDigest": candidate["payloadSha256"],
+            "rollbackToReleaseId": rollback["releaseId"],
+            "rollbackToManifestDigest": rollback["payloadSha256"],
+            "recordedAt": "2026-07-28T00:00:15Z",
+        }
+        lifecycle["verificationChecksum"] = _canonical_digest(lifecycle)
+        return {
+            "pilot-release": candidate,
+            "pilot-rollback": rollback,
+            "content-lifecycle": lifecycle,
+        }
+
     def _package(self, *, environment: str = "alpha") -> dict:
         target = {
             "alpha": "alpha-local",
@@ -121,7 +161,10 @@ class EnvironmentReleaseReceiptTest(unittest.TestCase):
         package_path.write_text(json.dumps(package_payload), encoding="utf-8")
         evidence["package"] = (package_path, package_payload)
         supplemental = (
-            self._preprod_evidence(environment)
+            {
+                **self._preprod_evidence(environment),
+                **self._release_closure(environment),
+            }
             if environment in {"alpha", "beta", "gamma"}
             else {}
         )
@@ -168,7 +211,11 @@ class EnvironmentReleaseReceiptTest(unittest.TestCase):
                 },
             )
         self.assertEqual(receipt["status"], "passed")
-        self.assertEqual(receipt["verifiedAt"], "2026-07-28T00:00:13Z")
+        self.assertEqual(receipt["verifiedAt"], "2026-07-28T00:00:15Z")
+        self.assertEqual(
+            receipt["evidence"]["files"]["pilot-release"]["path"],
+            RELEASE_CLOSURE_PATHS["pilot-release"],
+        )
 
     def test_rewrapped_candidate_evidence_is_rejected(self) -> None:
         wrapped = {
@@ -275,6 +322,163 @@ class EnvironmentReleaseReceiptTest(unittest.TestCase):
                     evidence={"up": (path, up)},
                     required_evidence=["up"],
                     archive_prefix="evidence/raw/environments/alpha/raw",
+                )
+
+    def test_exact_byte_archiver_stages_raw_and_rejects_path_traversal(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source.json"
+            source.write_bytes(b'{"exact":"bytes"}\n')
+            descriptors = archive_exact_files(
+                archive_root=root / "artifact",
+                files={"green-matrix": (source, RELEASE_CLOSURE_PATHS["green-matrix"])},
+            )
+            archived = root / "artifact" / RELEASE_CLOSURE_PATHS["green-matrix"]
+            self.assertEqual(archived.read_bytes(), source.read_bytes())
+            self.assertEqual(
+                descriptors["green-matrix"]["digest"],
+                "sha256:" + hashlib.sha256(source.read_bytes()).hexdigest(),
+            )
+            with self.assertRaisesRegex(ValueError, "path is unsafe"):
+                archive_exact_files(
+                    archive_root=root / "artifact",
+                    files={"escape": (source, "../escape.json")},
+                )
+
+    def test_environment_archiver_requires_manifest_bound_release_bytes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            artifact = root / "artifact"
+            staging = root / "staging"
+            canonical = artifact / RELEASE_CLOSURE_PATHS["pilot-release"]
+            canonical.parent.mkdir(parents=True)
+            canonical.write_bytes(b'{"release":"canonical"}\n')
+            raw = root / "raw-package.json"
+            raw.write_bytes(b'{"package":"exact"}\n')
+            descriptors = {
+                "pilot-release": {
+                    "path": RELEASE_CLOSURE_PATHS["pilot-release"],
+                    "digest": "sha256:"
+                    + hashlib.sha256(canonical.read_bytes()).hexdigest(),
+                },
+                "package": {
+                    "path": "evidence/raw/environments/alpha/raw/package.json",
+                    "digest": "sha256:"
+                    + hashlib.sha256(raw.read_bytes()).hexdigest(),
+                },
+            }
+            archive_environment_evidence(
+                artifact_root=artifact,
+                staging_root=staging,
+                environment="alpha",
+                evidence_paths={"pilot-release": canonical, "package": raw},
+                descriptors=descriptors,
+            )
+            self.assertEqual(
+                (staging / "raw/package.json").read_bytes(),
+                raw.read_bytes(),
+            )
+            wrong = root / "wrong-release.json"
+            wrong.write_bytes(canonical.read_bytes())
+            with self.assertRaisesRegex(ValueError, "manifest-bound exact file"):
+                archive_environment_evidence(
+                    artifact_root=artifact,
+                    staging_root=staging,
+                    environment="alpha",
+                    evidence_paths={"pilot-release": wrong},
+                    descriptors={"pilot-release": descriptors["pilot-release"]},
+                )
+
+    def test_full_release_closure_rejects_wrong_green_matrix_environment(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            common = self._release_closure("alpha")
+            candidate_path = root / "candidate.json"
+            rollback_path = root / "rollback.json"
+            candidate_path.write_text(
+                json.dumps(common["pilot-release"]), encoding="utf-8"
+            )
+            rollback_path.write_text(
+                json.dumps(common["pilot-rollback"]), encoding="utf-8"
+            )
+            lifecycle_paths: dict[str, Path] = {}
+            environments: dict[str, dict] = {}
+            for environment in ("alpha", "beta", "gamma"):
+                lifecycle = self._release_closure(environment)[
+                    "content-lifecycle"
+                ]
+                lifecycle_path = root / f"lifecycle-{environment}.json"
+                lifecycle_path.write_text(
+                    json.dumps(lifecycle), encoding="utf-8"
+                )
+                lifecycle_paths[environment] = lifecycle_path
+                target = f"{environment}-local"
+                environments[target] = {
+                    "environment": environment,
+                    "target": target,
+                    "release": {
+                        "releaseId": "pilot-003",
+                        "releaseDigest": "sha256:" + "6" * 64,
+                    },
+                    "rollbackRelease": {
+                        "releaseId": "pilot-002",
+                        "releaseDigest": "sha256:" + "7" * 64,
+                    },
+                }
+            matrix = {
+                "schema": "quwoquan.test.case-result",
+                "caseId": "stackctl.local-env-gate.alpha-beta-gamma",
+                "status": "passed",
+                "claim": "ALPHA_BETA_GAMMA_LOCAL_GREEN",
+                "executionClass": "live",
+                "targets": ["alpha-local", "beta-local", "gamma-local"],
+                "executed": 3,
+                "skipped": 0,
+                "failureCategory": "",
+                "baselineId": "sha256:" + "8" * 64,
+                "releaseId": "pilot-003",
+                "releaseDigest": "sha256:" + "6" * 64,
+                "generatedAt": "2026-07-28T00:00:16Z",
+                "phases": [{"name": "all", "status": "passed"}],
+                "environments": environments,
+            }
+            matrix_path = root / "matrix.json"
+            matrix_path.write_text(json.dumps(matrix), encoding="utf-8")
+            payloads = validate_release_closure_sources(
+                pilot_release_attestation=candidate_path,
+                pilot_rollback_attestation=rollback_path,
+                lifecycle_exits=lifecycle_paths,
+                green_matrix=matrix_path,
+            )
+            self.assertEqual(set(payloads), set(RELEASE_CLOSURE_PATHS))
+            matrix["claim"] = (
+                "ALPHA_BETA_GAMMA_EMULATOR_ONLY_FUNCTIONAL_GREEN"
+            )
+            matrix["deviceProfile"] = "emulator_only"
+            matrix["nonPromotable"] = True
+            matrix_path.write_text(json.dumps(matrix), encoding="utf-8")
+            with self.assertRaisesRegex(
+                ValueError, "not the live pilot release result"
+            ):
+                validate_release_closure_sources(
+                    pilot_release_attestation=candidate_path,
+                    pilot_rollback_attestation=rollback_path,
+                    lifecycle_exits=lifecycle_paths,
+                    green_matrix=matrix_path,
+                )
+            matrix["claim"] = "ALPHA_BETA_GAMMA_LOCAL_GREEN"
+            matrix.pop("deviceProfile")
+            matrix.pop("nonPromotable")
+            matrix["environments"]["beta-local"]["environment"] = "gamma"
+            matrix_path.write_text(json.dumps(matrix), encoding="utf-8")
+            with self.assertRaisesRegex(
+                ValueError, "beta release binding mismatch"
+            ):
+                validate_release_closure_sources(
+                    pilot_release_attestation=candidate_path,
+                    pilot_rollback_attestation=rollback_path,
+                    lifecycle_exits=lifecycle_paths,
+                    green_matrix=matrix_path,
                 )
 
     def test_prod_dry_run_cannot_generate_a_passed_receipt(self) -> None:

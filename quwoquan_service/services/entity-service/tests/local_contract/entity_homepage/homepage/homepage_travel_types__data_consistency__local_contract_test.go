@@ -41,6 +41,21 @@ func TestHomepageTypesMatchTheDeclaredClosedSet(t *testing.T) {
 	}
 }
 
+func TestSchoolHomepageTypeIsAdmittedAsItsOwnCampusIdentity(t *testing.T) {
+	if !homepagemodel.ValidHomepageType("school") {
+		t.Fatal("metadata-declared school homepage type must be admitted")
+	}
+	if got := homepagemodel.ObjectPageTemplate("school", ""); got != "campus" {
+		t.Fatalf("school template = %q, want campus", got)
+	}
+	if got := homepagemodel.CanonicalEntityID("school", "新东方学校"); got != "entity:school:新东方学校" {
+		t.Fatalf("school canonical entity id = %q", got)
+	}
+	if school, university := homepagemodel.CanonicalEntityID("school", "示例"), homepagemodel.CanonicalEntityID("university", "示例"); school == university {
+		t.Fatal("school and university must remain distinct canonical homepage identities")
+	}
+}
+
 func TestObjectPageTemplateSeparatesPlacesFromRoutes(t *testing.T) {
 	for _, value := range []string{"transport_hub", "city", "photo_spot"} {
 		if got := homepagemodel.ObjectPageTemplate(value, ""); got != "travel_photo" {
@@ -53,8 +68,10 @@ func TestObjectPageTemplateSeparatesPlacesFromRoutes(t *testing.T) {
 			t.Fatalf("homepage type %q template = %q, want standard", value, got)
 		}
 	}
-	if got := homepagemodel.ObjectPageTemplate("university", ""); got != "campus" {
-		t.Fatalf("university template = %q, want campus", got)
+	for _, value := range []string{"university", "school"} {
+		if got := homepagemodel.ObjectPageTemplate(value, ""); got != "campus" {
+			t.Fatalf("%s template = %q, want campus", value, got)
+		}
 	}
 	// 显式模板优先，避免类型映射覆盖数据侧已声明的版式。
 	if got := homepagemodel.ObjectPageTemplate("route", "campus"); got != "campus" {

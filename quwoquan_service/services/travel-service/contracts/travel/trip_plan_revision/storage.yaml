@@ -1,9 +1,0 @@
-backend: mongodb
-role: append_only
-collections:
-  trip_plan_revisions:
-    entity: TripPlanRevision
-    role: append_only
-    indexes:
-    - {name: uq_trip_plan_revision_number, keys: {tripId: 1, revisionNumber: 1}, unique: true}
-    - {name: idx_trip_plan_revision_created, keys: {tripId: 1, createdAt: -1}}

@@ -23,10 +23,10 @@ SMOKE_STATIC = [
 ]
 
 PAGEFLIP_PREFIXES = (
-    "quwoquan_app/lib/components/pageflip/",
-    "quwoquan_app/lib/ui/content/article_reader/pageflip/",
-    "quwoquan_app/test/local_contract/ui/components/pageflip/",
-    "quwoquan_app/test/local_contract/quality/shared/pageflip/",
+    "quwoquan_app/lib/design_system/pageflip/",
+    "quwoquan_app/lib/service/content_service/content/post/presentation/article_reader/pageflip/",
+    "quwoquan_app/test/local_contract/design_system/pageflip/",
+    "quwoquan_app/test/local_contract/service/content_service/content/post/works_image_book_pageflip_journey__local_contract_test.dart",
 )
 
 
@@ -121,7 +121,7 @@ def classify(paths: list[str]) -> dict[str, bool]:
 
 
 def static_checks(flags: dict[str, bool]) -> list[str]:
-    checks = ["branch_policy", "feature_tree"]
+    checks = ["branch_policy", "feature_tree", "python_script_governance"]
     if flags["has_service"] or flags["has_ops"]:
         checks.append("service_architecture")
     if flags["has_app"] or flags["has_app_contracts"]:
@@ -158,7 +158,7 @@ def map_app_path_to_tests(path: str) -> list[Path]:
         if candidate.is_file():
             return [candidate]
     if rel.startswith("lib/"):
-        # lib/ui/chat/foo.dart -> test/local_contract/ui/chat/**
+        # lib/service/chat_service/chat/conversation/foo.dart -> test/local_contract/service/chat_service/chat/conversation/**
         without_lib = rel.removeprefix("lib/")
         parts = Path(without_lib).parts
         if parts:
@@ -230,7 +230,9 @@ def select_pytest_paths(paths: list[str]) -> list[str]:
     for path in paths:
         for root in ("quwoquan_data/tests/local_contract", "quwoquan_ops/tests/local_contract"):
             if path.startswith(root + "/") and path.endswith(".py"):
-                if path not in seen:
+                # A staged deletion still shows up as a changed path; handing it to
+                # pytest aborts the whole run with "file or directory not found".
+                if path not in seen and (ROOT / path).exists():
                     seen.add(path)
                     selected.append(path)
             elif path.startswith(root.split("/tests/")[0] + "/"):

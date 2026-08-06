@@ -56,6 +56,11 @@ class ProviderProtocolSubstituteSecurityTest(unittest.TestCase):
         )
         self.assertIn("PROVIDER_SUBSTITUTE_TLS_CERT_FILE", debug_compose)
         self.assertIn("https://127.0.0.1:18089/healthz", debug_compose)
+        self.assertIn(
+            "--ca-certificate=/run/secrets/provider-protocol-substitute/ca.crt",
+            debug_compose,
+        )
+        self.assertNotIn("--no-check-certificate", debug_compose)
         local_runtime = (
             ROOT
             / "quwoquan_ops/environments/compose/"

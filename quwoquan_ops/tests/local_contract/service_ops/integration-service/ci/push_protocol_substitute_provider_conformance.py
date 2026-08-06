@@ -19,12 +19,8 @@ from quwoquan_ops.ci.provider_conformance.native_case_result import (
 RESULT_PATH_ENV = "QWQ_PROVIDER_CONFORMANCE_RESULT_PATH"
 TARGET = "push-protocol-substitute-local-contract"
 COMMAND = (
-    "go",
-    "-C",
-    "quwoquan_service",
-    "test",
-    "./services/integration-service/tests/local_contract/external_integration/push_delivery",
-    "-count=1",
+    "python3",
+    "quwoquan_ops/ci/provider_conformance/run_generic_protocol_substitute_conformance.py",
 )
 
 

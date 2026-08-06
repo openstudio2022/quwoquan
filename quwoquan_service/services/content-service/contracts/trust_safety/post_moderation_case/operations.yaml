@@ -333,3 +333,116 @@ consumers:
   - read_current_post_moderation_case
   - review_post_moderation_case
   - decide_post_moderation
+readiness_cases:
+- case_id: open-post-moderation-case-events-local
+  spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-008
+  producer: service
+  layer: local_contract
+  target: {kind: object, id: content.post_moderation_case}
+  runner_source_path: quwoquan_service/services/content-service/tests/local_contract/trust_safety/post_moderation_case/application/submission_case_opener__functional__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: open-post-moderation-case-events-api
+  spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-008
+  producer: service
+  layer: api_integration
+  target: {kind: object, id: content.post_moderation_case}
+  runner_source_path: quwoquan_service/services/content-service/tests/api_integration/trust_safety/post_moderation_case/http_mongo_case__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: open-post-moderation-case-local
+  spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-008
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: OpenPostModerationCase}
+  runner_source_path: quwoquan_service/services/content-service/tests/local_contract/trust_safety/post_moderation_case/application/moderation_operations__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: open-post-moderation-case-api
+  spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-008
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: OpenPostModerationCase}
+  runner_source_path: quwoquan_service/services/content-service/tests/api_integration/trust_safety/post_moderation_case/http_mongo_case__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: review-post-moderation-case-local
+  spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-008
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ReviewPostModerationCase}
+  runner_source_path: quwoquan_service/services/content-service/tests/local_contract/trust_safety/post_moderation_case/application/moderation_operations__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: review-post-moderation-case-api
+  spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-008
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ReviewPostModerationCase}
+  runner_source_path: quwoquan_service/services/content-service/tests/api_integration/trust_safety/post_moderation_case/http_mongo_case__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: decide-post-moderation-local
+  spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-008
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: DecidePostModeration}
+  runner_source_path: quwoquan_service/services/content-service/tests/local_contract/trust_safety/post_moderation_case/application/moderation_operations__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: decide-post-moderation-api
+  spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-008
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: DecidePostModeration}
+  runner_source_path: quwoquan_service/services/content-service/tests/api_integration/trust_safety/post_moderation_case/http_mongo_case__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: supersede-post-moderation-case-local
+  spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-008
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: SupersedePostModerationCase}
+  runner_source_path: quwoquan_service/services/content-service/tests/local_contract/trust_safety/post_moderation_case/application/moderation_operations__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: supersede-post-moderation-case-api
+  spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-008
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: SupersedePostModerationCase}
+  runner_source_path: quwoquan_service/services/content-service/tests/api_integration/trust_safety/post_moderation_case/http_mongo_case__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: get-current-post-moderation-case-local
+  spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-008
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: GetCurrentPostModerationCase}
+  runner_source_path: quwoquan_service/services/content-service/tests/local_contract/trust_safety/post_moderation_case/application/moderation_operations__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: get-current-post-moderation-case-api
+  spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-008
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: GetCurrentPostModerationCase}
+  runner_source_path: quwoquan_service/services/content-service/tests/api_integration/trust_safety/post_moderation_case/http_mongo_case__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: get-post-publication-eligibility-local
+  spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-008
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: GetPostPublicationEligibility}
+  runner_source_path: quwoquan_service/services/content-service/tests/local_contract/trust_safety/post_moderation_case/application/moderation_operations__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: get-post-publication-eligibility-api
+  spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-008
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: GetPostPublicationEligibility}
+  runner_source_path: quwoquan_service/services/content-service/tests/api_integration/trust_safety/post_moderation_case/http_mongo_case__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}

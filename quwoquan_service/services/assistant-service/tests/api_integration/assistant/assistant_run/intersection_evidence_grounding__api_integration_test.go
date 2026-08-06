@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/runtime/runtime-assistant/context-grounded-answering/spec.md#gwt-002
+// readiness_case: start-assistant-run-api
 package assistant_run_integration
 
 import (
@@ -12,11 +13,11 @@ import (
 
 	rtauth "quwoquan_service/runtime/auth"
 	"quwoquan_service/runtime/operation"
+	runhttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/adapters/inbound/http"
 	runapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
 	assistant "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/model"
 	runpersistence "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/infrastructure"
-	assistanthttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/adapters/inbound/http"
 )
 
 type integrationIntersectionEvidenceReader struct {
@@ -78,10 +79,9 @@ func TestAssistantRunAuthorizesIntersectionEvidenceAcrossHTTPBoundary(t *testing
 			VerifiedAt:     time.Date(2026, 7, 24, 1, 0, 0, 0, time.UTC),
 		}},
 	}
-	handler := assistanthttp.NewHandler(
-		nil,
-		assistanthttp.WithRunCommandService(commands),
-		assistanthttp.WithRunContextResolver(runapplication.NewContextResolver(
+	handler := runhttp.NewHandler(
+		commands,
+		runhttp.WithContextResolver(runapplication.NewContextResolver(
 			nil,
 			runapplication.IntersectionEvidenceAuthorizerFunc(func(
 				ctx context.Context,

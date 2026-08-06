@@ -37,6 +37,7 @@ from content.execution.recipe import _runtime_preflight_argv  # noqa: E402
 from content.templates.registry import TemplateRegistry  # noqa: E402
 from core.control_types import (  # noqa: E402
     AgentFailureKind,
+    AgentProvider,
     ContentType,
     ExecutionStage,
     QueueBackend,
@@ -263,10 +264,11 @@ def test_reliabletask_resume_accepts_receipt_for_only_remaining_jobs__reliabilit
     shutil.rmtree(execution_root(execution_id), ignore_errors=True)
 
 
-def test_execution_runtime_preflight__requires_ops_fleet_before_authoring__contract__local_contract() -> None:
+def test_execution_runtime_preflight__uses_single_canonical_fleet_gate__contract__local_contract() -> None:
     argv = _runtime_preflight_argv(EXECUTION_ID)
 
-    assert "--require-reliabletask-fleet" in argv
+    assert argv[:3] == ["task", "preflight", "--semantic-agent-startup"]
+    assert "--require-reliabletask-fleet" not in argv
 
 
 def test_reliabletask_fleet__waits_for_nonterminal_remote_jobs__reliability__local_contract(
@@ -507,6 +509,7 @@ def test_reliabletask_author__recovers_completed_provenance_bound_output_after_t
     monkeypatch.setattr(draft_io, "read_draft_meta", lambda *_args: meta)
     failed = AgentRunOutcome.failed(
         AgentFailureKind.FUTURE_TIMEOUT,
+        provider=AgentProvider.CURSOR_SDK,
         message="result future timed out after durable files were written",
         started=True,
         attempts=2,

@@ -1,0 +1,316 @@
+"""Pre-acquisition revisions and source guards share one canonical identity."""
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+from content.execution import campaign_external_inputs
+from content.execution import campaign_request_envelope as envelopes
+from content.execution import pre_acquisition_handoff as handoffs
+from content.source import professional_image_acquisition as image_acquisition
+from content.source import professional_video_acquisition as video_acquisition
+from core.io import write_json
+from core.source_digest import SourceDigest, content_source_revision
+
+SOURCE_A = "sha256:" + "a" * 64
+SOURCE_B = "sha256:" + "b" * 64
+CATALOG = "sha256:" + "c" * 64
+TARGETS = {
+    "homepage": 100,
+    "article": 100,
+    "image": 100,
+    "video": 10,
+}
+
+
+def _source_document(digest: str = SOURCE_A) -> dict[str, object]:
+    return SourceDigest(digest=digest).to_document()
+
+
+def _write_handoff(
+    output_root: Path,
+    *,
+    revision: int = 1,
+    supersedes: Path | None = None,
+) -> tuple[dict[str, object], Path]:
+    return handoffs.write_pre_acquisition_handoff(
+        handoff_id="travel-m100-20260807",
+        handoff_revision=revision,
+        supersedes_handoff=supersedes,
+        scale="M100",
+        vertical="travel",
+        scope="china",
+        region_ref="china",
+        topic=None,
+        run_date="20260807",
+        campaign_sequence=1,
+        campaign_retry_of=None,
+        source_digest=_source_document(),
+        entity_catalog_digest=CATALOG,
+        workload_targets=TARGETS,
+        output_root=output_root,
+    )
+
+
+def test_handoff_revision_is_create_once_and_preserves_superseded_bytes(
+    tmp_path: Path,
+) -> None:
+    output_root = tmp_path / "output"
+    _revision_one, revision_one_path = _write_handoff(output_root)
+    original_bytes = revision_one_path.read_bytes()
+
+    revision_two, path = _write_handoff(
+        output_root,
+        revision=2,
+        supersedes=revision_one_path,
+    )
+    repeated, repeated_path = _write_handoff(
+        output_root,
+        revision=2,
+        supersedes=revision_one_path,
+    )
+
+    assert repeated_path == path
+    assert repeated == revision_two
+    assert revision_one_path.read_bytes() == original_bytes
+    assert revision_two["handoffRevision"] == 2
+    assert revision_two["campaignSequence"] == 1
+    assert revision_two["campaignRetryOf"] is None
+    assert revision_two["supersedes"] == {
+        "handoffId": "travel-m100-20260807",
+        "handoffRevision": 1,
+        "handoffRef": (
+            "data/local/workspace/content-pre-acquisition-handoffs/"
+            "travel-m100-20260807/revision-001.json"
+        ),
+        "handoffFileDigest": handoffs._file_digest(revision_one_path),
+    }
+
+    with pytest.raises(
+        handoffs.PreAcquisitionHandoffError,
+        match="COLLISION",
+    ):
+        handoffs.write_pre_acquisition_handoff(
+            handoff_id="travel-m100-20260807",
+            handoff_revision=2,
+            supersedes_handoff=revision_one_path,
+            scale="M100",
+            vertical="travel",
+            scope="china",
+            region_ref="china",
+            topic=None,
+            run_date="20260807",
+            campaign_sequence=1,
+            campaign_retry_of=None,
+            source_digest=_source_document(),
+            entity_catalog_digest=CATALOG,
+            workload_targets={**TARGETS, "video": 11},
+            output_root=output_root,
+        )
+
+
+def test_handoff_revision_rejects_manual_predecessor(tmp_path: Path) -> None:
+    output_root = tmp_path / "output"
+    revision_one, _revision_one_path = _write_handoff(output_root)
+    manual_predecessor = output_root / "data/local/workspace/manual-handoff.json"
+    write_json(manual_predecessor, revision_one)
+
+    with pytest.raises(
+        handoffs.PreAcquisitionHandoffError,
+        match="LOCATION_INVALID",
+    ):
+        _write_handoff(
+            output_root,
+            revision=2,
+            supersedes=manual_predecessor,
+        )
+
+
+def test_handoff_revision_does_not_create_execution_retry(tmp_path: Path) -> None:
+    output_root = tmp_path / "output"
+    revision_one, revision_one_path = _write_handoff(output_root)
+    revision_two, _ = _write_handoff(
+        output_root,
+        revision=2,
+        supersedes=revision_one_path,
+    )
+
+    assert revision_one["campaignSequence"] == revision_two["campaignSequence"] == 1
+    assert revision_one["campaignRetryOf"] is revision_two["campaignRetryOf"] is None
+    assert revision_two["supersedes"]["handoffRevision"] == 1
+
+
+def test_envelopes_bind_handoff_and_derive_article_no_acquisition(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output_root = tmp_path / "output"
+    _handoff, handoff_path = _write_handoff(output_root)
+    repo = tmp_path / "repo"
+    (repo / "quwoquan_data/reference/travel/entities/china").mkdir(parents=True)
+    monkeypatch.setattr(
+        envelopes,
+        "current_source_digest",
+        lambda **_kwargs: SourceDigest(digest=SOURCE_A),
+    )
+    monkeypatch.setattr(envelopes, "entity_catalog_digest", lambda _ref: CATALOG)
+    monkeypatch.setattr(
+        envelopes,
+        "_require_stable_source_inputs",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(envelopes, "_git_branch", lambda _repo: "dev1.0")
+    monkeypatch.setattr(envelopes, "_git_commit", lambda _repo: "d" * 40)
+    monkeypatch.setattr(
+        campaign_external_inputs,
+        "bind_external_input_refs",
+        lambda carrier, _refs, **_kwargs: (
+            []
+            if carrier == "article"
+            else [{"kind": "professional_image_acquisition"}]
+        ),
+    )
+
+    homepage = envelopes.build_envelope(
+        scale="M100",
+        carrier="homepage",
+        region_ref="china",
+        repo_root=repo,
+        day="20260807",
+        pre_acquisition_handoff=handoff_path,
+        pre_acquisition_handoff_output_root=output_root,
+        external_input_refs=[{"kind": "professional_image_acquisition"}],
+    )
+    article = envelopes.build_envelope(
+        scale="M100",
+        carrier="article",
+        region_ref="china",
+        repo_root=repo,
+        day="20260807",
+        pre_acquisition_handoff=handoff_path,
+        pre_acquisition_handoff_output_root=output_root,
+    )
+
+    assert homepage["preAcquisitionHandoff"]["handoffId"] == (
+        "travel-m100-20260807"
+    )
+    assert homepage["preAcquisitionHandoff"]["handoffRevision"] == 1
+    assert article["externalInputRefs"] == []
+    assert (
+        _handoff["carrierRequirements"]["article"]["phase1Mode"]
+        == "execution_source_unit_freeze"
+    )
+    with pytest.raises(
+        handoffs.PreAcquisitionHandoffError,
+        match="IDENTITY_DRIFT",
+    ):
+        envelopes.build_envelope(
+            scale="M100",
+            carrier="article",
+            region_ref="china",
+            repo_root=repo,
+            day="20260808",
+            pre_acquisition_handoff=handoff_path,
+            pre_acquisition_handoff_output_root=output_root,
+        )
+
+
+def test_shared_guard_accepts_exact_identity_and_rejects_stale_source(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output_root = tmp_path / "output"
+    handoff, handoff_path = _write_handoff(output_root)
+    manifest = {
+        "sourceDigest": SOURCE_A,
+        "entityCatalogDigest": CATALOG,
+        "sourceRevision": content_source_revision(
+            source_digest=SOURCE_A,
+            entity_catalog_digest=CATALOG,
+        ),
+    }
+    monkeypatch.setattr(
+        handoffs,
+        "current_source_digest",
+        lambda **_kwargs: SourceDigest(digest=SOURCE_A),
+    )
+    assert handoffs.guard_acquisition_source_identity(
+        manifest,
+        handoff_ref=handoff_path,
+        repo_root=tmp_path,
+    ) == handoff
+
+    monkeypatch.setattr(
+        handoffs,
+        "current_source_digest",
+        lambda **_kwargs: SourceDigest(digest=SOURCE_B),
+    )
+    with pytest.raises(
+        handoffs.PreAcquisitionHandoffError,
+        match="SOURCE_IDENTITY_DRIFT",
+    ):
+        handoffs.guard_acquisition_source_identity(
+            manifest,
+            handoff_ref=handoff_path,
+            repo_root=tmp_path,
+        )
+
+
+def test_stale_identity_blocks_image_and_video_before_any_output_write(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output_root = tmp_path / "output"
+    _handoff, handoff_path = _write_handoff(output_root)
+    manifest = {
+        "sourceDigest": SOURCE_A,
+        "entityCatalogDigest": CATALOG,
+        "sourceRevision": content_source_revision(
+            source_digest=SOURCE_A,
+            entity_catalog_digest=CATALOG,
+        ),
+        "items": [],
+    }
+    manifest_path = tmp_path / "inputs/stale-manifest.json"
+    write_json(manifest_path, manifest)
+    monkeypatch.setattr(
+        handoffs,
+        "current_source_digest",
+        lambda **_kwargs: SourceDigest(digest=SOURCE_B),
+    )
+    monkeypatch.setattr(
+        image_acquisition,
+        "assert_valid",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        video_acquisition,
+        "assert_valid",
+        lambda *_args, **_kwargs: None,
+    )
+    image_output = tmp_path / "image-acquisition"
+    video_output = tmp_path / "video-acquisition"
+
+    with pytest.raises(
+        handoffs.PreAcquisitionHandoffError,
+        match="SOURCE_IDENTITY_DRIFT",
+    ):
+        image_acquisition.acquire_professional_images(
+            manifest_path,
+            handoff_ref=handoff_path,
+            repo_root=tmp_path,
+            output_root=image_output,
+        )
+    with pytest.raises(
+        handoffs.PreAcquisitionHandoffError,
+        match="SOURCE_IDENTITY_DRIFT",
+    ):
+        video_acquisition.acquire_professional_videos(
+            manifest_path,
+            handoff_ref=handoff_path,
+            repo_root=tmp_path,
+            output_root=video_output,
+        )
+
+    assert not image_output.exists()
+    assert not video_output.exists()

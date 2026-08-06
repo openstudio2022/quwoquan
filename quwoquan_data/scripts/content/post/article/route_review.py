@@ -2,31 +2,50 @@
 from __future__ import annotations
 
 import dataclasses
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-import re
-from typing import Any, Mapping, Sequence
+from typing import Any
 
-from core.data_issue import DataIssueCode, DataIssueStage, DataRecoveryAction, data_issues
-from content.post.article.evidence_bundle import gate_route_evidence_bundle
-from content.post.content_review import (
-    check_narrative_quality,
-    check_provenance,
-    fact_traceability_issues,
-    generator_provenance_issues,
-)
 from core.creative_brief import creative_governance_issues
+from core.data_issue import (
+    DataIssueCode,
+    DataIssueStage,
+    DataRecoveryAction,
+    data_issues,
+)
+from core.image_safety import assess_asset_sources
+from core.template_fingerprints import template_fingerprint_issues
+from governance.coverage.entity_extract import build_entities_sidecar
+
+from content.execution.stage_reports import (
+    write_gate_report,
+    write_repair_report,
+    write_stage_result,
+)
+from content.post.article.article_media_contract import article_media_contract_issues
 from content.post.article.draft_io import (
-    PLACEHOLDER_MARKER,
     draft_asset_reference_issues,
-    iter_draft_articles,
     is_placeholder,
     read_draft_article,
     read_draft_meta,
     read_writing_pack,
     repair_creative_meta,
 )
-from governance.coverage.entity_extract import build_entities_sidecar
-from core.image_safety import assess_asset_sources
+from content.post.article.route_compose import (
+    _compose_payload_from_pack,
+)
+from content.post.article.route_core import (
+    _unique_strings,
+    aggregate_checks,
+)
+from content.post.article.route_review_checks import (
+    _review_fallback_stage,
+    _route_review_checks,
+)
+from content.post.content_review import (
+    fact_traceability_issues,
+    generator_provenance_issues,
+)
 from content.review.ledger import (
     ReviewLedger,
     ReviewVerdict,
@@ -36,34 +55,7 @@ from content.review.ledger import (
     save_ledger,
 )
 from content.review.policy import review_policy
-from content.execution.stage_reports import write_gate_report, write_repair_report, write_stage_result
-from core.style_catalog import detect_opening_strategy, family_allowed_openings
-from core.template_fingerprints import template_fingerprint_issues
-from content.post.article.route_compose import (
-    _compose_payload_from_pack,
-    _image_source_paths_from_assets,
-    _source_ref_from_asset_path,
-)
-from content.post.article.route_core import (
-    DECISION_MARKERS,
-    DISLIKE_FEELING_MARKERS,
-    LIKE_FEELING_MARKERS,
-    PROVENANCE_TERMS,
-    STANDALONE_TIPS_MARKERS,
-    TRANSITION_TERMS,
-    aggregate_checks,
-    _build_summary,
-    _compact_public_text,
-    _fact_in_article,
-    _image_caption_from_article,
-    _jaccard,
-    _section_bodies,
-    _unique_strings,
-)
-from content.post.article.route_review_checks import (
-    _review_fallback_stage,
-    _route_review_checks,
-)
+
 
 def _load_source_texts(source_paths: Sequence[str]) -> list[str]:
     texts: list[str] = []
@@ -120,6 +112,19 @@ def review_route_draft(
         ref=ref,
         draft_meta=draft_meta,
     )
+    media_issues = article_media_contract_issues(
+        compose_payload,
+        str(brief.get("baseSourceRef") or pack.get("baseSourceRef") or ""),
+    )
+    route_checks["articleMediaClosure"] = {
+        "passed": not media_issues,
+        "issues": media_issues,
+        "suggestions": [
+            "补齐唯一底稿 sourceUnit 内的封面和至少一张正文图；若明确 text_only，资产必须为空。"
+        ]
+        if media_issues
+        else [],
+    }
     route_checks["generatorProvenance"] = {
         "passed": not authenticity_issues,
         "issues": authenticity_issues,
@@ -252,8 +257,11 @@ def review_route_draft(
         "passed": not creative_issues,
         "issues": creative_issues,
         "suggestions": [
-            "按 creativeBrief 先形成 2-3 个构思，选择最能兑现 readerPromise 的结构；"
-            "修正文案时只在 evidence 边界内发挥，不伪装真实亲历，并把 creativePlan/selfCritique 写入 draft_meta。"
+            (
+                "按 creativeBrief 先形成 2-3 个构思，选择最能兑现 readerPromise 的结构；"
+                "修正文案时只在 evidence 边界内发挥，不伪装真实亲历，并把 "
+                "creativePlan/selfCritique 写入 draft_meta。"
+            )
         ] if creative_issues else [],
     }
 

@@ -23,47 +23,47 @@ var (
 // AppErrorFromGroupNotFound returns *AppError for CIRCLE.USER.group_not_found (user_message from errors.yaml).
 func AppErrorFromGroupNotFound(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrGroupNotFound.Error()))
-	return rerrors.NewAppError(code, "群组不存在", debugMessage).WithMetadata("group_not_found", 404).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "群组不存在", debugMessage).WithMetadata("group_not_found", 404).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromGroupArchived returns *AppError for CIRCLE.USER.group_archived (user_message from errors.yaml).
 func AppErrorFromGroupArchived(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrGroupArchived.Error()))
-	return rerrors.NewAppError(code, "群组已归档", debugMessage).WithMetadata("group_archived", 409).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "群组已归档", debugMessage).WithMetadata("group_archived", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromGroupParentInvalid returns *AppError for CIRCLE.USER.group_parent_invalid (user_message from errors.yaml).
 func AppErrorFromGroupParentInvalid(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrGroupParentInvalid.Error()))
-	return rerrors.NewAppError(code, "上级群组无效或形成循环", debugMessage).WithMetadata("group_parent_invalid", 409).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "上级群组无效或形成循环", debugMessage).WithMetadata("group_parent_invalid", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromGroupDefaultConflict returns *AppError for CIRCLE.USER.group_default_conflict (user_message from errors.yaml).
 func AppErrorFromGroupDefaultConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrGroupDefaultConflict.Error()))
-	return rerrors.NewAppError(code, "该圈子已存在默认公共群", debugMessage).WithMetadata("group_default_conflict", 409).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "该圈子已存在默认公共群", debugMessage).WithMetadata("group_default_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromGroupDefaultCannotArchive returns *AppError for CIRCLE.USER.group_default_cannot_archive (user_message from errors.yaml).
 func AppErrorFromGroupDefaultCannotArchive(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrGroupDefaultCannotArchive.Error()))
-	return rerrors.NewAppError(code, "默认公共群不能归档", debugMessage).WithMetadata("group_default_cannot_archive", 409).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "默认公共群不能归档", debugMessage).WithMetadata("group_default_cannot_archive", 409).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromGroupVersionConflict returns *AppError for CIRCLE.USER.group_version_conflict (user_message from errors.yaml).
 func AppErrorFromGroupVersionConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrGroupVersionConflict.Error()))
-	return rerrors.NewAppError(code, "群组已更新，请刷新后重试", debugMessage).WithMetadata("group_version_conflict", 409).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "群组已更新，请刷新后重试", debugMessage).WithMetadata("group_version_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromGroupIdempotencyConflict returns *AppError for CIRCLE.USER.group_idempotency_conflict (user_message from errors.yaml).
 func AppErrorFromGroupIdempotencyConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrGroupIdempotencyConflict.Error()))
-	return rerrors.NewAppError(code, "重复请求与原群组命令不一致", debugMessage).WithMetadata("group_idempotency_conflict", 409).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "重复请求与原群组命令不一致", debugMessage).WithMetadata("group_idempotency_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromGroupStorageWriteFailed returns *AppError for CIRCLE.SYSTEM.group_storage_write_failed (user_message from errors.yaml).
 func AppErrorFromGroupStorageWriteFailed(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrGroupStorageWriteFailed.Error()))
-	return rerrors.NewAppError(code, "群组操作失败，请稍后重试", debugMessage).WithMetadata("group_storage_write_failed", 500).WithRecovery("retry", 5)
+	return rerrors.NewAppError(code, "群组操作失败，请稍后重试", debugMessage).WithMetadata("group_storage_write_failed", 500).WithRecoveryDirective("retry", "snackbar", 5)
 }

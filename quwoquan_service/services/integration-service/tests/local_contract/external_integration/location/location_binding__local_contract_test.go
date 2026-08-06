@@ -1,6 +1,7 @@
 package local_contract
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -55,5 +56,39 @@ func TestResolveLocationLookupUsesNonprodProtocolSubstituteAndProdRealProvider(t
 	}
 	if binding.AdapterID != "ext.map.baidu" {
 		t.Fatalf("unexpected adapter: %s", binding.AdapterID)
+	}
+}
+
+func TestPublicLocationBindingsDefaultUnavailableInAllEnvironments(
+	t *testing.T,
+) {
+	for _, environment := range []string{"alpha", "beta", "gamma", "prod"} {
+		for _, capability := range []string{
+			LocationPOISearchCapabilityID,
+			LocationRouteReadCapabilityID,
+		} {
+			_, err := ResolvePublicLocationCapability(
+				environment,
+				capability,
+				runtimeconfig.MapRuntimeConfigProvider{Values: map[string]string{
+					"INTEGRATION_LOCATION_NOMINATIM_BASE_URL": "https://nominatim.example.test",
+					"INTEGRATION_LOCATION_OSRM_BASE_URL":      "https://osrm.example.test",
+				}},
+				PublicProviderRuntimePolicy{
+					ConfigRef:          "config:integration.public_provider",
+					RatePolicyRef:      "config:integration.public_provider",
+					ProbePassed:        true,
+					RateLimitPerSecond: 1,
+				},
+			)
+			if !errors.Is(err, ErrPublicLocationCapabilityBlocked) {
+				t.Fatalf(
+					"%s %s error = %v, want blocked",
+					environment,
+					capability,
+					err,
+				)
+			}
+		}
 	}
 }

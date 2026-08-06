@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/discovery-content/media-processing-helper-read/image-delivery-variants/spec.md#gwt-003
+// readiness_case: request-original-image-access-api
 package api_integration_test
 
 import (
@@ -13,8 +15,8 @@ import (
 
 	"quwoquan_service/internal/platform/testinfra"
 	rtauth "quwoquan_service/runtime/auth"
-	rtoperation "quwoquan_service/runtime/operation"
 	"quwoquan_service/runtime/commandmeta"
+	rtoperation "quwoquan_service/runtime/operation"
 	mediaassetports "quwoquan_service/services/content-service/internal/media/media_asset/domain/ports"
 	originalaccesshttp "quwoquan_service/services/content-service/internal/media/media_original_access_fact/adapters/inbound/http"
 	originalaccessapp "quwoquan_service/services/content-service/internal/media/media_original_access_fact/application"

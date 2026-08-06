@@ -74,8 +74,8 @@ func (resolver *durablePresentationContextResolver) Resolve(
 	}
 	capturedAt := time.Now().UTC().Add(-time.Minute)
 	return skillcontext.ResolvedContext{
-		Kind: "trip",
-		SourceRef: "travel.TripTimelineView:trip-1@sha256:" +
+		Kind: "domain",
+		SourceRef: "circle.Gathering:gathering-1@sha256:" +
 			strings.Repeat("d", 64),
 		Authority:   generated.AssistantContextAuthorityDomainCanonical,
 		Sensitivity: generated.AssistantContextSensitivityInternal,
@@ -83,7 +83,7 @@ func (resolver *durablePresentationContextResolver) Resolve(
 		ExpiresAt:   capturedAt.Add(24 * time.Hour),
 		TokenCost:   8,
 		Value: map[string]any{
-			"tripId": "trip-1",
+			"gatheringId": "gathering-1",
 		},
 	}, nil
 }
@@ -171,7 +171,7 @@ func TestDurablePresentationUsesTheInferenceSkillContextSnapshotExactlyOnce(
 			t.Fatalf("model context digest drift: %v", model.segmentDigests)
 		}
 	}
-	if title := presentationNodeTitle(result.Presentation, "trip"); title != "trip-1" {
+	if title := presentationNodeTitle(result.Presentation, "gathering"); title != "gathering-1" {
 		t.Fatalf(
 			"presentation did not use inference context: title=%q document=%#v",
 			title,
@@ -261,7 +261,7 @@ func TestDurablePresentationModelSelectsOnlyAResolvedFrozenCandidate(t *testing.
 
 func TestDurablePresentationFailsClosedForContextOrTemplateFailure(t *testing.T) {
 	t.Run("required context assembly", func(t *testing.T) {
-		resolver := &durablePresentationContextResolver{err: errors.New("trip reader unavailable")}
+		resolver := &durablePresentationContextResolver{err: errors.New("gathering reader unavailable")}
 		executor, catalog, _ := durablePresentationExecutor(t, resolver)
 		result, err := executor.Execute(
 			t.Context(),
@@ -304,14 +304,14 @@ func durablePresentationExecutor(
 ) (*orchestration.DurableRunExecutor, *durablePresentationCatalog, *durablePresentationModel) {
 	t.Helper()
 	descriptor, err := readermodel.NewDescriptor(readermodel.Descriptor{
-		DescriptorID:        "travel.trip_current",
-		ResolverRef:         "trip.current",
-		OwnerService:        "travel-service",
-		OwnerOperationRefs:  []string{"travel.trip_timeline_view.GetTripTimeline"},
-		InputSchemaRef:      "travel.GetTripTimelineQuery",
-		OutputSchemaRef:     "assistant.TripContextSegment",
-		ObjectTypeRefs:      []string{"travel.TripTimelineView"},
-		AcceptedSourceKinds: []string{"trip"},
+		DescriptorID:        "circle.gathering_plan_context",
+		ResolverRef:         "gathering.plan_context",
+		OwnerService:        "circle-service",
+		OwnerOperationRefs:  []string{"circle.gathering_plan.GetGatheringPlan"},
+		InputSchemaRef:      "circle.GatheringPlanByGatheringQuery",
+		OutputSchemaRef:     "assistant.ContextSegment",
+		ObjectTypeRefs:      []string{"circle.Gathering"},
+		AcceptedSourceKinds: []string{"domain"},
 		Authority:           generated.AssistantContextAuthorityDomainCanonical,
 		Sensitivity:         generated.AssistantContextSensitivityInternal,
 		SurfaceKinds: []readermodel.SurfaceKind{
@@ -336,22 +336,22 @@ func durablePresentationExecutor(
 	}
 	manifest := skillpkg.Manifest{
 		SkillID:      "context_skill",
-		DisplayName:  "行程上下文测试",
-		DomainID:     "travel",
-		ProblemClass: "travel",
+		DisplayName:  "Gathering 计划上下文测试",
+		DomainID:     "circle",
+		ProblemClass: "coordination",
 		ContextProfile: skillpkg.ContextProfile{
 			ProfileID:   "context.test",
 			AssetDigest: "sha256:" + strings.Repeat("a", 64),
 			Requirements: []skillpkg.ContextRequirement{{
-				SlotID:              "trip.current",
+				SlotID:              "gathering.plan",
 				Required:            true,
-				AcceptedSourceKinds: []string{"trip"},
+				AcceptedSourceKinds: []string{"domain"},
 				Authority: generated.AssistantContextAuthorityDomainCanonical.
 					WireName(),
 				Sensitivity:      generated.AssistantContextSensitivityInternal.WireName(),
 				FreshnessSeconds: 86400,
 				TokenBudget:      32,
-				ResolverRef:      "trip.current",
+				ResolverRef:      "gathering.plan_context",
 				FallbackPolicy:   "block",
 			}},
 		},
@@ -383,7 +383,7 @@ func durablePresentationRequest(t *testing.T) runruntime.ExecutionRequest {
 		"assistant-default",
 		"user-context",
 		"context_skill",
-		"travel",
+		"circle",
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -392,9 +392,9 @@ func durablePresentationRequest(t *testing.T) runruntime.ExecutionRequest {
 		RunID:                     "run-presentation-context",
 		UserID:                    "user-context",
 		SessionID:                 "session-context",
-		Goal:                      "根据行程给我建议",
+		Goal:                      "根据 Gathering 计划给我建议",
 		RequestedSkillID:          "context_skill",
-		RequestedDomainID:         "travel",
+		RequestedDomainID:         "circle",
 		SkillPackageID:            "quwoquan.official",
 		SkillPackageReleaseDigest: "sha256:" + strings.Repeat("c", 64),
 		FrozenPolicySelection:     policy,
@@ -426,19 +426,19 @@ func durablePresentationTemplate(t *testing.T, skillID string) json.RawMessage {
 			"type":                 "object",
 			"additionalProperties": false,
 			"properties": map[string]any{
-				"tripId": map[string]any{"type": "string"},
-				"answer": map[string]any{"type": "string"},
+				"gatheringId": map[string]any{"type": "string"},
+				"answer":      map[string]any{"type": "string"},
 			},
-			"required": []any{"tripId", "answer"},
+			"required": []any{"gatheringId", "answer"},
 		},
 		RootNodeID: "root",
 		Nodes: []presentationpkg.Node{
 			{NodeID: "root", Kind: generated.AssistantPresentationNodeKindCard, Style: style},
 			{
-				NodeID:       "trip",
+				NodeID:       "gathering",
 				ParentNodeID: "root",
 				Kind:         generated.AssistantPresentationNodeKindText,
-				Binding:      map[string]string{"title": "$.tripId"},
+				Binding:      map[string]string{"title": "$.gatheringId"},
 				Style:        style,
 			},
 			{

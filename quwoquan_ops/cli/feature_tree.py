@@ -65,6 +65,11 @@ EVIDENCE_ROOTS = (
 )
 TEST_SUFFIXES = {".dart", ".go", ".py", ".sh", ".yaml", ".yml"}
 VALID_LEVELS = {0: "AppRoot Spec", 1: "L1 Domain Service", 2: "L2 Business Capability", 3: "L3 Story"}
+APP_TEST_LAYERS = {"local_contract", "api_integration", "user_acceptance"}
+APP_JOURNEY_ENGINEERING_ROOT_RE = re.compile(
+    r"^quwoquan_app/test/(?:local_contract|user_acceptance)/journeys/"
+    r"[a-z][a-z0-9_]*$"
+)
 
 
 @dataclass(frozen=True)
@@ -290,8 +295,35 @@ def engineering_claims(node: Node) -> list[tuple[str, str]]:
     return sorted(set(claims))
 
 
+def app_journey_engineering_roots(node: Node) -> list[str]:
+    """Return exact App Journey roots explicitly claimed by an L1 spec.
+
+    Journey claims live under the nested ``测试`` section rather than an App
+    production-root bullet, so ``engineering_claims`` intentionally does not
+    consume them.  Only the canonical, dependency-level-specific Journey root
+    is accepted here; project roots and the shared ``journeys`` parent remain
+    ineligible as owner fallbacks.
+    """
+
+    if node.level != 1 or not node.spec.is_file():
+        return []
+    body = section(node.spec.read_text(encoding="utf-8"), "工程归属")
+    roots: set[str] = set()
+    for line in body.splitlines():
+        if "协作引用" in line:
+            continue
+        for raw_root in PATH_RE.findall(line):
+            root = raw_root.rstrip("/")
+            if APP_JOURNEY_ENGINEERING_ROOT_RE.fullmatch(root):
+                roots.add(root)
+    return sorted(roots)
+
+
 def engineering_roots(node: Node) -> list[str]:
-    return sorted({root for _, root in engineering_claims(node)})
+    return sorted(
+        {root for _, root in engineering_claims(node)}
+        | set(app_journey_engineering_roots(node))
+    )
 
 
 def domain_service_roots() -> list[Path]:
@@ -372,7 +404,7 @@ def validate_domain_service_ownership(nodes: Iterable[Node]) -> list[str]:
 
 def owners_for_path(target: Path, nodes: Iterable[Node]) -> list[Node]:
     try:
-        rel = target.resolve().relative_to(REPO_ROOT).as_posix()
+        rel = target.resolve().relative_to(REPO_ROOT.resolve()).as_posix()
     except ValueError:
         return []
     matches: list[tuple[int, Node]] = []
@@ -387,6 +419,69 @@ def owners_for_path(target: Path, nodes: Iterable[Node]) -> list[Node]:
     return sorted({node for length, node in matches if length == longest}, key=lambda item: item.node_id)
 
 
+def canonical_app_test_owner_target(target: Path) -> Path | None:
+    """把对象化 App 测试投影到同 domain 的 production engineering root。
+
+    ``runtime`` 对 ``quwoquan_app`` 的项目级声明只拥有构建与平台壳，不能把
+    ``test/<layer>/<domain>/<context>/<object>`` 下的业务测试吞成 runtime owner。
+    Journey 不按 domain 投影，只接受 ``owners_for_app_test_path`` 解析出的
+    精确 L1 Journey root；support 不属于三层对象测试，继续按普通工程路径处理。
+    """
+    try:
+        parts = target.resolve().relative_to(REPO_ROOT.resolve()).parts
+    except ValueError:
+        return None
+    if (
+        len(parts) < 5
+        or parts[:2] != ("quwoquan_app", "test")
+        or parts[2] not in APP_TEST_LAYERS
+        or parts[3] == "journeys"
+    ):
+        return None
+    if len(parts) >= 7 and parts[3] == "service":
+        return REPO_ROOT / "quwoquan_app" / "lib" / Path(*parts[3:7])
+    return REPO_ROOT / "quwoquan_app" / "lib" / parts[3]
+
+
+def owners_for_app_test_path(target: Path, nodes: Iterable[Node]) -> list[Node] | None:
+    try:
+        parts = target.resolve().relative_to(REPO_ROOT.resolve()).parts
+    except ValueError:
+        return None
+    if (
+        len(parts) >= 4
+        and parts[:2] == ("quwoquan_app", "test")
+        and parts[2] in APP_TEST_LAYERS
+        and parts[3] == "journeys"
+    ):
+        if len(parts) < 6:
+            return []
+        journey_root = Path(*parts[:5]).as_posix()
+        # Resolve the declared Journey root, not the individual test file. This
+        # preserves duplicate-owner detection and prevents a project-level App
+        # or runtime root from becoming an implicit fallback.
+        root_owners = owners_for_path(REPO_ROOT / journey_root, nodes)
+        return [
+            owner
+            for owner in root_owners
+            if journey_root in app_journey_engineering_roots(owner)
+        ]
+    projected = canonical_app_test_owner_target(target)
+    if projected is None:
+        return None
+    projected_rel = projected.resolve().relative_to(REPO_ROOT.resolve()).as_posix()
+    owners = owners_for_path(projected, nodes)
+    return [
+        owner
+        for owner in owners
+        if any(
+            root.startswith("quwoquan_app/lib/")
+            and (projected_rel == root or projected_rel.startswith(root + "/"))
+            for root in engineering_roots(owner)
+        )
+    ]
+
+
 def resolve_target(raw: str, nodes: list[Node]) -> Node:
     target = Path(raw)
     if not target.is_absolute():
@@ -396,7 +491,12 @@ def resolve_target(raw: str, nodes: list[Node]) -> Node:
     direct = node_for_spec(target, nodes)
     if direct:
         return direct
-    owners = owners_for_path(target, nodes)
+    app_test_owners = owners_for_app_test_path(target, nodes)
+    owners = (
+        app_test_owners
+        if app_test_owners is not None
+        else owners_for_path(target, nodes)
+    )
     if len(owners) == 1:
         return owners[0]
     if not owners:

@@ -1,9 +1,6 @@
 events:
 - name: CircleMembershipRequested
-  producer: circle-service
-  consumers:
-  - notification-service
-  channel: transactional_outbox
+  delivery_semantics: transactional_outbox
   payload_entity: CircleMembership
   payload_fields:
   - id
@@ -15,12 +12,7 @@ events:
   - state
   - createdAt
 - name: CircleMembershipJoined
-  producer: circle-service
-  consumers:
-  - circle-member-count-projector
-  - recommendation-engine
-  - notification-service
-  channel: transactional_outbox
+  delivery_semantics: transactional_outbox
   payload_entity: CircleMembership
   payload_fields:
   - id
@@ -32,12 +24,7 @@ events:
   - state
   - joinedAt
 - name: CircleMembershipApproved
-  producer: circle-service
-  consumers:
-  - circle-member-count-projector
-  - recommendation-engine
-  - notification-service
-  channel: transactional_outbox
+  delivery_semantics: transactional_outbox
   payload_entity: CircleMembership
   payload_fields:
   - id
@@ -49,12 +36,7 @@ events:
   - state
   - joinedAt
 - name: CircleMembershipLeft
-  producer: circle-service
-  consumers:
-  - circle-member-count-projector
-  - recommendation-engine
-  - notification-service
-  channel: transactional_outbox
+  delivery_semantics: transactional_outbox
   payload_entity: CircleMembership
   payload_fields:
   - id
@@ -66,10 +48,7 @@ events:
   - state
   - leftAt
 - name: CircleMembershipRoleChanged
-  producer: circle-service
-  consumers:
-  - circle-authorization-projector
-  channel: transactional_outbox
+  delivery_semantics: transactional_outbox
   payload_entity: CircleMembership
   payload_fields:
   - id
@@ -80,10 +59,7 @@ events:
   - state
   - updatedAt
 - name: CircleMembershipRejected
-  producer: circle-service
-  consumers:
-  - notification-service
-  channel: transactional_outbox
+  delivery_semantics: transactional_outbox
   payload_entity: CircleMembership
   payload_fields:
   - id

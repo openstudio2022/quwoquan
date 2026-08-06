@@ -26,6 +26,7 @@ const (
 	commentReceiptsCollection   = "comment_command_receipts"
 	commentRateLocksCollection  = "comment_author_rate_limit_locks"
 	commentOutboxCollection     = "comment_outbox"
+	commentEventLogCollection   = "comment_event_log"
 	commentCheckpointCollection = "comment_projection_checkpoints"
 	postsRelationCollection     = "posts"
 )
@@ -38,6 +39,7 @@ type MongoCommentDataAdapter struct {
 	receipts        *mongo.Collection
 	rateLocks       *mongo.Collection
 	outbox          *mongo.Collection
+	eventLog        *mongo.Collection
 	checkpoints     *mongo.Collection
 	posts           *mongo.Collection
 	mediaReferences referencefence.Fence
@@ -55,6 +57,7 @@ func NewMongoCommentDataAdapter(
 		receipts:        db.Collection(commentReceiptsCollection),
 		rateLocks:       db.Collection(commentRateLocksCollection),
 		outbox:          db.Collection(commentOutboxCollection),
+		eventLog:        db.Collection(commentEventLogCollection),
 		checkpoints:     db.Collection(commentCheckpointCollection),
 		posts:           db.Collection(postsRelationCollection),
 		mediaReferences: mediaReferences,
@@ -276,8 +279,20 @@ func (s *MongoCommentDataAdapter) Commit(
 			}
 		}
 
-		for _, event := range commit.Events {
+		for _, event := range commit.OutboxEvents {
 			if _, err := s.outbox.InsertOne(txCtx, commentOutboxDocument{
+				ID:               event.EventID,
+				EventType:        event.EventType,
+				AggregateID:      event.AggregateID,
+				AggregateVersion: event.AggregateVersion,
+				Payload:          append([]byte(nil), event.Payload...),
+				OccurredAt:       event.OccurredAt.UTC(),
+			}); err != nil {
+				return nil, err
+			}
+		}
+		for _, event := range commit.EventLogRecords {
+			if _, err := s.eventLog.InsertOne(txCtx, commentEventLogDocument{
 				ID:               event.EventID,
 				EventType:        event.EventType,
 				AggregateID:      event.AggregateID,
@@ -438,28 +453,64 @@ func ValidateCommentCommit(commit commentports.Commit) error {
 			"comment author rate limit is only valid for aggregate creation",
 		)
 	}
-	if len(commit.Events) == 0 {
+	if (len(commit.OutboxEvents) == 0) == (len(commit.EventLogRecords) == 0) {
 		return contentgenerated.AppErrorFromVersionConflict(
-			"comment aggregate commit requires an outbox fact",
+			"comment aggregate commit requires exactly one publication destination",
 		)
 	}
-	eventIDs := make(map[string]struct{}, len(commit.Events))
-	for _, event := range commit.Events {
-		if strings.TrimSpace(event.EventID) == "" ||
-			strings.TrimSpace(event.EventType) == "" ||
-			event.AggregateID != commit.Aggregate.ID() ||
-			event.AggregateVersion != commit.Aggregate.Version() ||
-			event.OccurredAt.IsZero() {
+	eventIDs := make(map[string]struct{}, len(commit.OutboxEvents)+len(commit.EventLogRecords))
+	validateEvent := func(
+		eventID string,
+		eventType string,
+		aggregateID string,
+		aggregateVersion int64,
+		payload []byte,
+		occurredAt time.Time,
+		destination string,
+	) error {
+		if strings.TrimSpace(eventID) == "" ||
+			strings.TrimSpace(eventType) == "" ||
+			aggregateID != commit.Aggregate.ID() ||
+			aggregateVersion != commit.Aggregate.Version() ||
+			!json.Valid(payload) ||
+			occurredAt.IsZero() {
 			return contentgenerated.AppErrorFromVersionConflict(
-				"comment outbox event does not match aggregate commit",
+				"comment " + destination + " event does not match aggregate commit",
 			)
 		}
-		if _, found := eventIDs[event.EventID]; found {
+		if _, found := eventIDs[eventID]; found {
 			return contentgenerated.AppErrorFromVersionConflict(
-				"comment aggregate commit has duplicate outbox event id",
+				"comment aggregate commit has duplicate event id",
 			)
 		}
-		eventIDs[event.EventID] = struct{}{}
+		eventIDs[eventID] = struct{}{}
+		return nil
+	}
+	for _, event := range commit.OutboxEvents {
+		if err := validateEvent(
+			event.EventID,
+			event.EventType,
+			event.AggregateID,
+			event.AggregateVersion,
+			event.Payload,
+			event.OccurredAt,
+			"outbox",
+		); err != nil {
+			return err
+		}
+	}
+	for _, event := range commit.EventLogRecords {
+		if err := validateEvent(
+			event.EventID,
+			event.EventType,
+			event.AggregateID,
+			event.AggregateVersion,
+			event.Payload,
+			event.OccurredAt,
+			"event log",
+		); err != nil {
+			return err
+		}
 	}
 	return nil
 }

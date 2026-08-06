@@ -1,0 +1,85 @@
+# Code generated from quwoquan_service/generated/contract_graph.json.
+# Regenerate with verify_object_alert_coverage.py --write.
+groups:
+  - name: quwoquan_circle_contract_circle_post_placement
+    rules:
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="PATCH",route=~"^/circles/[^/]+/post-placements/[^/]+/feature$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle_post_placement.FeatureCirclePost"
+          contract_metric: "circle_post_placement_feature"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "600"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="PATCH",route=~"^/circles/[^/]+/post-placements/[^/]+/feature$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle_post_placement.FeatureCirclePost"
+          contract_metric: "circle_post_placement_feature"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "600"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="PATCH",route=~"^/circles/[^/]+/post-placements/[^/]+/pin$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle_post_placement.PinCirclePost"
+          contract_metric: "circle_post_placement_pin"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "600"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="PATCH",route=~"^/circles/[^/]+/post-placements/[^/]+/pin$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle_post_placement.PinCirclePost"
+          contract_metric: "circle_post_placement_pin"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "600"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="POST",route=~"^/circles/[^/]+/post-placements$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle_post_placement.PlacePostInCircle"
+          contract_metric: "circle_post_placement_place"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "600"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="POST",route=~"^/circles/[^/]+/post-placements$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle_post_placement.PlacePostInCircle"
+          contract_metric: "circle_post_placement_place"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "600"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="DELETE",route=~"^/circles/[^/]+/post-placements/[^/]+$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle_post_placement.RemovePostFromCircle"
+          contract_metric: "circle_post_placement_remove"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "600"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="DELETE",route=~"^/circles/[^/]+/post-placements/[^/]+$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle_post_placement.RemovePostFromCircle"
+          contract_metric: "circle_post_placement_remove"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "600"
+          slo_availability_percent: "99.9"

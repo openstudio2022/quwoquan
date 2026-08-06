@@ -18,11 +18,6 @@ relationships:
   reference_fields:
   - accountId
   target_object: user.UserAccount
-capabilities:
-- commandable
-- queryable
-- expiring
-- idempotent_commands
 business_rules:
 - purpose、channel、destinationHash、secretRef 与内部 bindingTicketRef 创建后不可变
 - secret 明文不得进入 aggregate、日志、事件或 API 响应

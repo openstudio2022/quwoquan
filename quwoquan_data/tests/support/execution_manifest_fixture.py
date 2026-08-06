@@ -1,19 +1,14 @@
 """Explicit builders for canonical execution test workspaces."""
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
-from typing import Iterable, Mapping
 from urllib.parse import quote
 
-from core.control_types import (
-    ContentType,
-    ExecutionStage,
-    ExecutionStateStatus,
-    SelectionPolicy,
-)
 from content.execution.contracts import ExecutionState, ExecutionStateTransition
-from content.execution.spec_contract import ExecutionSpec
 from content.execution.identity import parse_execution_id
+from content.execution.queue_backend import freeze_execution_queue_backend
+from content.execution.spec_contract import ExecutionSpec
 from content.execution.store import save_spec
 from content.execution.workspace import (
     TARGET_SET_REF,
@@ -25,7 +20,12 @@ from content.source.contracts import (
     HomepageAuthorityProvider,
     QualifiedHomepageSource,
 )
-
+from core.control_types import (
+    ContentType,
+    ExecutionStage,
+    ExecutionStateStatus,
+    SelectionPolicy,
+)
 
 _RECIPE_BY_CONTENT_TYPE = {
     ContentType.HOMEPAGE: "content/travel/homepage/homepage",
@@ -45,6 +45,8 @@ class ExecutionFixtureBuilder:
         default_factory=lambda: (_DEFAULT_TARGET,)
     )
     retry_of: str | None = None
+    semantic_selection_id: str = "default"
+    semantic_preflight_binding: Mapping[str, object] | None = None
     # 过采场景：候选池大于准出配额。省略时候选池与配额相同（不过采）。
     approved_quota: int | None = None
 
@@ -79,7 +81,7 @@ class ExecutionFixtureBuilder:
             source_ref="quwoquan_data/tests/support/execution_manifest_fixture.py",
         )
         save_spec(self.spec_payload())
-        return create_execution_manifest(
+        manifest = create_execution_manifest(
             execution_id=identity.execution_id,
             recipe_ref=recipe_ref,
             request={
@@ -94,7 +96,15 @@ class ExecutionFixtureBuilder:
             target_set_ref=TARGET_SET_REF,
             target_set_digest=digest,
             retry_of=self.retry_of,
+            semantic_selection_id=self.semantic_selection_id,
+            semantic_preflight_binding=self.semantic_preflight_binding,
         )
+        freeze_execution_queue_backend(
+            identity.execution_id,
+            spec=self.spec_payload(),
+            manifest=manifest,
+        )
+        return manifest
 
     def spec_payload(self) -> dict[str, object]:
         """Build a complete effective spec without writing runtime output."""
@@ -219,10 +229,16 @@ def build_execution_fixture(
     execution_id: str,
     *,
     targets: Iterable[Mapping[str, object]] | None = None,
+    retry_of: str | None = None,
+    semantic_selection_id: str = "default",
+    semantic_preflight_binding: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
     return ExecutionFixtureBuilder(
         execution_id=execution_id,
         targets=tuple(targets or (_DEFAULT_TARGET,)),
+        retry_of=retry_of,
+        semantic_selection_id=semantic_selection_id,
+        semantic_preflight_binding=semantic_preflight_binding,
     ).build()
 
 

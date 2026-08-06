@@ -1,3 +1,8 @@
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/spec.md#dom-001
+// readiness_case: generate-invitation-local
+// readiness_case: list-invitations-local
+// readiness_case: get-invitation-by-code-local
+// readiness_case: accept-invitation-local
 package invitation_test
 
 import (
@@ -26,6 +31,7 @@ func TestInvitationGenerateVerifiesPersonaOwnerAndStoresOnlyPhoneHash(t *testing
 		"persona-owner",
 		"direct",
 		"13800138000",
+		"generate-1",
 	)
 	if err != nil {
 		t.Fatalf("generate invitation: %v", err)
@@ -36,6 +42,11 @@ func TestInvitationGenerateVerifiesPersonaOwnerAndStoresOnlyPhoneHash(t *testing
 	if created.InviterOwnerAccountID != "account-owner" {
 		t.Fatalf("owner audit snapshot mismatch: %q", created.InviterOwnerAccountID)
 	}
+	if store.lastCommand.Operation != "GenerateInvitation" ||
+		store.lastCommand.IdempotencyKey != "generate-1" ||
+		len(store.lastCommand.CommandDigest) != 64 {
+		t.Fatalf("command receipt identity was not passed to the store: %+v", store.lastCommand)
+	}
 
 	if _, err := facade.Generate(
 		context.Background(),
@@ -43,6 +54,7 @@ func TestInvitationGenerateVerifiesPersonaOwnerAndStoresOnlyPhoneHash(t *testing
 		"persona-owner",
 		"direct",
 		"13800138000",
+		"generate-spoofed",
 	); err == nil {
 		t.Fatal("persona ownership spoof must be rejected")
 	}
@@ -96,16 +108,19 @@ func (owners invitationPersonaOwners) ResolveOwnerAccountID(
 }
 
 type invitationMemoryStore struct {
-	record *invitationmodel.Invitation
+	record      *invitationmodel.Invitation
+	lastCommand invitationports.CommandIdentity
 }
 
 func (store *invitationMemoryStore) Generate(
 	_ context.Context,
 	record *invitationmodel.Invitation,
 	_ int,
+	command invitationports.CommandIdentity,
 ) (*invitationmodel.Invitation, bool, error) {
 	copy := *record
 	store.record = &copy
+	store.lastCommand = command
 	return &copy, true, nil
 }
 
@@ -152,6 +167,7 @@ func (store *invitationMemoryStore) Accept(
 	_ context.Context,
 	_ string,
 	now time.Time,
+	command invitationports.CommandIdentity,
 ) (*invitationmodel.Invitation, error) {
 	if store.record == nil {
 		return nil, invitationports.ErrNotFound
@@ -160,5 +176,6 @@ func (store *invitationMemoryStore) Accept(
 		return nil, err
 	}
 	copy := *store.record
+	store.lastCommand = command
 	return &copy, nil
 }

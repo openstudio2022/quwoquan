@@ -1,8 +1,0 @@
-description: TripMembership 权限与来源收敛事件。
-events:
-- name: TripMembershipChanged
-  producer: travel-service
-  consumers: [assistant-service]
-  channel: transactional_outbox
-  payload_entity: TripMembership
-  payload_fields: [_id, tripId, personaId, version, role, state, sourceVersion, updatedAt]

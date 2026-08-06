@@ -1,10 +1,14 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-003
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-004
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-suspension-and-appeal-lifecycle/spec.md#gwt-003
+// readiness_case: recover-circle-account-closure-dead-letter-api
 package api_integration
 
 import (
+	"bytes"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"strconv"
 	"strings"
 	"testing"
@@ -14,12 +18,92 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
 	"quwoquan_service/runtime/accountrestriction"
+	rterr "quwoquan_service/runtime/errors"
+	runtimemessaging "quwoquan_service/runtime/messaging"
 	"quwoquan_service/services/circle-service/internal/circle_management/circle/application"
 	"quwoquan_service/services/circle-service/internal/circle_management/circle/infrastructure/messaging"
 	"quwoquan_service/services/circle-service/internal/circle_management/circle/infrastructure/persistence"
 	placementports "quwoquan_service/services/circle-service/internal/circle_management/circle_post_placement/domain/ports"
 	placementpersistence "quwoquan_service/services/circle-service/internal/circle_management/circle_post_placement/infrastructure/persistence"
 )
+
+func TestRecoverCircleAccountClosureDeadLetterHTTPReleasesRealTerminalMarker(
+	t *testing.T,
+) {
+	cleanCollections(t)
+	ctx := t.Context()
+	projection := persistence.NewMongoUserAccountClosedProjection(
+		mongoDB,
+		redisRouter.Scene("general"),
+	)
+	if err := projection.EnsureIndexes(ctx); err != nil {
+		t.Fatal(err)
+	}
+	const sourceStreamID = "1710000000000-91"
+	if attempts, err := projection.RecordUserAccountClosedFailure(
+		ctx,
+		sourceStreamID,
+		"circle-account-closure-event-91",
+		errors.New("scripted dependency failure"),
+	); err != nil || attempts != 1 {
+		t.Fatalf("record failure: attempts=%d err=%v", attempts, err)
+	}
+	if err := projection.MarkUserAccountClosedDeadLettered(
+		ctx,
+		sourceStreamID,
+	); err != nil {
+		t.Fatal(err)
+	}
+	consumer, err := messaging.NewUserAccountClosedConsumerWithConfig(
+		circleMessageTransport,
+		projection,
+		projection,
+		"account-closure-recovery-api-readiness",
+		nil,
+		messaging.UserAccountClosedConsumerConfig{
+			BatchSize: 10, MaxAttempts: 3, MinIdle: 0,
+			ReadBlock: 0, PollInterval: time.Millisecond,
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler, err := runtimemessaging.WithDeadLetterRecoveryRoute(
+		http.NotFoundHandler(),
+		runtimemessaging.DeadLetterRecoveryRouteConfig{
+			Path:   "/internal/circle/account-closure/dead-letters:recover",
+			Module: rterr.ModuleCircle, Releaser: consumer,
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/internal/circle/account-closure/dead-letters:recover",
+		bytes.NewBufferString(`{"sourceStreamId":"`+sourceStreamID+`"}`),
+	)
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Idempotency-Key", "recover-circle-account-closure-91")
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusAccepted {
+		t.Fatalf("recovery status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	deadLettered, err := projection.IsUserAccountClosedDeadLettered(
+		ctx,
+		sourceStreamID,
+	)
+	if err != nil || deadLettered {
+		t.Fatalf("terminal marker was not released: deadLettered=%v err=%v", deadLettered, err)
+	}
+	if count, err := mongoDB.Collection("circle_user_account_closed_failures").CountDocuments(
+		ctx,
+		bson.M{"sourceStreamId": sourceStreamID},
+	); err != nil || count != 0 {
+		t.Fatalf("failure marker count=%d want=0 err=%v", count, err)
+	}
+}
 
 func TestUserAccountClosedTerminalMarkerRetainsSourcePELReference(
 	t *testing.T,

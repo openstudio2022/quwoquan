@@ -1,0 +1,105 @@
+# Code generated from quwoquan_service/generated/contract_graph.json.
+# Regenerate with verify_object_alert_coverage.py --write.
+groups:
+  - name: quwoquan_ops_contract_account_enforcement_case
+    rules:
+      - record: quwoquan_ops_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="product-ops-service",method="GET",route=~"^/control-plane/product/account-enforcement-cases/[^/]+$"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.account_enforcement_case.GetAccountEnforcementCase"
+          contract_metric: "ops_account_enforcement_case_read"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "600"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="product-ops-service",method="GET",route=~"^/control-plane/product/account-enforcement-cases/[^/]+$"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.account_enforcement_case.GetAccountEnforcementCase"
+          contract_metric: "ops_account_enforcement_case_read"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "600"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="product-ops-service",method="POST",route="/control-plane/product/account-enforcement-cases/appeal"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.account_enforcement_case.OpenAccountAppealCase"
+          contract_metric: "ops_account_enforcement_case_command"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1000"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="product-ops-service",method="POST",route="/control-plane/product/account-enforcement-cases/appeal"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.account_enforcement_case.OpenAccountAppealCase"
+          contract_metric: "ops_account_enforcement_case_command"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1000"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="product-ops-service",method="POST",route="/control-plane/product/account-enforcement-cases/moderation"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.account_enforcement_case.OpenAccountModerationCase"
+          contract_metric: "ops_account_enforcement_case_command"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1000"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="product-ops-service",method="POST",route="/control-plane/product/account-enforcement-cases/moderation"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.account_enforcement_case.OpenAccountModerationCase"
+          contract_metric: "ops_account_enforcement_case_command"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1000"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="product-ops-service",method="POST",route=~"^/control-plane/product/account-enforcement-cases/[^/]+:retry-delivery$"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.account_enforcement_case.RetryAccountEnforcementDelivery"
+          contract_metric: "ops_account_enforcement_delivery_recovery"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1000"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="product-ops-service",method="POST",route=~"^/control-plane/product/account-enforcement-cases/[^/]+:retry-delivery$"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.account_enforcement_case.RetryAccountEnforcementDelivery"
+          contract_metric: "ops_account_enforcement_delivery_recovery"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1000"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="product-ops-service",method="POST",route=~"^/control-plane/product/account-enforcement-cases/[^/]+:review$"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.account_enforcement_case.ReviewAccountEnforcementCase"
+          contract_metric: "ops_account_enforcement_case_command"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1000"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="product-ops-service",method="POST",route=~"^/control-plane/product/account-enforcement-cases/[^/]+:review$"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.account_enforcement_case.ReviewAccountEnforcementCase"
+          contract_metric: "ops_account_enforcement_case_command"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1000"
+          slo_availability_percent: "99.9"

@@ -14,7 +14,7 @@ from quwoquan_ops.ci.provider_conformance.native_case_result import run_native_h
 
 RESULT_PATH_ENV = "QWQ_PROVIDER_CONFORMANCE_RESULT_PATH"
 TARGET = 'ext-auth-carrier_one_tap-user-acceptance'
-COMMAND = ('python3', 'quwoquan_ops/ci/provider_conformance/run_provider_patrol_uat.py', '--target', 'test/user_acceptance/patrol/user/carrier_one_tap_provider__user_acceptance_test.dart', '--platform', 'android', '--unauthenticated')
+COMMAND = ('python3', 'quwoquan_ops/ci/provider_conformance/run_provider_patrol_uat.py', '--target', 'test/user_acceptance/service/user_service/account/authentication_challenge/carrier_one_tap_provider__user_acceptance_test.dart', '--platform', 'android', '--unauthenticated')
 
 if __name__ == "__main__":
     raise SystemExit(run_native_harness(command=COMMAND, target=TARGET))

@@ -1,0 +1,184 @@
+description: GatheringPlan、typed PlanItem、proposal、immutable PlanRevision 与 Plan-level acknowledgement 的服务本地单轨契约。
+fields:
+- {name: _id, type: string, constraints: [PK, NOT_NULL], role: authoritative_state}
+- {name: gatheringId, type: string, constraints: [NOT_BLANK, UNIQUE], role: authoritative_state, reference: true}
+- {name: version, type: int64, constraints: [NOT_NULL], semantic_type: aggregate_version, role: authoritative_state}
+- {name: currentRevisionId, type: string, constraints: [NOT_BLANK], role: authoritative_state}
+- {name: currentRevisionNumber, type: int, constraints: [NOT_NULL], role: authoritative_state}
+- {name: currentRevisionDigest, type: string, constraints: [NOT_BLANK], role: authoritative_state}
+- {name: revisions, type: '[]PlanRevision', constraints: [NOT_NULL], role: owned_value}
+- {name: proposals, type: '[]GatheringPlanProposal', constraints: [NOT_NULL], role: owned_value}
+- {name: acknowledgements, type: '[]PlanRevisionAcknowledgement', constraints: [NOT_NULL], role: owned_value}
+- {name: createdAt, type: timestamp, constraints: [NOT_NULL], semantic_type: instant, role: authoritative_state}
+- {name: updatedAt, type: timestamp, constraints: [NOT_NULL], semantic_type: instant, role: authoritative_state}
+types:
+  GatheringPlanSourceRef:
+    description: 只保存 owner 可导航的 canonical object reference，不复制来源正文。
+    fields:
+    - {name: objectTypeRef, type: string, constraints: [NOT_BLANK]}
+    - {name: objectId, type: string, constraints: [NOT_BLANK]}
+  GatheringPlanParticipationRef:
+    description: Plan 对 GatheringParticipation typed key 的 reference；不是 Plan 内成员副本。
+    fields:
+    - {name: gatheringId, type: string, constraints: [NOT_BLANK]}
+    - {name: personaId, type: string, constraints: [NOT_BLANK]}
+  PlanAgendaItem:
+    fields:
+    - {name: content, type: string, constraints: [NOT_BLANK], max_utf8_bytes: 6000}
+    - {name: startsAt, type: timestamp, constraints: [NULLABLE], semantic_type: instant}
+    - {name: durationMinutes, type: int, constraints: [NULLABLE]}
+  PlanPlaceItem:
+    fields:
+    - {name: placeRef, type: GatheringPlanSourceRef, constraints: [NOT_NULL]}
+    - {name: instruction, type: string, constraints: [NULLABLE], max_utf8_bytes: 1200}
+  PlanRouteSegmentItem:
+    fields:
+    - {name: fromPlaceRef, type: GatheringPlanSourceRef, constraints: [NOT_NULL]}
+    - {name: toPlaceRef, type: GatheringPlanSourceRef, constraints: [NOT_NULL]}
+    - {name: travelMode, type: enum, enum_ref: PlanTravelMode, constraints: [NOT_NULL]}
+    - {name: estimatedMinutes, type: int, constraints: [NULLABLE]}
+    - {name: instruction, type: string, constraints: [NULLABLE], max_utf8_bytes: 1200}
+  PlanTaskItem:
+    fields:
+    - {name: content, type: string, constraints: [NOT_BLANK], max_utf8_bytes: 6000}
+    - {name: dueAt, type: timestamp, constraints: [NULLABLE], semantic_type: instant}
+    - {name: completed, type: bool, constraints: [NOT_NULL]}
+  PlanChecklistEntry:
+    fields:
+    - {name: entryId, type: string, constraints: [NOT_BLANK]}
+    - {name: content, type: string, constraints: [NOT_BLANK], max_utf8_bytes: 1200}
+    - {name: checked, type: bool, constraints: [NOT_NULL]}
+  PlanChecklistItem:
+    fields:
+    - {name: entries, type: '[]PlanChecklistEntry', constraints: [NOT_NULL], max_items: 100}
+  PlanNoteItem:
+    fields:
+    - {name: content, type: string, constraints: [NOT_BLANK], max_utf8_bytes: 12000}
+  PlanItem:
+    description: kind 与唯一 typed payload 一一对应；禁止 Map/dynamic 扩展字段。
+    fields:
+    - {name: itemId, type: string, constraints: [NOT_BLANK]}
+    - {name: kind, type: enum, enum_ref: PlanItemKind, constraints: [NOT_NULL]}
+    - {name: order, type: int, constraints: [NOT_NULL]}
+    - {name: agenda, type: PlanAgendaItem, constraints: [NULLABLE]}
+    - {name: place, type: PlanPlaceItem, constraints: [NULLABLE]}
+    - {name: routeSegment, type: PlanRouteSegmentItem, constraints: [NULLABLE]}
+    - {name: task, type: PlanTaskItem, constraints: [NULLABLE]}
+    - {name: checklist, type: PlanChecklistItem, constraints: [NULLABLE]}
+    - {name: note, type: PlanNoteItem, constraints: [NULLABLE]}
+    - {name: assigneeRef, type: GatheringPlanParticipationRef, constraints: [NULLABLE]}
+    - {name: sourceRefs, type: '[]GatheringPlanSourceRef', constraints: [NOT_NULL], max_items: 32}
+  PlanAcknowledgementPolicy:
+    description: Plan-level affected Participation confirmation policy；不得映射为 Gathering material revision acknowledgement。
+    fields:
+    - {name: mode, type: enum, enum_ref: PlanAcknowledgementMode, constraints: [NOT_NULL]}
+    - {name: deadlineAt, type: timestamp, constraints: [NULLABLE], semantic_type: instant}
+  PlanRevisionAcknowledgement:
+    description: Plan root-owned acknowledgement record；不属于 immutable PlanRevision，也不改写 GatheringParticipation。
+    fields:
+    - {name: revisionId, type: string, constraints: [NOT_BLANK]}
+    - {name: participationRef, type: GatheringPlanParticipationRef, constraints: [NOT_NULL]}
+    - {name: status, type: enum, enum_ref: PlanAcknowledgementStatus, constraints: [NOT_NULL]}
+    - {name: evidenceRef, type: GatheringPlanSourceRef, constraints: [NULLABLE]}
+    - {name: recordedAt, type: timestamp, constraints: [NULLABLE], semantic_type: instant}
+  PlanRevision:
+    description: append-only immutable Plan snapshot；revisionDigest 覆盖 typed items 与 acknowledgement policy/ref。
+    fields:
+    - {name: revisionId, type: string, constraints: [NOT_BLANK]}
+    - {name: revisionNumber, type: int, constraints: [NOT_NULL]}
+    - {name: baseRevisionId, type: string, constraints: [NULLABLE]}
+    - {name: baseRevisionNumber, type: int, constraints: [NOT_NULL]}
+    - {name: baseRevisionDigest, type: string, constraints: [NOT_NULL]}
+    - {name: revisionDigest, type: string, constraints: [NOT_BLANK]}
+    - {name: committedProposalId, type: string, constraints: [NULLABLE]}
+    - {name: committedByPersonaId, type: string, constraints: [NOT_BLANK]}
+    - {name: items, type: '[]PlanItem', constraints: [NOT_NULL], max_items: 256}
+    - {name: acknowledgementPolicy, type: PlanAcknowledgementPolicy, constraints: [NOT_NULL]}
+    - {name: affectedParticipationRefs, type: '[]GatheringPlanParticipationRef', constraints: [NOT_NULL], max_items: 512}
+    - {name: committedAt, type: timestamp, constraints: [NOT_NULL], semantic_type: instant}
+  GatheringPlanProposal:
+    fields:
+    - {name: proposalId, type: string, constraints: [NOT_BLANK]}
+    - {name: basePlanVersion, type: int64, constraints: [NOT_NULL]}
+    - {name: baseRevisionId, type: string, constraints: [NOT_BLANK]}
+    - {name: baseRevisionNumber, type: int, constraints: [NOT_NULL]}
+    - {name: baseRevisionDigest, type: string, constraints: [NOT_BLANK]}
+    - {name: proposalDigest, type: string, constraints: [NOT_BLANK]}
+    - {name: proposedByPersonaId, type: string, constraints: [NOT_BLANK]}
+    - {name: items, type: '[]PlanItem', constraints: [NOT_NULL], max_items: 256}
+    - {name: acknowledgementPolicy, type: PlanAcknowledgementPolicy, constraints: [NOT_NULL]}
+    - {name: affectedParticipationRefs, type: '[]GatheringPlanParticipationRef', constraints: [NOT_NULL], max_items: 512}
+    - {name: status, type: enum, enum_ref: GatheringPlanProposalStatus, constraints: [NOT_NULL]}
+    - {name: proposedAt, type: timestamp, constraints: [NOT_NULL], semantic_type: instant}
+    - {name: committedRevisionId, type: string, constraints: [NULLABLE]}
+    - {name: committedAt, type: timestamp, constraints: [NULLABLE], semantic_type: instant}
+  CreateGatheringPlanCommand:
+    fields:
+    - {name: gatheringId, type: string, constraints: [NOT_BLANK]}
+    - {name: items, type: '[]PlanItem', constraints: [NOT_NULL], max_items: 256}
+    - {name: acknowledgementPolicy, type: PlanAcknowledgementPolicy, constraints: [NOT_NULL]}
+    - {name: affectedParticipationRefs, type: '[]GatheringPlanParticipationRef', constraints: [NOT_NULL], max_items: 512}
+  ProposeGatheringPlanCommand:
+    fields:
+    - {name: planId, type: string, constraints: [NOT_BLANK]}
+    - {name: expectedPlanVersion, type: int64, constraints: [NOT_NULL]}
+    - {name: baseRevisionId, type: string, constraints: [NOT_BLANK]}
+    - {name: baseRevisionNumber, type: int, constraints: [NOT_NULL]}
+    - {name: baseRevisionDigest, type: string, constraints: [NOT_BLANK]}
+    - {name: items, type: '[]PlanItem', constraints: [NOT_NULL], max_items: 256}
+    - {name: acknowledgementPolicy, type: PlanAcknowledgementPolicy, constraints: [NOT_NULL]}
+    - {name: affectedParticipationRefs, type: '[]GatheringPlanParticipationRef', constraints: [NOT_NULL], max_items: 512}
+  CommitGatheringPlanProposalCommand:
+    fields:
+    - {name: planId, type: string, constraints: [NOT_BLANK]}
+    - {name: proposalId, type: string, constraints: [NOT_BLANK]}
+    - {name: expectedPlanVersion, type: int64, constraints: [NOT_NULL]}
+    - {name: expectedProposalDigest, type: string, constraints: [NOT_BLANK]}
+    - {name: expectedBaseRevisionDigest, type: string, constraints: [NOT_BLANK]}
+  GatheringPlanByGatheringQuery:
+    fields:
+    - {name: gatheringId, type: string, constraints: [NOT_BLANK]}
+  GatheringPlanRevisionPageQuery:
+    fields:
+    - {name: planId, type: string, constraints: [NOT_BLANK]}
+    - {name: cursor, type: string, constraints: [NULLABLE]}
+    - {name: limit, type: int, constraints: [NULLABLE]}
+  GatheringPlanCommandResult:
+    fields:
+    - {name: planId, type: string, constraints: [NOT_BLANK]}
+    - {name: gatheringId, type: string, constraints: [NOT_BLANK]}
+    - {name: planVersion, type: int64, constraints: [NOT_NULL]}
+    - {name: currentRevisionId, type: string, constraints: [NOT_BLANK]}
+    - {name: currentRevisionNumber, type: int, constraints: [NOT_NULL]}
+    - {name: currentRevisionDigest, type: string, constraints: [NOT_BLANK]}
+    - {name: proposalId, type: string, constraints: [NULLABLE]}
+    - {name: proposalDigest, type: string, constraints: [NULLABLE]}
+    - {name: replayed, type: bool, constraints: [NOT_NULL]}
+  GatheringPlanRevisionPageSlice:
+    fields:
+    - {name: items, type: '[]PlanRevision', constraints: [NOT_NULL]}
+    - {name: nextCursor, type: string, constraints: [NULLABLE]}
+    - {name: hasMore, type: bool, constraints: [NOT_NULL]}
+  GatheringPlanEventPayload:
+    fields:
+    - {name: planId, type: string, constraints: [NOT_BLANK]}
+    - {name: gatheringId, type: string, constraints: [NOT_BLANK]}
+    - {name: aggregateVersion, type: int64, constraints: [NOT_NULL]}
+    - {name: actorPersonaId, type: string, constraints: [NOT_BLANK]}
+    - {name: proposalId, type: string, constraints: [NULLABLE]}
+    - {name: proposalDigest, type: string, constraints: [NULLABLE]}
+    - {name: revisionId, type: string, constraints: [NOT_BLANK]}
+    - {name: revisionNumber, type: int, constraints: [NOT_NULL]}
+    - {name: revisionDigest, type: string, constraints: [NOT_BLANK]}
+    - {name: occurredAt, type: timestamp, constraints: [NOT_NULL], semantic_type: instant}
+enums:
+  PlanItemKind:
+    values: [agenda, place, route_segment, task, checklist, note]
+  PlanTravelMode:
+    values: [walk, bicycle, transit, drive, ferry, other]
+  PlanAcknowledgementMode:
+    values: [none, affected_participations]
+  PlanAcknowledgementStatus:
+    values: [pending, acknowledged, declined]
+  GatheringPlanProposalStatus:
+    values: [pending, committed]

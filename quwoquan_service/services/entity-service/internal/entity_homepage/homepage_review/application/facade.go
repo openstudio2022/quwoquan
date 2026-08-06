@@ -134,18 +134,6 @@ func viewFromAggregate(aggregate *reviewmodel.HomepageReview) ReviewView {
 	return viewFromSnapshot(aggregate.Snapshot())
 }
 
-type reviewEventPayload struct {
-	ID              string    `json:"reviewId"`
-	HomepageID      string    `json:"homepageId"`
-	AuthorPersonaID string    `json:"authorPersonaId,omitempty"`
-	Rating          int       `json:"rating,omitempty"`
-	TagRefs         []string  `json:"tagRefs,omitempty"`
-	Status          string    `json:"status"`
-	Version         int64     `json:"version"`
-	CreatedAt       time.Time `json:"createdAt,omitempty"`
-	UpdatedAt       time.Time `json:"updatedAt,omitempty"`
-}
-
 // Create 发表评价；软删记录上的再次创建复活同一聚合（版本继续推进）。
 func (f *Facade) Create(ctx context.Context, command CreateCommand) (ReviewView, error) {
 	actorID, err := requiredActor(command.ActorPersonaID)
@@ -474,17 +462,11 @@ func (f *Facade) commit(
 		return ReviewView{}, err
 	}
 	snapshot := aggregate.Snapshot()
-	payload, marshalErr := json.Marshal(reviewEventPayload{
-		ID:              snapshot.ID,
-		HomepageID:      snapshot.HomepageID,
-		AuthorPersonaID: snapshot.AuthorPersonaID,
-		Rating:          snapshot.Rating,
-		TagRefs:         snapshot.TagRefs,
-		Status:          string(snapshot.Status),
-		Version:         snapshot.Version,
-		CreatedAt:       snapshot.CreatedAt,
-		UpdatedAt:       snapshot.UpdatedAt,
-	})
+	payloadValue, payloadErr := reviewEventPayloadFor(eventType, snapshot)
+	if payloadErr != nil {
+		return ReviewView{}, unavailable(payloadErr)
+	}
+	payload, marshalErr := json.Marshal(payloadValue)
 	if marshalErr != nil {
 		return ReviewView{}, unavailable(marshalErr)
 	}
@@ -514,6 +496,35 @@ func (f *Facade) commit(
 		f.projector.OnReviewCommitted(ctx, snapshot.HomepageID)
 	}
 	return viewFromAggregate(result.Aggregate), nil
+}
+
+func reviewEventPayloadFor(eventType string, snapshot reviewmodel.Snapshot) (map[string]any, error) {
+	base := map[string]any{
+		"reviewId":   snapshot.ID,
+		"homepageId": snapshot.HomepageID,
+		"status":     string(snapshot.Status),
+		"version":    snapshot.Version,
+	}
+	switch eventType {
+	case EventReviewPublished, EventReviewUpdated:
+		tagRefs := snapshot.TagRefs
+		if tagRefs == nil {
+			tagRefs = []string{}
+		}
+		base["authorPersonaId"] = snapshot.AuthorPersonaID
+		base["rating"] = snapshot.Rating
+		base["tagRefs"] = tagRefs
+		if eventType == EventReviewPublished {
+			base["createdAt"] = snapshot.CreatedAt.UTC()
+		} else {
+			base["updatedAt"] = snapshot.UpdatedAt.UTC()
+		}
+	case EventReviewRemoved:
+		base["updatedAt"] = snapshot.UpdatedAt.UTC()
+	default:
+		return nil, fmt.Errorf("HomepageReview event type %q is not canonical", eventType)
+	}
+	return base, nil
 }
 
 func requiredActor(raw string) (string, error) {

@@ -1,14 +1,75 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: 93359367b8614f01bb5e1c51e37af383332b01f117cc1c6cf39e4fdf838e49d2
+// ContractGraph SHA256: 99a8a52d1ede68d6295d252a5c3cfd90ce40fa7e11b50e9fee2dad7a7afdf2b2
 
 library;
 
 import '../operation_request_payload.dart';
+import "../generated/shared_operation_enums.g.dart";
 import "../generated/shared_operation_types.g.dart";
 
+export "../generated/shared_operation_enums.g.dart";
 export "../generated/shared_operation_types.g.dart";
 
 part '../generated/requests/chat/chat_operation_contracts.g.requests.g.dart';
+
+enum ChatContactSource {
+  conversation("conversation"),
+  mutual("mutual"),
+  following("following"),
+  contactDiscovery("contact_discovery"),
+  circle("circle"),
+  group("group");
+
+  const ChatContactSource(this.wireName);
+
+  final String wireName;
+
+  static ChatContactSource fromWire(Object? value, String path) {
+    return switch (value) {
+      "conversation" => ChatContactSource.conversation,
+      "mutual" => ChatContactSource.mutual,
+      "following" => ChatContactSource.following,
+      "contact_discovery" => ChatContactSource.contactDiscovery,
+      "circle" => ChatContactSource.circle,
+      "group" => ChatContactSource.group,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum ConversationAccessMode {
+  active("active"),
+  readOnly("read_only");
+
+  const ConversationAccessMode(this.wireName);
+
+  final String wireName;
+
+  static ConversationAccessMode fromWire(Object? value, String path) {
+    return switch (value) {
+      "active" => ConversationAccessMode.active,
+      "read_only" => ConversationAccessMode.readOnly,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum ConversationPostingPolicy {
+  memberChat("member_chat"),
+  announcementsOnly("announcements_only");
+
+  const ConversationPostingPolicy(this.wireName);
+
+  final String wireName;
+
+  static ConversationPostingPolicy fromWire(Object? value, String path) {
+    return switch (value) {
+      "member_chat" => ConversationPostingPolicy.memberChat,
+      "announcements_only" => ConversationPostingPolicy.announcementsOnly,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
 
 enum MemberListSort {
   joinedAsc("joined_asc"),
@@ -95,6 +156,23 @@ enum MessageType {
       "card" => MessageType.card,
       "system_call_log" => MessageType.systemCallLog,
       "system_announcement" => MessageType.systemAnnouncement,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum SelectableGroupConversationSource {
+  group("group"),
+  circle("circle");
+
+  const SelectableGroupConversationSource(this.wireName);
+
+  final String wireName;
+
+  static SelectableGroupConversationSource fromWire(Object? value, String path) {
+    return switch (value) {
+      "group" => SelectableGroupConversationSource.group,
+      "circle" => SelectableGroupConversationSource.circle,
       _ => throw FormatException('$path has an invalid enum value'),
     };
   }
@@ -187,6 +265,10 @@ final class ChatConversation {
     required this.creatorId,
     required this.circleId,
     required this.circleGroupId,
+    required this.gatheringId,
+    required this.gatheringSourceVersion,
+    required this.accessMode,
+    required this.postingPolicy,
     required this.entityId,
     required this.originType,
     this.originIntersectionSnapshot,
@@ -219,6 +301,10 @@ final class ChatConversation {
   final String creatorId;
   final String circleId;
   final String circleGroupId;
+  final String gatheringId;
+  final int gatheringSourceVersion;
+  final ConversationAccessMode accessMode;
+  final ConversationPostingPolicy postingPolicy;
   final String entityId;
   final String originType;
   final GreetingIntersectionSnapshot? originIntersectionSnapshot;
@@ -241,7 +327,7 @@ final class ChatConversation {
   final DateTime updatedAt;
 
   factory ChatConversation.fromWire(Map<String, Object?> map, [String path = "ChatConversation"]) {
-    _rejectUnknownFields(map, const <String>{"id", "conversationId", "type", "title", "avatarUrl", "groupAvatarVersion", "groupAvatarSourceHash", "creatorId", "circleId", "circleGroupId", "entityId", "originType", "originIntersectionSnapshot", "maxSeq", "memberCount", "membersRosterRevision", "maxGroupSize", "receiptEnabled", "announcement", "announcementUpdatedBy", "announcementUpdatedAt", "nameEditableByAdminOnly", "lastMessageId", "lastMessagePreview", "lastMessageType", "lastMessageTime", "messageCount", "status", "createdAt", "updatedAt"}, path);
+    _rejectUnknownFields(map, const <String>{"id", "conversationId", "type", "title", "avatarUrl", "groupAvatarVersion", "groupAvatarSourceHash", "creatorId", "circleId", "circleGroupId", "gatheringId", "gatheringSourceVersion", "accessMode", "postingPolicy", "entityId", "originType", "originIntersectionSnapshot", "maxSeq", "memberCount", "membersRosterRevision", "maxGroupSize", "receiptEnabled", "announcement", "announcementUpdatedBy", "announcementUpdatedAt", "nameEditableByAdminOnly", "lastMessageId", "lastMessagePreview", "lastMessageType", "lastMessageTime", "messageCount", "status", "createdAt", "updatedAt"}, path);
     return ChatConversation(
       id: _requiredString(map["id"], '$path.id'),
       conversationId: _requiredString(map["conversationId"], '$path.conversationId'),
@@ -253,6 +339,10 @@ final class ChatConversation {
       creatorId: _requiredString(map["creatorId"], '$path.creatorId'),
       circleId: _requiredString(map["circleId"], '$path.circleId'),
       circleGroupId: _requiredString(map["circleGroupId"], '$path.circleGroupId'),
+      gatheringId: _requiredString(map["gatheringId"], '$path.gatheringId'),
+      gatheringSourceVersion: _requiredInt(map["gatheringSourceVersion"], '$path.gatheringSourceVersion'),
+      accessMode: ConversationAccessMode.fromWire(map["accessMode"], '$path.accessMode'),
+      postingPolicy: ConversationPostingPolicy.fromWire(map["postingPolicy"], '$path.postingPolicy'),
       entityId: _requiredString(map["entityId"], '$path.entityId'),
       originType: _requiredString(map["originType"], '$path.originType'),
       originIntersectionSnapshot: map["originIntersectionSnapshot"] == null ? null : GreetingIntersectionSnapshot.fromWire(_requiredObject(map["originIntersectionSnapshot"], '$path.originIntersectionSnapshot'), '$path.originIntersectionSnapshot'),
@@ -287,6 +377,10 @@ final class ChatConversation {
     "creatorId": creatorId,
     "circleId": circleId,
     "circleGroupId": circleGroupId,
+    "gatheringId": gatheringId,
+    "gatheringSourceVersion": gatheringSourceVersion,
+    "accessMode": accessMode.wireName,
+    "postingPolicy": postingPolicy.wireName,
     "entityId": entityId,
     "originType": originType,
     if (originIntersectionSnapshot != null) "originIntersectionSnapshot": originIntersectionSnapshot!.toWire(),
@@ -960,6 +1054,134 @@ final class ConversationUserStateCommandAck {
   };
 }
 
+final class GatheringAssetIndexItem {
+  const GatheringAssetIndexItem({
+    required this.messageId,
+    required this.seq,
+    required this.mediaAssetId,
+    required this.messageType,
+    required this.createdAt,
+  });
+
+  final String messageId;
+  final int seq;
+  final String mediaAssetId;
+  final String messageType;
+  final DateTime createdAt;
+
+  factory GatheringAssetIndexItem.fromWire(Map<String, Object?> map, [String path = "GatheringAssetIndexItem"]) {
+    _rejectUnknownFields(map, const <String>{"messageId", "seq", "mediaAssetId", "messageType", "createdAt"}, path);
+    return GatheringAssetIndexItem(
+      messageId: _requiredNonBlankString(map["messageId"], '$path.messageId'),
+      seq: _requiredInt(map["seq"], '$path.seq'),
+      mediaAssetId: _requiredNonBlankString(map["mediaAssetId"], '$path.mediaAssetId'),
+      messageType: _requiredNonBlankString(map["messageType"], '$path.messageType'),
+      createdAt: _requiredTimestamp(map["createdAt"], '$path.createdAt'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "messageId": messageId,
+    "seq": seq,
+    "mediaAssetId": mediaAssetId,
+    "messageType": messageType,
+    "createdAt": createdAt.toUtc().toIso8601String(),
+  };
+}
+
+final class GatheringChatAccessSummary {
+  const GatheringChatAccessSummary({
+    required this.gatheringId,
+    required this.conversationId,
+    required this.accessMode,
+    required this.postingPolicy,
+    required this.viewerRole,
+    required this.canPost,
+  });
+
+  final String gatheringId;
+  final String conversationId;
+  final ConversationAccessMode accessMode;
+  final ConversationPostingPolicy postingPolicy;
+  final String viewerRole;
+  final bool canPost;
+
+  factory GatheringChatAccessSummary.fromWire(Map<String, Object?> map, [String path = "GatheringChatAccessSummary"]) {
+    _rejectUnknownFields(map, const <String>{"gatheringId", "conversationId", "accessMode", "postingPolicy", "viewerRole", "canPost"}, path);
+    return GatheringChatAccessSummary(
+      gatheringId: _requiredNonBlankString(map["gatheringId"], '$path.gatheringId'),
+      conversationId: _requiredNonBlankString(map["conversationId"], '$path.conversationId'),
+      accessMode: ConversationAccessMode.fromWire(map["accessMode"], '$path.accessMode'),
+      postingPolicy: ConversationPostingPolicy.fromWire(map["postingPolicy"], '$path.postingPolicy'),
+      viewerRole: _requiredString(map["viewerRole"], '$path.viewerRole'),
+      canPost: _requiredBool(map["canPost"], '$path.canPost'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "gatheringId": gatheringId,
+    "conversationId": conversationId,
+    "accessMode": accessMode.wireName,
+    "postingPolicy": postingPolicy.wireName,
+    "viewerRole": viewerRole,
+    "canPost": canPost,
+  };
+}
+
+final class GatheringChatBoardSlice {
+  const GatheringChatBoardSlice({
+    required this.access,
+    this.pinnedAnnouncement,
+    required this.assets,
+  });
+
+  final GatheringChatAccessSummary access;
+  final GatheringPinnedAnnouncement? pinnedAnnouncement;
+  final List<GatheringAssetIndexItem> assets;
+
+  factory GatheringChatBoardSlice.fromWire(Map<String, Object?> map, [String path = "GatheringChatBoardSlice"]) {
+    _rejectUnknownFields(map, const <String>{"access", "pinnedAnnouncement", "assets"}, path);
+    return GatheringChatBoardSlice(
+      access: GatheringChatAccessSummary.fromWire(_requiredObject(map["access"], '$path.access'), '$path.access'),
+      pinnedAnnouncement: map["pinnedAnnouncement"] == null ? null : GatheringPinnedAnnouncement.fromWire(_requiredObject(map["pinnedAnnouncement"], '$path.pinnedAnnouncement'), '$path.pinnedAnnouncement'),
+      assets: List<GatheringAssetIndexItem>.unmodifiable(_requiredList(map["assets"], '$path.assets').asMap().entries.map((entry) => GatheringAssetIndexItem.fromWire(_requiredObject(entry.value, '$path.assets' + '[${entry.key}]'), '$path.assets' + '[${entry.key}]'))),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "access": access.toWire(),
+    if (pinnedAnnouncement != null) "pinnedAnnouncement": pinnedAnnouncement!.toWire(),
+    "assets": assets.map((value) => value.toWire()).toList(growable: false),
+  };
+}
+
+final class GatheringPinnedAnnouncement {
+  const GatheringPinnedAnnouncement({
+    required this.content,
+    required this.updatedBy,
+    required this.updatedAt,
+  });
+
+  final String content;
+  final String updatedBy;
+  final DateTime updatedAt;
+
+  factory GatheringPinnedAnnouncement.fromWire(Map<String, Object?> map, [String path = "GatheringPinnedAnnouncement"]) {
+    _rejectUnknownFields(map, const <String>{"content", "updatedBy", "updatedAt"}, path);
+    return GatheringPinnedAnnouncement(
+      content: _requiredNonBlankString(map["content"], '$path.content'),
+      updatedBy: _requiredNonBlankString(map["updatedBy"], '$path.updatedBy'),
+      updatedAt: _requiredTimestamp(map["updatedAt"], '$path.updatedAt'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "content": content,
+    "updatedBy": updatedBy,
+    "updatedAt": updatedAt.toUtc().toIso8601String(),
+  };
+}
+
 final class GroupCandidatePageSlice {
   const GroupCandidatePageSlice({
     required this.items,
@@ -1000,8 +1222,8 @@ final class GroupCandidateRow {
   final String bio;
   final String metFrom;
   final String lastInteraction;
-  final String relationState;
-  final String source;
+  final RelationshipState relationState;
+  final ChatContactSource source;
   final bool isStarred;
 
   factory GroupCandidateRow.fromWire(Map<String, Object?> map, [String path = "GroupCandidateRow"]) {
@@ -1014,8 +1236,8 @@ final class GroupCandidateRow {
       bio: _requiredString(map["bio"], '$path.bio'),
       metFrom: _requiredString(map["metFrom"], '$path.metFrom'),
       lastInteraction: _requiredString(map["lastInteraction"], '$path.lastInteraction'),
-      relationState: _requiredString(map["relationState"], '$path.relationState'),
-      source: _requiredString(map["source"], '$path.source'),
+      relationState: RelationshipState.fromWire(map["relationState"], '$path.relationState'),
+      source: ChatContactSource.fromWire(map["source"], '$path.source'),
       isStarred: _requiredBool(map["isStarred"], '$path.isStarred'),
     );
   }
@@ -1028,8 +1250,8 @@ final class GroupCandidateRow {
     "bio": bio,
     "metFrom": metFrom,
     "lastInteraction": lastInteraction,
-    "relationState": relationState,
-    "source": source,
+    "relationState": relationState.wireName,
+    "source": source.wireName,
     "isStarred": isStarred,
   };
 }
@@ -1042,6 +1264,7 @@ final class GroupHome {
     required this.groupAvatarVersion,
     required this.circleId,
     required this.circleGroupId,
+    required this.gatheringId,
     required this.entityId,
     required this.sourceEntityTitle,
     required this.sourceCircleTitle,
@@ -1049,6 +1272,8 @@ final class GroupHome {
     required this.announcement,
     required this.capabilities,
     required this.originType,
+    required this.accessMode,
+    required this.postingPolicy,
     required this.canManageMembers,
     required this.canDissolve,
   });
@@ -1059,6 +1284,7 @@ final class GroupHome {
   final int groupAvatarVersion;
   final String circleId;
   final String circleGroupId;
+  final String gatheringId;
   final String entityId;
   final String sourceEntityTitle;
   final String sourceCircleTitle;
@@ -1066,11 +1292,13 @@ final class GroupHome {
   final String announcement;
   final List<String> capabilities;
   final String originType;
+  final ConversationAccessMode accessMode;
+  final ConversationPostingPolicy postingPolicy;
   final bool canManageMembers;
   final bool canDissolve;
 
   factory GroupHome.fromWire(Map<String, Object?> map, [String path = "GroupHome"]) {
-    _rejectUnknownFields(map, const <String>{"conversationId", "title", "avatarUrl", "groupAvatarVersion", "circleId", "circleGroupId", "entityId", "sourceEntityTitle", "sourceCircleTitle", "memberCount", "announcement", "capabilities", "originType", "canManageMembers", "canDissolve"}, path);
+    _rejectUnknownFields(map, const <String>{"conversationId", "title", "avatarUrl", "groupAvatarVersion", "circleId", "circleGroupId", "gatheringId", "entityId", "sourceEntityTitle", "sourceCircleTitle", "memberCount", "announcement", "capabilities", "originType", "accessMode", "postingPolicy", "canManageMembers", "canDissolve"}, path);
     return GroupHome(
       conversationId: _requiredString(map["conversationId"], '$path.conversationId'),
       title: _requiredString(map["title"], '$path.title'),
@@ -1078,6 +1306,7 @@ final class GroupHome {
       groupAvatarVersion: _requiredInt(map["groupAvatarVersion"], '$path.groupAvatarVersion'),
       circleId: _requiredString(map["circleId"], '$path.circleId'),
       circleGroupId: _requiredString(map["circleGroupId"], '$path.circleGroupId'),
+      gatheringId: _requiredString(map["gatheringId"], '$path.gatheringId'),
       entityId: _requiredString(map["entityId"], '$path.entityId'),
       sourceEntityTitle: _requiredString(map["sourceEntityTitle"], '$path.sourceEntityTitle'),
       sourceCircleTitle: _requiredString(map["sourceCircleTitle"], '$path.sourceCircleTitle'),
@@ -1085,6 +1314,8 @@ final class GroupHome {
       announcement: _requiredString(map["announcement"], '$path.announcement'),
       capabilities: List<String>.unmodifiable(_requiredList(map["capabilities"], '$path.capabilities').asMap().entries.map((entry) => _requiredString(entry.value, '$path.capabilities' + '[${entry.key}]'))),
       originType: _requiredString(map["originType"], '$path.originType'),
+      accessMode: ConversationAccessMode.fromWire(map["accessMode"], '$path.accessMode'),
+      postingPolicy: ConversationPostingPolicy.fromWire(map["postingPolicy"], '$path.postingPolicy'),
       canManageMembers: _requiredBool(map["canManageMembers"], '$path.canManageMembers'),
       canDissolve: _requiredBool(map["canDissolve"], '$path.canDissolve'),
     );
@@ -1097,6 +1328,7 @@ final class GroupHome {
     "groupAvatarVersion": groupAvatarVersion,
     "circleId": circleId,
     "circleGroupId": circleGroupId,
+    "gatheringId": gatheringId,
     "entityId": entityId,
     "sourceEntityTitle": sourceEntityTitle,
     "sourceCircleTitle": sourceCircleTitle,
@@ -1104,6 +1336,8 @@ final class GroupHome {
     "announcement": announcement,
     "capabilities": capabilities.map((value) => value).toList(growable: false),
     "originType": originType,
+    "accessMode": accessMode.wireName,
+    "postingPolicy": postingPolicy.wireName,
     "canManageMembers": canManageMembers,
     "canDissolve": canDissolve,
   };
@@ -1391,8 +1625,8 @@ final class SelectableGroupContactMemberRow {
   final String userHandle;
   final String displayName;
   final String avatarUrl;
-  final String relationState;
-  final String source;
+  final RelationshipState relationState;
+  final ChatContactSource source;
 
   factory SelectableGroupContactMemberRow.fromWire(Map<String, Object?> map, [String path = "SelectableGroupContactMemberRow"]) {
     _rejectUnknownFields(map, const <String>{"userId", "userHandle", "displayName", "avatarUrl", "relationState", "source"}, path);
@@ -1401,8 +1635,8 @@ final class SelectableGroupContactMemberRow {
       userHandle: _requiredString(map["userHandle"], '$path.userHandle'),
       displayName: _requiredString(map["displayName"], '$path.displayName'),
       avatarUrl: _requiredString(map["avatarUrl"], '$path.avatarUrl'),
-      relationState: _requiredString(map["relationState"], '$path.relationState'),
-      source: _requiredString(map["source"], '$path.source'),
+      relationState: RelationshipState.fromWire(map["relationState"], '$path.relationState'),
+      source: ChatContactSource.fromWire(map["source"], '$path.source'),
     );
   }
 
@@ -1411,8 +1645,8 @@ final class SelectableGroupContactMemberRow {
     "userHandle": userHandle,
     "displayName": displayName,
     "avatarUrl": avatarUrl,
-    "relationState": relationState,
-    "source": source,
+    "relationState": relationState.wireName,
+    "source": source.wireName,
   };
 }
 
@@ -1540,6 +1774,9 @@ ConversationTimestampIndexSlice decodeConversationTimestampIndexSlice(Object? re
 ConversationUserStateCommandAck decodeConversationUserStateCommandAck(Object? response) =>
     ConversationUserStateCommandAck.fromWire(_requiredObject(response, "ConversationUserStateCommandAck"), "ConversationUserStateCommandAck");
 
+GatheringChatBoardSlice decodeGatheringChatBoardSlice(Object? response) =>
+    GatheringChatBoardSlice.fromWire(_requiredObject(response, "GatheringChatBoardSlice"), "GatheringChatBoardSlice");
+
 GroupCandidatePageSlice decodeGroupCandidatePageSlice(Object? response) =>
     GroupCandidatePageSlice.fromWire(_requiredObject(response, "GroupCandidatePageSlice"), "GroupCandidatePageSlice");
 
@@ -1594,6 +1831,14 @@ void _rejectUnknownFields(
 String _requiredString(Object? value, String path) {
   if (value is! String) throw FormatException('$path must be a string');
   return value;
+}
+
+String _requiredNonBlankString(Object? value, String path) {
+  final result = _requiredString(value, path);
+  if (result.trim().isEmpty) {
+    throw FormatException('$path must not be blank');
+  }
+  return result;
 }
 
 DateTime _requiredTimestamp(Object? value, String path) {

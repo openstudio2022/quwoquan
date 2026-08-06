@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	"quwoquan_service/runtime/commandmeta"
+	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/testsupport"
 )

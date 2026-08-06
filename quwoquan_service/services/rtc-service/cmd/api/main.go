@@ -70,6 +70,10 @@ type config struct {
 		TimeoutMs int    `yaml:"timeout_ms"`
 	} `yaml:"user_account_security_authority"`
 
+	CallSession struct {
+		RingTimeout rtcconfig.RingTimeoutSettings `yaml:"ring_timeout"`
+	} `yaml:"call_session"`
+
 	MongoDB struct {
 		URI      string `yaml:"uri"`
 		Database string `yaml:"database"`
@@ -94,6 +98,10 @@ func main() {
 	applyEnvOverrides(&cfg)
 	if err := validateRuntimeConfigurationIdentity(cfg, configVersion); err != nil {
 		log.Fatalf("rtc-service config identity failed: %v", err)
+	}
+	ringTimeoutConfiguration, err := cfg.CallSession.RingTimeout.Resolve()
+	if err != nil {
+		log.Fatalf("rtc-service ring timeout configuration invalid: %v", err)
 	}
 	controlplane.StartReleaseConfigAttestation(
 		serviceName, appEnv, configRoot, configVersion, imageVersion,
@@ -211,7 +219,12 @@ func main() {
 			mediaBinding.AdapterID,
 		)
 	}
-	domainSvc := callsession.NewCallSessionService()
+	domainSvc, err := callsession.NewCallSessionService(
+		ringTimeoutConfiguration.DomainPolicy,
+	)
+	if err != nil {
+		log.Fatalf("rtc-service call session domain policy invalid: %v", err)
+	}
 
 	userServiceBaseURL := strings.TrimSpace(os.Getenv("USER_SERVICE_BASE_URL"))
 	if userServiceBaseURL == "" && failFastEnvironment(appEnv) {
@@ -233,7 +246,7 @@ func main() {
 			application.NewCallAccountSecurityGate(accountSecurityAuthority),
 		),
 	)
-	outboxRelay := application.NewCallOutboxRelay(
+	signalDeliveryCoordinator := application.NewCallSignalDeliveryRelay(
 		callStore,
 		realtimePublisher,
 	)
@@ -261,12 +274,12 @@ func main() {
 			logger,
 			"rtc call outbox relay",
 			func(runCtx context.Context) error {
-				return outboxRelay.Run(runCtx, 100*time.Millisecond)
+				return signalDeliveryCoordinator.Run(runCtx, 100*time.Millisecond)
 			},
 		)
 	}()
-	// 振铃超时收割：无人接听迁移 ended/no_answer 并经 outbox 下发 call.ended
-	//（storage.yaml lifecycle_timers.ring_timeout 同源）。
+	// 振铃超时收割：无人接听迁移 ended/no_answer 并经 outbox 下发 call.ended。
+	// 扫描间隔与领域阈值来自同一 typed service runtime configuration。
 	go func() {
 		defer workerWG.Done()
 		runRecoveringWorker(
@@ -274,7 +287,10 @@ func main() {
 			logger,
 			"rtc ring timeout sweeper",
 			func(runCtx context.Context) error {
-				return orchestrator.RunRingTimeoutSweeper(runCtx, 5*time.Second)
+				return orchestrator.RunRingTimeoutSweeper(
+					runCtx,
+					ringTimeoutConfiguration.SweepInterval,
+				)
 			},
 		)
 	}()
@@ -341,12 +357,15 @@ func main() {
 		DeviceTicketVerifier:     deviceVerifier,
 		AccountSecurityAuthority: accountSecurityAuthority,
 	})(observedHandler)
+	timeouts := rtauth.ContractHTTPServerTimeouts(
+		operationsecurity.ForDomain("rtc"),
+	)
 	server := &http.Server{
 		Addr:              addr,
 		Handler:           authenticated,
-		ReadHeaderTimeout: 5 * time.Second,
-		WriteTimeout:      30 * time.Second,
-		IdleTimeout:       60 * time.Second,
+		ReadHeaderTimeout: timeouts.ReadHeader,
+		WriteTimeout:      timeouts.Write,
+		IdleTimeout:       timeouts.Idle,
 	}
 
 	logger.Info("rtc-service starting", "addr", addr, "env", appEnv)

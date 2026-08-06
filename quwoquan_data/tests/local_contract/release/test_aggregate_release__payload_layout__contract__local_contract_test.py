@@ -1,30 +1,55 @@
 """Aggregate homepage releases use one immutable payload tree."""
 from __future__ import annotations
 
-import json
 import hashlib
+import json
 import shutil
 import sys
 from argparse import Namespace
 from pathlib import Path
 
-
+import pytest
 
 ROOT = Path(__file__).resolve().parents[5]
 SCRIPTS = ROOT / "quwoquan_data" / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
-from core.release_layout import payload_digest, payload_file  # noqa: E402
-from core.source_digest import current_source_digest  # noqa: E402
-from content.release.canonical import handler  # noqa: E402
-from content.release.canonical import integrity  # noqa: E402
-from content.release.canonical.aggregate_release import build_aggregate_release  # noqa: E402
-
+from content.release.canonical import (
+    handler,
+    integrity,
+)
+from content.release.canonical.aggregate_release import (
+    build_aggregate_release,
+)
+from content.release.canonical.object_transaction_contract import (
+    ObjectTransactionError,
+)
+from core.release_layout import payload_digest, payload_file
+from core.source_digest import (
+    content_source_revision,
+    current_source_digest,
+)
+from tests.support.release_admission_fixture import (
+    article_render_profile,
+    bind_publishable_video_review,
+)
 
 EXECUTION_ID = "20260713--travel-homepage-coverage--test-region-a--scale-901"
 RELEASE_ID = "20260713--travel-homepage-coverage--test-release-a--scale-901"
 TAG_REF = "Topic/旅行"
+ENTITY_CATALOG_DIGEST = "sha256:" + "e" * 64
+
+
+def _release_source_identity(source_digest: str | None = None) -> dict[str, str]:
+    source_digest = source_digest or current_source_digest().digest
+    return {
+        "source_revision": content_source_revision(
+            source_digest=source_digest,
+            entity_catalog_digest=ENTITY_CATALOG_DIGEST,
+        ),
+        "entity_catalog_digest": ENTITY_CATALOG_DIGEST,
+    }
 
 
 def _write_json(path: Path, payload: dict) -> None:
@@ -65,6 +90,25 @@ def _write_rights_snapshot(object_root: Path, asset: dict[str, object]) -> None:
             },
         },
     )
+
+
+def _research_rights(asset: dict[str, object]) -> dict[str, object]:
+    return {
+        "assetId": asset["assetId"],
+        "asset": {
+            "sha256": asset["sha256"],
+            "bytes": 128,
+        },
+        "sourceUrl": f"https://media.example/{asset['assetId']}",
+        "platform": "Research Media",
+        "creator": "Research Creator",
+        "capturedAt": "2026-08-05T00:00:00Z",
+        "license": "unknown",
+        "termsUrl": "https://media.example/terms",
+        "authorizationProof": "",
+        "rightsAuditStatus": "unverified",
+        "rightsAuditIssues": ["commercial authorization pending"],
+    }
 
 
 def _write_avatar_rights_snapshot(
@@ -168,11 +212,12 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str, str]:
             "creatorRefsRef": "creator.refs.json",
             "tagRefsRef": "tag.refs.json",
             "assetRefsRef": "asset.refs.json",
+            "assets": [{**selected_asset, "role": "cover"}],
         },
     )
     (entity_root / "page.md").write_text("# 测试实体甲\n", encoding="utf-8")
     _write_json(entity_root / "source_catalog.json", {"sources": []})
-    _write_json(entity_root / "rights.json", {"assets": []})
+    _write_json(entity_root / "rights.json", {"assets": [_research_rights(selected_asset)]})
     _write_json(
         entity_root / "creator.refs.json",
         {"creatorRefs": []},
@@ -213,6 +258,12 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str, str]:
 
 def test_aggregate_release__payload_layout__contract__local_contract(tmp_path: Path) -> None:
     publish_root, execution_root, release_root, selected_key, unrelated_key = _fixture(tmp_path)
+    frozen_source_digest = json.loads(
+        (
+            publish_root / "entities/地点/景区/测试实体甲/manifest.json"
+        ).read_text(encoding="utf-8")
+    )["sourceDigest"]
+    identity = _release_source_identity(str(frozen_source_digest["digest"]))
     shutil.rmtree(execution_root)
 
     result = build_aggregate_release(
@@ -220,6 +271,7 @@ def test_aggregate_release__payload_layout__contract__local_contract(tmp_path: P
         release_root=release_root,
         release_id=RELEASE_ID,
         execution_ids=[EXECUTION_ID],
+        **identity,
     )
 
     release = release_root / RELEASE_ID
@@ -246,11 +298,17 @@ def test_aggregate_release__payload_layout__contract__local_contract(tmp_path: P
     assert all(unrelated_key not in str(item) for item in media["assets"])
     aggregate = json.loads((release / "attestations/release.json").read_text(encoding="utf-8"))
     assert aggregate["payloadSha256"] == payload_digest(release)
-    assert aggregate["sourceDigests"] == [current_source_digest().to_document()]
+    assert aggregate["sourceDigests"] == [frozen_source_digest]
+    assert aggregate["sourceDigest"] == frozen_source_digest["digest"]
+    assert aggregate["entityCatalogDigest"] == ENTITY_CATALOG_DIGEST
+    assert aggregate["sourceRevision"] == identity["source_revision"]
     assert aggregate["postCount"] == 0
     assert aggregate["creatorCount"] == 0
     header = json.loads(payload_file(release, "release.json").read_text(encoding="utf-8"))
-    assert header["sourceDigests"] == [current_source_digest().to_document()]
+    assert header["sourceDigests"] == [frozen_source_digest]
+    assert header["sourceDigest"] == frozen_source_digest["digest"]
+    assert header["entityCatalogDigest"] == ENTITY_CATALOG_DIGEST
+    assert header["sourceRevision"] == identity["source_revision"]
     assert not (release / "release.json").exists()
     assert not (release / "desired_state.json").exists()
 
@@ -265,12 +323,85 @@ def test_aggregate_release__payload_layout__contract__local_contract(tmp_path: P
         release_root=release_root,
         release_id=RELEASE_ID,
         execution_ids=[EXECUTION_ID],
+        **identity,
     )
     assert rerun["idempotent"] is True
 
 
+def test_existing_release__self_consistent_rights_tamper__rejects_idempotent(
+    tmp_path: Path,
+) -> None:
+    publish_root, execution_root, release_root, _selected_key, _unrelated_key = (
+        _fixture(tmp_path)
+    )
+    frozen_source_digest = json.loads(
+        (
+            publish_root / "entities/地点/景区/测试实体甲/manifest.json"
+        ).read_text(encoding="utf-8")
+    )["sourceDigest"]
+    identity = _release_source_identity(str(frozen_source_digest["digest"]))
+    shutil.rmtree(execution_root)
+    build_aggregate_release(
+        publish_root=publish_root,
+        release_root=release_root,
+        release_id=RELEASE_ID,
+        execution_ids=[EXECUTION_ID],
+        **identity,
+    )
+
+    release = release_root / RELEASE_ID
+    header_path = payload_file(release, "release.json")
+    attestation_path = release / "attestations/release.json"
+    admission = json.loads(
+        payload_file(release, "asset_admission.json").read_text(encoding="utf-8")
+    )
+    assert admission["containsUnverifiedAssets"] is True
+    assert admission["rightsStatusCounts"]["unverified"] == 1
+
+    tampered_rights = {
+        "verified": 1,
+        "unverified": 0,
+        "restricted": 0,
+        "unknown": 0,
+    }
+    header = json.loads(header_path.read_text(encoding="utf-8"))
+    header.update(
+        {
+            "containsUnverifiedAssets": False,
+            "rightsStatusCounts": tampered_rights,
+            "authorizationRequiredAssetIds": [],
+            "commercialAcceptedCount": header["researchAcceptedCount"],
+        }
+    )
+    _write_json(header_path, header)
+    attestation = json.loads(attestation_path.read_text(encoding="utf-8"))
+    attestation.update(
+        {
+            "containsUnverifiedAssets": False,
+            "rightsStatusCounts": tampered_rights,
+            "authorizationRequiredAssetIds": [],
+            "commercialAcceptedCount": attestation["researchAcceptedCount"],
+            "payloadSha256": payload_digest(release),
+        }
+    )
+    _write_json(attestation_path, attestation)
+    assert attestation["payloadSha256"] == payload_digest(release)
+
+    with pytest.raises(
+        ObjectTransactionError,
+        match="aggregate release create-once conflict",
+    ):
+        build_aggregate_release(
+            publish_root=publish_root,
+            release_root=release_root,
+            release_id=RELEASE_ID,
+            execution_ids=[EXECUTION_ID],
+            **identity,
+        )
+
+
 def test_copy_tag_snapshot__excludes_nested_child_tags__local_contract(tmp_path: Path) -> None:
-    from content.release.canonical.aggregate_release import _copy_tag_snapshot
+    from content.release.canonical.aggregate_release_closure import copy_tag_snapshot
 
     source = tmp_path / "Topic" / "旅行"
     nested = source / "玩法" / "观光游览"
@@ -278,35 +409,35 @@ def test_copy_tag_snapshot__excludes_nested_child_tags__local_contract(tmp_path:
     (source / "_definition.json").write_text('{"label":"旅行"}\n', encoding="utf-8")
     (nested / "_definition.json").write_text('{"label":"观光游览"}\n', encoding="utf-8")
     target = tmp_path / "out" / "Topic" / "旅行"
-    _copy_tag_snapshot(source, target)
+    copy_tag_snapshot(source, target)
     assert (target / "_definition.json").is_file()
     assert not (target / "玩法" / "观光游览" / "_definition.json").is_file()
 
 
-def test_release_aggregate_handler__execution_ids__contract__local_contract(
+def test_release_campaign_aggregate_handler__derives_execution_ids__contract(
     tmp_path: Path, monkeypatch, capsys
 ) -> None:
-    execution_ids = [
-        "20260715--travel-homepage-coverage--test-region-a--pilot-001",
-        "20260715--travel-homepage-coverage--test-region-b--pilot-001",
-    ]
+    root_execution_id = (
+        "20260715--travel-homepage-coverage--test-region-a--pilot-001"
+    )
     captured: dict[str, object] = {}
 
     def _build(**kwargs: object) -> dict[str, object]:
         captured.update(kwargs)
         return {"releaseId": RELEASE_ID, "idempotent": False}
 
-    monkeypatch.setattr(handler, "build_aggregate_release", _build)
-    handler.handle_aggregate_release(
+    monkeypatch.setattr(handler, "build_campaign_release", _build)
+    monkeypatch.setattr(handler, "PUBLISH_ROOT", tmp_path / "publish")
+    handler.handle_campaign_aggregate_release(
         Namespace(
-            execution_ids=",".join(execution_ids),
-            publish_root=str(tmp_path / "publish"),
-            release_root=str(tmp_path / "releases"),
+            root_execution_id=root_execution_id,
+            output_root=str(tmp_path / "output"),
             release_id=RELEASE_ID,
         )
     )
 
-    assert captured["execution_ids"] == execution_ids
+    assert captured["root_execution_id"] == root_execution_id
+    assert "execution_ids" not in captured
     assert json.loads(capsys.readouterr().out)["releaseId"] == RELEASE_ID
 
 
@@ -321,6 +452,8 @@ def test_release__multi_carrier_object_closure__contract__local_contract(
     for relative in ("creators", "entities", "posts", "tags", "media/objects"):
         (publish_root / relative).mkdir(parents=True, exist_ok=True)
     entity_root = publish_root / "entities" / entity_ref
+    _entity_key, entity_asset = _write_cas(publish_root, b"entity-homepage-hero")
+    entity_asset["role"] = "cover"
     _write_json(
         entity_root / "manifest.json",
         {
@@ -331,14 +464,19 @@ def test_release__multi_carrier_object_closure__contract__local_contract(
             "creatorRefsRef": "creator.refs.json",
             "tagRefsRef": "tag.refs.json",
             "assetRefsRef": "asset.refs.json",
+            "assets": [entity_asset],
         },
     )
     (entity_root / "page.md").write_text("# test entity\n", encoding="utf-8")
     _write_json(entity_root / "source_catalog.json", {"sources": []})
-    _write_json(entity_root / "rights.json", {"assets": []})
-    _write_json(entity_root / "creator.refs.json", {"creatorRefs": []})
+    _write_json(
+        entity_root / "rights.json",
+        {"assets": [_research_rights(entity_asset)]},
+    )
+    _write_json(entity_root / "creator.refs.json", {"creatorRefs": [creator_ref]})
     _write_json(entity_root / "tag.refs.json", {"tagRefs": []})
-    _write_json(entity_root / "asset.refs.json", {"assets": []})
+    _write_json(entity_root / "asset.refs.json", {"assets": [entity_asset]})
+    _write_rights_snapshot(entity_root, entity_asset)
     creator_root = publish_root / "creators" / creator_ref
     _avatar_key, avatar_asset = _write_cas(publish_root, b"creator-avatar")
     avatar_asset["kind"] = "avatar"
@@ -373,6 +511,7 @@ def test_release__multi_carrier_object_closure__contract__local_contract(
     (creator_root / "works.refs.ndjson").write_text("", encoding="utf-8")
 
     executions: list[str] = []
+    frozen_source_digest = current_source_digest().to_document()
 
     def add_execution(
         execution_id: str,
@@ -381,7 +520,7 @@ def test_release__multi_carrier_object_closure__contract__local_contract(
         posts: list[str],
         source_digest: dict[str, object] | None = None,
     ) -> None:
-        source_digest = source_digest or current_source_digest().to_document()
+        source_digest = source_digest or frozen_source_digest
         for kind, refs in (("entities", entities), ("posts", posts)):
             for ref in refs:
                 manifest_path = publish_root / kind / ref / "manifest.json"
@@ -396,7 +535,7 @@ def test_release__multi_carrier_object_closure__contract__local_contract(
         entities=[entity_ref],
         posts=[],
     )
-    alternate_source_digest = current_source_digest().to_document()
+    alternate_source_digest = {**frozen_source_digest}
     alternate_source_digest["digest"] = "sha256:" + "c" * 64
     for content_type, suffix in (("article", "guide"), ("image", "gallery"), ("video", "short")):
         post_ref = f"{content_type}/测试实体甲/{suffix}"
@@ -405,13 +544,14 @@ def test_release__multi_carrier_object_closure__contract__local_contract(
         if content_type == "article":
             cover_key, cover = _write_cas(publish_root, b"article-cover")
             body_key, body = _write_cas(publish_root, b"article-body")
+            article_source_ref = "sources/article-source-unit/source.md"
             cover.update(
                 role="cover",
-                sourceUnitRef="sources/article-source-unit/source.md",
+                sourceRef=article_source_ref,
             )
             body.update(
                 role="embedded",
-                sourceUnitRef="sources/article-source-unit/source.md",
+                sourceRef=article_source_ref,
             )
             assets = [cover, body]
             object_keys.extend((cover_key, body_key))
@@ -451,6 +591,12 @@ def test_release__multi_carrier_object_closure__contract__local_contract(
                 **(
                     {
                         "publishMediaMode": "same_source_illustrated",
+                        "articleRenderProfile": article_render_profile(
+                            mode="illustrated",
+                            source_ref=article_source_ref,
+                            cover_asset_id=str(assets[0]["assetId"]),
+                            body_asset_ids=[str(assets[1]["assetId"])],
+                        ),
                         "imageBindings": [
                             {"assetId": str(asset["assetId"])} for asset in assets
                         ],
@@ -462,7 +608,22 @@ def test_release__multi_carrier_object_closure__contract__local_contract(
         )
         (post_root / "content.md").write_text(f"# {content_type}\n", encoding="utf-8")
         _write_json(post_root / "source_catalog.json", {"sources": []})
-        _write_json(post_root / "rights.json", {"assets": []})
+        _write_json(
+            post_root / "rights.json",
+            {"assets": [_research_rights(asset) for asset in assets]},
+        )
+        if content_type == "video":
+            video_asset = next(
+                asset for asset in assets if asset.get("kind") == "video"
+            )
+            bind_publishable_video_review(
+                object_root=post_root,
+                asset_id=str(video_asset["assetId"]),
+                content_sha256=str(video_asset["sha256"]),
+                object_ref=post_ref,
+                source_digest=str(frozen_source_digest["digest"]),
+                entity_catalog_digest=ENTITY_CATALOG_DIGEST,
+            )
         _write_json(post_root / "creator.refs.json", {"creatorRefs": [creator_ref]})
         _write_json(post_root / "tag.refs.json", {"tagRefs": []})
         _write_json(post_root / "asset.refs.json", {"assets": assets})
@@ -472,9 +633,6 @@ def test_release__multi_carrier_object_closure__contract__local_contract(
             f"20260718--travel-{content_type}-supply--test-region-a--scale-90{len(executions) + 1}",
             entities=[],
             posts=[post_ref],
-            source_digest=(
-                alternate_source_digest if content_type == "article" else None
-            ),
         )
         assert all((publish_root / object_key).is_file() for object_key in object_keys)
 
@@ -483,6 +641,7 @@ def test_release__multi_carrier_object_closure__contract__local_contract(
         release_root=release_root,
         release_id="20260718--travel-multi-carrier--test-release-b--001",
         execution_ids=executions,
+        **_release_source_identity(str(frozen_source_digest["digest"])),
     )
 
     release = release_root / result["releaseId"]
@@ -502,10 +661,7 @@ def test_release__multi_carrier_object_closure__contract__local_contract(
     assert result["creatorCount"] == 1
     release_header = json.loads(payload_file(release, "release.json").read_text(encoding="utf-8"))
     assert release_header["sourceOwner"] == "qwq_data"
-    assert release_header["sourceDigests"] == sorted(
-        [current_source_digest().to_document(), alternate_source_digest],
-        key=lambda item: item["digest"],
-    )
+    assert release_header["sourceDigests"] == [frozen_source_digest]
     monkeypatch.setattr(integrity.paths, "PUBLISH_ROOT", publish_root)
     integrity_report = integrity._release_integrity(result["releaseId"], release)
     stats = integrity_report["stats"]
@@ -517,3 +673,18 @@ def test_release__multi_carrier_object_closure__contract__local_contract(
         stats["articleCount"] + stats["imageCount"] + stats["videoCount"]
         == stats["postCount"]
     )
+
+    article_manifest_path = (
+        publish_root / "posts/article/测试实体甲/guide/manifest.json"
+    )
+    article_manifest = json.loads(article_manifest_path.read_text(encoding="utf-8"))
+    article_manifest["sourceDigest"] = alternate_source_digest
+    _write_json(article_manifest_path, article_manifest)
+    with pytest.raises(ObjectTransactionError, match="one frozen sourceDigest"):
+        build_aggregate_release(
+            publish_root=publish_root,
+            release_root=release_root,
+            release_id="20260718--travel-multi-carrier--mixed-source--001",
+            execution_ids=executions,
+            **_release_source_identity(str(frozen_source_digest["digest"])),
+        )

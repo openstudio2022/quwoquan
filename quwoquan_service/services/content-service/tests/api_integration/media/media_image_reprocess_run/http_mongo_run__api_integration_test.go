@@ -1,3 +1,9 @@
+// spec_ref: specs/feature-tree/discovery-content/media-processing-helper-read/image-delivery-variants/spec.md#gwt-004
+// readiness_case: start-media-image-reprocess-run-api
+// readiness_case: pause-media-image-reprocess-run-api
+// readiness_case: resume-media-image-reprocess-run-api
+// readiness_case: rollback-media-image-reprocess-run-api
+// readiness_case: get-media-image-reprocess-run-api
 package api_integration_test
 
 import (
@@ -56,12 +62,52 @@ func TestHTTPStartAndGetUseObjectOwnedMongoTransaction(t *testing.T) {
 		t.Fatalf("get status=%d body=%s", getRecorder.Code, getRecorder.Body.String())
 	}
 
+	transition := func(
+		name string,
+		key string,
+		invoke func(http.ResponseWriter, *http.Request),
+		wantStatus string,
+	) {
+		t.Helper()
+		request := httptest.NewRequest(
+			http.MethodPost,
+			"/internal/content/media-image-reprocess-runs/image-reprocess-run:"+name,
+			nil,
+		)
+		request.SetPathValue("runId", "image-reprocess-run")
+		request = request.WithContext(commandmeta.WithIdempotencyKey(request.Context(), key))
+		recorder := httptest.NewRecorder()
+		invoke(recorder, request)
+		if recorder.Code != http.StatusAccepted ||
+			!strings.Contains(recorder.Body.String(), `"status":"`+wantStatus+`"`) {
+			t.Fatalf("%s status=%d body=%s", name, recorder.Code, recorder.Body.String())
+		}
+	}
+	transition("pause", "pause-image-reprocess-once", handler.Pause, "paused")
+	transition("resume", "resume-image-reprocess-once", handler.Resume, "running")
+	transition("pause", "pause-image-reprocess-for-rollback", handler.Pause, "paused")
+	transition("rollback", "rollback-image-reprocess-once", handler.Rollback, "rolling_back")
+
+	finalGetRequest := httptest.NewRequest(
+		http.MethodGet,
+		"/internal/content/media-image-reprocess-runs/image-reprocess-run",
+		nil,
+	)
+	finalGetRequest.SetPathValue("runId", "image-reprocess-run")
+	finalGetRecorder := httptest.NewRecorder()
+	handler.Get(finalGetRecorder, finalGetRequest)
+	if finalGetRecorder.Code != http.StatusOK ||
+		!strings.Contains(finalGetRecorder.Body.String(), `"status":"rolling_back"`) ||
+		!strings.Contains(finalGetRecorder.Body.String(), `"version":5`) {
+		t.Fatalf("final get status=%d body=%s", finalGetRecorder.Code, finalGetRecorder.Body.String())
+	}
+
 	runs, err := runtime.Database.Collection("media_image_reprocess_runs").CountDocuments(context.Background(), bson.D{})
 	if err != nil || runs != 1 {
 		t.Fatalf("run count=%d err=%v", runs, err)
 	}
 	receipts, err := runtime.Database.Collection("media_image_reprocess_run_receipts").CountDocuments(context.Background(), bson.D{})
-	if err != nil || receipts != 1 {
+	if err != nil || receipts != 5 {
 		t.Fatalf("receipt count=%d err=%v", receipts, err)
 	}
 }

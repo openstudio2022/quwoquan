@@ -19,29 +19,29 @@ var (
 // AppErrorFromConsentIdempotencyConflict returns *AppError for ASSISTANT.USER.consent_idempotency_conflict (user_message from errors.yaml).
 func AppErrorFromConsentIdempotencyConflict(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.consent_idempotency_conflict")
-	return rterr.NewAppError(code, "请勿将同一请求标识用于不同授权操作", debugMessage).WithMetadata("consent_idempotency_conflict", 409).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "请勿将同一请求标识用于不同授权操作", debugMessage).WithMetadata("consent_idempotency_conflict", 409).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromConsentInvalidArgument returns *AppError for ASSISTANT.USER.consent_invalid_argument (user_message from errors.yaml).
 func AppErrorFromConsentInvalidArgument(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.consent_invalid_argument")
-	return rterr.NewAppError(code, "授权请求参数有误", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "授权请求参数有误", debugMessage).WithMetadata("invalid_argument", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromConsentScopeConflict returns *AppError for ASSISTANT.USER.consent_scope_conflict (user_message from errors.yaml).
 func AppErrorFromConsentScopeConflict(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.consent_scope_conflict")
-	return rterr.NewAppError(code, "技能所需权限已变化，请撤销原授权后重新确认", debugMessage).WithMetadata("consent_scope_conflict", 409).WithRecovery("refresh", 0)
+	return rterr.NewAppError(code, "技能所需权限已变化，请撤销原授权后重新确认", debugMessage).WithMetadata("consent_scope_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromConsentUnauthorized returns *AppError for ASSISTANT.USER.consent_unauthorized (user_message from errors.yaml).
 func AppErrorFromConsentUnauthorized(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.consent_unauthorized")
-	return rterr.NewAppError(code, "请先登录", debugMessage).WithMetadata("consent_unauthorized", 401).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "请先登录", debugMessage).WithMetadata("consent_unauthorized", 401).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromConsentUnavailable returns *AppError for ASSISTANT.SYSTEM.consent_unavailable (user_message from errors.yaml).
 func AppErrorFromConsentUnavailable(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.SYSTEM.consent_unavailable")
-	return rterr.NewAppError(code, "授权服务暂不可用，敏感能力已按未授权处理", debugMessage).WithMetadata("unavailable", 503).WithRecovery("retry", 3)
+	return rterr.NewAppError(code, "授权服务暂不可用，敏感能力已按未授权处理", debugMessage).WithMetadata("unavailable", 503).WithRecoveryDirective("retry", "snackbar", 3)
 }

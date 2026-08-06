@@ -816,24 +816,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "string"
     },
     {
-      "default": "http://travel-service:18093",
-      "key": "sys.assistant-service.travel_service.base_url",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "default": 3000,
-      "key": "sys.assistant-service.travel_service.timeout_ms",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "int"
-    },
-    {
       "default": "",
       "key": "sys.assistant-service.user_profile.base_url",
       "reload": "restart",
@@ -2530,6 +2512,114 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "int"
     },
     {
+      "default": 5,
+      "key": "sys.integration-service.integration.public_provider.poi.circuit_failure_threshold",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": 30000,
+      "key": "sys.integration-service.integration.public_provider.poi.circuit_reset_timeout_ms",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": false,
+      "key": "sys.integration-service.integration.public_provider.poi.probe_passed",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "bool"
+    },
+    {
+      "default": 1,
+      "key": "sys.integration-service.integration.public_provider.poi.rate_limit_per_second",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": 200,
+      "key": "sys.integration-service.integration.public_provider.poi.retry_backoff_ms",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": 2,
+      "key": "sys.integration-service.integration.public_provider.poi.retry_max_attempts",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": 5,
+      "key": "sys.integration-service.integration.public_provider.route.circuit_failure_threshold",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": 30000,
+      "key": "sys.integration-service.integration.public_provider.route.circuit_reset_timeout_ms",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": false,
+      "key": "sys.integration-service.integration.public_provider.route.probe_passed",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "bool"
+    },
+    {
+      "default": 5,
+      "key": "sys.integration-service.integration.public_provider.route.rate_limit_per_second",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": 200,
+      "key": "sys.integration-service.integration.public_provider.route.retry_backoff_ms",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": 2,
+      "key": "sys.integration-service.integration.public_provider.route.retry_max_attempts",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
       "default": "quwoquan_integration",
       "key": "sys.integration-service.mongodb.database",
       "reload": "restart",
@@ -2946,17 +3036,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "scope": "workload",
       "sensitive": false,
       "type": "string"
-    },
-    {
-      "default": 800,
-      "key": "sys.orchestrator.downstream.timeout_ms",
-      "owner": "platform-ops",
-      "reload": "hot",
-      "risk_level": "high",
-      "rollout": "progressive",
-      "scope": "service",
-      "type": "int",
-      "ui_editable": false
     },
     {
       "key": "sys.platform-ops-service.postgres.dsn",
@@ -3783,6 +3862,33 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "string"
     },
     {
+      "default": 60000,
+      "key": "sys.rtc-service.call_session.ring_timeout.group_timeout_ms",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": 30000,
+      "key": "sys.rtc-service.call_session.ring_timeout.one_to_one_timeout_ms",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": 5000,
+      "key": "sys.rtc-service.call_session.ring_timeout.sweep_interval_ms",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
       "key": "sys.rtc-service.livekit.api_key",
       "reload": "restart",
       "rollout": "progressive",
@@ -4444,214 +4550,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "scope": "workload",
       "sensitive": false,
       "type": "int"
-    },
-    {
-      "key": "sys.travel-service.accountSecurityAuthority.baseUrl",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "default": 800,
-      "key": "sys.travel-service.accountSecurityAuthority.timeoutMs",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "int"
-    },
-    {
-      "key": "sys.travel-service.chatSourceAuthority.baseUrl",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "default": 800,
-      "key": "sys.travel-service.chatSourceAuthority.timeoutMs",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "int"
-    },
-    {
-      "key": "sys.travel-service.circleSourceAuthority.baseUrl",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "default": 800,
-      "key": "sys.travel-service.circleSourceAuthority.timeoutMs",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "int"
-    },
-    {
-      "key": "sys.travel-service.contentPublicAuthority.baseUrl",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "default": 800,
-      "key": "sys.travel-service.contentPublicAuthority.timeoutMs",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "int"
-    },
-    {
-      "key": "sys.travel-service.entityPublicAuthority.baseUrl",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "default": 800,
-      "key": "sys.travel-service.entityPublicAuthority.timeoutMs",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "int"
-    },
-    {
-      "default": "quwoquan_travel",
-      "key": "sys.travel-service.mongo.database",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "key": "sys.travel-service.mongo.uri",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": true,
-      "type": "string"
-    },
-    {
-      "key": "sys.travel-service.redis.general.addr",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "default": [],
-      "key": "sys.travel-service.redis.general.addrs",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "list"
-    },
-    {
-      "default": 0,
-      "key": "sys.travel-service.redis.general.db",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "int"
-    },
-    {
-      "default": "standalone",
-      "key": "sys.travel-service.redis.general.mode",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "key": "sys.travel-service.redis.general.password",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": true,
-      "type": "string"
-    },
-    {
-      "default": 500,
-      "key": "sys.travel-service.redis.general.pool.dial_timeout_ms",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "int"
-    },
-    {
-      "default": 0,
-      "key": "sys.travel-service.redis.general.pool.min_idle",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "int"
-    },
-    {
-      "default": 200,
-      "key": "sys.travel-service.redis.general.pool.read_timeout_ms",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "int"
-    },
-    {
-      "default": 0,
-      "key": "sys.travel-service.redis.general.pool.size",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "int"
-    },
-    {
-      "default": 200,
-      "key": "sys.travel-service.redis.general.pool.write_timeout_ms",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "int"
-    },
-    {
-      "default": false,
-      "key": "sys.travel-service.redis.general.tls",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "bool"
-    },
-    {
-      "default": ":18093",
-      "key": "sys.travel-service.service.http.addr",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
     },
     {
       "default": 0,

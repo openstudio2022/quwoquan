@@ -9,7 +9,7 @@ import (
 	"quwoquan_service/internal/testsupport/contractsview"
 )
 
-func TestSSEOperationGeneratesTypedStreamClient(t *testing.T) {
+func TestOperationContractsGenerateTypedStreamAndUpgradeSurfaces(t *testing.T) {
 	metadataDir := contractsview.Build(t)
 	if err := initializeMetadataSourceForServiceOutput(metadataDir); err != nil {
 		t.Fatal(err)
@@ -25,8 +25,10 @@ func TestSSEOperationGeneratesTypedStreamClient(t *testing.T) {
 	}
 
 	wanted := map[string]struct{}{
+		"assistant.assistant_run.StartAssistantRun":        {},
 		"assistant.assistant_run.StreamAssistantRunEvents": {},
 		"content.post.GetFeed":                             {},
+		"realtime.connection.WebSocketUpgrade":             {},
 	}
 	lock := appContractLock{}
 	requestArtifacts := map[string]operationRequestArtifact{}
@@ -65,9 +67,16 @@ func TestSSEOperationGeneratesTypedStreamClient(t *testing.T) {
 	))
 	for _, expected := range []string{
 		"abstract interface class CloudOperationStreamExecutor",
+		"final class CloudOperationStreamBudget",
+		"final CloudOperationStreamBudget? streamBudget;",
 		"Stream<assistantContracts.AssistantStreamEventWire> assistantAssistantRunStreamAssistantRunEvents(",
 		"return streamExecutor.stream<assistantContracts.AssistantStreamEventWire>(",
 		"responseDecoder: assistantContracts.decodeAssistantStreamEventWire,",
+		"handshakeMilliseconds: 5000,",
+		"idleMilliseconds: 60000,",
+		"maxDurationMilliseconds: 600000,",
+		"final int? successStatus;",
+		"successStatus: 201,",
 	} {
 		if !strings.Contains(generated, expected) {
 			t.Fatalf("SSE generated client is missing %q", expected)
@@ -78,5 +87,50 @@ func TestSSEOperationGeneratesTypedStreamClient(t *testing.T) {
 		"Future<assistantContracts.AssistantStreamEventWire> assistantAssistantRunStreamAssistantRunEvents(",
 	) {
 		t.Fatal("SSE operation was downgraded to a Future response")
+	}
+	for _, expected := range []string{
+		"final class CloudOperationUpgradeDescriptor<TRequest>",
+		"abstract final class AppCloudOperationUpgradeDescriptors",
+		"static final CloudOperationUpgradeDescriptor<realtimeContracts.WebSocketUpgradeRequest> realtimeConnectionWebSocketUpgrade =",
+		"operation: appCloudOperationContracts[AppCloudOperationIds.realtimeConnectionWebSocketUpgrade]!",
+		"requestEncoder: realtimeContracts.encodeRealtimeConnectionWebSocketUpgradeGeneratedRequest,",
+		"idleMilliseconds: 90000,",
+		"maxDurationMilliseconds: 1800000,",
+	} {
+		if !strings.Contains(generated, expected) {
+			t.Fatalf("upgrade descriptor is missing %q", expected)
+		}
+	}
+	if strings.Contains(
+		generated,
+		"Future<void> realtimeConnectionWebSocketUpgrade(",
+	) {
+		t.Fatal("WebSocket upgrade was emitted as a JSON Future method")
+	}
+	if strings.Contains(
+		generated,
+		`_executor.send<void>(\n      appCloudOperationContracts["realtime.connection.WebSocketUpgrade"]!`,
+	) {
+		t.Fatal("WebSocket upgrade was routed through CloudOperationExecutor.send")
+	}
+
+	malformedLock := lock
+	malformedLock.AppExposedOperations = append(
+		[]appExposedOperation(nil),
+		lock.AppExposedOperations...,
+	)
+	for index := range malformedLock.AppExposedOperations {
+		operation := &malformedLock.AppExposedOperations[index]
+		if operation.CanonicalOperationID == "realtime.connection.WebSocketUpgrade" {
+			operation.Method = "POST"
+		}
+	}
+	err = writeGeneratedOperationContracts(
+		t.TempDir(),
+		malformedLock,
+		requestArtifacts,
+	)
+	if err == nil || !strings.Contains(err.Error(), "upgrade ABI must be GET/body-none") {
+		t.Fatalf("malformed upgrade ABI was not rejected: %v", err)
 	}
 }

@@ -1,4 +1,2 @@
-entity: DeletedPostTombstone
-domain: CONTENT
 description: DeletedPostTombstone 是数据对象且不拥有 HTTP operation；410 content_deleted 由真实发射者 Post.GetPost 在 post/errors.yaml 定义。
 errors: []

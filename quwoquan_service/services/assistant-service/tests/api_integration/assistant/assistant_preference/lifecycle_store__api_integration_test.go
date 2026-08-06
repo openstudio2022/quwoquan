@@ -1,5 +1,9 @@
 // spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/session-preference-memory-control/spec.md#gwt-001
 // spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/session-preference-memory-control/spec.md#gwt-002
+// readiness_case: set-assistant-preference-api
+// readiness_case: list-assistant-preferences-api
+// readiness_case: revoke-assistant-preference-api
+// readiness_case: restore-assistant-preference-api
 package api_integration
 
 import (

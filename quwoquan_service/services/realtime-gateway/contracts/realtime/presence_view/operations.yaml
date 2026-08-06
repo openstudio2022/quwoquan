@@ -51,21 +51,20 @@ api_routes:
     token_transport: bearer
     anonymous_policy: deny
     visibility: internal
-runtime_entrypoints:
-- name: ProjectPresence
-  kind: projector
-  phase: event_projection
-  source_events:
-  - realtime.ConnectionOpened
-  - realtime.ConnectionHeartbeatObserved
-  - realtime.ConnectionClosed
-  - user.UserAccountClosed
-  checkpoint: realtime_connection_event_sequence
-  rebuild: replay_connection_journal_with_current_ttl_boundary
-  tombstone: delete_presence_keep_checkpoint
-  idempotency: aggregate_version
-  application:
-    kind: command
-    facet: PresenceViewProjector
-    method: apply
-    object_owner: PresenceView
+readiness_cases:
+- case_id: get-persona-presence-local
+  spec_ref: specs/feature-tree/gateway-orchestrator-foundation/realtime-gateway/realtime-channel-delivery/spec.md#gwt-002
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: GetPersonaPresence}
+  runner_source_path: quwoquan_service/services/realtime-gateway/tests/local_contract/realtime/presence_view/projection_store__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: get-persona-presence-api
+  spec_ref: specs/feature-tree/gateway-orchestrator-foundation/realtime-gateway/realtime-channel-delivery/spec.md#gwt-002
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: GetPersonaPresence}
+  runner_source_path: quwoquan_service/services/realtime-gateway/tests/api_integration/realtime/presence_view/query_projection__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: redis, digest_binding: candidate}

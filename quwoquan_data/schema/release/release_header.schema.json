@@ -46,6 +46,9 @@
     "researchAcceptedCount": {"type": "integer", "minimum": 0},
     "commercialAcceptedCount": {"type": "integer", "minimum": 0},
     "canonicalMerkle": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "sourceRevision": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "sourceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "entityCatalogDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "executionIds": {
       "type": "array",
       "uniqueItems": true,
@@ -68,9 +71,27 @@
           }
         }
       }
+    },
+    "reviewedClosureAdoption": {
+      "$ref": "../execution/reviewed_closure_adoption_campaign_binding.schema.json"
     }
   },
   "allOf": [
+    {
+      "if": {"properties": {"releaseKind": {"const": "content"}}},
+      "then": {
+        "required": ["sourceRevision", "sourceDigest", "entityCatalogDigest"]
+      },
+      "else": {
+        "not": {
+          "anyOf": [
+            {"required": ["sourceRevision"]},
+            {"required": ["sourceDigest"]},
+            {"required": ["entityCatalogDigest"]}
+          ]
+        }
+      }
+    },
     {
       "if": {"properties": {"releaseClass": {"const": "commercial"}}},
       "then": {

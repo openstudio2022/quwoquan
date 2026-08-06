@@ -18,8 +18,8 @@ BEHAVIORS_PATH = (
 )
 DART_PATH = (
     ROOT
-    / "quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/circle/"
-    "behavior_fact_contracts.dart"
+    / "quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/generated/"
+    "shared_operation_enums.g.dart"
 )
 GO_PATH = (
     ROOT
@@ -66,13 +66,13 @@ def load_content_event_values(path: Path) -> tuple[str, ...]:
 def load_dart_values(path: Path) -> tuple[str, ...]:
     source = path.read_text(encoding="utf-8")
     match = re.search(
-        r"enum CircleBehaviorEventType \{(?P<body>.*?)\n\s*const CircleBehaviorEventType",
+        r"enum BehaviorEventType \{(?P<body>.*?)\n\s*const BehaviorEventType",
         source,
         re.DOTALL,
     )
     if match is None:
-        raise ValueError(f"{path.relative_to(ROOT)} CircleBehaviorEventType is missing")
-    return tuple(re.findall(r"\b\w+\('([^']+)'\)[,;]", match.group("body")))
+        raise ValueError(f"{path.relative_to(ROOT)} BehaviorEventType is missing")
+    return tuple(re.findall(r'\b\w+\("([^"]+)"\)[,;]', match.group("body")))
 
 
 def load_go_values(path: Path) -> tuple[str, ...]:
@@ -106,7 +106,7 @@ def validate(
     for consumer, values in (("Dart", dart_values), ("Go", go_values)):
         if values != shared_values:
             failures.append(
-                f"{consumer} CircleBehaviorEventType drift: "
+                f"{consumer} BehaviorEventType drift: "
                 f"expected={list(shared_values)!r} actual={list(values)!r}"
             )
     return failures

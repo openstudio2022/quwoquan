@@ -73,13 +73,12 @@ def _tracked_paths() -> set[str]:
 
 
 def _status_paths() -> dict[str, str]:
-    """返回 path -> porcelain XY，包含 ignored 与所有 untracked 文件。"""
+    """返回 path -> porcelain XY；ignored 文件由磁盘扫描统一补齐。"""
     records = _split_z(
         _run_git(
             [
                 "status",
                 "--porcelain=v1",
-                "--ignored",
                 "--untracked-files=all",
                 "-z",
             ]
@@ -101,11 +100,17 @@ def _disk_file_paths() -> set[str]:
     paths: set[str] = set()
     for current, directories, files in os.walk(ROOT, topdown=True):
         current_path = Path(current)
-        directories[:] = [name for name in directories if name != ".git"]
-        for name in directories:
+        visible_directories = [name for name in directories if name != ".git"]
+        for name in visible_directories:
             path = current_path / name
-            if path.is_symlink():
+            if path.is_symlink() or name in CACHE_SEGMENTS:
                 paths.add(path.relative_to(ROOT).as_posix())
+        directories[:] = [
+            name
+            for name in visible_directories
+            if name not in CACHE_SEGMENTS
+            and not (current_path / name).is_symlink()
+        ]
         for name in files:
             paths.add((current_path / name).relative_to(ROOT).as_posix())
     return paths

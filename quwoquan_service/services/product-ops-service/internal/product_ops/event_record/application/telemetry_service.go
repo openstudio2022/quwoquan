@@ -136,9 +136,11 @@ type EventTelemetrySnapshot struct {
 }
 
 type StartupDiagnosticRecord struct {
-	EventID, AttemptID, Phase, Outcome, OccurredAt, Platform, RuntimeEnv                  string
-	AppVersion, NetworkClass, RecoverySurface, FailureCode, FailureSource, DeadlineOrigin string
-	Sequence, PhaseDurationMS, ElapsedMS                                                  int
+	EventID, AttemptID, Phase, Outcome, OccurredAt, Platform, RuntimeEnv string
+	AppVersion, NetworkClass, RecoverySurface                            string
+	RecoveryLifecycle, RecoveryMount, RecoveryPhase, RecoveryAction      string
+	FailureCode, FailureSource, DeadlineOrigin                           string
+	Sequence, PhaseDurationMS, ElapsedMS                                 int
 }
 
 type EventLogStore interface {

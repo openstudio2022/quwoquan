@@ -1,39 +1,39 @@
 """Reusable single-carrier target selection and execution audit helpers."""
 from __future__ import annotations
+
 import hashlib
-import json
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Mapping
-from governance.coverage.entity_extract import require_domain_etype
-from core.data_issue import DataIssue
+from typing import Any
+
 from core.control_types import ExecutionStateStatus, TargetSelector
-from core.image_asset_strategy import COMMERCIAL_SCALE_TARGET_THRESHOLD
+from core.data_issue import DataIssue
 from core.execution_branch import stamp_execution_branch
-from core.io import read_json, write_json
-from core.runtime_policy import active_runtime_policy
+from core.io import read_json
 from core.paths import (
-    execution_entity_page_input_path,
     execution_root,
     preset_path,
 )
-from content.execution import store
-from content.execution import validate_execution_id
-from content.execution.identity import SelectionPolicy
+from core.runtime_policy import active_runtime_policy
+
+from content.execution import store, validate_execution_id
 from content.execution.contracts import ExecutionStateTransition
+from content.execution.identity import SelectionPolicy
 from content.execution.selection_discovery import (
     coverage_target_from_selection,
     leaf_selection_name,
     load_partitions,
     ordered_partition_leaves,
     partition_targets,
+    resolve_target_names,
 )
 from content.execution.selection_materialization import write_selected_task
 from content.execution.source_selection import (
     TargetSourceQualifier,
     qualify_source_ready_targets,
 )
-from content.source.contracts import QualifiedHomepageSource
+
 DEFAULT_ARTICLE_ANGLES = ["planning_consultation", "decision_experience", "route_transport", "seasonal_timing"]
 
 
@@ -180,12 +180,7 @@ def select_targets(
         raise ValueError("source-ready-priority requires source_qualifier")
     if target_names:
         target_catalog = all_by_name if inherit_frozen_targets else by_name
-        missing = [name for name in target_names if name not in target_catalog]
-        if missing:
-            raise ValueError(
-                "requested targets are absent from the region reference: "
-                + ", ".join(missing)
-            )
+        resolved_target_names = resolve_target_names(target_catalog, target_names)
         if (
             target_selector is not TargetSelector.SOURCE_READY_PRIORITY
             or inherit_frozen_targets
@@ -201,13 +196,14 @@ def select_targets(
                     str(row.get("name") or "").strip()
                     for row in inherited_targets
                 )
-                if inherited_names != target_names:
+                if inherited_names != resolved_target_names:
                     raise ValueError(
-                        "inherited target rows must match the frozen target order exactly"
+                        "inherited target rows must match the resolved canonical "
+                        "target order exactly"
                     )
                 selected = [dict(row) for row in inherited_targets]
             else:
-                selected = [by_name[name] for name in target_names]
+                selected = [target_catalog[name] for name in resolved_target_names]
             report = {
                 "schema": "quwoquan_data.target_selection",
                 "strategy": (

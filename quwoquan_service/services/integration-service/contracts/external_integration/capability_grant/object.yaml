@@ -1,0 +1,26 @@
+kind: runtime_session
+description: >-
+  ResolvedCapabilityGrant 是 Public Provider、用户 Connector、当前设备能力或 owner
+  Domain Operation 的短期 typed 解析结果；它不是共同聚合，也不把公共 Provider 或设备
+  能力伪装为 ConnectorConnection。
+identity:
+  fields: [resolutionId]
+  version_source: session
+access:
+  commands: session_facade
+  queries: named_reader
+  cross_context: public_contract_only
+relationships:
+- {name: accountOwner, kind: reference, target_object: user.UserAccount, cardinality: 'N:1', reference_fields: [accountId], access: named_reader, consistency: runtime, on_delete: cascade}
+business_rules:
+- PublicProviderBinding 只引用环境 adapter、contract digest、configRef、timeout/rate policy 与 capability probe 状态，无 endpoint 值、account/authorization/connection/credential 生命周期。
+- Public Provider 仅在 binding state=ready、capability probe=passed 且请求 regionCode 命中 supportedRegionCodes（`*` 表示全球）时可被解析；disabled、unavailable、failed、not_run 或区域不匹配均结构化失败。
+- UserConnectorConnection 只能来自 Integration 已验证且未撤销的 Connection；OAuth subject 来自受信 callback proof，body accountId 不参与赋权。
+- DeviceCapabilityBinding 只代表当前 installation 的 PlatformCapabilities/bridge capability；unavailable 与 permission_denied 必须结构化失败。
+- DomainOperationBinding 只含 owner operationId 与 contract digest，不复制 owner payload、invariant、provider 或 credential。
+- 解析按 bindingPriority 选择；优先候选一旦 unavailable/denied/revoked，不得静默回退到次优 binding。
+- 任意写能力必须同时绑定用户确认、短期 permit、typed input digest 与 idempotency key。
+lifecycle:
+  ttl_seconds: 300
+  expiry_semantics: fixed_five_minute_resolution_expiry
+  renewal: re_resolve_all_authority_and_capability_signals

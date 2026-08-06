@@ -13,7 +13,6 @@ access:
 relationships:
 - {name: accountOwner, kind: reference, target_object: user.UserAccount, cardinality: 'N:1', reference_fields: [accountId], access: named_reader, consistency: eventual, on_delete: cascade}
 - {name: connectorDefinition, kind: reference, target_object: integration.ConnectorDefinition, cardinality: 'N:1', reference_fields: [connectorId], access: named_reader, consistency: strong, on_delete: restrict}
-capabilities: [commandable, queryable, idempotent_commands, credential_protected]
 taggable: false
 vector_enabled: false
 business_rules:

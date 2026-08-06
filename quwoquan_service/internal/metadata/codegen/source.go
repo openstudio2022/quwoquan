@@ -8,6 +8,7 @@ import (
 
 	"quwoquan_service/internal/metadata/compiler"
 	"quwoquan_service/internal/metadata/graph"
+	"quwoquan_service/internal/metadata/load"
 	"quwoquan_service/internal/metadata/validate"
 )
 
@@ -23,6 +24,24 @@ func NewSource(metadataDir string, profile validate.Profile) (*Source, error) {
 		return nil, err
 	}
 	return NewSourceFromGraph(metadataDir, contractGraph), nil
+}
+
+// NewDocumentSource builds the same ContractGraph-backed Source for an
+// explicit metadata responsibility. It is reserved for generators whose
+// complete input is a fixed set of canonical shared documents and therefore
+// must not be blocked by unrelated object or operation handoff validation.
+func NewDocumentSource(
+	metadataDir string,
+	relativePaths []string,
+) (*Source, error) {
+	documents, err := load.SourceDocuments(metadataDir, relativePaths)
+	if err != nil {
+		return nil, err
+	}
+	return NewSourceFromGraph(
+		metadataDir,
+		&graph.ContractGraph{Documents: documents},
+	), nil
 }
 
 func NewSourceFromGraph(

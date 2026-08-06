@@ -18,9 +18,9 @@ func TestContextConsentScopePolicySeparatesOptionalLabelsFromRequiredGate(t *tes
 			ConsentScopes: []string{"assistant.memory.preferences.read"},
 		},
 		{
-			SlotID:        "required_trip",
+			SlotID:        "required_context",
 			Required:      true,
-			ConsentScopes: []string{"travel.trip.read", "assistant.memory.preferences.read"},
+			ConsentScopes: []string{"assistant.context.private.read", "assistant.memory.preferences.read"},
 		},
 		{
 			SlotID:        "optional_feedback",
@@ -31,16 +31,16 @@ func TestContextConsentScopePolicySeparatesOptionalLabelsFromRequiredGate(t *tes
 
 	all := catalogapplication.AllContextConsentScopes(profile)
 	if want := []string{
+		"assistant.context.private.read",
 		"assistant.learning.feedback_context.read",
 		"assistant.memory.preferences.read",
-		"travel.trip.read",
 	}; !reflect.DeepEqual(all, want) {
 		t.Fatalf("all consent scopes=%v, want %v", all, want)
 	}
 	required := catalogapplication.RequiredContextConsentScopes(profile)
 	if want := []string{
+		"assistant.context.private.read",
 		"assistant.memory.preferences.read",
-		"travel.trip.read",
 	}; !reflect.DeepEqual(required, want) {
 		t.Fatalf("required consent scopes=%v, want %v", required, want)
 	}

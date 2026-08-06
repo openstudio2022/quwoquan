@@ -9,7 +9,7 @@ SCRIPTS_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPTS_ROOT))
 
 from core.paths import PUBLISH_ROOT
-from content.release.canonical.object_transaction_audit import validate_canonical_publish
+from content.release.canonical.object_transaction_audit import validate_publish_invariants
 
 
 ALLOWED_ROOTS = {"creators", "entities", "posts", "tags", "media"}
@@ -17,7 +17,7 @@ FORBIDDEN_PARTS = {"sources", "draft", "drafts", "prompt", "prompts", "reports",
 FORBIDDEN_SUFFIXES = (".log", ".jsonl")
 
 
-def publish_purity_issues(publish_root: Path = PUBLISH_ROOT) -> list[str]:
+def publish_structure_issues(publish_root: Path = PUBLISH_ROOT) -> list[str]:
     issues: list[str] = []
     if not publish_root.exists():
         return issues
@@ -36,7 +36,12 @@ def publish_purity_issues(publish_root: Path = PUBLISH_ROOT) -> list[str]:
             continue
         if path.is_file() and path.name.casefold().endswith(FORBIDDEN_SUFFIXES):
             issues.append(f"{path}: logs are runtime evidence, not publish objects")
-    closure = validate_canonical_publish(publish_root)
+    return issues
+
+
+def publish_purity_issues(publish_root: Path = PUBLISH_ROOT) -> list[str]:
+    issues = publish_structure_issues(publish_root)
+    closure = validate_publish_invariants(publish_root)
     for issue in closure["issues"]:
         code = issue.get("code", "closure")
         ref = issue.get("ref", "")

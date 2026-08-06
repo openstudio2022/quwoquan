@@ -1,69 +1,67 @@
-aggregate: HomepageClaimRequest
-domain: ENTITY
 description: 'HomepageClaimRequest 聚合专属错误码。通用命令错误复用 entity/entity_homepage/homepage/errors.yaml。
 
   '
 errors:
 - code: ENTITY.USER.claim_material_missing
-  kind: USER
   reason: invalid_argument
   http_status: 400
   emitted_by:
   - surface: http
     operations: [CreateHomepageClaimRequest]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: claimMaterialMissing
   go_const: ErrClaimMaterialMissing
   user_message:
     zh: 认领材料不完整，请补充后重试
     en: Claim materials are incomplete
 - code: ENTITY.USER.already_claimed
-  kind: USER
   reason: conflict
   http_status: 409
   emitted_by:
   - surface: http
     operations: [CreateHomepageClaimRequest]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: alreadyClaimed
   go_const: ErrAlreadyClaimed
   user_message:
     zh: 该主页已被认领
     en: Homepage has already been claimed
 - code: ENTITY.USER.claim_not_found
-  kind: USER
   reason: not_found
   http_status: 404
   emitted_by:
   - surface: http
     operations: [ReviewHomepageClaimRequest]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: claimNotFound
   go_const: ErrClaimNotFound
   user_message:
     zh: 认领申请不存在
     en: Claim request not found
 - code: ENTITY.USER.duplicate_pending_claim
-  kind: USER
   reason: conflict
   http_status: 409
   emitted_by:
   - surface: http
     operations: [CreateHomepageClaimRequest]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: duplicatePendingClaim
   go_const: ErrDuplicatePendingClaim
   user_message:
     zh: 你已提交过认领申请，请等待审核
     en: You already have a pending claim request
 - code: ENTITY.USER.invalid_claim_material_url
-  kind: USER
   reason: invalid_argument
   http_status: 400
   emitted_by:
   - surface: http
     operations: [CreateHomepageClaimRequest]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: invalidClaimMaterialUrl
   go_const: ErrInvalidClaimMaterialURL
   user_message:

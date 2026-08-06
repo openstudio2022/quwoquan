@@ -32,7 +32,7 @@ func NewUserProfileSearchOutboxStore(
 	return &UserProfileSearchOutboxStore{pool: pool}, nil
 }
 
-func (store *UserProfileSearchOutboxStore) ClaimReady(
+func (store *UserProfileSearchOutboxStore) ClaimPendingOutbox(
 	ctx context.Context,
 	owner string,
 	now time.Time,

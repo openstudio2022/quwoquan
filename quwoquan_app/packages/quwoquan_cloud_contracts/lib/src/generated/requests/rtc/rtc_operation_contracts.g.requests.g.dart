@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 93359367b8614f01bb5e1c51e37af383332b01f117cc1c6cf39e4fdf838e49d2
+// ContractGraph SHA256: 99a8a52d1ede68d6295d252a5c3cfd90ce40fa7e11b50e9fee2dad7a7afdf2b2
 
 part of '../../../rtc/rtc_operation_contracts.g.dart';
 
@@ -170,7 +170,10 @@ final class RtcInviteToCallCommand {
 }
 
 final class RtcListCallsQuery {
-  const RtcListCallsQuery({
+  static const int defaultLimit = 20;
+  static const int maximumLimit = 100;
+
+  RtcListCallsQuery({
     String? cursor,
     int limit = 20,
     CallStatus? status,
@@ -178,7 +181,14 @@ final class RtcListCallsQuery {
   }) : cursor = cursor,
        limit = limit,
        status = status,
-       missedOnly = missedOnly;
+       missedOnly = missedOnly {
+    if (this.limit <= 0) {
+      throw ArgumentError.value(this.limit, "limit", "must be positive");
+    }
+    if (this.limit > 100) {
+      throw ArgumentError.value(this.limit, "limit", "must not exceed 100");
+    }
+  }
 
   final String? cursor;
   final int limit;

@@ -34,6 +34,7 @@ type DomainEvent struct {
 var SupportedEventTypes = []string{
 	conversationevent.ConversationCreated,
 	conversationevent.ConversationRosterUpdated,
+	conversationevent.GatheringConversationPolicyChanged,
 	conversationevent.ConversationAvatarUpdated,
 	conversationevent.ConversationDissolved,
 	membershipevent.ConversationMemberAdded,

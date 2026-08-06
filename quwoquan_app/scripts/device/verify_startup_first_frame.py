@@ -227,7 +227,7 @@ def native_launch_visual_provenance(profile: str) -> dict[str, Any]:
     image_qualifier = "-nodpi" if profile == "default" else f"-{profile}-nodpi"
     files = [
         APP_DIR / "tool/generate_native_launch_welcome_final_test.dart",
-        APP_DIR / "lib/ui/welcome/widgets/welcome_brand_cluster.dart",
+        APP_DIR / "lib/runtime/shell/welcome/welcome_brand_cluster.dart",
         resource_root / f"drawable{qualifier}/launch_background.xml",
         resource_root / f"drawable{image_qualifier}/launch_brand_cluster.png",
         resource_root / f"drawable{image_qualifier}/launch_brand_footer.png",

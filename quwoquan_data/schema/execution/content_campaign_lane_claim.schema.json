@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/content_campaign_lane_claim.schema.json",
+  "type": "object",
+  "required": [
+    "schema",
+    "rootExecutionId",
+    "planDigest",
+    "campaignRunId",
+    "campaignGeneration",
+    "campaignFencingToken",
+    "carrier",
+    "executionId",
+    "claimId",
+    "claimAttempt",
+    "status",
+    "phase",
+    "capsuleRef",
+    "executionRoot",
+    "pid",
+    "pgid",
+    "returnCode",
+    "error",
+    "acquiredAt",
+    "heartbeatAt",
+    "updatedAt",
+    "finishedAt"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "quwoquan_data.content_campaign_lane_claim"
+    },
+    "rootExecutionId": { "type": "string", "minLength": 1 },
+    "planDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "campaignRunId": { "type": "string", "minLength": 1 },
+    "campaignGeneration": { "type": "integer", "minimum": 1 },
+    "campaignFencingToken": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "carrier": { "enum": ["homepage", "article", "image", "video"] },
+    "executionId": { "type": "string", "minLength": 1 },
+    "claimId": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "claimAttempt": { "type": "integer", "minimum": 1 },
+    "status": {
+      "enum": [
+        "active",
+        "starting",
+        "running",
+        "succeeded",
+        "failed",
+        "timed_out",
+        "interrupted",
+        "completed"
+      ]
+    },
+    "phase": { "enum": ["claim", "review-only", "run", "completed"] },
+    "capsuleRef": { "type": "string", "minLength": 1 },
+    "executionRoot": { "type": "string", "minLength": 1 },
+    "pid": { "type": ["integer", "null"], "minimum": 1 },
+    "pgid": { "type": ["integer", "null"], "minimum": 1 },
+    "returnCode": { "type": ["integer", "null"] },
+    "error": { "type": ["string", "null"] },
+    "acquiredAt": { "type": "string", "format": "date-time" },
+    "heartbeatAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" },
+    "finishedAt": { "type": ["string", "null"], "format": "date-time" }
+  }
+}

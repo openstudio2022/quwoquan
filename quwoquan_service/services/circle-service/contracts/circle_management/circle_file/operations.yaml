@@ -8,6 +8,7 @@ api_routes:
   - method: GET
     path: /circles/{circleId}/files
     operation: ListCircleFiles
+    pagination: {default_items: 20, maximum_items: 100}
     request_bindings:
       path:
         - name: circleId
@@ -284,17 +285,7 @@ contract_test:
     - aggregate、version、command receipt 与 outbox 在同一真实 Mongo transaction 提交
     - list/get 通过 named Reader 返回 typed Slice，并覆盖 Circle/Group membership BOLA
     - App Remote、alpha fixture 与真实页面使用同一 typed contract，旧 Repository/DTO 不可达
-  mock_strategy:
-    app_side:
-      mock_target: CircleFileCommandWriter + CircleFileQueryReader
-      data_source: typed alpha fixture bundle
-      scenarios:
-        - name: upload_bind_browse_and_open
-          assertions:
-            - Media upload session completes before CircleFile create
-            - page only submits MediaAsset id to CircleFile
-            - folder navigation queries exact parentFolderId
-            - file open requests a short-lived Media original access grant
+  test_strategy:
     service_side:
       description: MongoDB 7 replica set、Redis 7 与真实 Content MediaAsset owner Reader；不 mock Store/outbox/Reader
       real_engines:
@@ -322,3 +313,84 @@ contract_test:
             - non-member and wrong group member cannot enumerate file metadata
             - owner mismatch and non-ready MediaAsset are rejected before commit
             - Reader response contains no objectKey, uploadUrl or actor alias
+readiness_cases:
+  - case_id: list-circle-files-local
+    spec_ref: specs/feature-tree/circle-community/circle-collaboration-tools/spec.md#sit-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: ListCircleFiles}
+    runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/circle_file/facades__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: list-circle-files-api
+    spec_ref: specs/feature-tree/circle-community/circle-collaboration-tools/spec.md#sit-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: ListCircleFiles}
+    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle_file/file_http_mongo__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: create-circle-file-local
+    spec_ref: specs/feature-tree/circle-community/circle-collaboration-tools/spec.md#sit-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: CreateCircleFile}
+    runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/circle_file/facades__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: create-circle-file-api
+    spec_ref: specs/feature-tree/circle-community/circle-collaboration-tools/spec.md#sit-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: CreateCircleFile}
+    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle_file/file_http_mongo__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: get-circle-file-local
+    spec_ref: specs/feature-tree/circle-community/circle-collaboration-tools/spec.md#sit-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: GetCircleFile}
+    runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/circle_file/facades__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: get-circle-file-api
+    spec_ref: specs/feature-tree/circle-community/circle-collaboration-tools/spec.md#sit-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: GetCircleFile}
+    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle_file/file_http_mongo__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: update-circle-file-local
+    spec_ref: specs/feature-tree/circle-community/circle-collaboration-tools/spec.md#sit-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: UpdateCircleFile}
+    runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/circle_file/facades__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: update-circle-file-api
+    spec_ref: specs/feature-tree/circle-community/circle-collaboration-tools/spec.md#sit-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: UpdateCircleFile}
+    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle_file/file_http_mongo__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: delete-circle-file-local
+    spec_ref: specs/feature-tree/circle-community/circle-collaboration-tools/spec.md#sit-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: DeleteCircleFile}
+    runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/circle_file/facades__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: delete-circle-file-api
+    spec_ref: specs/feature-tree/circle-community/circle-collaboration-tools/spec.md#sit-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: DeleteCircleFile}
+    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle_file/file_http_mongo__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}

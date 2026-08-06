@@ -25,59 +25,59 @@ var (
 // AppErrorFromGroupMembershipNotFound returns *AppError for CIRCLE.USER.group_membership_not_found (user_message from errors.yaml).
 func AppErrorFromGroupMembershipNotFound(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrGroupMembershipNotFound.Error()))
-	return rerrors.NewAppError(code, "群组成员关系不存在", debugMessage).WithMetadata("group_membership_not_found", 404).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "群组成员关系不存在", debugMessage).WithMetadata("group_membership_not_found", 404).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromGroupMembershipAlreadyActive returns *AppError for CIRCLE.USER.group_membership_already_active (user_message from errors.yaml).
 func AppErrorFromGroupMembershipAlreadyActive(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrGroupMembershipAlreadyActive.Error()))
-	return rerrors.NewAppError(code, "已经加入该群组", debugMessage).WithMetadata("group_membership_already_active", 409).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "已经加入该群组", debugMessage).WithMetadata("group_membership_already_active", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromGroupMembershipFull returns *AppError for CIRCLE.USER.group_membership_full (user_message from errors.yaml).
 func AppErrorFromGroupMembershipFull(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrGroupMembershipFull.Error()))
-	return rerrors.NewAppError(code, "群组成员已达上限", debugMessage).WithMetadata("group_membership_full", 409).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "群组成员已达上限", debugMessage).WithMetadata("group_membership_full", 409).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromGroupMembershipStateConflict returns *AppError for CIRCLE.USER.group_membership_state_conflict (user_message from errors.yaml).
 func AppErrorFromGroupMembershipStateConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrGroupMembershipStateConflict.Error()))
-	return rerrors.NewAppError(code, "群组成员状态已变化，请刷新后重试", debugMessage).WithMetadata("group_membership_state_conflict", 409).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "群组成员状态已变化，请刷新后重试", debugMessage).WithMetadata("group_membership_state_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromGroupMembershipOwnerCannotLeave returns *AppError for CIRCLE.USER.group_membership_owner_cannot_leave (user_message from errors.yaml).
 func AppErrorFromGroupMembershipOwnerCannotLeave(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrGroupMembershipOwnerCannotLeave.Error()))
-	return rerrors.NewAppError(code, "群主不能直接退出群组", debugMessage).WithMetadata("group_membership_owner_cannot_leave", 409).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "群主不能直接退出群组", debugMessage).WithMetadata("group_membership_owner_cannot_leave", 409).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromGroupMembershipOwnerCannotRemove returns *AppError for CIRCLE.USER.group_membership_owner_cannot_remove (user_message from errors.yaml).
 func AppErrorFromGroupMembershipOwnerCannotRemove(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrGroupMembershipOwnerCannotRemove.Error()))
-	return rerrors.NewAppError(code, "群主不能被移除", debugMessage).WithMetadata("group_membership_owner_cannot_remove", 409).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "群主不能被移除", debugMessage).WithMetadata("group_membership_owner_cannot_remove", 409).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromGroupMembershipRoleInvalid returns *AppError for CIRCLE.USER.group_membership_role_invalid (user_message from errors.yaml).
 func AppErrorFromGroupMembershipRoleInvalid(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrGroupMembershipRoleInvalid.Error()))
-	return rerrors.NewAppError(code, "群组成员角色无效", debugMessage).WithMetadata("group_membership_role_invalid", 400).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "群组成员角色无效", debugMessage).WithMetadata("group_membership_role_invalid", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromGroupMembershipVersionConflict returns *AppError for CIRCLE.USER.group_membership_version_conflict (user_message from errors.yaml).
 func AppErrorFromGroupMembershipVersionConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrGroupMembershipVersionConflict.Error()))
-	return rerrors.NewAppError(code, "群组成员状态已更新，请刷新后重试", debugMessage).WithMetadata("group_membership_version_conflict", 409).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "群组成员状态已更新，请刷新后重试", debugMessage).WithMetadata("group_membership_version_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromGroupMembershipIdempotencyConflict returns *AppError for CIRCLE.USER.group_membership_idempotency_conflict (user_message from errors.yaml).
 func AppErrorFromGroupMembershipIdempotencyConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrGroupMembershipIdempotencyConflict.Error()))
-	return rerrors.NewAppError(code, "重复请求与原群组成员命令不一致", debugMessage).WithMetadata("group_membership_idempotency_conflict", 409).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "重复请求与原群组成员命令不一致", debugMessage).WithMetadata("group_membership_idempotency_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromGroupMembershipStorageWriteFailed returns *AppError for CIRCLE.SYSTEM.group_membership_storage_write_failed (user_message from errors.yaml).
 func AppErrorFromGroupMembershipStorageWriteFailed(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrGroupMembershipStorageWriteFailed.Error()))
-	return rerrors.NewAppError(code, "群组成员操作失败，请稍后重试", debugMessage).WithMetadata("group_membership_storage_write_failed", 500).WithRecovery("retry", 5)
+	return rerrors.NewAppError(code, "群组成员操作失败，请稍后重试", debugMessage).WithMetadata("group_membership_storage_write_failed", 500).WithRecoveryDirective("retry", "snackbar", 5)
 }

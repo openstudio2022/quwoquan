@@ -2,6 +2,7 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-003
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-004
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-suspension-and-appeal-lifecycle/spec.md#gwt-003
+// readiness_case: close-account-api
 package api_integration
 
 import (
@@ -529,7 +530,7 @@ INSERT INTO user_account_outbox(
 	}
 
 	claimedAt := secondOccurredAt.Add(time.Second)
-	claimed, found, err := store.ClaimReady(
+	claimed, found, err := store.ClaimPendingOutbox(
 		ctx,
 		"terminal-relay",
 		claimedAt,
@@ -616,7 +617,7 @@ WHERE table_schema = current_schema()
 		t.Fatal("raw UserAccount outbox last_error column must be removed")
 	}
 
-	if blocked, found, err := store.ClaimReady(
+	if blocked, found, err := store.ClaimPendingOutbox(
 		ctx,
 		"blocked-relay",
 		claimedAt.Add(time.Second),
@@ -631,7 +632,7 @@ WHERE table_schema = current_schema()
 	); err != nil {
 		t.Fatalf("replay terminal failure: %v", err)
 	}
-	replayed, found, err := store.ClaimReady(
+	replayed, found, err := store.ClaimPendingOutbox(
 		ctx,
 		"replay-relay",
 		claimedAt.Add(2*time.Second),
@@ -648,7 +649,7 @@ WHERE table_schema = current_schema()
 	); err != nil {
 		t.Fatalf("ack replayed event after durable publish: %v", err)
 	}
-	later, found, err := store.ClaimReady(
+	later, found, err := store.ClaimPendingOutbox(
 		ctx,
 		"replay-relay",
 		claimedAt.Add(3*time.Second),
@@ -684,7 +685,7 @@ INSERT INTO user_account_outbox(
 	); err != nil {
 		t.Fatalf("seed expiry outbox event: %v", err)
 	}
-	expired, found, err := store.ClaimReady(
+	expired, found, err := store.ClaimPendingOutbox(
 		ctx,
 		"expiry-relay",
 		expiredOccurredAt,
@@ -725,7 +726,7 @@ INSERT INTO user_account_outbox(
 	); err != nil {
 		t.Fatalf("terminal source must remain replayable after diagnostic TTL: %v", err)
 	}
-	replayedExpired, found, err := store.ClaimReady(
+	replayedExpired, found, err := store.ClaimPendingOutbox(
 		ctx,
 		"expiry-replay-relay",
 		expiresAt.Add(time.Second),

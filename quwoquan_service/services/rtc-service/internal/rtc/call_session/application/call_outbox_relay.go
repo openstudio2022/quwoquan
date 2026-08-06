@@ -7,23 +7,27 @@ import (
 	"time"
 )
 
-// CallOutboxRelay 是 CallSession 事实的唯一发布主线。
+// CallSignalDeliveryCoordinator 是 CallSession 事实的唯一发布主线。
 //
 // 聚合 state/receipt/outbox 已同事务提交；relay 成功发布 persona realtime 与 durable
 // downstream stream 后才标记 publishedAt，进程重启可继续补偿。
-type CallOutboxRelay struct {
+type CallSignalDeliveryCoordinator struct {
 	store     CallOutboxStore
 	publisher CallRealtimePublisher
 }
 
-func NewCallOutboxRelay(
+// NewCallSignalDeliveryRelay composes the CallSession outbox relay whose
+// application facet is CallSignalDeliveryCoordinator.
+func NewCallSignalDeliveryRelay(
 	store CallOutboxStore,
 	publisher CallRealtimePublisher,
-) *CallOutboxRelay {
-	return &CallOutboxRelay{store: store, publisher: publisher}
+) *CallSignalDeliveryCoordinator {
+	return &CallSignalDeliveryCoordinator{store: store, publisher: publisher}
 }
 
-func (r *CallOutboxRelay) Drain(ctx context.Context, limit int) (int, error) {
+// Deliver consumes committed CallSession events, publishes their typed signal,
+// and advances the event-id checkpoint only after the transport ACKs.
+func (r *CallSignalDeliveryCoordinator) Deliver(ctx context.Context, limit int) (int, error) {
 	if r == nil || r.store == nil || r.publisher == nil {
 		return 0, errors.New("rtc call outbox relay is not fully configured")
 	}
@@ -55,14 +59,14 @@ func (r *CallOutboxRelay) Drain(ctx context.Context, limit int) (int, error) {
 	return len(events), nil
 }
 
-func (r *CallOutboxRelay) Run(ctx context.Context, interval time.Duration) error {
+func (r *CallSignalDeliveryCoordinator) Run(ctx context.Context, interval time.Duration) error {
 	if interval <= 0 {
 		interval = 100 * time.Millisecond
 	}
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
-		if _, err := r.Drain(ctx, 100); err != nil {
+		if _, err := r.Deliver(ctx, 100); err != nil {
 			return err
 		}
 		select {

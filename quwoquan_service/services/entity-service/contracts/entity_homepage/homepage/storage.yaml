@@ -1,6 +1,7 @@
 backend: mongodb
 collections:
   homepages:
+    publication_role: not_published
     entity: Homepage
     role: authoritative
     indexes:
@@ -46,7 +47,6 @@ collections:
         version: 1
       unique: true
       description: Homepage CAS commit predicate
-    search_indexes:
     - name: search_homepages_text
       source: search_homepages_text
       type: text
@@ -61,6 +61,7 @@ collections:
         address: 3
         city: 2
   homepage_command_receipts:
+    publication_role: not_published
     entity: Homepage
     description: Homepage command 幂等回执；与聚合版本和 homepage_outbox 在同一 Mongo transaction 提交。
     indexes:
@@ -71,8 +72,9 @@ collections:
     - name: idx_homepage_command_receipts_expire
       keys:
         expiresAt: 1
-      expireAfterSeconds: 0
+      expire_after_seconds: 0
   homepage_outbox:
+    publication_role: transactional_outbox
     entity: Homepage
     description: Homepage 领域事实 outbox；同事务写入，供投影与事件消费异步重放。
     indexes:
@@ -86,6 +88,7 @@ collections:
         aggregateVersion: 1
       unique: true
   homepage_detail_views:
+    publication_role: not_published
     entity: HomepageDetailView
     role: projection
     description: 跨对象事实组成的 Homepage 详情读投影；评分、预览、关系边和助手上下文不得写回 homepages 聚合文档
@@ -94,6 +97,7 @@ collections:
       keys:
         updatedAt: -1
   homepage_follower_projection:
+    publication_role: not_published
     entity: HomepageFollowerProjection
     role: projection
     description: user.SubjectFollow 事实的 entity 域可重建投影；Homepage 不拥有关注关系
@@ -113,6 +117,7 @@ collections:
         personaId: 1
         sourceVersion: -1
   homepage_projection_checkpoints:
+    publication_role: publication_accessory
     entity: Homepage
     role: projection
     description: claim/report/review/follow 投影消费者的 durable checkpoint

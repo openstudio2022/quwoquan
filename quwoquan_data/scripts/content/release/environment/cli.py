@@ -44,11 +44,11 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     verify.add_argument("--run-id")
     verify.add_argument(
         "--readiness-phase",
-        choices=("consumer", "commercial"),
+        choices=("research", "consumer", "commercial"),
         default="commercial",
         help=(
-            "consumer 验证首页/载体/媒体；commercial 额外要求 product-ops "
-            "premium_stream"
+            "research 只接受受保护内部身份与私有短签媒体证据；consumer "
+            "验证首页/载体/媒体；commercial 额外要求 product-ops premium_stream"
         ),
     )
     verify.add_argument(

@@ -4,18 +4,22 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from content.execution import store
-from content.execution.selection import (
-    execution_planned_entity_ids,
-    execution_failure_items,
-)
-from content.execution.source_precheck import source_precheck_report
-from content.execution.contracts import ExecutionStateTransition
-from content.execution.spec_contract import ExecutionSpec
 from core.control_types import ContentType
 from core.entity_artifacts import inactive_entity_artifact_rows
 from core.paths import execution_entity_page_input_path
 from governance.coverage.entity_extract import require_domain_etype
+
+from content.execution import store
+from content.execution.contracts import ExecutionStateTransition
+from content.execution.execution_state_journal import (
+    verify_execution_state_journal_for_execution,
+)
+from content.execution.selection import (
+    execution_failure_items,
+    execution_planned_entity_ids,
+)
+from content.execution.source_precheck import source_precheck_report
+from content.execution.spec_contract import ExecutionSpec
 
 
 def audit_execution_readiness(
@@ -24,15 +28,16 @@ def audit_execution_readiness(
     execution_state_override: ExecutionStateTransition | None = None,
 ) -> dict[str, Any]:
     """Return one typed report for all enabled content lanes of an execution."""
-    from content.homepage.homepage import validate_entity_page_inputs
+    verify_execution_state_journal_for_execution(execution_id)
+    from content.execution.active_spec import active_spec
+    from content.execution.context import ExecutionContext, load_execution_state
     from content.execution.coverage import (
         coverage_entity_ids,
         coverage_entity_type,
         coverage_entity_type_for_entity,
     )
-    from content.execution.context import ExecutionContext, load_execution_state
-    from content.execution.active_spec import active_spec
     from content.execution.recovery.download_gate import _download_research_lane_issues
+    from content.homepage.homepage import validate_entity_page_inputs
     from content.source.source_inputs import curated_images_for_entity
 
     spec_model = store.load_spec_model(execution_id)

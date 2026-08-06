@@ -10,34 +10,23 @@ import (
 
 	"quwoquan_service/services/product-ops-service/internal/product_ops/experiment/domain/model"
 	"quwoquan_service/services/product-ops-service/internal/product_ops/experiment/domain/ports"
-	assignmentapplication "quwoquan_service/services/product-ops-service/internal/product_ops/experiment_assignment_fact/application"
-	assignmentdomain "quwoquan_service/services/product-ops-service/internal/product_ops/experiment_assignment_fact/domain"
 )
 
 type Facade struct {
-	store           ports.AggregateStore
-	catalog         ports.CatalogReader
-	assignmentFacts *assignmentapplication.Facade
-	now             func() time.Time
+	store   ports.AggregateStore
+	catalog ports.CatalogReader
+	now     func() time.Time
 }
 
 func NewFacade(
 	store ports.AggregateStore,
 	catalog ports.CatalogReader,
-	assignments assignmentapplication.Sink,
-	reader assignmentapplication.Reader,
 ) (*Facade, error) {
-	if store == nil || catalog == nil || assignments == nil || reader == nil {
-		return nil, fmt.Errorf("experiment aggregate store, catalog, assignment sink and reader are required")
+	if store == nil || catalog == nil {
+		return nil, fmt.Errorf("experiment aggregate store and catalog are required")
 	}
-	assignmentFacts, err := assignmentapplication.NewFacade(store, assignments, reader)
-	if err != nil {
-		return nil, err
-	}
-	return &Facade{store: store, catalog: catalog, assignmentFacts: assignmentFacts, now: time.Now}, nil
+	return &Facade{store: store, catalog: catalog, now: time.Now}, nil
 }
-
-func (f *Facade) AssignmentFacts() *assignmentapplication.Facade { return f.assignmentFacts }
 
 func (f *Facade) Get(ctx context.Context, id string) (model.Experiment, error) {
 	return f.store.Load(ctx, id)
@@ -178,21 +167,4 @@ func newPolicyActivationEvent(
 		Type: "ExperimentPolicyActivated", AggregateID: experiment.ID,
 		AggregateType: "Experiment", Payload: payload, OccurredAt: now,
 	}, nil
-}
-
-func (f *Facade) GetAssignment(ctx context.Context, experimentID, subjectKey string) (assignmentdomain.Fact, error) {
-	return f.assignmentFacts.Get(ctx, experimentID, subjectKey)
-}
-
-func (f *Facade) Stats(ctx context.Context, experimentID string) (model.Experiment, assignmentdomain.Stats, error) {
-	return f.assignmentFacts.Stats(ctx, experimentID)
-}
-
-// StatsFor 按目录已加载的实验（含当前 experimentRevision）读取分配统计，
-// 供列表页避免逐实验重复 Load 聚合（listExperiments N+1 收敛）。
-func (f *Facade) StatsFor(
-	ctx context.Context,
-	experiment model.Experiment,
-) (assignmentdomain.Stats, error) {
-	return f.assignmentFacts.StatsFor(ctx, experiment)
 }

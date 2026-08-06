@@ -1,102 +1,116 @@
-# L1 Domain Service：共同旅行旅程 (`travel-journey`)
+# L1 Domain Service：Gathering 共同旅行体验 (`travel-journey`)
 
-> 一句话定位：以可共同维护、可追溯修订、可连接内容与关系的 Trip 事实，让一次出行从计划持续生长为共同时间线。
+> 一句话定位：把多人多日旅行表达为 Gathering + optional Plan/Map/Calendar/Experience 的体验组合，并保留已退役 travel-service 到当前 owner 的历史 crosswalk。
 
 ## 1. 目标与用户价值
 
-为 2–8 人、3–7 天国内自由行的组织者和参与者提供“活的共同旅行时间线”：一次维护吃玩住行，群内同步变化，行中获得下一步与讲解，随拍自然归档，行后形成可编辑、可分享的游记。领队、导游和本地专家可以复用模板与署名内容，创作者内容可以被真实行程采用，搭子关系可从共同经历继续沉淀。
+为多人多日 Gathering 的组织者和参与者提供“活的共同旅行体验”：在活动群聊看板上按需启用 Plan、Map、Calendar 与 Experience，一次维护吃玩住行，行中同步变化与讲解，行后形成可编辑、可分享的回顾。旅行不复制 Gathering 的 Host、Participation、准入、会话、生命周期或 Outcome，共同经历也不自动建立关系。
 
 ## 2. 领域边界
 
-### 本领域拥有
+### 目标所有权
 
-- `TripPlan`、不可变 `TripPlanRevision`、`TripPlanItem`、`TripMembership`、`TripMoment`、`TripPlanPlacement`、`TripShareSnapshot`、`TripPlanTemplate` 与 `TripGuideAssignment` 的生命周期和写入决定权。
-- 从上述事实派生的 `TripTimelineView` 与 `TripMapView`，以及 Trip/Item 与外部业务对象之间的 typed link。
+- Circle 的 Gathering 拥有活动身份、Host、root-owned Participation、准入、会话 binding、生命周期、Outcome 与可选 Plan 的目标事实；旅行体验只组合 Plan、Map、Calendar、Experience 和 Content reference。
+- `travel-journey` 只拥有旅行体验边界、历史 crosswalk 与 target-only 迁移证据；不保留 Trip 作为长期公共独立根。
+
+### 已退役源边界
+
+- 历史 `TripPlan`、Revision、Membership、Moment、Placement、ShareSnapshot、Template 与 GuideAssignment 只存在于 crosswalk、脱敏快照和迁移 receipt；生产源码、进程、contract、generated client、路由与 App DI 均已删除。
+- 每类历史源对象通过确定性映射进入 Gathering/Plan/Experience/Content/Chat 目标 owner；inventory、parity、cutover 与 target-only rollback 由签名 receipt 证明，禁止恢复源写入或源 runtime。
 
 ### 本领域不拥有
 
-- Conversation、Message 与成员名册；owner：[`chat-conversation`](../chat-conversation/spec.md)。
-- Circle、Gathering 与参与者；owner：[`circle-community`](../circle-community/spec.md)。
+- Gathering、Host、Participation、Revision、Outcome 与 room binding；owner：[`circle-community`](../circle-community/spec.md)。
+- Conversation、ConversationMembership、Message、Announcement 与附件索引；owner：[`chat-conversation`](../chat-conversation/spec.md)。
 - Post、LocalPostDraft、MediaAsset；owner：[`discovery-content`](../discovery-content/spec.md)。
 - Persona、Follow 与公开资质声明；owner：[`user-identity-profile-relationship`](../user-identity-profile-relationship/spec.md)。
 - Skill、AssistantRun、Trigger、Evidence 与 Presentation；owner：[`assistant-run-learning`](../assistant-run-learning/spec.md)。
 
 ### 上下游协作
 
-- 上游：Conversation/Circle/Gathering 放置上下文、Persona 权限、Post/MediaAsset 引用、Entity/Place 事实及用户确认的助手提案。
-- 下游：当前 Trip Revision、时间线、地图、变化事件、分享快照和游记草稿请求。
-- 跨域写入：只调用目标领域公开 command；本领域不直写 Chat、Circle、Content、User 或 Assistant 存储。
-- 跨域读取：使用所属领域公开 query/projection，并保存 typed reference 与来源版本。
-- 异步协作：发布 Trip revision、placement、moment、lifecycle 与 share snapshot 事件供 Assistant、Chat、Circle、Content 和观测消费者使用。
+- 上游：有效多人多日 Gathering、活动群聊、Persona 权限、Post/MediaAsset 引用、Place/Route 事实及用户确认的助手提案。
+- 下游：活动看板可消费的 Plan Revision、Timeline/Map/Calendar/Experience 投影，以及回顾草稿请求。
+- 跨域写入：只调用 Circle/Chat/Content/Integration 等目标 owner 公开 command；迁移工具也不得直写派生投影。
+- 跨域读取：使用 owner 公开 query/projection，并保存 canonical reference 与来源版本。
+- 异步协作：目标 owner 发布 Plan/Experience/Calendar/Content 事件；已退役源事件不得成为产品输入。
 
 ## 3. Journey / Scenario 职责
 
 - [`JNY-013 / SCN-030`](../spec.md#scn-030)
-  - 本领域负责：把经确认的计划提案写成 Trip、Revision、Item、Membership 与 Placement 事实。
-  - 进入条件：组织者身份、目标共享场景和计划输入有效。
-  - 交付给下游的结果：可共同查看和继续修订的当前 TripPlan。
-  - 不负责：不把 Assistant 文本或 Chat Message 当 Trip 真相源。
+  - 本领域负责：定义组织者如何在既有 Gathering 上启用可选 Plan，并把确认后的提案写入 Circle 目标 owner 的 Plan Revision 与 item。
+  - 进入条件：Gathering 有效、操作者具有 Organizer authority，计划输入与引用可见。
+  - 交付给下游的结果：活动群聊 Board 可查看和继续修订的当前 Plan。
+  - 不负责：不创建 Trip 根，不把 Assistant 文本或 Chat Message 当计划真相源。
 - [`JNY-013 / SCN-031`](../spec.md#scn-031)
-  - 本领域负责：以不可变 Revision 原子推进当前计划，计算可读 diff、严重等级与受影响成员，并发布变化事实。
-  - 进入条件：操作者拥有组织权限，expected revision 与当前事实一致。
-  - 交付给下游的结果：新的 current Revision 和可供主动提醒的 typed event。
+  - 本领域负责：以 owner 的不可变 Plan Revision 推进当前计划，计算可读 diff 与受影响 GatheringParticipation，并发布变化事实。
+  - 进入条件：操作者拥有 Gathering Organizer authority，expected revision 与当前事实一致。
+  - 交付给下游的结果：新的 current Plan Revision 和可供活动群聊提醒的 typed event。
   - 不负责：不决定通知频控、静默与投递渠道。
 - [`JNY-013 / SCN-032`](../spec.md#scn-032)
-  - 本领域负责：经用户确认把 Moment 或 Post link 关联到 Day/Item，并从同一事实投影时间线和地图。
-  - 进入条件：Trip、目标 Item 与引用对象可见且未失效。
-  - 交付给下游的结果：顺序稳定、可追溯且可删除的 Moment/link 与投影。
+  - 本领域负责：经用户确认把 Experience 或 Post reference 关联到 Gathering/Plan item，并从同一 owner 事实投影时间线和地图。
+  - 进入条件：Gathering、目标 Plan item 与引用对象可见且未失效。
+  - 交付给下游的结果：顺序稳定、可追溯且可删除的 Experience/reference 与投影。
   - 不负责：不复制媒体字节、Post 正文或连续位置轨迹。
 - [`JNY-013 / SCN-033`](../spec.md#scn-033)
-  - 本领域负责：冻结隐私裁剪后的分享范围和 TripShareSnapshot，并向 Content 请求 LocalPostDraft。
-  - 进入条件：调用方可分享目标 Trip 范围，且敏感字段裁剪通过。
-  - 交付给下游的结果：整段、单日、单点、路线或 Moment 集合快照及草稿来源引用。
+  - 本领域负责：基于 Gathering Outcome、Plan、Map 与 Experience 形成隐私裁剪后的分享种子，并向 Content 请求 LocalPostDraft。
+  - 进入条件：调用方可分享目标 Gathering 范围，且敏感字段裁剪通过。
+  - 交付给下游的结果：整段、单日、单点、路线或 Experience 集合的草稿来源引用。
   - 不负责：不自动发布内容，不创建或修改关系。
 
 ## 4. 业务能力
 
-- [`collaborative-trip-lifecycle`](./collaborative-trip-lifecycle/spec.md)：组合 Trip 计划、修订、成员与共享放置、Moment/内容关系、时间线/地图、分享、模板和导游任务的完整生命周期。
+- [`collaborative-trip-lifecycle`](./collaborative-trip-lifecycle/spec.md)：组合 GatheringPlan/Revision、Chat Board、Experience/Content reference、Map/Calendar 与回顾分享，并保存 legacy Trip 对象到当前 owner 的历史 crosswalk。
 
 ## 5. 领域要求
 
 <a id="req-001"></a>
-### REQ-001 Trip 当前事实与历史修订单轨
+### REQ-001 旅行是 Gathering 上的可选体验组合
 
-- `TripPlan` 只引用一个 current Revision；每次结构或计划项变更必须生成新的不可变 Revision，并以 CAS 原子推进。
-- 失败、冲突或未确认提案不得改变 current Revision，也不得以 Chat Message、Assistant Artifact 或 App cache 作为当前计划。
+- 每次多人多日旅行必须先有一个 Gathering；Host、Participation、准入、会话、生命周期、取消、完成与 Outcome 始终由 Gathering owner 负责。
+- Plan、Map、Calendar 与 Experience 可以按需启用或隐藏；它们不复制活动身份、成员、容量或 room。任务是 Plan item，文件是 Chat AssetIndex，回顾是 Content Post/Media。
+- Plan 只引用一个 current Revision；失败、冲突或未确认提案不得改变它，也不得以 Chat Message、Assistant Artifact 或 App cache 作为当前计划。
 
 <a id="req-002"></a>
-### REQ-002 多共享场景、多行程与隐私边界
+### REQ-002 时间线、地图、日历、Experience 与隐私边界
 
-- 一个 Trip 可放置于多个 Conversation/Circle，一个共享场景可放置多个 Trip/Gathering；目标不明确时调用方必须消歧。
-- 时间线与地图不得记录连续实时轨迹；公开 ShareSnapshot 必须移除私人住宿细节、联系方式、成员名单和实时精确位置。
+- 活动群聊 Board 可呈现当前 Gathering 的 Plan/Map/Calendar/Experience；目标或 Plan 不明确时调用方必须消歧，零写入返回。
+- 时间线与地图从同一 canonical reference 投影，不记录连续实时轨迹；公开分享必须移除私人住宿细节、联系方式、参与者名单和实时精确位置。
+- Calendar 只是导出/提醒 capability，不拥有日程真相；设备、OAuth Connector 或 Provider 不可用时返回结构化 unavailable，不伪造成功。
+
+<a id="req-003"></a>
+### REQ-003 travel-service 已完成 target-only 迁移与退役
+
+- travel-service 的进程、contracts、generated client、App DI、旧 Skill 绑定和 route/page/surface 已删除；App、Assistant 与 api-edge 对该服务的依赖保持为零。
+- 历史对象只经确定性 target owner、ID crosswalk、幂等映射、count/digest/orphan/collision receipt 与隐私裁剪判定进入目标；不得双读、双写或保留兼容 shim。
+- 回滚只允许恢复目标应用/config 或目标数据快照，不得恢复源写入、源 runtime 或源产品入口。
 
 ## 6. 领域验收
 
 <a id="dom-001"></a>
-### DOM-001 共同旅行事实所有权与收敛
+### DOM-001 Gathering 旅行体验所有权与 target-only 收敛
 
-- 条件：多个成员在同一共享场景创建、修订、记录和分享 Trip。
-- 可观察结果：当前 Revision 唯一且历史不可变，Moment/Post 只以引用关联，时间线与地图收敛到同一事实，跨域写入均有公开 command receipt。
-- 禁止结果：不得双写 Trip、复制 Post/MediaAsset、手工写投影、以消息或助手状态代替 Trip、泄露公开分享禁止字段。
+- 条件：多个有效 GatheringParticipant 在活动群聊 Board 启用、修订、记录和分享旅行可选能力，且已退役源对象的签名 crosswalk/receipt 可供审计。
+- 可观察结果：Gathering 仍是唯一活动根，Plan current Revision 唯一且历史不可变，Experience/Post 只以引用关联，时间线与地图收敛到同一事实；所有生产调用只读目标 owner。
+- 禁止结果：不得保留长期公共 Trip 根、复制 Participation/Conversation/Post/Media、手工写投影、以消息或助手状态代替计划、双读双写 travel-service，或泄露公开分享禁止字段。
 
 ## 7. 工程归属
 
-- App：`quwoquan_app/lib/ui/travel`
-- Contracts：`quwoquan_service/services/travel-service/contracts`
-- Service：`quwoquan_service/services/travel-service`
-- Ops：`quwoquan_service/services/travel-service/environments`
+- App：无独立 Travel owner；旅行体验复用 Circle Gathering/Plan、Chat、Content 与 Integration 的 typed ports。
+- Contracts / Service：无 `travel-service`；目标合同与 runtime 由 Circle/Chat/Content/Integration 各对象 owner 持有。
+- Ops：`quwoquan_ops/migrations/travel_to_gathering` 只保存 target-only crosswalk、证据控制面与回滚审批协议。
+- 目标实现归 [`circle-community`](../circle-community/spec.md) 工程归属管理；本节点不重复认领 `quwoquan_app/lib/service/circle_service` 或 `circle-service`。
 - 测试：
-  - `local_contract`：`quwoquan_service/services/travel-service/tests/local_contract`
-  - `api_integration`：`quwoquan_service/services/travel-service/tests/api_integration`
+  - `local_contract`：`quwoquan_ops/tests/local_contract/test_travel_to_gathering_migration__local_contract_test.py`
+  - `api_integration`：归属各目标 owner 的 Gathering/Plan/Chat/Content/Integration 证据树，不保留源服务目录。
 
 ## 8. 开放事项
 
-<a id="open-001"></a>
-### OPEN-001 共同旅行领域端到端与真环境准出未完成
+<a id="open-002"></a>
+### OPEN-002 Gathering 旅行体验与真环境 UAT 未完成
 
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：缺 AppRoot 共同旅行端到端 UAT、完整跨域 Reader/command/event、真实存储执行、受管环境激活回读与物理真机证据；App 已有 Trip 目录、创建、修订、时间线、地图、Moment inbox、模板、导游任务和分享页面及 typed Remote local contract，不能据此替代跨域与环境验收。
-- 完成判定：`DOM-001` 具有对象 local_contract、跨对象 api_integration 和 AppRoot 共同旅行 user_acceptance 直接 `spec_ref`；同一候选通过 Alpha/Beta/Gamma 与 Android/iPhone 物理真机，Prod 另行完成灰度和回滚。
-- 依赖：Assistant active Skill package、Chat/Circle Placement、Content draft/media、User Persona 与 Runtime Provider/Connector 能力。
+- 影响或价值：当前 travel-service target-only 迁移与退役已经完成。尚缺实现：GatheringPlan/Revision、Experience reference、Map/Calendar、Chat Board 与 Content 回顾在同一 production Remote composition 中的完整旅行体验及真实 Provider/Connector。尚缺验收证据：跨域 API integration、离线恢复、隐私分享和 Android/iPhone 真环境结果。
+- 完成判定：`DOM-001` 由目标 owner 的 local_contract、Circle/Assistant/Chat/Content/Integration 跨域 api_integration 和 [AppRoot 双端共同旅行验收](../spec.md#uat-012) 直接覆盖；Android 与 iPhone 真环境均可从活动群聊看板启用、修订、记录和分享，所有结果绑定同一 Gathering/Plan revision，Provider 不可用时结构化降级，公开分享完成隐私裁剪，参与不自动 mutual。
+- 依赖：本 L2/L3 的阻断 OPEN、Circle production Remote、Chat Board/AssetIndex、Assistant active Skill package、Content draft/media、Integration Provider/Connector 与 Gathering Outcome。

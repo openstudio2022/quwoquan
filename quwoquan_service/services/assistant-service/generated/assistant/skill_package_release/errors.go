@@ -20,35 +20,35 @@ var (
 // AppErrorFromSkillPackageAssetUnavailable returns *AppError for ASSISTANT.DEPENDENCY.skill_package_asset_unavailable (user_message from errors.yaml).
 func AppErrorFromSkillPackageAssetUnavailable(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.DEPENDENCY.skill_package_asset_unavailable")
-	return rterr.NewAppError(code, "技能包资产暂时无法读取，请稍后重试", debugMessage).WithMetadata("skill_package_asset_unavailable", 503).WithRecovery("retry", 3)
+	return rterr.NewAppError(code, "技能包资产暂时无法读取，请稍后重试", debugMessage).WithMetadata("skill_package_asset_unavailable", 503).WithRecoveryDirective("retry", "snackbar", 3)
 }
 
 // AppErrorFromSkillPackageCapabilityDenied returns *AppError for ASSISTANT.USER.skill_package_capability_denied (user_message from errors.yaml).
 func AppErrorFromSkillPackageCapabilityDenied(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.skill_package_capability_denied")
-	return rterr.NewAppError(code, "技能包请求了未授权能力", debugMessage).WithMetadata("skill_package_capability_denied", 403).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "技能包请求了未授权能力", debugMessage).WithMetadata("skill_package_capability_denied", 403).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromSkillPackageDigestMismatch returns *AppError for ASSISTANT.USER.skill_package_digest_mismatch (user_message from errors.yaml).
 func AppErrorFromSkillPackageDigestMismatch(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.skill_package_digest_mismatch")
-	return rterr.NewAppError(code, "技能包完整性校验失败", debugMessage).WithMetadata("skill_package_digest_mismatch", 400).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "技能包完整性校验失败", debugMessage).WithMetadata("skill_package_digest_mismatch", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromSkillPackageInvalid returns *AppError for ASSISTANT.USER.skill_package_invalid (user_message from errors.yaml).
 func AppErrorFromSkillPackageInvalid(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.skill_package_invalid")
-	return rterr.NewAppError(code, "技能包格式无效", debugMessage).WithMetadata("skill_package_invalid", 400).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "技能包格式无效", debugMessage).WithMetadata("skill_package_invalid", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromSkillPackageRevisionConflict returns *AppError for ASSISTANT.USER.skill_package_revision_conflict (user_message from errors.yaml).
 func AppErrorFromSkillPackageRevisionConflict(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.skill_package_revision_conflict")
-	return rterr.NewAppError(code, "技能包激活状态已更新，请刷新后重试", debugMessage).WithMetadata("skill_package_revision_conflict", 409).WithRecovery("refresh", 0)
+	return rterr.NewAppError(code, "技能包激活状态已更新，请刷新后重试", debugMessage).WithMetadata("skill_package_revision_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromSkillPackageSignatureInvalid returns *AppError for ASSISTANT.SYSTEM.skill_package_signature_invalid (user_message from errors.yaml).
 func AppErrorFromSkillPackageSignatureInvalid(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.SYSTEM.skill_package_signature_invalid")
-	return rterr.NewAppError(code, "技能包签名校验失败", debugMessage).WithMetadata("skill_package_signature_invalid", 500).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "技能包签名校验失败", debugMessage).WithMetadata("skill_package_signature_invalid", 500).WithRecoveryDirective("surface", "inlineCard", 0)
 }

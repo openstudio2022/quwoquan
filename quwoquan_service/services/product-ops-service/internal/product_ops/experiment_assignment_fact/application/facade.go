@@ -6,19 +6,21 @@ import (
 	"fmt"
 	"time"
 
-	"quwoquan_service/services/product-ops-service/internal/product_ops/experiment/domain/model"
-	"quwoquan_service/services/product-ops-service/internal/product_ops/experiment/domain/ports"
+	experimentapplication "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/application"
 	assignmentdomain "quwoquan_service/services/product-ops-service/internal/product_ops/experiment_assignment_fact/domain"
 )
 
-var ErrInvalidObservation = errors.New("experiment assignment observation is invalid")
+var (
+	ErrInvalidObservation = errors.New("experiment assignment observation is invalid")
+	ErrExperimentNotFound = errors.New("experiment assignment policy not found")
+)
 
 // Facade owns assignment-fact append and read use cases. Experiment is consulted
 // only to resolve the current aggregate revision and deterministic variant.
 type Facade struct {
-	experiments ports.AggregateStore
-	sink        Sink
-	reader      Reader
+	policies experimentapplication.AssignmentPolicyPort
+	sink     Sink
+	reader   Reader
 }
 
 type AssignmentObservation struct {
@@ -38,11 +40,21 @@ type Reader interface {
 	Stats(context.Context, string, int64) (assignmentdomain.Stats, error)
 }
 
-func NewFacade(experiments ports.AggregateStore, sink Sink, reader Reader) (*Facade, error) {
-	if experiments == nil || sink == nil || reader == nil {
-		return nil, fmt.Errorf("experiment store, assignment sink and reader are required")
+// StatsPort is the public application read port consumed by Experiment's
+// catalog HTTP owner. It exposes no assignment persistence implementation.
+type StatsPort interface {
+	StatsForRevision(context.Context, string, int64) (assignmentdomain.Stats, error)
+}
+
+func NewFacade(
+	policies experimentapplication.AssignmentPolicyPort,
+	sink Sink,
+	reader Reader,
+) (*Facade, error) {
+	if policies == nil || sink == nil || reader == nil {
+		return nil, fmt.Errorf("experiment policy port, assignment sink and reader are required")
 	}
-	return &Facade{experiments: experiments, sink: sink, reader: reader}, nil
+	return &Facade{policies: policies, sink: sink, reader: reader}, nil
 }
 
 // AppendObserved accepts only a runtime observation produced by Recommendation
@@ -53,21 +65,19 @@ func (f *Facade) AppendObserved(
 	ctx context.Context,
 	observation AssignmentObservation,
 ) (assignmentdomain.Fact, bool, error) {
-	experiment, err := f.experiments.LoadRevision(
-		ctx,
-		observation.ExperimentID,
-		observation.ExperimentRevision,
-	)
-	if err != nil {
-		return assignmentdomain.Fact{}, false, err
-	}
 	observedAt := observation.ObservedAt.UTC()
 	if observedAt.IsZero() {
 		return assignmentdomain.Fact{}, false, fmt.Errorf("%w: assignment observation time is required", ErrInvalidObservation)
 	}
-	fact, err := experiment.Assign(observation.SubjectKey, observedAt)
+	fact, err := f.policies.ResolveAssignment(
+		ctx,
+		observation.ExperimentID,
+		observation.ExperimentRevision,
+		observation.SubjectKey,
+		observedAt,
+	)
 	if err != nil {
-		return assignmentdomain.Fact{}, false, err
+		return assignmentdomain.Fact{}, false, mapExperimentPolicyError(err)
 	}
 	if fact.Variant != observation.Variant {
 		return assignmentdomain.Fact{}, false, fmt.Errorf("%w: assignment observation does not match canonical bucket", ErrInvalidObservation)
@@ -76,22 +86,38 @@ func (f *Facade) AppendObserved(
 }
 
 func (f *Facade) Get(ctx context.Context, experimentID, subjectKey string) (assignmentdomain.Fact, error) {
-	experiment, err := f.experiments.Load(ctx, experimentID)
+	policy, err := f.policies.CurrentAssignmentPolicy(ctx, experimentID)
 	if err != nil {
-		return assignmentdomain.Fact{}, err
+		return assignmentdomain.Fact{}, mapExperimentPolicyError(err)
 	}
-	return f.reader.Get(ctx, experimentID, experiment.Version, subjectKey)
+	return f.reader.Get(ctx, experimentID, policy.Revision, subjectKey)
 }
 
-func (f *Facade) Stats(ctx context.Context, experimentID string) (model.Experiment, assignmentdomain.Stats, error) {
-	experiment, err := f.experiments.Load(ctx, experimentID)
+func (f *Facade) Stats(
+	ctx context.Context,
+	experimentID string,
+) (experimentapplication.AssignmentPolicySnapshot, assignmentdomain.Stats, error) {
+	policy, err := f.policies.CurrentAssignmentPolicy(ctx, experimentID)
 	if err != nil {
-		return model.Experiment{}, assignmentdomain.Stats{}, err
+		return experimentapplication.AssignmentPolicySnapshot{}, assignmentdomain.Stats{}, mapExperimentPolicyError(err)
 	}
-	stats, err := f.reader.Stats(ctx, experimentID, experiment.Version)
-	return experiment, stats, err
+	stats, err := f.reader.Stats(ctx, experimentID, policy.Revision)
+	return policy, stats, err
 }
 
-func (f *Facade) StatsFor(ctx context.Context, experiment model.Experiment) (assignmentdomain.Stats, error) {
-	return f.reader.Stats(ctx, experiment.ID, experiment.Version)
+func (f *Facade) StatsForRevision(
+	ctx context.Context,
+	experimentID string,
+	experimentRevision int64,
+) (assignmentdomain.Stats, error) {
+	return f.reader.Stats(ctx, experimentID, experimentRevision)
 }
+
+func mapExperimentPolicyError(err error) error {
+	if errors.Is(err, experimentapplication.ErrAssignmentPolicyNotFound) {
+		return fmt.Errorf("%w: %v", ErrExperimentNotFound, err)
+	}
+	return err
+}
+
+var _ StatsPort = (*Facade)(nil)

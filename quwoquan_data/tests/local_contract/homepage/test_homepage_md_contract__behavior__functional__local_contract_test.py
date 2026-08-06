@@ -193,7 +193,7 @@ def test_structure_gate_flags_missing_frontmatter_cover_and_bad_roles():
     assert "非法值 gallery" in text, issues
 
 
-def test_structure_gate_allows_media_absent_homepage_without_cover():
+def test_structure_gate_rejects_media_absent_accepted_homepage():
     page = "# 黄龙\n\n这是一篇没有可发布图片的实体主页。\n"
     with tempfile.TemporaryDirectory() as td:
         obj = _write_entity(Path(td), page)
@@ -202,7 +202,8 @@ def test_structure_gate_allows_media_absent_homepage_without_cover():
             *_asset_closure_issues(obj, manifest, "黄龙"),
             *homepage_structure_issues(obj, manifest, "黄龙"),
         ]
-    assert issues == [], issues
+    assert any("manifest.assets must not be empty" in issue for issue in issues)
+    assert any("imageSourceRefs must declare" in issue for issue in issues)
 
 
 def test_caption_gate_allows_empty_related_caption():

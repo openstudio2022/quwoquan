@@ -16,12 +16,18 @@ import sys
 
 import yaml
 
+REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from quwoquan_ops.cli.lib.immutable_image_composition import first_party_service_names
+
 
 ENV_OUTPUT_PARTS = (".qwq_output", "env", "repo", "local")
 
 
 def repository_root() -> Path:
-    return Path(__file__).resolve().parents[3]
+    return REPO_ROOT
 
 
 def load_domain(path: Path) -> str:
@@ -66,6 +72,8 @@ def link_tree(source: Path, target: Path) -> None:
 
 
 def contract_roots(root: Path) -> list[Path]:
+    # Only physical service/control-plane contracts participate. Retired
+    # domains must leave the tree; no materialized dual-track is accepted.
     candidates = sorted((root / "quwoquan_service/services").glob("*/contracts"))
     candidates.extend(
         sorted((root / "quwoquan_service/control-plane").glob("*/contracts"))
@@ -75,7 +83,16 @@ def contract_roots(root: Path) -> list[Path]:
 
 def build_config_views(root: Path, output: Path, contracts_roots: list[Path]) -> None:
     """聚合服务自治 schema，供尚未改造完成的编译器读取派生视图。"""
-    schema_paths = [contracts.parent / "config/schema.yaml" for contracts in contracts_roots]
+    active_services = set(first_party_service_names(root))
+    schema_paths: list[Path] = []
+    for contracts in contracts_roots:
+        schema_path = contracts.parent / "config/schema.yaml"
+        if "services" not in contracts.parts:
+            schema_paths.append(schema_path)
+            continue
+        service_name = contracts.parent.name
+        if service_name in active_services:
+            schema_paths.append(schema_path)
     schema_paths.extend(
         [
             root / "quwoquan_service/runtime/config/schema.yaml",

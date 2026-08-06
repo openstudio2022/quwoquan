@@ -131,7 +131,7 @@ consumers:
   - stage_taxonomy_release
   - activate_taxonomy_release
 contract_test:
-  mock_strategy:
+  test_strategy:
     service_side:
       description: 真实 Mongo 验证 digest 幂等、单 active CAS 切换与状态机
       real_engines:
@@ -147,3 +147,37 @@ contract_test:
         - 激活后旧 active release 变 retired，同一时刻只有一个 active
         - 重复激活 no-op 重放安全
         - release-bound empty_baseline 零节点快照可激活并可重放 retired 历史快照
+
+readiness_cases:
+- case_id: stage-tag-taxonomy-release-local
+  spec_ref: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-object-taxonomy-and-provider-registry/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: StageTagTaxonomyRelease}
+  runner_source_path: quwoquan_service/services/tag-service/tests/local_contract/tag/tag_taxonomy_release/taxonomy_release_commands__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: stage-tag-taxonomy-release-api
+  spec_ref: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-object-taxonomy-and-provider-registry/spec.md#gwt-001
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: StageTagTaxonomyRelease}
+  runner_source_path: quwoquan_service/services/tag-service/tests/api_integration/tag/tag_taxonomy_release/taxonomy_release_contract__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: activate-tag-taxonomy-release-local
+  spec_ref: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-object-taxonomy-and-provider-registry/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ActivateTagTaxonomyRelease}
+  runner_source_path: quwoquan_service/services/tag-service/tests/local_contract/tag/tag_taxonomy_release/taxonomy_release_commands__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: activate-tag-taxonomy-release-api
+  spec_ref: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-object-taxonomy-and-provider-registry/spec.md#gwt-001
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ActivateTagTaxonomyRelease}
+  runner_source_path: quwoquan_service/services/tag-service/tests/api_integration/tag/tag_taxonomy_release/taxonomy_release_contract__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}

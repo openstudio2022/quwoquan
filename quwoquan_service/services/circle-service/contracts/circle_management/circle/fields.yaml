@@ -1452,6 +1452,30 @@ types:
       - name: circleId
         type: string
         client_dart_type: String
+  CircleGatheringHostAuthorityEvaluationQuery:
+    fields:
+      - {name: hostSubjectKind, type: string, constraints: [NOT_BLANK]}
+      - {name: hostSubjectId, type: string, constraints: [NOT_BLANK]}
+      - {name: hostSubjectRef, type: string, constraints: [NOT_BLANK]}
+      - {name: actorPersonaId, type: string, constraints: [NOT_BLANK]}
+      - {name: organizerPersonaId, type: string, constraints: [NOT_BLANK]}
+      - {name: authorityEvidenceRef, type: string, constraints: [NOT_BLANK]}
+      - {name: authorityVersion, type: int64, constraints: [POSITIVE]}
+      - {name: action, type: string, constraints: [NOT_BLANK]}
+  CircleGatheringHostAuthorityEvidence:
+    fields:
+      - {name: hostSubjectKind, type: string, constraints: [NOT_BLANK]}
+      - {name: hostSubjectId, type: string, constraints: [NOT_BLANK]}
+      - {name: hostSubjectRef, type: string, constraints: [NOT_BLANK]}
+      - {name: actorPersonaId, type: string, constraints: [NOT_BLANK]}
+      - {name: organizerPersonaId, type: string, constraints: [NOT_BLANK]}
+      - {name: authorityEvidenceRef, type: string, constraints: [NOT_BLANK]}
+      - {name: authorityVersion, type: int64, constraints: [POSITIVE]}
+      - {name: authorityDigest, type: string, constraints: [NOT_BLANK]}
+      - {name: expiresAt, type: timestamp, constraints: [NOT_NULL], semantic_type: instant}
+      - {name: action, type: string, constraints: [NOT_BLANK]}
+      - {name: valid, type: bool, constraints: [NOT_NULL]}
+      - {name: revoked, type: bool, constraints: [NOT_NULL]}
 enums:
   CircleDiscoveryFeedScope:
     values: [recommended, mine]

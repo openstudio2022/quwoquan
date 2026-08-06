@@ -110,18 +110,50 @@ while IFS= read -r env_name; do
         matrix_exit_code=2
       else
         profile_target="$(resolve_patrol_target user_profile_journey_patrol)"
-        bash quwoquan_app/scripts/gamma/run_local_gamma_t4.sh \
+        bash quwoquan_app/scripts/gamma/run_local_gamma_device_uat.sh \
           --platform "$MOBILE_PLATFORM" \
           --device-id "$MOBILE_DEVICE_ID" \
           --target "$profile_target" \
           --report "$QWQ_OUTPUT_ROOT/env/gamma/runs/device-matrix/user-profile-${MOBILE_PLATFORM}.json"
         matrix_exit_code=$?
       fi
+    elif [[ "$matrix_kind" == "runtime-recovery" ]]; then
+      if [[ "$env_name" != "gamma" ]]; then
+        echo "::error::runtime-recovery device journey is only defined for gamma; received env=${env_name}"
+        matrix_exit_code=2
+      else
+        recovery_target="$(resolve_patrol_target runtime_recovery_journey_patrol)"
+        IFS=$'\t' read -r \
+          recovery_gateway_base_url \
+          recovery_product_ops_base_url \
+          recovery_media_avatar_base_url \
+          recovery_media_image_base_url \
+          recovery_media_video_base_url \
+          recovery_media_upload_base_url \
+          recovery_rtc_base < <(resolve_topology_public_bases gamma-local)
+        python3 quwoquan_ops/cli/smoke/run_environment_patrol_smoke.py \
+          --env-name local-gamma \
+          --runtime-env gamma \
+          --api-contract-env gamma \
+          --target "$recovery_target" \
+          --persisted-device-session \
+          --platform "$MOBILE_PLATFORM" \
+          --device-id "$MOBILE_DEVICE_ID" \
+          --gateway-base-url "$recovery_gateway_base_url" \
+          --product-ops-base-url "$recovery_product_ops_base_url" \
+          --media-avatar-base-url "$recovery_media_avatar_base_url" \
+          --media-image-base-url "$recovery_media_image_base_url" \
+          --media-video-base-url "$recovery_media_video_base_url" \
+          --media-upload-base-url "$recovery_media_upload_base_url" \
+          --rtc-media-connection-url "$recovery_rtc_base" \
+          --report "$QWQ_OUTPUT_ROOT/env/gamma/runs/device-matrix/runtime-recovery-${MOBILE_PLATFORM}.json"
+        matrix_exit_code=$?
+      fi
     elif [[ "$matrix_kind" == "account-closure" ]]; then
       closure_target="$(resolve_patrol_target account_closure_patrol)"
       closure_install_id="account-closure-${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-1}-${MOBILE_PLATFORM}-$(date +%s)-{device}"
       if [[ "$env_name" == "gamma" ]]; then
-        bash quwoquan_app/scripts/gamma/run_local_gamma_t4.sh \
+        bash quwoquan_app/scripts/gamma/run_local_gamma_device_uat.sh \
           --platform "$MOBILE_PLATFORM" \
           --device-id "$MOBILE_DEVICE_ID" \
           --target "$closure_target" \
@@ -228,10 +260,10 @@ while IFS= read -r env_name; do
         matrix_exit_code=2
       else
         if [[ "$matrix_kind" == "app-core-readback" ]]; then
-          smoke_target="test/user_acceptance/patrol/environment/app_core_readback__user_acceptance_test.dart"
+          smoke_target="test/user_acceptance/journeys/app_startup/app_core_readback__user_acceptance_test.dart"
           smoke_report_name="app-core-readback"
         else
-          smoke_target="test/user_acceptance/patrol/environment/basic_viability__user_acceptance_test.dart"
+          smoke_target="test/user_acceptance/journeys/app_startup/basic_viability__user_acceptance_test.dart"
           smoke_report_name="environment-smoke"
         fi
         IFS=$'\t' read -r \

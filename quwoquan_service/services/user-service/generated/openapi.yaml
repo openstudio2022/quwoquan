@@ -665,6 +665,45 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
+    /internal/user/personas/{personaId}/gathering-host-authority:evaluate:
+        post:
+            operationId: EvaluatePersonaGatheringHostAuthority
+            x-contract-operation-id: user.persona.EvaluatePersonaGatheringHostAuthority
+            x-object-id: user.persona
+            x-actor: none
+            x-application:
+                kind: query
+                facet: PersonaGatheringHostAuthorityQueryFacet
+                method: evaluate
+                reader: PersonaOwnerAuthorityReader
+                slice: PersonaGatheringHostAuthorityEvidence
+            parameters:
+                - name: personaId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/PersonaGatheringHostAuthorityEvaluationQuery'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PersonaGatheringHostAuthorityEvidence'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
     /internal/user/personas/{personaId}/push-destinations:
         get:
             operationId: ResolveIncomingCallPushDestinations
@@ -3593,6 +3632,16 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: OtpChallengeIssueResult
+            x-contract-placeholder: true
+        PersonaGatheringHostAuthorityEvaluationQuery:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: PersonaGatheringHostAuthorityEvaluationQuery
+            x-contract-placeholder: true
+        PersonaGatheringHostAuthorityEvidence:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: PersonaGatheringHostAuthorityEvidence
             x-contract-placeholder: true
         PersonaLifecycleGuardView:
             type: object

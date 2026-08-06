@@ -136,14 +136,7 @@ func (store *MongoAggregateStore) Commit(ctx context.Context, request circleport
 			return nil, sequenceErr
 		}
 		eventType := circleEventType(request.Change.Kind)
-		payloadJSON, marshalErr := json.Marshal(circleEventPayload{
-			CircleID: next.ID, Version: next.Version, Name: next.Name,
-			Description: next.Description, RulesText: next.RulesText,
-			WelcomeMessage: next.WelcomeMessage, OwnerID: next.OwnerID,
-			IconUrl: next.IconUrl, AutoSyncChat: next.AutoSyncChat,
-			Category: next.Category, Tags: next.Tags,
-			Status: next.Status, OccurredAt: next.UpdatedAt.UTC(),
-		})
+		payloadJSON, marshalErr := json.Marshal(circleEventPayloadFor(eventType, next))
 		if marshalErr != nil {
 			return nil, marshalErr
 		}
@@ -307,20 +300,27 @@ func circleEventType(kind circlemodel.ChangeKind) string {
 	}
 }
 
-type circleEventPayload struct {
-	CircleID       string                   `json:"circleId"`
-	Version        int64                    `json:"version"`
-	Name           string                   `json:"name"`
-	Description    string                   `json:"description,omitempty"`
-	RulesText      string                   `json:"rulesText,omitempty"`
-	WelcomeMessage string                   `json:"welcomeMessage,omitempty"`
-	IconUrl        string                   `json:"iconUrl,omitempty"`
-	AutoSyncChat   bool                     `json:"autoSyncChat"`
-	OwnerID        string                   `json:"ownerId"`
-	Category       string                   `json:"category,omitempty"`
-	Tags           []string                 `json:"tags,omitempty"`
-	Status         circlemodel.CircleStatus `json:"status"`
-	OccurredAt     time.Time                `json:"occurredAt"`
+func circleEventPayloadFor(eventType string, circle circlemodel.Circle) map[string]any {
+	switch eventType {
+	case "CircleCreated":
+		return map[string]any{
+			"id": circle.ID, "name": circle.Name, "ownerId": circle.OwnerID,
+			"category": circle.Category, "tags": circle.Tags,
+			"rulesText": circle.RulesText, "welcomeMessage": circle.WelcomeMessage,
+			"iconUrl": circle.IconUrl, "autoSyncChat": circle.AutoSyncChat,
+		}
+	case "CircleArchived":
+		return map[string]any{"id": circle.ID, "status": circle.Status}
+	case "CircleSectionsUpdated":
+		return map[string]any{"circleId": circle.ID, "sectionConfig": circle.SectionConfig}
+	default:
+		return map[string]any{
+			"id": circle.ID, "name": circle.Name, "description": circle.Description,
+			"rulesText": circle.RulesText, "welcomeMessage": circle.WelcomeMessage,
+			"iconUrl": circle.IconUrl, "autoSyncChat": circle.AutoSyncChat,
+			"tags": circle.Tags, "category": circle.Category,
+		}
+	}
 }
 
 var (

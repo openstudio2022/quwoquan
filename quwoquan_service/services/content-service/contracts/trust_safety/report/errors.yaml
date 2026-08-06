@@ -1,5 +1,3 @@
-entity: Report
-domain: CONTENT
 description: 'Report 对象专属错误码。共享错误码唯一定义于 content/content/post/errors.yaml；
 
   content 域 codegen 与端云 parity 按固定文件列表合并，code 全域唯一。
@@ -7,15 +5,68 @@ description: 'Report 对象专属错误码。共享错误码唯一定义于 cont
   '
 errors:
 - code: CONTENT.USER.report_not_found
-  kind: USER
   reason: report_not_found
   http_status: 404
   emitted_by:
   - surface: http
-    operations: [GetReport, BeginReportReview, ResolveReport, DismissReport]
+    operations: [GetReport, BeginReportReview, ResolveReport, DismissReport, GrantGatheringSafetyTermination, RevokeGatheringSafetyTermination]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: reportNotFound
   go_const: ErrReportNotFound
   user_message:
     zh: 举报不存在
     en: Report not found
+- code: CONTENT.USER.gathering_safety_authorization_invalid
+  reason: gathering_safety_authorization_invalid
+  http_status: 400
+  emitted_by:
+  - surface: http
+    operations: [GrantGatheringSafetyTermination, RevokeGatheringSafetyTermination, AuthorizeGatheringSafetyTermination]
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: gatheringSafetyAuthorizationInvalid
+  go_const: ErrGatheringSafetyAuthorizationInvalid
+  user_message:
+    zh: 安全处置授权请求无效
+    en: Invalid safety authorization request
+- code: CONTENT.USER.gathering_safety_authorization_denied
+  reason: gathering_safety_authorization_denied
+  http_status: 403
+  emitted_by:
+  - surface: http
+    operations: [GrantGatheringSafetyTermination, RevokeGatheringSafetyTermination]
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: gatheringSafetyAuthorizationDenied
+  go_const: ErrGatheringSafetyAuthorizationDenied
+  user_message:
+    zh: 当前安全处置授权不可用
+    en: Safety authorization is not available
+- code: CONTENT.USER.gathering_safety_authorization_conflict
+  reason: gathering_safety_authorization_conflict
+  http_status: 409
+  emitted_by:
+  - surface: http
+    operations: [GrantGatheringSafetyTermination, RevokeGatheringSafetyTermination]
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: gatheringSafetyAuthorizationConflict
+  go_const: ErrGatheringSafetyAuthorizationConflict
+  user_message:
+    zh: 安全处置授权已发生变化
+    en: Safety authorization changed concurrently
+- code: CONTENT.SYSTEM.gathering_safety_authority_unavailable
+  reason: gathering_safety_authority_unavailable
+  http_status: 503
+  emitted_by:
+  - surface: http
+    operations: [GrantGatheringSafetyTermination, RevokeGatheringSafetyTermination, AuthorizeGatheringSafetyTermination]
+  recovery_action: retry
+  recovery_after_seconds: 3
+  disruption_level: snackbar
+  dart_const: gatheringSafetyAuthorityUnavailable
+  go_const: ErrGatheringSafetyAuthorityUnavailable
+  user_message:
+    zh: 安全处置服务暂时不可用，请稍后重试
+    en: Safety authorization is temporarily unavailable

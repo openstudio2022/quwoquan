@@ -23,7 +23,7 @@ description: |
     - codegen：
       tools/codegen_impact         → runtime/impact/help_type_table.go（Go：Help* 常量 + 各查表 + 反查表）
       tools/codegen_app_metadata   → quwoquan_app/.../generated/content/impact_help_type_metadata.g.dart（Dart：tone 查表）
-    - 门禁 scripts/recommendation/verify_impact_help_type_registry.py 校验 registry ↔ Go 产物 ↔ Dart 产物 ↔ fixtures 一致。
+    - 门禁 scripts/recommendation-service/recommendation/recommendation_model_release/verify_impact_help_type_registry.py 校验 registry ↔ Go 产物 ↔ Dart 产物 ↔ fixtures 一致。
 
   字段语义：
     helpType        标准 helpType（唯一 id）。relationship 关系连接 / community 社区参与 / decision 决策影响 /

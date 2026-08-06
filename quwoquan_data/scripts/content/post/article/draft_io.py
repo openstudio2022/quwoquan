@@ -440,6 +440,7 @@ def write_agent_draft(
 
         self_critique = default_self_critique(reader_promise)
     from content.execution.runtime_contract import stage_execution_context
+    from core.runtime_policy import active_runtime_policy
 
     write_json(
         draft_meta_path(execution_id, ref),
@@ -451,7 +452,7 @@ def write_agent_draft(
             "ref": ref,
             "generator": GENERATOR_AGENT,
             "status": "completed",
-            "provider": "cursor_sdk",
+            "provider": active_runtime_policy().semantic_agent_provider.value,
             "model": model,
             "sessionTrace": session_trace,
             "agentRunId": agent_run_id or existing_meta.get("agentRunId"),

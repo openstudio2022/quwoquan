@@ -37,7 +37,7 @@ func TestHomepageLocationIsIndexableAndNearQueryable(t *testing.T) {
 	}
 	defer func() { _ = client.Disconnect(context.Background()) }()
 	database := client.Database("entity_homepage_geo_it")
-	store := homepagepersistence.NewMongoHomepageStore(database, true)
+	store := homepagepersistence.NewMongoHomepageStore(database)
 	if err := store.EnsureIndexes(ctx); err != nil {
 		t.Fatalf("ensure homepage indexes: %v", err)
 	}

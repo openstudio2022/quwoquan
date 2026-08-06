@@ -1,0 +1,45 @@
+# Code generated from quwoquan_service/generated/contract_graph.json.
+# Regenerate with verify_object_alert_coverage.py --write.
+groups:
+  - name: quwoquan_chat_contract_conversation_user_state
+    rules:
+      - record: quwoquan_chat_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="chat-service",method="POST",route=~"^/chat/conversations/[^/]+/messages/[^/]+/read$"})
+        labels:
+          service: "chat-service"
+          operation: "chat.conversation_user_state.MarkAsRead"
+          contract_metric: "chat_user_state_command"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_chat_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="chat-service",method="POST",route=~"^/chat/conversations/[^/]+/messages/[^/]+/read$"})
+        labels:
+          service: "chat-service"
+          operation: "chat.conversation_user_state.MarkAsRead"
+          contract_metric: "chat_user_state_command"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_chat_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="chat-service",method="PATCH",route=~"^/chat/conversations/[^/]+/settings$"})
+        labels:
+          service: "chat-service"
+          operation: "chat.conversation_user_state.UpdateConversationSettings"
+          contract_metric: "chat_user_state_command"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_chat_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="chat-service",method="PATCH",route=~"^/chat/conversations/[^/]+/settings$"})
+        labels:
+          service: "chat-service"
+          operation: "chat.conversation_user_state.UpdateConversationSettings"
+          contract_metric: "chat_user_state_command"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"

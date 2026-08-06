@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/streaming-feed-performance/spec.md#gwt-001
+// readiness_case: append-feed-delivery-page-api
 package feed_delivery_page_test
 
 import (

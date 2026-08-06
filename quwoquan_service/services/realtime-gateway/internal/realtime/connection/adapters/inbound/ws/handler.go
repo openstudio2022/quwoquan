@@ -13,39 +13,51 @@ import (
 	"net/http"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/coder/websocket"
 	"github.com/google/uuid"
 
+	rtauth "quwoquan_service/runtime/auth"
 	rterr "quwoquan_service/runtime/errors"
+	"quwoquan_service/runtime/operation"
+	"quwoquan_service/runtime/streaming"
 	generated "quwoquan_service/services/realtime-gateway/generated/realtime/connection"
 	"quwoquan_service/services/realtime-gateway/internal/realtime/connection/application"
 )
 
-const (
-	writeTimeout   = 5 * time.Second
-	readIdleWindow = 90 * time.Second
-)
+const webSocketUpgradeOperationID = "realtime.connection.WebSocketUpgrade"
 
 type Handler struct {
-	tickets *application.TicketService
-	hub     *application.Hub
-	logger  *slog.Logger
+	tickets              *application.TicketService
+	hub                  *application.Hub
+	logger               *slog.Logger
+	operationDescriptors []rtauth.OperationSecurityDescriptor
+	streamBudget         rtauth.OperationStreamBudget
 }
 
 func NewHandler(
 	tickets *application.TicketService,
 	hub *application.Hub,
 	logger *slog.Logger,
+	operationDescriptors []rtauth.OperationSecurityDescriptor,
 ) (*Handler, error) {
 	if tickets == nil || hub == nil {
 		return nil, errors.New("realtime ws handler requires ticket service and hub")
 	}
+	streamBudget, err := webSocketStreamBudget(operationDescriptors)
+	if err != nil {
+		return nil, err
+	}
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Handler{tickets: tickets, hub: hub, logger: logger}, nil
+	return &Handler{
+		tickets:              tickets,
+		hub:                  hub,
+		logger:               logger,
+		operationDescriptors: append([]rtauth.OperationSecurityDescriptor(nil), operationDescriptors...),
+		streamBudget:         streamBudget,
+	}, nil
 }
 
 func (h *Handler) HandleUpgrade(w http.ResponseWriter, r *http.Request) {
@@ -53,10 +65,66 @@ func (h *Handler) HandleUpgrade(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, generated.AppErrorFromTicketInvalid("websocket upgrade required"))
 		return
 	}
-	claims, err := h.tickets.Consume(r.Context(), r.URL.Query().Get("ticket"))
+	// The handshake clock starts before the one-shot ticket is consumed. A
+	// stalled identity dependency therefore cannot outlive the operation's
+	// generated admission budget or fall back to a transport timeout.
+	budgetGuard := streaming.NewBudgetGuard(r.Context(), h.streamBudget)
+	defer budgetGuard.Stop()
+	claims, err := h.tickets.Consume(
+		budgetGuard.Context(),
+		r.URL.Query().Get("ticket"),
+	)
 	if err != nil {
+		if budgetGuard.Limit() == streaming.BudgetLimitHandshake {
+			writeError(w, r, generated.AppErrorFromInternalError(
+				"realtime websocket admission exceeded its declared handshake budget",
+			))
+			return
+		}
 		writeError(w, r, ticketError(err))
 		return
+	}
+
+	identity := claims.TrustedIdentity
+	principal := rtauth.Principal{
+		Claims: rtauth.Claims{
+			Subject:       identity.AccountID,
+			Persona:       identity.PersonaID,
+			DeviceActorID: identity.DeviceID,
+			AuthEpoch:     claims.AuthEpoch,
+		},
+		Actor: operation.ActorContext{
+			AccountID:     identity.AccountID,
+			PersonaID:     identity.PersonaID,
+			DeviceActorID: identity.DeviceID,
+		},
+	}
+	authorizedRequest := r.WithContext(rtauth.WithPrincipal(
+		budgetGuard.Context(),
+		principal,
+	))
+	rtauth.EnforceRuntimeOperationContract(h.operationDescriptors)(
+		http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+			h.handleAuthorizedUpgrade(writer, request, claims, budgetGuard)
+		}),
+	).ServeHTTP(w, authorizedRequest)
+}
+
+func (h *Handler) handleAuthorizedUpgrade(
+	w http.ResponseWriter,
+	r *http.Request,
+	claims application.TicketClaims,
+	budgetGuard *streaming.BudgetGuard,
+) {
+	// A server-level write deadline would preempt the generated max-duration
+	// budget after hijack. Clearing it here is safe because every read and write
+	// below uses the BudgetGuard context.
+	if err := streaming.ReleaseTransportWriteDeadline(w); err != nil {
+		h.logger.Debug(
+			"realtime websocket transport has no write deadline to release",
+			"errorDigest",
+			application.ErrorDigest(err),
+		)
 	}
 
 	conn, err := websocket.Accept(w, r, nil)
@@ -71,9 +139,8 @@ func (h *Handler) HandleUpgrade(w http.ResponseWriter, r *http.Request) {
 
 	identity := claims.TrustedIdentity
 	connID := "ws-" + uuid.NewString()
-	// 连接生命周期不绑定 upgrade 请求的 ctx（请求返回即取消），使用独立 ctx。
-	connCtx, cancel := context.WithCancel(context.Background())
-	sink := newConnectionSink(connCtx, conn, h.logger)
+	connCtx := r.Context()
+	sink := newConnectionSink(connCtx, conn, h.logger, budgetGuard)
 
 	detach, err := h.hub.Attach(
 		connCtx,
@@ -96,20 +163,17 @@ func (h *Handler) HandleUpgrade(w http.ResponseWriter, r *http.Request) {
 			reason = "account security unavailable"
 		}
 		_ = conn.Close(status, reason)
-		cancel()
 		return
 	}
+	defer detach()
 
-	if !sink.Deliver(`{"type":"auth_ack","authenticated":true}`) {
-		detach()
-		cancel()
+	if !sink.CompleteHandshake(`{"type":"auth_ack","authenticated":true}`) {
 		return
 	}
 
 	h.readLoop(connCtx, conn, sink)
-	detach()
-	cancel()
-	_ = conn.Close(websocket.StatusNormalClosure, "bye")
+	status, reason := boundedCloseStatus(budgetGuard.Limit())
+	_ = conn.Close(status, reason)
 }
 
 func (h *Handler) readLoop(
@@ -118,9 +182,7 @@ func (h *Handler) readLoop(
 	sink *connectionSink,
 ) {
 	for {
-		readCtx, cancelRead := context.WithTimeout(ctx, readIdleWindowFor(ctx))
-		_, payload, err := conn.Read(readCtx)
-		cancelRead()
+		_, payload, err := conn.Read(ctx)
 		if err != nil {
 			return
 		}
@@ -132,7 +194,7 @@ func (h *Handler) readLoop(
 		}
 		switch frame.Type {
 		case "ping":
-			if !sink.Deliver(`{"type":"pong"}`) {
+			if !sink.DeliverKeepAlive(`{"type":"pong"}`) {
 				return
 			}
 		case "subscribe", "unsubscribe":
@@ -144,44 +206,67 @@ func (h *Handler) readLoop(
 	}
 }
 
-func readIdleWindowFor(ctx context.Context) time.Duration {
-	if deadline, ok := ctx.Deadline(); ok {
-		remaining := time.Until(deadline)
-		if remaining < readIdleWindow {
-			return remaining
-		}
-	}
-	return readIdleWindow
-}
-
 // connectionSink 串行化对同一 WS 连接的写入。
 type connectionSink struct {
-	ctx    context.Context
-	conn   *websocket.Conn
-	logger *slog.Logger
-	mu     sync.Mutex
-	closed bool
+	ctx         context.Context
+	conn        *websocket.Conn
+	logger      *slog.Logger
+	budgetGuard *streaming.BudgetGuard
+	ready       chan struct{}
+	readyOnce   sync.Once
+	mu          sync.Mutex
+	closed      bool
 }
 
 func newConnectionSink(
 	ctx context.Context,
 	conn *websocket.Conn,
 	logger *slog.Logger,
+	budgetGuard *streaming.BudgetGuard,
 ) *connectionSink {
-	return &connectionSink{ctx: ctx, conn: conn, logger: logger}
+	return &connectionSink{
+		ctx:         ctx,
+		conn:        conn,
+		logger:      logger,
+		budgetGuard: budgetGuard,
+		ready:       make(chan struct{}),
+	}
 }
 
 func (s *connectionSink) Deliver(payload string) bool {
+	select {
+	case <-s.ready:
+	case <-s.ctx.Done():
+		return false
+	}
+	return s.write(payload, true)
+}
+
+func (s *connectionSink) CompleteHandshake(payload string) bool {
+	if !s.write(payload, false) {
+		return false
+	}
+	s.budgetGuard.HandshakeCompleted()
+	s.readyOnce.Do(func() { close(s.ready) })
+	return true
+}
+
+func (s *connectionSink) DeliverKeepAlive(payload string) bool {
+	return s.write(payload, false)
+}
+
+func (s *connectionSink) write(payload string, businessProgress bool) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
 		return false
 	}
-	writeCtx, cancel := context.WithTimeout(s.ctx, writeTimeout)
-	defer cancel()
-	if err := s.conn.Write(writeCtx, websocket.MessageText, []byte(payload)); err != nil {
+	if err := s.conn.Write(s.ctx, websocket.MessageText, []byte(payload)); err != nil {
 		s.closed = true
 		return false
+	}
+	if businessProgress {
+		s.budgetGuard.FrameEmitted()
 	}
 	return true
 }
@@ -193,7 +278,46 @@ func (s *connectionSink) Kick(reason string) {
 		return
 	}
 	s.closed = true
+	s.readyOnce.Do(func() { close(s.ready) })
 	_ = s.conn.Close(websocket.StatusPolicyViolation, reason)
+}
+
+func webSocketStreamBudget(
+	descriptors []rtauth.OperationSecurityDescriptor,
+) (rtauth.OperationStreamBudget, error) {
+	for _, descriptor := range descriptors {
+		if descriptor.CanonicalOperationID != webSocketUpgradeOperationID {
+			continue
+		}
+		if descriptor.Method != http.MethodGet ||
+			descriptor.PathTemplate != "/realtime/ws" ||
+			descriptor.StreamBudget == nil {
+			return rtauth.OperationStreamBudget{}, errors.New(
+				"realtime WebSocketUpgrade descriptor is missing its canonical route or stream budget",
+			)
+		}
+		budget := *descriptor.StreamBudget
+		if budget.HandshakeMilliseconds <= 0 ||
+			budget.IdleMilliseconds <= 0 ||
+			budget.MaxDurationMilliseconds <= 0 ||
+			budget.HandshakeMilliseconds >= budget.MaxDurationMilliseconds ||
+			budget.IdleMilliseconds >= budget.MaxDurationMilliseconds {
+			return rtauth.OperationStreamBudget{}, errors.New(
+				"realtime WebSocketUpgrade descriptor has an invalid stream budget",
+			)
+		}
+		return budget, nil
+	}
+	return rtauth.OperationStreamBudget{}, errors.New(
+		"realtime WebSocketUpgrade descriptor is missing",
+	)
+}
+
+func boundedCloseStatus(limit streaming.BudgetLimit) (websocket.StatusCode, string) {
+	if limit == streaming.BudgetLimitNone {
+		return websocket.StatusNormalClosure, "bye"
+	}
+	return websocket.StatusGoingAway, "stream budget reached"
 }
 
 func ticketError(err error) error {

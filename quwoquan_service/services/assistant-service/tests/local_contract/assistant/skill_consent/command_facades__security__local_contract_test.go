@@ -1,4 +1,7 @@
 // spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/skill-user-lifecycle/spec.md#gwt-001
+// readiness_case: grant-skill-consent-local
+// readiness_case: revoke-skill-consent-local
+// readiness_case: list-consents-local
 package local_contract
 
 import (
@@ -36,7 +39,7 @@ func TestSkillConsentFacadesFailClosedWithoutStore(t *testing.T) {
 		"grant-command",
 		"account-a",
 		"travel_companion",
-		[]string{"travel.trip.read"},
+		[]string{"assistant.learning.feedback_context.read"},
 	); err == nil {
 		t.Fatal("Grant() error=nil, want unavailable")
 	}
@@ -63,7 +66,7 @@ func TestSkillConsentLifecycleUsesAuthoritativeStore(t *testing.T) {
 		"grant-command",
 		"account-a",
 		"travel_companion",
-		[]string{"assistant.memory.preferences.read", "travel.trip.read"},
+		[]string{"assistant.memory.preferences.read", "assistant.learning.feedback_context.read"},
 	)
 	if err != nil || granted.Consent == nil {
 		t.Fatalf("Grant() result=%+v error=%v", granted, err)
@@ -71,8 +74,8 @@ func TestSkillConsentLifecycleUsesAuthoritativeStore(t *testing.T) {
 	if granted.Consent.AccountID != "account-a" ||
 		granted.Consent.SkillID != "travel_companion" ||
 		len(granted.Consent.GrantedScopes) != 2 ||
-		granted.Consent.GrantedScopes[0] != "assistant.memory.preferences.read" ||
-		granted.Consent.GrantedScopes[1] != "travel.trip.read" ||
+		granted.Consent.GrantedScopes[0] != "assistant.learning.feedback_context.read" ||
+		granted.Consent.GrantedScopes[1] != "assistant.memory.preferences.read" ||
 		!granted.Consent.IsGranted() {
 		t.Fatalf("Grant()=%+v", granted)
 	}
@@ -81,7 +84,7 @@ func TestSkillConsentLifecycleUsesAuthoritativeStore(t *testing.T) {
 		"grant-command",
 		"account-a",
 		"travel_companion",
-		[]string{"travel.trip.read", "assistant.memory.preferences.read"},
+		[]string{"assistant.learning.feedback_context.read", "assistant.memory.preferences.read"},
 	)
 	if err != nil || !replayed.Replayed || replayed.Consent == nil ||
 		replayed.Consent.ID != granted.Consent.ID {
@@ -92,7 +95,7 @@ func TestSkillConsentLifecycleUsesAuthoritativeStore(t *testing.T) {
 		"grant-command-distinct",
 		"account-a",
 		"travel_companion",
-		[]string{"assistant.memory.preferences.read", "travel.trip.read"},
+		[]string{"assistant.memory.preferences.read", "assistant.learning.feedback_context.read"},
 	)
 	if err != nil || noOp.Changed || noOp.Replayed || noOp.Consent == nil ||
 		noOp.Consent.ID != granted.Consent.ID {
@@ -125,7 +128,7 @@ func TestSkillConsentLifecycleUsesAuthoritativeStore(t *testing.T) {
 		"duplicate-scope-command",
 		"account-a",
 		"travel_companion",
-		[]string{"travel.trip.read", "travel.trip.read"},
+		[]string{"assistant.learning.feedback_context.read", "assistant.learning.feedback_context.read"},
 	); !errors.Is(err, model.ErrInvalidArgument) {
 		t.Fatalf("Grant() duplicate scope error=%v, want invalid argument", err)
 	}
@@ -134,7 +137,7 @@ func TestSkillConsentLifecycleUsesAuthoritativeStore(t *testing.T) {
 		"scope-conflict-command",
 		"account-a",
 		"travel_companion",
-		[]string{"assistant.memory.preferences.read", "travel.trip.read", "travel.stay.read"},
+		[]string{"assistant.memory.preferences.read", "assistant.learning.feedback_context.read", "assistant.unregistered.scope"},
 	); !errors.Is(err, model.ErrScopeConflict) {
 		t.Fatalf("Grant() changed scope set error=%v, want scope conflict", err)
 	}
@@ -175,7 +178,7 @@ func TestSkillConsentRequireUsesCurrentSkillAndRequiredScopes(t *testing.T) {
 		ctx,
 		"account-a",
 		"travel_companion",
-		[]string{"travel.trip.read"},
+		[]string{"assistant.learning.feedback_context.read"},
 	); !errors.Is(err, model.ErrStorageUnavailable) {
 		t.Fatalf("required scope without reader error=%v, want unavailable", err)
 	}
@@ -185,7 +188,7 @@ func TestSkillConsentRequireUsesCurrentSkillAndRequiredScopes(t *testing.T) {
 		"travel-consent",
 		"account-a",
 		"travel_companion",
-		[]string{"assistant.memory.preferences.read", "travel.trip.read"},
+		[]string{"assistant.memory.preferences.read", "assistant.learning.feedback_context.read"},
 	); err != nil {
 		t.Fatalf("Grant() error=%v", err)
 	}
@@ -193,7 +196,7 @@ func TestSkillConsentRequireUsesCurrentSkillAndRequiredScopes(t *testing.T) {
 		ctx,
 		"account-a",
 		"travel_companion",
-		[]string{"travel.trip.read"},
+		[]string{"assistant.learning.feedback_context.read"},
 	); err != nil {
 		t.Fatalf("same active consent did not cover required scope: %v", err)
 	}
@@ -201,7 +204,7 @@ func TestSkillConsentRequireUsesCurrentSkillAndRequiredScopes(t *testing.T) {
 		ctx,
 		"account-a",
 		"another_skill",
-		[]string{"travel.trip.read"},
+		[]string{"assistant.learning.feedback_context.read"},
 	); !errors.Is(err, model.ErrConsentRequired) {
 		t.Fatalf("foreign Skill consent error=%v, want consent required", err)
 	}
@@ -209,7 +212,7 @@ func TestSkillConsentRequireUsesCurrentSkillAndRequiredScopes(t *testing.T) {
 		ctx,
 		"account-a",
 		"travel_companion",
-		[]string{"travel.trip.read", "travel.stay.read"},
+		[]string{"assistant.learning.feedback_context.read", "assistant.unregistered.scope"},
 	); !errors.Is(err, model.ErrConsentRequired) {
 		t.Fatalf("partial scope coverage error=%v, want consent required", err)
 	}
@@ -229,7 +232,7 @@ func TestSkillConsentRequireUsesCurrentSkillAndRequiredScopes(t *testing.T) {
 			ID:            "consent-a",
 			AccountID:     "account-a",
 			SkillID:       "travel_companion",
-			GrantedScopes: []string{"travel.trip.read"},
+			GrantedScopes: []string{"assistant.learning.feedback_context.read"},
 		},
 		{
 			ID:            "consent-b",
@@ -242,7 +245,7 @@ func TestSkillConsentRequireUsesCurrentSkillAndRequiredScopes(t *testing.T) {
 		ctx,
 		"account-a",
 		"travel_companion",
-		[]string{"assistant.memory.preferences.read", "travel.trip.read"},
+		[]string{"assistant.memory.preferences.read", "assistant.learning.feedback_context.read"},
 	); !errors.Is(err, model.ErrConsentRequired) {
 		t.Fatalf("split active facts error=%v, want consent required", err)
 	}

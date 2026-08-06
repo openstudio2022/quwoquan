@@ -138,6 +138,55 @@ fields:
     description: 关联 Gathering；仅由 circle-service 的受信任投影命令写入，一对一绑定群会话。
     role: authoritative_state
     reference: true
+  - name: gatheringSourceVersion
+    source: gatheringSourceVersion
+    type: int64
+    constraints:
+      - NOT_NULL
+      - DEFAULT_0
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: Gathering room/access/posting 投影的单调 source version；旧版本与精确重放不得回退 Conversation。
+    role: authoritative_state
+  - name: gatheringSourceEventId
+    source: gatheringSourceEventId
+    type: string
+    constraints:
+      - NULLABLE
+    classification: INTERNAL
+    log_policy: hash
+    api_exposure: read
+    ops_exposure: read
+    description: 当前 Gathering source version 对应的受信事件 ID；同版本复用不同事实必须 fail-closed。
+    role: authoritative_state
+  - name: accessMode
+    source: accessMode
+    type: enum
+    enum_ref: ConversationAccessMode
+    constraints:
+      - NOT_NULL
+      - DEFAULT_ACTIVE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 会话访问模式；Gathering 会话仅由 Circle 的 versioned projection 切换 active/read_only。
+    role: authoritative_state
+  - name: postingPolicy
+    source: postingPolicy
+    type: enum
+    enum_ref: ConversationPostingPolicy
+    constraints:
+      - NOT_NULL
+      - DEFAULT_MEMBER_CHAT
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 会话发言策略；announcements_only 只允许复用 Chat Announcement 命令产生 system_announcement。
+    role: authoritative_state
   - name: entityId
     source: entityId
     type: string
@@ -406,18 +455,62 @@ types:
       - {name: status, type: enum, enum_ref: ConversationStatus, constraints: [NOT_NULL]}
       - {name: dissolvedBy, type: string, constraints: [NOT_BLANK]}
       - {name: dissolvedAt, type: timestamp, constraints: [NOT_NULL]}
+  GatheringConversationPolicyChangedEventPayload:
+    description: Gathering source policy 投影收敛后通知当前成员刷新 Chat access/posting 状态。
+    fields:
+      - {name: conversationId, type: string, constraints: [NOT_BLANK]}
+      - {name: gatheringId, type: string, constraints: [NOT_BLANK]}
+      - {name: sourceVersion, type: int64, constraints: [NOT_NULL]}
+      - {name: accessMode, type: enum, enum_ref: ConversationAccessMode, constraints: [NOT_NULL]}
+      - {name: postingPolicy, type: enum, enum_ref: ConversationPostingPolicy, constraints: [NOT_NULL]}
+      - {name: updatedAt, type: timestamp, constraints: [NOT_NULL]}
   GatheringConversationProjectionCommand:
-    description: circle-service 提交的 Gathering 群会话创建事实；禁止客户端构造。
+    description: circle-service 提交的 Gathering room/access/posting versioned projection；禁止客户端构造。
     fields:
       - {name: gatheringId, source: path.gatheringId, type: string, constraints: [NOT_BLANK]}
       - {name: sourceEventId, type: string, constraints: [NOT_BLANK]}
-      - {name: ownerPersonaId, type: string, constraints: [NOT_BLANK]}
+      - {name: sourceVersion, type: int64, constraints: [NOT_NULL]}
       - {name: title, type: string, constraints: [NOT_BLANK]}
-      - {name: maxGroupSize, type: int, constraints: [NOT_NULL]}
+      - {name: accessMode, type: enum, enum_ref: ConversationAccessMode, constraints: [NOT_NULL]}
+      - {name: postingPolicy, type: enum, enum_ref: ConversationPostingPolicy, constraints: [NOT_NULL]}
   GatheringConversationProjectionResult:
     fields:
       - {name: gatheringId, type: string, constraints: [NOT_BLANK]}
       - {name: conversationId, type: string, constraints: [NOT_BLANK]}
+      - {name: sourceVersion, type: int64, constraints: [NOT_NULL]}
+      - {name: accessMode, type: enum, enum_ref: ConversationAccessMode, constraints: [NOT_NULL]}
+      - {name: postingPolicy, type: enum, enum_ref: ConversationPostingPolicy, constraints: [NOT_NULL]}
+  GatheringChatBoardQuery:
+    description: Board 消费的 Chat owner typed query；不读取或复制 Circle Gathering/Plan 写状态。
+    fields:
+      - {name: conversationId, source: path.conversationId, type: string, constraints: [NOT_BLANK]}
+  GatheringChatAccessSummary:
+    fields:
+      - {name: gatheringId, type: string, constraints: [NOT_BLANK]}
+      - {name: conversationId, type: string, constraints: [NOT_BLANK]}
+      - {name: accessMode, type: enum, enum_ref: ConversationAccessMode, constraints: [NOT_NULL]}
+      - {name: postingPolicy, type: enum, enum_ref: ConversationPostingPolicy, constraints: [NOT_NULL]}
+      - {name: viewerRole, type: string, constraints: [NOT_NULL]}
+      - {name: canPost, type: bool, constraints: [NOT_NULL]}
+  GatheringPinnedAnnouncement:
+    fields:
+      - {name: content, type: string, constraints: [NOT_BLANK]}
+      - {name: updatedBy, type: string, constraints: [NOT_BLANK]}
+      - {name: updatedAt, type: timestamp, constraints: [NOT_NULL]}
+  GatheringAssetIndexItem:
+    description: Message/MediaAsset owner 事实的只读索引行；不复制文件或媒体生命周期。
+    fields:
+      - {name: messageId, type: string, constraints: [NOT_BLANK]}
+      - {name: seq, type: int64, constraints: [NOT_NULL]}
+      - {name: mediaAssetId, type: string, constraints: [NOT_BLANK]}
+      - {name: messageType, type: string, constraints: [NOT_BLANK]}
+      - {name: createdAt, type: timestamp, constraints: [NOT_NULL]}
+  GatheringChatBoardSlice:
+    description: Board 可组合的 Chat query slice；仅包含 pinned announcement、最近 200 条 Message 内的 asset index 与 access summary。
+    fields:
+      - {name: access, type: GatheringChatAccessSummary, constraints: [NOT_NULL]}
+      - {name: pinnedAnnouncement, type: GatheringPinnedAnnouncement, constraints: [NULLABLE]}
+      - {name: assets, type: '[]GatheringAssetIndexItem', constraints: [NOT_NULL]}
   ChatAccountClosureDeadLetterRecoveryRequest:
     description: operator 释放 Chat 注销清理 terminal marker 的强类型命令；只接受 Redis source PEL 坐标。
     fields:
@@ -459,10 +552,10 @@ types:
           - NULLABLE
         client_dart_type: String?
       - name: source
-        type: string
+        type: enum
+        enum_ref: SelectableGroupConversationSource
         constraints:
           - NULLABLE
-        client_dart_type: String?
       - name: cursor
         type: string
         constraints:
@@ -747,8 +840,8 @@ types:
       - {name: bio, type: string, constraints: [NOT_NULL]}
       - {name: metFrom, type: string, constraints: [NOT_NULL]}
       - {name: lastInteraction, type: string, constraints: [NOT_NULL]}
-      - {name: relationState, type: string, constraints: [NOT_NULL]}
-      - {name: source, type: string, constraints: [NOT_NULL]}
+      - {name: relationState, type: enum, enum_ref: RelationshipState, constraints: [NOT_NULL]}
+      - {name: source, type: enum, enum_ref: ChatContactSource, constraints: [NOT_NULL]}
       - {name: isStarred, type: bool, constraints: [NOT_NULL]}
   GroupCandidatePageSlice:
     description: 群候选 Reader 的稳定有界响应。
@@ -772,8 +865,8 @@ types:
       - {name: userHandle, type: string, constraints: [NOT_NULL]}
       - {name: displayName, type: string, constraints: [NOT_NULL]}
       - {name: avatarUrl, type: string, constraints: [NOT_NULL]}
-      - {name: relationState, type: string, constraints: [NOT_NULL]}
-      - {name: source, type: string, constraints: [NOT_NULL]}
+      - {name: relationState, type: enum, enum_ref: RelationshipState, constraints: [NOT_NULL]}
+      - {name: source, type: enum, enum_ref: ChatContactSource, constraints: [NOT_NULL]}
   SelectableGroupContactPageSlice:
     description: 指定群内可选互关联系人 Reader 的稳定分页响应。
     fields:
@@ -783,3 +876,32 @@ types:
       - name: nextCursor
         type: string
         constraints: [NULLABLE]
+enums:
+  ConversationAccessMode:
+    values:
+      - active
+      - read_only
+  ConversationPostingPolicy:
+    values:
+      - member_chat
+      - announcements_only
+  SelectableGroupConversationSource:
+    description: >-
+      可选群会话的来源过滤闭集，与 MemberService.ListSelectableGroupConversations
+      的入参校验一致：group 只保留无 circleId 的自建群，circle 只保留圈子群；
+      不传表示两者都要。其它取值必须以 CHAT.USER.invalid_argument 拒绝。
+    values:
+      - group
+      - circle
+  ChatContactSource:
+    description: >-
+      联系人候选行的来源闭集，真相源是 normalizeContactSource /
+      normalizeSocialSource / contactSourcePriority 的同一张表；
+      行输出永不为空（未知来源回落 contact_discovery）。
+    values:
+      - conversation
+      - mutual
+      - following
+      - contact_discovery
+      - circle
+      - group

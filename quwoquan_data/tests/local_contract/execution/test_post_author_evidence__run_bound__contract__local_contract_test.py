@@ -45,6 +45,7 @@ from content.templates.registry import TemplateRegistry  # noqa: E402
 from governance.creators.assignment import creator_profile_digest  # noqa: E402
 from core.io import read_json, write_json  # noqa: E402
 from core.control_types import (  # noqa: E402
+    AgentProvider,
     QueueBackend,
     QueueJobStage,
     QueueJobState,
@@ -162,6 +163,7 @@ def test_post_author_evidence_binds_output_and_stable_job(monkeypatch) -> None:
         ctx,
         ref=ref,
         outcome=AgentRunOutcome.finished(
+            provider=AgentProvider.CURSOR_SDK,
             run_id="cursor-run-post-001",
             agent_id="agent-post-001",
         ),

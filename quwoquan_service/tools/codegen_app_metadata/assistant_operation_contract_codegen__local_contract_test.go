@@ -194,7 +194,10 @@ func TestAssistantOperationOwnerIsTheOnlyRequestAndResponseLibrary(t *testing.T)
 		"assistant_run.g.dart",
 		"assistant_session.g.dart",
 		"skill_subscription.g.dart",
-	}, []string{"skill_subscription.g.dart"})
+	}, []string{"skill_subscription.g.dart"}, []string{
+		"assistant_presentation_document.g.dart",
+		"assistant_trace_event.g.dart",
+	})
 	for _, expected := range []string{
 		"import '../generated/assistant/assistant_runtime_enums.g.dart';",
 		"assistant_api_responses.g.dart",
@@ -203,6 +206,8 @@ func TestAssistantOperationOwnerIsTheOnlyRequestAndResponseLibrary(t *testing.T)
 		"assistant_stream_event.g.dart",
 		"assistant_session.g.dart",
 		"skill_subscription.g.dart",
+		"assistant_presentation_document.g.dart",
+		"assistant_trace_event.g.dart",
 		"assistant_operation_contracts.g.requests.g.dart",
 	} {
 		if !strings.Contains(rendered, expected) {
@@ -214,6 +219,37 @@ func TestAssistantOperationOwnerIsTheOnlyRequestAndResponseLibrary(t *testing.T)
 	}
 	if strings.Contains(rendered, "assistant_run_envelope.g.dart") {
 		t.Fatal("Assistant operation owner retained the duplicate run envelope output")
+	}
+}
+
+// spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/trajectory-replay-evaluation-gate/spec.md#gwt-001
+func TestAssistantPackageSharedWireOutputsExcludeReplayFixtures(t *testing.T) {
+	metadataDir := initializeTestContractGraph(t)
+	outputs, err := assistantPackageSharedWireOutputs(metadataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(outputs) != 14 {
+		t.Fatalf("Assistant package shared wire output count = %d, want 14: %v", len(outputs), outputs)
+	}
+	joined := strings.Join(outputs, "\n")
+	for _, expected := range []string{
+		"assistant_presentation_document.g.dart",
+		"assistant_trace_event.g.dart",
+		"device_context.g.dart",
+		"tool_use.g.dart",
+	} {
+		if !strings.Contains(joined, expected) {
+			t.Fatalf("Assistant package output list misses %q: %v", expected, outputs)
+		}
+	}
+	for _, retired := range []string{
+		"assistant_replay_case.g.dart",
+		"assistant_run_response.g.dart",
+	} {
+		if strings.Contains(joined, retired) {
+			t.Fatalf("Assistant package output list retained %q: %v", retired, outputs)
+		}
 	}
 }
 

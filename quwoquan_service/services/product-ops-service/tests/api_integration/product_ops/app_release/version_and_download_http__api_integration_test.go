@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/product-ops-growth/product-control-plane-foundation/app-release-recovery-routing/spec.md#gwt-001
+// readiness_case: get-app-recovery-version-api
 package api_integration
 
 import (

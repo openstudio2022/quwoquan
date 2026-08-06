@@ -61,3 +61,20 @@ consumers:
     capabilities: [report_behavior]
   - name: recommendation-engine
     capabilities: [read_behaviors]
+readiness_cases:
+- case_id: report-behaviors-local
+  spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/feedback-ingestion-sampling/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ReportBehaviors}
+  runner_source_path: quwoquan_service/services/content-service/tests/local_contract/content/content_behavior_fact/adapters/inbound/http/report_behaviors_typed_wire__contract__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: report-behaviors-api
+  spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/feedback-ingestion-sampling/spec.md#gwt-001
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ReportBehaviors}
+  runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/content_behavior_fact/http_mongo_append__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}

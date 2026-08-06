@@ -14,7 +14,7 @@ from quwoquan_ops.ci.provider_conformance.native_case_result import run_native_h
 
 RESULT_PATH_ENV = "QWQ_PROVIDER_CONFORMANCE_RESULT_PATH"
 TARGET = 'ext-map-protocol_fixture-user-acceptance'
-COMMAND = ('python3', 'quwoquan_ops/ci/provider_conformance/run_provider_patrol_uat.py', '--target', 'test/user_acceptance/patrol/content/location_lookup_provider__user_acceptance_test.dart', '--platform', 'android', '--define-key', 'QWQ_PROVIDER_UAT_LOCATION_QUERY', '--define-key', 'QWQ_PROVIDER_UAT_LOCATION_EXPECTED_TEXT')
+COMMAND = ('python3', 'quwoquan_ops/ci/provider_conformance/run_provider_patrol_uat.py', '--target', 'test/user_acceptance/service/content_service/content/post/location_lookup_provider__user_acceptance_test.dart', '--platform', 'android', '--define-key', 'QWQ_PROVIDER_UAT_LOCATION_QUERY', '--define-key', 'QWQ_PROVIDER_UAT_LOCATION_EXPECTED_TEXT')
 
 if __name__ == "__main__":
     raise SystemExit(run_native_harness(command=COMMAND, target=TARGET))

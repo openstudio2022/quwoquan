@@ -1,3 +1,9 @@
+// spec_ref: specs/feature-tree/circle-community/activity-member-governance/circle-lifecycle/spec.md#gwt-001
+// spec_ref: specs/feature-tree/circle-community/spec.md#dom-001
+// readiness_case: create-circle-local
+// readiness_case: update-circle-local
+// readiness_case: archive-circle-local
+// readiness_case: update-circle-sections-local
 package local_contract
 
 import (

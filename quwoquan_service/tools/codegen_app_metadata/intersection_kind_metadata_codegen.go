@@ -9,9 +9,14 @@ import (
 	"quwoquan_service/tools/recintersectionmeta"
 )
 
-// 交集 kind 注册表 → 端可消费 IntersectionKindMetadata（§23 Solution A/B/C）。
-// registry 解析/校验层统一在 tools/recintersectionmeta（服务端 Go codegen 同源复用），
-// 本文件只负责把注册表渲染为客户端 Dart；不再各写一份 registry struct/parser。
+// 交集 kind 注册表 → package vocabulary / App application policy /
+// presentation metadata。
+// registry 解析层统一在 tools/recintersectionmeta（服务端 Go codegen 同源复用），
+// 本文件只补端侧分层输出需要的严格校验与 Dart 渲染。
+
+const intersectionKindRegistryMetadataPath = "recommendation/recommendation/recommendation_model_release/intersection_kind_registry.yaml"
+
+const intersectionContractVocabularyImport = "package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart"
 
 func dartStringListLiteral(values []string) string {
 	if len(values) == 0 {
@@ -24,71 +29,601 @@ func dartStringListLiteral(values []string) string {
 	return "<String>[" + strings.Join(parts, ", ") + "]"
 }
 
-// writeIntersectionKindMetadata generates the App-consumable IntersectionKindMetadata
-// table + UnifiedObjectKind enum + closed-set constants (§23 Solution A/B/C).
-func writeIntersectionKindMetadata(appDir, metadataDir string) error {
-	contractPath := filepath.Join(metadataDir, "recommendation", "recommendation", "recommendation_model_release", "intersection_kind_registry.yaml")
+func readIntersectionGeneratedMetadata(
+	metadataDir string,
+) (string, *recintersectionmeta.Registry, error) {
+	contractPath := filepath.Join(
+		metadataDir,
+		filepath.FromSlash(intersectionKindRegistryMetadataPath),
+	)
 	raw, err := readMetadataDocument(contractPath)
 	if err != nil {
-		return fmt.Errorf("intersection kind registry: %w", err)
+		return "", nil, fmt.Errorf("intersection kind registry: %w", err)
 	}
 	registry, err := recintersectionmeta.Parse(raw)
 	if err != nil {
-		return fmt.Errorf("read intersection kind registry: %w", err)
+		return "", nil, fmt.Errorf("read intersection kind registry: %w", err)
 	}
 	if err := recintersectionmeta.Validate(registry); err != nil {
-		return fmt.Errorf("intersection kind registry: %w", err)
+		return "", nil, fmt.Errorf("intersection kind registry: %w", err)
 	}
-	out := renderIntersectionKindMetadataDart(metadataSourceLabel(contractPath), registry)
-	outPath := filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "recommendation", "intersection_kind_metadata.g.dart")
-	writeFile(outPath, out)
+	canonicalEnums, err := loadCanonicalSharedEnumValues()
+	if err != nil {
+		return "", nil, fmt.Errorf("intersection package vocabulary: %w", err)
+	}
+	canonicalDimensions := canonicalEnums["IntersectionDimension"]
+	if err := validateIntersectionGeneratedMetadata(
+		registry,
+		canonicalDimensions,
+	); err != nil {
+		return "", nil, fmt.Errorf("intersection generated metadata: %w", err)
+	}
+	return metadataSourceLabel(contractPath), registry, nil
+}
+
+// writeIntersectionFeedbackContracts owns only the cross-object feedback wire
+// vocabulary. It deliberately has a separate lifecycle from the legacy
+// renderer so retiring the latter cannot silently retire feedback reporting.
+func writeIntersectionFeedbackContracts(
+	appDir,
+	sourcePath string,
+	registry *recintersectionmeta.Registry,
+) {
+	writeFile(filepath.Join(
+		appDir,
+		"packages",
+		"quwoquan_cloud_contracts",
+		"lib",
+		"src",
+		"generated",
+		"recommendation",
+		"intersection_feedback_contracts.g.dart",
+	), renderIntersectionFeedbackContractsDart(sourcePath, registry))
+}
+
+func writeCanonicalIntersectionMetadata(
+	appDir,
+	sourcePath string,
+	registry *recintersectionmeta.Registry,
+) {
+	writeFile(filepath.Join(
+		appDir,
+		"packages",
+		"quwoquan_cloud_contracts",
+		"lib",
+		"src",
+		"generated",
+		"recommendation",
+		"intersection_contract_vocabulary.g.dart",
+	), renderIntersectionContractVocabularyDart(sourcePath, registry))
+	writeFile(
+		recommendationFeatureProfileApplicationOutputPath(
+			appDir,
+			"intersection_client_policy.g.dart",
+		),
+		renderIntersectionClientPolicyDart(sourcePath, registry),
+	)
+	writeFile(
+		recommendationFeatureProfilePresentationOutputPath(
+			appDir,
+			"intersection_display_metadata.g.dart",
+		),
+		renderIntersectionDisplayMetadataDart(sourcePath, registry),
+	)
+	writeFile(
+		recommendationFeatureProfilePresentationOutputPath(
+			appDir,
+			"intersection_kind_metadata.g.dart",
+		),
+		renderIntersectionActionKeyMetadataDart(sourcePath, registry),
+	)
+}
+
+func renderIntersectionFeedbackContractsDart(
+	sourcePath string,
+	r *recintersectionmeta.Registry,
+) string {
+	var b strings.Builder
+	b.WriteString("// Code generated from the canonical intersection kind registry. DO NOT EDIT.\n")
+	b.WriteString("// Source: ")
+	b.WriteString(filepath.ToSlash(sourcePath))
+	b.WriteString("\n\n")
+	b.WriteString("/// 负反馈闭集；端上报与云侧降权/冷却同源。\n")
+	b.WriteString(fmt.Sprintf(
+		"const List<String> intersectionFeedbackKinds = %s;\n\n",
+		dartStringListLiteral(r.FeedbackKinds),
+	))
+	for _, kind := range r.FeedbackKinds {
+		trimmed := strings.TrimSpace(kind)
+		name := "intersectionFeedbackKind" + intersectionDartExportedSuffix(trimmed)
+		b.WriteString(fmt.Sprintf("const String %s = %q;\n", name, trimmed))
+	}
+	return b.String()
+}
+
+var intersectionDartReservedWords = map[string]struct{}{
+	"abstract": {}, "as": {}, "assert": {}, "async": {}, "await": {},
+	"base": {}, "break": {}, "case": {}, "catch": {}, "class": {},
+	"const": {}, "continue": {}, "covariant": {}, "default": {},
+	"deferred": {}, "do": {}, "dynamic": {}, "else": {}, "enum": {},
+	"export": {}, "extends": {}, "extension": {}, "external": {},
+	"factory": {}, "false": {}, "final": {}, "finally": {}, "for": {},
+	"get": {}, "hide": {}, "if": {}, "implements": {}, "import": {},
+	"in": {}, "interface": {}, "is": {}, "late": {}, "library": {},
+	"mixin": {}, "new": {}, "null": {}, "of": {}, "on": {},
+	"operator": {}, "part": {}, "required": {}, "rethrow": {},
+	"return": {}, "sealed": {}, "set": {}, "show": {}, "static": {},
+	"super": {}, "switch": {}, "sync": {}, "this": {}, "throw": {},
+	"true": {}, "try": {}, "typedef": {}, "var": {}, "void": {},
+	"when": {}, "while": {}, "with": {}, "yield": {},
+}
+
+func intersectionDartEnumMemberName(value string) string {
+	name := toDartFieldName(strings.TrimSpace(value))
+	if _, reserved := intersectionDartReservedWords[name]; reserved {
+		return name + "Value"
+	}
+	return name
+}
+
+func intersectionDartExportedSuffix(value string) string {
+	name := intersectionDartEnumMemberName(value)
+	if name == "" {
+		return "Value"
+	}
+	return strings.ToUpper(name[:1]) + name[1:]
+}
+
+func validateIntersectionClosedSet(kind string, values []string) error {
+	if len(values) == 0 {
+		return fmt.Errorf("%s closed set is empty", kind)
+	}
+	seenValues := map[string]struct{}{}
+	seenMembers := map[string]string{}
+	for _, raw := range values {
+		value := strings.TrimSpace(raw)
+		if value == "" || value != raw {
+			return fmt.Errorf("%s contains an empty or untrimmed value %q", kind, raw)
+		}
+		if _, duplicate := seenValues[value]; duplicate {
+			return fmt.Errorf("%s contains duplicate value %q", kind, value)
+		}
+		seenValues[value] = struct{}{}
+		member := intersectionDartEnumMemberName(value)
+		if !isDartIdentifier(member) {
+			return fmt.Errorf(
+				"%s value %q maps to invalid Dart member %q",
+				kind,
+				value,
+				member,
+			)
+		}
+		if previous, collision := seenMembers[member]; collision {
+			return fmt.Errorf(
+				"%s values %q and %q map to Dart member %q",
+				kind,
+				previous,
+				value,
+				member,
+			)
+		}
+		seenMembers[member] = value
+	}
 	return nil
 }
 
-func renderIntersectionKindMetadataDart(sourcePath string, r *recintersectionmeta.Registry) string {
+func equalIntersectionValues(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if left[index] != right[index] {
+			return false
+		}
+	}
+	return true
+}
+
+func validateIntersectionGeneratedMetadata(
+	r *recintersectionmeta.Registry,
+	canonicalDimensions []string,
+) error {
+	if r == nil {
+		return fmt.Errorf("registry is nil")
+	}
+	closedSets := []struct {
+		name   string
+		values []string
+	}{
+		{"dimensions", r.Dimensions},
+		{"lifecycleStates", r.LifecycleStates},
+		{"verticals", r.Verticals},
+		{"moments", r.Moments},
+		{"gateKeys", r.GateKeys},
+		{"feedbackKinds", r.FeedbackKinds},
+		{"actionDispatch", r.ActionDispatch},
+	}
+	for _, item := range closedSets {
+		if err := validateIntersectionClosedSet(item.name, item.values); err != nil {
+			return err
+		}
+	}
+	if len(canonicalDimensions) == 0 {
+		return fmt.Errorf("canonical IntersectionDimension owner is missing")
+	}
+	if !equalIntersectionValues(r.Dimensions, canonicalDimensions) {
+		return fmt.Errorf(
+			"registry dimensions %v do not match canonical IntersectionDimension %v",
+			r.Dimensions,
+			canonicalDimensions,
+		)
+	}
+
+	actionKeys := make([]string, 0, len(r.ActionHintLegend))
+	for key := range r.ActionHintLegend {
+		actionKeys = append(actionKeys, key)
+	}
+	sort.Strings(actionKeys)
+	if err := validateIntersectionClosedSet("actionKeys", actionKeys); err != nil {
+		return err
+	}
+	for _, key := range actionKeys {
+		meta := r.ActionKeyMeta[key]
+		if err := validateIntersectionNoDuplicates(
+			"actionKeyMeta["+key+"].requiredGates",
+			meta.RequiredGates,
+		); err != nil {
+			return err
+		}
+	}
+
+	objectKinds := make([]string, 0, len(r.ObjectKinds))
+	seenObjectKinds := map[string]struct{}{}
+	for _, item := range r.ObjectKinds {
+		kind := strings.TrimSpace(item.Kind)
+		if kind == "" || kind != item.Kind {
+			return fmt.Errorf("objectKinds contains an empty or untrimmed kind %q", item.Kind)
+		}
+		if _, duplicate := seenObjectKinds[kind]; duplicate {
+			return fmt.Errorf("objectKinds contains duplicate kind %q", kind)
+		}
+		seenObjectKinds[kind] = struct{}{}
+		objectKinds = append(objectKinds, kind)
+	}
+	if err := validateIntersectionClosedSet("objectKinds", objectKinds); err != nil {
+		return err
+	}
+
+	seenKinds := map[string]struct{}{}
+	for _, item := range r.Kinds {
+		kind := strings.TrimSpace(item.Kind)
+		if kind == "" || kind != item.Kind {
+			return fmt.Errorf("kinds contains an empty or untrimmed kind %q", item.Kind)
+		}
+		if _, duplicate := seenKinds[kind]; duplicate {
+			return fmt.Errorf("kinds contains duplicate kind %q", kind)
+		}
+		seenKinds[kind] = struct{}{}
+		iconKey := strings.TrimSpace(item.IconKey)
+		if iconKey == "" {
+			return fmt.Errorf("kind %q has no iconKey", kind)
+		}
+		if _, known := r.IconKeyLegend[iconKey]; !known {
+			return fmt.Errorf("kind %q references unknown iconKey %q", kind, iconKey)
+		}
+		if strings.TrimSpace(r.VisualToneByIcon[iconKey]) == "" {
+			return fmt.Errorf("kind %q iconKey %q has no visual tone", kind, iconKey)
+		}
+	}
+	return nil
+}
+
+func validateCanonicalIntersectionDimensionMembers(
+	members []canonicalRequestEnumMember,
+) error {
+	if activeMetadataSource == nil {
+		return fmt.Errorf("ContractGraph is not initialized")
+	}
+	var registry struct {
+		Dimensions []string `yaml:"dimensions"`
+	}
+	if err := activeMetadataSource.Decode(
+		intersectionKindRegistryMetadataPath,
+		&registry,
+	); err != nil {
+		return fmt.Errorf("decode intersection dimension owner: %w", err)
+	}
+	canonicalEnums, err := loadCanonicalSharedEnumValues()
+	if err != nil {
+		return err
+	}
+	canonicalDimensions := canonicalEnums["IntersectionDimension"]
+	if !equalIntersectionValues(registry.Dimensions, canonicalDimensions) {
+		return fmt.Errorf(
+			"intersection registry dimensions %v do not match canonical IntersectionDimension %v",
+			registry.Dimensions,
+			canonicalDimensions,
+		)
+	}
+	if len(members) != len(canonicalDimensions) {
+		return fmt.Errorf(
+			"IntersectionDimension operation enum has %d members, want %d",
+			len(members),
+			len(canonicalDimensions),
+		)
+	}
+	for index, value := range canonicalDimensions {
+		wantMember := intersectionDartEnumMemberName(value)
+		if members[index].WireValue != value ||
+			members[index].DartMember != wantMember {
+			return fmt.Errorf(
+				"IntersectionDimension member[%d] = %s/%s, want %s/%s",
+				index,
+				members[index].WireValue,
+				members[index].DartMember,
+				value,
+				wantMember,
+			)
+		}
+	}
+	return nil
+}
+
+func validateIntersectionNoDuplicates(kind string, values []string) error {
+	seen := map[string]struct{}{}
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if _, duplicate := seen[value]; duplicate {
+			return fmt.Errorf("%s contains duplicate value %q", kind, value)
+		}
+		seen[value] = struct{}{}
+	}
+	return nil
+}
+
+func renderIntersectionWireEnum(
+	b *strings.Builder,
+	name string,
+	values []string,
+) {
+	b.WriteString("enum ")
+	b.WriteString(name)
+	b.WriteString(" {\n")
+	for index, value := range values {
+		terminator := ","
+		if index == len(values)-1 {
+			terminator = ";"
+		}
+		b.WriteString(fmt.Sprintf(
+			"  %s(%q)%s\n",
+			intersectionDartEnumMemberName(value),
+			value,
+			terminator,
+		))
+	}
+	b.WriteString("\n  const ")
+	b.WriteString(name)
+	b.WriteString("(this.wireName);\n\n")
+	b.WriteString("  final String wireName;\n\n")
+	b.WriteString("  static ")
+	b.WriteString(name)
+	b.WriteString(" fromWire(Object? value, String path) {\n")
+	b.WriteString("    return switch (value) {\n")
+	for _, value := range values {
+		b.WriteString(fmt.Sprintf(
+			"      %q => %s.%s,\n",
+			value,
+			name,
+			intersectionDartEnumMemberName(value),
+		))
+	}
+	b.WriteString("      _ => throw FormatException('$path has an invalid enum value'),\n")
+	b.WriteString("    };\n")
+	b.WriteString("  }\n")
+	b.WriteString("}\n\n")
+}
+
+func renderIntersectionContractVocabularyDart(
+	sourcePath string,
+	r *recintersectionmeta.Registry,
+) string {
 	var b strings.Builder
-	b.WriteString("// Code generated by tools/codegen_app_metadata from recommendation/recommendation/recommendation_model_release/intersection_kind_registry.yaml. DO NOT EDIT.\n")
+	b.WriteString("// Code generated from the canonical intersection registry. DO NOT EDIT.\n")
+	b.WriteString("// Source: ")
+	b.WriteString(filepath.ToSlash(sourcePath))
+	b.WriteString("\n\nlibrary;\n\n")
+	renderIntersectionWireEnum(&b, "IntersectionDimension", r.Dimensions)
+	renderIntersectionWireEnum(&b, "IntersectionLifecycleState", r.LifecycleStates)
+	renderIntersectionWireEnum(&b, "IntersectionVertical", r.Verticals)
+	renderIntersectionWireEnum(&b, "IntersectionMoment", r.Moments)
+	renderIntersectionWireEnum(&b, "IntersectionGateKey", r.GateKeys)
+	renderIntersectionWireEnum(&b, "IntersectionActionDispatch", r.ActionDispatch)
+	actionKeys := make([]string, 0, len(r.ActionHintLegend))
+	for key := range r.ActionHintLegend {
+		actionKeys = append(actionKeys, key)
+	}
+	sort.Strings(actionKeys)
+	renderIntersectionWireEnum(&b, "IntersectionActionKey", actionKeys)
+	renderIntersectionWireEnum(
+		&b,
+		"IntersectionActionTier",
+		[]string{"light", "heavy"},
+	)
+	objectKinds := make([]string, 0, len(r.ObjectKinds))
+	for _, item := range r.ObjectKinds {
+		objectKinds = append(objectKinds, item.Kind)
+	}
+	renderIntersectionWireEnum(&b, "IntersectionObjectKind", objectKinds)
+	return b.String()
+}
+
+func renderIntersectionClientPolicyDart(
+	sourcePath string,
+	r *recintersectionmeta.Registry,
+) string {
+	var b strings.Builder
+	b.WriteString("// Code generated from the canonical intersection registry. DO NOT EDIT.\n")
+	b.WriteString("// Source: ")
+	b.WriteString(filepath.ToSlash(sourcePath))
+	b.WriteString("\n\n")
+	b.WriteString("import '" + intersectionContractVocabularyImport + "'\n")
+	b.WriteString("    show IntersectionActionDispatch, IntersectionActionKey, IntersectionActionTier, IntersectionGateKey, IntersectionObjectKind;\n\n")
+	b.WriteString("final class IntersectionActionPolicy {\n")
+	b.WriteString("  const IntersectionActionPolicy({\n")
+	b.WriteString("    required this.key,\n")
+	b.WriteString("    required this.tier,\n")
+	b.WriteString("    required this.requiredGates,\n")
+	b.WriteString("    required this.dispatch,\n")
+	b.WriteString("  });\n\n")
+	b.WriteString("  final IntersectionActionKey key;\n")
+	b.WriteString("  final IntersectionActionTier tier;\n")
+	b.WriteString("  final Set<IntersectionGateKey> requiredGates;\n")
+	b.WriteString("  final IntersectionActionDispatch dispatch;\n\n")
+	b.WriteString("  bool get isAssistant => dispatch == IntersectionActionDispatch.assistant;\n")
+	b.WriteString("  bool get isGathering => dispatch == IntersectionActionDispatch.gathering;\n\n")
+	b.WriteString("  static IntersectionActionPolicy of(IntersectionActionKey key) =>\n")
+	b.WriteString("      intersectionActionPolicies[key]!;\n")
+	b.WriteString("}\n\n")
+	b.WriteString("const Map<IntersectionActionKey, IntersectionActionPolicy>\n")
+	b.WriteString("    intersectionActionPolicies = <IntersectionActionKey, IntersectionActionPolicy>{\n")
+	actionKeys := make([]string, 0, len(r.ActionKeyMeta))
+	for key := range r.ActionKeyMeta {
+		actionKeys = append(actionKeys, key)
+	}
+	sort.Strings(actionKeys)
+	for _, key := range actionKeys {
+		meta := r.ActionKeyMeta[key]
+		keyMember := intersectionDartEnumMemberName(key)
+		b.WriteString("  IntersectionActionKey.")
+		b.WriteString(keyMember)
+		b.WriteString(": IntersectionActionPolicy(\n")
+		b.WriteString("    key: IntersectionActionKey.")
+		b.WriteString(keyMember)
+		b.WriteString(",\n")
+		b.WriteString("    tier: IntersectionActionTier.")
+		b.WriteString(intersectionDartEnumMemberName(meta.Tier))
+		b.WriteString(",\n")
+		b.WriteString("    requiredGates: <IntersectionGateKey>{")
+		for index, gate := range meta.RequiredGates {
+			if index > 0 {
+				b.WriteString(", ")
+			}
+			b.WriteString("IntersectionGateKey.")
+			b.WriteString(intersectionDartEnumMemberName(gate))
+		}
+		b.WriteString("},\n")
+		b.WriteString("    dispatch: IntersectionActionDispatch.")
+		b.WriteString(intersectionDartEnumMemberName(meta.Dispatch))
+		b.WriteString(",\n")
+		b.WriteString("  ),\n")
+	}
+	b.WriteString("};\n\n")
+	b.WriteString("const Map<IntersectionObjectKind, String> intersectionRouteIdByObjectKind =\n")
+	b.WriteString("    <IntersectionObjectKind, String>{\n")
+	for _, item := range r.ObjectKinds {
+		if strings.TrimSpace(item.RouteID) == "" {
+			continue
+		}
+		b.WriteString(fmt.Sprintf(
+			"  IntersectionObjectKind.%s: %q,\n",
+			intersectionDartEnumMemberName(item.Kind),
+			item.RouteID,
+		))
+	}
+	b.WriteString("};\n\n")
+	b.WriteString("String intersectionRouteIdForObjectKind(IntersectionObjectKind kind) =>\n")
+	b.WriteString("    intersectionRouteIdByObjectKind[kind] ?? '';\n\n")
+	b.WriteString("IntersectionObjectKind? intersectionObjectKindForObjectType(\n")
+	b.WriteString("  String? objectType,\n")
+	b.WriteString(") {\n")
+	b.WriteString("  return switch (objectType?.trim()) {\n")
+	bindings := append([]recintersectionmeta.ObjectTypeBinding(nil), r.ObjectTypeBindings...)
+	sort.Slice(bindings, func(i, j int) bool {
+		return bindings[i].ObjectType < bindings[j].ObjectType
+	})
+	for _, binding := range bindings {
+		b.WriteString(fmt.Sprintf(
+			"    %q => IntersectionObjectKind.%s,\n",
+			binding.ObjectType,
+			intersectionDartEnumMemberName(binding.ObjectKind),
+		))
+	}
+	b.WriteString("    _ => null,\n")
+	b.WriteString("  };\n")
+	b.WriteString("}\n")
+	return b.String()
+}
+
+func renderIntersectionDisplayMetadataDart(
+	sourcePath string,
+	r *recintersectionmeta.Registry,
+) string {
+	var b strings.Builder
+	b.WriteString("// Code generated from the canonical intersection registry. DO NOT EDIT.\n")
+	b.WriteString("// Source: ")
+	b.WriteString(filepath.ToSlash(sourcePath))
+	b.WriteString("\n\n")
+	b.WriteString("import '" + intersectionContractVocabularyImport + "'\n")
+	b.WriteString("    show IntersectionDimension, IntersectionObjectKind;\n\n")
+	b.WriteString("final class IntersectionKindDisplayMetadata {\n")
+	b.WriteString("  const IntersectionKindDisplayMetadata({required this.iconKey});\n\n")
+	b.WriteString("  final String iconKey;\n\n")
+	b.WriteString("  static IntersectionKindDisplayMetadata? of(String? kind) {\n")
+	b.WriteString("    if (kind == null) return null;\n")
+	b.WriteString("    return intersectionKindDisplayMetadata[kind.trim()];\n")
+	b.WriteString("  }\n")
+	b.WriteString("}\n\n")
+	b.WriteString("const Map<String, IntersectionKindDisplayMetadata>\n")
+	b.WriteString("    intersectionKindDisplayMetadata = <String, IntersectionKindDisplayMetadata>{\n")
+	kinds := append([]recintersectionmeta.KindDef(nil), r.Kinds...)
+	sort.Slice(kinds, func(i, j int) bool { return kinds[i].Kind < kinds[j].Kind })
+	for _, item := range kinds {
+		b.WriteString(fmt.Sprintf(
+			"  %q: IntersectionKindDisplayMetadata(iconKey: %q),\n",
+			item.Kind,
+			item.IconKey,
+		))
+	}
+	b.WriteString("};\n\n")
+	b.WriteString("const Map<String, String> intersectionVisualToneByIconKey = <String, String>{\n")
+	writeSortedStringMap(&b, r.VisualToneByIcon)
+	b.WriteString("};\n\n")
+	b.WriteString("const Map<IntersectionDimension, String>\n")
+	b.WriteString("    intersectionFallbackIconKeyByDimension = <IntersectionDimension, String>{\n")
+	for _, dimension := range r.Dimensions {
+		b.WriteString(fmt.Sprintf(
+			"  IntersectionDimension.%s: %q,\n",
+			intersectionDartEnumMemberName(dimension),
+			r.IconKeyByDimension[dimension],
+		))
+	}
+	b.WriteString("};\n\n")
+	b.WriteString("const Map<IntersectionObjectKind, String> intersectionAssetKindByObjectKind =\n")
+	b.WriteString("    <IntersectionObjectKind, String>{\n")
+	for _, item := range r.ObjectKinds {
+		if strings.TrimSpace(item.AssetKind) == "" {
+			continue
+		}
+		b.WriteString(fmt.Sprintf(
+			"  IntersectionObjectKind.%s: %q,\n",
+			intersectionDartEnumMemberName(item.Kind),
+			item.AssetKind,
+		))
+	}
+	b.WriteString("};\n")
+	return b.String()
+}
+
+func renderIntersectionActionKeyMetadataDart(
+	sourcePath string,
+	r *recintersectionmeta.Registry,
+) string {
+	var b strings.Builder
+	b.WriteString("// Code generated from the canonical intersection registry. DO NOT EDIT.\n")
 	b.WriteString("// Source: ")
 	b.WriteString(filepath.ToSlash(sourcePath))
 	b.WriteString("\n// ignore_for_file: prefer_const_constructors\n\n")
 
-	// ── closed sets ──
-	b.WriteString("/// §21 五维闭集（registry.dimensions，端 dimension 归一/校验唯一真相源）。\n")
-	b.WriteString(fmt.Sprintf("const List<String> intersectionDimensionKeys = %s;\n\n", dartStringListLiteral(r.Dimensions)))
-
-	b.WriteString("/// Lifecycle 状态闭集（registry.lifecycleStates，§21.3 五态 + §22.3 archived/expired）。\n")
-	b.WriteString(fmt.Sprintf("const List<String> intersectionLifecycleStateKeys = %s;\n\n", dartStringListLiteral(r.LifecycleStates)))
-
-	b.WriteString("/// 垂类闭集（registry.verticals，§23.4 三元组正交标注）。\n")
-	b.WriteString(fmt.Sprintf("const List<String> intersectionVerticalKeys = %s;\n\n", dartStringListLiteral(r.Verticals)))
-
-	b.WriteString("/// 意图时态闭集（registry.moments，§24 M0.2；retrospective|current|prospective，与 lifecycleState 正交）。\n")
-	b.WriteString(fmt.Sprintf("const List<String> intersectionMomentKeys = %s;\n\n", dartStringListLiteral(r.Moments)))
-
-	b.WriteString("/// 安全门闭集（registry.gateKeys，§24 M0.1；重行动 requiredGates 取值域）。\n")
-	b.WriteString(fmt.Sprintf("const List<String> intersectionGateKeys = %s;\n\n", dartStringListLiteral(r.GateKeys)))
-
-	b.WriteString("/// 负反馈闭集（registry.feedbackKinds，§24 M0.4；端上报与云侧降权/冷却同源）。\n")
-	b.WriteString(fmt.Sprintf("const List<String> intersectionFeedbackKinds = %s;\n\n", dartStringListLiteral(r.FeedbackKinds)))
-
-	// 负反馈 kind 命名常量：端 UI 触发点（收件箱「不感兴趣」等）读命名常量，
-	// 禁止硬编码 registry 字符串字面量（单一真相源 = registry.feedbackKinds）。
-	b.WriteString("/// 负反馈 kind 命名常量（registry.feedbackKinds 单条；端 UI 触发点读此常量，禁止字面量）。\n")
-	for _, kind := range r.FeedbackKinds {
-		trimmed := strings.TrimSpace(kind)
-		if trimmed == "" {
-			continue
-		}
-		name := "intersectionFeedbackKind" + strings.ToUpper(trimmed[:1]) + trimmed[1:]
-		b.WriteString(fmt.Sprintf("const String %s = %q;\n", name, trimmed))
-	}
-	b.WriteString("\n")
-
-	b.WriteString("/// 行动路由类别闭集（registry.actionDispatch，§24 M0.7；assistant|navigate|message|gathering）。\n")
-	b.WriteString("/// 端交互 handler 路由维度，与 tier 权限成本正交；端 navigator/徽标/助手分发读 actionKeyMeta.dispatch。\n")
-	b.WriteString(fmt.Sprintf("const List<String> intersectionActionDispatchKeys = %s;\n\n", dartStringListLiteral(r.ActionDispatch)))
-
-	// action key closed set (sorted for deterministic output) + legend.
 	actionKeys := make([]string, 0, len(r.ActionHintLegend))
 	for k := range r.ActionHintLegend {
 		actionKeys = append(actionKeys, k)
@@ -97,7 +632,6 @@ func renderIntersectionKindMetadataDart(sourcePath string, r *recintersectionmet
 	b.WriteString("/// 行动建议 actionKey 闭集（registry.actionHintLegend，端只读分发，不按 kind 猜测）。\n")
 	b.WriteString(fmt.Sprintf("const List<String> intersectionActionKeys = %s;\n\n", dartStringListLiteral(actionKeys)))
 
-	// ── actionKey 行动阶梯元数据（§24 M0.1/M0.3；端 safetyGate 降级真相源） ──
 	b.WriteString("/// 单个 actionKey 的行动阶梯元数据（registry.actionKeyMeta，§24 M0.1/M0.3/M0.7）。\n")
 	b.WriteString("/// 端据 requiredGates 判断「可执行 / 优雅降级」；tier 区分轻查看/重社交；\n")
 	b.WriteString("/// dispatch 表示端交互 handler 路由类别（assistant|navigate|message|gathering），\n")
@@ -141,7 +675,39 @@ func renderIntersectionKindMetadataDart(sourcePath string, r *recintersectionmet
 		b.WriteString(fmt.Sprintf("    dispatch: %s,\n", dartStringLiteral(meta.Dispatch)))
 		b.WriteString("  ),\n")
 	}
-	b.WriteString("};\n\n")
+	b.WriteString("};\n")
+	return b.String()
+}
+
+func renderIntersectionKindMetadataDart(sourcePath string, r *recintersectionmeta.Registry) string {
+	var b strings.Builder
+	b.WriteString("// Code generated by tools/codegen_app_metadata from recommendation/recommendation/recommendation_model_release/intersection_kind_registry.yaml. DO NOT EDIT.\n")
+	b.WriteString("// Source: ")
+	b.WriteString(filepath.ToSlash(sourcePath))
+	b.WriteString("\n// ignore_for_file: prefer_const_constructors\n\n")
+
+	// ── closed sets ──
+	b.WriteString("/// §21 五维闭集（registry.dimensions，端 dimension 归一/校验唯一真相源）。\n")
+	b.WriteString(fmt.Sprintf("const List<String> intersectionDimensionKeys = %s;\n\n", dartStringListLiteral(r.Dimensions)))
+
+	b.WriteString("/// Lifecycle 状态闭集（registry.lifecycleStates，§21.3 五态 + §22.3 archived/expired）。\n")
+	b.WriteString(fmt.Sprintf("const List<String> intersectionLifecycleStateKeys = %s;\n\n", dartStringListLiteral(r.LifecycleStates)))
+
+	b.WriteString("/// 垂类闭集（registry.verticals，§23.4 三元组正交标注）。\n")
+	b.WriteString(fmt.Sprintf("const List<String> intersectionVerticalKeys = %s;\n\n", dartStringListLiteral(r.Verticals)))
+
+	b.WriteString("/// 意图时态闭集（registry.moments，§24 M0.2；retrospective|current|prospective，与 lifecycleState 正交）。\n")
+	b.WriteString(fmt.Sprintf("const List<String> intersectionMomentKeys = %s;\n\n", dartStringListLiteral(r.Moments)))
+
+	b.WriteString("/// 安全门闭集（registry.gateKeys，§24 M0.1；重行动 requiredGates 取值域）。\n")
+	b.WriteString(fmt.Sprintf("const List<String> intersectionGateKeys = %s;\n\n", dartStringListLiteral(r.GateKeys)))
+
+	b.WriteString("/// 行动路由类别闭集（registry.actionDispatch，§24 M0.7；assistant|navigate|message|gathering）。\n")
+	b.WriteString("/// 端交互 handler 路由维度，与 tier 权限成本正交；端 navigator/徽标/助手分发读 actionKeyMeta.dispatch。\n")
+	b.WriteString(fmt.Sprintf("const List<String> intersectionActionDispatchKeys = %s;\n\n", dartStringListLiteral(r.ActionDispatch)))
+
+	b.WriteString(renderIntersectionActionKeyMetadataDart(sourcePath, r))
+	b.WriteString("\n\n")
 
 	b.WriteString("/// iconKey → 低饱和语义 tone（registry.visualToneByIconKey）。\n")
 	b.WriteString("const Map<String, String> intersectionVisualToneByIconKey = <String, String>{\n")

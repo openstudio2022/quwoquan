@@ -9,6 +9,7 @@ import (
 
 	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtredis "quwoquan_service/runtime/redis"
+	experimentapp "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/application"
 	experimentmodel "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/domain/model"
 	experimentports "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/domain/ports"
 	assignmentstream "quwoquan_service/services/product-ops-service/internal/product_ops/experiment_assignment_fact/adapters/inbound/stream"
@@ -16,6 +17,7 @@ import (
 	assignmentdomain "quwoquan_service/services/product-ops-service/internal/product_ops/experiment_assignment_fact/domain"
 )
 
+// spec_ref: specs/feature-tree/product-ops-growth/experiment-bucketing-and-rollout/spec.md#sit-001
 func TestAssignmentObservedConsumerProjectsCanonicalFactAndRejectsUnauthorizedProducer(t *testing.T) {
 	ctx := context.Background()
 	redisClient := rtredis.NewMemoryClient()
@@ -24,7 +26,11 @@ func TestAssignmentObservedConsumerProjectsCanonicalFactAndRejectsUnauthorizedPr
 		t.Fatal(err)
 	}
 	store := newAssignmentStore()
-	facade, err := assignmentapp.NewFacade(store, store, store)
+	experiments, err := experimentapp.NewFacade(store, store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	facade, err := assignmentapp.NewFacade(experiments, store, store)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,6 +64,14 @@ func TestAssignmentObservedConsumerProjectsCanonicalFactAndRejectsUnauthorizedPr
 	}
 	if healthyErr := consumer.Healthy(10 * time.Second); healthyErr != nil {
 		t.Fatalf("consumer should stay healthy after NUL subject DLQ, err=%v", healthyErr)
+	}
+	read, err := facade.Get(ctx, expected.ExperimentID, expected.SubjectKey)
+	if err != nil || read != expected {
+		t.Fatalf("Get() = %+v, %v; want canonical observed fact", read, err)
+	}
+	_, stats, err := facade.Stats(ctx, expected.ExperimentID)
+	if err != nil || stats.AssignedSubjects != 1 || stats.VariantCounts[expected.Variant] != 1 {
+		t.Fatalf("Stats() = %+v, %v", stats, err)
 	}
 }
 
@@ -110,7 +124,10 @@ func newAssignmentStore() *assignmentStore {
 	}
 }
 
-func (s *assignmentStore) Load(context.Context, string) (experimentmodel.Experiment, error) {
+func (s *assignmentStore) Load(_ context.Context, id string) (experimentmodel.Experiment, error) {
+	if id != s.experiment.ID {
+		return experimentmodel.Experiment{}, experimentmodel.ErrNotFound
+	}
 	return s.experiment, nil
 }
 
@@ -119,6 +136,10 @@ func (s *assignmentStore) LoadRevision(_ context.Context, id string, revision in
 		return experimentmodel.Experiment{}, experimentmodel.ErrNotFound
 	}
 	return s.experiment, nil
+}
+
+func (s *assignmentStore) List(context.Context) ([]experimentmodel.Experiment, error) {
+	return []experimentmodel.Experiment{s.experiment}, nil
 }
 
 func (*assignmentStore) Replay(context.Context, string, string, string) (experimentports.CommitReceipt, bool, error) {
@@ -150,8 +171,22 @@ func (s *assignmentStore) Get(_ context.Context, experimentID string, revision i
 	return fact, nil
 }
 
-func (s *assignmentStore) Stats(context.Context, string, int64) (assignmentdomain.Stats, error) {
-	return assignmentdomain.Stats{}, nil
+func (s *assignmentStore) Stats(
+	_ context.Context,
+	experimentID string,
+	experimentRevision int64,
+) (assignmentdomain.Stats, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	stats := assignmentdomain.Stats{VariantCounts: map[string]int{}}
+	for _, fact := range s.assignments {
+		if fact.ExperimentID != experimentID || fact.ExperimentRevision != experimentRevision {
+			continue
+		}
+		stats.AssignedSubjects++
+		stats.VariantCounts[fact.Variant]++
+	}
+	return stats, nil
 }
 
 func (s *assignmentStore) count() int {
@@ -162,6 +197,7 @@ func (s *assignmentStore) count() int {
 
 var (
 	_ experimentports.AggregateStore = (*assignmentStore)(nil)
+	_ experimentports.CatalogReader  = (*assignmentStore)(nil)
 	_ assignmentapp.Sink             = (*assignmentStore)(nil)
 	_ assignmentapp.Reader           = (*assignmentStore)(nil)
 )

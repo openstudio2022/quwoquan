@@ -6,6 +6,7 @@ fields:
 - {name: grantedCapabilities, source: grantedCapabilities, type: '[]string', constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: read, ops_exposure: read, role: authoritative_state}
 - {name: status, source: status, type: enum, enum_ref: ConnectorConnectionStatus, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
 - {name: credentialRef, source: credentialRef, type: string, constraints: [NULLABLE], classification: SECRET, log_policy: drop, api_exposure: none, ops_exposure: none, role: authoritative_state}
+- {name: providerAccountSubjectDigest, source: verifiedProviderAccountSubjectDigest, type: string, constraints: [NULLABLE], classification: SECRET, log_policy: drop, api_exposure: none, ops_exposure: none, role: authoritative_state}
 - {name: grantReceiptDigest, source: grantReceiptDigest, type: string, constraints: [NOT_NULL], classification: PRIVATE, log_policy: hash, api_exposure: none, ops_exposure: read, role: authoritative_state}
 - {name: freshnessAt, source: freshnessAt, type: timestamp, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
 - {name: expiresAt, source: expiresAt, type: timestamp, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}

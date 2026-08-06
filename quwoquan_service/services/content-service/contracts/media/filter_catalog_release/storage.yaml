@@ -1,6 +1,7 @@
 backend: mongodb
 collections:
   filter_catalog_releases:
+    publication_role: not_published
     entity: FilterCatalogRelease
     description: 不可变滤镜目录发布与激活状态；categories/presets 为有界内嵌成员。
     indexes:
@@ -28,6 +29,7 @@ collections:
         version: 1
       unique: true
   filter_catalog_command_receipts:
+    publication_role: not_published
     entity: FilterCatalogRelease
     description: Stage/Activate/Rollback 的幂等结果，与聚合状态在同一 Mongo transaction 提交。
     indexes:
@@ -42,7 +44,7 @@ collections:
     - name: idx_filter_catalog_receipts_expire
       keys:
         expiresAt: 1
-      expireAfterSeconds: 0
+      expire_after_seconds: 0
 redis_cache:
 - key: content:filter-catalog:active
   ttl_seconds: 21600

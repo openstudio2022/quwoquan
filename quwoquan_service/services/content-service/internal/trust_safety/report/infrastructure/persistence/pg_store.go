@@ -147,6 +147,30 @@ CREATE TABLE IF NOT EXISTS report_outbox_checkpoints (
 CREATE INDEX IF NOT EXISTS idx_reports_target ON reports(target_type, target_id);
 CREATE INDEX IF NOT EXISTS idx_reports_status ON reports(status, created_at);
 CREATE INDEX IF NOT EXISTS idx_reports_reporter ON reports(reporter_id);
+CREATE TABLE IF NOT EXISTS report_gathering_safety_authorizations (
+  decision_ref VARCHAR(192) PRIMARY KEY,
+  report_id VARCHAR(36) NOT NULL REFERENCES reports(id) ON DELETE RESTRICT,
+  decision_version BIGINT NOT NULL,
+  decision_digest VARCHAR(64) NOT NULL,
+  actor_persona_id VARCHAR(64) NOT NULL,
+  gathering_id VARCHAR(64) NOT NULL,
+  action VARCHAR(64) NOT NULL,
+  evidence_ref VARCHAR(192) NOT NULL,
+  grant_idempotency_key VARCHAR(128) NOT NULL,
+  revoke_idempotency_key VARCHAR(128),
+  expires_at TIMESTAMPTZ NOT NULL,
+  issued_at TIMESTAMPTZ NOT NULL,
+  revoked_at TIMESTAMPTZ
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_report_gathering_safety_report
+  ON report_gathering_safety_authorizations(report_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_report_gathering_safety_grant_idempotency
+  ON report_gathering_safety_authorizations(grant_idempotency_key);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_report_gathering_safety_revoke_idempotency
+  ON report_gathering_safety_authorizations(revoke_idempotency_key)
+  WHERE revoke_idempotency_key IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_report_gathering_safety_expiry
+  ON report_gathering_safety_authorizations(expires_at);
 CREATE INDEX IF NOT EXISTS idx_report_receipts_expires ON report_command_receipts(expires_at);
 DROP INDEX IF EXISTS idx_report_outbox_unpublished;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_report_outbox_replay_order

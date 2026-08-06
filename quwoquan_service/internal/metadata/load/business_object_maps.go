@@ -74,14 +74,7 @@ type fieldDeclaration struct {
 	Reference bool   `json:"reference"`
 }
 
-type storageDocument struct {
-	Backend string `json:"backend"`
-	Role    string `json:"role"`
-}
-
-type eventsDocument struct {
-	Subscriptions []string `json:"subscriptions"`
-}
+const canonicalFieldRolesDescription = "authoritative_state, owned_value, reference, append_only_fact, projection, transport_only"
 
 func deriveBusinessObjectMaps(catalog *ast.Catalog, errs *[]error) {
 	documents := make(map[string]ast.SourceDocument, len(catalog.Documents))
@@ -165,7 +158,7 @@ func deriveBusinessObjectMaps(catalog *ast.Catalog, errs *[]error) {
 			contextsSeen[domainSegment][contextID] = struct{}{}
 		}
 
-		fieldRoles := cloneFieldRoles(nil)
+		fieldRoles := newFieldRoles()
 		fieldsPath := path.Join(objectDir, "fields.yaml")
 		if fields, exists := documents[fieldsPath]; exists {
 			var packet fieldsPacket
@@ -184,6 +177,16 @@ func deriveBusinessObjectMaps(catalog *ast.Catalog, errs *[]error) {
 					))
 					continue
 				}
+				if !isCanonicalFieldRole(role) {
+					*errs = append(*errs, fmt.Errorf(
+						"%s: fields[%d].role %q is not canonical; want one of %s",
+						fieldsPath,
+						index,
+						role,
+						canonicalFieldRolesDescription,
+					))
+					continue
+				}
 				fieldRoles[role] = append(fieldRoles[role], name)
 				if field.Reference {
 					fieldRoles["reference"] = append(fieldRoles["reference"], name)
@@ -192,9 +195,11 @@ func deriveBusinessObjectMaps(catalog *ast.Catalog, errs *[]error) {
 		}
 
 		storagePath := path.Join(objectDir, "storage.yaml")
-		var storage storageDocument
+		var storage ast.StorageDocument
 		if document, exists := documents[storagePath]; exists {
-			if err := json.Unmarshal(document.Content, &storage); err != nil {
+			var err error
+			storage, err = decodeStorageJSON(document.Content)
+			if err != nil {
 				*errs = append(*errs, fmt.Errorf("%s: decode storage: %w", storagePath, err))
 				continue
 			}
@@ -202,20 +207,15 @@ func deriveBusinessObjectMaps(catalog *ast.Catalog, errs *[]error) {
 		if strings.TrimSpace(storage.Role) == "" {
 			storage.Role = storageRoleForKind(objectWire.Kind)
 		}
-		eventsPath := path.Join(objectDir, "events.yaml")
-		var events eventsDocument
-		if document, exists := documents[eventsPath]; exists {
-			if err := json.Unmarshal(document.Content, &events); err != nil {
-				*errs = append(*errs, fmt.Errorf("%s: decode events: %w", eventsPath, err))
-				continue
-			}
-		}
-
 		mutationEntrypoints := make([]string, 0)
 		for _, operation := range operationsByObject[object.ID] {
 			if operation.Kind != ast.OperationKindQuery {
 				mutationEntrypoints = append(mutationEntrypoints, operation.LocalID)
 			}
+		}
+		eventConsumers := make([]string, 0)
+		if object.Lifecycle != nil {
+			eventConsumers = append(eventConsumers, object.Lifecycle.SourceEvents...)
 		}
 		memberBounds := map[string]int{}
 		for _, member := range object.Members {
@@ -265,7 +265,7 @@ func deriveBusinessObjectMaps(catalog *ast.Catalog, errs *[]error) {
 			StorageRole:         strings.TrimSpace(storage.Role),
 			StorageBackend:      strings.TrimSpace(storage.Backend),
 			MutationEntrypoints: mutationEntrypoints,
-			EventConsumers:      normalizedStrings(events.Subscriptions),
+			EventConsumers:      normalizedStrings(eventConsumers),
 			LifecycleRefs:       lifecycleRefs,
 			SourceDocument:      sourceDocument,
 			SourceEntity:        sourceEntity,
@@ -326,8 +326,8 @@ func decodeDerivedDocument[T any](
 	return result, true
 }
 
-func cloneFieldRoles(roles map[string][]string) map[string][]string {
-	cloned := map[string][]string{
+func newFieldRoles() map[string][]string {
+	return map[string][]string{
 		"authoritative_state": {},
 		"owned_value":         {},
 		"reference":           {},
@@ -335,10 +335,20 @@ func cloneFieldRoles(roles map[string][]string) map[string][]string {
 		"projection":          {},
 		"transport_only":      {},
 	}
-	for role, fields := range roles {
-		cloned[role] = append([]string{}, fields...)
+}
+
+func isCanonicalFieldRole(role string) bool {
+	switch role {
+	case "authoritative_state",
+		"owned_value",
+		"reference",
+		"append_only_fact",
+		"projection",
+		"transport_only":
+		return true
+	default:
+		return false
 	}
-	return cloned
 }
 
 func normalizedStrings(values []string) []string {

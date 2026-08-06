@@ -1,3 +1,15 @@
+// spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-006
+// readiness_case: list-service-configs-local
+// readiness_case: resolve-effective-config-local
+// readiness_case: resolve-effective-config-for-instance-local
+// readiness_case: get-config-snapshot-local
+// readiness_case: list-config-domains-local
+// readiness_case: list-service-catalog-entries-local
+// readiness_case: list-plane-bindings-local
+// readiness_case: get-prod-plane-access-isolation-local
+// readiness_case: get-gray-routing-policy-local
+// readiness_case: list-environment-topologies-local
+// readiness_case: list-runtime-clusters-local
 package local_contract
 
 import (
@@ -10,6 +22,7 @@ import (
 
 	confighttp "quwoquan_service/control-plane/platform-ops/internal/platform_ops/config_snapshot/adapters/inbound/http/config_layer"
 	configapp "quwoquan_service/control-plane/platform-ops/internal/platform_ops/config_snapshot/application/config_layer"
+	configrepository "quwoquan_service/control-plane/platform-ops/internal/platform_ops/config_snapshot/infrastructure/repository"
 	rtauth "quwoquan_service/runtime/auth"
 	"quwoquan_service/runtime/controlplane"
 	"quwoquan_service/runtime/operation"
@@ -35,12 +48,58 @@ func seedSnapshotRepo(t *testing.T) string {
 			content = "overrides:\n  sys.content-service.embedding.enabled: true\nsecretRefs: {}\n"
 		}
 		mustWrite(filepath.Join(root, "quwoquan_service", "services", "content-service", "environments", environment, "config.yaml"), content)
+		mustWrite(filepath.Join(root, "quwoquan_service", "services", "content-service", "environments", environment, "deploy", "kustomization.yaml"), "resources: []\n")
+		target := environment + "-local"
+		if environment == "prod" {
+			target = "prod-hosted"
+		}
+		mustWrite(filepath.Join(root, "quwoquan_ops", "environments", environment, "runtime.yaml"),
+			"targets:\n  "+target+":\n    env: "+environment+"\n")
 	}
+	if err := os.MkdirAll(filepath.Join(root, "quwoquan_ops", "external"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(filepath.Join(root, "quwoquan_ops", "platform", "deploy", "base", "kustomization.yaml"), "resources: []\n")
+	mustWrite(filepath.Join(root, "quwoquan_ops", "environments", "prod", "rollout", "routing_policy.yaml"), `policy:
+  enabled: true
+  grayUpstream: http://gray.internal
+  grayUpstreamTlsInsecureSkipVerify: false
+  stageDimensions:
+    gray-initial: {appVersions: [], userIds: [canary], provinces: [], carriers: []}
+    carry-on: {appVersions: ["1.1.0"], userIds: [canary], provinces: [], carriers: []}
+    full: {appVersions: [], userIds: [], provinces: [], carriers: []}
+`)
+	mustWrite(filepath.Join(root, "quwoquan_ops", "environments", "prod", "access-isolation.yaml"), `schema: prod-plane-access-isolation
+target: prod-hosted
+relayAccount: {name: prod-ops}
+planes:
+  - {plane: edge, account: prod-edge-svc, sshKeySecret: PROD_EDGE_SSH_KEY, access: read-write, runtimeContainer: rootless-podman, appliesToStages: [gray-initial, carry-on, full]}
+  - {plane: media, account: prod-media-svc, sshKeySecret: PROD_MEDIA_SSH_KEY, access: read-write, runtimeContainer: rootless-podman, appliesToStages: [gray-initial, carry-on, full]}
+  - {plane: service, account: prod-service-svc, sshKeySecret: PROD_SERVICE_SSH_KEY, access: read-write, runtimeContainer: rootless-podman, appliesToStages: [gray-initial, carry-on, full]}
+  - {plane: data, account: prod-data-svc, sshKeySecret: PROD_DATA_SSH_KEY, access: read-only-audit, runtimeContainer: rootless-podman, appliesToStages: [gray-initial, carry-on, full]}
+`)
 	mustWrite(filepath.Join(root, "quwoquan_app", "configs", "gamma", "app_runtime.yaml"),
 		"gatewayBaseUrl: https://gamma.example.test\n")
 	mustWrite(filepath.Join(root, "quwoquan_data", "control_plane", "_shared", "catalogs", "region_catalog.yaml"),
 		"regions: []\n")
 	return root
+}
+
+func newSnapshotTopologyHandler(t *testing.T, repoRoot string) http.Handler {
+	t.Helper()
+	source, err := configrepository.NewTopologySource(repoRoot, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	facade, err := configapp.NewTopologyFacade(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler, err := confighttp.NewTopologyHandler(facade)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return handler
 }
 
 func newSnapshotHandler(t *testing.T, repoRoot string) http.Handler {
@@ -225,6 +284,15 @@ func TestConfigWriteRoutesRetired(t *testing.T) {
 
 func TestConfigDomainsCatalog(t *testing.T) {
 	handler := newSnapshotHandler(t, seedSnapshotRepo(t))
+	catalog := httptest.NewRecorder()
+	handler.ServeHTTP(catalog, httptest.NewRequest(
+		http.MethodGet,
+		"/control-plane/platform/configs",
+		nil,
+	))
+	if catalog.Code != http.StatusOK {
+		t.Fatalf("config catalog status=%d body=%s", catalog.Code, catalog.Body.String())
+	}
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/control-plane/platform/configs/domains", nil))
 	if recorder.Code != http.StatusOK {
@@ -242,6 +310,58 @@ func TestConfigDomainsCatalog(t *testing.T) {
 		if !got[want] {
 			t.Fatalf("domain catalog missing %q: %+v", want, domains.Items)
 		}
+	}
+}
+
+func TestConfigSnapshotTopologyOperationsUseRepositoryTruth(t *testing.T) {
+	handler := newSnapshotTopologyHandler(t, seedSnapshotRepo(t))
+
+	catalog := performTopologyRequest(t, handler, "/control-plane/platform/catalog/services")
+	assertTopologyItems(t, catalog, 2)
+	bindings := performTopologyRequest(t, handler, "/control-plane/platform/topology/planes")
+	assertTopologyItems(t, bindings, 8)
+	isolation := performTopologyRequest(t, handler, "/control-plane/platform/topology/prod-plane-access-isolation")
+	if isolation["environment"] != "prod" || isolation["directAccessAllowed"] != false {
+		t.Fatalf("isolation=%+v", isolation)
+	}
+	if planes, ok := isolation["plane"].([]any); !ok || len(planes) != 4 {
+		t.Fatalf("isolation planes=%+v", isolation["plane"])
+	}
+	evidence := isolation["evidence"].(map[string]any)
+	source := evidence["source"].(map[string]any)
+	if source["path"] == "" || source["sha256"] == "" {
+		t.Fatalf("isolation source=%+v", source)
+	}
+	gray := performTopologyRequest(t, handler, "/control-plane/platform/rollout/routing-policy")
+	policy := gray["policy"].(map[string]any)
+	if policy["enabled"] != true || len(policy["stageDimensions"].(map[string]any)) != 3 {
+		t.Fatalf("gray policy=%+v", policy)
+	}
+	environments := performTopologyRequest(t, handler, "/control-plane/platform/topology/environments")
+	assertTopologyItems(t, environments, 8)
+	clusters := performTopologyRequest(t, handler, "/control-plane/platform/topology/clusters")
+	assertTopologyItems(t, clusters, 4)
+}
+
+func performTopologyRequest(t *testing.T, handler http.Handler, path string) map[string]any {
+	t.Helper()
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("GET %s status=%d body=%s", path, response.Code, response.Body.String())
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("GET %s decode: %v", path, err)
+	}
+	return payload
+}
+
+func assertTopologyItems(t *testing.T, payload map[string]any, expected int) {
+	t.Helper()
+	items, ok := payload["items"].([]any)
+	if !ok || len(items) != expected {
+		t.Fatalf("items=%+v expected=%d", payload["items"], expected)
 	}
 }
 

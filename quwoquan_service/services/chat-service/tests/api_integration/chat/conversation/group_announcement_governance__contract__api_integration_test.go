@@ -1,3 +1,10 @@
+// spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+// readiness_case: list-conversation-timestamps-api
+// readiness_case: batch-get-conversations-api
+// readiness_case: update-conversation-title-api
+// readiness_case: update-announcement-api
+// readiness_case: update-group-governance-settings-api
+// readiness_case: get-group-home-api
 package api_integration
 
 import (

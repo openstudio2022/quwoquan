@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-suspension-and-appeal-lifecycle/spec.md#gwt-003
+// readiness_case: apply-notification-account-restriction-api
 package api_integration
 
 import (
@@ -14,7 +15,7 @@ func TestSuspendedRecipientSuppressesNewDeliveryWithoutBackfillAfterRestore(
 ) {
 	resetNotificationCollections(t)
 	ctx := t.Context()
-	projection := notificationRestriction
+	projection := notificationRestrictionFacet
 	now := time.Date(2026, time.July, 28, 10, 0, 0, 0, time.UTC)
 	suspended := accountrestriction.Event{
 		EventID:        "notification-suspend-11",

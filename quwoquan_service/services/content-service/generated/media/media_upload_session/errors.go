@@ -19,17 +19,17 @@ var (
 // AppErrorFromMediaFileTooLarge returns *AppError for CONTENT.USER.media_file_too_large (user_message from errors.yaml).
 func AppErrorFromMediaFileTooLarge(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.USER.media_file_too_large")
-	return rterr.NewAppError(code, "文件超过 50 MB，请选择更短或更小的媒体", debugMessage).WithMetadata("media_file_too_large", 413).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "文件超过 50 MB，请选择更短或更小的媒体", debugMessage).WithMetadata("media_file_too_large", 413).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromMediaTypeUnsupported returns *AppError for CONTENT.USER.media_type_unsupported (user_message from errors.yaml).
 func AppErrorFromMediaTypeUnsupported(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.USER.media_type_unsupported")
-	return rterr.NewAppError(code, "暂不支持这种媒体格式", debugMessage).WithMetadata("media_type_unsupported", 415).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "暂不支持这种媒体格式", debugMessage).WithMetadata("media_type_unsupported", 415).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromMediaUploadSessionExpired returns *AppError for CONTENT.USER.media_upload_session_expired (user_message from errors.yaml).
 func AppErrorFromMediaUploadSessionExpired(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.USER.media_upload_session_expired")
-	return rterr.NewAppError(code, "上传凭证已过期，正在重新准备", debugMessage).WithMetadata("media_upload_session_expired", 409).WithRecovery("retry", 0)
+	return rterr.NewAppError(code, "上传凭证已过期，正在重新准备", debugMessage).WithMetadata("media_upload_session_expired", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }

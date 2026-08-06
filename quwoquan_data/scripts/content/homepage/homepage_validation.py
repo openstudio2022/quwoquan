@@ -24,10 +24,11 @@ def _page_asset_refs(page: Path) -> set[str]:
 
 
 def _asset_closure_issues(entity_dir: Path, manifest_payload: dict[str, Any], label: str) -> list[str]:
-    """Check manifest.assets closure; page.md MAY inline asset:// figures (must close to manifest).
+    """Check manifest.assets closure; accepted homepages always carry real media.
 
     图文混排策略：正文可按章节/段落内联 `:::figure` 块引用 asset://（与文章一致），
-    但每个引用都必须闭环到 manifest.assets；纯文字 page.md（无 asset://）同样合法。
+    但每个引用都必须闭环到 manifest.assets。封面可只在 frontmatter，
+    但 accepted homepage 不再允许空 assets/imageSourceRefs。
     """
     page_path = entity_dir / "page.md"
     refs = _page_asset_refs(page_path)
@@ -40,6 +41,8 @@ def _asset_closure_issues(entity_dir: Path, manifest_payload: dict[str, Any], la
     vertical = str(manifest_payload.get("vertical") or "").strip()
     if not vertical:
         return [f"{label}: manifest missing vertical policy owner"]
+    if not assets:
+        issues.append(f"{label}: accepted homepage manifest.assets must not be empty")
     require_rights_proof = rights_proof_required(vertical)
     for raw in assets:
         if not isinstance(raw, dict):
@@ -84,7 +87,7 @@ def _asset_closure_issues(entity_dir: Path, manifest_payload: dict[str, Any], la
         if len({str(r) for r in image_refs if str(r).strip()}) > 1:
             issues.append(f"{label}: imageSourceRefs must contain exactly one source unit")
         image_set = {str(r) for r in image_refs if str(r).strip()}
-        if assets and not image_set:
+        if not image_set:
             issues.append(f"{label}: imageSourceRefs must declare the asset source unit")
         for raw in assets:
             if not isinstance(raw, dict):

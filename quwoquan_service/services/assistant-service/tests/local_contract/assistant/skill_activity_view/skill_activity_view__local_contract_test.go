@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/skill-user-lifecycle/spec.md#gwt-003
+// readiness_case: list-skill-activities-local
 package local_contract
 
 import (

@@ -12,8 +12,8 @@ import (
 	preferencehttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_preference/adapters/inbound/http"
 	preferenceapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_preference/application"
 	preferencemodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_preference/domain/model"
-	assistanthttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/adapters/inbound/http"
 	assistant "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/model"
+	"quwoquan_service/services/assistant-service/tests/support/assistantingress"
 )
 
 func newPreferenceIntegrationHandler() http.Handler {
@@ -24,10 +24,10 @@ func newPreferenceIntegrationHandler() http.Handler {
 	)
 	mux := http.NewServeMux()
 	preferencehttp.NewHandler(commands, queries).RegisterRoutes(mux)
-	mux.Handle("/", assistanthttp.NewHandler(
+	mux.Handle("/", assistantingress.Routes(
 		newIntegrationAssistantService(),
-		assistanthttp.WithRunPreferenceSnapshots(queries),
-	).Routes())
+		assistantingress.WithRunPreferenceSnapshots(queries),
+	))
 	return mux
 }
 

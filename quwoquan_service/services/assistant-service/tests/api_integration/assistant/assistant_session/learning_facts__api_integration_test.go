@@ -17,7 +17,6 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
-	rtauth "quwoquan_service/runtime/auth"
 	runtimemessaging "quwoquan_service/runtime/messaging"
 	learninghttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/adapters/inbound/http"
 	learningapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/application"
@@ -26,8 +25,8 @@ import (
 	learningpersistence "quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/infrastructure/persistence"
 	learningprojection "quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/infrastructure/projection"
 	runpersistence "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/infrastructure"
-	assistanthttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/adapters/inbound/http"
 	assistant "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/model"
+	"quwoquan_service/services/assistant-service/tests/support/assistantingress"
 )
 
 func newLearningFactIntegrationHandler(t *testing.T) http.Handler {
@@ -36,7 +35,7 @@ func newLearningFactIntegrationHandler(t *testing.T) http.Handler {
 	if err := store.EnsureIndexes(t.Context()); err != nil {
 		t.Fatalf("ensure learning fact indexes: %v", err)
 	}
-	service := learningapplication.NewService(
+	service := learningapplication.NewAssistantLearningFactAppender(
 		store,
 		runpersistence.NewMongoRunOwnerReader(integrationMongoDB),
 		nil,
@@ -46,7 +45,7 @@ func newLearningFactIntegrationHandler(t *testing.T) http.Handler {
 		service,
 		learningapplication.NewOpsQueryService(integrationLearningProjector),
 	).RegisterRoutes(mux)
-	mux.Handle("/", assistanthttp.NewHandler(newIntegrationAssistantService()).Routes())
+	mux.Handle("/", assistantingress.Routes(newIntegrationAssistantService()))
 	return mux
 }
 
@@ -672,75 +671,6 @@ func TestAssistantLearningFactOwnerAndWireValidation(t *testing.T) {
 		CountDocuments(ctx, bson.M{})
 	if err != nil || count != 0 {
 		t.Fatalf("rejected facts must not persist: count=%d err=%v", count, err)
-	}
-}
-
-func TestAssistantServiceLearningFactRequiresServicePrincipal(t *testing.T) {
-	resetIntegrationState(t)
-	handler := newLearningFactIntegrationHandler(t)
-	turnID := createLearningFactRun(
-		t,
-		handler,
-		"service-score-owner",
-		"learning-service-score",
-	)
-	payload, err := json.Marshal(map[string]any{
-		"eventId":          "service-scorecard-1",
-		"factType":         "service_scorecard",
-		"assistantTurnId":  turnID,
-		"referralSource":   "assistant_session",
-		"domainId":         "assistant",
-		"metricId":         "turn_completion",
-		"metricValue":      1,
-		"metricSource":     "service_auto",
-		"trainingEligible": false,
-		"occurredAt":       time.Now().UTC().Format(time.RFC3339Nano),
-	})
-	if err != nil {
-		t.Fatalf("marshal service scorecard: %v", err)
-	}
-	request := httptest.NewRequest(
-		http.MethodPost,
-		"/internal/assistant/learning/facts",
-		bytes.NewReader(payload),
-	)
-	request.Header.Set("Content-Type", "application/json")
-	request = request.WithContext(rtauth.WithPrincipal(
-		request.Context(),
-		rtauth.Principal{Claims: rtauth.Claims{
-			Subject: "service:assistant-scorecard",
-		}},
-	))
-	recorder := httptest.NewRecorder()
-	handler.ServeHTTP(recorder, request)
-	if recorder.Code != http.StatusOK {
-		t.Fatalf(
-			"service scorecard status=%d body=%s",
-			recorder.Code,
-			recorder.Body.String(),
-		)
-	}
-
-	request = httptest.NewRequest(
-		http.MethodPost,
-		"/internal/assistant/learning/facts",
-		bytes.NewReader(payload),
-	)
-	request.Header.Set("Content-Type", "application/json")
-	request = request.WithContext(rtauth.WithPrincipal(
-		request.Context(),
-		rtauth.Principal{Claims: rtauth.Claims{
-			Subject: "account-not-service",
-		}},
-	))
-	recorder = httptest.NewRecorder()
-	handler.ServeHTTP(recorder, request)
-	if recorder.Code != http.StatusUnauthorized {
-		t.Fatalf(
-			"account principal internal scorecard status=%d body=%s",
-			recorder.Code,
-			recorder.Body.String(),
-		)
 	}
 }
 

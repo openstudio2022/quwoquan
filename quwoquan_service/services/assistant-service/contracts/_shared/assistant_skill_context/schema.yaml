@@ -1,8 +1,10 @@
 dart_class: AssistantContextProfileWire
-library_path: assistant/generated/contracts/assistant_skill_context.g.dart
-output_path: assistant/generated/contracts/assistant_skill_context.g.dart
+library_path: package:quwoquan_cloud_contracts/src/generated/assistant/assistant_skill_context.g.dart
+output_path: packages/quwoquan_cloud_contracts/lib/src/generated/assistant/assistant_skill_context.g.dart
 contract: assistant_skill_context
 kind: shared_wire_contract
+imports:
+  - assistant_runtime_enums.g.dart
 fields:
   - { name: profileId, type: string, required: true }
   - { name: requirements, type: list<object>, ref: context_requirement, default: [] }

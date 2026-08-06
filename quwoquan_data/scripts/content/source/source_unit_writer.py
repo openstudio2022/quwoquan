@@ -19,106 +19,34 @@ post assets/{assetId} -> manifest.sourceAssetRef（相对 batch 根）。
 from __future__ import annotations
 
 import hashlib
-import json
-import os
 import re
 import shutil
+from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any
 
-from core.io import read_json, write_json
-from content.execution.runtime_contract import stage_execution_context
 from core import ops_governance as og
 from core.image_decode import probe_image_bytes
-from core.image_variants import build_local_variants, image_dimensions
+from core.image_variants import build_local_variants
+from core.io import write_json
 from core.paths import (
     STAGE_DOWNLOAD,
-    execution_entity_object_dir,
-    execution_root,
     execution_source_unit_dir,
-    executions_root,
-    relative_execution_ref,
     object_source_unit_dir,
+    relative_execution_ref,
 )
-from governance.coverage.entity_extract import require_domain_etype, resolve_domain_etype
+
+from content.execution.runtime_contract import stage_execution_context
+from content.source.source_snapshot_redaction import redact_raw_source_snapshot
 
 SOURCE_UNIT_MANIFEST = "meta.json"
 SOURCE_UNIT_ASSET_INDEX = "assets/index.json"
 _IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 _UNIT_RE = re.compile(r"^(\d{2})\.(.+)$")
 OBJECT_SOURCE_REFS = "1.download/source_refs.json"
-_RAW_SNAPSHOT_BEARER = re.compile(
-    r"\bBearer\s+[A-Za-z0-9._~+/=-]+",
-    flags=re.IGNORECASE,
-)
-_RAW_SNAPSHOT_SECRET_ASSIGNMENT = re.compile(
-    r"(?i)(\b(?:access[_-]?token|api[_-]?key|authcode|authorization|credential|"
-    r"password|private[_-]?key|secret|signature|token|x-amz-credential|"
-    r"x-amz-signature)s?\b\s*=\s*)([^&#\s\"'<>\\]+)"
-)
-_RAW_SNAPSHOT_EMPTY_SECRET_ASSIGNMENT = re.compile(
-    r"(?i)(\b(?:access[_-]?token|api[_-]?key|authcode|authorization|credential|"
-    r"password|private[_-]?key|secret|signature|token|x-amz-credential|"
-    r"x-amz-signature)s?\b\s*=\s*)(?=[&#\s\"'<>\\]|$)"
-)
-_RAW_SNAPSHOT_SECRET_KEY_SUFFIXES = (
-    "apikey",
-    "credential",
-    "password",
-    "privatekey",
-    "secret",
-    "signature",
-    "token",
-)
-def _redact_embedded_snapshot_secrets(value: str) -> str:
-    redacted = _RAW_SNAPSHOT_BEARER.sub("Bearer <redacted>", value)
-    redacted = _RAW_SNAPSHOT_SECRET_ASSIGNMENT.sub(
-        r"\1<redacted>",
-        redacted,
-    )
-    return _RAW_SNAPSHOT_EMPTY_SECRET_ASSIGNMENT.sub(
-        r"\1<redacted>",
-        redacted,
-    )
 
 
-def _snapshot_key_is_secret(value: object) -> bool:
-    normalized = re.sub(r"[^a-z0-9]", "", str(value or "").lower())
-    return normalized.endswith(_RAW_SNAPSHOT_SECRET_KEY_SUFFIXES)
-
-
-def _redact_snapshot_json(value: object) -> object:
-    if isinstance(value, dict):
-        return {
-            key: (
-                "<redacted>"
-                if _snapshot_key_is_secret(key)
-                else _redact_snapshot_json(item)
-            )
-            for key, item in value.items()
-        }
-    if isinstance(value, list):
-        return [_redact_snapshot_json(item) for item in value]
-    if isinstance(value, str):
-        return _redact_embedded_snapshot_secrets(value)
-    return value
-def redact_raw_source_snapshot(raw: bytes, *, raw_format: str = "") -> bytes:
-    """Remove credential-like values before an untrusted source snapshot persists."""
-    text = raw.decode("utf-8", errors="replace")
-    if str(raw_format or "").strip() == "mediawiki_api_json":
-        try:
-            payload = json.loads(text)
-        except json.JSONDecodeError:
-            pass
-        else:
-            return json.dumps(
-                _redact_snapshot_json(payload),
-                ensure_ascii=False,
-                separators=(",", ":"),
-                sort_keys=True,
-            ).encode("utf-8")
-    return _redact_embedded_snapshot_secrets(text).encode("utf-8")
 def _is_representative_visual(
     execution_id: str,
     image: Mapping[str, Any],
@@ -127,8 +55,9 @@ def _is_representative_visual(
         return False
     if str(image.get("placementType") or "") == "locatorMap":
         return False
-    from content.execution.identity import parse_execution_id
     from governance.content_supply_policy import load_content_supply_policy
+
+    from content.execution.identity import parse_execution_id
 
     vertical = parse_execution_id(execution_id).vertical
     indicator = load_content_supply_policy(vertical).media_subject.prohibited_indicator(
@@ -141,10 +70,15 @@ def _is_representative_visual(
 
 
 from content.source.source_unit import (
-    _execution_root_for_object_dir, _ext_from_name, _record_object_source_ref,
-    _relative_ref_for_execution_root, bind_inline_source_placeholders,
-    slugify, source_unit_raw_snapshot_name,
+    _execution_root_for_object_dir,
+    _ext_from_name,
+    _record_object_source_ref,
+    _relative_ref_for_execution_root,
+    bind_inline_source_placeholders,
+    slugify,
+    source_unit_raw_snapshot_name,
 )
+
 
 def write_source_unit(
     object_dir: Path,
@@ -187,13 +121,12 @@ def write_source_unit(
     生产 download 主链路可传 build_variants=False，把 WebP 物理变体延后到
     media/release 阶段；原图、尺寸、hash、授权链仍在本阶段闭合。
     """
-    from core.paths import STAGE_DOWNLOAD, ensure_object_stages
-
     from core.baike_source_contract import (
         HOMEPAGE_SOURCE_POLICY_REVISION,
         SOURCE_USE_MODES,
         source_identity_matches_contract,
     )
+    from core.paths import ensure_object_stages
 
     snapshot_hash = "sha256:" + hashlib.sha256(source_md.encode("utf-8")).hexdigest()
     source_payload = source or {}
@@ -321,6 +254,17 @@ def write_source_unit(
                 var_path.parent.mkdir(parents=True, exist_ok=True)
                 var_path.write_bytes(var_bytes)
                 variants_meta.append(var)
+        professional_identity = (
+            str(img.get("acquisitionReceiptRef") or "").strip(),
+            str(img.get("professionalAssetId") or "").strip(),
+            str(img.get("professionalContentSha256") or "").strip(),
+        )
+        if any(professional_identity) and not all(professional_identity):
+            raise ValueError(
+                "professional source image requires receipt, assetId, and contentSha256"
+            )
+        if professional_identity[0] and professional_identity[2] != sha:
+            raise ValueError("professional source image contentSha256 drift")
         entry = {
             "sourceAssetId": f"{ordinal:03d}_{k:03d}",
             "fileName": file_name,
@@ -346,6 +290,23 @@ def write_source_unit(
             "creator": str(img.get("creator") or img.get("credit") or ""),
             "collectionPageUrl": str(img.get("collectionPageUrl") or img.get("sourceUrl") or ""),
             "authorizationProof": str(img.get("authorizationProof") or ""),
+            "acquisitionReceiptRef": str(img.get("acquisitionReceiptRef") or ""),
+            "professionalAssetId": str(img.get("professionalAssetId") or ""),
+            "professionalContentSha256": str(
+                img.get("professionalContentSha256") or ""
+            ),
+            "acquisitionStatus": str(img.get("acquisitionStatus") or ""),
+            "rightsStatus": str(
+                img.get("rightsStatus") or img.get("rightsAuditStatus") or ""
+            ),
+            "authorizationRequired": img.get("authorizationRequired"),
+            "distributionDecision": str(img.get("distributionDecision") or ""),
+            "platform": str(img.get("platform") or ""),
+            "capturedAt": str(img.get("capturedAt") or ""),
+            "contentSha256": sha,
+            "rightsIssues": list(
+                img.get("rightsIssues") or img.get("rightsAuditIssues") or []
+            ),
             **provenance.audit_fields(),
             "caption": str(img.get("caption") or ""),
             "relevance": str(img.get("relevance") or relevance or ""),

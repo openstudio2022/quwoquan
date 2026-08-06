@@ -30,7 +30,7 @@ func NewUserAccountOutboxStore(pool *pgxpool.Pool) (*UserAccountOutboxStore, err
 
 var _ accountports.UserAccountOutboxStore = (*UserAccountOutboxStore)(nil)
 
-func (store *UserAccountOutboxStore) ClaimReady(
+func (store *UserAccountOutboxStore) ClaimPendingOutbox(
 	ctx context.Context,
 	owner string,
 	now time.Time,

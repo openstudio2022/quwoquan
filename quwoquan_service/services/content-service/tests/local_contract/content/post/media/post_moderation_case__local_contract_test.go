@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-008
+// readiness_case: apply-post-lifecycle-events-local
 package media_test
 
 import (
@@ -11,9 +13,9 @@ import (
 	"testing"
 	"time"
 
+	"quwoquan_service/runtime/commandmeta"
 	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 	postapp "quwoquan_service/services/content-service/internal/content/post/application"
-	"quwoquan_service/runtime/commandmeta"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/testsupport"
 	mediacontract "quwoquan_service/services/content-service/internal/content/post/infrastructure/testsupport/media_contract"
@@ -243,7 +245,7 @@ func TestReportRevisionReadFailureKeepsOutboxCheckpointReplayable(t *testing.T) 
 		ReceiptExpiresAt: now.Add(time.Hour),
 		Events: []reportports.OutboxEvent{{
 			EventID:          "event-reader-failure",
-			EventType:        "content.report.created",
+			EventType:        "content.report.ReportCreated",
 			AggregateID:      report.ID(),
 			AggregateVersion: report.Version(),
 			Payload:          payload,
@@ -253,7 +255,7 @@ func TestReportRevisionReadFailureKeepsOutboxCheckpointReplayable(t *testing.T) 
 		t.Fatalf("persist report fact: %v", err)
 	}
 
-	opener := moderationapp.NewReportCaseOpener(
+	opener := moderationapp.NewReportModerationHandler(
 		moderationService,
 		failingPostRevisionReader{err: errors.New("malformed Mongo revision")},
 	)
@@ -300,7 +302,7 @@ func TestModerationDecisionConsumerAppliesExactPostRevisionAndVisibility(t *test
 		PublishedAt:      now.Add(-time.Hour),
 	}})
 	service := postapp.NewPostService(postapp.BindDataPorts(store))
-	consumer := postapp.NewPostModerationDecisionConsumer(service)
+	handler := postapp.NewPostModerationDecisionHandler(service)
 
 	rejected := moderationDecisionEvent(
 		t,
@@ -313,7 +315,7 @@ func TestModerationDecisionConsumerAppliesExactPostRevisionAndVisibility(t *test
 		"rejected",
 		now,
 	)
-	if err := consumer.Publish(context.Background(), rejected); err != nil {
+	if err := handler.ApplyPostModerationDecision(context.Background(), rejected); err != nil {
 		t.Fatalf("apply rejected decision: %v", err)
 	}
 	post, found, err := store.Load(context.Background(), "post-moderation-target")
@@ -327,7 +329,7 @@ func TestModerationDecisionConsumerAppliesExactPostRevisionAndVisibility(t *test
 		t.Fatalf("rejected Post leaked into published/search source: %+v", visible)
 	}
 
-	if err := consumer.Publish(context.Background(), rejected); err != nil {
+	if err := handler.ApplyPostModerationDecision(context.Background(), rejected); err != nil {
 		t.Fatalf("replay rejected decision: %v", err)
 	}
 	replayed, _, _ := store.Load(context.Background(), "post-moderation-target")
@@ -346,7 +348,7 @@ func TestModerationDecisionConsumerAppliesExactPostRevisionAndVisibility(t *test
 		"approved",
 		now.Add(time.Minute),
 	)
-	if err := consumer.Publish(context.Background(), staleApproval); err != nil {
+	if err := handler.ApplyPostModerationDecision(context.Background(), staleApproval); err != nil {
 		t.Fatalf("stale approval must be an acknowledged no-op: %v", err)
 	}
 	stale, _, _ := store.Load(context.Background(), "post-moderation-target")
@@ -365,7 +367,7 @@ func TestModerationDecisionConsumerAppliesExactPostRevisionAndVisibility(t *test
 		"approved",
 		now.Add(2*time.Minute),
 	)
-	if err := consumer.Publish(context.Background(), approved); err != nil {
+	if err := handler.ApplyPostModerationDecision(context.Background(), approved); err != nil {
 		t.Fatalf("apply exact-revision approval: %v", err)
 	}
 	restored, _, _ := store.Load(context.Background(), "post-moderation-target")
@@ -494,7 +496,7 @@ func moderationDecisionEvent(
 	}
 	return moderationports.OutboxEvent{
 		EventID:          eventID,
-		EventType:        "content.post_moderation_case.decided",
+		EventType:        "content.post_moderation_case.PostModerationCaseDecided",
 		AggregateID:      caseID,
 		AggregateVersion: caseVersion,
 		Payload:          payload,

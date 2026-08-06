@@ -13,6 +13,13 @@ from pathlib import Path
 from typing import Any, Callable, Iterator
 from uuid import uuid4
 
+from quwoquan_ops.cli.lib import (
+    external_provider_governance,
+    provider_conformance,
+)
+from quwoquan_ops.cli.lib.deployment_candidate_manifest import (
+    validate_packaged_provider_runtime,
+)
 from quwoquan_ops.cli.lib.local_env_gate_timing import (
     PhaseTimer,
     load_local_env_matrix_budgets,
@@ -26,9 +33,12 @@ from quwoquan_ops.cli.lib.local_postgres_migration_drift import (
 from quwoquan_ops.cli.lib.output_paths import output_root
 from quwoquan_ops.cli.lib.startup_attempt_receipt import load_startup_attempt
 
-
 ROOT = Path(__file__).resolve().parents[3]
 PROFILE_LOCAL_ENV_GATE = "local-env-gate"
+DEVICE_PROFILE_FULL = "full"
+DEVICE_PROFILE_EMULATOR_ONLY = "emulator_only"
+DEVICE_PROFILES = (DEVICE_PROFILE_FULL, DEVICE_PROFILE_EMULATOR_ONLY)
+EMULATOR_ONLY_CLAIM = "ALPHA_BETA_GAMMA_EMULATOR_ONLY_FUNCTIONAL_GREEN"
 CANONICAL_TARGETS = ("alpha-local", "beta-local", "gamma-local")
 TARGET_ENVIRONMENTS = {
     "alpha-local": "alpha",
@@ -51,6 +61,8 @@ EnvRunner = Callable[..., dict[str, Any]]
 DataRunner = Callable[..., dict[str, Any]]
 _SHA256 = re.compile(r"sha256:[0-9a-f]{64}")
 _ATTEMPT_ID = re.compile(r"(?!unknown\b)[A-Za-z0-9][A-Za-z0-9._:-]{5,}")
+_PROVIDER_CAPABILITY_ID = re.compile(r"[a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+")
+_PROVIDER_LAYERS = ("local_contract", "api_integration", "user_acceptance")
 
 
 def _new_matrix_run_id() -> str:
@@ -197,8 +209,31 @@ def _docker_daemon_ready() -> tuple[bool, str]:
     return False, detail[:300]
 
 
+def _device_uat_bindings(
+    *,
+    device_profile: str,
+    ios_simulator_device: str,
+    android_emulator_device: str,
+    android_physical_device: str,
+) -> tuple[tuple[str, str, str], ...]:
+    if device_profile not in DEVICE_PROFILES:
+        raise ValueError(
+            "device_profile must be one of " + ", ".join(DEVICE_PROFILES)
+        )
+    bindings = [
+        ("iosSimulatorUAT", "ios-simulator", ios_simulator_device),
+        ("androidEmulatorUAT", "android", android_emulator_device),
+    ]
+    if device_profile == DEVICE_PROFILE_FULL:
+        bindings.append(
+            ("androidPhysicalUAT", "android", android_physical_device)
+        )
+    return tuple(bindings)
+
+
 def _device_binding_errors(
     *,
+    device_profile: str = DEVICE_PROFILE_FULL,
     ios_simulator_device: str,
     android_emulator_device: str,
     android_physical_device: str,
@@ -206,21 +241,35 @@ def _device_binding_errors(
     """Reject absent or misclassified device bindings before mutating runtimes."""
 
     errors: list[str] = []
+    try:
+        uat_bindings = _device_uat_bindings(
+            device_profile=device_profile,
+            ios_simulator_device=ios_simulator_device,
+            android_emulator_device=android_emulator_device,
+            android_physical_device=android_physical_device,
+        )
+    except ValueError as exc:
+        return [str(exc)]
+    labels = {
+        "iosSimulatorUAT": "iOS Simulator",
+        "androidEmulatorUAT": "Android Emulator",
+        "androidPhysicalUAT": "Android physical device",
+    }
     bindings = {
-        "iOS Simulator": ios_simulator_device.strip(),
-        "Android Emulator": android_emulator_device.strip(),
-        "Android physical device": android_physical_device.strip(),
+        labels[key]: device_id.strip()
+        for key, _, device_id in uat_bindings
     }
     for label, device_id in bindings.items():
         if not device_id:
             errors.append(f"{label} device id is required")
-    android_ids = {
-        android_emulator_device.strip(),
-        android_physical_device.strip(),
-    }
-    android_ids.discard("")
-    if len(android_ids) != 2 and len(android_ids) > 0:
-        errors.append("Android Emulator and physical device must be distinct")
+    if device_profile == DEVICE_PROFILE_FULL:
+        android_ids = {
+            android_emulator_device.strip(),
+            android_physical_device.strip(),
+        }
+        android_ids.discard("")
+        if len(android_ids) != 2 and len(android_ids) > 0:
+            errors.append("Android Emulator and physical device must be distinct")
     if errors:
         return errors
 
@@ -248,10 +297,11 @@ def _device_binding_errors(
     if simulator.returncode != 0 or ios_simulator_device not in available_ids:
         errors.append("configured iOS Simulator is not available")
 
-    for label, device_id, expected_qemu in (
-        ("Android Emulator", android_emulator_device, "1"),
-        ("Android physical device", android_physical_device, "0"),
-    ):
+    for key, platform, device_id in uat_bindings:
+        if platform != "android":
+            continue
+        label = labels[key]
+        expected_qemu = "1" if key == "androidEmulatorUAT" else "0"
         try:
             state = subprocess.run(
                 ["adb", "-s", device_id, "get-state"],
@@ -518,6 +568,89 @@ def _invoke_env(fn: EnvRunner, args: Any, *, action: str) -> dict[str, Any]:
         }
 
 
+def _provider_local_functional_errors(
+    payload: dict[str, Any],
+    *,
+    environment: str,
+    target: str,
+    compiled_provider_governance: dict[str, Any],
+) -> list[str]:
+    """Reject an aggregate missing any compiled Provider capability/layer cell."""
+    errors: list[str] = []
+    capability_ids = provider_conformance.provider_conformance_capability_ids(
+        compiled_provider_governance
+    )
+    expected = {
+        (capability_id, layer)
+        for capability_id in capability_ids
+        for layer in _PROVIDER_LAYERS
+    }
+    expected_count = len(expected)
+    if not capability_ids:
+        errors.append(
+            "Provider local functional compiled governance has no required capabilities"
+        )
+    expected_scalars = {
+        "schema": "stackctl-provider-conformance-environment-matrix",
+        "readinessScope": "local_functional",
+        "releasePromotionClaimed": False,
+        "status": "passed",
+        "environment": environment,
+        "target": target,
+        "capabilityCount": len(capability_ids),
+        "expectedCells": expected_count,
+        "executed": expected_count,
+        "skipped": 0,
+        "attemptEvidenceCount": expected_count,
+        "exitCode": 0,
+    }
+    for field, expected_value in expected_scalars.items():
+        if payload.get(field) != expected_value:
+            errors.append(
+                f"Provider local functional {field} must be {expected_value!r}, "
+                f"got {payload.get(field)!r}"
+            )
+    issues = payload.get("issues")
+    if not isinstance(issues, list) or issues:
+        errors.append("Provider local functional issues must be an empty list")
+    cells = payload.get("cells")
+    observed: list[tuple[str, str]] = []
+    if not isinstance(cells, list) or len(cells) != expected_count:
+        errors.append(
+            "Provider local functional cells must contain exactly the compiled "
+            f"{expected_count} entries"
+        )
+        cells = []
+    for index, cell in enumerate(cells):
+        if not isinstance(cell, dict):
+            errors.append(f"Provider local functional cell[{index}] must be an object")
+            continue
+        capability_id = cell.get("capabilityId")
+        adapter_id = cell.get("adapterId")
+        layer = cell.get("layer")
+        if (
+            not isinstance(capability_id, str)
+            or _PROVIDER_CAPABILITY_ID.fullmatch(capability_id) is None
+            or capability_id not in capability_ids
+            or not isinstance(adapter_id, str)
+            or not adapter_id
+            or layer not in _PROVIDER_LAYERS
+            or cell.get("exitCode") != 0
+        ):
+            errors.append(f"Provider local functional cell[{index}] is malformed")
+            continue
+        observed.append((capability_id, str(layer)))
+    if (
+        len(observed) != len(set(observed))
+        or set(observed) != expected
+    ):
+        errors.append(
+            "Provider local functional cells must contain every compiled capability "
+            "exactly once across all three layers"
+        )
+    return errors
+
+
 def _down_target(target: str, *, down_fn: EnvRunner) -> dict[str, Any]:
     """Only use stackctl down; never kill listeners, clear locks, or wipe state."""
     return _invoke_env(
@@ -538,9 +671,10 @@ def _live_matrix_evidence_errors(
     environments: dict[str, Any],
     *,
     baseline_id: str,
+    device_profile: str = DEVICE_PROFILE_FULL,
 ) -> list[str]:
     errors: list[str] = []
-    required_steps = (
+    required_steps = [
         "package",
         "up",
         "health",
@@ -557,18 +691,25 @@ def _live_matrix_evidence_errors(
         "lifecycleExit",
         "iosSimulatorUAT",
         "androidEmulatorUAT",
-        "androidPhysicalUAT",
         "telemetryAfter",
         "acceptanceLeaseAcquire",
         "acceptanceLeaseRevoke",
         "down",
-    )
+    ]
+    if device_profile == DEVICE_PROFILE_FULL:
+        required_steps.insert(
+            required_steps.index("telemetryAfter"),
+            "androidPhysicalUAT",
+        )
     for target in CANONICAL_TARGETS:
         block = environments.get(target)
         if not isinstance(block, dict):
             errors.append(f"{target}: environment evidence block is missing")
             continue
-        if block.get("target") != target or block.get("environment") != TARGET_ENVIRONMENTS[target]:
+        if (
+            block.get("target") != target
+            or block.get("environment") != TARGET_ENVIRONMENTS[target]
+        ):
             errors.append(f"{target}: environment evidence identity drifted")
         package = block.get("package")
         if not isinstance(package, dict) or package.get("baselineId") != baseline_id:
@@ -583,6 +724,21 @@ def _live_matrix_evidence_errors(
             != "package-bound-local"
         ):
             errors.append(f"{target}: package/OCI/Elasticsearch identity is incomplete")
+        else:
+            try:
+                candidate_dir = Path(
+                    str(package.get("candidateDir") or "")
+                ).resolve()
+                validate_packaged_provider_runtime(
+                    package.get("providerRuntime"),
+                    expected_environment=TARGET_ENVIRONMENTS[target],
+                    expected_target=target,
+                    candidate_root=candidate_dir,
+                )
+            except (OSError, TypeError, ValueError) as exc:
+                errors.append(
+                    f"{target}: package-bound Provider runtime is incomplete: {exc}"
+                )
         if block.get("workload") != "full" or block.get("profile") != "integration":
             errors.append(f"{target}: Green closure did not use full/integration")
         for step in required_steps:
@@ -629,7 +785,12 @@ def _live_matrix_evidence_errors(
                 or int(telemetry.get("skipped") or 0) != 0
             ):
                 errors.append(f"{target}: {step} has no Elasticsearch execution evidence")
-        for step in ("iosSimulatorUAT", "androidEmulatorUAT", "androidPhysicalUAT"):
+        for step, _, _ in _device_uat_bindings(
+            device_profile=device_profile,
+            ios_simulator_device="ios-simulator",
+            android_emulator_device="android-emulator",
+            android_physical_device="android-physical",
+        ):
             uat = block.get(step)
             if (
                 not isinstance(uat, dict)
@@ -699,11 +860,16 @@ def _write_matrix_result(
     release: dict[str, str],
     matrix_run_id: str,
     execution_class: str,
+    device_profile: str,
 ) -> dict[str, Any]:
     passed = exit_code == 0 and tuple(environments) == CANONICAL_TARGETS
     live_evidence = execution_class == "live"
     claim = (
-        "ALPHA_BETA_GAMMA_LOCAL_GREEN"
+        EMULATOR_ONLY_CLAIM
+        if passed
+        and live_evidence
+        and device_profile == DEVICE_PROFILE_EMULATOR_ONLY
+        else "ALPHA_BETA_GAMMA_LOCAL_GREEN"
         if passed and live_evidence
         else "CONTRACT_SIMULATION_PASSED"
         if passed
@@ -726,6 +892,8 @@ def _write_matrix_result(
             "skipped": skipped,
             "matrixRunId": matrix_run_id,
             "executionClass": execution_class,
+            "deviceProfile": device_profile,
+            "nonPromotable": device_profile == DEVICE_PROFILE_EMULATOR_ONLY,
         },
     )
     payload = {
@@ -744,6 +912,7 @@ def _write_matrix_result(
         "failureCategory": failure_category,
         "matrixRunId": matrix_run_id,
         "executionClass": execution_class,
+        "deviceProfile": device_profile,
         "baselineId": baseline_id,
         "releaseId": release.get("releaseId", ""),
         "releaseDigest": release.get("releaseDigest", ""),
@@ -751,6 +920,19 @@ def _write_matrix_result(
         "phases": phases,
         "environments": environments,
     }
+    if device_profile == DEVICE_PROFILE_EMULATOR_ONLY:
+        payload["nonPromotable"] = True
+        payload["deviceCoverage"] = [
+            "ios-simulator",
+            "android-emulator",
+        ]
+        payload["waivers"] = [
+            {
+                "scope": "android-physical-device",
+                "effect": "release-promotion-blocked",
+                "reason": "emulator_only execution profile",
+            }
+        ]
     (matrix_dir / "matrix.json").write_text(
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
@@ -779,6 +961,7 @@ def _write_matrix_result(
             f"skipped={skipped}",
             f"timing={_evidence_path(timing_path)}",
             f"failureCategory={failure_category or 'none'}",
+            f"deviceProfile={device_profile}",
         ],
         "reportDir": _evidence_path(matrix_dir),
         "claim": claim,
@@ -808,6 +991,7 @@ def _run_local_env_gate_matrix(
     ios_simulator_device: str = "",
     android_emulator_device: str = "",
     android_physical_device: str = "",
+    device_profile: str = DEVICE_PROFILE_FULL,
     data_fn: DataRunner = _data_cli_runner,
     execution_class: str = "live",
     matrix_run_id: str,
@@ -815,6 +999,10 @@ def _run_local_env_gate_matrix(
     """Run one package-bound full integration state machine per local environment."""
     if execution_class not in {"live", "contract-simulation"}:
         raise ValueError("execution_class must be live or contract-simulation")
+    if device_profile not in DEVICE_PROFILES:
+        raise ValueError(
+            "device_profile must be one of " + ", ".join(DEVICE_PROFILES)
+        )
     if tuple(targets) != CANONICAL_TARGETS:
         return {
             "exitCode": 2,
@@ -827,6 +1015,7 @@ def _run_local_env_gate_matrix(
             "executed": 0,
             "skipped": 0,
         }
+    compiled_provider_governance: dict[str, Any] = {}
     try:
         candidate_release = _release_binding(release_attestation, label="candidate")
         rollback_release = _release_binding(
@@ -837,6 +1026,20 @@ def _run_local_env_gate_matrix(
             raise ValueError("candidate and rollback release must be different")
         evidence_by_target = dict(nonprod_data_evidence or {})
         if execution_class == "live":
+            compiled_provider_governance, provider_governance_issues = (
+                external_provider_governance.load_and_compile()
+            )
+            if provider_governance_issues:
+                raise ValueError(
+                    "canonical Provider governance is invalid: "
+                    + "; ".join(issue.render() for issue in provider_governance_issues)
+                )
+            if not provider_conformance.provider_conformance_capability_ids(
+                compiled_provider_governance
+            ):
+                raise ValueError(
+                    "canonical Provider governance defines no required capabilities"
+                )
             if set(evidence_by_target) != set(CANONICAL_TARGETS):
                 raise ValueError(
                     "live matrix requires one --nonprod-data-evidence for every target"
@@ -852,6 +1055,7 @@ def _run_local_env_gate_matrix(
                     "live matrix requires telemetry, Provider, and App UAT runners"
                 )
             device_errors = _device_binding_errors(
+                device_profile=device_profile,
                 ios_simulator_device=ios_simulator_device,
                 android_emulator_device=android_emulator_device,
                 android_physical_device=android_physical_device,
@@ -1177,6 +1381,27 @@ def _run_local_env_gate_matrix(
                 ),
                 action=f"{target} Provider environment matrix",
             )
+            provider_contract_errors = _provider_local_functional_errors(
+                provider_payload,
+                environment=env_name,
+                target=target,
+                compiled_provider_governance=compiled_provider_governance,
+            )
+            if provider_contract_errors:
+                provider_payload = {
+                    **provider_payload,
+                    "exitCode": 2,
+                    "status": "gate_block",
+                    "summary": "Provider local functional evidence is GATE_BLOCK",
+                    "details": [
+                        *list(provider_payload.get("details") or []),
+                        *provider_contract_errors,
+                    ],
+                    "issues": [
+                        *list(provider_payload.get("issues") or []),
+                        *provider_contract_errors,
+                    ],
+                }
             block["providerMatrix"] = provider_payload
             provider_exit = _record_phase(
                 phases,
@@ -1523,10 +1748,11 @@ def _run_local_env_gate_matrix(
                     )
 
         if lease_acquire_event is not None and execution_class == "live":
-            for key, platform, device_id in (
-                ("iosSimulatorUAT", "ios-simulator", ios_simulator_device),
-                ("androidEmulatorUAT", "android", android_emulator_device),
-                ("androidPhysicalUAT", "android", android_physical_device),
+            for key, platform, device_id in _device_uat_bindings(
+                device_profile=device_profile,
+                ios_simulator_device=ios_simulator_device,
+                android_emulator_device=android_emulator_device,
+                android_physical_device=android_physical_device,
             ):
                 uat_payload = _invoke_env(
                     app_uat_fn,
@@ -1641,6 +1867,7 @@ def _run_local_env_gate_matrix(
         evidence_errors = _live_matrix_evidence_errors(
             environments,
             baseline_id=matrix_baseline_id,
+            device_profile=device_profile,
         )
         phases.append(
             PhaseTimer("live_matrix_evidence_identity").finish(
@@ -1668,6 +1895,7 @@ def _run_local_env_gate_matrix(
         release=candidate_release,
         matrix_run_id=matrix_run_id,
         execution_class=execution_class,
+        device_profile=device_profile,
     )
 
 
@@ -1690,6 +1918,7 @@ def run_local_env_gate_matrix(
     ios_simulator_device: str = "",
     android_emulator_device: str = "",
     android_physical_device: str = "",
+    device_profile: str = DEVICE_PROFILE_FULL,
     data_fn: DataRunner = _data_cli_runner,
     execution_class: str = "live",
 ) -> dict[str, Any]:
@@ -1715,6 +1944,7 @@ def run_local_env_gate_matrix(
         "ios_simulator_device": ios_simulator_device,
         "android_emulator_device": android_emulator_device,
         "android_physical_device": android_physical_device,
+        "device_profile": device_profile,
         "data_fn": data_fn,
         "execution_class": execution_class,
         "matrix_run_id": matrix_run_id,

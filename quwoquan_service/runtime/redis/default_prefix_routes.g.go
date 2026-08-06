@@ -5,6 +5,7 @@ package redis
 // GeneratedPrefixRoutes returns prefix routes derived from redis_keyspace.yaml.
 func GeneratedPrefixRoutes() []PrefixRoute {
 	return []PrefixRoute{
+		{Prefix: "assistant:", Scene: "general"},
 		{Prefix: "blocked_set:", Scene: "general"},
 		{Prefix: "cache:", Scene: "general"},
 		{Prefix: "comment_summary:", Scene: "general"},
@@ -16,7 +17,9 @@ func GeneratedPrefixRoutes() []PrefixRoute {
 		{Prefix: "events.chat.", Scene: "general"},
 		{Prefix: "events.circle.", Scene: "general"},
 		{Prefix: "events.content.", Scene: "general"},
+		{Prefix: "events.integration.", Scene: "general"},
 		{Prefix: "events.search.", Scene: "general"},
+		{Prefix: "events.user.", Scene: "general"},
 		{Prefix: "ix:", Scene: "general"},
 		{Prefix: "login_fail:", Scene: "general"},
 		{Prefix: "page_ctx:", Scene: "general"},

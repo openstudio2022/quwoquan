@@ -1,16 +1,16 @@
 """真实源视频的媒体、水印、权利、规划与交付包闭环。"""
 from __future__ import annotations
 
+import hashlib
 import json
-from pathlib import Path
 import sys
 import tempfile
 from email.message import Message
+from pathlib import Path
 
 import cv2
 import numpy as np
 import pytest
-
 
 DATA_ROOT = next(
     parent
@@ -32,8 +32,14 @@ from content.post.video.sourced_package import (  # noqa: E402
     SourcedVideoPackageRequest,
     render_sourced_video_package,
 )
-from content.source import sourced_video_admission  # noqa: E402
-from content.source import handler_fetch_video  # noqa: E402
+from content.source import (
+    handler_fetch_video,  # noqa: E402
+    sourced_video_admission,  # noqa: E402
+    sourced_video_unit,  # noqa: E402
+)
+from content.source.professional_video_probe import (  # noqa: E402
+    probe_professional_video,
+)
 from content.source.sourced_video_admission import (  # noqa: E402
     probe_sourced_video,
     scan_sourced_video_watermark,
@@ -42,25 +48,26 @@ from content.source.sourced_video_unit import (  # noqa: E402
     _commercial_source_use_mode,
     write_admitted_sourced_video_unit,
 )
-from core.image_safety import ImageVerdict  # noqa: E402
 from core.content_source_registry import (  # noqa: E402
     load_content_source_registry,
     verify_content_source_registry,
 )
+from core.image_safety import ImageVerdict  # noqa: E402
 from core.paths import execution_root  # noqa: E402
+from core.schema import assert_valid  # noqa: E402
 from core.video_source_admission import (  # noqa: E402
     assert_video_source_admitted,
 )
 from governance.content_supply_policy import (  # noqa: E402
     load_content_supply_policy,
 )
+from governance.coverage.distribution import ProductLifecycleState  # noqa: E402
 from support.execution_manifest_fixture import build_execution_fixture  # noqa: E402
-
 
 EXECUTION_ID = "20260720--travel-video-supply--test-region-a--pilot-001"
 
 
-def _video(path: Path, *, seconds: int = 7) -> Path:
+def _video(path: Path, *, seconds: int = 7, motion_step: int = 3) -> Path:
     writer = cv2.VideoWriter(
         str(path),
         cv2.VideoWriter_fourcc(*"mp4v"),
@@ -76,7 +83,7 @@ def _video(path: Path, *, seconds: int = 7) -> Path:
         frame[:, :, 2] = 35
         cv2.circle(
             frame,
-            (40 + index * 3 % 240, 120),
+            (40 + index * motion_step % 240, 120),
             24,
             (210, 190, 80),
             -1,
@@ -278,7 +285,7 @@ def test_sourced_video_runs_from_source_unit_to_delivery_package(
         attribution_text="山海旅行者 · Wikimedia Commons · CC BY-SA 4.0",
         rights_basis="CC BY-SA 4.0",
         commercial_authorization_status="verified",
-        publication_admission="research_release",
+        publication_admission="commercial_release",
         authorization_proof_url="https://commons.wikimedia.org/wiki/File:West_Lake.webm",
         terms_url="https://creativecommons.org/licenses/by-sa/4.0/",
         risk_acceptance_id=None,
@@ -289,13 +296,40 @@ def test_sourced_video_runs_from_source_unit_to_delivery_package(
         takedown_policy="notice_and_takedown",
     )
     payload = json.loads(evidence_path.read_text(encoding="utf-8"))
+    assert_valid(
+        payload,
+        "content",
+        "sourced_video_evidence",
+        label="commercial sourced-video evidence",
+    )
+    for field, invalid in (
+        ("commercialAuthorizationStatus", "unverified"),
+        ("authorizationProofUrl", None),
+        ("termsUrl", "http://insecure.example/terms"),
+    ):
+        forged = {**payload, field: invalid}
+        with pytest.raises(ValueError):
+            assert_valid(
+                forged,
+                "content",
+                "sourced_video_evidence",
+                label=f"forged commercial sourced-video evidence:{field}",
+            )
     evidence, admission_issues = SourcedVideoEvidence.from_mapping(payload)
     assert admission_issues == ()
+    _, forged_issues = SourcedVideoEvidence.from_mapping(
+        {**payload, "commercialAuthorizationStatus": "unverified"}
+    )
+    assert "sourceVideo unverified authorization requires research or risk acceptance" in forged_issues
+    assert (
+        "sourceVideo commercial release requires verified HTTPS authorization and terms proof"
+        in forged_issues
+    )
     source_meta = json.loads(
         (evidence_path.parent / "meta.json").read_text(encoding="utf-8")
     )
-    assert source_meta["sourceUseMode"] == "rights_audit_only"
-    assert source_meta["rightsMode"] == "rights_audit_only"
+    assert source_meta["sourceUseMode"] == "licensed_adaptation"
+    assert source_meta["rightsMode"] == "attribution_no_watermark"
     asset_index = json.loads(
         (evidence_path.parent / "assets/index.json").read_text(encoding="utf-8")
     )
@@ -368,11 +402,93 @@ def test_sourced_video_runs_from_source_unit_to_delivery_package(
     assert provenance["outputAudioStatus"] == "none"
 
 
+def test_professional_video_source_unit_preserves_receipt_and_popularity(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(
+        sourced_video_unit,
+        "load_content_distribution_policy",
+        lambda: type(
+            "ResearchPolicy",
+            (),
+            {"product_lifecycle_state": ProductLifecycleState.RESEARCH},
+        )(),
+    )
+    execution_id = "20260805--travel-video-m100--china--scale-912"
+    _patch_output_root(monkeypatch, tmp_path)
+    build_execution_fixture(execution_id)
+    source = _video(tmp_path / "professional.mp4", motion_step=12)
+    content_sha256 = "sha256:" + hashlib.sha256(source.read_bytes()).hexdigest()
+    professional_probe = probe_professional_video(source)
+    popularity = {
+        "playCount": 10000,
+        "likeCount": 1200,
+        "commentCount": 80,
+        "shareCount": 45,
+        "favoriteCount": 300,
+        "observedAt": "2026-08-05T00:00:00Z",
+        "provider": "pexels_videos",
+        "topic": "九寨沟",
+        "timeBucket": "2026-W32",
+        "popularityScore": 9.2,
+        "popularityPercentile": 1.0,
+        "rankingEligible": True,
+        "rankingIneligibleReason": "",
+        "comparisonCandidateCount": 2,
+    }
+    evidence_path = write_admitted_sourced_video_unit(
+        execution_id=execution_id,
+        object_ref="/entity/地点/景区/九寨沟",
+        source_unit={
+            "ordinal": 1,
+            "sourceId": "pexels_videos",
+            "sourceKind": "tourism_video_site",
+            "title": "九寨沟实拍",
+            "relevance": "展示九寨沟湖泊与森林的真实运动画面",
+            "rightsStatus": "unverified",
+            "rightsIssues": ["commercial authorization is unverified"],
+            "professionalAcquisitionReceiptRef": f"receipts/{'b' * 64}.json",
+            "professionalAssetId": "pexels-jiuzhaigou-1",
+            "professionalContentSha256": content_sha256,
+            "premiumPlayableEligible": True,
+            "mediaProbe": professional_probe,
+            "popularitySignals": popularity,
+        },
+        source_video_path=source,
+        original_creator_name="摄影师乙",
+        platform="Pexels Videos",
+        source_post_url="https://www.pexels.com/video/jiuzhaigou-1/",
+        original_asset_url="https://videos.pexels.com/video-files/example.mp4",
+        attribution_text="九寨沟实拍 — 摄影师乙 — Pexels Videos",
+        rights_basis="platform rights pending verification",
+        commercial_authorization_status="unverified",
+        publication_admission="research_release",
+        authorization_proof_url=None,
+        terms_url="https://www.pexels.com/terms-of-service/",
+        risk_acceptance_id=None,
+        audio_rights_status="no_audio",
+        audio_authorization_proof_url=None,
+        model_release_status="unverified",
+        property_release_status="not_required",
+        takedown_policy="notice_and_takedown",
+    )
+    asset = json.loads(
+        (evidence_path.parent / "assets/index.json").read_text(encoding="utf-8")
+    )["assets"][0]
+    assert asset["professionalAcquisitionReceiptRef"] == f"receipts/{'b' * 64}.json"
+    assert asset["professionalAssetId"] == "pexels-jiuzhaigou-1"
+    assert asset["professionalContentSha256"] == content_sha256
+    assert asset["professionalMediaProbe"] == professional_probe
+    assert asset["popularitySignals"] == popularity
+    assert asset["premiumPlayableEligible"] is True
+
+
 def test_risk_only_sourced_video_cannot_claim_licensed_adaptation() -> None:
     with pytest.raises(ValueError, match="risk-only sourced video"):
         _commercial_source_use_mode(
             publication_admission="risk_accepted_attribution_only",
-            commercial_authorization_status="not_verified",
+            commercial_authorization_status="unverified",
             rights_basis="risk_accepted_attribution_only",
             authorization_proof_url=None,
         )

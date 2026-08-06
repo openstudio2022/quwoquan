@@ -73,6 +73,7 @@ api_routes:
       - CONTENT.SYSTEM.storage_read_failed
     method: GET
     operation: ListMyReports
+    pagination: {default_items: 20, maximum_items: 100}
     path: /content/users/me/reports
     privacy:
       log_policy: metadata_only
@@ -384,6 +385,170 @@ api_routes:
         - outcome
       metric: content_report_resolve
       trace: true
+  - actor: account
+    application:
+      aggregate_owner: Report
+      mutation_target: Report
+      invariant_target: Report
+      facet: ReportCommandFacet
+      kind: command
+      method: grantGatheringSafetyTermination
+    authorization:
+      ownership_policy: resolved_gathering_report_operator
+      permissions:
+        - content.report.gathering_safety_grant
+      principal: operator
+      scopes:
+        - ops.case.write
+    commercial:
+      status: ready
+    description: 为 resolution=terminate_gathering 的已结案 Gathering Report 签发至多五分钟、绑定 actor 的执行授权。
+    error_codes:
+      - CONTENT.USER.unauthorized
+      - CONTENT.USER.report_not_found
+      - CONTENT.USER.gathering_safety_authorization_invalid
+      - CONTENT.USER.gathering_safety_authorization_denied
+      - CONTENT.USER.gathering_safety_authorization_conflict
+      - CONTENT.SYSTEM.gathering_safety_authority_unavailable
+    method: POST
+    operation: GrantGatheringSafetyTermination
+    path: /content/reports/{reportId}:grant-gathering-safety-termination
+    privacy:
+      log_policy: redacted
+      request_classification: SENSITIVE
+      response_classification: SENSITIVE
+    reliability:
+      cancellation: supported
+      idempotency: required
+      max_attempts: 2
+      retry_mode: idempotent
+      timeout_ms: 1500
+    request_bindings:
+      path:
+        - {name: reportId, field: reportId, required: true}
+    request_entity: GrantGatheringSafetyTerminationRequest
+    request_body_kind: object
+    response_body: GatheringSafetyTerminationGrantResult
+    response_body_kind: object
+    response_entity: GatheringSafetyTerminationGrantResult
+    security:
+      auth_mode: required
+      token_transport: bearer
+      visibility: internal
+    slo:
+      availability_percent: 99.9
+      latency_p95_ms: 500
+    telemetry:
+      attributes: [action, outcome]
+      metric: content_gathering_safety_grant
+      trace: true
+  - actor: account
+    application:
+      aggregate_owner: Report
+      mutation_target: Report
+      invariant_target: Report
+      facet: ReportCommandFacet
+      kind: command
+      method: revokeGatheringSafetyTermination
+    authorization:
+      ownership_policy: resolved_gathering_report_operator
+      permissions:
+        - content.report.gathering_safety_grant
+      principal: operator
+      scopes:
+        - ops.case.write
+    commercial:
+      status: ready
+    description: 撤销同一 Report 的安全终止授权；撤销后所有 Circle 校验立即 fail-closed。
+    error_codes:
+      - CONTENT.USER.unauthorized
+      - CONTENT.USER.report_not_found
+      - CONTENT.USER.gathering_safety_authorization_invalid
+      - CONTENT.USER.gathering_safety_authorization_denied
+      - CONTENT.USER.gathering_safety_authorization_conflict
+      - CONTENT.SYSTEM.gathering_safety_authority_unavailable
+    method: POST
+    operation: RevokeGatheringSafetyTermination
+    path: /content/reports/{reportId}:revoke-gathering-safety-termination
+    privacy:
+      log_policy: redacted
+      request_classification: SENSITIVE
+      response_classification: SENSITIVE
+    reliability:
+      cancellation: supported
+      idempotency: required
+      max_attempts: 2
+      retry_mode: idempotent
+      timeout_ms: 1500
+    request_bindings:
+      path:
+        - {name: reportId, field: reportId, required: true}
+    request_entity: RevokeGatheringSafetyTerminationRequest
+    request_body_kind: object
+    response_body: GatheringSafetyTerminationGrantResult
+    response_body_kind: object
+    response_entity: GatheringSafetyTerminationGrantResult
+    security:
+      auth_mode: required
+      token_transport: bearer
+      visibility: internal
+    slo:
+      availability_percent: 99.9
+      latency_p95_ms: 500
+    telemetry:
+      attributes: [action, outcome]
+      metric: content_gathering_safety_revoke
+      trace: true
+  - actor: account
+    application:
+      facet: ReportQueryFacet
+      kind: query
+      method: authorizeGatheringSafetyTermination
+      reader: GatheringSafetyTerminationAuthorityReader
+      slice: GatheringSafetyTerminationAuthoritySlice
+    authorization:
+      ownership_policy: exact_gathering_safety_decision_binding
+      principal: service
+      scopes:
+        - content.gathering.safety.authorize
+    commercial:
+      status: ready
+    description: 供 Circle 以短期服务凭据校验 actor、Gathering、动作与决定证据的精确绑定；拒绝不返回内部理由。
+    error_codes:
+      - CONTENT.USER.gathering_safety_authorization_invalid
+      - CONTENT.USER.unauthorized
+      - CONTENT.SYSTEM.gathering_safety_authority_unavailable
+    method: POST
+    operation: AuthorizeGatheringSafetyTermination
+    path: /internal/content/gathering-safety-termination:authorize
+    privacy:
+      log_policy: redacted
+      request_classification: SENSITIVE
+      response_classification: INTERNAL
+    reliability:
+      cancellation: supported
+      idempotency: none
+      max_attempts: 1
+      retry_mode: none
+      timeout_ms: 500
+    request_entity: AuthorizeGatheringSafetyTerminationRequest
+    request_body_kind: object
+    response_body: GatheringSafetyTerminationAuthoritySlice
+    response_body_kind: object
+    response_entity: GatheringSafetyTerminationAuthoritySlice
+    security:
+      anonymous_policy: deny
+      auth_mode: required
+      principal: service
+      token_transport: bearer
+      visibility: internal
+    slo:
+      availability_percent: 99.95
+      latency_p95_ms: 250
+    telemetry:
+      attributes: [action, allowed, outcome]
+      metric: content_gathering_safety_authorize
+      trace: true
 consumers:
   - capabilities:
       - create_report
@@ -395,4 +560,186 @@ consumers:
       - begin_review
       - resolve_report
       - dismiss_report
+      - grant_gathering_safety_termination
+      - revoke_gathering_safety_termination
     name: platform-ops
+  - capabilities:
+      - authorize_gathering_safety_termination
+    name: circle-service
+readiness_cases:
+  - case_id: create-report-local
+    spec_ref: specs/feature-tree/discovery-content/content-display-consistency/content-action-intent-contract/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: CreateReport}
+    runner_source_path: quwoquan_service/services/content-service/tests/local_contract/trust_safety/report/adapters/inbound/http/report_operations__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: create-report-api
+    spec_ref: specs/feature-tree/discovery-content/content-display-consistency/content-action-intent-contract/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: CreateReport}
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/trust_safety/report/http_postgres_report__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+  - case_id: list-my-reports-local
+    spec_ref: specs/feature-tree/discovery-content/content-display-consistency/content-action-intent-contract/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: ListMyReports}
+    runner_source_path: quwoquan_service/services/content-service/tests/local_contract/trust_safety/report/application/report_service__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: list-my-reports-api
+    spec_ref: specs/feature-tree/discovery-content/content-display-consistency/content-action-intent-contract/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: ListMyReports}
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/trust_safety/report/http_postgres_report__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+  - case_id: list-reports-local
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-008
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: ListReports}
+    runner_source_path: quwoquan_service/services/content-service/tests/local_contract/trust_safety/report/adapters/inbound/http/report_operations__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: list-reports-api
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-008
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: ListReports}
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/trust_safety/report/http_postgres_report__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+  - case_id: get-report-local
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-008
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: GetReport}
+    runner_source_path: quwoquan_service/services/content-service/tests/local_contract/trust_safety/report/adapters/inbound/http/report_operations__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: get-report-api
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-008
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: GetReport}
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/trust_safety/report/http_postgres_report__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+  - case_id: begin-report-review-local
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-008
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: BeginReportReview}
+    runner_source_path: quwoquan_service/services/content-service/tests/local_contract/trust_safety/report/adapters/inbound/http/report_operations__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: begin-report-review-api
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-008
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: BeginReportReview}
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/trust_safety/report/http_postgres_report__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+  - case_id: dismiss-report-local
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-008
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: DismissReport}
+    runner_source_path: quwoquan_service/services/content-service/tests/local_contract/trust_safety/report/adapters/inbound/http/report_operations__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: dismiss-report-api
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-008
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: DismissReport}
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/trust_safety/report/http_postgres_report__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+  - case_id: resolve-report-local
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-008
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: ResolveReport}
+    runner_source_path: quwoquan_service/services/content-service/tests/local_contract/trust_safety/report/adapters/inbound/http/report_operations__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: resolve-report-api
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-008
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: ResolveReport}
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/trust_safety/report/http_postgres_report__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+  - case_id: grant-gathering-safety-termination-local
+    spec_ref: specs/feature-tree/circle-community/gathering-coordination/spec.md#sit-003
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: GrantGatheringSafetyTermination}
+    runner_source_path: quwoquan_service/services/content-service/tests/local_contract/trust_safety/report/application/report_service__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: grant-gathering-safety-termination-api
+    spec_ref: specs/feature-tree/circle-community/gathering-coordination/spec.md#sit-003
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: GrantGatheringSafetyTermination}
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/trust_safety/report/http_postgres_report__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+  - case_id: revoke-gathering-safety-termination-local
+    spec_ref: specs/feature-tree/circle-community/gathering-coordination/spec.md#sit-003
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: RevokeGatheringSafetyTermination}
+    runner_source_path: quwoquan_service/services/content-service/tests/local_contract/trust_safety/report/application/report_service__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: revoke-gathering-safety-termination-api
+    spec_ref: specs/feature-tree/circle-community/gathering-coordination/spec.md#sit-003
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: RevokeGatheringSafetyTermination}
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/trust_safety/report/http_postgres_report__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+  - case_id: authorize-gathering-safety-termination-local
+    spec_ref: specs/feature-tree/circle-community/gathering-coordination/spec.md#sit-003
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: AuthorizeGatheringSafetyTermination}
+    runner_source_path: quwoquan_service/services/content-service/tests/local_contract/trust_safety/report/application/report_service__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: authorize-gathering-safety-termination-api
+    spec_ref: specs/feature-tree/circle-community/gathering-coordination/spec.md#sit-003
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: AuthorizeGatheringSafetyTermination}
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/trust_safety/report/http_postgres_report__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+  - case_id: report_create_report_app_local
+    spec_ref: specs/feature-tree/discovery-content/content-display-consistency/content-action-intent-contract/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: CreateReport}
+    runner_source_path: quwoquan_app/test/local_contract/service/content_service/trust_safety/report/report_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: report_list_my_reports_app_local
+    spec_ref: specs/feature-tree/discovery-content/content-display-consistency/content-action-intent-contract/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: ListMyReports}
+    runner_source_path: quwoquan_app/test/local_contract/service/content_service/trust_safety/report/report_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}

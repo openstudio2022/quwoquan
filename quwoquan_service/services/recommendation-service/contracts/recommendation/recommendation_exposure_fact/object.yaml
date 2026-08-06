@@ -2,6 +2,14 @@ kind: append_only_fact
 lifecycle:
   immutable: true
   subject_closure: hard_delete_identifying_fact_after_terminal_closure_is_persisted
+  source_events:
+  - content.feed_delivery_page.FeedPageDelivered
+  event_consumers:
+  - name: AppendRecommendationExposure
+    kind: subscription
+    facet: FeedPageDeliveredConsumer
+    method: processOnce
+    idempotency: event_id
 description: Content 确认 FeedDeliveryPage 后由 Recommendation 幂等追加的交付曝光事实，绑定模型发布、窗口序号与目标。
 identity:
   fields:

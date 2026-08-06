@@ -29,6 +29,9 @@ func (s *MongoCommentDataAdapter) EnsureIndexes(ctx context.Context) error {
 	if _, err := s.outbox.Indexes().CreateMany(ctx, CommentOutboxMongoIndexes()); err != nil {
 		return fmt.Errorf("create comment outbox indexes: %w", err)
 	}
+	if _, err := s.eventLog.Indexes().CreateMany(ctx, CommentEventLogMongoIndexes()); err != nil {
+		return fmt.Errorf("create comment event log indexes: %w", err)
+	}
 	if _, err := s.checkpoints.Indexes().CreateOne(ctx, mongo.IndexModel{
 		Keys:    bson.D{{Key: "updatedAt", Value: -1}},
 		Options: options.Index().SetName("idx_comment_projection_checkpoint_updated"),
@@ -173,6 +176,27 @@ func CommentOutboxMongoIndexes() []mongo.IndexModel {
 			Options: options.Index().
 				SetName("idx_comment_outbox_aggregate_version").
 				SetUnique(true),
+		},
+	}
+}
+
+func CommentEventLogMongoIndexes() []mongo.IndexModel {
+	return []mongo.IndexModel{
+		{
+			Keys: bson.D{
+				{Key: "aggregateId", Value: 1},
+				{Key: "aggregateVersion", Value: 1},
+			},
+			Options: options.Index().
+				SetName("idx_comment_event_log_aggregate_version").
+				SetUnique(true),
+		},
+		{
+			Keys: bson.D{
+				{Key: "occurredAt", Value: -1},
+				{Key: "_id", Value: -1},
+			},
+			Options: options.Index().SetName("idx_comment_event_log_occurred_at"),
 		},
 	}
 }

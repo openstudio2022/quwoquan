@@ -4,7 +4,9 @@ import (
 	"net/http"
 	"strings"
 
+	rtauth "quwoquan_service/runtime/auth"
 	rterr "quwoquan_service/runtime/errors"
+	generated "quwoquan_service/services/chat-service/generated/chat/conversation"
 	"quwoquan_service/services/chat-service/internal/chat/conversation/application"
 )
 
@@ -12,11 +14,19 @@ func (handler *ChatHandler) handleProjectGatheringConversation(
 	writer http.ResponseWriter,
 	request *http.Request,
 ) {
+	if !isAuthorizedCircleGatheringProjection(request) {
+		writeHTTPError(writer, request, generated.AppErrorFromUnauthorized(
+			"Gathering projection requires delegated circle-service authorization",
+		))
+		return
+	}
 	var body struct {
 		SourceEventID  string `json:"sourceEventId"`
+		SourceVersion  int64  `json:"sourceVersion"`
 		OwnerPersonaID string `json:"ownerPersonaId"`
 		Title          string `json:"title"`
-		MaxGroupSize   int    `json:"maxGroupSize"`
+		AccessMode     string `json:"accessMode"`
+		PostingPolicy  string `json:"postingPolicy"`
 	}
 	if err := readJSON(request, &body); err != nil {
 		writeHTTPError(writer, request, rterr.NewInvalidArgument(
@@ -33,8 +43,9 @@ func (handler *ChatHandler) handleProjectGatheringConversation(
 		request.Context(),
 		application.GatheringConversationProvisioningRequest{
 			SourceEventID: body.SourceEventID, GatheringID: gatheringID,
+			SourceVersion:  body.SourceVersion,
 			OwnerPersonaID: body.OwnerPersonaID, Title: body.Title,
-			MaxGroupSize: body.MaxGroupSize,
+			AccessMode: body.AccessMode, PostingPolicy: body.PostingPolicy,
 		},
 	)
 	if err != nil {
@@ -44,4 +55,13 @@ func (handler *ChatHandler) handleProjectGatheringConversation(
 	writeJSON(writer, http.StatusOK, map[string]any{
 		"gatheringId": gatheringID, "conversationId": conversation.ID,
 	})
+}
+
+func isAuthorizedCircleGatheringProjection(request *http.Request) bool {
+	principal, ok := rtauth.PrincipalFromContext(request.Context())
+	if !ok || principal.Subject != "service:circle-service" ||
+		!containsGrant(principal.Roles, "service") {
+		return false
+	}
+	return containsGrant(strings.Fields(principal.Scope), "chat.gathering.write")
 }

@@ -1009,14 +1009,6 @@ func incomingCallDeliveryKey(callID string, targetPersonaID string) string {
 	return "sha256:" + hex.EncodeToString(sum[:])
 }
 
-func callRingingTTL(session *model.CallSession) time.Duration {
-	if session != nil &&
-		session.MaxParticipants > model.MaxParticipants1v1 {
-		return 60 * time.Second
-	}
-	return 30 * time.Second
-}
-
 func callSourceLabel(session *model.CallSession) string {
 	if session == nil {
 		return "direct_call"

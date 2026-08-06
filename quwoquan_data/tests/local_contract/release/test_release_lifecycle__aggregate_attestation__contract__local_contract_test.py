@@ -13,7 +13,7 @@ if str(SCRIPTS) not in sys.path:
 
 from content.release.canonical.baseline_release import build_empty_baseline_release
 from core.release_layout import payload_digest
-from core.source_digest import current_source_digest
+from core.source_digest import content_source_revision, current_source_digest
 from verify import verify_release_lifecycle as lifecycle
 
 RELEASE_ID = "20260715--travel-homepage-coverage--test-release-a--003"
@@ -21,6 +21,36 @@ EXECUTION_IDS = [
     "20260715--travel-homepage-coverage--test-region-b--pilot-007",
     "20260715--travel-homepage-coverage--test-region-a--pilot-004",
 ]
+ENTITY_CATALOG_DIGEST = "sha256:" + "e" * 64
+
+
+def _content_identity(source_digest: dict[str, object]) -> dict[str, object]:
+    digest = str(source_digest["digest"])
+    return {
+        "sourceRevision": content_source_revision(
+            source_digest=digest,
+            entity_catalog_digest=ENTITY_CATALOG_DIGEST,
+        ),
+        "sourceDigest": digest,
+        "entityCatalogDigest": ENTITY_CATALOG_DIGEST,
+    }
+
+
+def _research_lifecycle() -> dict[str, object]:
+    return {
+        "releaseClass": "research",
+        "productLifecycleState": "research",
+        "containsUnverifiedAssets": False,
+        "rightsStatusCounts": {
+            "verified": 1,
+            "unverified": 0,
+            "restricted": 0,
+            "unknown": 0,
+        },
+        "authorizationRequiredAssetIds": [],
+        "researchAcceptedCount": 1,
+        "commercialAcceptedCount": 0,
+    }
 
 
 def _write_json(path: Path, payload: dict) -> None:
@@ -38,8 +68,10 @@ def _fixture(tmp_path: Path) -> Path:
             "releaseId": RELEASE_ID,
             "sourceOwner": "qwq_data",
             "releaseKind": "content",
+            **_research_lifecycle(),
             "canonicalMerkle": "sha256:" + "a" * 64,
             "executionIds": EXECUTION_IDS,
+            **_content_identity(source_digest),
             "sourceDigests": [source_digest],
         },
     )
@@ -63,12 +95,14 @@ def _fixture(tmp_path: Path) -> Path:
             "releaseId": RELEASE_ID,
             "sourceOwner": "qwq_data",
             "releaseKind": "content",
+            **_research_lifecycle(),
             "executionIds": EXECUTION_IDS,
             "entityCount": 1,
             "postCount": 0,
             "creatorCount": 0,
             "tagCount": 1,
             "canonicalMerkle": "sha256:" + "a" * 64,
+            **_content_identity(source_digest),
             "sourceDigests": [source_digest],
             "payloadSha256": payload_digest(release),
             "recordedAt": "2026-07-15T00:00:00Z",
@@ -108,6 +142,10 @@ def _environment_fixture(
         "releaseId": RELEASE_ID,
         "runId": import_run_id,
         "status": status,
+        "releaseClass": "research",
+        "productLifecycleState": "research",
+        "containsUnverifiedAssets": False,
+        "manifestDigest": manifest_digest,
         "homepageVerificationCasesRef": "",
         "tagImportReportRef": f"{run.relative_to(root).as_posix()}/tag-import.json",
         "creatorImportReportRef": f"{run.relative_to(root).as_posix()}/creator-import.json",
@@ -241,6 +279,10 @@ def _environment_fixture(
             "runId": verify_run_id,
             "importRunId": import_run_id,
             "status": "completed",
+            "releaseClass": "research",
+            "productLifecycleState": "research",
+            "containsUnverifiedAssets": False,
+            "manifestDigest": manifest_digest,
             "homepageApiVerificationRef": homepage_ref,
         },
     )

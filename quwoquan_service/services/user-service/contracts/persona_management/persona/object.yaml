@@ -55,10 +55,6 @@ relationships:
   reference_fields:
   - taxonomyReleaseId
   target_object: tag.TagTaxonomyRelease
-capabilities:
-- commandable
-- queryable
-- idempotent_commands
 business_rules:
 - personaId 只使用 `us_<4hex>_<26 lowercase Crockford>`，其 4hex 与所属账号 logicalShard 一致；禁止版本段、别名格式或宽松解析
 - accountId 与 personaId 创建后不可变且 userHandle 全局唯一

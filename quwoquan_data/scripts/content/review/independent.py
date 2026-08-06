@@ -1,4 +1,4 @@
-"""Bind an independent Cursor reviewer result to one post review package."""
+"""Bind an independent semantic-agent reviewer result to one post package."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -36,7 +36,7 @@ def apply_independent_post_review(
         return [str(exc)]
     normalized_run_id = run_id.strip()
     if not normalized_run_id or normalized_run_id.startswith("contract-output:"):
-        return [f"{review_dir}: independent reviewer must bind a real Cursor SDK runId"]
+        return [f"{review_dir}: independent reviewer must bind a real provider runId"]
     decision = str(result_payload.get("decision") or "")
     issues = [
         str(item).strip()

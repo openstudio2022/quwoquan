@@ -7,8 +7,8 @@ ROOT = Path(__file__).resolve().parents[3]
 def test_hls_cmaf_packaging_fallback_has_metric_dashboard_and_alert() -> None:
     metric_source = (
         ROOT
-        / "quwoquan_service/services/content-service/internal/content/post/"
-        "infrastructure/content/media/processing/metrics.go"
+        / "quwoquan_service/services/content-service/internal/media/media_asset/"
+        "infrastructure/media/processing/metrics.go"
     ).read_text(encoding="utf-8")
     alerts = (
         ROOT

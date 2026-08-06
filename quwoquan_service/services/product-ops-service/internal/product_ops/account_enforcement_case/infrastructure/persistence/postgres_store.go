@@ -387,7 +387,7 @@ WHERE id=$1 AND version=$2`, caseID, storedVersion, recoveredAt.UTC())
 	return ports.CaseSnapshot{Case: recovered}, nil
 }
 
-func (store *PostgresStore) ClaimDue(
+func (store *PostgresStore) ClaimPendingOutbox(
 	ctx context.Context,
 	owner string,
 	now time.Time,
@@ -456,7 +456,7 @@ WHERE decision_id=$1`, job.Decision.ID, owner, now.UTC().Add(leaseDuration), now
 	return jobs, nil
 }
 
-func (store *PostgresStore) MarkDelivered(
+func (store *PostgresStore) MarkDispatched(
 	ctx context.Context,
 	owner string,
 	receipt ports.DeliveryReceipt,

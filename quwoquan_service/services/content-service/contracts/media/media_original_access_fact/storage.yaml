@@ -39,7 +39,7 @@ collections:
     - name: idx_media_original_access_rate_limit_expire
       keys:
         expiresAt: 1
-      expireAfterSeconds: 0
+      expire_after_seconds: 0
 transaction:
   scope:
   - media_original_access_facts

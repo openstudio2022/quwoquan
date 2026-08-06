@@ -104,6 +104,17 @@ fields:
     api_exposure: read
     ops_exposure: read
     role: authoritative_state
+  - name: gatheringInvitation
+    source: gatheringInvitation
+    type: AppMessageGatheringInvitation
+    constraints:
+      - NULLABLE
+    classification: PII
+    log_policy: metadata_only
+    api_exposure: read
+    ops_exposure: read
+    description: 仅 source=gathering_invitation 可携带的 typed action card；事实和状态仍由 Circle GatheringParticipation 拥有。
+    role: projection
   - name: provenance
     source: provenance
     type: AppMessageProvenance
@@ -184,6 +195,38 @@ types:
       - {name: routeId, source: routeId, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read}
       - {name: routePath, source: routePath, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: metadata_only, api_exposure: read_write, ops_exposure: read}
       - {name: query, source: query, type: AppMessageRouteQuery, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read}
+  AppMessageGatheringInvitationSchedule:
+    description: Circle 事件已按未加入 viewer 披露策略裁剪的日程；Notification 不补查 Circle 写模型。
+    fields:
+      - {name: timezone, source: timezone, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: startAt, source: startAt, type: timestamp, constraints: [NULLABLE], classification: SENSITIVE, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+      - {name: endAt, source: endAt, type: timestamp, constraints: [NULLABLE], classification: SENSITIVE, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+      - {name: dateLabel, source: dateLabel, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+  AppMessageGatheringInvitationPlace:
+    description: Circle 事件已裁剪的地点；after_join 不含 exactMeetingPoint、room 或群内容。
+    fields:
+      - {name: mode, source: mode, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: coarsePlaceLabel, source: coarsePlaceLabel, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: exactMeetingPoint, source: exactMeetingPoint, type: string, constraints: [NULLABLE], classification: SENSITIVE, log_policy: drop, api_exposure: read, ops_exposure: read}
+  AppMessageGatheringInvitationActionIntent:
+    description: App 将 intent 映射到 Circle Accept/Decline typed operation；Notification 不执行 Participation 状态迁移。
+    fields:
+      - {name: action, source: action, type: enum, enum_ref: AppMessageGatheringInvitationAction, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: expectedGatheringVersion, source: expectedGatheringVersion, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: expectedParticipationVersion, source: expectedParticipationVersion, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+  AppMessageGatheringInvitation:
+    description: Notification-owned 可重建邀请卡片投影；canonical IDs、披露快照与 owner versions 全部来自 GatheringInvitationChanged。
+    fields:
+      - {name: gatheringId, source: gatheringId, type: string, constraints: [NOT_NULL], classification: PII, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: inviterPersonaId, source: inviterPersonaId, type: string, constraints: [NOT_NULL], classification: PII, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: recipientPersonaId, source: recipientPersonaId, type: string, constraints: [NOT_NULL], classification: PII, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: purposeSummary, source: purposeSummary, type: string, constraints: [NOT_NULL], classification: PII, log_policy: drop, api_exposure: read, ops_exposure: read}
+      - {name: schedule, source: schedule, type: AppMessageGatheringInvitationSchedule, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+      - {name: place, source: place, type: AppMessageGatheringInvitationPlace, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+      - {name: participationVersion, source: participationVersion, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: status, source: status, type: enum, enum_ref: AppMessageGatheringInvitationStatus, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: actionIntents, source: actionIntents, type: '[]AppMessageGatheringInvitationActionIntent', constraints: [NOT_NULL], max_items: 2, classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+      - {name: expiresAt, source: expiresAt, type: timestamp, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
   AppMessageProvenance:
     description: 生产者提交的个性化归因事实，仅用于审计与行为回流。
     fields:
@@ -203,6 +246,7 @@ types:
       - {name: title, source: title, type: string, constraints: [NOT_NULL, NOT_BLANK], classification: PII, log_policy: drop, api_exposure: read, ops_exposure: read}
       - {name: summary, source: summary, type: string, constraints: [NOT_NULL, NOT_BLANK], classification: PII, log_policy: drop, api_exposure: read, ops_exposure: read}
       - {name: target, source: target, type: AppMessageTarget, constraints: [NOT_NULL], classification: PII, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+      - {name: gatheringInvitation, source: gatheringInvitation, type: AppMessageGatheringInvitation, constraints: [NULLABLE], classification: PII, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
       - {name: read, source: read, type: bool, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
       - {name: createdAt, source: createdAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
       - {name: deliveredAt, source: deliveredAt, type: timestamp, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
@@ -217,15 +261,6 @@ types:
     description: 当前账户实时计算的未读消息数量。
     fields:
       - {name: unreadCount, source: unreadCount, type: int, constraints: [NOT_NULL, NON_NEGATIVE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
-  NotificationPushRequestedEvent:
-    description: Notification 与 NotificationDeliveryJob 同事务创建后写入投递 outbox 的严格载荷。
-    fields:
-      - {name: messageId, source: messageId, type: string, constraints: [PK, NOT_NULL], classification: PII, log_policy: hash, api_exposure: none, ops_exposure: read}
-      - {name: messageType, source: messageType, type: enum, enum_ref: NotificationType, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read}
-      - {name: title, source: title, type: string, constraints: [NOT_NULL], classification: PII, log_policy: drop, api_exposure: none, ops_exposure: none}
-      - {name: summary, source: summary, type: string, constraints: [NOT_NULL], classification: PII, log_policy: drop, api_exposure: none, ops_exposure: none}
-      - {name: targetType, source: targetType, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read}
-      - {name: targetId, source: targetId, type: string, constraints: [NOT_NULL], classification: PII, log_policy: hash, api_exposure: none, ops_exposure: none}
   CreateAppMessageRequest:
     description: 受信服务创建统一 App 消息的请求体；Idempotency-Key 仅由受信请求头提供，不进入 body。
     fields:
@@ -374,3 +409,8 @@ types:
       - name: messageId
         type: string
         client_dart_type: String
+enums:
+  AppMessageGatheringInvitationStatus:
+    values: [pending, accepted, declined, revoked, cancelled, expired]
+  AppMessageGatheringInvitationAction:
+    values: [accept, decline]

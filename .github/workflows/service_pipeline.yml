@@ -611,7 +611,11 @@ jobs:
         name: Read official queue, setup, matrix and DAG timestamps
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          BUILD_IMAGE_COUNT: ${{ needs.prepare-release.outputs.build_count }}
+          REUSE_IMAGE_COUNT: ${{ needs.prepare-release.outputs.reuse_count }}
         run: |
+          IMAGE_JOB_COUNT=$((BUILD_IMAGE_COUNT + REUSE_IMAGE_COUNT))
+          test "$IMAGE_JOB_COUNT" -gt 0
           python3 quwoquan_ops/ci/github_actions_timing.py \
             --repository "${{ github.repository }}" \
             --run-id "${{ github.run_id }}" \
@@ -621,7 +625,7 @@ jobs:
             --phase "validate_deploy=校验 Kustomize 部署" \
             --require-count "prepare_release=1" \
             --require-count "build_go=1" \
-            --require-count "build_release_images=15" \
+            --require-count "build_release_images=${IMAGE_JOB_COUNT}" \
             --require-count "validate_deploy=1" \
             --dag-layer "prepare_release" \
             --dag-layer "build_go,build_release_images" \
@@ -697,7 +701,7 @@ jobs:
             --phase "build_release_images=${BUILD_IMAGES_SECONDS}" \
             --phase "validate_deploy=${VALIDATE}" \
             --critical-path-source github_run_calendar \
-            --note "GitHub Jobs API records the longest 15-service matrix node; unchanged services reuse a sealed digest and changed services use isolated registry BuildKit caches." \
+            --note "GitHub Jobs API records the longest governed-service matrix node; unchanged services reuse a sealed digest and changed services use isolated registry BuildKit caches." \
             --write-json "$QWQ_OUTPUT_ROOT/env/repo/runs/ci-timing/service-pipeline-summary.json" \
             --write-step-summary
           echo "machine_critical_path_seconds=${MACHINE_CRITICAL_PATH_SECONDS}" >> "$GITHUB_OUTPUT"

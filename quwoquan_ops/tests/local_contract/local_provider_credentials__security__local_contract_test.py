@@ -1,11 +1,18 @@
 from __future__ import annotations
 
 import unittest
+from copy import deepcopy
+from unittest import mock
 
+from quwoquan_ops.cli.lib import local_provider_credentials as subject
+from quwoquan_ops.cli.lib.external_provider_governance import load_and_compile
 from quwoquan_ops.cli.lib.local_provider_credentials import (
     _required_material_for_environment,
     load_nonprod_provider_environment,
     provider_environment_reference_names,
+)
+from quwoquan_ops.cli.lib.provider_runtime_composition import (
+    compile_provider_runtime_composition,
 )
 
 
@@ -108,6 +115,50 @@ class LocalProviderCredentialsSecurityLocalContractTest(unittest.TestCase):
                 environment="prod",
                 target_name="prod-local",
                 source={},
+            )
+
+    def test_packaged_runtime_path_does_not_reload_workspace_binding(self) -> None:
+        compiled, issues = load_and_compile()
+        self.assertFalse(issues)
+        composition = compile_provider_runtime_composition(
+            environment="alpha",
+            target="alpha-local",
+            compiled=compiled,
+        )
+        material = _material("alpha")
+        with mock.patch.object(
+            subject,
+            "load_and_compile",
+            side_effect=AssertionError("workspace Binding reload"),
+        ):
+            values = load_nonprod_provider_environment(
+                environment="alpha",
+                target_name="alpha-local",
+                source=material,
+                runtime_composition=composition,
+            )
+        self.assertEqual(
+            values["INTEGRATION_SMS_ENDPOINT"],
+            "https://sms-provider-substitute:9443/v1/provider/sms/send",
+        )
+
+        mismatched = deepcopy(compiled)
+        sms = mismatched["selectedBindings"]["alpha"]["identity.sms.otp"]
+        sms["endpoint_ref"] = "local_topology:provider-protocol-substitute"
+        sms["endpoint_envs"] = {
+            "endpoint": "INTEGRATION_PUSH_SUBSTITUTE_ENDPOINT"
+        }
+        mismatched_composition = compile_provider_runtime_composition(
+            environment="alpha",
+            target="alpha-local",
+            compiled=mismatched,
+        )
+        with self.assertRaisesRegex(ValueError, "SMS adapter/endpoint"):
+            load_nonprod_provider_environment(
+                environment="alpha",
+                target_name="alpha-local",
+                source=_material("alpha"),
+                runtime_composition=mismatched_composition,
             )
 
 

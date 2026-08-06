@@ -5,12 +5,249 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[3]
 
 
 class LocalEnvGateMatrixContractTest(unittest.TestCase):
+    def test_emulator_only_profile_is_explicitly_non_promotable(self) -> None:
+        from quwoquan_ops.cli.lib import local_env_gate_matrix as matrix_mod
+
+        bindings = matrix_mod._device_uat_bindings(
+            device_profile=matrix_mod.DEVICE_PROFILE_EMULATOR_ONLY,
+            ios_simulator_device="ios-simulator-udid",
+            android_emulator_device="emulator-5554",
+            android_physical_device="",
+        )
+        self.assertEqual(
+            tuple(key for key, _, _ in bindings),
+            ("iosSimulatorUAT", "androidEmulatorUAT"),
+        )
+
+        with tempfile.TemporaryDirectory() as temporary:
+            matrix_dir = Path(temporary)
+            with mock.patch.object(
+                matrix_mod,
+                "write_timing_bundle",
+                return_value=matrix_dir / "timing.json",
+            ):
+                result = matrix_mod._write_matrix_result(
+                    matrix_dir=matrix_dir,
+                    phases=[{"name": "matrix", "status": "passed"}],
+                    environments={
+                        target: {}
+                        for target in matrix_mod.CANONICAL_TARGETS
+                    },
+                    budgets={
+                        "softBudgetSeconds": 600,
+                        "hardBudgetSeconds": 1800,
+                    },
+                    wall_seconds=1.0,
+                    exit_code=0,
+                    failure_category="",
+                    baseline_id=f"sha256:{'a' * 64}",
+                    release={
+                        "releaseId": "release-emulator-only",
+                        "releaseDigest": f"sha256:{'b' * 64}",
+                    },
+                    matrix_run_id="matrix-emulator-only",
+                    execution_class="live",
+                    device_profile=matrix_mod.DEVICE_PROFILE_EMULATOR_ONLY,
+                )
+            payload = json.loads(
+                (matrix_dir / "matrix.json").read_text(encoding="utf-8")
+            )
+
+        self.assertEqual(result["claim"], matrix_mod.EMULATOR_ONLY_CLAIM)
+        self.assertEqual(payload["schema"], "quwoquan.test.case-result")
+        self.assertTrue(payload["nonPromotable"])
+        self.assertEqual(
+            payload["deviceCoverage"],
+            ["ios-simulator", "android-emulator"],
+        )
+        self.assertEqual(
+            payload["waivers"][0]["effect"],
+            "release-promotion-blocked",
+        )
+
+    def test_provider_phase_requires_explicit_local_functional_scope(self) -> None:
+        from quwoquan_ops.cli.lib.local_env_gate_matrix import (
+            _provider_local_functional_errors,
+        )
+
+        cells = [
+            {
+                "capabilityId": f"fixture.capability_{index:02d}",
+                "adapterId": f"ext.fixture.adapter_{index:02d}",
+                "layer": layer,
+                "exitCode": 0,
+            }
+            for index in range(14)
+            for layer in (
+                "local_contract",
+                "api_integration",
+                "user_acceptance",
+            )
+        ]
+        payload = {
+            "schema": "stackctl-provider-conformance-environment-matrix",
+            "readinessScope": "local_functional",
+            "releasePromotionClaimed": False,
+            "status": "passed",
+            "environment": "alpha",
+            "target": "alpha-local",
+            "capabilityCount": 14,
+            "expectedCells": 42,
+            "executed": 42,
+            "skipped": 0,
+            "attemptEvidenceCount": 42,
+            "exitCode": 0,
+            "issues": [],
+            "cells": cells,
+        }
+        compiled = {
+            "providerConformanceCapabilityIds": [
+                f"fixture.capability_{index:02d}" for index in range(14)
+            ]
+        }
+
+        self.assertEqual(
+            _provider_local_functional_errors(
+                payload,
+                environment="alpha",
+                target="alpha-local",
+                compiled_provider_governance=compiled,
+            ),
+            [],
+        )
+        promoted = {**payload, "releasePromotionClaimed": True}
+        self.assertTrue(
+            any(
+                "releasePromotionClaimed" in issue
+                for issue in _provider_local_functional_errors(
+                    promoted,
+                    environment="alpha",
+                    target="alpha-local",
+                    compiled_provider_governance=compiled,
+                )
+            )
+        )
+        duplicate = {**payload, "cells": [*cells[:-1], cells[0]]}
+        self.assertTrue(
+            any(
+                "every compiled capability" in issue
+                for issue in _provider_local_functional_errors(
+                    duplicate,
+                    environment="alpha",
+                    target="alpha-local",
+                    compiled_provider_governance=compiled,
+                )
+            )
+        )
+
+        extended_capability = "fixture.capability_14"
+        extended_cells = [
+            *cells,
+            *[
+                {
+                    "capabilityId": extended_capability,
+                    "adapterId": "ext.fixture.adapter_14",
+                    "layer": layer,
+                    "exitCode": 0,
+                }
+                for layer in (
+                    "local_contract",
+                    "api_integration",
+                    "user_acceptance",
+                )
+            ],
+        ]
+        extended = {
+            **payload,
+            "capabilityCount": 15,
+            "expectedCells": 45,
+            "executed": 45,
+            "attemptEvidenceCount": 45,
+            "cells": extended_cells,
+        }
+        self.assertEqual(
+            _provider_local_functional_errors(
+                extended,
+                environment="alpha",
+                target="alpha-local",
+                compiled_provider_governance={
+                    "providerConformanceCapabilityIds": [
+                        *compiled["providerConformanceCapabilityIds"],
+                        extended_capability,
+                    ]
+                },
+            ),
+            [],
+        )
+
+    def test_stackctl_up_rejects_env_and_target_before_locking(self) -> None:
+        from quwoquan_ops.cli import stackctl as stackctl_mod
+
+        with mock.patch.object(
+            stackctl_mod,
+            "_local_stack_operation_lock",
+        ) as operation_lock:
+            payload = stackctl_mod.command_up(
+                SimpleNamespace(env="beta", target="beta-local")
+            )
+
+        self.assertEqual(payload["exitCode"], 2)
+        self.assertIn(
+            "provide exactly one of --env or --target",
+            payload["details"],
+        )
+        operation_lock.assert_not_called()
+
+    def test_live_evidence_requires_package_bound_provider_runtime(self) -> None:
+        from quwoquan_ops.cli.lib.local_env_gate_matrix import (
+            _live_matrix_evidence_errors,
+        )
+
+        baseline_id = f"sha256:{'a' * 64}"
+        environments = {
+            target: {
+                "target": target,
+                "environment": environment,
+                "package": {
+                    "baselineId": baseline_id,
+                    "packageDigest": f"sha256:{'b' * 64}",
+                    "imageDigest": f"sha256:{'c' * 64}",
+                    "observabilityLogSink": {
+                        "adapterId": "ext.obs.elasticsearch",
+                        "deploymentMode": "package-bound-local",
+                    },
+                },
+            }
+            for target, environment in {
+                "alpha-local": "alpha",
+                "beta-local": "beta",
+                "gamma-local": "gamma",
+            }.items()
+        }
+
+        errors = _live_matrix_evidence_errors(
+            environments,
+            baseline_id=baseline_id,
+        )
+
+        self.assertEqual(
+            len(
+                [
+                    error
+                    for error in errors
+                    if "package-bound Provider runtime is incomplete" in error
+                ]
+            ),
+            3,
+        )
+
     def test_timing_budget_gate_exists(self) -> None:
         budgets = json.loads(
             (
@@ -239,14 +476,14 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
             app_dir = candidate_dir / "packages/app"
             app_dir.mkdir(parents=True)
             (app_dir / "marker").write_text("ok", encoding="utf-8")
-            svc_dir = tmp_path / "svc"
-            svc_dir.mkdir()
+            svc_dir = candidate_dir / "packages/services/content-service"
+            svc_dir.mkdir(parents=True)
             (svc_dir / "marker").write_text("ok", encoding="utf-8")
-            shared_dir = tmp_path / "runtime-shared"
-            shared_dir.mkdir()
+            shared_dir = candidate_dir / "packages/runtime-shared"
+            shared_dir.mkdir(parents=True)
             (shared_dir / "marker").write_text("ok", encoding="utf-8")
-            legal_dir = tmp_path / "legal-static"
-            legal_dir.mkdir()
+            legal_dir = candidate_dir / "packages/legal-static"
+            legal_dir.mkdir(parents=True)
             (legal_dir / "marker").write_text("ok", encoding="utf-8")
             with mock.patch(
                 "quwoquan_ops.cli.lib.package_reuse.app_deployment_package_dir",
@@ -277,10 +514,9 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
                 },
             ), mock.patch(
                 "quwoquan_ops.cli.lib.package_reuse.active_deployment_candidate",
-                return_value={
-                    "target": "alpha-local",
-                    "baselineId": f"sha256:{'b' * 64}",
-                },
+                side_effect=AssertionError(
+                    "explicit candidate reuse must not inspect the active candidate"
+                ),
             ), mock.patch(
                 "quwoquan_ops.cli.lib.package_reuse.validate_candidate_manifest",
                 side_effect=lambda payload, **_kwargs: payload,
@@ -315,7 +551,10 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
                     encoding="utf-8",
                 )
                 ok, detail = can_reuse_package(
-                    "alpha", "alpha-local", include_services=True
+                    "alpha",
+                    "alpha-local",
+                    include_services=True,
+                    candidate_root=candidate_dir,
                 )
                 self.assertTrue(ok, detail)
 

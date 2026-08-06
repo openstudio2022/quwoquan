@@ -15,6 +15,7 @@ import (
 func TestCircleHandlerRoutesCoverMetadataPathTemplates(t *testing.T) {
 	root := repositoryRoot(t)
 	handlerSource := readFile(t, filepath.Join(root, "services/circle-service/internal/circle_management/circle/adapters/inbound/http/circle_handler.go")) +
+		readFile(t, filepath.Join(root, "services/circle-service/internal/circle_management/circle/adapters/inbound/http/host_authority_handler.go")) +
 		readFile(t, filepath.Join(root, "services/circle-service/internal/circle_management/circle_membership/adapters/inbound/http/handler.go")) +
 		readFile(t, filepath.Join(root, "services/circle-service/internal/circle_management/circle_file/adapters/inbound/http/handler.go")) +
 		readFile(t, filepath.Join(root, "services/circle-service/internal/circle_management/circle_group/adapters/inbound/http/handler.go")) +
@@ -52,6 +53,8 @@ func TestCircleHandlerRoutesCoverMetadataPathTemplates(t *testing.T) {
 				topLevel["/circles"] = struct{}{}
 			case path == "/internal/circle/account-closure/dead-letters:recover":
 				topLevel[path] = struct{}{}
+			case path == "/internal/circle/circles/{circleId}/gathering-host-authority:evaluate":
+				topLevel["/internal/circle/circles/"] = struct{}{}
 			default:
 				t.Fatalf("unexpected circle path template outside handler scope: %s", path)
 			}

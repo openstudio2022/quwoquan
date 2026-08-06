@@ -27,7 +27,8 @@
 - 理由：post 只需要稳定 entity identity，不需要等待 entity homepage 生成；独立 execution 才能按载体隔离来源、权利、容量与失败恢复。
 - 被否决方案：把四载体塞入同一 execution、让 post 依赖 homepage publish，或由调用方、页面、脚本复制本层状态并绕过公开契约。
 - 约束与影响：四载体必须共享 reviewed named main branch、commit、source digest 与 entity catalog digest。
-- 约束与影响：detached lane 只继承冻结分支证据而不恢复工作分支，final release 统一验证引用闭包。
+- 约束与影响：controller 从受审核输入构建一份 content-addressed、只读 source/executor capsule；各 lane 只写独立 execution root、queue namespace 与 staging prefix，不复制完整仓库，也不直接写共享工作树，final release 统一验证引用闭包。
+- 约束与影响：四复制会话以 plan-frozen campaign run/fence 为共同身份，但各自只持有 carrier-scoped 文件锁与 claim；共享 canonical publish 继续由对象事务锁串行，review/author/download 和 execution evidence 不共享可写根。
 - 约束与影响：单一载体失败不得篡改其他工作包，也不得阻止其他载体已合格对象发布。
 - 约束与影响：quota 是里程碑目标，`partial` lane 必须发布合格对象并记录 typed shortfall。
 - 关联要求：`REQ-001`

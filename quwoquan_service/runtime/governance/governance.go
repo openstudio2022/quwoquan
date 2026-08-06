@@ -1,36 +1,11 @@
 package runtimegovernance
 
 import (
-	"context"
-	"fmt"
 	"log/slog"
 	"sync"
 	"sync/atomic"
 	"time"
 )
-
-// ResiliencePolicy defines runtime-governance baseline controls.
-type ResiliencePolicy struct {
-	TimeoutMs             int
-	RetryMaxAttempts      int
-	RetryBackoffMs        int
-	CircuitBreakerEnabled bool
-	DegradeEnabled        bool
-}
-
-// PolicyProvider resolves governance policy from runtime config.
-type PolicyProvider interface {
-	Policy(ctx context.Context, key string) (ResiliencePolicy, error)
-}
-
-// StaticPolicyProvider returns the same policy for all keys.
-type StaticPolicyProvider struct {
-	Value ResiliencePolicy
-}
-
-func (p StaticPolicyProvider) Policy(_ context.Context, _ string) (ResiliencePolicy, error) {
-	return p.Value, nil
-}
 
 // CircuitBreaker implements a simple three-state circuit breaker.
 type CircuitBreaker struct {
@@ -50,19 +25,6 @@ const (
 	StateOpen
 	StateHalfOpen
 )
-
-func (s CircuitState) String() string {
-	switch s {
-	case StateClosed:
-		return "closed"
-	case StateOpen:
-		return "open"
-	case StateHalfOpen:
-		return "half-open"
-	default:
-		return "unknown"
-	}
-}
 
 func NewCircuitBreaker(threshold int, resetTimeout time.Duration, logger *slog.Logger) *CircuitBreaker {
 	return &CircuitBreaker{
@@ -131,7 +93,6 @@ func (cb *CircuitBreaker) RecordFailure() {
 // of queueing unboundedly.
 type InflightLimiter struct {
 	sem chan struct{}
-	max int
 	cur int64
 }
 
@@ -141,7 +102,7 @@ func NewInflightLimiter(max int) *InflightLimiter {
 	if max <= 0 {
 		max = 1
 	}
-	return &InflightLimiter{sem: make(chan struct{}, max), max: max}
+	return &InflightLimiter{sem: make(chan struct{}, max)}
 }
 
 // Acquire reserves a slot without blocking. It returns false when the limiter is
@@ -168,33 +129,3 @@ func (l *InflightLimiter) Release() {
 
 // Inflight reports the current number of held slots (observability gauge source).
 func (l *InflightLimiter) Inflight() int { return int(atomic.LoadInt64(&l.cur)) }
-
-// Max reports the configured concurrency ceiling.
-func (l *InflightLimiter) Max() int { return l.max }
-
-// Retry executes fn with retry logic based on policy.
-func Retry(ctx context.Context, policy ResiliencePolicy, fn func(ctx context.Context) error) error {
-	var lastErr error
-	for attempt := 0; attempt <= policy.RetryMaxAttempts; attempt++ {
-		if attempt > 0 && policy.RetryBackoffMs > 0 {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(time.Duration(policy.RetryBackoffMs*attempt) * time.Millisecond):
-			}
-		}
-
-		timeoutCtx := ctx
-		if policy.TimeoutMs > 0 {
-			var cancel context.CancelFunc
-			timeoutCtx, cancel = context.WithTimeout(ctx, time.Duration(policy.TimeoutMs)*time.Millisecond)
-			defer cancel()
-		}
-
-		lastErr = fn(timeoutCtx)
-		if lastErr == nil {
-			return nil
-		}
-	}
-	return fmt.Errorf("after %d retries: %w", policy.RetryMaxAttempts, lastErr)
-}

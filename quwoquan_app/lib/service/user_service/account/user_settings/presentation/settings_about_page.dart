@@ -1,0 +1,127 @@
+import 'package:flutter/cupertino.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/design_system/forms/settings/settings_inset_form_page.dart';
+import 'package:quwoquan_app/design_system/layout/web_page_max_width_frame.dart';
+import 'package:quwoquan_app/design_system/providers/theme_provider.dart';
+import 'package:quwoquan_app/design_system/semantics/settings_semantic_constants.dart';
+import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
+
+class SettingsAboutPage extends ConsumerWidget {
+  const SettingsAboutPage({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isDark = ref.watch(isDarkProvider);
+    return SettingsInsetFormPageScaffold(
+      isDark: isDark,
+      title: SettingsText.settingsAboutQuwoquan,
+      onBack: () {
+        if (context.canPop()) {
+          context.pop();
+        } else {
+          context.go(AppRoutePaths.settings);
+        }
+      },
+      body: WebPageMaxWidthFrame(
+        child: SafeArea(
+          bottom: false,
+          child: FutureBuilder<PackageInfo>(
+            future: PackageInfo.fromPlatform(),
+            builder: (context, snapshot) {
+              final version =
+                  snapshot.data?.version ??
+                  SettingsText.settingsAboutDefaultVersion;
+              return ListView(
+                padding: EdgeInsets.only(
+                  left:
+                      SettingsSemanticConstants.insetFormListHorizontalPadding,
+                  right:
+                      SettingsSemanticConstants.insetFormListHorizontalPadding,
+                  top: AppSpacing.intraGroupSm,
+                  bottom: AppSpacing.xl,
+                ),
+                children: <Widget>[
+                  SettingsInsetGroupedSection(
+                    isDark: isDark,
+                    density: SettingsInsetSectionDensity.compact,
+                    child: Column(
+                      children: <Widget>[
+                        SettingsInsetFormRow(
+                          isDark: isDark,
+                          label: FoundationText.loginBrandName,
+                          trailing: SettingsInsetTrailingText(
+                            isDark: isDark,
+                            value: SettingsText.settingsAppOfficialName,
+                          ),
+                        ),
+                        SettingsInsetFormSectionDivider(isDark: isDark),
+                        SettingsInsetFormRow(
+                          isDark: isDark,
+                          label: SettingsText.settingsVersion,
+                          trailing: SettingsInsetTrailingText(
+                            isDark: isDark,
+                            value: UITextConstants.settingsVersionValue(
+                              version,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  SizedBox(height: AppSpacing.intraGroupSm),
+                  SettingsInsetGroupedSection(
+                    isDark: isDark,
+                    density: SettingsInsetSectionDensity.compact,
+                    child: Column(
+                      children: <Widget>[
+                        SettingsInsetFormRow(
+                          isDark: isDark,
+                          label: FoundationText.userAgreement,
+                          trailing: SettingsInsetChevron(isDark: isDark),
+                          onTap: () {
+                            context.push(AppRoutePaths.legalUserAgreement);
+                          },
+                        ),
+                        SettingsInsetFormSectionDivider(isDark: isDark),
+                        SettingsInsetFormRow(
+                          isDark: isDark,
+                          label: FoundationText.privacyPolicy,
+                          trailing: SettingsInsetChevron(isDark: isDark),
+                          onTap: () {
+                            context.push(AppRoutePaths.legalPrivacyPolicy);
+                          },
+                        ),
+                        SettingsInsetFormSectionDivider(isDark: isDark),
+                        SettingsInsetFormRow(
+                          isDark: isDark,
+                          label: FoundationText.permissionsStatement,
+                          trailing: SettingsInsetChevron(isDark: isDark),
+                          onTap: () {
+                            context.push(AppRoutePaths.legalPermissions);
+                          },
+                        ),
+                        SettingsInsetFormSectionDivider(isDark: isDark),
+                        SettingsInsetFormRow(
+                          isDark: isDark,
+                          label: FoundationText.thirdPartySdkList,
+                          trailing: SettingsInsetChevron(isDark: isDark),
+                          onTap: () {
+                            context.push(AppRoutePaths.legalThirdPartySdkList);
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}

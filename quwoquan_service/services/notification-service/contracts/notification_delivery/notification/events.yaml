@@ -1,15 +1,3 @@
-events:
-- name: NotificationPushRequested
-  description: AppMessage aggregate 创建后请求可靠外部投递；由同库 outbox 发布。
-  producer: notification-service
-  consumers:
-  - notification-delivery-worker
-  channel: internal
-  payload_entity: NotificationPushRequestedEvent
-  payload_fields:
-  - messageId
-  - messageType
-  - title
-  - summary
-  - targetType
-  - targetId
+description: Notification（AppMessage）聚合自身不发布领域事件；站内消息状态由 Notification reader operation 直接读取。跨边界可靠推送唯一归 NotificationDeliveryJob
+  及其 transactional outbox，不得在本对象重复声明。
+events: []

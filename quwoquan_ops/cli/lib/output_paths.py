@@ -12,8 +12,10 @@ import json
 import os
 import re
 import shutil
+import stat
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 from uuid import uuid4
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -30,6 +32,243 @@ DEFAULT_DEPLOY_TARGET_BY_ENV = {
 ACTIVE_CANDIDATE_SCHEMA = "stackctl-active-deployment-candidate"
 PACKAGE_ROOT_OVERRIDE_ENV = "QWQ_DEPLOY_PACKAGE_ROOT_OVERRIDE"
 _BASELINE_ID = re.compile(r"sha256:[0-9a-f]{64}")
+
+
+class _UnsafeActiveCandidatePath(ValueError):
+    """The active-candidate pointer cannot be accessed without following links."""
+
+
+def _secure_directory_flags() -> int:
+    nofollow = getattr(os, "O_NOFOLLOW", 0)
+    directory = getattr(os, "O_DIRECTORY", 0)
+    if not nofollow or not directory:
+        raise RuntimeError(
+            "active candidate verification requires O_NOFOLLOW/O_DIRECTORY"
+        )
+    return os.O_RDONLY | nofollow | directory | getattr(os, "O_CLOEXEC", 0)
+
+
+def _secure_file_flags(*, write: bool) -> int:
+    nofollow = getattr(os, "O_NOFOLLOW", 0)
+    if not nofollow:
+        raise RuntimeError("active candidate verification requires O_NOFOLLOW")
+    access = os.O_WRONLY | os.O_CREAT | os.O_EXCL if write else os.O_RDONLY
+    return access | nofollow | getattr(os, "O_CLOEXEC", 0)
+
+
+def _open_directory_chain(
+    path: Path,
+    *,
+    label: str,
+) -> tuple[int, tuple[tuple[int, int], ...]]:
+    """Open every absolute directory segment without following symbolic links."""
+    absolute = path.expanduser().absolute()
+    if not absolute.is_absolute() or ".." in absolute.parts:
+        raise _UnsafeActiveCandidatePath(f"{label} parent path is unsafe")
+    anchor = Path(absolute.anchor)
+    try:
+        descriptor = os.open(anchor, _secure_directory_flags())
+    except OSError as exc:
+        raise _UnsafeActiveCandidatePath(
+            f"{label} filesystem root is unavailable"
+        ) from exc
+    identities: list[tuple[int, int]] = []
+    try:
+        root_info = os.fstat(descriptor)
+        identities.append((root_info.st_dev, root_info.st_ino))
+        for part in absolute.parts[1:]:
+            try:
+                child = os.open(
+                    part,
+                    _secure_directory_flags(),
+                    dir_fd=descriptor,
+                )
+            except FileNotFoundError:
+                raise
+            except OSError as exc:
+                raise _UnsafeActiveCandidatePath(
+                    f"{label} parent is a symlink or non-directory: {part}"
+                ) from exc
+            os.close(descriptor)
+            descriptor = child
+            info = os.fstat(descriptor)
+            if not stat.S_ISDIR(info.st_mode):
+                raise _UnsafeActiveCandidatePath(
+                    f"{label} parent is not a directory: {part}"
+                )
+            identities.append((info.st_dev, info.st_ino))
+        return descriptor, tuple(identities)
+    except Exception:
+        os.close(descriptor)
+        raise
+
+
+def _revalidate_directory_chain(
+    path: Path,
+    *,
+    label: str,
+    expected_identities: tuple[tuple[int, int], ...],
+) -> None:
+    descriptor, identities = _open_directory_chain(path, label=label)
+    os.close(descriptor)
+    if identities != expected_identities:
+        raise _UnsafeActiveCandidatePath(f"{label} parent changed during access")
+
+
+def _read_secure_json_object(path: Path, *, label: str) -> dict[str, Any] | None:
+    try:
+        parent_descriptor, parent_identities = _open_directory_chain(
+            path.parent,
+            label=label,
+        )
+    except FileNotFoundError:
+        return None
+    descriptor = -1
+    try:
+        try:
+            before = os.stat(
+                path.name,
+                dir_fd=parent_descriptor,
+                follow_symlinks=False,
+            )
+        except FileNotFoundError:
+            return None
+        if not stat.S_ISREG(before.st_mode):
+            raise _UnsafeActiveCandidatePath(
+                f"{label} is a symlink or non-regular file"
+            )
+        try:
+            descriptor = os.open(
+                path.name,
+                _secure_file_flags(write=False),
+                dir_fd=parent_descriptor,
+            )
+        except OSError as exc:
+            raise _UnsafeActiveCandidatePath(
+                f"{label} is a symlink or unreadable"
+            ) from exc
+        opened = os.fstat(descriptor)
+        identity = (opened.st_dev, opened.st_ino)
+        if not stat.S_ISREG(opened.st_mode) or identity != (
+            before.st_dev,
+            before.st_ino,
+        ):
+            raise _UnsafeActiveCandidatePath(f"{label} changed during access")
+        with os.fdopen(descriptor, "rb") as handle:
+            descriptor = -1
+            encoded = handle.read()
+        _revalidate_directory_chain(
+            path.parent,
+            label=label,
+            expected_identities=parent_identities,
+        )
+        after = os.stat(
+            path.name,
+            dir_fd=parent_descriptor,
+            follow_symlinks=False,
+        )
+        if not stat.S_ISREG(after.st_mode) or (after.st_dev, after.st_ino) != identity:
+            raise _UnsafeActiveCandidatePath(f"{label} changed during access")
+    except FileNotFoundError as exc:
+        raise _UnsafeActiveCandidatePath(f"{label} changed during access") from exc
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+        os.close(parent_descriptor)
+    try:
+        payload = json.loads(encoded.decode("utf-8"))
+    except (UnicodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"{label} is unreadable: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise TypeError(f"{label} must be an object")
+    return payload
+
+
+def _atomic_write_secure_json_object(
+    path: Path,
+    payload: dict[str, Any],
+    *,
+    label: str,
+) -> None:
+    encoded = (
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+    ).encode("utf-8")
+    parent_descriptor, parent_identities = _open_directory_chain(
+        path.parent,
+        label=label,
+    )
+    temporary = f".{path.name}.{uuid4().hex}.tmp"
+    descriptor = -1
+    temporary_exists = False
+    try:
+        try:
+            current = os.stat(
+                path.name,
+                dir_fd=parent_descriptor,
+                follow_symlinks=False,
+            )
+        except FileNotFoundError:
+            current = None
+        if current is not None and not stat.S_ISREG(current.st_mode):
+            raise _UnsafeActiveCandidatePath(
+                f"{label} final path is a symlink or non-regular file"
+            )
+        current_identity = (
+            (current.st_dev, current.st_ino) if current is not None else None
+        )
+        descriptor = os.open(
+            temporary,
+            _secure_file_flags(write=True),
+            0o600,
+            dir_fd=parent_descriptor,
+        )
+        temporary_exists = True
+        with os.fdopen(descriptor, "wb") as handle:
+            descriptor = -1
+            handle.write(encoded)
+            handle.flush()
+            os.fsync(handle.fileno())
+        _revalidate_directory_chain(
+            path.parent,
+            label=label,
+            expected_identities=parent_identities,
+        )
+        try:
+            latest = os.stat(
+                path.name,
+                dir_fd=parent_descriptor,
+                follow_symlinks=False,
+            )
+        except FileNotFoundError:
+            latest = None
+        if latest is not None and not stat.S_ISREG(latest.st_mode):
+            raise _UnsafeActiveCandidatePath(
+                f"{label} final path is a symlink or non-regular file"
+            )
+        latest_identity = (
+            (latest.st_dev, latest.st_ino) if latest is not None else None
+        )
+        if latest_identity != current_identity:
+            raise _UnsafeActiveCandidatePath(
+                f"{label} final path changed before activation"
+            )
+        os.replace(
+            temporary,
+            path.name,
+            src_dir_fd=parent_descriptor,
+            dst_dir_fd=parent_descriptor,
+        )
+        temporary_exists = False
+        os.fsync(parent_descriptor)
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+        if temporary_exists:
+            try:
+                os.unlink(temporary, dir_fd=parent_descriptor)
+            except FileNotFoundError:
+                pass
+        os.close(parent_descriptor)
 
 
 def safe_segment(value: str, *, fallback: str = "run") -> str:
@@ -245,17 +484,18 @@ def target_cache_dir(target: str) -> Path:
     return target_local_dir(target) / "cache"
 
 
+def _deployment_base_root() -> Path:
+    configured = os.environ.get("QWQ_DEPLOY_WORK_ROOT", "").strip()
+    base = Path(configured).expanduser() if configured else DEFAULT_DEPLOY_WORK_ROOT
+    resolved_base = base.resolve()
+    _require_external_deployment_base(resolved_base)
+    return resolved_base
+
+
 def deployment_work_root(target: str) -> Path:
     """Return the real, external workspace for exactly one deployment target."""
     target_segment = _deployment_segment(target, label="target", fallback="local")
-    configured = os.environ.get("QWQ_DEPLOY_WORK_ROOT", "").strip()
-    base = (
-        Path(configured).expanduser()
-        if configured
-        else DEFAULT_DEPLOY_WORK_ROOT
-    )
-    resolved_base = base.resolve()
-    _require_external_deployment_base(resolved_base)
+    resolved_base = _deployment_base_root()
     target_root = (resolved_base / target_segment).resolve()
     if not _is_within(target_root, resolved_base):
         raise ValueError(
@@ -314,18 +554,54 @@ def deployment_candidate_dir(target: str, baseline_id: str) -> Path:
 
 
 def active_candidate_manifest_path(target: str) -> Path:
-    return deployment_target_path(target, "active-runtime-candidate.json")
+    target_segment = _deployment_segment(target, label="target", fallback="local")
+    unresolved_target_root = _deployment_base_root() / target_segment
+    resolved_target_root = deployment_work_root(target)
+    if unresolved_target_root != resolved_target_root:
+        raise _UnsafeActiveCandidatePath(
+            "active deployment candidate parent cannot be a symbolic link"
+        )
+    return unresolved_target_root / "active-runtime-candidate.json"
 
 
-def active_deployment_candidate(target: str) -> dict[str, str] | None:
-    """Read and validate the only activated package candidate for a target."""
+def _load_full_deployment_candidate(
+    target: str,
+    baseline_id: str,
+) -> dict[str, Any]:
+    # Delayed import avoids the output_paths -> deployment_candidate_manifest ->
+    # output_paths module initialization cycle while retaining the one canonical
+    # full-candidate validator.
+    from quwoquan_ops.cli.lib.deployment_candidate_manifest import (
+        load_candidate_manifest,
+    )
+
+    payload = load_candidate_manifest(
+        env_for_target(target),
+        target,
+        baseline_id,
+        require_full=True,
+    )
+    if (
+        payload.get("candidateType") != "runtime-full"
+        or payload.get("target") != target
+        or payload.get("baselineId") != baseline_id
+    ):
+        raise ValueError("deployment candidate manifest identity mismatch")
+    return payload
+
+
+def _active_deployment_candidate_descriptor(
+    target: str,
+) -> dict[str, str] | None:
+    """Securely read the active pointer without re-reading candidate payloads."""
+
     path = active_candidate_manifest_path(target)
-    if not path.is_file():
+    payload = _read_secure_json_object(
+        path,
+        label="active deployment candidate",
+    )
+    if payload is None:
         return None
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise ValueError(f"active deployment candidate is unreadable: {exc}") from exc
     required = {
         "schema",
         "candidateType",
@@ -337,13 +613,13 @@ def active_deployment_candidate(target: str) -> dict[str, str] | None:
         raise ValueError("active deployment candidate fields mismatch")
     baseline = str(payload.get("baselineId") or "")
     expected = deployment_candidate_dir(target, baseline)
+    candidate_dir = payload.get("candidateDir")
     if (
         payload.get("schema") != ACTIVE_CANDIDATE_SCHEMA
         or payload.get("candidateType") != "runtime-full"
         or payload.get("target") != target
-        or Path(str(payload.get("candidateDir") or "")).resolve() != expected
-        or not (expected / "packages").is_dir()
-        or not (expected / "manifest.json").is_file()
+        or not isinstance(candidate_dir, str)
+        or candidate_dir != str(expected)
     ):
         raise ValueError("active deployment candidate identity mismatch")
     return {
@@ -355,27 +631,81 @@ def active_deployment_candidate(target: str) -> dict[str, str] | None:
     }
 
 
+def active_deployment_candidate_snapshot(target: str) -> dict[str, Any] | None:
+    """Fix one fully validated candidate for a complete runtime operation.
+
+    The active pointer is parsed exactly once.  Every caller that needs Provider,
+    observability or OCI identity can derive it from the returned manifest and
+    candidate directory without consulting a later active pointer.
+    """
+
+    descriptor = _active_deployment_candidate_descriptor(target)
+    if descriptor is None:
+        return None
+    manifest = _load_full_deployment_candidate(
+        target,
+        descriptor["baselineId"],
+    )
+    return {**descriptor, "manifest": manifest}
+
+
+def active_deployment_candidate(target: str) -> dict[str, str] | None:
+    """Read and validate the only activated package candidate for a target."""
+
+    snapshot = active_deployment_candidate_snapshot(target)
+    if snapshot is None:
+        return None
+    return {
+        key: str(snapshot[key])
+        for key in (
+            "schema",
+            "candidateType",
+            "target",
+            "baselineId",
+            "candidateDir",
+        )
+    }
+
+
+def assert_active_deployment_candidate_snapshot(
+    snapshot: dict[str, Any],
+) -> None:
+    """Fail closed if the active pointer no longer selects a fixed snapshot."""
+
+    required = {
+        "schema",
+        "candidateType",
+        "target",
+        "baselineId",
+        "candidateDir",
+        "manifest",
+    }
+    if not isinstance(snapshot, dict) or set(snapshot) != required:
+        raise ValueError("fixed deployment candidate snapshot fields mismatch")
+    target = str(snapshot.get("target") or "")
+    current = _active_deployment_candidate_descriptor(target)
+    expected = {
+        key: snapshot[key]
+        for key in (
+            "schema",
+            "candidateType",
+            "target",
+            "baselineId",
+            "candidateDir",
+        )
+    }
+    if current != expected:
+        raise ValueError("active deployment candidate changed during operation")
+
+
 def activate_deployment_candidate(target: str, baseline_id: str) -> Path:
     """Atomically publish one already-complete candidate as the active input."""
     candidate = deployment_candidate_dir(target, baseline_id)
-    if not (candidate / "packages").is_dir():
-        raise ValueError("cannot activate a candidate without packages")
-    manifest_path = candidate / "manifest.json"
-    if not manifest_path.is_file():
-        raise ValueError("cannot activate a candidate without manifest.json")
     try:
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-        raise ValueError(f"cannot activate unreadable candidate manifest: {exc}") from exc
-    if (
-        not isinstance(manifest, dict)
-        or manifest.get("candidateType") != "runtime-full"
-        or manifest.get("target") != target
-        or manifest.get("baselineId") != baseline_id
-    ):
-        raise ValueError("cannot activate non-runtime or mismatched candidate")
+        _load_full_deployment_candidate(target, baseline_id)
+    except (OSError, TypeError, ValueError) as exc:
+        raise ValueError(f"cannot activate invalid full candidate: {exc}") from exc
     path = active_candidate_manifest_path(target)
-    path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "schema": ACTIVE_CANDIDATE_SCHEMA,
         "candidateType": "runtime-full",
@@ -383,12 +713,11 @@ def activate_deployment_candidate(target: str, baseline_id: str) -> Path:
         "baselineId": baseline_id,
         "candidateDir": str(candidate),
     }
-    temporary = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
-    temporary.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
+    _atomic_write_secure_json_object(
+        path,
+        payload,
+        label="active deployment candidate",
     )
-    temporary.replace(path)
     return path
 
 

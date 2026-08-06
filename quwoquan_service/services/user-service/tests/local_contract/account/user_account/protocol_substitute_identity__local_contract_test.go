@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	credentialmodel "quwoquan_service/services/user-service/internal/account/credential_binding/domain/model"
 	userintegration "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/integration"
@@ -20,6 +21,20 @@ func TestProtocolSubstituteIdentityAdaptersUseRemoteProtocol(t *testing.T) {
 					"phone": "+8613800000000", "displayLabel": "138****0000",
 				})
 			case "/federated":
+				var payload struct {
+					Action string `json:"action"`
+				}
+				if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+					http.Error(writer, "invalid request", http.StatusBadRequest)
+					return
+				}
+				if payload.Action == "authorize" {
+					_ = json.NewEncoder(writer).Encode(map[string]any{
+						"payload":   "opaque-nonprod-authorization-request",
+						"expiresAt": time.Now().UTC().Add(5 * time.Minute),
+					})
+					return
+				}
 				_ = json.NewEncoder(writer).Encode(map[string]string{
 					"credentialKey": "remote-credential",
 					"displayName":   "Remote Nonprod User",
@@ -53,6 +68,11 @@ func TestProtocolSubstituteIdentityAdaptersUseRemoteProtocol(t *testing.T) {
 		)
 	if err != nil {
 		t.Fatal(err)
+	}
+	authorization, err := federated.IssueAuthorizationRequest(context.Background())
+	if err != nil || authorization.Payload != "opaque-nonprod-authorization-request" ||
+		!authorization.ExpiresAt.After(time.Now().UTC()) {
+		t.Fatalf("federated authorization=%+v err=%v", authorization, err)
 	}
 	identity, err := federated.Verify(context.Background(), "authorization-code")
 	if err != nil || identity.CredentialKey != "remote-credential" {

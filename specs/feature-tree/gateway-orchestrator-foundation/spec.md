@@ -62,7 +62,7 @@
 
 ## 7. 工程归属
 
-- App：`quwoquan_app/lib/cloud/runtime`、`quwoquan_app/lib/app`
+- App：`quwoquan_app/lib/service/realtime_gateway`
 - Metadata（协作引用，不用于代码归属）：`quwoquan_service/contracts/metadata/_shared`
 - Service：`quwoquan_service/runtime`、`quwoquan_service/services/api-edge`、`quwoquan_service/services/realtime-gateway`
 - 测试：

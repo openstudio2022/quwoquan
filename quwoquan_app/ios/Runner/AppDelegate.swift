@@ -347,7 +347,6 @@ private final class StartupNativeTelemetryJournal {
     phase: String,
     elapsedMs: Int,
     outcome: String,
-    recoverySurface: String = "",
     failureCode: String = "",
     failureSource: String = "",
     deadlineOrigin: String = "ios_process"
@@ -761,7 +760,10 @@ private final class RecoveryFailureEncryptedStore {
           "buildNumber": buildNumber,
           "osVersion": UIDevice.current.systemVersion,
           "deviceModel": UIDevice.current.model,
+          "environment": self.nativeRuntimeEnvironment,
           "recoveryBaseUrl": self.recoveryBaseURLString,
+          "runtimeConfigDigest": self.nativeRuntimeConfigDigest,
+          "effectiveLaunchManifestDigest": self.nativeEffectiveLaunchManifestDigest,
           "publicWebUrl": self.publicWebURLString,
           "appDownloadBaseUrl": self.appDownloadBaseURLString,
         ])
@@ -1438,7 +1440,6 @@ private final class RecoveryFailureEncryptedStore {
       phase: "terminal",
       elapsedMs: elapsedMs,
       outcome: "recovery",
-      recoverySurface: "native_recovery",
       failureCode: failureCode,
       failureSource: "native_watchdog"
     )
@@ -1694,7 +1695,17 @@ private final class RecoveryFailureEncryptedStore {
     }
     let configured = Bundle.main.object(forInfoDictionaryKey: "QWQRuntimeEnvironment") as? String
     let value = configured?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-    return ["alpha", "beta", "gamma", "prod"].contains(value) ? value : "prod"
+    return ["alpha", "beta", "gamma", "prod"].contains(value) ? value : ""
+  }
+
+  private var nativeRuntimeConfigDigest: String {
+    (nativeRuntimeManifest["runtimeConfigDigest"] as? String)?
+      .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+  }
+
+  private var nativeEffectiveLaunchManifestDigest: String {
+    (nativeRuntimeManifest["effectiveLaunchManifestDigest"] as? String)?
+      .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
   }
 
   private var nativeRuntimeManifest: [String: Any] {
@@ -1942,99 +1953,398 @@ private enum StartupTransitionBackground {
 }
 
 final class AssistantDeviceActionPlugin {
-  private static let idempotencyPrefix = "qwq.assistant.calendar."
+  private static let recordPrefix = "qwq.device.calendar."
   let eventStore: EKEventStore
+  private let defaults: UserDefaults
 
-  init(eventStore: EKEventStore = EKEventStore()) {
+  init(
+    eventStore: EKEventStore = EKEventStore(),
+    defaults: UserDefaults = .standard
+  ) {
     self.eventStore = eventStore
+    self.defaults = defaults
   }
 
   func handle(call: FlutterMethodCall, result: @escaping FlutterResult) {
-    guard call.method == "createCalendarReminder" else {
+    switch call.method {
+    case "probe":
+      handleProbe(result: result)
+    case "createEvent":
+      handleMutation(operation: .create, arguments: call.arguments, result: result)
+    case "updateEvent":
+      handleMutation(operation: .update, arguments: call.arguments, result: result)
+    case "deleteEvent":
+      handleMutation(operation: .delete, arguments: call.arguments, result: result)
+    case "createCalendarReminder":
+      // The pre-M3 request has no opaque permit binding and must fail closed.
+      result(failure(status: "unavailable"))
+    default:
       result(FlutterMethodNotImplemented)
+    }
+  }
+
+  private func handleProbe(result: @escaping FlutterResult) {
+    let permission = permissionStatus()
+    guard permission == "granted" else {
+      result(probe(permission: permission, hasWritableCalendar: false))
       return
     }
-    guard let request = CalendarReminderRequest(call.arguments) else {
-      result(response(status: "failed"))
+    let hasWritableCalendar = eventStore.calendars(for: .event)
+      .contains(where: \.allowsContentModifications)
+    result(probe(permission: permission, hasWritableCalendar: hasWritableCalendar))
+  }
+
+  private func handleMutation(
+    operation: DeviceCalendarNativeOperation,
+    arguments: Any?,
+    result: @escaping FlutterResult
+  ) {
+    guard let request = DeviceCalendarNativeRequest(
+      operation: operation,
+      arguments: arguments
+    ) else {
+      result(failure(status: "invalid_request"))
       return
     }
-    let preferenceKey = Self.idempotencyPrefix + request.idempotencyKey
-    let marker = eventMarker(for: request.idempotencyKey)
-    requestCalendarAccess { [weak self] granted in
-      guard let self else {
-        result(["status": "failed", "deviceObjectId": ""])
+    if let record = readRecord(for: request.idempotencyKey) {
+      guard record.operation == operation.rawValue,
+            record.inputDigest == request.inputDigest
+      else {
+        result(failure(status: "idempotency_conflict"))
         return
       }
-      guard granted else {
-        result(self.response(status: "denied"))
-        return
-      }
-      if let existing = UserDefaults.standard.string(forKey: preferenceKey),
-         self.eventStore.event(withIdentifier: existing) != nil
+      if record.status == "succeeded",
+         !record.eventId.isEmpty,
+         Self.isCanonicalDigest(record.receiptDigest)
       {
-        result(self.response(status: "created", objectId: existing))
+        result(success(
+          eventId: record.eventId,
+          receiptDigest: record.receiptDigest,
+          replayed: true
+        ))
         return
       }
-      if let recovered = self.event(matching: request, marker: marker),
-         let identifier = recovered.eventIdentifier,
-         !identifier.isEmpty
-      {
-        UserDefaults.standard.set(identifier, forKey: preferenceKey)
-        result(self.response(status: "created", objectId: identifier))
-        return
-      }
-      guard let calendar = self.eventStore.defaultCalendarForNewEvents else {
-        result(self.response(status: "unavailable"))
-        return
-      }
-      let event = EKEvent(eventStore: self.eventStore)
-      event.calendar = calendar
-      event.title = request.title
-      event.notes = request.notes
-      event.startDate = request.startsAt
-      event.endDate = request.startsAt.addingTimeInterval(
-        TimeInterval(request.durationMinutes * 60)
-      )
-      event.url = marker
-      event.addAlarm(
-        EKAlarm(relativeOffset: TimeInterval(-request.reminderMinutes * 60))
-      )
-      do {
-        try self.eventStore.save(event, span: .thisEvent, commit: true)
-        let identifier = event.eventIdentifier ?? ""
-        guard !identifier.isEmpty else {
-          result(self.response(status: "failed"))
+    }
+
+    let permission = permissionStatus()
+    if permission == "requestable" {
+      requestCalendarAccess { [weak self] granted in
+        guard let self else {
+          result([
+            "status": "system_error",
+            "deviceEventId": "",
+            "receiptDigest": "",
+            "replayed": false,
+          ])
           return
         }
-        UserDefaults.standard.set(identifier, forKey: preferenceKey)
-        result(self.response(status: "created", objectId: identifier))
-      } catch {
-        result(self.response(status: "failed"))
+        guard granted, self.permissionStatus() == "granted" else {
+          let deniedStatus = self.permissionStatus() == "restricted"
+            ? "permission_restricted"
+            : "permission_denied"
+          result(self.failure(status: deniedStatus))
+          return
+        }
+        self.execute(request: request, result: result)
       }
+      return
     }
+    guard permission == "granted" else {
+      result(failure(
+        status: permission == "restricted"
+          ? "permission_restricted"
+          : "permission_denied"
+      ))
+      return
+    }
+    execute(request: request, result: result)
+  }
+
+  private func execute(
+    request: DeviceCalendarNativeRequest,
+    result: @escaping FlutterResult
+  ) {
+    do {
+      switch request.operation {
+      case .create:
+        try create(request: request, result: result)
+      case .update:
+        try update(request: request, result: result)
+      case .delete:
+        try delete(request: request, result: result)
+      }
+    } catch {
+      result(failure(status: "system_error"))
+    }
+  }
+
+  private func create(
+    request: DeviceCalendarNativeRequest,
+    result: @escaping FlutterResult
+  ) throws {
+    let existing = readRecord(for: request.idempotencyKey)
+    if existing?.status == "pending",
+       let recovered = event(matching: request),
+       let identifier = recovered.eventIdentifier,
+       !identifier.isEmpty
+    {
+      finishSuccess(
+        request: request,
+        eventId: identifier,
+        replayed: true,
+        result: result
+      )
+      return
+    }
+    guard let calendar = writableCalendar(identifier: request.calendarId) else {
+      result(failure(status: "no_calendar"))
+      return
+    }
+    guard writePending(request: request, eventId: "") else {
+      result(failure(status: "system_error"))
+      return
+    }
+
+    let event = EKEvent(eventStore: eventStore)
+    event.calendar = calendar
+    apply(request: request, to: event)
+    event.url = eventMarker(for: request.idempotencyKey)
+    do {
+      try eventStore.save(event, span: .thisEvent, commit: true)
+      guard let identifier = event.eventIdentifier, !identifier.isEmpty else {
+        result(failure(status: "system_error"))
+        return
+      }
+      guard writeSucceeded(request: request, eventId: identifier) else {
+        try? eventStore.remove(event, span: .thisEvent, commit: true)
+        result(failure(status: "system_error"))
+        return
+      }
+      result(success(
+        eventId: identifier,
+        receiptDigest: receiptDigest(request: request, eventId: identifier),
+        replayed: false
+      ))
+    } catch {
+      try? eventStore.remove(event, span: .thisEvent, commit: true)
+      throw error
+    }
+  }
+
+  private func update(
+    request: DeviceCalendarNativeRequest,
+    result: @escaping FlutterResult
+  ) throws {
+    guard let event = eventStore.event(withIdentifier: request.deviceEventId) else {
+      result(failure(status: "event_not_found"))
+      return
+    }
+    if !request.calendarId.isEmpty {
+      guard let calendar = writableCalendar(identifier: request.calendarId) else {
+        result(failure(status: "no_calendar"))
+        return
+      }
+      event.calendar = calendar
+    }
+    let replayingPending = readRecord(for: request.idempotencyKey)?.status == "pending"
+    if !replayingPending,
+       !writePending(request: request, eventId: request.deviceEventId)
+    {
+      result(failure(status: "system_error"))
+      return
+    }
+    apply(request: request, to: event)
+    try eventStore.save(event, span: .thisEvent, commit: true)
+    finishSuccess(
+      request: request,
+      eventId: request.deviceEventId,
+      replayed: replayingPending,
+      result: result
+    )
+  }
+
+  private func delete(
+    request: DeviceCalendarNativeRequest,
+    result: @escaping FlutterResult
+  ) throws {
+    let existing = readRecord(for: request.idempotencyKey)
+    guard let event = eventStore.event(withIdentifier: request.deviceEventId) else {
+      if existing?.status == "pending" {
+        finishSuccess(
+          request: request,
+          eventId: request.deviceEventId,
+          replayed: true,
+          result: result
+        )
+      } else {
+        result(failure(status: "event_not_found"))
+      }
+      return
+    }
+    guard existing?.status == "pending"
+      || writePending(request: request, eventId: request.deviceEventId)
+    else {
+      result(failure(status: "system_error"))
+      return
+    }
+    try eventStore.remove(event, span: .thisEvent, commit: true)
+    finishSuccess(
+      request: request,
+      eventId: request.deviceEventId,
+      replayed: existing?.status == "pending",
+      result: result
+    )
+  }
+
+  private func apply(
+    request: DeviceCalendarNativeRequest,
+    to event: EKEvent
+  ) {
+    event.title = request.title
+    event.startDate = request.start
+    event.endDate = request.end
+    event.timeZone = TimeZone(identifier: request.timezone)
+    event.location = request.location
+    event.notes = request.notes
+  }
+
+  private func writableCalendar(identifier: String) -> EKCalendar? {
+    if !identifier.isEmpty {
+      guard let calendar = eventStore.calendar(withIdentifier: identifier),
+            calendar.allowsContentModifications
+      else {
+        return nil
+      }
+      return calendar
+    }
+    guard let calendar = eventStore.defaultCalendarForNewEvents,
+          calendar.allowsContentModifications
+    else {
+      return nil
+    }
+    return calendar
+  }
+
+  private func event(matching request: DeviceCalendarNativeRequest) -> EKEvent? {
+    let predicate = eventStore.predicateForEvents(
+      withStart: request.start.addingTimeInterval(-60),
+      end: request.end.addingTimeInterval(60),
+      calendars: nil
+    )
+    let marker = eventMarker(for: request.idempotencyKey)
+    return eventStore.events(matching: predicate).first { $0.url == marker }
   }
 
   private func eventMarker(for idempotencyKey: String) -> URL {
-    let digest = SHA256.hash(data: Data(idempotencyKey.utf8))
-      .map { String(format: "%02x", $0) }
-      .joined()
-    return URL(string: "quwoquan://assistant/calendar/\(digest)")!
+    URL(string: "quwoquan://device-calendar/\(Self.sha256Hex(idempotencyKey))")!
   }
 
-  private func event(
-    matching request: CalendarReminderRequest,
-    marker: URL
-  ) -> EKEvent? {
-    let endDate = request.startsAt.addingTimeInterval(
-      TimeInterval(request.durationMinutes * 60)
+  private func finishSuccess(
+    request: DeviceCalendarNativeRequest,
+    eventId: String,
+    replayed: Bool,
+    result: @escaping FlutterResult
+  ) {
+    guard writeSucceeded(request: request, eventId: eventId) else {
+      result(failure(status: "system_error"))
+      return
+    }
+    result(success(
+      eventId: eventId,
+      receiptDigest: receiptDigest(request: request, eventId: eventId),
+      replayed: replayed
+    ))
+  }
+
+  private func writePending(
+    request: DeviceCalendarNativeRequest,
+    eventId: String
+  ) -> Bool {
+    writeRecord(
+      DeviceCalendarMutationRecord(
+        operation: request.operation.rawValue,
+        inputDigest: request.inputDigest,
+        eventId: eventId,
+        receiptDigest: "",
+        status: "pending"
+      ),
+      for: request.idempotencyKey
     )
-    let predicate = eventStore.predicateForEvents(
-      withStart: request.startsAt.addingTimeInterval(-60),
-      end: endDate.addingTimeInterval(60),
-      calendars: nil
+  }
+
+  private func writeSucceeded(
+    request: DeviceCalendarNativeRequest,
+    eventId: String
+  ) -> Bool {
+    writeRecord(
+      DeviceCalendarMutationRecord(
+        operation: request.operation.rawValue,
+        inputDigest: request.inputDigest,
+        eventId: eventId,
+        receiptDigest: receiptDigest(request: request, eventId: eventId),
+        status: "succeeded"
+      ),
+      for: request.idempotencyKey
     )
-    return eventStore.events(matching: predicate).first { event in
-      event.url == marker
+  }
+
+  private func readRecord(for idempotencyKey: String) -> DeviceCalendarMutationRecord? {
+    DeviceCalendarMutationRecord(
+      defaults.dictionary(forKey: recordKey(idempotencyKey))
+    )
+  }
+
+  private func writeRecord(
+    _ record: DeviceCalendarMutationRecord,
+    for idempotencyKey: String
+  ) -> Bool {
+    defaults.set(record.dictionary, forKey: recordKey(idempotencyKey))
+    return defaults.synchronize()
+  }
+
+  private func recordKey(_ idempotencyKey: String) -> String {
+    Self.recordPrefix + Self.sha256Hex(idempotencyKey)
+  }
+
+  private func receiptDigest(
+    request: DeviceCalendarNativeRequest,
+    eventId: String
+  ) -> String {
+    let material = [
+      "device-calendar-receipt",
+      request.operation.rawValue,
+      request.idempotencyKey,
+      request.inputDigest,
+      eventId,
+    ].joined(separator: "\n")
+    return "sha256:\(Self.sha256Hex(material))"
+  }
+
+  private func permissionStatus() -> String {
+    let status = EKEventStore.authorizationStatus(for: .event)
+    if #available(iOS 17.0, *) {
+      if status == .fullAccess {
+        return "granted"
+      }
+      if status == .writeOnly || status == .notDetermined {
+        return "requestable"
+      }
+      if status == .denied {
+        return "denied"
+      }
+      return "restricted"
+    }
+    switch status {
+    case .authorized:
+      return "granted"
+    case .notDetermined:
+      return "requestable"
+    case .denied:
+      return "denied"
+    case .restricted:
+      return "restricted"
+    @unknown default:
+      return "restricted"
     }
   }
 
@@ -2052,57 +2362,208 @@ final class AssistantDeviceActionPlugin {
     }
   }
 
-  private func response(
-    status: String,
-    objectId: String = ""
+  private func probe(
+    permission: String,
+    hasWritableCalendar: Bool
   ) -> [String: Any] {
     [
-      "status": status,
-      "deviceObjectId": objectId,
+      "availability": "available",
+      "permission": permission,
+      "hasWritableCalendar": hasWritableCalendar,
     ]
+  }
+
+  private func success(
+    eventId: String,
+    receiptDigest: String,
+    replayed: Bool
+  ) -> [String: Any] {
+    [
+      "status": "succeeded",
+      "deviceEventId": eventId,
+      "receiptDigest": receiptDigest,
+      "replayed": replayed,
+    ]
+  }
+
+  private func failure(status: String) -> [String: Any] {
+    [
+      "status": status,
+      "deviceEventId": "",
+      "receiptDigest": "",
+      "replayed": false,
+    ]
+  }
+
+  static func sha256Hex(_ value: String) -> String {
+    SHA256.hash(data: Data(value.utf8))
+      .map { String(format: "%02x", $0) }
+      .joined()
+  }
+
+  static func isCanonicalDigest(_ value: String) -> Bool {
+    value.range(
+      of: #"^sha256:[0-9a-f]{64}$"#,
+      options: .regularExpression
+    ) != nil
   }
 }
 
-struct CalendarReminderRequest {
-  init?(_ rawArguments: Any?) {
+enum DeviceCalendarNativeOperation: String {
+  case create
+  case update
+  case delete
+}
+
+struct DeviceCalendarNativeRequest {
+  init?(
+    operation: DeviceCalendarNativeOperation,
+    arguments rawArguments: Any?
+  ) {
     guard let arguments = rawArguments as? [String: Any],
-          let idempotencyKey = arguments["idempotencyKey"] as? String,
-          !idempotencyKey.isEmpty,
-          idempotencyKey.count <= 128,
-          let title = arguments["title"] as? String,
-          !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-          title.count <= 200,
-          let startsAtEpochMs = arguments["startsAtEpochMs"] as? NSNumber,
-          startsAtEpochMs.int64Value > 0
+          let rawIdempotencyKey = arguments["idempotencyKey"] as? String,
+          let rawInputDigest = arguments["inputDigest"] as? String
     else {
       return nil
     }
+    let idempotencyKey = rawIdempotencyKey.trimmingCharacters(
+      in: .whitespacesAndNewlines
+    )
+    let inputDigest = rawInputDigest.trimmingCharacters(
+      in: .whitespacesAndNewlines
+    )
+    guard !idempotencyKey.isEmpty,
+          idempotencyKey.count <= 128,
+          AssistantDeviceActionPlugin.isCanonicalDigest(inputDigest)
+    else {
+      return nil
+    }
+
+    let deviceEventId = ((arguments["deviceEventId"] as? String) ?? "")
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    if operation != .create,
+       deviceEventId.isEmpty || deviceEventId.count > 512
+    {
+      return nil
+    }
+
+    self.operation = operation
     self.idempotencyKey = idempotencyKey
-    self.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
-    startsAt = Date(
-      timeIntervalSince1970: TimeInterval(startsAtEpochMs.int64Value) / 1000
-    )
-    durationMinutes = min(
-      max((arguments["durationMinutes"] as? NSNumber)?.intValue ?? 60, 1),
-      1440
-    )
-    reminderMinutes = min(
-      max((arguments["reminderMinutes"] as? NSNumber)?.intValue ?? 10, 0),
-      10080
-    )
-    notes = String(
-      ((arguments["notes"] as? String) ?? "")
-        .trimmingCharacters(in: .whitespacesAndNewlines)
-        .prefix(2000)
+    self.inputDigest = inputDigest
+    self.deviceEventId = deviceEventId
+    calendarId = ((arguments["calendarId"] as? String) ?? "")
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    if calendarId.count > 512 {
+      return nil
+    }
+
+    if operation == .delete {
+      title = ""
+      start = .distantPast
+      end = .distantPast
+      timezone = ""
+      location = ""
+      notes = ""
+      return
+    }
+
+    guard let rawTitle = arguments["title"] as? String,
+          let startEpochMs = arguments["startEpochMs"] as? NSNumber,
+          let endEpochMs = arguments["endEpochMs"] as? NSNumber,
+          let rawTimezone = arguments["timezone"] as? String
+    else {
+      return nil
+    }
+    let title = rawTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+    let timezone = rawTimezone.trimmingCharacters(in: .whitespacesAndNewlines)
+    let startEpoch = startEpochMs.int64Value
+    let endEpoch = endEpochMs.int64Value
+    let location = ((arguments["location"] as? String) ?? "")
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    let notes = ((arguments["notes"] as? String) ?? "")
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !title.isEmpty,
+          title.count <= 200,
+          startEpoch > 0,
+          endEpoch > startEpoch,
+          !timezone.isEmpty,
+          timezone.count <= 100,
+          TimeZone(identifier: timezone) != nil,
+          location.count <= 500,
+          notes.count <= 2000
+    else {
+      return nil
+    }
+    self.title = title
+    start = Date(timeIntervalSince1970: TimeInterval(startEpoch) / 1000)
+    end = Date(timeIntervalSince1970: TimeInterval(endEpoch) / 1000)
+    self.timezone = timezone
+    self.location = location
+    self.notes = notes
+  }
+
+  let operation: DeviceCalendarNativeOperation
+  let idempotencyKey: String
+  let inputDigest: String
+  let deviceEventId: String
+  let calendarId: String
+  let title: String
+  let start: Date
+  let end: Date
+  let timezone: String
+  let location: String
+  let notes: String
+}
+
+struct DeviceCalendarMutationRecord {
+  init(
+    operation: String,
+    inputDigest: String,
+    eventId: String,
+    receiptDigest: String,
+    status: String
+  ) {
+    self.operation = operation
+    self.inputDigest = inputDigest
+    self.eventId = eventId
+    self.receiptDigest = receiptDigest
+    self.status = status
+  }
+
+  init?(_ raw: [String: Any]?) {
+    guard let raw,
+          let operation = raw["operation"] as? String,
+          let inputDigest = raw["inputDigest"] as? String,
+          let eventId = raw["eventId"] as? String,
+          let receiptDigest = raw["receiptDigest"] as? String,
+          let status = raw["status"] as? String
+    else {
+      return nil
+    }
+    self.init(
+      operation: operation,
+      inputDigest: inputDigest,
+      eventId: eventId,
+      receiptDigest: receiptDigest,
+      status: status
     )
   }
 
-  let idempotencyKey: String
-  let title: String
-  let startsAt: Date
-  let durationMinutes: Int
-  let reminderMinutes: Int
-  let notes: String
+  let operation: String
+  let inputDigest: String
+  let eventId: String
+  let receiptDigest: String
+  let status: String
+
+  var dictionary: [String: String] {
+    [
+      "operation": operation,
+      "inputDigest": inputDigest,
+      "eventId": eventId,
+      "receiptDigest": receiptDigest,
+      "status": status,
+    ]
+  }
 }
 
 private final class PersonalAssistantNativeApiPlugin {

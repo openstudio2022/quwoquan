@@ -1,4 +1,14 @@
 // spec_ref: specs/feature-tree/runtime/runtime-assistant/proactive-subscription-delivery/spec.md#gwt-001
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/settings-audit/spec.md#gwt-001
+// readiness_case: get-notification-settings-local
+// readiness_case: get-privacy-settings-local
+// readiness_case: resolve-assistant-delivery-policy-local
+// readiness_case: get-call-settings-local
+// readiness_case: get-appearance-settings-local
+// readiness_case: update-notification-settings-local
+// readiness_case: update-privacy-settings-local
+// readiness_case: update-call-settings-local
+// readiness_case: update-appearance-settings-local
 package local_contract
 
 import (
@@ -161,6 +171,45 @@ func TestUserSettingsCommandFacadeKeepsUpdatedAtMonotonicAcrossClockSkew(
 	}
 }
 
+func TestUserSettingsCommandFacadeUpdatesCallAndAppearanceSections(t *testing.T) {
+	t.Parallel()
+	current, err := settingsmodel.NewDefault(
+		"account-sections",
+		time.Date(2026, 8, 5, 9, 0, 0, 0, time.UTC),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := &fakeUserSettingsStore{current: current, found: true}
+	facade := settingsapp.NewUserSettingsCommandFacade(store)
+	ringtone := settingsmodel.OfficialRingtoneID("official.classic")
+	callResult, err := facade.UpdateCallSettings(
+		trustedAccountContext("account-sections"),
+		settingsapp.UpdateCallSettingsCommand{
+			DefaultIncomingCallRingtoneID: settingsapp.Set(&ringtone),
+			EnableGroupCallRing:           settingsapp.Set(false),
+		},
+	)
+	if err != nil || callResult.Version != 1 ||
+		store.current.Call.DefaultIncomingCallRingtoneID == nil ||
+		*store.current.Call.DefaultIncomingCallRingtoneID != ringtone {
+		t.Fatalf("UpdateCallSettings: result=%+v state=%+v err=%v", callResult, store.current.Call, err)
+	}
+	appearanceResult, err := facade.UpdateAppearanceSettings(
+		trustedAccountContext("account-sections"),
+		settingsapp.UpdateAppearanceSettingsCommand{
+			ThemeMode:      settingsmodel.ThemeModeDark,
+			FontSizePreset: settingsmodel.FontSizePresetLG,
+			ApplyScope:     settingsmodel.AppearanceApplyScopeAllAccounts,
+		},
+	)
+	if err != nil || appearanceResult.Version != 2 ||
+		store.current.Appearance.DefaultThemeMode != settingsmodel.ThemeModeDark ||
+		store.current.Appearance.DefaultFontSizePreset != settingsmodel.FontSizePresetLG {
+		t.Fatalf("UpdateAppearanceSettings: result=%+v state=%+v err=%v", appearanceResult, store.current.Appearance, err)
+	}
+}
+
 func TestUserSettingsQueryFacadeReturnsTypedSnapshotAndSectionSlices(
 	t *testing.T,
 ) {
@@ -187,6 +236,10 @@ func TestUserSettingsQueryFacadeReturnsTypedSnapshotAndSectionSlices(
 	if err != nil {
 		t.Fatalf("读取 typed snapshot: %v", err)
 	}
+	notifications, err := facade.GetNotificationSettings(ctx)
+	if err != nil {
+		t.Fatalf("读取 notification slice: %v", err)
+	}
 	privacy, err := facade.GetPrivacySettings(ctx)
 	if err != nil {
 		t.Fatalf("读取 privacy slice: %v", err)
@@ -200,7 +253,7 @@ func TestUserSettingsQueryFacadeReturnsTypedSnapshotAndSectionSlices(
 		t.Fatalf("读取 appearance slice: %v", err)
 	}
 
-	if snapshot.Version != 7 ||
+	if snapshot.Version != 7 || !notifications.EnablePush ||
 		privacy.ContentLanguage == nil ||
 		*privacy.ContentLanguage != language ||
 		privacy.FeedPreference == nil ||

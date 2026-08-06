@@ -21,6 +21,7 @@ import (
 	runtimeconfig "quwoquan_service/runtime/config"
 	"quwoquan_service/runtime/controlplane"
 	rterr "quwoquan_service/runtime/errors"
+	rthealth "quwoquan_service/runtime/health"
 	rthttp "quwoquan_service/runtime/http"
 	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtmetrics "quwoquan_service/runtime/metrics"
@@ -37,7 +38,9 @@ import (
 	realtimeclient "quwoquan_service/services/notification-service/internal/notification_delivery/notification/infrastructure/realtime"
 	userclient "quwoquan_service/services/notification-service/internal/notification_delivery/notification/infrastructure/user"
 	deliveryhttp "quwoquan_service/services/notification-service/internal/notification_delivery/notification_delivery_job/adapters/inbound/http"
+	deliverystream "quwoquan_service/services/notification-service/internal/notification_delivery/notification_delivery_job/adapters/inbound/stream"
 	deliveryapplication "quwoquan_service/services/notification-service/internal/notification_delivery/notification_delivery_job/application"
+	deliverymessaging "quwoquan_service/services/notification-service/internal/notification_delivery/notification_delivery_job/infrastructure/messaging"
 	deliverypersistence "quwoquan_service/services/notification-service/internal/notification_delivery/notification_delivery_job/infrastructure/persistence"
 )
 
@@ -336,7 +339,7 @@ func run() error {
 	}()
 	notificationDB := mongoClient.Database(mongoDatabase)
 	deliveryLifecycle := deliverypersistence.NewMongoAccountLifecycle(notificationDB)
-	accountRestrictionProjection, err :=
+	accountRestrictionStore, err :=
 		persistence.NewMongoUserAccountRestrictionProjection(
 			notificationDB,
 			deliveryLifecycle,
@@ -346,10 +349,10 @@ func run() error {
 	}
 	store := deliverypersistence.NewMongoNotificationDeliveryJobStore(
 		notificationDB,
-		accountRestrictionProjection,
+		accountRestrictionStore,
 	)
 	appMessageStore := persistence.NewMongoAppMessageStore(notificationDB)
-	accountClosureProjection, err := persistence.NewMongoUserAccountClosedProjection(
+	accountClosureStore, err := persistence.NewMongoUserAccountClosedProjection(
 		notificationDB,
 		deliveryLifecycle,
 	)
@@ -365,10 +368,10 @@ func run() error {
 		indexErr = deliveryLifecycle.EnsureIndexes(indexCtx)
 	}
 	if indexErr == nil {
-		indexErr = accountClosureProjection.EnsureIndexes(indexCtx)
+		indexErr = accountClosureStore.EnsureIndexes(indexCtx)
 	}
 	if indexErr == nil {
-		indexErr = accountRestrictionProjection.EnsureIndexes(indexCtx)
+		indexErr = accountRestrictionStore.EnsureIndexes(indexCtx)
 	}
 	cancelIndexes()
 	if indexErr != nil {
@@ -394,6 +397,18 @@ func run() error {
 	)
 	if err != nil {
 		return fmt.Errorf("app message command facade init failed: %w", err)
+	}
+	accountClosureProjection, err := application.NewUserAccountClosedProjection(
+		accountClosureStore,
+	)
+	if err != nil {
+		return fmt.Errorf("UserAccountClosed application facet init failed: %w", err)
+	}
+	accountRestrictionProjection, err := application.NewUserAccountRestrictionProjection(
+		accountRestrictionStore,
+	)
+	if err != nil {
+		return fmt.Errorf("account restriction application facet init failed: %w", err)
 	}
 	redisAddr, err := requiredEnv("NOTIFICATION_REDIS_ADDR", "REDIS_ADDR")
 	if err != nil {
@@ -444,6 +459,34 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("notification message transport construction failed: %w", err)
 	}
+	if err := messageTransport.SetDurableRetention(
+		ctx,
+		deliverymessaging.NotificationDeliveryJobEventStream,
+		deliverymessaging.NotificationDeliveryJobEventStreamRetention,
+	); err != nil {
+		return fmt.Errorf("NotificationDeliveryJob event stream retention setup failed: %w", err)
+	}
+	deliveryEventPublisher, err := deliverymessaging.NewEventPublisher(messageTransport)
+	if err != nil {
+		return fmt.Errorf("NotificationDeliveryJob event publisher init failed: %w", err)
+	}
+	deliveryOutboxRelay, err := deliveryapplication.NewOutboxRelay(
+		store,
+		deliveryEventPublisher,
+		fmt.Sprintf(
+			"notification-delivery-job-relay-%s-%d",
+			getenvOrDefault("SERVICE_INSTANCE_ID", "local"),
+			os.Getpid(),
+		),
+	)
+	if err != nil {
+		return fmt.Errorf("NotificationDeliveryJob outbox relay init failed: %w", err)
+	}
+	go func() {
+		if err := deliveryOutboxRelay.Run(ctx, time.Second); err != nil && ctx.Err() == nil {
+			slog.Error("NotificationDeliveryJob outbox relay stopped", "err", err)
+		}
+	}()
 	interactionFailures := persistence.NewMongoInteractionFailureStore(
 		mongoClient.Database(mongoDatabase),
 	)
@@ -453,12 +496,19 @@ func run() error {
 	if failureIndexErr != nil {
 		return fmt.Errorf("interaction failure store EnsureIndexes failed: %w", failureIndexErr)
 	}
+	gatheringInvitations, err := application.NewGatheringInvitationProjection(
+		appMessageStore,
+	)
+	if err != nil {
+		return fmt.Errorf("Gathering invitation projection init failed: %w", err)
+	}
 	interactionConsumer, err := streamadapter.NewInteractionNotificationConsumer(
 		messageTransport,
 		appMessageCommands,
 		interactionFailures,
 		getenvOrDefault("NOTIFICATION_CONSUMER_NAME", "notification-interaction-projector"),
 		slog.Default(),
+		gatheringInvitations,
 	)
 	if err != nil {
 		return fmt.Errorf("interaction notification consumer init failed: %w", err)
@@ -497,7 +547,7 @@ func run() error {
 	accountClosureConsumer, err := streamadapter.NewUserAccountClosedConsumer(
 		messageTransport,
 		accountClosureProjection,
-		accountClosureProjection,
+		accountClosureStore,
 		getenvOrDefault(
 			"NOTIFICATION_USER_ACCOUNT_CLOSED_CONSUMER_NAME",
 			"notification-user-account-closed-projector",
@@ -536,20 +586,20 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("incoming call realtime publisher init failed: %w", err)
 	}
-	incomingCoordinator, err := application.NewIncomingCallDeliveryCoordinator(
+	incomingCoordinator, err := deliveryapplication.NewIncomingCallDeliveryCoordinator(
 		store,
 		pushDestinations,
 		presenceReader,
 		incomingPublisher,
 		deliveryAdapter,
-		application.WithIncomingCallObserver(
+		deliveryapplication.WithIncomingCallObserver(
 			registerIncomingCallMetrics(),
 		),
 	)
 	if err != nil {
 		return fmt.Errorf("incoming call coordinator init failed: %w", err)
 	}
-	rtcConsumer, err := streamadapter.NewRTCIncomingCallConsumer(
+	rtcConsumer, err := deliverystream.NewRTCIncomingCallConsumer(
 		messageTransport,
 		incomingCoordinator,
 		getenvOrDefault(
@@ -581,7 +631,6 @@ func run() error {
 	handler, err := httpadapter.NewHandler(httpadapter.HandlerDependencies{
 		AppMessageCommands: appMessageCommands,
 		AppMessageQueries:  appMessageQueries,
-		IncomingCalls:      incomingCoordinator,
 	})
 	if err != nil {
 		return fmt.Errorf("notification http handler init failed: %w", err)
@@ -590,6 +639,7 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("notification delivery http handler init failed: %w", err)
 	}
+	deliveryHandler.WithIncomingCallCoordinator(incomingCoordinator)
 	workerDone := make(chan struct{})
 	go func() {
 		defer close(workerDone)
@@ -607,49 +657,35 @@ func run() error {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
-	rootMux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
-		readyCtx, cancel := context.WithTimeout(r.Context(), time.Second)
-		defer cancel()
-		if err := mongoClient.Ping(readyCtx, nil); err != nil {
-			writeNotificationReadinessError(w, r, "mongodb unavailable")
-			return
-		}
-		if err := redisRouter.Scene("realtime").Ping(readyCtx); err != nil {
-			writeNotificationReadinessError(w, r, "realtime redis unavailable")
-			return
-		}
-		if err := redisRouter.Scene("general").Ping(readyCtx); err != nil {
-			writeNotificationReadinessError(w, r, "general redis unavailable")
-			return
-		}
-		if err := accountSecurityAuthority.CheckAccountSecurityAuthority(readyCtx); err != nil {
-			writeNotificationReadinessError(w, r, "account security authority unavailable")
-			return
-		}
-		if err := interactionConsumer.Healthy(10 * time.Second); err != nil {
-			writeNotificationReadinessError(w, r, "interaction consumer unavailable")
-			return
-		}
-		if err := accountClosureConsumer.Healthy(10 * time.Second); err != nil {
-			writeNotificationReadinessError(
-				w,
-				r,
-				"account closure consumer unavailable",
-			)
-			return
-		}
-		if err := rtcConsumer.Healthy(10 * time.Second); err != nil {
-			writeNotificationReadinessError(w, r, "rtc consumer unavailable")
-			return
-		}
-		if err := externalResultConsumer.Healthy(10 * time.Second); err != nil {
-			writeNotificationReadinessError(w, r, "external result consumer unavailable")
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status":"ready"}`))
+	readiness := rthealth.NewChecker()
+	readiness.Register("mongodb", func(hctx context.Context) error {
+		return mongoClient.Ping(hctx, nil)
 	})
+	readiness.Register("realtime-redis", func(hctx context.Context) error {
+		return redisRouter.Scene("realtime").Ping(hctx)
+	})
+	readiness.Register("general-redis", func(hctx context.Context) error {
+		return redisRouter.Scene("general").Ping(hctx)
+	})
+	readiness.Register("account-security-authority", func(readyCtx context.Context) error {
+		return accountSecurityAuthority.CheckAccountSecurityAuthority(readyCtx)
+	})
+	readiness.Register("interaction-consumer", func(context.Context) error {
+		return interactionConsumer.Healthy(10 * time.Second)
+	})
+	readiness.Register("account-closure-consumer", func(context.Context) error {
+		return accountClosureConsumer.Healthy(10 * time.Second)
+	})
+	readiness.Register("rtc-consumer", func(context.Context) error {
+		return rtcConsumer.Healthy(10 * time.Second)
+	})
+	readiness.Register("external-result-consumer", func(context.Context) error {
+		return externalResultConsumer.Healthy(10 * time.Second)
+	})
+	readiness.Register("delivery-outbox-relay", func(context.Context) error {
+		return deliveryOutboxRelay.Healthy(10 * time.Second)
+	})
+	rootMux.HandleFunc("/readyz", readiness.Handler())
 	rootMux.Handle("/metrics", rtmetrics.Handler())
 	serviceMux := http.NewServeMux()
 	handler.RegisterRoutes(serviceMux)
@@ -687,6 +723,9 @@ func run() error {
 		exceptionLogger,
 	)
 	addr := getenvOrDefault("NOTIFICATION_SERVICE_ADDR", ":18087")
+	timeouts := rtauth.ContractHTTPServerTimeouts(
+		operationsecurity.ForDomain("notification"),
+	)
 	server := &http.Server{
 		Addr: addr,
 		Handler: rtauth.Middleware(rtauth.MiddlewareConfig{
@@ -695,9 +734,9 @@ func run() error {
 			AccountSecurityAuthority: accountSecurityAuthority,
 		})(withObservability),
 		BaseContext:       func(_ net.Listener) context.Context { return ctx },
-		ReadHeaderTimeout: 5 * time.Second,
-		WriteTimeout:      30 * time.Second,
-		IdleTimeout:       60 * time.Second,
+		ReadHeaderTimeout: timeouts.ReadHeader,
+		WriteTimeout:      timeouts.Write,
+		IdleTimeout:       timeouts.Idle,
 	}
 	log.Printf("notification-service listening on %s", server.Addr)
 	if err := rthttp.ListenAndServeGraceful(server, 15*time.Second); err != nil {
@@ -714,22 +753,6 @@ func run() error {
 	waitForWorkerShutdown(accountClosureConsumerDone)
 	waitForWorkerShutdown(externalResultConsumerDone)
 	return nil
-}
-
-func writeNotificationReadinessError(
-	w http.ResponseWriter,
-	r *http.Request,
-	debugMessage string,
-) {
-	rterr.WriteHTTPError(
-		w,
-		rterr.NewUnavailable(
-			rterr.ModuleNotification,
-			rterr.DefaultUserMessage,
-			debugMessage,
-		),
-		rterr.HTTPWriteOptionsFromRequest(r),
-	)
 }
 
 func runWorkerLoop(ctx context.Context, service *application.NotificationDeliveryService) {
@@ -756,7 +779,7 @@ func runWorkerLoop(ctx context.Context, service *application.NotificationDeliver
 
 func runIncomingCallWorkerLoop(
 	ctx context.Context,
-	coordinator *application.IncomingCallDeliveryCoordinator,
+	coordinator *deliveryapplication.IncomingCallDeliveryCoordinator,
 ) {
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()

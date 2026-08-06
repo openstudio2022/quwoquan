@@ -17,7 +17,7 @@
 - 工具执行的时限、重试与循环检测
 - 工具失败的恢复动作与用户可见边界
 - 策略允许工具集合与运行时注册表的一致性
-- 端侧动作的显式确认、平台能力降级与 continuation
+- 端侧动作的显式确认、平台能力降级与独立执行回执
 
 ### Out of Scope
 
@@ -53,15 +53,15 @@
 ### REQ-004 端侧动作必须显式确认且不得伪成功
 
 - 变更设备状态的工具必须声明 `placement=device_action`、`readOnly=false` 与 `requiresConfirmation=true`。
-- AgentLoop 必须停在等待确认状态；只有用户批准且平台 capability 可用、原生执行成功后才能通过 continuation 恢复同一 Run。
-- 用户拒绝、权限拒绝、平台不可用或原生失败时不得写入成功结果，重复 continuation 不得重复外部副作用。
+- AgentLoop 必须停在等待确认状态；`ApproveTool` 只提交批准或拒绝，批准设备动作只签发短期 `DeviceActionPermit`，不代表原生执行成功。
+- App 仅在 permit 的 target、expiry、capability、device 与 input digest 全部匹配时调用 Device bridge，并通过独立回执 command 恢复同一 Run；拒绝、权限拒绝、平台不可用、原生失败或重放均不得伪造成功或重复外部副作用。
 
 ## 4. 契约引用
 
 - canonical：`quwoquan_service/services/assistant-service/contracts/_shared/assistant_tool_metadata/schema.yaml`
 - object：`quwoquan_service/services/assistant-service/contracts/_shared/tool_use/schema.yaml`
 - error / recovery：`quwoquan_service/services/assistant-service/contracts/assistant/assistant_run/errors.yaml`
-- operation：`quwoquan_service/services/assistant-service/contracts/assistant/assistant_policy_release/operations.yaml`
+- operation：`quwoquan_service/services/assistant-service/contracts/assistant/assistant_run/operations.yaml`（`ApproveAssistantToolUse`、`SubmitDeviceActionReceipt`）
 
 ## 5. 验收场景
 
@@ -89,7 +89,7 @@
 - GIVEN Skill 提议创建系统日历提醒，且该动作被 Tool Catalog 声明为需要确认的端侧动作。
 - WHEN AgentLoop 产生动作提案。
 - THEN Run 停在等待确认状态，确认前不会合成成功结果。
-- AND 用户批准时 App 先检查平台 capability 并调用原生桥，成功后以同一 continuation 恢复 Run。
+- AND 用户批准时服务端先签发短期 DeviceActionPermit；App 验证绑定后调用原生桥，再以独立设备回执恢复同一 Run。
 - AND 拒绝、权限拒绝、平台不可用或原生失败均不得伪造成功，重复请求最多产生一次系统日历副作用。
 
 ## 6. 依赖
@@ -106,5 +106,7 @@
 - 类型：`external_blocker`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：Android instrumentation 与 iOS XCTest 已覆盖原生参数校验、边界收敛、系统日历写入、readback 和同一 `idempotencyKey` 重放不重复写入；服务端 local contract 已覆盖确认前停机、缺回执拒绝、回执续接和重复 command 不重复记录。尚缺 Android/iPhone 受管真机上的权限拒绝、重复点击、App 重启恢复和端云同一 Remote 候选收据。
+- 影响或价值：Android instrumentation 与 iOS XCTest 已覆盖原生参数校验、边界收敛、系统日历写入、readback 和同一 `idempotencyKey` 重放不重复写入。
+- 已有服务端 local contract 覆盖确认前停机、缺回执拒绝、回执续接和重复 command 不重复记录。
+- 尚缺 generated permit verifier、真实 installation/device binding、Assistant 与平台 bridge 的 capability 同源映射，以及把不透明 permit 绑定到 Device bridge canonical input 的 production composition；同时尚缺 Android/iPhone 受管真机上的权限拒绝、重复点击、App 重启恢复和端云同一 Remote 候选收据。
 - 完成判定：在 Android/iPhone 受管真机对同一 Remote 候选执行批准、用户拒绝、权限拒绝、平台不可用、原生失败、重复点击与 App 重启恢复场景；系统日历 readback 证明每个 `idempotencyKey` 最多产生一个副作用，失败场景不出现 `device_action_completed`。

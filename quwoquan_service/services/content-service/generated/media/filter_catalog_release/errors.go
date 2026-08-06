@@ -23,41 +23,41 @@ var (
 // AppErrorFromFilterCatalogDigestMismatch returns *AppError for CONTENT.USER.filter_catalog_digest_mismatch (user_message from errors.yaml).
 func AppErrorFromFilterCatalogDigestMismatch(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.USER.filter_catalog_digest_mismatch")
-	return rterr.NewAppError(code, "滤镜目录校验失败", debugMessage).WithMetadata("filter_catalog_digest_mismatch", 400).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "滤镜目录校验失败", debugMessage).WithMetadata("filter_catalog_digest_mismatch", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromFilterCatalogIdempotencyConflict returns *AppError for CONTENT.USER.filter_catalog_idempotency_conflict (user_message from errors.yaml).
 func AppErrorFromFilterCatalogIdempotencyConflict(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.USER.filter_catalog_idempotency_conflict")
-	return rterr.NewAppError(code, "重复请求与原滤镜目录操作不一致", debugMessage).WithMetadata("filter_catalog_idempotency_conflict", 409).WithRecovery("refresh", 0)
+	return rterr.NewAppError(code, "重复请求与原滤镜目录操作不一致", debugMessage).WithMetadata("filter_catalog_idempotency_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromFilterCatalogInvalidArgument returns *AppError for CONTENT.USER.filter_catalog_invalid_argument (user_message from errors.yaml).
 func AppErrorFromFilterCatalogInvalidArgument(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.USER.filter_catalog_invalid_argument")
-	return rterr.NewAppError(code, "滤镜目录内容不合法", debugMessage).WithMetadata("filter_catalog_invalid_argument", 400).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "滤镜目录内容不合法", debugMessage).WithMetadata("filter_catalog_invalid_argument", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromFilterCatalogInvalidTransition returns *AppError for CONTENT.USER.filter_catalog_invalid_transition (user_message from errors.yaml).
 func AppErrorFromFilterCatalogInvalidTransition(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.USER.filter_catalog_invalid_transition")
-	return rterr.NewAppError(code, "滤镜目录状态不允许该操作", debugMessage).WithMetadata("filter_catalog_invalid_transition", 409).WithRecovery("refresh", 0)
+	return rterr.NewAppError(code, "滤镜目录状态不允许该操作", debugMessage).WithMetadata("filter_catalog_invalid_transition", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromFilterCatalogReleaseNotFound returns *AppError for CONTENT.USER.filter_catalog_release_not_found (user_message from errors.yaml).
 func AppErrorFromFilterCatalogReleaseNotFound(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.USER.filter_catalog_release_not_found")
-	return rterr.NewAppError(code, "滤镜目录发布不存在", debugMessage).WithMetadata("filter_catalog_release_not_found", 404).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "滤镜目录发布不存在", debugMessage).WithMetadata("filter_catalog_release_not_found", 404).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromFilterCatalogStorageUnavailable returns *AppError for CONTENT.SYSTEM.filter_catalog_storage_unavailable (user_message from errors.yaml).
 func AppErrorFromFilterCatalogStorageUnavailable(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.SYSTEM.filter_catalog_storage_unavailable")
-	return rterr.NewAppError(code, "滤镜目录服务暂时不可用", debugMessage).WithMetadata("filter_catalog_storage_unavailable", 503).WithRecovery("retry", 3)
+	return rterr.NewAppError(code, "滤镜目录服务暂时不可用", debugMessage).WithMetadata("filter_catalog_storage_unavailable", 503).WithRecoveryDirective("retry", "snackbar", 3)
 }
 
 // AppErrorFromFilterCatalogUnavailable returns *AppError for CONTENT.SYSTEM.filter_catalog_unavailable (user_message from errors.yaml).
 func AppErrorFromFilterCatalogUnavailable(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.SYSTEM.filter_catalog_unavailable")
-	return rterr.NewAppError(code, "滤镜暂时无法加载，请稍后重试", debugMessage).WithMetadata("filter_catalog_unavailable", 503).WithRecovery("retry", 3)
+	return rterr.NewAppError(code, "滤镜暂时无法加载，请稍后重试", debugMessage).WithMetadata("filter_catalog_unavailable", 503).WithRecoveryDirective("retry", "snackbar", 3)
 }

@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/runtime/runtime-external-integration/integration-service-foundation/spec.md#gwt-001
 package api_integration
 
 import (

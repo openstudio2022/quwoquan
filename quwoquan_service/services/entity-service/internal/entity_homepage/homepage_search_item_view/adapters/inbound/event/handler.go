@@ -26,16 +26,16 @@ type HomepagePublicEvent struct {
 	UpdatedAt     time.Time
 }
 
-type Handler struct{ projector *searchitemapp.Projector }
+type HomepageSearchItemViewProjector struct{ projector *searchitemapp.Projector }
 
-func NewHandler(projector *searchitemapp.Projector) *Handler {
+func NewHandler(projector *searchitemapp.Projector) *HomepageSearchItemViewProjector {
 	if projector == nil {
 		panic("HomepageSearchItemView event handler requires projector")
 	}
-	return &Handler{projector: projector}
+	return &HomepageSearchItemViewProjector{projector: projector}
 }
 
-func (h *Handler) Apply(ctx context.Context, event HomepagePublicEvent) (bool, error) {
+func (h *HomepageSearchItemViewProjector) Apply(ctx context.Context, event HomepagePublicEvent) (bool, error) {
 	switch strings.TrimSpace(event.EventType) {
 	case "HomepageRetired", "HomepageDeleted":
 		return h.projector.Delete(ctx, event.HomepageID, event.SourceVersion)

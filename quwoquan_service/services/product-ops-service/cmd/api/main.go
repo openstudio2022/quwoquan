@@ -37,11 +37,13 @@ import (
 	"quwoquan_service/services/product-ops-service/internal/product_ops/event_record/infrastructure/messaging"
 	opsobservability "quwoquan_service/services/product-ops-service/internal/product_ops/event_record/infrastructure/observability"
 	telemetrypersistence "quwoquan_service/services/product-ops-service/internal/product_ops/event_record/infrastructure/persistence"
-	experimenthttp "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/adapters/inbound"
+	experimenthttp "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/adapters/inbound/http"
 	experimentapp "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/application"
 	experimentmessaging "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/infrastructure/messaging"
 	experimentpersistence "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/infrastructure/persistence"
+	assignmenthttp "quwoquan_service/services/product-ops-service/internal/product_ops/experiment_assignment_fact/adapters/inbound/http"
 	assignmentstream "quwoquan_service/services/product-ops-service/internal/product_ops/experiment_assignment_fact/adapters/inbound/stream"
+	assignmentapp "quwoquan_service/services/product-ops-service/internal/product_ops/experiment_assignment_fact/application"
 	assignmentpersistence "quwoquan_service/services/product-ops-service/internal/product_ops/experiment_assignment_fact/infrastructure/persistence"
 	premiumpoolapp "quwoquan_service/services/product-ops-service/internal/product_ops/premium_pool_entry/application"
 	premiumpoolpersistence "quwoquan_service/services/product-ops-service/internal/product_ops/premium_pool_entry/infrastructure/persistence"
@@ -50,23 +52,6 @@ import (
 	visitapplication "quwoquan_service/services/product-ops-service/internal/product_ops/visit_record/application"
 	visitpersistence "quwoquan_service/services/product-ops-service/internal/product_ops/visit_record/infrastructure/persistence"
 )
-
-type metricSnapshot struct {
-	ID          string  `json:"id"`
-	Level       string  `json:"level"`
-	Environment string  `json:"environment"`
-	Cluster     string  `json:"cluster,omitempty"`
-	Service     string  `json:"service,omitempty"`
-	InstanceID  string  `json:"instanceId,omitempty"`
-	Label       string  `json:"label"`
-	Metric      string  `json:"metric"`
-	Value       float64 `json:"value"`
-	Unit        string  `json:"unit"`
-	Status      string  `json:"status"`
-	Trend       string  `json:"trend"`
-	Source      string  `json:"source,omitempty"`
-	Description string  `json:"description"`
-}
 
 type productService struct {
 	store              controlplane.StateStore
@@ -77,6 +62,7 @@ type productService struct {
 	growth             *application.GrowthService
 	prometheus         application.PrometheusQuery
 	experimentHTTP     *experimenthttp.Handler
+	assignmentHTTP     *assignmenthttp.Handler
 	publisher          runtimemessaging.EventPublisher
 	appRelease         *apprelease.Service
 	recoveryFailures   *recoveryfailure.Service
@@ -275,7 +261,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("product-ops-service account enforcement target invalid: %v", err)
 	}
-	accountEnforcementDispatcher, err := accountenforcementapp.NewDispatcher(
+	accountEnforcementDispatcher, err := accountenforcementapp.NewDeliveryRelay(
 		accountEnforcementStore,
 		accountEnforcementTarget,
 		accountEnforcementMetrics,
@@ -297,11 +283,17 @@ func main() {
 	experimentFacade, err := experimentapp.NewFacade(
 		experimentStore,
 		experimentStore,
+	)
+	if err != nil {
+		log.Fatalf("product-ops-service experiment facade invalid: %v", err)
+	}
+	assignmentFacade, err := assignmentapp.NewFacade(
+		experimentFacade,
 		assignmentStore,
 		assignmentStore,
 	)
 	if err != nil {
-		log.Fatalf("product-ops-service experiment facade invalid: %v", err)
+		log.Fatalf("product-ops-service experiment assignment facade invalid: %v", err)
 	}
 	router, messageTransportSceneModes, err := buildRedisRouter(cfg)
 	if err != nil {
@@ -331,7 +323,7 @@ func main() {
 	go accountEnforcementDispatcher.Run(ctx)
 	assignmentConsumer, err := assignmentstream.NewConsumer(
 		messageTransport,
-		experimentFacade.AssignmentFacts(),
+		assignmentFacade,
 		serviceName+"-"+instanceID,
 		nil,
 	)
@@ -458,6 +450,7 @@ func main() {
 		visitService,
 		application.NewRuntimeLogService(runtimeLogStore, batchLedger),
 		experimentFacade,
+		assignmentFacade,
 		publisher,
 	)
 	service.accountEnforcement = accountEnforcementService
@@ -568,6 +561,9 @@ func main() {
 		internalRuntimeLogIngest,
 		corsHandler,
 	)
+	timeouts := rtauth.ContractHTTPServerTimeouts(
+		productOpsGeneratedOperationDescriptors(),
+	)
 	server := &http.Server{
 		Addr: addr,
 		Handler: rtauth.Middleware(rtauth.MiddlewareConfig{
@@ -576,9 +572,9 @@ func main() {
 			OperatorOIDCVerifier:     operatorOIDCVerifier,
 			AccountSecurityAuthority: accountSecurityAuthority,
 		})(servedHandler),
-		ReadHeaderTimeout: 5 * time.Second,
-		WriteTimeout:      30 * time.Second,
-		IdleTimeout:       60 * time.Second,
+		ReadHeaderTimeout: timeouts.ReadHeader,
+		WriteTimeout:      timeouts.Write,
+		IdleTimeout:       timeouts.Idle,
 	}
 	log.Printf("product-ops-service listening on %s", addr)
 	if err := rthttp.ListenAndServeGraceful(server, 15*time.Second); err != nil {
@@ -604,9 +600,18 @@ func newProductService(
 	telemetry *application.TelemetryService,
 	visits *visitapplication.Service,
 	experiments *experimentapp.Facade,
+	assignments *assignmentapp.Facade,
 	publishers ...runtimemessaging.EventPublisher,
 ) *productService {
-	return newProductServiceWithRuntimeLogs(store, telemetry, visits, nil, experiments, publishers...)
+	return newProductServiceWithRuntimeLogs(
+		store,
+		telemetry,
+		visits,
+		nil,
+		experiments,
+		assignments,
+		publishers...,
+	)
 }
 
 func newProductServiceWithRuntimeLogs(
@@ -615,64 +620,29 @@ func newProductServiceWithRuntimeLogs(
 	visits *visitapplication.Service,
 	runtimeLogs *application.RuntimeLogService,
 	experiments *experimentapp.Facade,
+	assignments *assignmentapp.Facade,
 	publishers ...runtimemessaging.EventPublisher,
 ) *productService {
 	var publisher runtimemessaging.EventPublisher
 	if len(publishers) > 0 {
 		publisher = publishers[0]
 	}
-	if store == nil || telemetry == nil || visits == nil || experiments == nil {
-		panic("product service requires control-plane store, telemetry, visits and experiment facade")
+	if store == nil || telemetry == nil || visits == nil || experiments == nil || assignments == nil {
+		panic("product service requires control-plane store, telemetry, visits, experiment and assignment facades")
 	}
-	experimentHandler, err := experimenthttp.NewHandler(experiments)
+	experimentHandler, err := experimenthttp.NewHandler(experiments, assignments)
+	if err != nil {
+		panic(err)
+	}
+	assignmentHandler, err := assignmenthttp.NewHandler(assignments)
 	if err != nil {
 		panic(err)
 	}
 	return &productService{
 		store: store, telemetry: telemetry, visits: visits, runtimeLogs: runtimeLogs,
-		experimentHTTP: experimentHandler, publisher: publisher,
+		experimentHTTP: experimentHandler, assignmentHTTP: assignmentHandler,
+		publisher: publisher,
 	}
-}
-
-func (s *productService) buildL1L4Cards() ([]map[string]any, error) {
-	priority := map[string]int{"L1": 1, "L2": 2, "L3": 3, "L4": 4}
-	seen := map[string]bool{}
-	type card struct {
-		level    string
-		label    string
-		metric   string
-		priority int
-	}
-	cards := make([]card, 0, 4)
-	for _, definition := range canonicalL1L4MetricDefinitions(l1l4MetricsScope{Environment: "prod"}) {
-		level := strings.TrimSpace(definition.Level)
-		if level == "" || seen[level] {
-			continue
-		}
-		rank, ok := priority[level]
-		if !ok {
-			continue
-		}
-		seen[level] = true
-		cards = append(cards, card{
-			level:    level,
-			label:    strings.TrimSpace(definition.Label),
-			metric:   strings.TrimSpace(definition.Metric),
-			priority: rank,
-		})
-	}
-	sort.Slice(cards, func(i, j int) bool {
-		return cards[i].priority < cards[j].priority
-	})
-	out := make([]map[string]any, 0, len(cards))
-	for _, item := range cards {
-		out = append(out, map[string]any{
-			"level":  item.level,
-			"label":  item.label,
-			"metric": item.metric,
-		})
-	}
-	return out, nil
 }
 
 func (s *productService) putIfMissing(namespace, id string, value any) error {

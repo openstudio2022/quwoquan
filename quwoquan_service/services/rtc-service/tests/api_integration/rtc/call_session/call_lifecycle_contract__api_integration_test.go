@@ -1,8 +1,26 @@
+// spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-002
+// spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-008
+// spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-005
+// readiness_case: initiate-call-api
+// readiness_case: answer-call-api
+// readiness_case: reject-call-api
+// readiness_case: cancel-call-api
+// readiness_case: hangup-call-api
+// readiness_case: get-call-api
+// readiness_case: list-calls-api
+// readiness_case: toggle-mute-api
+// readiness_case: toggle-camera-api
+// readiness_case: start-screen-share-api
+// readiness_case: stop-screen-share-api
+// readiness_case: deliver-realtime-call-signals-api
 package api_integration
 
 import (
 	"net/http"
 	"testing"
+	"time"
+
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 func TestContract_InitiateCall(t *testing.T) {
@@ -28,6 +46,26 @@ func TestContract_InitiateCall(t *testing.T) {
 	}
 
 	extractMediaAccess(t, resp)
+	waitForCallSignalDeliveryCheckpoint(t, session["callId"].(string), "CallInitiated")
+}
+
+func waitForCallSignalDeliveryCheckpoint(t *testing.T, callID string, eventType string) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		count, err := mongoDB.Collection("call_session_outbox").CountDocuments(
+			t.Context(),
+			bson.M{"aggregateId": callID, "eventType": eventType, "publishedAt": bson.M{"$ne": nil}},
+		)
+		if err != nil {
+			t.Fatalf("count delivered %s signal: %v", eventType, err)
+		}
+		if count == 1 {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("%s signal was not transport-ACKed and checkpointed for call %s", eventType, callID)
 }
 
 func TestContract_InitiateCall_VideoType(t *testing.T) {

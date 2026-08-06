@@ -22,6 +22,32 @@ type BindResult struct {
 	Replayed  bool
 }
 
+// SecurityAuditEvent 是 CredentialBinding 事务日志中等待复制到受保留审计流的
+// 脱敏记录。PayloadJSON 只允许 canonical {"id": ...}，不得加入 credentialKey、
+// token、手机号或 Provider 证明。
+type SecurityAuditEvent struct {
+	EventID          string
+	AggregateID      string
+	AggregateVersion int64
+	EventType        string
+	PayloadJSON      []byte
+	OccurredAt       time.Time
+	AttemptCount     int
+	ClaimUntil       time.Time
+}
+
+// SecurityAuditOutbox 是本对象基础设施审计镜像的租约/检查点端口。它不表示存在
+// 领域 consumer；认证与撤权仍只读取 CredentialBinding 权威状态。
+type SecurityAuditOutbox interface {
+	ClaimPendingOutbox(
+		context.Context,
+		time.Time,
+		time.Duration,
+	) (SecurityAuditEvent, bool, error)
+	MarkOutboxPublished(context.Context, string, time.Time, time.Time) error
+	ScheduleOutboxRetry(context.Context, string, time.Time, time.Time, string) error
+}
+
 // AggregateStore 是 CredentialBinding 的唯一权威数据端口。
 //
 // Bind 必须以 credentialType + credentialKey 全局唯一约束承载自然幂等：

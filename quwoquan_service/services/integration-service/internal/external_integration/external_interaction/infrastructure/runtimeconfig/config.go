@@ -39,11 +39,24 @@ type Config struct {
 			DefaultLatitude           float64 `yaml:"default_latitude"`
 			DefaultLongitude          float64 `yaml:"default_longitude"`
 		} `yaml:"location"`
+		PublicProvider struct {
+			POI   PublicProviderPolicyConfig `yaml:"poi"`
+			Route PublicProviderPolicyConfig `yaml:"route"`
+		} `yaml:"public_provider"`
 		ExternalInteraction struct {
 			SMS  ExternalProviderConfig     `yaml:"sms"`
 			Push PushDeliveryProviderConfig `yaml:"push"`
 		} `yaml:"external_interaction"`
 	} `yaml:"integration"`
+}
+
+type PublicProviderPolicyConfig struct {
+	ProbePassed             bool `yaml:"probe_passed"`
+	RateLimitPerSecond      int  `yaml:"rate_limit_per_second"`
+	RetryMaxAttempts        int  `yaml:"retry_max_attempts"`
+	RetryBackoffMs          int  `yaml:"retry_backoff_ms"`
+	CircuitFailureThreshold int  `yaml:"circuit_failure_threshold"`
+	CircuitResetTimeoutMs   int  `yaml:"circuit_reset_timeout_ms"`
 }
 
 type AccountSecurityAuthorityConfig struct {
@@ -219,6 +232,14 @@ func NormalizeDefaults(cfg *Config) {
 	if cfg.Integration.Location.DefaultLongitude == 0 {
 		cfg.Integration.Location.DefaultLongitude = 104.0648
 	}
+	normalizePublicProviderPolicy(
+		&cfg.Integration.PublicProvider.POI,
+		1,
+	)
+	normalizePublicProviderPolicy(
+		&cfg.Integration.PublicProvider.Route,
+		5,
+	)
 	if cfg.Integration.ExternalInteraction.Push.TimeoutMs <= 0 {
 		cfg.Integration.ExternalInteraction.Push.TimeoutMs = 5000
 	}
@@ -231,6 +252,27 @@ func NormalizeDefaults(cfg *Config) {
 	}
 	if strings.TrimSpace(cfg.Redis.Rec.Mode) == "" {
 		cfg.Redis.Rec.Mode = "standalone"
+	}
+}
+
+func normalizePublicProviderPolicy(
+	policy *PublicProviderPolicyConfig,
+	defaultRateLimit int,
+) {
+	if policy.RateLimitPerSecond <= 0 {
+		policy.RateLimitPerSecond = defaultRateLimit
+	}
+	if policy.RetryMaxAttempts <= 0 {
+		policy.RetryMaxAttempts = 2
+	}
+	if policy.RetryBackoffMs <= 0 {
+		policy.RetryBackoffMs = 200
+	}
+	if policy.CircuitFailureThreshold <= 0 {
+		policy.CircuitFailureThreshold = 5
+	}
+	if policy.CircuitResetTimeoutMs <= 0 {
+		policy.CircuitResetTimeoutMs = 30000
 	}
 }
 

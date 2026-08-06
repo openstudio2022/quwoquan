@@ -1,0 +1,165 @@
+# Code generated from quwoquan_service/generated/contract_graph.json.
+# Regenerate with verify_object_alert_coverage.py --write.
+groups:
+  - name: quwoquan_realtime_contract_connection
+    rules:
+      - record: quwoquan_realtime_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="realtime-gateway",method="GET",route="/config/realtime"})
+        labels:
+          service: "realtime-gateway"
+          operation: "realtime.connection.GetRealtimeConfig"
+          contract_metric: "realtime_config_read"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "100"
+          slo_availability_percent: "99.95"
+      - record: quwoquan_realtime_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="realtime-gateway",method="GET",route="/config/realtime"})
+        labels:
+          service: "realtime-gateway"
+          operation: "realtime.connection.GetRealtimeConfig"
+          contract_metric: "realtime_config_read"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "100"
+          slo_availability_percent: "99.95"
+      - record: quwoquan_realtime_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="realtime-gateway",method="GET",route="/healthz"})
+        labels:
+          service: "realtime-gateway"
+          operation: "realtime.connection.HealthCheck"
+          contract_metric: "realtime_health_probe"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "100"
+          slo_availability_percent: "99.99"
+      - record: quwoquan_realtime_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="realtime-gateway",method="GET",route="/healthz"})
+        labels:
+          service: "realtime-gateway"
+          operation: "realtime.connection.HealthCheck"
+          contract_metric: "realtime_health_probe"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "100"
+          slo_availability_percent: "99.99"
+      - record: quwoquan_realtime_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="realtime-gateway",method="POST",route="/realtime/tickets"})
+        labels:
+          service: "realtime-gateway"
+          operation: "realtime.connection.IssueConnectionTicket"
+          contract_metric: "realtime_connection_ticket"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "200"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_realtime_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="realtime-gateway",method="POST",route="/realtime/tickets"})
+        labels:
+          service: "realtime-gateway"
+          operation: "realtime.connection.IssueConnectionTicket"
+          contract_metric: "realtime_connection_ticket"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "200"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_realtime_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="realtime-gateway",method="GET",route="/realtime/poll"})
+        labels:
+          service: "realtime-gateway"
+          operation: "realtime.connection.LongPoll"
+          contract_metric: "realtime_connection_session"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_realtime_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="realtime-gateway",method="GET",route="/realtime/poll"})
+        labels:
+          service: "realtime-gateway"
+          operation: "realtime.connection.LongPoll"
+          contract_metric: "realtime_connection_session"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_realtime_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="realtime-gateway",method="GET",route="/metrics"})
+        labels:
+          service: "realtime-gateway"
+          operation: "realtime.connection.Metrics"
+          contract_metric: "realtime_metrics_probe"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_realtime_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="realtime-gateway",method="GET",route="/metrics"})
+        labels:
+          service: "realtime-gateway"
+          operation: "realtime.connection.Metrics"
+          contract_metric: "realtime_metrics_probe"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_realtime_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="realtime-gateway",method="GET",route="/readyz"})
+        labels:
+          service: "realtime-gateway"
+          operation: "realtime.connection.ReadinessCheck"
+          contract_metric: "realtime_readiness_probe"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.95"
+      - record: quwoquan_realtime_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="realtime-gateway",method="GET",route="/readyz"})
+        labels:
+          service: "realtime-gateway"
+          operation: "realtime.connection.ReadinessCheck"
+          contract_metric: "realtime_readiness_probe"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.95"
+      - record: quwoquan_realtime_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="realtime-gateway",method="POST",route="/internal/realtime/account-closure/dead-letters:recover"})
+        labels:
+          service: "realtime-gateway"
+          operation: "realtime.connection.RecoverRealtimeAccountClosureDeadLetter"
+          contract_metric: "realtime_account_closure_dead_letter_recover"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_realtime_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="realtime-gateway",method="POST",route="/internal/realtime/account-closure/dead-letters:recover"})
+        labels:
+          service: "realtime-gateway"
+          operation: "realtime.connection.RecoverRealtimeAccountClosureDeadLetter"
+          contract_metric: "realtime_account_closure_dead_letter_recover"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_realtime_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="realtime-gateway",method="GET",route="/realtime/ws"})
+        labels:
+          service: "realtime-gateway"
+          operation: "realtime.connection.WebSocketUpgrade"
+          contract_metric: "realtime_connection_session"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "300"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_realtime_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="realtime-gateway",method="GET",route="/realtime/ws"})
+        labels:
+          service: "realtime-gateway"
+          operation: "realtime.connection.WebSocketUpgrade"
+          contract_metric: "realtime_connection_session"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "300"
+          slo_availability_percent: "99.9"

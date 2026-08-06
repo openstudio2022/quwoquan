@@ -9,15 +9,15 @@ import (
 	rtmongo "quwoquan_service/internal/platform/mongodb"
 	rtauth "quwoquan_service/runtime/auth"
 	runtimeconfig "quwoquan_service/runtime/config"
-	rterr "quwoquan_service/runtime/errors"
 	rthealth "quwoquan_service/runtime/health"
 	rthttp "quwoquan_service/runtime/http"
-	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtotel "quwoquan_service/runtime/otel"
 	rtrecpolicy "quwoquan_service/runtime/recpolicy"
 	commentapp "quwoquan_service/services/content-service/internal/content/comment/application"
 	commentmessaging "quwoquan_service/services/content-service/internal/content/comment/infrastructure/messaging"
 	commentpersistence "quwoquan_service/services/content-service/internal/content/comment/infrastructure/persistence"
+	closurehttp "quwoquan_service/services/content-service/internal/content/content_account_closure_workflow/adapters/inbound/http"
+	closureapp "quwoquan_service/services/content-service/internal/content/content_account_closure_workflow/application"
 	"quwoquan_service/services/content-service/internal/content/content_account_closure_workflow/infrastructure/accountclosure"
 	behaviorstream "quwoquan_service/services/content-service/internal/content/content_behavior_fact/infrastructure/messaging"
 	behaviorpersistence "quwoquan_service/services/content-service/internal/content/content_behavior_fact/infrastructure/persistence"
@@ -26,13 +26,13 @@ import (
 	reactionpersistence "quwoquan_service/services/content-service/internal/content/content_reaction/infrastructure/persistence"
 	tombstonepost "quwoquan_service/services/content-service/internal/content/deleted_post_tombstone/adapters/inbound/post"
 	tombstonepersistence "quwoquan_service/services/content-service/internal/content/deleted_post_tombstone/infrastructure/persistence"
+	intersectionapp "quwoquan_service/services/content-service/internal/content/intersection_visit_state/application/intersection"
 	intersectionvisitpersistence "quwoquan_service/services/content-service/internal/content/intersection_visit_state/infrastructure/persistence"
 	outboundshareapp "quwoquan_service/services/content-service/internal/content/outbound_share_fact/application/command"
 	outboundsharemessaging "quwoquan_service/services/content-service/internal/content/outbound_share_fact/infrastructure/messaging"
 	outboundshareinfra "quwoquan_service/services/content-service/internal/content/outbound_share_fact/infrastructure/persistence"
 	postapp "quwoquan_service/services/content-service/internal/content/post/application"
 	feedapp "quwoquan_service/services/content-service/internal/content/post/application/feed"
-	intersectionapp "quwoquan_service/services/content-service/internal/content/intersection_visit_state/application/intersection"
 	"quwoquan_service/services/content-service/internal/content/post/application/ports"
 	accessinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/accesscontrol"
 	accountsecurity "quwoquan_service/services/content-service/internal/content/post/infrastructure/accountsecurity"
@@ -288,7 +288,7 @@ func main() {
 		if err := profileReadFactStore.EnsureIndexes(ctx); err != nil {
 			log.Fatalf("content-service ProfileInteractionReadFact indexes init failed: %v", err)
 		}
-		profileProjector := profileinteractionapp.NewProjector(
+		profileProjector := profileinteractionapp.NewProfileInteractionActivityViewProjector(
 			profileinteractioninfra.NewMongoProjectionSourceReader(db),
 			profileActivityStore,
 		)
@@ -322,14 +322,14 @@ func main() {
 		)
 		startProfileInteractionReadFactRelay(
 			ctx, profileReadFactStore, profileReadFactStore,
-			profileinteractionapp.NewReadFactProjector(profileActivityStore),
+			profileinteractionapp.NewReadFactProjector(profileProjector),
 			"content-profile-interaction-read-projection",
 			"content_profile_interaction_read_projection",
 			healthChecker, logger,
 		)
 		startPostOutboxRelay(
 			ctx, store, store,
-			profileinteractionapp.NewPostTargetProjector(profileActivityStore),
+			profileinteractionapp.NewPostTargetProjector(profileProjector),
 			"content-post-profile-interaction-target",
 			"content_post_profile_interaction_target",
 			healthChecker, logger,
@@ -337,6 +337,16 @@ func main() {
 		mediaStore = mediaassetpersistence.NewMongoMediaStore(db)
 		if err := mediaStore.EnsureIndexes(ctx); err != nil {
 			log.Fatalf("content-service media runtime indexes init failed: %v", err)
+		}
+		if err := startMediaAssetOutboxRelay(
+			ctx,
+			mediaStore,
+			mediaStore,
+			messageTransport,
+			healthChecker,
+			logger,
+		); err != nil {
+			log.Fatalf("content-service MediaAsset outbox relay init failed: %v", err)
 		}
 		mediaOriginalAccessStore = originalaccesspersistence.NewMongoStore(db)
 		if err := mediaOriginalAccessStore.EnsureIndexes(ctx); err != nil {
@@ -352,6 +362,15 @@ func main() {
 		)
 		if err := mediaUploadSessionStore.EnsureIndexes(ctx); err != nil {
 			log.Fatalf("content-service MediaUploadSession indexes init failed: %v", err)
+		}
+		if err := startMediaUploadSessionOutboxRelay(
+			ctx,
+			mediaUploadSessionStore,
+			messageTransport,
+			healthChecker,
+			logger,
+		); err != nil {
+			log.Fatalf("content-service MediaUploadSession outbox relay init failed: %v", err)
 		}
 		commentDataAdapter = commentpersistence.NewMongoCommentDataAdapter(
 			db,
@@ -399,7 +418,9 @@ func main() {
 		)
 		startCommentOutboxRelay(
 			ctx, commentDataAdapter, commentDataAdapter,
-			commentapp.NewCommentCountProjector(commentDataAdapter, mongoStore),
+			postapp.NewCommentCountProjectionPublisher(
+				postapp.NewCommentCountProjectionHandler(commentDataAdapter, mongoStore),
+			),
 			"content-comment-post-count", "content_comment_post_count",
 			healthChecker, logger,
 		)
@@ -433,7 +454,7 @@ func main() {
 			ctx,
 			store,
 			store,
-			moderationapp.NewSubmissionCaseOpener(moderationFacades),
+			moderationapp.NewPostSubmissionModerationHandler(moderationFacades),
 			"content-post-submission-moderation",
 			"content_post_submission_moderation",
 			healthChecker,
@@ -500,7 +521,7 @@ func main() {
 			logger,
 		)
 		// hotScore 投影：评论赞踩与回复事实驱动的确定性排序分（sort=hot 真相源）。
-		commentHotScoreProjector := commentapp.NewCommentHotScoreProjector(
+		commentHotScoreProjector := commentapp.NewCommentHotScoreProjectionHandler(
 			commentDataAdapter,
 			reactionStore,
 			commentDataAdapter,
@@ -829,14 +850,17 @@ func main() {
 		profileInteractionFacades:    profileInteractionFacades,
 		filterCatalogFacades:         filterCatalogFacades,
 	})
-	handler, err = runtimemessaging.WithDeadLetterRecoveryRoute(
-		handler,
-		runtimemessaging.DeadLetterRecoveryRouteConfig{
-			Path:     "/internal/content/account-closure/dead-letters:recover",
-			Module:   rterr.ModuleContent,
-			Releaser: accountClosureConsumer,
-		},
+	accountClosureRecoveryCommands, err := closureapp.NewContentAccountClosureRecoveryCommandFacet(
+		accountClosureConsumer,
 	)
+	if err != nil {
+		log.Fatalf("content-service account-closure recovery commands failed: %v", err)
+	}
+	accountClosureRecoveryHandler, err := closurehttp.NewHandler(accountClosureRecoveryCommands)
+	if err != nil {
+		log.Fatalf("content-service account-closure recovery handler failed: %v", err)
+	}
+	handler, err = accountClosureRecoveryHandler.Mount(handler)
 	if err != nil {
 		log.Fatalf("content-service account-closure recovery route failed: %v", err)
 	}

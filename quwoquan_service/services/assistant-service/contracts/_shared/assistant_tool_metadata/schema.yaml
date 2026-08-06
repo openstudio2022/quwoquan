@@ -1,8 +1,10 @@
 dart_class: AssistantToolMetadataWire
-library_path: assistant/generated/contracts/assistant_tool_metadata.g.dart
-output_path: assistant/generated/contracts/assistant_tool_metadata.g.dart
+library_path: package:quwoquan_cloud_contracts/src/generated/assistant/assistant_tool_metadata.g.dart
+output_path: packages/quwoquan_cloud_contracts/lib/src/generated/assistant/assistant_tool_metadata.g.dart
 contract: assistant_tool_metadata
 kind: shared_wire_contract
+imports:
+  - assistant_runtime_enums.g.dart
 fields:
   - { name: toolName, type: string, required: true }
   - { name: displayName, type: string, default: '' }

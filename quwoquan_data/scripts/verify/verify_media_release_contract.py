@@ -162,7 +162,16 @@ def _required_markers() -> dict[Path, tuple[str, ...]]:
             "validateReleaseMediaAssetClosure",
             "validateReleaseRightsBinding",
         ),
-        ROOT / "quwoquan_app" / "lib" / "core" / "media" / "asset_url_resolver.dart": (
+        ROOT
+        / "quwoquan_app"
+        / "lib"
+        / "service"
+        / "content_service"
+        / "media"
+        / "media_asset"
+        / "application"
+        / "public"
+        / "media_asset_manifest_resolver.dart": (
             "resolveManifestUrls",
             "publicSliceKey",
         ),

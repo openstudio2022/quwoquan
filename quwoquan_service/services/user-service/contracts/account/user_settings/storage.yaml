@@ -1,6 +1,7 @@
 backend: postgres
 tables:
   user_settings:
+    publication_role: not_published
     entity: UserSettings
     role: authoritative
     description: 服务端 version CAS + LWW；同值重写幂等，不设独立 receipt 表。
@@ -93,6 +94,7 @@ tables:
       - NOT_NULL
       default: NOW()
   user_settings_outbox:
+    publication_role: transactional_event_log
     entity: UserSettings
     role: append_only
     infrastructure_only: true

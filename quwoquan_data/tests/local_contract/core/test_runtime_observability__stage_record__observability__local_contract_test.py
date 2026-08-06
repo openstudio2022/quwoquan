@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import inspect
 import json
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
+from content.execution.controller import orchestrator
 from content.execution.controller.orchestrator import _execution_runtime_logger
 from core.paths import OUTPUT_ROOT
-from core.runtime_observability import DataRuntimeLogResource, DataRuntimeLogger
+from core.runtime_observability import DataRuntimeLogger, DataRuntimeLogResource
 
 
 def test_data_runtime_logger_emits_canonical_redacted_stage_records(
@@ -75,3 +77,14 @@ def test_execution_controller_uses_the_shared_repo_observability_run() -> None:
     root = OUTPUT_ROOT / "env" / "repo" / "observability" / execution_id
     assert (root / "manifest.json").is_file()
     assert (root / "logs" / "data" / "runtime.log").is_file()
+    manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest == {
+        **manifest,
+        "schema": "observability.slim",
+        "env": "repo",
+        "runId": execution_id,
+        "command": "task execute",
+        "target": execution_id,
+        "reportDir": f"{OUTPUT_ROOT.name}/data/tasks/{execution_id}",
+    }
+    assert "quwoquan_ops" not in inspect.getsource(orchestrator)

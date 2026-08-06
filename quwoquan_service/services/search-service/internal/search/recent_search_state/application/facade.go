@@ -371,8 +371,8 @@ func receiptIdentity(personaID, idempotencyKey, commandName string, parts ...str
 
 func unauthorized() error {
 	return rterrors.NewAppError(
-		rterrors.NewCode(moduleSearch, rterrors.KindUser, "unauthorized"),
-		"请先登录后使用最近搜索", "recent search requires an authenticated persona")
+		rterrors.NewCode(rterrors.ModuleGateway, rterrors.KindUser, "unauthorized"),
+		"请先登录后再继续", "recent search requires an authenticated persona")
 }
 
 func invalidArgument(debug string) error {

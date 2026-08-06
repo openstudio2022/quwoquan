@@ -17,17 +17,17 @@ var (
 // AppErrorFromSkillActivityInvalidArgument returns *AppError for ASSISTANT.USER.skill_activity_invalid_argument (user_message from errors.yaml).
 func AppErrorFromSkillActivityInvalidArgument(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.skill_activity_invalid_argument")
-	return rterr.NewAppError(code, "活动筛选条件无效", debugMessage).WithMetadata("skill_activity_invalid_argument", 400).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "活动筛选条件无效", debugMessage).WithMetadata("skill_activity_invalid_argument", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromSkillActivityUnauthorized returns *AppError for ASSISTANT.USER.skill_activity_unauthorized (user_message from errors.yaml).
 func AppErrorFromSkillActivityUnauthorized(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.skill_activity_unauthorized")
-	return rterr.NewAppError(code, "请先登录后查看 Skill 活动", debugMessage).WithMetadata("skill_activity_unauthorized", 401).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "请先登录后查看 Skill 活动", debugMessage).WithMetadata("skill_activity_unauthorized", 401).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromSkillActivityUnavailable returns *AppError for ASSISTANT.SYSTEM.skill_activity_unavailable (user_message from errors.yaml).
 func AppErrorFromSkillActivityUnavailable(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.SYSTEM.skill_activity_unavailable")
-	return rterr.NewAppError(code, "Skill 活动暂不可用，请稍后重试", debugMessage).WithMetadata("skill_activity_unavailable", 503).WithRecovery("retry", 3)
+	return rterr.NewAppError(code, "Skill 活动暂不可用，请稍后重试", debugMessage).WithMetadata("skill_activity_unavailable", 503).WithRecoveryDirective("retry", "snackbar", 3)
 }

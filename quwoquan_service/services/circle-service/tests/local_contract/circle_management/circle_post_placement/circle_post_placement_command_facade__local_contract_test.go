@@ -1,3 +1,8 @@
+// spec_ref: specs/feature-tree/circle-community/spec.md#dom-001
+// readiness_case: place-post-in-circle-local
+// readiness_case: remove-post-from-circle-local
+// readiness_case: pin-circle-post-local
+// readiness_case: feature-circle-post-local
 package local_contract
 
 import (
@@ -23,7 +28,7 @@ func TestPlaceRequiresTrustedOwnerOrModeratorAndReplaysReceipt(t *testing.T) {
 	}
 	facade := NewCommandFacade(store, readers.policyReaders())
 
-	ctx := placementContext("persona-owner", "place-1")
+	ctx := placementContext("PlacePostInCircle", "persona-owner", "place-1")
 	first, err := facade.Place(ctx, PlaceCommand{CircleID: "circle-1", PostID: "post-1", GroupID: "group-1"})
 	if err != nil || first.IdempotentReplay || first.Version != 1 || first.State != "active" {
 		t.Fatalf("first place drift: result=%+v err=%v", first, err)
@@ -33,7 +38,7 @@ func TestPlaceRequiresTrustedOwnerOrModeratorAndReplaysReceipt(t *testing.T) {
 		t.Fatalf("replay drift: result=%+v err=%v", replayed, err)
 	}
 
-	_, err = facade.Place(placementContext("persona-outsider", "place-2"), PlaceCommand{
+	_, err = facade.Place(placementContext("PlacePostInCircle", "persona-outsider", "place-2"), PlaceCommand{
 		CircleID: "circle-1", PostID: "post-1", GroupID: "group-1",
 	})
 	if !hasRuntimeCode(err, generated.ErrPermissionDenied.Error()) {
@@ -53,27 +58,44 @@ func TestPresentationRequiresModeratorAndRetriesInternalVersion(t *testing.T) {
 	}
 	facade := NewCommandFacade(store, readers.policyReaders())
 
-	_, err := facade.SetPinned(placementContext("persona-owner", "pin-owner"), PresentationCommand{
+	_, err := facade.SetPinned(placementContext("PinCirclePost", "persona-owner", "pin-owner"), PresentationCommand{
 		CircleID: "circle-1", PlacementID: "placement-1", Enabled: true,
 	})
 	if !hasRuntimeCode(err, generated.ErrPermissionDenied.Error()) {
 		t.Fatalf("post owner without moderator role must not pin, got %v", err)
 	}
 	store.conflictOnce = true
-	result, err := facade.SetPinned(placementContext("persona-moderator", "pin-ok"), PresentationCommand{
+	result, err := facade.SetPinned(placementContext("PinCirclePost", "persona-moderator", "pin-ok"), PresentationCommand{
 		CircleID: "circle-1", PlacementID: "placement-1", Enabled: true,
 	})
 	if err != nil || result.Version != 2 || !store.placement.Pinned {
 		t.Fatalf("moderator pin drift: result=%+v placement=%+v err=%v", result, store.placement, err)
 	}
 	replayed, err := facade.SetPinned(
-		placementContext("persona-moderator", "pin-already-applied"),
+		placementContext("PinCirclePost", "persona-moderator", "pin-already-applied"),
 		PresentationCommand{
 			CircleID: "circle-1", PlacementID: "placement-1", Enabled: true,
 		},
 	)
 	if err != nil || !replayed.IdempotentReplay || replayed.Version != 2 {
 		t.Fatalf("semantic pin replay drift: result=%+v err=%v", replayed, err)
+	}
+	featured, err := facade.SetFeatured(
+		placementContext("FeatureCirclePost", "persona-moderator", "feature-ok"),
+		PresentationCommand{
+			CircleID: "circle-1", PlacementID: "placement-1", Enabled: true,
+		},
+	)
+	if err != nil || featured.Version != 3 || !store.placement.Featured {
+		t.Fatalf("moderator feature drift: result=%+v placement=%+v err=%v", featured, store.placement, err)
+	}
+	removed, err := facade.Remove(
+		placementContext("RemovePostFromCircle", "persona-owner", "remove-ok"),
+		TargetCommand{CircleID: "circle-1", PlacementID: "placement-1"},
+	)
+	if err != nil || removed.Version != 4 ||
+		store.placement.State != placementmodel.CirclePostPlacementStateRemoved {
+		t.Fatalf("post owner remove drift: result=%+v placement=%+v err=%v", removed, store.placement, err)
 	}
 }
 
@@ -82,9 +104,9 @@ func hasRuntimeCode(err error, want string) bool {
 	return errors.As(err, &appError) && appError.Code.String() == want
 }
 
-func placementContext(personaID, idempotencyKey string) context.Context {
+func placementContext(operationID, personaID, idempotencyKey string) context.Context {
 	return operation.WithContext(context.Background(), operation.Context{
-		OperationID: "circle.circle_post_placement.PlacePostInCircle",
+		OperationID: "circle.circle_post_placement." + operationID,
 		RequestID:   "request-1", TraceID: "trace-1", IdempotencyKey: idempotencyKey,
 		Actor: operation.ActorContext{AccountID: "account-1", PersonaID: personaID},
 	})

@@ -89,7 +89,7 @@ PY
   elif ! (
     cd "$ROOT/quwoquan_app"
     ASSISTANT_LEARNING_REMOTE_EVIDENCE_PATH="$EVIDENCE" flutter test \
-      test/api_integration/cloud/assistant/assistant_learning_remote_roundtrip__api_integration_test.dart \
+      test/api_integration/service/assistant_service/assistant/assistant_learning_fact/assistant_learning_remote_roundtrip__api_integration_test.dart \
       "--dart-define-from-file=$SESSION_DEFINES" \
       --dart-define=APP_RUNTIME_ENV=gamma \
       "--dart-define=CLOUD_GATEWAY_BASE_URL=$GATEWAY_BASE_URL" \

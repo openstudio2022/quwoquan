@@ -50,9 +50,35 @@ func clampPageLimit(limit int) int {
 	return limit
 }
 
+// ErrSessionOutboxClaimLost reports that another relay owner took over the
+// claim before this owner could mark the event published.
+var ErrSessionOutboxClaimLost = errors.New("assistant session outbox claim lost")
+
+var (
+	_ sessionports.SessionStore       = (*MongoSessionStore)(nil)
+	_ sessionports.SessionOutboxStore = (*MongoSessionStore)(nil)
+	_ sessionports.SessionStore       = (*MemorySessionStore)(nil)
+	_ sessionports.SessionOutboxStore = (*MemorySessionStore)(nil)
+)
+
+// sessionOutboxDocument mirrors the assistant learning fact outbox document so
+// the service keeps exactly one transactional outbox shape.
+type sessionOutboxDocument struct {
+	ID           string                        `bson:"_id"`
+	EventType    string                        `bson:"eventType"`
+	SessionID    string                        `bson:"sessionId"`
+	Payload      assistant.SessionEventPayload `bson:"payload"`
+	OccurredAt   time.Time                     `bson:"occurredAt"`
+	ClaimOwner   string                        `bson:"claimOwner,omitempty"`
+	ClaimUntil   *time.Time                    `bson:"claimUntil,omitempty"`
+	PublishedAt  *time.Time                    `bson:"publishedAt,omitempty"`
+	PublishedRef string                        `bson:"publishedRef,omitempty"`
+}
+
 type MongoSessionStore struct {
 	sessions *mongo.Collection
 	receipts *mongo.Collection
+	outbox   *mongo.Collection
 }
 
 func NewMongoSessionStore(db *mongo.Database) *MongoSessionStore {
@@ -62,6 +88,7 @@ func NewMongoSessionStore(db *mongo.Database) *MongoSessionStore {
 	return &MongoSessionStore{
 		sessions: db.Collection("assistant_sessions"),
 		receipts: db.Collection("assistant_session_summary_receipts"),
+		outbox:   db.Collection("assistant_session_outbox"),
 	}
 }
 
@@ -96,28 +123,180 @@ func (store *MongoSessionStore) EnsureIndexes(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("create assistant session summary receipt indexes: %w", err)
 	}
+	_, err = store.outbox.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys: bson.D{
+			{Key: "publishedAt", Value: 1},
+			{Key: "claimUntil", Value: 1},
+			{Key: "occurredAt", Value: 1},
+		},
+		Options: options.Index().
+			SetName("idx_assistant_session_outbox_claimable"),
+	})
+	if err != nil {
+		return fmt.Errorf("create assistant session outbox indexes: %w", err)
+	}
 	return nil
 }
 
+// InsertSession commits the aggregate and its AssistantSessionCreated domain
+// event in one transaction. The event identity is derived from the sessionId,
+// so a replayed creation observes the stored aggregate and appends nothing.
 func (store *MongoSessionStore) InsertSession(
 	ctx context.Context,
 	session assistant.AssistantSession,
 ) (assistant.AssistantSession, bool, error) {
-	if _, err := store.sessions.InsertOne(ctx, session); err != nil {
-		if mongo.IsDuplicateKeyError(err) && session.ClientRequestID != "" {
-			var existing assistant.AssistantSession
-			findErr := store.sessions.FindOne(ctx, bson.M{
-				"userId":          session.UserID,
-				"clientRequestId": session.ClientRequestID,
-			}).Decode(&existing)
-			if findErr == nil {
-				return existing, true, nil
-			}
-			return assistant.AssistantSession{}, false, findErr
-		}
-		return assistant.AssistantSession{}, false, err
+	mongoSession, err := store.sessions.Database().Client().StartSession()
+	if err != nil {
+		return assistant.AssistantSession{}, false, fmt.Errorf(
+			"start assistant session create transaction: %w",
+			err,
+		)
 	}
-	return session, false, nil
+	defer mongoSession.EndSession(ctx)
+	_, err = mongoSession.WithTransaction(
+		ctx,
+		func(txCtx context.Context) (any, error) {
+			if _, insertErr := store.sessions.InsertOne(txCtx, session); insertErr != nil {
+				return nil, insertErr
+			}
+			event := session.CreatedEvent()
+			_, outboxErr := store.outbox.InsertOne(txCtx, sessionOutboxDocument{
+				ID:         event.EventID,
+				EventType:  event.EventType,
+				SessionID:  event.SessionID,
+				Payload:    event.Payload,
+				OccurredAt: event.OccurredAt,
+			})
+			return nil, outboxErr
+		},
+	)
+	if err == nil {
+		return session, false, nil
+	}
+	if mongo.IsDuplicateKeyError(err) && session.ClientRequestID != "" {
+		var existing assistant.AssistantSession
+		findErr := store.sessions.FindOne(ctx, bson.M{
+			"userId":          session.UserID,
+			"clientRequestId": session.ClientRequestID,
+		}).Decode(&existing)
+		if findErr == nil {
+			return existing, true, nil
+		}
+		return assistant.AssistantSession{}, false, findErr
+	}
+	return assistant.AssistantSession{}, false, err
+}
+
+func (store *MongoSessionStore) ClaimPendingSessionEvents(
+	ctx context.Context,
+	ownerID string,
+	lease time.Duration,
+	limit int,
+) ([]sessionports.PendingSessionEvent, error) {
+	ownerID = strings.TrimSpace(ownerID)
+	if ownerID == "" || lease <= 0 {
+		return nil, fmt.Errorf(
+			"assistant session outbox claim requires owner and positive lease",
+		)
+	}
+	if limit <= 0 || limit > 512 {
+		limit = 128
+	}
+	events := make([]sessionports.PendingSessionEvent, 0, limit)
+	for len(events) < limit {
+		now := time.Now().UTC()
+		var document sessionOutboxDocument
+		err := store.outbox.FindOneAndUpdate(
+			ctx,
+			bson.M{
+				"publishedAt": bson.M{"$exists": false},
+				"$or": bson.A{
+					bson.M{"claimUntil": bson.M{"$exists": false}},
+					bson.M{"claimUntil": bson.M{"$lte": now}},
+				},
+			},
+			bson.M{"$set": bson.M{
+				"claimOwner": ownerID,
+				"claimUntil": now.Add(lease),
+			}},
+			options.FindOneAndUpdate().
+				SetSort(bson.D{{Key: "occurredAt", Value: 1}}).
+				SetReturnDocument(options.After),
+		).Decode(&document)
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("claim assistant session outbox: %w", err)
+		}
+		events = append(events, sessionports.PendingSessionEvent{
+			EventID:    document.ID,
+			EventType:  document.EventType,
+			SessionID:  document.SessionID,
+			OccurredAt: document.OccurredAt,
+			Payload:    document.Payload,
+		})
+	}
+	return events, nil
+}
+
+func (store *MongoSessionStore) MarkSessionEventPublished(
+	ctx context.Context,
+	eventID string,
+	ownerID string,
+	publishedRef string,
+	publishedAt time.Time,
+) error {
+	result, err := store.outbox.UpdateOne(
+		ctx,
+		bson.M{
+			"_id":         strings.TrimSpace(eventID),
+			"claimOwner":  strings.TrimSpace(ownerID),
+			"publishedAt": bson.M{"$exists": false},
+		},
+		bson.M{
+			"$set": bson.M{
+				"publishedAt":  publishedAt.UTC(),
+				"publishedRef": strings.TrimSpace(publishedRef),
+			},
+			"$unset": bson.M{"claimOwner": "", "claimUntil": ""},
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("mark assistant session outbox published: %w", err)
+	}
+	if result.MatchedCount == 0 {
+		var existing sessionOutboxDocument
+		loadErr := store.outbox.FindOne(
+			ctx,
+			bson.M{"_id": strings.TrimSpace(eventID)},
+		).Decode(&existing)
+		if loadErr == nil && existing.PublishedAt != nil {
+			return nil
+		}
+		return ErrSessionOutboxClaimLost
+	}
+	return nil
+}
+
+func (store *MongoSessionStore) ReleaseSessionEventClaim(
+	ctx context.Context,
+	eventID string,
+	ownerID string,
+) error {
+	_, err := store.outbox.UpdateOne(
+		ctx,
+		bson.M{
+			"_id":         strings.TrimSpace(eventID),
+			"claimOwner":  strings.TrimSpace(ownerID),
+			"publishedAt": bson.M{"$exists": false},
+		},
+		bson.M{"$unset": bson.M{"claimOwner": "", "claimUntil": ""}},
+	)
+	if err != nil {
+		return fmt.Errorf("release assistant session outbox claim: %w", err)
+	}
+	return nil
 }
 
 func (store *MongoSessionStore) GetSession(
@@ -278,12 +457,15 @@ type MemorySessionStore struct {
 	mu       sync.RWMutex
 	sessions map[string]assistant.AssistantSession
 	receipts map[string]sessionSummaryReceiptDocument
+	outbox   map[string]*sessionOutboxDocument
+	order    []string
 }
 
 func NewMemorySessionStore() *MemorySessionStore {
 	return &MemorySessionStore{
 		sessions: map[string]assistant.AssistantSession{},
 		receipts: map[string]sessionSummaryReceiptDocument{},
+		outbox:   map[string]*sessionOutboxDocument{},
 	}
 }
 
@@ -300,8 +482,107 @@ func (store *MemorySessionStore) InsertSession(
 			}
 		}
 	}
+	event := session.CreatedEvent()
+	if _, exists := store.outbox[event.EventID]; !exists {
+		store.outbox[event.EventID] = &sessionOutboxDocument{
+			ID:         event.EventID,
+			EventType:  event.EventType,
+			SessionID:  event.SessionID,
+			Payload:    event.Payload,
+			OccurredAt: event.OccurredAt,
+		}
+		store.order = append(store.order, event.EventID)
+	}
 	store.sessions[session.SessionID] = session
 	return session, false, nil
+}
+
+func (store *MemorySessionStore) ClaimPendingSessionEvents(
+	_ context.Context,
+	ownerID string,
+	lease time.Duration,
+	limit int,
+) ([]sessionports.PendingSessionEvent, error) {
+	ownerID = strings.TrimSpace(ownerID)
+	if ownerID == "" || lease <= 0 {
+		return nil, fmt.Errorf(
+			"assistant session outbox claim requires owner and positive lease",
+		)
+	}
+	if limit <= 0 || limit > 512 {
+		limit = 128
+	}
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	now := time.Now().UTC()
+	claimed := make([]sessionports.PendingSessionEvent, 0, limit)
+	for _, eventID := range store.order {
+		if len(claimed) == limit {
+			break
+		}
+		document := store.outbox[eventID]
+		if document == nil || document.PublishedAt != nil {
+			continue
+		}
+		if document.ClaimUntil != nil && document.ClaimUntil.After(now) {
+			continue
+		}
+		claimUntil := now.Add(lease)
+		document.ClaimOwner = ownerID
+		document.ClaimUntil = &claimUntil
+		claimed = append(claimed, sessionports.PendingSessionEvent{
+			EventID:    document.ID,
+			EventType:  document.EventType,
+			SessionID:  document.SessionID,
+			OccurredAt: document.OccurredAt,
+			Payload:    document.Payload,
+		})
+	}
+	return claimed, nil
+}
+
+func (store *MemorySessionStore) MarkSessionEventPublished(
+	_ context.Context,
+	eventID string,
+	ownerID string,
+	publishedRef string,
+	publishedAt time.Time,
+) error {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	document := store.outbox[strings.TrimSpace(eventID)]
+	if document == nil {
+		return ErrSessionOutboxClaimLost
+	}
+	if document.PublishedAt != nil {
+		return nil
+	}
+	if document.ClaimOwner != strings.TrimSpace(ownerID) {
+		return ErrSessionOutboxClaimLost
+	}
+	stamp := publishedAt.UTC()
+	document.PublishedAt = &stamp
+	document.PublishedRef = strings.TrimSpace(publishedRef)
+	document.ClaimOwner = ""
+	document.ClaimUntil = nil
+	return nil
+}
+
+func (store *MemorySessionStore) ReleaseSessionEventClaim(
+	_ context.Context,
+	eventID string,
+	ownerID string,
+) error {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	document := store.outbox[strings.TrimSpace(eventID)]
+	if document == nil || document.PublishedAt != nil ||
+		document.ClaimOwner != strings.TrimSpace(ownerID) {
+		return nil
+	}
+	document.ClaimOwner = ""
+	document.ClaimUntil = nil
+	return nil
 }
 
 func (store *MemorySessionStore) GetSession(

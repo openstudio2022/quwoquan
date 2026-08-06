@@ -35,13 +35,3 @@ func assistantSessionStorageUnavailable(debug string) *rterr.AppError {
 	appErr.HTTPStatus = http.StatusServiceUnavailable
 	return appErr
 }
-
-func AssistantRunInvalidArgument(debug string) *rterr.AppError {
-	appErr := rterr.NewAppError(
-		rterr.NewCode(rterr.ModuleAssistant, rterr.KindUser, "run_invalid_argument"),
-		"执行请求参数有误",
-		debug,
-	)
-	appErr.HTTPStatus = http.StatusBadRequest
-	return appErr
-}

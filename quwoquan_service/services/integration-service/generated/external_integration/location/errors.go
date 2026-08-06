@@ -10,46 +10,60 @@ import (
 //
 //nolint:gochecknoglobals
 var (
-	ErrLocationUnavailable         = errors.New("INTEGRATION.USER.location_unavailable")
-	ErrInvalidArgument             = errors.New("INTEGRATION.USER.invalid_argument")
-	ErrLocationPermissionRequired  = errors.New("INTEGRATION.USER.location_permission_required")
-	ErrUpstreamTimeout             = errors.New("INTEGRATION.MIDDLEWARE.upstream_timeout")
-	ErrLocationProviderUnavailable = errors.New("INTEGRATION.MIDDLEWARE.location_provider_unavailable")
-	ErrLocationInternalError       = errors.New("INTEGRATION.SYSTEM.location_internal_error")
+	ErrLocationUnavailable             = errors.New("INTEGRATION.USER.location_unavailable")
+	ErrInvalidArgument                 = errors.New("INTEGRATION.USER.invalid_argument")
+	ErrLocationPermissionRequired      = errors.New("INTEGRATION.USER.location_permission_required")
+	ErrUpstreamTimeout                 = errors.New("INTEGRATION.MIDDLEWARE.upstream_timeout")
+	ErrLocationProviderUnavailable     = errors.New("INTEGRATION.MIDDLEWARE.location_provider_unavailable")
+	ErrLocationProviderRateLimited     = errors.New("INTEGRATION.MIDDLEWARE.location_provider_rate_limited")
+	ErrLocationProviderInvalidResponse = errors.New("INTEGRATION.MIDDLEWARE.location_provider_invalid_response")
+	ErrLocationInternalError           = errors.New("INTEGRATION.SYSTEM.location_internal_error")
 )
 
 // AppErrorFromLocationUnavailable returns *AppError for INTEGRATION.USER.location_unavailable (user_message from errors.yaml).
 func AppErrorFromLocationUnavailable(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrLocationUnavailable.Error()))
-	return rerrors.NewAppError(code, "暂时无法获取当前位置，请稍后重试", debugMessage).WithMetadata("unavailable", 400).WithRecovery("retry", 3)
+	return rerrors.NewAppError(code, "暂时无法获取当前位置，请稍后重试", debugMessage).WithMetadata("unavailable", 400).WithRecoveryDirective("retry", "snackbar", 3)
 }
 
 // AppErrorFromInvalidArgument returns *AppError for INTEGRATION.USER.invalid_argument (user_message from errors.yaml).
 func AppErrorFromInvalidArgument(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrInvalidArgument.Error()))
-	return rerrors.NewAppError(code, "搜索关键词不能为空", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "请求参数无效，请检查后重试", debugMessage).WithMetadata("invalid_argument", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromLocationPermissionRequired returns *AppError for INTEGRATION.USER.location_permission_required (user_message from errors.yaml).
 func AppErrorFromLocationPermissionRequired(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrLocationPermissionRequired.Error()))
-	return rerrors.NewAppError(code, "请在设置中为本应用开启定位权限", debugMessage).WithMetadata("permission_denied", 403).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "请在设置中为本应用开启定位权限", debugMessage).WithMetadata("permission_denied", 403).WithRecoveryDirective("surface", "permissionCard", 0)
 }
 
 // AppErrorFromUpstreamTimeout returns *AppError for INTEGRATION.MIDDLEWARE.upstream_timeout (user_message from errors.yaml).
 func AppErrorFromUpstreamTimeout(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrUpstreamTimeout.Error()))
-	return rerrors.NewAppError(code, "位置服务响应超时，请稍后重试", debugMessage).WithMetadata("timeout", 504).WithRecovery("retry", 5)
+	return rerrors.NewAppError(code, "位置服务响应超时，请稍后重试", debugMessage).WithMetadata("timeout", 504).WithRecoveryDirective("retry", "snackbar", 5)
 }
 
 // AppErrorFromLocationProviderUnavailable returns *AppError for INTEGRATION.MIDDLEWARE.location_provider_unavailable (user_message from errors.yaml).
 func AppErrorFromLocationProviderUnavailable(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrLocationProviderUnavailable.Error()))
-	return rerrors.NewAppError(code, "位置服务暂不可用，请稍后重试", debugMessage).WithMetadata("location_provider_unavailable", 503).WithRecovery("retry", 5)
+	return rerrors.NewAppError(code, "位置服务暂不可用，请稍后重试", debugMessage).WithMetadata("location_provider_unavailable", 503).WithRecoveryDirective("retry", "snackbar", 5)
+}
+
+// AppErrorFromLocationProviderRateLimited returns *AppError for INTEGRATION.MIDDLEWARE.location_provider_rate_limited (user_message from errors.yaml).
+func AppErrorFromLocationProviderRateLimited(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrLocationProviderRateLimited.Error()))
+	return rerrors.NewAppError(code, "位置服务请求繁忙，请稍后重试", debugMessage).WithMetadata("location_provider_rate_limited", 503).WithRecoveryDirective("retry", "snackbar", 30)
+}
+
+// AppErrorFromLocationProviderInvalidResponse returns *AppError for INTEGRATION.MIDDLEWARE.location_provider_invalid_response (user_message from errors.yaml).
+func AppErrorFromLocationProviderInvalidResponse(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrLocationProviderInvalidResponse.Error()))
+	return rerrors.NewAppError(code, "位置服务返回异常，请稍后重试", debugMessage).WithMetadata("location_provider_invalid_response", 502).WithRecoveryDirective("retry", "snackbar", 5)
 }
 
 // AppErrorFromLocationInternalError returns *AppError for INTEGRATION.SYSTEM.location_internal_error (user_message from errors.yaml).
 func AppErrorFromLocationInternalError(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrLocationInternalError.Error()))
-	return rerrors.NewAppError(code, "位置服务异常，请稍后重试", debugMessage).WithMetadata("internal_error", 500).WithRecovery("retry", 5)
+	return rerrors.NewAppError(code, "位置服务异常，请稍后重试", debugMessage).WithMetadata("internal_error", 500).WithRecoveryDirective("retry", "snackbar", 5)
 }

@@ -1,6 +1,7 @@
 backend: mongodb
 collections:
   assistant_runs:
+    publication_role: not_published
     entity: AssistantRun
     description: AssistantRun aggregate 与 terminalSnapshot 的 authoritative 无 TTL 存储；事件日志过期不得影响 GetRun、SSE 终态重放或历史恢复。
     indexes:
@@ -35,6 +36,7 @@ collections:
         status: 1
         createdAt: -1
   assistant_run_events:
+    publication_role: not_published
     entity: AssistantRun
     description: AssistantRun 拥有的 SSE 有序事件日志；支持 Last-Event-ID 断线续传，保留 7 天。
     indexes:
@@ -46,8 +48,9 @@ collections:
     - name: idx_run_events_expire
       keys:
         expiresAt: 1
-      expireAfterSeconds: 0
+      expire_after_seconds: 0
   assistant_run_command_receipts:
+    publication_role: not_published
     entity: AssistantRun
     description: 非 Start 命令的持久幂等回执；同一 runId/commandId 同载荷不重复执行，异载荷冲突。
     indexes:
@@ -57,6 +60,7 @@ collections:
         runId: 1
         commandId: 1
   assistant_run_worker_leases:
+    publication_role: not_published
     entity: AssistantRun
     description: Worker claim、heartbeat 与 fencing token 的短租约；过期后允许其他实例接管，旧 token 永远不能继续提交。
     indexes:
@@ -64,6 +68,7 @@ collections:
       keys:
         expiresAt: 1
   assistant_run_work_queue:
+    publication_role: not_published
     entity: AssistantRun
     description: AssistantRun durable worker 的唯一待执行队列；claim 使用 fencing token，租约过期后才允许重新领取。
     indexes:
@@ -73,15 +78,18 @@ collections:
         availableAt: 1
         expiresAt: 1
   assistant_run_terminal_outbox:
+    publication_role: transactional_outbox
     entity: AssistantRun
     description: AssistantRun 终态与学习事实订阅之间的事务 outbox；终态 snapshot、journal 与该事件在同一 Mongo 事务提交，消费端以稳定 eventId 幂等追加 AssistantLearningFact。
     indexes:
     - name: idx_run_terminal_outbox_pending
       keys:
         processedAt: 1
+        nextAttemptAt: 1
         claimUntil: 1
         occurredAt: 1
   assistant_run_web_evidence:
+    publication_role: not_published
     entity: AssistantRun
     description: Public Web Fetch Runtime 提交的 authoritative Target、Source、Document 与 Artifact ledger；四类不可变记录单次抓取事务写入，所有回查均由 runId 约束。
     indexes:
@@ -126,6 +134,7 @@ collections:
         runId: 1
         fetchedAt: -1
   assistant_run_web_budgets:
+    publication_role: not_published
     entity: AssistantRun
     description: Public Web Fetch Runtime 的持久页面、字节与在途 reservation 预算；服务重启不得重置已消费预算，过期 reservation 只能回收为未消费额度。
     indexes:

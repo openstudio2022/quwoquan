@@ -47,7 +47,7 @@
 ## 4. 契约引用
 
 - canonical：`quwoquan_service/services/user-service/contracts/account/user_account/operations.yaml`
-- canonical：`quwoquan_app/lib/ui/settings/pages/settings_page.dart`
+- canonical：`quwoquan_app/lib/service/user_service/account/user_settings/presentation/settings_page.dart`
 
 ## 5. 验收场景
 

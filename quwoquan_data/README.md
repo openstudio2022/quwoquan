@@ -97,9 +97,17 @@ python3 quwoquan_data/scripts/cli.py release lifecycle-exit --help
 python3 quwoquan_data/scripts/cli.py release acceptance-lease --help
 python3 quwoquan_data/scripts/cli.py governance taxonomy --help
 
-# 全量 Data gate
+# 全量 Data gate（唯一静态组合入口）
 python3 quwoquan_data/scripts/cli.py verify all
 ```
+
+### Verify 三类入口
+
+1. **static all**：`python3 quwoquan_data/scripts/cli.py verify all` 是唯一静态 gate 组合，不要新增平行 `verify-*` Make/脚本入口。
+2. **on-demand**：需要具体 release、execution 或环境参数时，使用显式子命令（如 `verify release-lifecycle`、`verify execution-readiness`、`verify publish-purity`）。
+3. **runtime library**：`scripts/verify/*.py` 与领域模块供 CLI/gate import；直接 `python3 .../verify_*.py` 只供本地调试，不算正式入口。
+
+`scripts/` 保持 `cli.py` / `core/` / `content/` / `governance/` / `verify/` 闭集；稳定脚本名用语义描述，禁止阶段编号、批次编号和数字分片名。
 
 Cursor SDK 凭证默认只从仓外、权限为 `0600` 的
 `~/.config/quwoquan/cursor_api_key` 动态读取；`QWQ_CURSOR_API_KEY_FILE`

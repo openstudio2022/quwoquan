@@ -1,13 +1,29 @@
 events:
 - name: RecommendationModelReleaseStaged
-  producer: recommendation-service
-  consumers: [recommendation-service]
-  channel: outbox
+  delivery_semantics: transactional_outbox
   payload_entity: RecommendationModelRelease
-  payload_fields: [id, scenario, modelDigest, featureContractDigest, status, createdAt]
+  payload_fields:
+  - id
+  - scenario
+  - modelDigest
+  - featureContractDigest
+  - status
+  - createdAt
 - name: RecommendationModelReleaseActivated
-  producer: recommendation-service
-  consumers: [recommendation-service, product-ops-service]
-  channel: outbox
+  delivery_semantics: transactional_outbox
   payload_entity: RecommendationModelRelease
-  payload_fields: [id, scenario, modelDigest, featureContractDigest, status, activatedAt]
+  payload_fields:
+  - id
+  - scenario
+  - modelDigest
+  - featureContractDigest
+  - status
+  - activatedAt
+- name: RecommendationModelReleaseRetired
+  delivery_semantics: transactional_outbox
+  payload_entity: RecommendationModelRelease
+  payload_fields:
+  - id
+  - scenario
+  - status
+  - retiredAt

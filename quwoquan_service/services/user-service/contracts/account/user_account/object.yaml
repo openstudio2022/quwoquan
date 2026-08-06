@@ -37,9 +37,6 @@ relationships:
   reference_fields:
   - backgroundAssetId
   target_object: content.MediaAsset
-capabilities:
-- queryable
-- searchable
 taggable: true
 vector_enabled: false
 business_rules:
@@ -65,3 +62,14 @@ lifecycle:
   - closed
   optimistic_concurrency: version
   idempotency: event_or_command_receipt
+  source_events:
+  - user.persona.PersonaCreated
+  - user.persona.PersonaUpdated
+  - user.persona.PersonaRetired
+  - user.persona.PersonaActivated
+  event_consumers:
+  - name: MaterializeActivePersonaProfile
+    kind: event_handler
+    facet: PersonaProfileProjector
+    method: project
+    idempotency: aggregate_version

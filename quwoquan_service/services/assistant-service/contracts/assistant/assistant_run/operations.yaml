@@ -1,6 +1,6 @@
 commercial_defaults:
   status: blocked
-  block_reason: canonical operation awaits object-centered commercial migration
+  block_reason: run execution control still awaits real-environment worker and model Provider evidence
   gap_id: ASSISTANT_ASSISTANT_RUN_COMMERCIAL_EVIDENCE
   target_story: app-cloud-business-object-commercial-closure
 description: 小趣助手执行、上下文感知、Skill 路由与学习反馈
@@ -22,7 +22,7 @@ api_routes:
   actor: persona
   commercial:
     status: blocked
-    block_reason: AssistantRun domain/store/HTTP adapter remain physically mixed with AssistantSession orchestration, and Prod model Provider conformance is unproven
+    block_reason: Prod model Provider conformance for the frozen generation policy is unproven; four-environment Provider evidence is still missing
     gap_id: ASSISTANT_ASSISTANT_RUN_COMMERCIAL_EVIDENCE
     target_story: app-cloud-business-object-commercial-closure
   application:
@@ -92,10 +92,7 @@ api_routes:
   request_entity: AssistantRunByIdQuery
   request_body_kind: none
   commercial:
-    status: blocked
-    block_reason: AssistantRun domain model, Mongo store and HTTP adapter remain physically mixed with AssistantSession orchestration
-    gap_id: ASSISTANT_ASSISTANT_RUN_COMMERCIAL_EVIDENCE
-    target_story: app-cloud-business-object-commercial-closure
+    status: ready
   application:
     kind: query
     facet: AssistantRunQueryFacade
@@ -145,10 +142,7 @@ api_routes:
   operation: CancelAssistantRun
   actor: persona
   commercial:
-    status: blocked
-    block_reason: AssistantRun cancel aggregate/store/HTTP adapter remain physically mixed with AssistantSession orchestration
-    gap_id: ASSISTANT_ASSISTANT_RUN_COMMERCIAL_EVIDENCE
-    target_story: app-cloud-business-object-commercial-closure
+    status: ready
   application:
     kind: command
     facet: AssistantRunCommandFacade
@@ -259,22 +253,42 @@ api_routes:
   authorization: {principal: persona, ownership_policy: run_owner}
   security: {auth_mode: required, principal: owner, token_transport: bearer, anonymous_policy: deny, visibility: private}
 - method: POST
-  path: /assistant/runs/{runId}/tool-uses/{toolUseId}/continue
-  operation: ContinueAssistantToolUse
+  path: /assistant/runs/{runId}/tool-invocations/{toolInvocationId}/approval
+  operation: ApproveAssistantToolUse
   actor: persona
-  commercial: {status: blocked, block_reason: 设备动作 confirmation 与 continuation 端云回执尚需真机证据, gap_id: ASSISTANT_ASSISTANT_RUN_COMMERCIAL_EVIDENCE, target_story: adaptive-presentation-runtime}
-  application: {kind: command, facet: AssistantRunCommandFacade, method: continueToolUse, aggregate_owner: AssistantRun, mutation_target: AssistantRun, invariant_target: AssistantRun}
-  description: 对等待确认的 typed ActionIntent 明确批准或拒绝；设备动作仅在批准且携带原生成功回执时产生 continuation。
-  request_entity: AssistantContinueToolUseRequest
+  commercial: {status: blocked, block_reason: approval permit 的 account authority 与真机 readback 证据尚未闭合, gap_id: ASSISTANT_ASSISTANT_RUN_COMMERCIAL_EVIDENCE, target_story: adaptive-presentation-runtime}
+  application: {kind: command, facet: AssistantRunCommandFacade, method: approveToolUse, aggregate_owner: AssistantRun, mutation_target: AssistantRun, invariant_target: AssistantRun}
+  description: 对等待确认的 typed ApproveTool ActionIntent 明确批准或拒绝；批准设备动作只签发短期 DeviceActionPermit，不接受执行回执。
+  request_entity: AssistantApproveToolUseRequest
   request_body_kind: object
   request_bindings:
-    path: [{name: runId, field: runId}, {name: toolUseId, field: toolUseId}]
+    path: [{name: runId, field: runId}, {name: toolInvocationId, field: toolInvocationId}]
+    injected: [{name: Idempotency-Key, field: idempotencyKey}]
+  response_entity: AssistantToolApprovalResult
+  reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
+  error_codes: [ASSISTANT.USER.run_not_found, ASSISTANT.USER.run_unauthorized, ASSISTANT.USER.run_invalid_argument, ASSISTANT.USER.run_state_conflict, ASSISTANT.USER.delegated_approval_invalid, ASSISTANT.SYSTEM.run_storage_unavailable]
+  privacy: {request_classification: SENSITIVE, response_classification: SENSITIVE, log_policy: metadata_only}
+  telemetry: {metric: assistant_tool_approval, trace: true, attributes: [operation, outcome, error_code, decision]}
+  slo: {latency_p95_ms: 500, availability_percent: 99.9}
+  authorization: {principal: persona, ownership_policy: run_owner}
+  security: {auth_mode: required, principal: owner, token_transport: bearer, anonymous_policy: deny, visibility: private}
+- method: POST
+  path: /assistant/runs/{runId}/tool-invocations/{toolInvocationId}/device-action-receipt
+  operation: SubmitDeviceActionReceipt
+  actor: persona
+  commercial: {status: blocked, block_reason: DeviceActionPermit durable JTI store 与 Android/iPhone 真机回执尚未闭合, gap_id: ASSISTANT_ASSISTANT_RUN_COMMERCIAL_EVIDENCE, target_story: adaptive-presentation-runtime}
+  application: {kind: command, facet: AssistantRunCommandFacade, method: submitDeviceActionReceipt, aggregate_owner: AssistantRun, mutation_target: AssistantRun, invariant_target: AssistantRun}
+  description: 独立消费单次 DeviceActionPermit 并提交原生执行回执；任何 target、digest、设备、capability、幂等、expiry 或 jti 不匹配均零 continuation。
+  request_entity: AssistantSubmitDeviceActionReceiptRequest
+  request_body_kind: object
+  request_bindings:
+    path: [{name: runId, field: runId}, {name: toolInvocationId, field: toolInvocationId}]
     injected: [{name: Idempotency-Key, field: idempotencyKey}]
   response_entity: AssistantRunEnvelopeWire
   reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
-  error_codes: [ASSISTANT.USER.run_not_found, ASSISTANT.USER.run_unauthorized, ASSISTANT.USER.run_invalid_argument, ASSISTANT.USER.run_state_conflict, ASSISTANT.SYSTEM.run_storage_unavailable]
+  error_codes: [ASSISTANT.USER.run_not_found, ASSISTANT.USER.run_unauthorized, ASSISTANT.USER.run_invalid_argument, ASSISTANT.USER.run_state_conflict, ASSISTANT.USER.device_action_permit_invalid, ASSISTANT.USER.device_action_permit_expired, ASSISTANT.USER.device_action_permit_replayed, ASSISTANT.SYSTEM.device_action_unavailable, ASSISTANT.USER.device_action_permission_denied, ASSISTANT.SYSTEM.device_action_failed, ASSISTANT.SYSTEM.run_storage_unavailable]
   privacy: {request_classification: SENSITIVE, response_classification: SENSITIVE, log_policy: metadata_only}
-  telemetry: {metric: assistant_tool_continuation, trace: true, attributes: [operation, outcome, error_code, decision]}
+  telemetry: {metric: assistant_device_action_receipt, trace: true, attributes: [operation, outcome, error_code, capability]}
   slo: {latency_p95_ms: 500, availability_percent: 99.9}
   authorization: {principal: persona, ownership_policy: run_owner}
   security: {auth_mode: required, principal: owner, token_transport: bearer, anonymous_policy: deny, visibility: private}
@@ -286,7 +300,7 @@ api_routes:
   request_body_kind: none
   commercial:
     status: blocked
-    block_reason: AssistantRun event journal and SSE adapter remain physically mixed with AssistantSession orchestration
+    block_reason: SSE 连接已由声明的 reliability.stream_budget 三个上限强制，握手、空闲与总时长各有 local_contract 与 api_integration 证据；剩余缺口是同一不可变候选上的四环境流式回执——真实环境长连接的 SLO、灰度与回滚证据尚未绑定候选
     gap_id: ASSISTANT_ASSISTANT_RUN_COMMERCIAL_EVIDENCE
     target_story: app-cloud-business-object-commercial-closure
   application:
@@ -310,7 +324,19 @@ api_routes:
     terminal_values: [completed, failed, cancelled]
   response_admission: {maximum_body_bytes: 1048576}
   reliability:
-    timeout_ms: 190000
+    # 长连接没有「响应完成」的瞬间，所以不用标量 timeout_ms，改为三个互不替代的
+    # 独立上限；timeout_ms 由 max_duration_ms 派生，不在此处书写。
+    #
+    # handshake_ms：从准入到首字节 flush。授权、run 读取与首页 journal 读取都在
+    #   这一段内，超时说明连接被接受却什么都没产出。
+    # idle_ms：两个 payload frame 之间的最大间隔。心跳注释不重置它，否则停摆的
+    #   worker 与健康的长 run 无法区分。持续产出事件的正常长 run 不受影响。
+    # max_duration_ms：连接生命周期上限，健康也要关闭。客户端凭
+    #   streaming.resume_request_field 续传，run 本身在服务端继续执行。
+    stream_budget:
+      handshake_ms: 5000
+      idle_ms: 60000
+      max_duration_ms: 600000
     cancellation: supported
     retry_mode: idempotent
     max_attempts: 3
@@ -362,11 +388,7 @@ consumers:
   capabilities:
   - read_runs
 contract_test:
-  mock_strategy:
-    app_side:
-      mock_target: assistant-service API
-      data_source: fields.yaml
-      scenarios:
+  test_strategy:
     service_side:
       description: 使用真实测试数据库，不 mock 存储层
       real_engines:
@@ -401,3 +423,148 @@ contract_test:
   coverage_requirements:
   - learning feedback loop end-to-end
   - run persistence and idempotent replay covered
+readiness_cases:
+- case_id: start-assistant-run-local
+  spec_ref: specs/feature-tree/runtime/runtime-assistant/context-grounded-answering/spec.md#gwt-002
+  producer: service
+  target: {kind: operation, id: StartAssistantRun}
+  layer: local_contract
+  runner_source_path: quwoquan_service/services/assistant-service/tests/local_contract/assistant/assistant_run/assistant_run_command_service__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: start-assistant-run-api
+  spec_ref: specs/feature-tree/runtime/runtime-assistant/context-grounded-answering/spec.md#gwt-002
+  producer: service
+  target: {kind: operation, id: StartAssistantRun}
+  layer: api_integration
+  runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/assistant_run/intersection_evidence_grounding__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: get-assistant-run-local
+  spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/durable-agent-run-orchestration/spec.md#gwt-002
+  producer: service
+  target: {kind: operation, id: GetAssistantRun}
+  layer: local_contract
+  runner_source_path: quwoquan_service/services/assistant-service/tests/local_contract/assistant/assistant_run/assistant_run_command_service__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: get-assistant-run-api
+  spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/durable-agent-run-orchestration/spec.md#gwt-002
+  producer: service
+  target: {kind: operation, id: GetAssistantRun}
+  layer: api_integration
+  runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/assistant_run/assistant_run_control_operations__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: pause-assistant-run-local
+  spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/durable-agent-run-orchestration/spec.md#gwt-002
+  producer: service
+  target: {kind: operation, id: PauseAssistantRun}
+  layer: local_contract
+  runner_source_path: quwoquan_service/services/assistant-service/tests/local_contract/assistant/assistant_run/assistant_run_command_service__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: pause-assistant-run-api
+  spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/durable-agent-run-orchestration/spec.md#gwt-002
+  producer: service
+  target: {kind: operation, id: PauseAssistantRun}
+  layer: api_integration
+  runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/assistant_run/assistant_run_control_operations__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: resume-assistant-run-local
+  spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/durable-agent-run-orchestration/spec.md#gwt-002
+  producer: service
+  target: {kind: operation, id: ResumeAssistantRun}
+  layer: local_contract
+  runner_source_path: quwoquan_service/services/assistant-service/tests/local_contract/assistant/assistant_run/assistant_run_command_service__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: resume-assistant-run-api
+  spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/durable-agent-run-orchestration/spec.md#gwt-002
+  producer: service
+  target: {kind: operation, id: ResumeAssistantRun}
+  layer: api_integration
+  runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/assistant_run/assistant_run_control_operations__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: steer-assistant-run-local
+  spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/durable-agent-run-orchestration/spec.md#gwt-002
+  producer: service
+  target: {kind: operation, id: SteerAssistantRun}
+  layer: local_contract
+  runner_source_path: quwoquan_service/services/assistant-service/tests/local_contract/assistant/assistant_run/assistant_run_command_service__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: steer-assistant-run-api
+  spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/durable-agent-run-orchestration/spec.md#gwt-002
+  producer: service
+  target: {kind: operation, id: SteerAssistantRun}
+  layer: api_integration
+  runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/assistant_run/assistant_run_control_operations__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: cancel-assistant-run-local
+  spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/durable-agent-run-orchestration/spec.md#gwt-003
+  producer: service
+  target: {kind: operation, id: CancelAssistantRun}
+  layer: local_contract
+  runner_source_path: quwoquan_service/services/assistant-service/tests/local_contract/assistant/assistant_run/assistant_run_command_service__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: cancel-assistant-run-api
+  spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/durable-agent-run-orchestration/spec.md#gwt-003
+  producer: service
+  target: {kind: operation, id: CancelAssistantRun}
+  layer: api_integration
+  runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/assistant_run/assistant_run_control_operations__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: approve-assistant-tool-use-local
+  spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/tool-fabric-runtime/spec.md#gwt-003
+  producer: service
+  target: {kind: operation, id: ApproveAssistantToolUse}
+  layer: local_contract
+  runner_source_path: quwoquan_service/services/assistant-service/tests/local_contract/assistant/assistant_run/assistant_run_command_service__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: submit-device-action-receipt-local
+  spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/tool-fabric-runtime/spec.md#gwt-003
+  producer: service
+  target: {kind: operation, id: SubmitDeviceActionReceipt}
+  layer: local_contract
+  runner_source_path: quwoquan_service/services/assistant-service/tests/local_contract/assistant/assistant_run/assistant_run_command_service__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: approve-assistant-tool-use-api
+  spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/tool-fabric-runtime/spec.md#gwt-003
+  producer: service
+  target: {kind: operation, id: ApproveAssistantToolUse}
+  layer: api_integration
+  runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/assistant_run/assistant_run_control_operations__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: submit-device-action-receipt-api
+  spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/tool-fabric-runtime/spec.md#gwt-003
+  producer: service
+  target: {kind: operation, id: SubmitDeviceActionReceipt}
+  layer: api_integration
+  runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/assistant_run/assistant_run_control_operations__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: stream-assistant-run-events-local
+  spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-005
+  producer: service
+  target: {kind: operation, id: StreamAssistantRunEvents}
+  layer: local_contract
+  runner_source_path: quwoquan_service/services/assistant-service/tests/local_contract/assistant/assistant_run/run_event_stream_budget__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: stream-assistant-run-events-api
+  spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-005
+  producer: service
+  target: {kind: operation, id: StreamAssistantRunEvents}
+  layer: api_integration
+  runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/assistant_run/run_event_stream_budget__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}

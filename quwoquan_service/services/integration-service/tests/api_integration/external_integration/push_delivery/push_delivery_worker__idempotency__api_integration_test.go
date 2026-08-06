@@ -1,10 +1,13 @@
 // spec_ref: specs/feature-tree/runtime/runtime-external-integration/integration-service-foundation/spec.md#gwt-001
+// readiness_case: invoke-push-delivery-provider-api
 package api_integration
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -19,83 +22,61 @@ import (
 	deadletteradapter "quwoquan_service/services/integration-service/internal/external_integration/external_interaction_dead_letter_fact/adapters/inbound/runtime"
 	deadletterpersistence "quwoquan_service/services/integration-service/internal/external_integration/external_interaction_dead_letter_fact/infrastructure/persistence"
 	"quwoquan_service/services/integration-service/internal/external_integration/push_delivery/application"
+	pushprovider "quwoquan_service/services/integration-service/internal/external_integration/push_delivery/infrastructure/provider"
 	integrationsupport "quwoquan_service/services/integration-service/tests/support"
 )
 
 const apiIntegrationEndpointRef = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 
-type pushEndpointAccessSpy struct {
-	resolutions   atomic.Int32
-	invalidations atomic.Int32
-}
-
-func (s *pushEndpointAccessSpy) ResolvePushEndpointSecret(
-	_ context.Context,
-	endpointRef string,
-) (application.PushEndpointSecret, error) {
-	s.resolutions.Add(1)
-	return application.PushEndpointSecret{
-		EndpointRef:  endpointRef,
-		EndpointKind: application.PushEndpointKindFCM,
-		Token:        "api-integration-transient-token",
-	}, nil
-}
-
-func (s *pushEndpointAccessSpy) InvalidatePushEndpoint(
-	context.Context,
-	string,
-	string,
-	string,
-) error {
-	s.invalidations.Add(1)
-	return nil
-}
-
-type pushSenderSpy struct {
-	calls atomic.Int32
-}
-
-func (s *pushSenderSpy) SendPush(
-	_ context.Context,
-	token string,
-	message application.PushDeliveryMessage,
-) (application.PushSendReceipt, error) {
-	if token != "api-integration-transient-token" {
-		return application.PushSendReceipt{}, fmt.Errorf("unexpected transient token")
-	}
-	if message.DeliveryKey != "delivery-api-001" || message.CallID != "call-api-001" {
-		return application.PushSendReceipt{}, fmt.Errorf("unexpected push payload")
-	}
-	s.calls.Add(1)
-	return application.PushSendReceipt{ProviderRequestID: "fcm-message-api-001"}, nil
-}
-
 func TestPushDeliveryWorkerDispatchesIdempotentlyExactlyOnce(t *testing.T) {
 	integrationsupport.WithIntegrationMongo(t, func(runtime *integrationsupport.MongoRuntime) {
 		runtime.ResetExternalInteraction(t)
-		endpointAccess := &pushEndpointAccessSpy{}
-		apns := &pushSenderSpy{}
-		fcm := &pushSenderSpy{}
-		dispatchProvider, err := application.NewPushDispatchProvider(
-			endpointAccess,
-			endpointAccess,
-			apns,
-			fcm,
-			slog.Default(),
+		var providerCalls atomic.Int32
+		providerServer := httptest.NewTLSServer(http.HandlerFunc(func(
+			writer http.ResponseWriter,
+			request *http.Request,
+		) {
+			providerCalls.Add(1)
+			if request.Method != http.MethodPost {
+				t.Errorf("provider method=%s, want POST", request.Method)
+			}
+			var payload map[string]string
+			if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+				t.Errorf("decode provider request: %v", err)
+			}
+			if payload["requestId"] != "push-api-request-001" ||
+				payload["operation"] != reliabletask.ExternalInteractionOperationPush ||
+				payload["idempotencyKey"] != "delivery-api-001" ||
+				payload["payloadDigest"] != integrationsupport.CanonicalTestSHA256("push:delivery-api-001") {
+				t.Errorf("non-canonical provider request: %+v", payload)
+			}
+			writer.Header().Set("Content-Type", "application/json")
+			writer.WriteHeader(http.StatusAccepted)
+			_ = json.NewEncoder(writer).Encode(map[string]string{
+				"providerRequestId": "push-substitute-api-001",
+			})
+		}))
+		t.Cleanup(providerServer.Close)
+		remoteProvider, err := pushprovider.NewProtocolSubstitutePushProvider(
+			providerServer.URL,
+			providerServer.Client(),
+			2*time.Second,
 		)
 		if err != nil {
 			t.Fatal(err)
 		}
 		policies := map[string]reliabletask.ProviderPolicy{
 			reliabletask.ExternalInteractionOperationPush: {
-				Providers:   []string{"push_dispatch"},
+				Providers:   []string{pushprovider.ProtocolSubstituteProviderName},
 				Timeout:     2 * time.Second,
 				RetryPolicy: reliabletask.DefaultRetryPolicy(),
 			},
 		}
 		service, err := externalapp.NewExternalInteractionService(
 			runtime.CanonicalExternalStore(t),
-			map[string]reliabletask.ExternalProvider{"push_dispatch": dispatchProvider},
+			map[string]reliabletask.ExternalProvider{
+				pushprovider.ProtocolSubstituteProviderName: remoteProvider,
+			},
 			policies,
 		)
 		if err != nil {
@@ -160,7 +141,9 @@ func TestPushDeliveryWorkerDispatchesIdempotentlyExactlyOnce(t *testing.T) {
 				attemptadapter.NewRuntimeStore(reopenedStore),
 				deadletterpersistence.NewMongoRepository(runtime.Database),
 			),
-			map[string]reliabletask.ExternalProvider{"push_dispatch": dispatchProvider},
+			map[string]reliabletask.ExternalProvider{
+				pushprovider.ProtocolSubstituteProviderName: remoteProvider,
+			},
 			policies,
 		)
 		if err != nil {
@@ -177,23 +160,14 @@ func TestPushDeliveryWorkerDispatchesIdempotentlyExactlyOnce(t *testing.T) {
 		if err != nil || processed {
 			t.Fatalf("second worker process must be empty processed=%t err=%v", processed, err)
 		}
-		if fcm.calls.Load() != 1 ||
-			apns.calls.Load() != 0 ||
-			endpointAccess.resolutions.Load() != 1 ||
-			endpointAccess.invalidations.Load() != 0 {
-			t.Fatalf(
-				"exactly-once calls fcm=%d apns=%d resolutions=%d invalidations=%d",
-				fcm.calls.Load(),
-				apns.calls.Load(),
-				endpointAccess.resolutions.Load(),
-				endpointAccess.invalidations.Load(),
-			)
+		if providerCalls.Load() != 1 {
+			t.Fatalf("HTTPS provider calls=%d, want exactly one", providerCalls.Load())
 		}
 		attempts, err := reopened.ListAttempts(context.Background(), request.RequestID)
 		if err != nil || len(attempts) != 1 {
 			t.Fatalf("attempt ledger=%+v err=%v", attempts, err)
 		}
-		if attempts[0].Provider != application.PushEndpointKindFCM ||
+		if attempts[0].Provider != pushprovider.ProtocolSubstituteProviderName ||
 			attempts[0].Status != reliabletask.ExternalInteractionStatusSentUnconfirmed {
 			t.Fatalf("unexpected attempt: %+v", attempts[0])
 		}

@@ -19,23 +19,23 @@ var (
 // AppErrorFromRelationshipFollowBlocked returns *AppError for USER.RELATIONSHIP.follow_blocked (user_message from errors.yaml).
 func AppErrorFromRelationshipFollowBlocked(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrRelationshipFollowBlocked.Error()))
-	return rerrors.NewAppError(code, "当前关系不可关注", debugMessage).WithMetadata("follow_blocked", 403).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "当前关系不可关注", debugMessage).WithMetadata("follow_blocked", 403).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromRelationshipInvalidPair returns *AppError for USER.RELATIONSHIP.invalid_pair (user_message from errors.yaml).
 func AppErrorFromRelationshipInvalidPair(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrRelationshipInvalidPair.Error()))
-	return rerrors.NewAppError(code, "关系主体无效", debugMessage).WithMetadata("invalid_pair", 400).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "关系主体无效", debugMessage).WithMetadata("invalid_pair", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromRelationshipTargetNotFound returns *AppError for USER.RELATIONSHIP.target_not_found (user_message from errors.yaml).
 func AppErrorFromRelationshipTargetNotFound(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrRelationshipTargetNotFound.Error()))
-	return rerrors.NewAppError(code, "该用户不存在或不可关注", debugMessage).WithMetadata("not_found", 404).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "该用户不存在或不可关注", debugMessage).WithMetadata("not_found", 404).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromRelationshipActorForbidden returns *AppError for USER.RELATIONSHIP.actor_forbidden (user_message from errors.yaml).
 func AppErrorFromRelationshipActorForbidden(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrRelationshipActorForbidden.Error()))
-	return rerrors.NewAppError(code, "当前身份无法执行该操作", debugMessage).WithMetadata("actor_forbidden", 403).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "当前身份无法执行该操作", debugMessage).WithMetadata("actor_forbidden", 403).WithRecoveryDirective("surface", "inlineCard", 0)
 }

@@ -69,7 +69,7 @@
 - canonical：`quwoquan_service/services/content-service/contracts/media/media_asset/operations.yaml`
 - canonical：`quwoquan_service/services/content-service/contracts/media/media_asset/image_variant_policy.yaml`
 - canonical：`quwoquan_data/scripts/core/media_asset_url.py`
-- canonical：`quwoquan_app/lib/cloud/media/cdn_image_url_builder.dart`
+- canonical：`quwoquan_app/lib/service/content_service/media/media_asset/adapters/cdn_image_url_builder.dart`
 - canonical：`quwoquan_service/services/content-service/contracts/media/media_original_access_fact/operations.yaml`
 - canonical：`quwoquan_service/services/content-service/contracts/media/media_original_access_fact/fields.yaml`
 - canonical：`quwoquan_service/services/content-service/contracts/media/media_original_access_fact/original_access_policy.yaml`

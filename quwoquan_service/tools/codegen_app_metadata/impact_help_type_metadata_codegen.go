@@ -29,8 +29,13 @@ func writeImpactHelpTypeMetadata(appDir, metadataDir string) error {
 		return fmt.Errorf("impact help type registry: %w", err)
 	}
 	out := renderImpactHelpTypeMetadataDart(metadataSourceLabel(contractPath), registry)
-	outPath := filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "recommendation", "impact_help_type_metadata.g.dart")
-	writeFile(outPath, out)
+	writeFile(
+		recommendationFeatureProfilePresentationOutputPath(
+			appDir,
+			"impact_help_type_metadata.g.dart",
+		),
+		out,
+	)
 	return nil
 }
 

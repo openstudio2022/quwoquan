@@ -70,8 +70,8 @@
 - canonical：`quwoquan_service/services/content-service/contracts/media/filter_catalog_release/operations.yaml`
 - canonical：`quwoquan_service/services/content-service/contracts/media/filter_catalog_release/errors.yaml`
 - canonical：`quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/content/filter_catalog_facets.dart`
-- canonical：`quwoquan_app/lib/application/content/filter_catalog`
-- canonical：`quwoquan_app/lib/infrastructure/local/content/filter_catalog`
+- canonical：`quwoquan_app/lib/service/content_service/media/filter_catalog_release/application`
+- canonical：`quwoquan_app/lib/service/content_service/media/filter_catalog_release/adapters`
 - canonical：`specs/feature-tree/discovery-content/publish-comment-reaction/filter-catalog-release/spec.md`
 
 ## 5. 验收场景

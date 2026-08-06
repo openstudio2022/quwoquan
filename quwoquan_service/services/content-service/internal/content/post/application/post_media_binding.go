@@ -70,15 +70,11 @@ func (s *PostService) prepareMediaAssetsForPublication(
 		return nil
 	}
 	if s.mediaAssetBindings == nil {
-		return rterr.NewUnavailable(
-			rterr.ModuleContent,
-			"媒体读取服务未配置",
-			"MediaAsset binding reader is required",
-		)
+		return contentgenerated.AppErrorFromRequiredDependencyUnavailable("MediaAsset binding reader is required")
 	}
 	assets, err := s.mediaAssetBindings.FindMediaAssetsForBinding(ctx, assetIDs)
 	if err != nil {
-		return rterr.NewUnavailable(rterr.ModuleContent, "读取媒体素材失败", err.Error())
+		return contentgenerated.AppErrorFromRequiredDependencyUnavailable(err.Error())
 	}
 	bound := make([]string, 0, len(assetIDs))
 	seen := make(map[string]struct{}, len(assetIDs))
@@ -116,11 +112,7 @@ func (s *PostService) prepareMediaAssetsForPublication(
 		bound = append(bound, assetID)
 	}
 	if err := s.mediaAssetBindings.MaterializePublicSlices(ctx, bound); err != nil {
-		return rterr.NewUnavailable(
-			rterr.ModuleContent,
-			"公开媒体交付准备失败",
-			err.Error(),
-		)
+		return contentgenerated.AppErrorFromRequiredDependencyUnavailable(err.Error())
 	}
 	if err := ProjectBoundMediaAssets(post, assets, bound); err != nil {
 		return rterr.NewInvalidArgument(

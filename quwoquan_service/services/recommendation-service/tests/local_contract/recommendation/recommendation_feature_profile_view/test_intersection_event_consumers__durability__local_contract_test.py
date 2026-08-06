@@ -1,4 +1,8 @@
 # spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-003
+# readiness_case: project-feature-profile-local
+# readiness_case: project-feature-persona-relationship-local
+# readiness_case: project-feature-circle-membership-local
+# readiness_case: project-feature-post-lifecycle-local
 from __future__ import annotations
 
 import hashlib

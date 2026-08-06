@@ -1,3 +1,5 @@
+# spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/spec.md#sit-001
+# readiness_case: project-candidate-index-local
 import json
 
 import pytest

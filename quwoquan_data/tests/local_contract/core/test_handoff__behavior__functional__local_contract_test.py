@@ -153,8 +153,8 @@ def test_ref_review_gate_pass():
 
 def test_batch_reducer_flags_source_reuse():
     payload = [
-        {"ref": "r1", "article": "独特的过程体验一二三四五。 asset://a1", "writingIntent": "decision_experience", "baseSourceRef": "sources/shared.md"},
-        {"ref": "r2", "article": "完全不同的攻略步骤与顺序。 asset://a2", "writingIntent": "planning_consultation", "baseSourceRef": "sources/shared.md"},
+        {"ref": "r1", "article": "独特的过程体验一二三四五。 asset://a1", "writingIntent": "decision_experience", "baseSourceRef": "sources/shared.md", "articleMediaMode": "illustrated", "articleMediaIssue": ""},
+        {"ref": "r2", "article": "完全不同的攻略步骤与顺序。 asset://a2", "writingIntent": "planning_consultation", "baseSourceRef": "sources/shared.md", "articleMediaMode": "illustrated", "articleMediaIssue": ""},
     ]
     gate = handoff.build_execution_reducer_gate(payload)
     assert gate["passed"] is False
@@ -165,12 +165,77 @@ def test_batch_reducer_flags_source_reuse():
 
 def test_batch_reducer_passes_for_distinct_refs():
     payload = [
-        {"ref": "r1", "article": "先坐车到景区，再步行上山，最后回城。 asset://a1", "writingIntent": "planning_consultation", "baseSourceRef": "sources/a.md"},
-        {"ref": "r2", "article": "上午走老街，下午看博物馆，傍晚吃完再回酒店。 asset://a2", "writingIntent": "post_trip_journal", "baseSourceRef": "sources/b.md"},
+        {"ref": "r1", "article": "先坐车到景区，再步行上山，最后回城。 asset://a1", "writingIntent": "planning_consultation", "baseSourceRef": "sources/a.md", "articleMediaMode": "illustrated", "articleMediaIssue": ""},
+        {"ref": "r2", "article": "上午走老街，下午看博物馆，傍晚吃完再回酒店。 asset://a2", "writingIntent": "post_trip_journal", "baseSourceRef": "sources/b.md", "articleMediaMode": "illustrated", "articleMediaIssue": ""},
     ]
     gate = handoff.build_execution_reducer_gate(payload)
     assert gate["passed"] is True, gate["issues"]
     assert gate["affectedRefs"] == []
+
+
+def test_batch_reducer_enforces_typed_article_media_coverage(monkeypatch):
+    monkeypatch.setattr(
+        handoff.qg,
+        "skeleton_similarity_issues",
+        lambda _article, _peers: [],
+    )
+    payload = [
+        {
+            "ref": f"illustrated-{index}",
+            "article": f"独立正文 {index}",
+            "writingIntent": "planning_consultation",
+            "baseSourceRef": f"sources/{index}/source.md",
+            "articleMediaMode": "illustrated",
+            "articleMediaIssue": "",
+        }
+        for index in range(9)
+    ]
+    payload.append(
+        {
+            "ref": "text-only-allowed",
+            "article": "纯文字正文",
+            "writingIntent": "post_trip_journal",
+            "baseSourceRef": "sources/text/source.md",
+            "articleMediaMode": "text_only",
+            "articleMediaIssue": "",
+        }
+    )
+    passed = handoff.build_execution_reducer_gate(payload)
+    assert passed["passed"] is True
+    assert passed["imageCoverage"]["illustratedRate"] == 0.9
+    assert passed["imageCoverage"]["textOnlyRate"] == 0.1
+
+    payload.append(
+        {
+            "ref": "text-only-excess",
+            "article": "另一篇纯文字正文",
+            "writingIntent": "decision_experience",
+            "baseSourceRef": "sources/text-two/source.md",
+            "articleMediaMode": "text_only",
+            "articleMediaIssue": "",
+        }
+    )
+    blocked = handoff.build_execution_reducer_gate(payload)
+    assert blocked["passed"] is False
+    assert "text-only-excess" in blocked["affectedRefs"]
+    assert any("article_media_coverage" in issue for issue in blocked["issues"])
+
+
+def test_batch_reducer_rejects_missing_typed_article_media_closure():
+    gate = handoff.build_execution_reducer_gate(
+        [
+            {
+                "ref": "missing-media",
+                "article": "正文",
+                "writingIntent": "planning_consultation",
+                "baseSourceRef": "sources/base/source.md",
+                "articleMediaMode": "",
+                "articleMediaIssue": "mediaClosure is missing",
+            }
+        ]
+    )
+    assert gate["passed"] is False
+    assert gate["affectedRefs"] == ["missing-media"]
 
 
 def _run_all() -> None:

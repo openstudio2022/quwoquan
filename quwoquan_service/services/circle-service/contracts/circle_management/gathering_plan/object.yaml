@@ -1,0 +1,54 @@
+kind: aggregate_root
+description: Circle 单轨拥有、按 Gathering 选装的协作计划；独立维护 typed proposal 与 immutable PlanRevision，不成为第二活动根。
+identity:
+  fields: [_id]
+  version_source: store_commit
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+members:
+  PlanRevision:
+    kind: value_object
+    cardinality: many
+    ownership: aggregate
+    append_only: true
+  GatheringPlanProposal:
+    kind: owned_entity
+    identity: [proposalId]
+    cardinality: many
+    ownership: aggregate
+    write_access: aggregate_facade_only
+  PlanRevisionAcknowledgement:
+    kind: owned_entity
+    identity: [revisionId, participationPersonaId]
+    cardinality: many
+    ownership: aggregate
+    write_access: aggregate_facade_only
+relationships:
+- name: gathering
+  kind: reference
+  cardinality: N:1
+  consistency: strong
+  access: external_port
+  on_delete: retain
+  reference_fields: [gatheringId]
+  target_object: circle.Gathering
+local_identity_reasons:
+  currentRevisionId: GatheringPlan 聚合内 append-only PlanRevision 的当前指针，只能经 root facade 与 CAS 推进，不是独立 Store 对象身份。
+lifecycle:
+  state_model: revision_pointer
+  active_condition: plan exists and currentRevisionId/currentRevisionNumber/currentRevisionDigest identify one immutable PlanRevision
+  optimistic_concurrency: version
+  idempotency: command_receipt
+business_rules:
+- GatheringPlan 是可选能力；gatheringId 必须唯一，同一 Gathering 最多一个 Plan
+- GatheringPlan 不拥有或复制 title schedule Host Participation capacity lifecycle Outcome conversation
+- currentRevisionId currentRevisionNumber currentRevisionDigest 必须共同指向 revisions 中唯一一条不可变 PlanRevision
+- PlanItem kind 只允许 agenda place route_segment task checklist note，typed payload 必须与 kind 一一对应
+- assigneeRef 只引用 canonical GatheringParticipation persona，sourceRefs 只保存 canonical object reference
+- create 与 commit 只允许 current Host；proposal 只允许 current Host 或 active Participation，全部经 Gathering delegated owner port 实时校验
+- Gathering 不存在、cancelled、completed 或 delegated authority 无法证明时所有 Plan 写入 fail-closed
+- proposal 与 commit 必须匹配 expected Plan version、base Revision identity 和 digest；冲突拒绝，禁止 last-write-wins
+- command receipt 绑定 actor、idempotency key 与 command digest；同 key 不同 digest 拒绝，相同 digest 重放不得追加 Proposal、Revision 或 event log record
+- PlanRevision append-only；受影响确认只保存 Plan-level policy/ref，不得写入 Gathering material revision acknowledgement

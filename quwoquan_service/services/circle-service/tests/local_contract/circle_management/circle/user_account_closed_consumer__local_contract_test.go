@@ -1,5 +1,6 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-003
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-004
+// readiness_case: recover-circle-account-closure-dead-letter-local
 package local_contract
 
 import (
@@ -15,6 +16,7 @@ import (
 
 	rtredis "quwoquan_service/runtime/redis"
 	"quwoquan_service/services/circle-service/internal/circle_management/circle/application"
+	"quwoquan_service/services/circle-service/tests/support"
 )
 
 type userAccountClosedProjectionSpy struct {
@@ -207,7 +209,7 @@ func TestUserAccountClosedConsumerDeadLettersAfterBoundedRetriesWithoutPII(
 	}
 	var logs bytes.Buffer
 	consumer, err := NewUserAccountClosedConsumerWithConfig(
-		newCircleTestMessageTransport(t, redisSpy),
+		support.NewRedisMessageTransport(t, redisSpy),
 		projection,
 		projection,
 		"local-contract",
@@ -351,7 +353,7 @@ func newUserAccountClosedTestConsumer(
 ) *UserAccountClosedConsumer {
 	t.Helper()
 	consumer, err := NewUserAccountClosedConsumerWithConfig(
-		newCircleTestMessageTransport(t, client),
+		support.NewRedisMessageTransport(t, client),
 		projection,
 		projection,
 		"local-contract",

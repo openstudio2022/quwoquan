@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../" && pwd)"
 LOCAL_GAMMA_ACTIVE_CHILD_PID=""
+STARTUP_ATTEMPT_PREPARED=0
 STARTUP_ATTEMPT_PARTIAL=0
 STARTUP_ATTEMPT_RUNNING=0
 
@@ -18,6 +19,17 @@ cleanup_active_child() {
     wait "$LOCAL_GAMMA_ACTIVE_CHILD_PID" >/dev/null 2>&1 || true
   fi
   LOCAL_GAMMA_ACTIVE_CHILD_PID=""
+  if [[ "$exit_status" != "0" \
+     && "$STARTUP_ATTEMPT_PREPARED" == "1" \
+     && "$STARTUP_ATTEMPT_PARTIAL" != "1" \
+     && "$STARTUP_ATTEMPT_RUNNING" != "1" \
+     && "${formal_release:-0}" != "1" ]]; then
+    echo "[local-gamma] startup failed before runtime mutation; closing prepared attempt" >&2
+    write_startup_attempt \
+      stopped \
+      "startup exited with status ${exit_status} before runtime mutation" \
+      "" || true
+  fi
   if [[ "$exit_status" != "0" \
      && "$STARTUP_ATTEMPT_PARTIAL" == "1" \
      && "$STARTUP_ATTEMPT_RUNNING" != "1" \
@@ -56,6 +68,14 @@ trap cleanup_active_child EXIT INT TERM HUP
 
 QWQ_OUTPUT_ROOT="${QWQ_OUTPUT_ROOT:-$ROOT/.qwq_output}"
 QWQ_DEPLOY_WORK_ROOT="${QWQ_DEPLOY_WORK_ROOT:-${XDG_CACHE_HOME:-$HOME/.cache}/quwoquan/deploy}"
+if [[ ! -d "$QWQ_DEPLOY_WORK_ROOT" ]]; then
+  echo "[local-release] GATE_BLOCK: deploy work root is unavailable" >&2
+  exit 2
+fi
+# macOS exposes /var through /private/var. Package descriptors are emitted
+# with the physical path, so normalize the configured root before enforcing
+# candidate containment.
+QWQ_DEPLOY_WORK_ROOT="$(cd "$QWQ_DEPLOY_WORK_ROOT" && pwd -P)"
 QWQ_LOCAL_RELEASE_ENV="${QWQ_LOCAL_RELEASE_ENV:-gamma}"
 QWQ_LOCAL_RELEASE_TARGET="${QWQ_LOCAL_RELEASE_TARGET:-${QWQ_LOCAL_RELEASE_ENV}-local}"
 if [[ "$QWQ_LOCAL_RELEASE_ENV" != "alpha" \
@@ -68,10 +88,35 @@ if [[ "$QWQ_LOCAL_RELEASE_TARGET" != "${QWQ_LOCAL_RELEASE_ENV}-local" ]]; then
   echo "[local-release] GATE_BLOCK: target does not belong to environment" >&2
   exit 2
 fi
+if [[ "${QWQ_PREPARED_ATTEMPT_ONLY:-0}" == "1" ]]; then
+  prepared_down=0
+  for arg in "$@"; do
+    if [[ "$arg" == "--down" ]]; then prepared_down=1; fi
+  done
+  if [[ "$prepared_down" != "1" ]]; then
+    echo "[local-release] GATE_BLOCK: prepared-attempt recovery is teardown-only" >&2
+    exit 2
+  fi
+  echo "[local-gamma] prepared attempt has no runtime resources; skipping runtime materialization"
+  exit 0
+fi
 export QWQ_LOCAL_RELEASE_ENV QWQ_LOCAL_RELEASE_TARGET
+EARLY_BUILD_ONLY=0
+for early_arg in "$@"; do
+  if [[ "$early_arg" == "--build-only" ]]; then
+    EARLY_BUILD_ONLY=1
+  fi
+done
 PRODUCT_TELEMETRY_AVAILABLE="${QWQ_PRODUCT_TELEMETRY_AVAILABLE:-1}"
 PRODUCT_OPS_REQUIRED=1
 WORKLOAD="${QWQ_WORKLOAD:-full}"
+PROVIDER_RUNTIME_DIGEST="${QWQ_PROVIDER_RUNTIME_DIGEST:-}"
+if [[ ! "$PROVIDER_RUNTIME_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+  echo "[local-release] GATE_BLOCK: package-bound Provider runtime digest is required" >&2
+  exit 2
+fi
+OBSERVABILITY_LOG_SINK_COMPOSE_FILE="${QWQ_OBSERVABILITY_LOG_SINK_COMPOSE_FILE:-}"
+OBSERVABILITY_LOG_SINK_DIGEST="${QWQ_OBSERVABILITY_LOG_SINK_DIGEST:-}"
 case "$WORKLOAD" in
   content-release)
     # Content import/API/media are intentionally independent from commercial
@@ -105,21 +150,26 @@ case "$WORKLOAD" in
       echo "[local-gamma] GATE_BLOCK: full workload requires product telemetry" >&2
       exit 2
     fi
-    debug_sms_profile=""
-    if [[ "${QWQ_DEBUG_SMS_SUBSTITUTE_ENABLED:-false}" == "true" ]]; then
-      debug_sms_profile=",debug-sms-substitute"
+    if [[ -z "${QWQ_PROVIDER_RUNTIME_COMPOSE_FILES:-}" \
+       || -z "${QWQ_PROVIDER_RUNTIME_COMPOSE_PROFILES:-}" ]]; then
+      echo "[local-gamma] GATE_BLOCK: full workload requires package-bound Provider workloads" >&2
+      exit 2
     fi
-    debug_provider_profile=""
-    if [[ "${QWQ_DEBUG_PROVIDER_SUBSTITUTE_ENABLED:-false}" == "true" ]]; then
-      debug_provider_profile=",debug-provider-substitute"
-    fi
-    export COMPOSE_PROFILES="${COMPOSE_PROFILES:+${COMPOSE_PROFILES},}commercial-observability,assistant-runtime,edge-media${debug_sms_profile}${debug_provider_profile}"
+    export COMPOSE_PROFILES="${COMPOSE_PROFILES:+${COMPOSE_PROFILES},}commercial-observability,assistant-runtime,edge-media,${QWQ_PROVIDER_RUNTIME_COMPOSE_PROFILES}"
     ;;
   *)
     echo "[local-gamma] FAIL: QWQ_WORKLOAD must be content-release, content-commercial or full" >&2
     exit 2
     ;;
 esac
+if [[ "$WORKLOAD" == "full" || "$WORKLOAD" == "content-commercial" ]]; then
+  if [[ ! "$OBSERVABILITY_LOG_SINK_DIGEST" =~ ^sha256:[0-9a-f]{64}$ \
+     || -z "$OBSERVABILITY_LOG_SINK_COMPOSE_FILE" \
+     || -z "${PRODUCT_OPS_ELASTICSEARCH_ENDPOINT:-}" ]]; then
+    echo "[local-release] GATE_BLOCK: candidate-bound Elasticsearch runtime is required" >&2
+    exit 2
+  fi
+fi
 LOCAL_RUN_ACTION="up"
 for arg in "$@"; do
   if [[ "$arg" == "--down" ]]; then LOCAL_RUN_ACTION="down"; fi
@@ -132,69 +182,224 @@ write_startup_attempt() {
   local status="$1"
   local failure="${2:-}"
   local cleanup_failure="${3:-}"
-  PYTHONDONTWRITEBYTECODE=1 python3 \
-    "$ROOT/quwoquan_ops/cli/lib/startup_attempt_receipt.py" \
+  local -a receipt_args=(
     --env "$QWQ_LOCAL_RELEASE_ENV" \
     --target "$QWQ_LOCAL_RELEASE_TARGET" \
     --attempt-id "$QWQ_LOCAL_RUN_ID" \
     --status "$status" \
-    --workload "$WORKLOAD" \
-    --compose-project "${LOCAL_GAMMA_COMPOSE_PROJECT_NAME:-}" \
-    --candidate-digest "${QWQ_RELEASE_CANDIDATE_DIGEST:-}" \
-    --configuration-digest "${CONFIG_VERSION:-}" \
-    --image-transport-tag "${IMAGE_VERSION:-}" \
-    --run-root "$QWQ_RUN_ROOT" \
     --failure "$failure" \
     --cleanup-failure "$cleanup_failure"
-}
-COMPOSE_FILE="$ROOT/quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml"
-COMPOSE_FILES=("$COMPOSE_FILE")
-if [[ "$WORKLOAD" == "content-release" || "$WORKLOAD" == "content-commercial" ]]; then
-  # Compose interpolates every loaded file before it applies the selected
-  # service list. Loading full-workload service files here would therefore
-  # require unrelated Provider secrets (for example integration-service mTLS)
-  # even though those services are not started. Keep this slice structural:
-  # only load the canonical content consumer plane and its environment overlay.
-  content_slice_services=(
-    api-edge
-    recommendation-service
-    content-service
-    user-service
-    entity-service
   )
-  if [[ "$WORKLOAD" == "content-commercial" ]]; then
-    content_slice_services+=(product-ops-service)
+  if [[ "$status" == "prepared" ]]; then
+    local startup_image_file="${QWQ_STARTUP_IMAGE_COMPOSITION_FILE:-}"
+    local startup_image_tag="${QWQ_STARTUP_IMAGE_TRANSPORT_TAG:-}"
+    if [[ "$startup_image_file" != /* \
+       || ! -f "$startup_image_file" \
+       || -L "$startup_image_file" \
+       || ! "$startup_image_tag" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+      echo "[local-release] GATE_BLOCK: active-candidate full OCI startup identity is required" >&2
+      return 2
+    fi
+    receipt_args+=(
+      --workload "$WORKLOAD"
+      --compose-project "${LOCAL_GAMMA_COMPOSE_PROJECT_NAME:-}"
+      --candidate-digest "${QWQ_RELEASE_CANDIDATE_DIGEST:-}"
+      --configuration-digest "${CONFIG_VERSION:-}"
+      --provider-runtime-digest "$PROVIDER_RUNTIME_DIGEST"
+      --observability-log-sink-digest "$OBSERVABILITY_LOG_SINK_DIGEST"
+      --image-transport-tag "$startup_image_tag"
+      --image-composition-file "$startup_image_file"
+      --run-root "$QWQ_RUN_ROOT"
+    )
   fi
-  for content_slice_service in "${content_slice_services[@]}"; do
-    service_compose_file="$ROOT/quwoquan_service/services/${content_slice_service}/deploy/compose.yaml"
-    if [[ ! -f "$service_compose_file" ]]; then
-      echo "[local-release] GATE_BLOCK: missing bounded content compose file $service_compose_file" >&2
+  PYTHONDONTWRITEBYTECODE=1 python3 \
+    "$ROOT/quwoquan_ops/cli/lib/startup_attempt_receipt.py" \
+    "${receipt_args[@]}"
+}
+COMPOSE_FILES=()
+QWQ_RUNTIME_TOPOLOGY_POLICY_FILE=""
+QWQ_RUNTIME_TOPOLOGY_DIGEST=""
+if [[ "$EARLY_BUILD_ONLY" == "1" ]]; then
+  # Package creation is the only phase allowed to read source Compose.  The
+  # resulting candidate seals transformed, image-only topology bytes below
+  # packages/runtime-shared/runtime-topology.
+  COMPOSE_FILE="$ROOT/quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml"
+  COMPOSE_FILES=("$COMPOSE_FILE")
+  if [[ "$WORKLOAD" == "content-release" || "$WORKLOAD" == "content-commercial" ]]; then
+    content_slice_services=(
+      api-edge
+      recommendation-service
+      content-service
+      user-service
+      entity-service
+    )
+    if [[ "$WORKLOAD" == "content-commercial" ]]; then
+      content_slice_services+=(product-ops-service)
+    fi
+    for content_slice_service in "${content_slice_services[@]}"; do
+      service_compose_file="$ROOT/quwoquan_service/services/${content_slice_service}/deploy/compose.yaml"
+      if [[ ! -f "$service_compose_file" ]]; then
+        echo "[local-release] GATE_BLOCK: missing bounded content compose file $service_compose_file" >&2
+        exit 2
+      fi
+      COMPOSE_FILES+=("$service_compose_file")
+      service_environment_compose_file="$ROOT/quwoquan_service/services/${content_slice_service}/environments/${QWQ_LOCAL_RELEASE_ENV}/deploy/compose.yaml"
+      if [[ -f "$service_environment_compose_file" ]]; then
+        COMPOSE_FILES+=("$service_environment_compose_file")
+      fi
+    done
+  else
+    # 只纳入 runtime topology ∩ 自治服务根（与 compose_layout.first_party 同源）。
+    # 禁止 find 扫入已退役服务目录内残留的 compose，否则
+    # docker compose 会因缺失 QWQ_COMPOSE_*_CONFIG_VERSION 直接 GATE_BLOCK。
+    while IFS= read -r service_compose_file; do
+      [[ -n "$service_compose_file" ]] || continue
+      COMPOSE_FILES+=("$service_compose_file")
+    done < <(
+      ROOT="$ROOT" QWQ_LOCAL_RELEASE_ENV="$QWQ_LOCAL_RELEASE_ENV" \
+        PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
+import os
+from pathlib import Path
+
+from quwoquan_ops.cli.lib.immutable_image_composition import first_party_service_names
+
+root = Path(os.environ["ROOT"])
+env_name = os.environ["QWQ_LOCAL_RELEASE_ENV"]
+active = set(first_party_service_names(root))
+services_root = root / "quwoquan_service" / "services"
+for path in sorted(services_root.glob("*/deploy/compose.yaml")):
+    if path.parents[1].name in active:
+        print(path)
+for path in sorted(
+    services_root.glob(f"*/environments/{env_name}/deploy/compose.yaml")
+):
+    if path.parents[3].name in active:
+        print(path)
+PY
+    )
+    COMPOSE_FILES+=("$ROOT/quwoquan_service/control-plane/platform-ops/deploy/compose.yaml")
+  fi
+else
+  RUNTIME_CANDIDATE_ROOT="${QWQ_RUNTIME_CANDIDATE_ROOT:-}"
+  expected_candidate_leaf="${QWQ_RELEASE_CANDIDATE_DIGEST/:/-}"
+  case "$RUNTIME_CANDIDATE_ROOT" in
+    "$QWQ_DEPLOY_WORK_ROOT/$QWQ_LOCAL_RELEASE_TARGET/candidates/runtime-full/$expected_candidate_leaf") ;;
+    *)
+      echo "[local-release] GATE_BLOCK: exact runtime candidate root is required" >&2
+      exit 2
+      ;;
+  esac
+  if [[ ! -d "$RUNTIME_CANDIDATE_ROOT" || -L "$RUNTIME_CANDIDATE_ROOT" ]]; then
+    echo "[local-release] GATE_BLOCK: runtime candidate root is unsafe" >&2
+    exit 2
+  fi
+  if ! topology_environment="$({
+    PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 \
+      "$ROOT/quwoquan_ops/cli/lib/runtime_topology_package.py" \
+      --candidate-root "$RUNTIME_CANDIDATE_ROOT" \
+      --environment "$QWQ_LOCAL_RELEASE_ENV" \
+      --target "$QWQ_LOCAL_RELEASE_TARGET" \
+      --workload "$WORKLOAD" \
+      --format shell
+  } 2>&1)"; then
+    echo "[local-release] $topology_environment" >&2
+    exit 2
+  fi
+  eval "$topology_environment"
+  if [[ ! "$QWQ_RUNTIME_TOPOLOGY_DIGEST" =~ ^sha256:[0-9a-f]{64}$ \
+     || -z "$QWQ_RUNTIME_TOPOLOGY_COMPOSE_FILES" \
+     || -z "$QWQ_RUNTIME_TOPOLOGY_POLICY_FILE" ]]; then
+    echo "[local-release] GATE_BLOCK: candidate runtime topology identity is incomplete" >&2
+    exit 2
+  fi
+  # stackctl clears any inherited override before launch.  Reintroduce only
+  # the exact no-follow validated candidate package root so later config/legal
+  # helpers cannot re-resolve a newly activated pointer.
+  QWQ_DEPLOY_PACKAGE_ROOT_OVERRIDE="$RUNTIME_CANDIDATE_ROOT/packages"
+  export QWQ_DEPLOY_PACKAGE_ROOT_OVERRIDE
+  while IFS= read -r candidate_compose_file; do
+    [[ -n "$candidate_compose_file" ]] || continue
+    COMPOSE_FILES+=("$candidate_compose_file")
+  done <<< "$QWQ_RUNTIME_TOPOLOGY_COMPOSE_FILES"
+fi
+if [[ "$WORKLOAD" == "full" ]]; then
+  provider_compose_files=()
+  provider_compose_digests=()
+  while IFS= read -r provider_compose_file; do
+    [[ -n "$provider_compose_file" ]] || continue
+    provider_compose_files+=("$provider_compose_file")
+  done <<< "$QWQ_PROVIDER_RUNTIME_COMPOSE_FILES"
+  while IFS= read -r provider_compose_digest; do
+    [[ -n "$provider_compose_digest" ]] || continue
+    provider_compose_digests+=("$provider_compose_digest")
+  done <<< "${QWQ_PROVIDER_RUNTIME_COMPOSE_DIGESTS:-}"
+  if [[ "${#provider_compose_files[@]}" -eq 0 \
+     || "${#provider_compose_files[@]}" -ne "${#provider_compose_digests[@]}" ]]; then
+    echo "[local-release] GATE_BLOCK: Provider Compose digest closure is incomplete" >&2
+    exit 2
+  fi
+  for ((provider_index = 0; provider_index < ${#provider_compose_files[@]}; provider_index++)); do
+    provider_compose_file="${provider_compose_files[$provider_index]}"
+    provider_compose_digest="${provider_compose_digests[$provider_index]}"
+    if [[ "$EARLY_BUILD_ONLY" == "1" ]]; then
+      case "$provider_compose_file" in
+        "$QWQ_DEPLOY_WORK_ROOT/$QWQ_LOCAL_RELEASE_TARGET/candidates/runtime-full/"*) ;;
+        *)
+          echo "[local-release] GATE_BLOCK: Provider Compose is outside candidate staging" >&2
+          exit 2
+          ;;
+      esac
+    else
+      case "$provider_compose_file" in
+        "$RUNTIME_CANDIDATE_ROOT/"*) ;;
+        *)
+          echo "[local-release] GATE_BLOCK: Provider Compose is outside the exact runtime candidate" >&2
+          exit 2
+          ;;
+      esac
+    fi
+    if [[ ! -f "$provider_compose_file" || -L "$provider_compose_file" \
+       || ! "$provider_compose_digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+      echo "[local-release] GATE_BLOCK: packaged Provider Compose identity is unavailable" >&2
       exit 2
     fi
-    COMPOSE_FILES+=("$service_compose_file")
-
-    service_environment_compose_file="$ROOT/quwoquan_service/services/${content_slice_service}/environments/${QWQ_LOCAL_RELEASE_ENV}/deploy/compose.yaml"
-    if [[ -f "$service_environment_compose_file" ]]; then
-      COMPOSE_FILES+=("$service_environment_compose_file")
+    actual_provider_compose_digest="sha256:$(shasum -a 256 "$provider_compose_file" | awk '{print $1}')"
+    if [[ "$actual_provider_compose_digest" != "$provider_compose_digest" ]]; then
+      echo "[local-release] GATE_BLOCK: packaged Provider Compose digest drifted" >&2
+      exit 2
     fi
+    COMPOSE_FILES+=("$provider_compose_file")
   done
-else
-  while IFS= read -r service_compose_file; do
-    COMPOSE_FILES+=("$service_compose_file")
-  done < <(find "$ROOT/quwoquan_service/services" -mindepth 3 -maxdepth 3 -path '*/deploy/compose.yaml' -type f | sort)
-  while IFS= read -r service_environment_compose_file; do
-    COMPOSE_FILES+=("$service_environment_compose_file")
-  done < <(find "$ROOT/quwoquan_service/services" -mindepth 5 -maxdepth 5 -path "*/environments/${QWQ_LOCAL_RELEASE_ENV}/deploy/compose.yaml" -type f | sort)
-  COMPOSE_FILES+=("$ROOT/quwoquan_service/control-plane/platform-ops/deploy/compose.yaml")
-  if [[ "${QWQ_DEBUG_SMS_SUBSTITUTE_ENABLED:-false}" == "true" ]]; then
-    COMPOSE_FILES+=("$ROOT/quwoquan_ops/external/sms-provider-substitute/deploy/compose.yaml")
-  fi
-  if [[ "${QWQ_DEBUG_PROVIDER_SUBSTITUTE_ENABLED:-false}" == "true" ]]; then
-    COMPOSE_FILES+=("$ROOT/quwoquan_ops/external/provider-protocol-substitute/deploy/compose.yaml")
-  fi
 fi
 if [[ "$WORKLOAD" == "full" || "$WORKLOAD" == "content-commercial" ]]; then
-  COMPOSE_FILES+=("$ROOT/quwoquan_service/services/product-ops-service/deploy/local-elasticsearch.compose.yaml")
+  if [[ "$EARLY_BUILD_ONLY" == "1" ]]; then
+    case "$OBSERVABILITY_LOG_SINK_COMPOSE_FILE" in
+      "$QWQ_DEPLOY_WORK_ROOT/$QWQ_LOCAL_RELEASE_TARGET/candidates/runtime-full/"*) ;;
+      *)
+        echo "[local-release] GATE_BLOCK: Elasticsearch Compose is outside candidate staging" >&2
+        exit 2
+        ;;
+    esac
+  else
+    case "$OBSERVABILITY_LOG_SINK_COMPOSE_FILE" in
+      "$RUNTIME_CANDIDATE_ROOT/"*) ;;
+      *)
+        echo "[local-release] GATE_BLOCK: Elasticsearch Compose is outside the exact runtime candidate" >&2
+        exit 2
+        ;;
+    esac
+  fi
+  if [[ ! -f "$OBSERVABILITY_LOG_SINK_COMPOSE_FILE" \
+     || -L "$OBSERVABILITY_LOG_SINK_COMPOSE_FILE" ]]; then
+    echo "[local-release] GATE_BLOCK: packaged Elasticsearch Compose is unavailable" >&2
+    exit 2
+  fi
+  actual_log_sink_digest="sha256:$(shasum -a 256 "$OBSERVABILITY_LOG_SINK_COMPOSE_FILE" | awk '{print $1}')"
+  if [[ "$actual_log_sink_digest" != "$OBSERVABILITY_LOG_SINK_DIGEST" ]]; then
+    echo "[local-release] GATE_BLOCK: packaged Elasticsearch Compose digest drifted" >&2
+    exit 2
+  fi
+  COMPOSE_FILES+=("$OBSERVABILITY_LOG_SINK_COMPOSE_FILE")
 fi
 COMPOSE_FILE_ARGS=()
 for service_compose_file in "${COMPOSE_FILES[@]}"; do
@@ -211,7 +416,11 @@ if [[ -z "$LOCAL_GAMMA_RESOURCE_PREFIX" ]]; then
   echo "[local-gamma] GATE_BLOCK: Compose project has no safe resource prefix." >&2
   exit 2
 fi
-LOCAL_GAMMA_REC_POLICY_SOURCE="$ROOT/quwoquan_service/services/content-service/resources/policies/content/post/recommendation_policy.yaml"
+if [[ "$EARLY_BUILD_ONLY" == "1" ]]; then
+  LOCAL_GAMMA_REC_POLICY_SOURCE="$ROOT/quwoquan_service/services/content-service/resources/policies/content/post/recommendation_policy.yaml"
+else
+  LOCAL_GAMMA_REC_POLICY_SOURCE="$QWQ_RUNTIME_TOPOLOGY_POLICY_FILE"
+fi
 export LOCAL_GAMMA_REC_POLICY_SOURCE
 if [[ -z "${LOCAL_GAMMA_HTTP_PORT:-}" \
    || -z "${LOCAL_GAMMA_PRODUCT_OPS_PORT:-}" \
@@ -396,24 +605,33 @@ case "$STAGE" in
 esac
 # Ops owns these immutable runtime files. stackctl package projects their exact
 # bytes into runtime-shared; up must never bind-mount the mutable source tree.
-LOCAL_GAMMA_RUNTIME_SHARED_ROOT="$(
-  PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 - "$CONFIG_SOURCE_ENV" <<'PY'
+if [[ "$EARLY_BUILD_ONLY" == "1" ]]; then
+  LOCAL_GAMMA_RUNTIME_SHARED_ROOT="$(
+    PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 - "$CONFIG_SOURCE_ENV" <<'PY'
 import sys
 from quwoquan_ops.cli.lib.output_paths import deployment_package_root
 
 print(deployment_package_root(sys.argv[1]) / "runtime-shared")
 PY
-)"
+  )"
+else
+  LOCAL_GAMMA_RUNTIME_SHARED_ROOT="$RUNTIME_CANDIDATE_ROOT/packages/runtime-shared"
+fi
 LOCAL_GAMMA_CADDYFILE="${LOCAL_GAMMA_RUNTIME_SHARED_ROOT}/Caddyfile"
 LOCAL_GAMMA_LIVEKIT_CONFIG_FILE="${LOCAL_GAMMA_RUNTIME_SHARED_ROOT}/livekit.yaml"
 LOCAL_GAMMA_OBJECT_STORAGE_LIFECYCLE_FILE="${LOCAL_GAMMA_RUNTIME_SHARED_ROOT}/object-storage-lifecycle.json"
-LOCAL_GAMMA_LEGAL_STATIC_ROOT="${LOCAL_GAMMA_LEGAL_STATIC_ROOT:-$(PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 - "$CONFIG_SOURCE_ENV" <<'PY'
+if [[ "$EARLY_BUILD_ONLY" == "1" ]]; then
+  default_legal_static_root="$(PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 - "$CONFIG_SOURCE_ENV" <<'PY'
 import sys
 from quwoquan_ops.cli.lib.output_paths import legal_static_deployment_package_dir
 
 print(legal_static_deployment_package_dir(sys.argv[1]) / "current" / "public")
 PY
-)}"
+)"
+else
+  default_legal_static_root="$RUNTIME_CANDIDATE_ROOT/packages/legal-static/current/public"
+fi
+LOCAL_GAMMA_LEGAL_STATIC_ROOT="${LOCAL_GAMMA_LEGAL_STATIC_ROOT:-$default_legal_static_root}"
 LOCAL_GAMMA_READY_INDEX_STREAM="${LOCAL_GAMMA_READY_INDEX_STREAM:-reliabletask:chat:avatar:ready:${LOCAL_GAMMA_READY_INDEX_SUFFIX}}"
 LOCAL_GAMMA_READY_INDEX_GROUP="${LOCAL_GAMMA_READY_INDEX_GROUP:-chat.group_avatar_worker.${LOCAL_GAMMA_READY_INDEX_SUFFIX}}"
 LOCAL_GAMMA_READY_INDEX_QUEUE="${LOCAL_GAMMA_READY_INDEX_QUEUE:-reliabletask.chat.avatar}"
@@ -459,27 +677,6 @@ export LOCAL_GAMMA_GO_BOOKWORM_IMAGE="${LOCAL_GAMMA_GO_BOOKWORM_IMAGE:-$(library
 export LOCAL_GAMMA_CADDY_IMAGE="${LOCAL_GAMMA_CADDY_IMAGE:-$(library_image caddy:2.8.4-alpine)}"
 export LOCAL_GAMMA_MINIO_IMAGE="${LOCAL_GAMMA_MINIO_IMAGE:-minio/minio:RELEASE.2025-04-22T22-12-26Z}"
 export LOCAL_GAMMA_MINIO_MC_IMAGE="${LOCAL_GAMMA_MINIO_MC_IMAGE:-minio/mc:RELEASE.2025-03-12T17-29-24Z}"
-# Product Ops compose 通过 env 插值绑定本地 ES；缺省会让 log-sink 启动失败。
-export PRODUCT_OPS_ELASTICSEARCH_ENDPOINT="${PRODUCT_OPS_ELASTICSEARCH_ENDPOINT:-http://elasticsearch:9200}"
-
-# ES 镜像来自 elastic 官方 registry（非 docker.io/library），不经 library_image 前缀。
-# Compose 通过 export_service_compose_environment 消费为 QWQ_COMPOSE_ELASTICSEARCH_IMAGE。
-# arm64 必须钉平台 manifest，禁止回落到 amd64-only digest（会在 Docker Desktop 上 ~1s exited）。
-case "$(uname -m)" in
-  arm64|aarch64)
-    export LOCAL_GAMMA_ELASTICSEARCH_IMAGE="${LOCAL_GAMMA_ELASTICSEARCH_IMAGE:-docker.elastic.co/elasticsearch/elasticsearch@sha256:5af05323c9bfc52fcee63a47c682412a6ef5955ac85966f045a68ba8623db2e1}"
-    # Apple Silicon 的 Colima/VZ 会向 bundled JDK 报告 guest 无法执行的
-    # SVE；ES CLI bootstrap 与运行时都必须在 Elasticsearch 启动前禁用它。
-    export LOCAL_GAMMA_ELASTICSEARCH_CLI_JAVA_OPTS="${LOCAL_GAMMA_ELASTICSEARCH_CLI_JAVA_OPTS:--XX:UseSVE=0}"
-    export LOCAL_GAMMA_ELASTICSEARCH_JAVA_OPTS="${LOCAL_GAMMA_ELASTICSEARCH_JAVA_OPTS:--XX:UseSVE=0 -Xms512m -Xmx512m}"
-    ;;
-  *)
-    # ES 8.13.4 multi-arch index digest（amd64+arm64）；非 arm 主机由 Docker 选原生层。
-    export LOCAL_GAMMA_ELASTICSEARCH_IMAGE="${LOCAL_GAMMA_ELASTICSEARCH_IMAGE:-docker.elastic.co/elasticsearch/elasticsearch@sha256:dfd318b417be1356d9c7fdd6a5577c8a45553ac9d34354929a416c69c85daa9f}"
-    export LOCAL_GAMMA_ELASTICSEARCH_CLI_JAVA_OPTS="${LOCAL_GAMMA_ELASTICSEARCH_CLI_JAVA_OPTS:-}"
-    export LOCAL_GAMMA_ELASTICSEARCH_JAVA_OPTS="${LOCAL_GAMMA_ELASTICSEARCH_JAVA_OPTS:--Xms512m -Xmx512m}"
-    ;;
-esac
 export LOCAL_GAMMA_GO_BASE_IMAGE="${LOCAL_GAMMA_GO_BASE_IMAGE:?LOCAL_GAMMA_GO_BASE_IMAGE is required}"
 export LOCAL_GAMMA_ALPINE_BASE_IMAGE="${LOCAL_GAMMA_ALPINE_BASE_IMAGE:?LOCAL_GAMMA_ALPINE_BASE_IMAGE is required}"
 export LOCAL_GAMMA_PYTHON_BASE_IMAGE="${LOCAL_GAMMA_PYTHON_BASE_IMAGE:-$(library_image python:3.11-slim)}"
@@ -1015,7 +1212,6 @@ ensure_local_gamma_base_images() {
     "$LOCAL_GAMMA_MONGO_IMAGE"
     "$LOCAL_GAMMA_REDIS_IMAGE"
     "$LOCAL_GAMMA_CADDY_IMAGE"
-    "$LOCAL_GAMMA_ELASTICSEARCH_IMAGE"
   )
   for image in "${required_images[@]}"; do
     [[ -n "$image" ]] || continue
@@ -1223,6 +1419,10 @@ if [[ "$print_env" == "1" ]]; then
 fi
 
 if [[ "$down" == "1" ]]; then
+  if [[ "${QWQ_PREPARED_ATTEMPT_ONLY:-0}" == "1" ]]; then
+    echo "[local-gamma] prepared attempt has no runtime resources; skipping Compose teardown"
+    exit 0
+  fi
   stop_colima_tunnels
   prepare_down_compose_environment
   down_args=(down)
@@ -1267,6 +1467,7 @@ PY
     fi
   fi
   write_startup_attempt prepared
+  STARTUP_ATTEMPT_PREPARED=1
 fi
 
 if [[ "$skip_up" == "1" ]]; then
@@ -1378,7 +1579,6 @@ compose_build_services=(
   circle-service
   integration-service
   notification-service
-  travel-service
 )
 if [[ "$PRODUCT_OPS_REQUIRED" != "1" ]]; then
   filtered_build_services=()
@@ -1398,7 +1598,6 @@ if [[ ",${COMPOSE_PROFILES:-}," == *,edge-media,* ]]; then
   compose_build_services+=(realtime-gateway)
   compose_build_services+=(rtc-service)
 fi
-
 if [[ -n "$build_services_csv" ]]; then
   requested_build_services=()
   IFS=',' read -r -a requested_build_services <<< "$build_services_csv"
@@ -1547,7 +1746,6 @@ if [[ "$podman_compose" == "1" ]]; then
     quwoquan_service_notification-service_1 \
     quwoquan_service_mongo-init_1 \
     quwoquan_service_recommendation-service_1 \
-    quwoquan_service_elasticsearch_1 \
     quwoquan_service_redis_1 \
     quwoquan_service_mongodb_1 \
     quwoquan_service_postgres_1; do
@@ -1563,7 +1761,6 @@ if [[ "$podman_compose" == "1" ]]; then
   podman volume inspect quwoquan_service_local-gamma-mongo >/dev/null 2>&1 || podman volume create quwoquan_service_local-gamma-mongo >/dev/null
   podman volume inspect quwoquan_service_local-gamma-redis >/dev/null 2>&1 || podman volume create quwoquan_service_local-gamma-redis >/dev/null
   podman volume inspect quwoquan_service_local-gamma-go-cache >/dev/null 2>&1 || podman volume create quwoquan_service_local-gamma-go-cache >/dev/null
-  podman volume inspect quwoquan_service_local-gamma-es >/dev/null 2>&1 || podman volume create quwoquan_service_local-gamma-es >/dev/null
 
   podman run --pull=never --name quwoquan_service_postgres_1 -d \
     --net "$network_name" --network-alias postgres \
@@ -1591,24 +1788,10 @@ if [[ "$podman_compose" == "1" ]]; then
     --healthcheck-interval 5s --healthcheck-timeout 3s --healthcheck-retries 20 \
     "$LOCAL_GAMMA_REDIS_IMAGE" redis-server --appendonly yes >/dev/null
 
-  podman run --pull=never --name quwoquan_service_elasticsearch_1 -d \
-    --net "$network_name" --network-alias elasticsearch \
-    -e discovery.type=single-node \
-    -e xpack.security.enabled=false \
-    -e xpack.security.http.ssl.enabled=false \
-    -e CLI_JAVA_OPTS="$LOCAL_GAMMA_ELASTICSEARCH_CLI_JAVA_OPTS" \
-    -e ES_JAVA_OPTS="$LOCAL_GAMMA_ELASTICSEARCH_JAVA_OPTS" \
-    -v quwoquan_service_local-gamma-es:/usr/share/elasticsearch/data \
-    -p "${LOCAL_GAMMA_ES_PORT:-19430}:9200" \
-    --healthcheck-command "curl -fsS 'http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=1s' || exit 1" \
-    --healthcheck-interval 10s --healthcheck-timeout 5s --healthcheck-start-period 120s --healthcheck-retries 30 \
-    "$LOCAL_GAMMA_ELASTICSEARCH_IMAGE" >/dev/null
-
   wait_healthy quwoquan_service_postgres_1
   wait_running quwoquan_service_mongodb_1
   sleep 5
   wait_healthy quwoquan_service_redis_1
-  wait_healthy quwoquan_service_elasticsearch_1
 
   podman run --pull=never --rm --name quwoquan_service_mongo-init_1 \
     --net "$network_name" --network-alias mongo-init \
@@ -1643,7 +1826,7 @@ if [[ "$podman_compose" == "1" ]]; then
       -e MONGO_URI=mongodb://mongodb:27017 \
       -e POSTGRES_DSN='postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable' \
       -e PRODUCT_OPS_REDIS_REC_ADDR=redis:6379 -e PRODUCT_OPS_REDIS_GENERAL_ADDR=redis:6379 \
-      -e PRODUCT_OPS_ELASTICSEARCH_ENDPOINT="${PRODUCT_OPS_ELASTICSEARCH_ENDPOINT:-http://elasticsearch:9200}" \
+      -e PRODUCT_OPS_ELASTICSEARCH_ENDPOINT \
       -e AUTH_JWT_SECRET="${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}" \
       -e AUTH_JWT_ISSUER="${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}" \
       -e AUTH_JWT_AUDIENCE="${AUTH_JWT_AUDIENCE:?AUTH_JWT_AUDIENCE is required}" \
@@ -2113,7 +2296,7 @@ fi
 start_colima_tunnels_if_needed
 verify_public_dns
 
-# docker compose 分支不会逐项 wait_healthy；在宣告就绪前用主机侧探测避免 T3/T4 撞到端口未监听。
+# docker compose 分支不会逐项 wait_healthy；在宣告就绪前用主机侧探测避免 release-consumer/device-UAT 撞到端口未监听。
 gamma_canonical_video_range_mime_ready() {
   local host="$1"
   local port="$2"
@@ -2236,9 +2419,9 @@ wait_local_gamma_host_ready() {
   # /readyz and crash exits remain inspectable in the up receipt.
   docker compose -p "$LOCAL_GAMMA_COMPOSE_PROJECT_NAME" "${COMPOSE_FILE_ARGS[@]}" logs --tail 120 \
     gamma-proxy api-edge content-service entity-service product-ops-service platform-ops-service \
-    user-service integration-service notification-service search-service travel-service assistant-service \
+    user-service integration-service notification-service search-service assistant-service \
     chat-service recommendation-service realtime-gateway rtc-service tag-service >&2 || true
-  for svc in search-service travel-service assistant-service user-service integration-service notification-service tag-service platform-ops-service product-ops-service; do
+  for svc in search-service assistant-service user-service integration-service notification-service tag-service platform-ops-service product-ops-service; do
     cname=$(docker compose -p "$LOCAL_GAMMA_COMPOSE_PROJECT_NAME" "${COMPOSE_FILE_ARGS[@]}" ps -q "$svc" 2>/dev/null | head -1 || true)
     if [[ -n "$cname" ]]; then
       echo "[local-gamma] inspect Health ${svc}:" >&2

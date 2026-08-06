@@ -24,7 +24,19 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.cli.lib import external_provider_governance as governance
-from quwoquan_ops.cli.lib.output_paths import output_root, service_deployment_package_dir
+from quwoquan_ops.cli.lib.deployment_candidate_manifest import load_candidate_manifest
+from quwoquan_ops.cli.lib.immutable_image_composition import immutable_image_digest
+from quwoquan_ops.cli.lib.output_paths import (
+    active_deployment_candidate,
+    output_root,
+    runtime_shared_deployment_package_dir,
+    service_deployment_package_dir,
+)
+from quwoquan_ops.cli.lib.package_reuse import can_reuse_package
+from quwoquan_ops.cli.lib.startup_attempt_receipt import (
+    load_startup_attempt,
+    startup_attempt_path,
+)
 
 
 EVIDENCE_SCHEMA = ROOT / "quwoquan_ops" / "environments" / "provider_conformance_evidence.schema.json"
@@ -58,13 +70,14 @@ def execution_profile_for(environment: str, layer: str) -> str | None:
 
 def requires_release_readiness(environment: str, layer: str) -> bool:
     return environment in RELEASE_READINESS_ENVIRONMENTS and layer == "user_acceptance"
-MESSAGE_TRANSPORT_CAPABILITY_ID = "runtime.message.transport"
-MESSAGE_TRANSPORT_METRIC_NAMES = (
-    "pending_lag",
-    "dead_letter",
-    "publish_p95",
-    "consume_p95",
-)
+MESSAGE_TRANSPORT_CAPABILITY_ID = governance.MESSAGE_TRANSPORT_CAPABILITY_ID
+MESSAGE_TRANSPORT_METRIC_NAMES = governance.MESSAGE_TRANSPORT_REQUIRED_METRICS
+MESSAGE_TRANSPORT_METRIC_REFS = {
+    "pending_lag": "prometheus://qwq_message_transport_pending_lag",
+    "dead_letter": "prometheus://qwq_message_transport_dead_letter",
+    "publish_p95": "promql://qwq_message_transport_publish_p95",
+    "consume_p95": "promql://qwq_message_transport_consume_p95",
+}
 REQUIRED_FIELDS = frozenset(
     {
         "schema",
@@ -79,6 +92,13 @@ REQUIRED_FIELDS = frozenset(
         "artifactRef",
         "artifactDigest",
         "artifactAttestation",
+        "nonPromotable",
+        "sourceTreeState",
+        "commitReview",
+        "candidateStatus",
+        "candidateReceiptRef",
+        "candidateReceiptDigest",
+        "attestationAuthority",
         "testArtifactRef",
         "testArtifactDigest",
         "testSource",
@@ -124,6 +144,13 @@ EXECUTION_REPORT_REQUIRED_FIELDS = frozenset(
         "status",
         "executedAt",
         "commit",
+        "nonPromotable",
+        "sourceTreeState",
+        "commitReview",
+        "candidateStatus",
+        "candidateReceiptRef",
+        "candidateReceiptDigest",
+        "attestationAuthority",
         "imageDigest",
         "configDigest",
         "contractGraphDigest",
@@ -166,8 +193,8 @@ CASE_RESULT_REQUIRED_FIELDS = frozenset(
     }
 )
 CASE_RESULT_RELEASE_FIELDS = frozenset({"releaseReadiness"})
-B10_REMOTE_READBACK_SCHEMA = "b10-remote-uat-readback"
-CASE_RESULT_B10_REMOTE_FIELDS = frozenset({"nativeReadback"})
+REMOTE_READBACK_SCHEMA = "provider-remote-uat-readback"
+CASE_RESULT_REMOTE_FIELDS = frozenset({"nativeReadback"})
 NATIVE_READBACK_ARTIFACT_RE = re.compile(
     r"^[a-z0-9][a-z0-9._-]*\.native-device-readback\.json$"
 )
@@ -221,7 +248,9 @@ ALLOWED_FIELDS = REQUIRED_FIELDS | {"failure", "releaseReadiness"}
 ADAPTER_PATTERN = re.compile(r"^(?:ext|infra|data|dev|cap)\.[a-z0-9_]+(?:\.[a-z0-9_]+)*$")
 CAPABILITY_PATTERN = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+$")
 SHA256_PATTERN = re.compile(r"^sha256:[a-f0-9]{64}$")
-ARTIFACT_ATTESTATION_PATTERN = re.compile(r"^hmac-sha256:[a-f0-9]{64}$")
+ARTIFACT_ATTESTATION_PATTERN = re.compile(
+    r"^(?:hmac-sha256|local-sha256):[a-f0-9]{64}$"
+)
 COMMIT_PATTERN = re.compile(r"^[a-f0-9]{7,64}$")
 ASSERTION_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$")
 RECEIPT_REF_PATTERN = re.compile(r"^receipt:[a-z0-9][a-z0-9._:-]{2,255}$")
@@ -258,12 +287,35 @@ def evidence_files(root: Path | None = None) -> list[Path]:
     return files
 
 
-def load_evidence(root: Path | None = None) -> tuple[list[dict[str, Any]], list[str]]:
+def load_evidence_paths(
+    paths: Iterable[Path],
+    *,
+    root: Path | None = None,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Load one caller-owned evidence set without inheriting historical runs."""
+    configured_root = Path(root) if root is not None else output_root()
+    resolved_root = configured_root.resolve()
     evidence: list[dict[str, Any]] = []
     issues: list[str] = []
-    for path in evidence_files(root):
+    for path in sorted(Path(item) for item in paths):
         try:
-            payload = json.loads(path.read_text(encoding="utf-8"))
+            resolved = path.resolve(strict=True)
+            resolved.relative_to(resolved_root)
+        except (OSError, ValueError):
+            issues.append(
+                _issue(
+                    path.as_posix(),
+                    "evidence path must be a regular file inside QWQ_OUTPUT_ROOT",
+                )
+            )
+            continue
+        if path.is_symlink() or not resolved.is_file():
+            issues.append(
+                _issue(path.as_posix(), "evidence path must be a regular non-symlink file")
+            )
+            continue
+        try:
+            payload = json.loads(resolved.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
             issues.append(_issue(path.as_posix(), f"invalid evidence JSON: {exc}"))
             continue
@@ -273,6 +325,10 @@ def load_evidence(root: Path | None = None) -> tuple[list[dict[str, Any]], list[
         payload["_source"] = path
         evidence.append(payload)
     return evidence, issues
+
+
+def load_evidence(root: Path | None = None) -> tuple[list[dict[str, Any]], list[str]]:
+    return load_evidence_paths(evidence_files(root), root=root)
 
 
 def _is_non_empty_string(value: object) -> bool:
@@ -318,9 +374,32 @@ def compiled_capability_binding_roots(
 def required_metric_refs(capability_id: str) -> tuple[str, ...]:
     if capability_id != MESSAGE_TRANSPORT_CAPABILITY_ID:
         return ()
+    registry = governance.load_registry()
+    capability = next(
+        (
+            item
+            for item in registry.get("capabilities") or []
+            if isinstance(item, Mapping)
+            and item.get("capability_id") == capability_id
+        ),
+        None,
+    )
+    declared_metrics = ()
+    if isinstance(capability, Mapping):
+        raw_metrics = capability.get("observability_metrics") or ()
+        if isinstance(raw_metrics, list):
+            declared_metrics = tuple(
+                str(metric)
+                for metric in raw_metrics
+                if isinstance(metric, str) and metric.strip()
+            )
+    metric_names = declared_metrics or MESSAGE_TRANSPORT_METRIC_NAMES
     return tuple(
-        f"provider-conformance://{capability_id}/metrics/{metric_name}"
-        for metric_name in MESSAGE_TRANSPORT_METRIC_NAMES
+        MESSAGE_TRANSPORT_METRIC_REFS.get(
+            metric_name,
+            f"provider-conformance://{capability_id}/metrics/{metric_name}",
+        )
+        for metric_name in metric_names
     )
 
 
@@ -377,6 +456,78 @@ def provider_conformance_capability_ids(
         if isinstance(binding, Mapping)
         and governance.requires_provider_conformance(binding)
     )
+
+
+def expected_required_cell_keys(
+    compiled: Mapping[str, Any],
+) -> frozenset[tuple[str, str, str]]:
+    """Derive the canonical release cell set from generated Bindings."""
+    capability_ids = provider_conformance_capability_ids(compiled)
+    if not capability_ids:
+        raise ValueError("canonical Provider governance defines no capabilities")
+    cells = {
+        (capability_id, environment, layer)
+        for capability_id in capability_ids
+        for environment in ENVIRONMENTS
+        for layer in LAYERS
+    } | {
+        (capability_id, RELEASE_ENVIRONMENT, "user_acceptance")
+        for capability_id in capability_ids
+    }
+    expected_count = len(capability_ids) * (
+        len(ENVIRONMENTS) * len(LAYERS) + 1
+    )
+    if len(cells) != expected_count:
+        raise AssertionError(
+            "Provider release cell derivation produced duplicate environment/layer keys"
+        )
+    return frozenset(cells)
+
+
+def exact_required_cell_issues(
+    evidence: Iterable[Mapping[str, Any]],
+    *,
+    compiled: Mapping[str, Any],
+) -> list[str]:
+    """Reject missing, duplicate, extra or legacy release evidence cells."""
+    expected = expected_required_cell_keys(compiled)
+    observed: list[tuple[str, str, str]] = []
+    invalid: list[str] = []
+    for index, item in enumerate(evidence):
+        cell = (
+            str(item.get("capabilityId") or ""),
+            str(item.get("environment") or ""),
+            str(item.get("testLayer") or ""),
+        )
+        if (
+            item.get("schema") != "provider-conformance-evidence"
+            or set(REQUIRED_FIELDS) - set(item)
+            or cell not in expected
+        ):
+            invalid.append(f"evidence[{index}]={cell}")
+            continue
+        observed.append(cell)
+    observed_set = set(observed)
+    duplicate = sorted(
+        cell for cell in observed_set if observed.count(cell) > 1
+    )
+    missing = sorted(expected - observed_set)
+    extra = sorted(observed_set - expected)
+    issues: list[str] = []
+    if invalid:
+        issues.append(
+            "Provider release evidence contains non-canonical/legacy cells: "
+            + ", ".join(invalid)
+        )
+    if duplicate:
+        issues.append(f"Provider release evidence contains duplicate cells: {duplicate}")
+    if missing or extra or len(observed) != len(expected):
+        issues.append(
+            "Provider release evidence must contain exactly the compiled required cells: "
+            f"expected={len(expected)}, observed={len(observed)}, "
+            f"missing={missing}, extra={extra}"
+        )
+    return issues
 
 
 def _binding_preflight_ready(
@@ -513,6 +664,320 @@ def candidate_image_digest(
             sort_keys=True,
         ).encode("utf-8")
     )
+
+
+def _artifact_reference(path: Path) -> str:
+    try:
+        relative = path.resolve().relative_to(output_root().resolve())
+    except ValueError as exc:
+        raise ValueError("candidate receipt must remain under QWQ_OUTPUT_ROOT") from exc
+    return f".qwq_output/{relative.as_posix()}"
+
+
+def _inactive_candidate(reason: str) -> dict[str, object]:
+    return {
+        "active": False,
+        "receiptRef": "",
+        "receiptDigest": "",
+        "reason": reason,
+    }
+
+
+def _nonprod_active_candidate_issues(
+    *,
+    environment: str,
+    target: str,
+    startup: Mapping[str, Any],
+    active: Mapping[str, Any],
+    manifest: Mapping[str, Any],
+    oci: Mapping[str, Any],
+    commit: str,
+    image_digest: str,
+    contract_graph_digest: str,
+    expected_image_digest: str,
+    expected_contract_graph_digest: str | None,
+) -> list[str]:
+    """Validate one canonical startup receipt against its activated package."""
+    issues: list[str] = []
+    if startup.get("target") != target or startup.get("env") != environment:
+        issues.append("startup receipt target/environment mismatch")
+    if startup.get("status") != "running":
+        issues.append("startup receipt status is not running")
+    if startup.get("workload") != "full":
+        issues.append("startup receipt workload is not provider-matrix compatible")
+    baseline_id = str(active.get("baselineId") or "")
+    candidate_digest = str(startup.get("candidateDigest") or "")
+    if (
+        SHA256_PATTERN.fullmatch(candidate_digest) is None
+        or candidate_digest != baseline_id
+        or manifest.get("baselineId") != baseline_id
+    ):
+        issues.append("startup receipt candidateDigest does not bind the active candidate")
+    if manifest.get("sourceRevision") != commit:
+        issues.append("active candidate commit does not match the executed cell")
+    if expected_image_digest != image_digest:
+        issues.append("active package image identity does not match the executed cell")
+    if (
+        expected_contract_graph_digest is None
+        or expected_contract_graph_digest != contract_graph_digest
+    ):
+        issues.append("active candidate ContractGraph does not match the executed cell")
+
+    runtime_config = str(manifest.get("runtimeConfigDigest") or "")
+    startup_config = str(startup.get("configurationDigest") or "")
+    if (
+        SHA256_PATTERN.fullmatch(startup_config) is None
+        or startup_config != runtime_config
+        or oci.get("configurationDigest") != runtime_config
+    ):
+        issues.append("startup receipt configuration digest is stale")
+    if (
+        oci.get("schema") != "stackctl-package-oci-images"
+        or oci.get("environment") != environment
+        or oci.get("target") != target
+        or oci.get("imageDigest") != manifest.get("imageDigest")
+        or oci.get("buildInputDigest") != manifest.get("buildInputDigest")
+    ):
+        issues.append("active candidate OCI identity is inconsistent")
+
+    startup_composition = startup.get("imageComposition")
+    startup_images = (
+        startup_composition.get("images")
+        if isinstance(startup_composition, Mapping)
+        else None
+    )
+    oci_images = oci.get("images")
+    runtime_refs: dict[str, str] = {}
+    if (
+        not isinstance(startup_images, Mapping)
+        or not isinstance(oci_images, Mapping)
+        or set(startup_images) != set(oci_images)
+    ):
+        issues.append("startup receipt image composition does not match the active package")
+    else:
+        for service, descriptor in oci_images.items():
+            startup_descriptor = startup_images.get(service)
+            expected_runtime_image = (
+                descriptor.get("imageDigest")
+                if isinstance(descriptor, Mapping)
+                else None
+            )
+            startup_ref = (
+                startup_descriptor.get("ref")
+                if isinstance(startup_descriptor, Mapping)
+                else None
+            )
+            if (
+                not isinstance(expected_runtime_image, str)
+                or SHA256_PATTERN.fullmatch(expected_runtime_image) is None
+                or startup_ref != expected_runtime_image
+            ):
+                issues.append(
+                    f"startup receipt runtime image is stale for {service}"
+                )
+                continue
+            runtime_refs[str(service)] = expected_runtime_image
+        if runtime_refs and startup.get("imageTransportTag") != immutable_image_digest(
+            runtime_refs
+        ):
+            issues.append("startup receipt image transport digest is stale")
+    return issues
+
+
+def resolve_nonprod_active_candidate(
+    *,
+    environment: str,
+    registry: Mapping[str, Any],
+    commit: str,
+    image_digest: str,
+    contract_graph_digest: str,
+) -> dict[str, object]:
+    """Resolve active local runtime identity through canonical receipt loaders."""
+    if environment not in ENVIRONMENTS:
+        return _inactive_candidate("environment is not a nonprod Provider matrix")
+    target = f"{environment}-local"
+    try:
+        startup = load_startup_attempt(target)
+        if not isinstance(startup, Mapping):
+            return _inactive_candidate("canonical startup receipt is missing")
+        reusable, reuse_reason = can_reuse_package(
+            environment,
+            target,
+            require_workspace_match=False,
+        )
+        if not reusable:
+            return _inactive_candidate(
+                f"active candidate package is stale: {reuse_reason}"
+            )
+        active = active_deployment_candidate(target)
+        if not isinstance(active, Mapping):
+            return _inactive_candidate("active deployment candidate is missing")
+        baseline_id = str(active.get("baselineId") or "")
+        manifest = load_candidate_manifest(
+            environment,
+            target,
+            baseline_id,
+            require_full=True,
+        )
+        oci_path = (
+            runtime_shared_deployment_package_dir(environment, target=target)
+            / "oci-images.json"
+        )
+        oci = json.loads(oci_path.read_text(encoding="utf-8"))
+        if not isinstance(oci, Mapping):
+            return _inactive_candidate("active candidate OCI receipt is invalid")
+        expected_image_digest = candidate_image_digest(
+            environment,
+            registry=registry,
+        )
+        expected_contract_graph_digest = _current_contract_graph_digest()
+        issues = _nonprod_active_candidate_issues(
+            environment=environment,
+            target=target,
+            startup=startup,
+            active=active,
+            manifest=manifest,
+            oci=oci,
+            commit=commit,
+            image_digest=image_digest,
+            contract_graph_digest=contract_graph_digest,
+            expected_image_digest=expected_image_digest,
+            expected_contract_graph_digest=expected_contract_graph_digest,
+        )
+        if issues:
+            return _inactive_candidate("; ".join(issues))
+        receipt_path = startup_attempt_path(target)
+        receipt_raw = receipt_path.read_bytes()
+        return {
+            "active": True,
+            "receiptRef": _artifact_reference(receipt_path),
+            "receiptDigest": _digest_bytes(receipt_raw),
+            "reason": "",
+        }
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        return _inactive_candidate(str(exc))
+
+
+def resolve_prod_active_candidate(
+    *,
+    case_result_path: Path,
+    case_result: Mapping[str, Any],
+    capability_id: str,
+    adapter_id: str,
+    image_digest: str,
+    config_digest: str,
+    contract_graph_digest: str,
+    adapter_digest: str,
+) -> dict[str, object]:
+    """Bind Prod promotability to the canonical native/operator readback."""
+    descriptor = case_result.get("nativeReadback")
+    if not isinstance(descriptor, Mapping):
+        return _inactive_candidate("Prod active candidate readback is unavailable")
+    artifact_name = descriptor.get("artifactName")
+    artifact_digest = descriptor.get("artifactDigest")
+    if (
+        not isinstance(artifact_name, str)
+        or not NATIVE_READBACK_ARTIFACT_RE.fullmatch(artifact_name)
+        or not isinstance(artifact_digest, str)
+        or SHA256_PATTERN.fullmatch(artifact_digest) is None
+    ):
+        return _inactive_candidate("Prod active candidate readback descriptor is invalid")
+    receipt_path = case_result_path.parent / artifact_name
+    try:
+        raw = receipt_path.read_bytes()
+        payload = json.loads(raw)
+    except (OSError, json.JSONDecodeError) as exc:
+        return _inactive_candidate(f"Prod active candidate readback is unreadable: {exc}")
+    actual_digest = _digest_bytes(raw)
+    if actual_digest != artifact_digest:
+        return _inactive_candidate("Prod active candidate readback digest mismatch")
+    expected = {
+        "schema": REMOTE_READBACK_SCHEMA,
+        "status": "passed",
+        "capabilityId": capability_id,
+        "adapterId": adapter_id,
+        "imageDigest": image_digest,
+        "configDigest": config_digest,
+        "contractGraphDigest": contract_graph_digest,
+        "adapterDigest": adapter_digest,
+    }
+    if not isinstance(payload, Mapping) or any(
+        payload.get(field) != value for field, value in expected.items()
+    ):
+        return _inactive_candidate(
+            "Prod active candidate readback does not match the executed cell"
+        )
+    if payload.get("releaseReadiness") != case_result.get("releaseReadiness"):
+        return _inactive_candidate(
+            "Prod active candidate readback release readiness is inconsistent"
+        )
+    return {
+        "active": True,
+        "receiptRef": _artifact_reference(receipt_path),
+        "receiptDigest": actual_digest,
+        "reason": "",
+    }
+
+
+def active_candidate_receipt_issues(
+    item: Mapping[str, Any],
+    *,
+    registry: Mapping[str, Any],
+    root: Path,
+) -> list[str]:
+    """Re-resolve active identity; never trust candidateStatus from evidence."""
+    if item.get("candidateStatus") != "active_immutable":
+        return []
+    environment = str(item.get("environment") or "")
+    expected_ref = str(item.get("candidateReceiptRef") or "")
+    expected_digest = str(item.get("candidateReceiptDigest") or "")
+    if environment in ENVIRONMENTS:
+        binding = resolve_nonprod_active_candidate(
+            environment=environment,
+            registry=registry,
+            commit=str(item.get("commit") or ""),
+            image_digest=str(item.get("imageDigest") or ""),
+            contract_graph_digest=str(item.get("contractGraphDigest") or ""),
+        )
+        if (
+            binding.get("active") is not True
+            or binding.get("receiptRef") != expected_ref
+            or binding.get("receiptDigest") != expected_digest
+        ):
+            return [
+                "candidateStatus=active_immutable is not backed by the current "
+                f"canonical startup receipt: {binding.get('reason') or 'identity mismatch'}"
+            ]
+        return []
+    if environment != RELEASE_ENVIRONMENT:
+        return ["candidateStatus uses an unsupported evidence environment"]
+
+    receipt_path = _output_path(expected_ref, root=root)
+    if receipt_path is None or not receipt_path.is_file():
+        return ["Prod active candidate readback receipt is unavailable"]
+    try:
+        raw = receipt_path.read_bytes()
+        payload = json.loads(raw)
+    except (OSError, json.JSONDecodeError) as exc:
+        return [f"Prod active candidate readback receipt is unreadable: {exc}"]
+    if _digest_bytes(raw) != expected_digest:
+        return ["Prod active candidate readback receipt digest mismatch"]
+    expected = {
+        "schema": REMOTE_READBACK_SCHEMA,
+        "status": "passed",
+        "capabilityId": item.get("capabilityId"),
+        "adapterId": item.get("adapterId"),
+        "imageDigest": item.get("imageDigest"),
+        "configDigest": item.get("configDigest"),
+        "contractGraphDigest": item.get("contractGraphDigest"),
+        "adapterDigest": item.get("adapterDigest"),
+        "releaseReadiness": item.get("releaseReadiness"),
+    }
+    if not isinstance(payload, Mapping) or any(
+        payload.get(field) != value for field, value in expected.items()
+    ):
+        return ["Prod active candidate readback does not match evidence identity"]
+    return []
 
 
 def implementation_digest(path: Path) -> str | None:
@@ -878,6 +1343,68 @@ def source_coverage_issues(
     return issues
 
 
+def local_source_coverage_issues(
+    *,
+    compiled: Mapping[str, Any],
+    environment: str,
+    sources: Mapping[tuple[str, str, str], Mapping[str, Any]] | None = None,
+) -> list[str]:
+    """Check only this nonprod target's selected Adapter across all three layers."""
+    if environment not in ENVIRONMENTS:
+        return [
+            _issue(
+                "source_coverage",
+                f"unsupported nonprod environment {environment}",
+            )
+        ]
+    catalog, discovery_issues = (
+        discover_test_sources() if sources is None else (dict(sources), [])
+    )
+    issues = list(discovery_issues)
+    selected_bindings = compiled.get("selectedBindings")
+    environment_bindings = (
+        selected_bindings.get(environment)
+        if isinstance(selected_bindings, Mapping)
+        else None
+    )
+    if not isinstance(environment_bindings, Mapping):
+        return [
+            *issues,
+            _issue(
+                f"source_coverage.{environment}",
+                "compiled selected Bindings are unavailable",
+            ),
+        ]
+    for capability_id, binding in sorted(environment_bindings.items()):
+        if not isinstance(capability_id, str) or not isinstance(binding, Mapping):
+            continue
+        if not governance.requires_provider_conformance(binding):
+            continue
+        adapter_id = binding.get("adapter_id")
+        if not isinstance(adapter_id, str):
+            issues.append(
+                _issue(
+                    f"source_coverage.{environment}.{capability_id}",
+                    "selected Binding has no Adapter ID",
+                )
+            )
+            continue
+        missing = [
+            f"{adapter_id}/{layer}"
+            for layer in LAYERS
+            if (capability_id, adapter_id, layer) not in catalog
+        ]
+        if missing:
+            issues.append(
+                _issue(
+                    f"source_coverage.{environment}.{capability_id}",
+                    "missing self-describing executable sources for "
+                    + ", ".join(missing),
+                )
+            )
+    return issues
+
+
 def sign_execution_report(raw: bytes, *, key: str | None = None) -> str:
     """为不可变执行报告生成仅 CI 持有密钥可复核的证明。"""
     signing_key = key or os.environ.get("QWQ_PROVIDER_CONFORMANCE_ATTESTATION_KEY", "")
@@ -888,6 +1415,130 @@ def sign_execution_report(raw: bytes, *, key: str | None = None) -> str:
         raw,
         hashlib.sha256,
     ).hexdigest()
+
+
+def current_source_tree_state() -> str:
+    """Return clean only when Git proves there are no tracked/untracked changes."""
+    try:
+        completed = subprocess.run(
+            ["git", "status", "--porcelain=v1", "--untracked-files=all"],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return "dirty"
+    return "dirty" if completed.stdout else "clean"
+
+
+def ci_attestation_authority_available(*, commit: str | None = None) -> bool:
+    """Recognize the reviewed GitHub workflow authority, never a local key alone."""
+    current_commit = commit or _current_commit()
+    reviewed_commit = os.environ.get(
+        "QWQ_PROVIDER_CONFORMANCE_REVIEWED_COMMIT",
+        "",
+    ).strip()
+    return (
+        os.environ.get("GITHUB_ACTIONS", "").strip().lower() == "true"
+        and os.environ.get(
+            "QWQ_PROVIDER_CONFORMANCE_ATTESTATION_AUTHORITY",
+            "",
+        ).strip()
+        == "ci"
+        and bool(
+            os.environ.get(
+                "QWQ_PROVIDER_CONFORMANCE_ATTESTATION_KEY",
+                "",
+            ).strip()
+        )
+        and current_commit is not None
+        and reviewed_commit == current_commit
+        and current_source_tree_state() == "clean"
+    )
+
+
+def evidence_identity(
+    *,
+    commit: str,
+    candidate_receipt_bound: bool,
+    candidate_receipt_ref: str = "",
+    candidate_receipt_digest: str = "",
+) -> dict[str, object]:
+    """Derive signed promotability identity from source, candidate and authority."""
+    source_tree_state = current_source_tree_state()
+    reviewed = (
+        os.environ.get("GITHUB_ACTIONS", "").strip().lower() == "true"
+        and os.environ.get(
+            "QWQ_PROVIDER_CONFORMANCE_REVIEWED_COMMIT",
+            "",
+        ).strip()
+        == commit
+    )
+    ci_authority = (
+        reviewed
+        and source_tree_state == "clean"
+        and ci_attestation_authority_available(commit=commit)
+    )
+    receipt_identity_complete = (
+        bool(candidate_receipt_ref)
+        and SHA256_PATTERN.fullmatch(candidate_receipt_digest) is not None
+    )
+    candidate_status = (
+        "active_immutable"
+        if candidate_receipt_bound and receipt_identity_complete
+        else "unverified"
+    )
+    non_promotable = not (
+        source_tree_state == "clean"
+        and reviewed
+        and candidate_status == "active_immutable"
+        and ci_authority
+    )
+    return {
+        "nonPromotable": non_promotable,
+        "sourceTreeState": source_tree_state,
+        "commitReview": "reviewed" if reviewed else "unreviewed",
+        "candidateStatus": candidate_status,
+        "candidateReceiptRef": (
+            candidate_receipt_ref if candidate_status == "active_immutable" else ""
+        ),
+        "candidateReceiptDigest": (
+            candidate_receipt_digest if candidate_status == "active_immutable" else ""
+        ),
+        "attestationAuthority": "ci" if ci_authority else "local",
+    }
+
+
+def attest_execution_report(
+    raw: bytes,
+    *,
+    identity: Mapping[str, object],
+) -> str:
+    """Use CI HMAC only for promotable identity; local evidence gets a checksum."""
+    if identity.get("attestationAuthority") == "ci":
+        return sign_execution_report(raw)
+    return "local-sha256:" + hashlib.sha256(raw).hexdigest()
+
+
+def evidence_is_promotable(
+    item: Mapping[str, Any],
+    *,
+    require_runtime_authority: bool = True,
+) -> bool:
+    intrinsic = (
+        item.get("nonPromotable") is False
+        and item.get("sourceTreeState") == "clean"
+        and item.get("commitReview") == "reviewed"
+        and item.get("candidateStatus") == "active_immutable"
+        and _is_non_empty_string(item.get("candidateReceiptRef"))
+        and _digest(item.get("candidateReceiptDigest")) is not None
+        and item.get("attestationAuthority") == "ci"
+    )
+    if not intrinsic or not require_runtime_authority:
+        return intrinsic
+    commit = _commit_digest(item.get("commit"))
+    return commit is not None and ci_attestation_authority_available(commit=commit)
 
 
 def _observability_refs_valid(value: object) -> bool:
@@ -903,19 +1554,19 @@ def _observability_refs_valid(value: object) -> bool:
     )
 
 
-def _b10_native_readback_valid(
+def _native_readback_valid(
     value: object,
     *,
     case_result_path: Path,
 ) -> bool:
-    """Verify the B10 device readback sidecar is present and content-bound."""
+    """Verify the Provider two-device device readback sidecar is present and content-bound."""
     if not isinstance(value, Mapping) or set(value) != {
         "schema",
         "artifactName",
         "artifactDigest",
     }:
         return False
-    if value.get("schema") != B10_REMOTE_READBACK_SCHEMA:
+    if value.get("schema") != REMOTE_READBACK_SCHEMA:
         return False
     artifact_name = value.get("artifactName")
     artifact_digest = value.get("artifactDigest")
@@ -953,18 +1604,19 @@ def load_case_results(
         environment,
         str(source.get("testLayer") or ""),
     )
-    is_b10_remote_case = is_release_case and str(source.get("target") or "").startswith(
-        "b10-remote-"
+    is_remote_release_case = is_release_case and str(source.get("target") or "").startswith(
+        "provider-remote-"
     )
     expected_fields = (
-        CASE_RESULT_REQUIRED_FIELDS
-        | CASE_RESULT_RELEASE_FIELDS
-        | (CASE_RESULT_B10_REMOTE_FIELDS if is_b10_remote_case else frozenset())
+        CASE_RESULT_REQUIRED_FIELDS | CASE_RESULT_RELEASE_FIELDS
         if is_release_case
         else CASE_RESULT_REQUIRED_FIELDS
     )
+    allowed_fields = expected_fields | (
+        CASE_RESULT_REMOTE_FIELDS if is_remote_release_case else frozenset()
+    )
     missing = expected_fields - set(result)
-    unknown = set(result) - expected_fields
+    unknown = set(result) - allowed_fields
     if missing or unknown:
         if missing:
             issues.append(
@@ -1098,14 +1750,18 @@ def load_case_results(
                 "readiness receipts",
             )
         )
-    if is_b10_remote_case and not _b10_native_readback_valid(
-        result.get("nativeReadback"),
-        case_result_path=artifact_path,
+    if (
+        is_remote_release_case
+        and "nativeReadback" in result
+        and not _native_readback_valid(
+            result.get("nativeReadback"),
+            case_result_path=artifact_path,
+        )
     ):
         issues.append(
             _issue(
                 str(artifact_path),
-                "B10 Remote CaseResult must bind an existing native-device readback "
+                "Provider two-device Remote CaseResult must bind an existing native-device readback "
                 "sidecar with a matching digest",
             )
         )
@@ -1180,22 +1836,42 @@ def _validate_execution_report(
         issues.append(
             _issue(
                 str(artifact_path),
-                "artifactAttestation must be an HMAC-SHA256 value",
+                "artifactAttestation must be an HMAC-SHA256 or local-SHA256 value",
             )
         )
-    else:
-        try:
-            expected_attestation = sign_execution_report(raw)
-        except ValueError as exc:
-            issues.append(_issue(str(artifact_path), str(exc)))
-        else:
-            if not hmac.compare_digest(supplied_attestation, expected_attestation):
-                issues.append(
-                    _issue(
-                        str(artifact_path),
-                        "artifactAttestation is not trusted for the immutable execution report",
-                    )
+    elif evidence.get("attestationAuthority") == "local":
+        expected_attestation = "local-sha256:" + hashlib.sha256(raw).hexdigest()
+        if not hmac.compare_digest(supplied_attestation, expected_attestation):
+            issues.append(
+                _issue(
+                    str(artifact_path),
+                    "local artifactAttestation does not match the execution report checksum",
                 )
+            )
+    elif evidence.get("attestationAuthority") == "ci":
+        if not ci_attestation_authority_available(
+            commit=_commit_digest(evidence.get("commit"))
+        ):
+            issues.append(
+                _issue(
+                    str(artifact_path),
+                    "CI attestation authority is unavailable; protected HMAC "
+                    "verification was not performed",
+                )
+            )
+        else:
+            try:
+                expected_attestation = sign_execution_report(raw)
+            except ValueError as exc:
+                issues.append(_issue(str(artifact_path), str(exc)))
+            else:
+                if not hmac.compare_digest(supplied_attestation, expected_attestation):
+                    issues.append(
+                        _issue(
+                            str(artifact_path),
+                            "artifactAttestation is not trusted for the immutable execution report",
+                        )
+                    )
     for field in (
         "adapterId",
         "capabilityId",
@@ -1205,6 +1881,13 @@ def _validate_execution_report(
         "status",
         "executedAt",
         "commit",
+        "nonPromotable",
+        "sourceTreeState",
+        "commitReview",
+        "candidateStatus",
+        "candidateReceiptRef",
+        "candidateReceiptDigest",
+        "attestationAuthority",
         "imageDigest",
         "configDigest",
         "contractGraphDigest",
@@ -1336,6 +2019,81 @@ def validate_evidence(
             continue
         if item.get("schema") != "provider-conformance-evidence":
             issues.append(_issue(location, "has unsupported evidence schema"))
+        if not isinstance(item.get("nonPromotable"), bool):
+            issues.append(_issue(location, "nonPromotable must be a boolean"))
+        if item.get("sourceTreeState") not in {"clean", "dirty"}:
+            issues.append(_issue(location, "sourceTreeState must be clean or dirty"))
+        if item.get("commitReview") not in {"reviewed", "unreviewed"}:
+            issues.append(_issue(location, "commitReview must be reviewed or unreviewed"))
+        if item.get("candidateStatus") not in {"active_immutable", "unverified"}:
+            issues.append(
+                _issue(
+                    location,
+                    "candidateStatus must be active_immutable or unverified",
+                )
+            )
+        candidate_receipt_ref = item.get("candidateReceiptRef")
+        candidate_receipt_digest = item.get("candidateReceiptDigest")
+        if item.get("candidateStatus") == "active_immutable":
+            if (
+                not isinstance(candidate_receipt_ref, str)
+                or not candidate_receipt_ref.startswith(
+                    f".qwq_output/env/{item.get('environment')}/"
+                )
+                or not isinstance(candidate_receipt_digest, str)
+                or SHA256_PATTERN.fullmatch(candidate_receipt_digest) is None
+            ):
+                issues.append(
+                    _issue(
+                        location,
+                        "active candidate requires a canonical receipt ref and digest",
+                    )
+                )
+        elif candidate_receipt_ref != "" or candidate_receipt_digest != "":
+            issues.append(
+                _issue(
+                    location,
+                    "unverified candidate must not claim a candidate receipt",
+                )
+            )
+        if item.get("attestationAuthority") not in {"ci", "local"}:
+            issues.append(_issue(location, "attestationAuthority must be ci or local"))
+        if (
+            item.get("sourceTreeState") == "dirty"
+            or item.get("commitReview") != "reviewed"
+            or item.get("candidateStatus") != "active_immutable"
+            or item.get("attestationAuthority") != "ci"
+        ) and item.get("nonPromotable") is not True:
+            issues.append(
+                _issue(
+                    location,
+                    "dirty/unreviewed/non-CI/unverified evidence must fail closed "
+                    "with nonPromotable=true",
+                )
+            )
+        supplied_attestation = item.get("artifactAttestation")
+        if (
+            item.get("attestationAuthority") == "local"
+            and isinstance(supplied_attestation, str)
+            and not supplied_attestation.startswith("local-sha256:")
+        ):
+            issues.append(
+                _issue(
+                    location,
+                    "local attestation authority must use a local-sha256 checksum",
+                )
+            )
+        if (
+            item.get("attestationAuthority") == "ci"
+            and isinstance(supplied_attestation, str)
+            and not supplied_attestation.startswith("hmac-sha256:")
+        ):
+            issues.append(
+                _issue(
+                    location,
+                    "CI attestation authority must use an HMAC-SHA256 attestation",
+                )
+            )
         adapter_id = item.get("adapterId")
         capability_id = item.get("capabilityId")
         if not isinstance(adapter_id, str) or not ADAPTER_PATTERN.fullmatch(adapter_id):
@@ -1632,6 +2390,12 @@ def validate_evidence(
             )
         elif item.get("imageDigest") != expected_image:
             issues.append(_issue(location, "imageDigest does not match the active immutable image"))
+        for candidate_issue in active_candidate_receipt_issues(
+            item,
+            registry=registry,
+            root=configured_root,
+        ):
+            issues.append(_issue(location, candidate_issue))
         if isinstance(selected_binding, Mapping) and compiled_roots is not None:
             current_config_digest = binding_config_digest(selected_binding, compiled_roots)
             if item.get("configDigest") != current_config_digest:
@@ -1809,6 +2573,14 @@ def _cells_share_release(
     ):
         return False
     concrete_cells = [cell for cell in evidence_cells if cell is not None]
+    if any(
+        not evidence_is_promotable(
+            cell,
+            require_runtime_authority=False,
+        )
+        for cell in concrete_cells
+    ):
+        return False
     release_digests = {
         (
             _commit_digest(cell.get("commit")),
@@ -1818,6 +2590,11 @@ def _cells_share_release(
         for cell in concrete_cells
     }
     if len(release_digests) != 1 or any(None in digest for digest in release_digests):
+        return False
+    release_commit = next(iter(release_digests))[0]
+    if not isinstance(release_commit, str) or not ci_attestation_authority_available(
+        commit=release_commit
+    ):
         return False
     if len({_assertion_semantics(cell) for cell in concrete_cells}) != 1:
         return False
@@ -1843,6 +2620,248 @@ def _cells_share_release(
         if len(adapter_digests) != 1 or None in adapter_digests:
             return False
     return True
+
+
+def _cells_share_local_candidate(
+    cells: Iterable[Mapping[str, Any] | None],
+    *,
+    environment: str,
+) -> bool:
+    """Prove one capability's three layers share one active local candidate.
+
+    Local authority is intentionally accepted here, but it remains explicitly
+    non-promotable.  This predicate never participates in release readiness.
+    """
+    evidence_cells = list(cells)
+    if len(evidence_cells) != len(LAYERS) or any(
+        cell is None
+        or cell.get("status") != "passed"
+        or cell.get("environment") != environment
+        or cell.get("candidateStatus") != "active_immutable"
+        for cell in evidence_cells
+    ):
+        return False
+    concrete_cells = [cell for cell in evidence_cells if cell is not None]
+    for cell in concrete_cells:
+        authority = cell.get("attestationAuthority")
+        attestation = cell.get("artifactAttestation")
+        if authority == "local":
+            if (
+                cell.get("nonPromotable") is not True
+                or not isinstance(attestation, str)
+                or not attestation.startswith("local-sha256:")
+            ):
+                return False
+        elif authority == "ci":
+            if (
+                not evidence_is_promotable(
+                    cell,
+                    require_runtime_authority=False,
+                )
+                or not isinstance(attestation, str)
+                or not attestation.startswith("hmac-sha256:")
+            ):
+                return False
+        else:
+            return False
+    candidate_identities = {
+        (
+            _commit_digest(cell.get("commit")),
+            _digest(cell.get("imageDigest")),
+            _digest(cell.get("contractGraphDigest")),
+            cell.get("candidateReceiptRef"),
+            _digest(cell.get("candidateReceiptDigest")),
+        )
+        for cell in concrete_cells
+    }
+    if len(candidate_identities) != 1 or any(
+        value is None or not value
+        for value in next(iter(candidate_identities), ())
+    ):
+        return False
+    if (
+        len({cell.get("adapterId") for cell in concrete_cells}) != 1
+        or len({_digest(cell.get("adapterDigest")) for cell in concrete_cells}) != 1
+        or len({_digest(cell.get("configDigest")) for cell in concrete_cells}) != 1
+        or len({cell.get("typedPort") for cell in concrete_cells}) != 1
+        or len({cell.get("contractRef") for cell in concrete_cells}) != 1
+        or len({_assertion_semantics(cell) for cell in concrete_cells}) != 1
+        or any(_assertion_semantics(cell) is None for cell in concrete_cells)
+    ):
+        return False
+    return all(
+        _digest(cell.get("adapterDigest")) is not None
+        and _digest(cell.get("configDigest")) is not None
+        for cell in concrete_cells
+    )
+
+
+def local_functional_readiness_issues(
+    *,
+    compiled: Mapping[str, Any],
+    evidence: Iterable[Mapping[str, Any]],
+    environment: str,
+) -> list[str]:
+    """Validate one nonprod environment's compiled cells without release claims."""
+    if environment not in ENVIRONMENTS:
+        return [
+            _issue(
+                "local_functional_readiness",
+                f"unsupported nonprod environment {environment}",
+            )
+        ]
+    capability_ids = provider_conformance_capability_ids(compiled)
+    expected = {
+        (capability_id, environment, layer)
+        for capability_id in capability_ids
+        for layer in LAYERS
+    }
+    evidence_cells = list(evidence)
+    observed = [
+        (
+            str(item.get("capabilityId") or ""),
+            str(item.get("environment") or ""),
+            str(item.get("testLayer") or ""),
+        )
+        for item in evidence_cells
+    ]
+    observed_set = set(observed)
+    issues: list[str] = []
+    duplicate = sorted(cell for cell in observed_set if observed.count(cell) > 1)
+    missing = sorted(expected - observed_set)
+    extra = sorted(observed_set - expected)
+    expected_count = len(capability_ids) * len(LAYERS)
+    if not capability_ids or len(expected) != expected_count:
+        issues.append(
+            _issue(
+                f"local_functional_readiness.{environment}",
+                "generated Bindings must derive a non-empty unique capability/cell set",
+            )
+        )
+    if duplicate:
+        issues.append(
+            _issue(
+                f"local_functional_readiness.{environment}",
+                f"current invocation contains duplicate cells: {duplicate}",
+            )
+        )
+    if missing or extra or len(observed) != len(expected):
+        issues.append(
+            _issue(
+                f"local_functional_readiness.{environment}",
+                "current invocation must contain exactly the environment's "
+                f"{expected_count} compiled cells: observed={len(observed)}, "
+                f"missing={missing}, extra={extra}",
+            )
+        )
+    candidate_identities = {
+        (
+            _commit_digest(item.get("commit")),
+            _digest(item.get("imageDigest")),
+            _digest(item.get("contractGraphDigest")),
+            item.get("candidateReceiptRef"),
+            _digest(item.get("candidateReceiptDigest")),
+        )
+        for item in evidence_cells
+    }
+    if not evidence_cells or len(candidate_identities) != 1 or any(
+        value is None or not value
+        for value in next(iter(candidate_identities), ())
+    ):
+        issues.append(
+            _issue(
+                f"local_functional_readiness.{environment}",
+                "all cells must bind one active immutable candidate identity",
+            )
+        )
+    by_key = {
+        (
+            str(item.get("capabilityId") or ""),
+            str(item.get("testLayer") or ""),
+        ): item
+        for item in evidence_cells
+        if item.get("environment") == environment
+    }
+    for capability_id in sorted(capability_ids):
+        binding = _selected_binding(
+            compiled,
+            capability_id=capability_id,
+            environment=environment,
+        )
+        selected_adapter = (
+            binding.get("adapter_id") if isinstance(binding, Mapping) else None
+        )
+        cells = [by_key.get((capability_id, layer)) for layer in LAYERS]
+        if (
+            not isinstance(binding, Mapping)
+            or binding.get("state") != "enabled"
+            or not governance.requires_provider_conformance(binding)
+            or not isinstance(selected_adapter, str)
+            or any(
+                cell is not None and cell.get("adapterId") != selected_adapter
+                for cell in cells
+            )
+            or not _binding_preflight_ready(
+                compiled,
+                capability_id=capability_id,
+                environment=environment,
+            )
+            or not _cells_share_local_candidate(cells, environment=environment)
+        ):
+            issues.append(
+                _issue(
+                    f"local_functional_readiness.{environment}.{capability_id}",
+                    "selected Adapter lacks a candidate-bound three-layer local closure",
+                )
+            )
+    return issues
+
+
+def load_validate_local_functional_readiness(
+    paths: Iterable[Path],
+    *,
+    environment: str,
+    compiled: Mapping[str, Any],
+    registry: Mapping[str, Any],
+    sources: Mapping[tuple[str, str, str], Mapping[str, Any]],
+    root: Path | None = None,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Validate only the evidence emitted by one stackctl environment attempt."""
+    evidence, load_issues = load_evidence_paths(paths, root=root)
+    current_commit = _current_commit()
+    issues = [*load_issues]
+    if evidence and current_commit is None:
+        issues.append(
+            _issue(
+                f"local_functional_readiness.{environment}",
+                "cannot determine the current git revision",
+            )
+        )
+    issues.extend(
+        local_source_coverage_issues(
+            compiled=compiled,
+            environment=environment,
+            sources=sources,
+        )
+    )
+    issues.extend(
+        validate_evidence(
+            evidence,
+            registry=registry,
+            root=root,
+            current_commit=current_commit,
+            compiled=compiled,
+            source_catalog=sources,
+        )
+    )
+    issues.extend(
+        local_functional_readiness_issues(
+            compiled=compiled,
+            evidence=evidence,
+            environment=environment,
+        )
+    )
+    return evidence, list(dict.fromkeys(issues))
 
 
 def derive_readiness(
@@ -2047,6 +3066,14 @@ def readiness_issues(
     if environment not in READINESS_ENVIRONMENTS:
         return [_issue("readiness", f"unsupported readiness environment {environment}")]
     issues: list[str] = []
+    if not ci_attestation_authority_available():
+        issues.append(
+            _issue(
+                f"readiness.{environment}",
+                "promotable evidence requires a clean reviewed commit and "
+                "CI attestation authority",
+            )
+        )
     source_coverage = report.get("sourceCoverageIssues")
     if isinstance(source_coverage, list):
         issues.extend(str(issue) for issue in source_coverage)

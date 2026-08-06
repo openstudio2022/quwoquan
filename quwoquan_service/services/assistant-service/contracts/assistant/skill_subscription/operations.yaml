@@ -14,6 +14,7 @@ api_routes:
       slice: SkillSubscriptionListView
     method: GET
     operation: ListSkillSubscriptions
+    pagination: {default_items: 20, maximum_items: 100}
     path: /assistant/skill-subscriptions
     description: owner 自己的订阅列表。
     commercial:
@@ -278,3 +279,116 @@ api_routes:
       principal: service
       token_transport: bearer
       visibility: internal
+readiness_cases:
+- case_id: list-skill-subscriptions-local
+  spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/skill-user-lifecycle/spec.md#gwt-002
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ListSkillSubscriptions}
+  runner_source_path: quwoquan_service/services/assistant-service/tests/local_contract/assistant/skill_subscription/status__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: list-skill-subscriptions-api
+  spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/skill-user-lifecycle/spec.md#gwt-002
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ListSkillSubscriptions}
+  runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/skill_subscription/command_store__atomicity__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: create-skill-subscription-local
+  spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/skill-user-lifecycle/spec.md#gwt-002
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: CreateSkillSubscription}
+  runner_source_path: quwoquan_service/services/assistant-service/tests/local_contract/assistant/skill_subscription/status__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: create-skill-subscription-api
+  spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/skill-user-lifecycle/spec.md#gwt-002
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: CreateSkillSubscription}
+  runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/skill_subscription/command_store__atomicity__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: get-skill-subscription-local
+  spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/skill-user-lifecycle/spec.md#gwt-002
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: GetSkillSubscription}
+  runner_source_path: quwoquan_service/services/assistant-service/tests/local_contract/assistant/skill_subscription/status__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: get-skill-subscription-api
+  spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/skill-user-lifecycle/spec.md#gwt-002
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: GetSkillSubscription}
+  runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/skill_subscription/command_store__atomicity__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: update-skill-subscription-status-local
+  spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/skill-user-lifecycle/spec.md#gwt-002
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: UpdateSkillSubscriptionStatus}
+  runner_source_path: quwoquan_service/services/assistant-service/tests/local_contract/assistant/skill_subscription/status__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: update-skill-subscription-status-api
+  spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/skill-user-lifecycle/spec.md#gwt-002
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: UpdateSkillSubscriptionStatus}
+  runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/skill_subscription/command_store__atomicity__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: tick-skill-subscription-cron-local
+  spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/skill-user-lifecycle/spec.md#gwt-002
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: TickSkillSubscriptionCron}
+  runner_source_path: quwoquan_service/services/assistant-service/tests/local_contract/assistant/skill_subscription/status__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: tick-skill-subscription-cron-api
+  spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/skill-user-lifecycle/spec.md#gwt-002
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: TickSkillSubscriptionCron}
+  runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/skill_subscription/cron_tick__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb-redis-first-party-http, digest_binding: candidate}
+- case_id: skill_subscription_create_skill_subscription_app_local
+  spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/skill-user-lifecycle/spec.md#gwt-002
+  producer: app
+  layer: local_contract
+  target: {kind: operation, id: CreateSkillSubscription}
+  runner_source_path: quwoquan_app/test/local_contract/service/assistant_service/assistant/skill_subscription/assistant_skill_subscription_remote__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: skill_subscription_get_skill_subscription_app_local
+  spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/skill-user-lifecycle/spec.md#gwt-002
+  producer: app
+  layer: local_contract
+  target: {kind: operation, id: GetSkillSubscription}
+  runner_source_path: quwoquan_app/test/local_contract/service/assistant_service/assistant/skill_subscription/assistant_skill_subscription_remote__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: skill_subscription_list_skill_subscriptions_app_local
+  spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/skill-user-lifecycle/spec.md#gwt-002
+  producer: app
+  layer: local_contract
+  target: {kind: operation, id: ListSkillSubscriptions}
+  runner_source_path: quwoquan_app/test/local_contract/service/assistant_service/assistant/skill_subscription/assistant_skill_subscription_remote__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: skill_subscription_update_skill_subscription_status_app_local
+  spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/skill-user-lifecycle/spec.md#gwt-002
+  producer: app
+  layer: local_contract
+  target: {kind: operation, id: UpdateSkillSubscriptionStatus}
+  runner_source_path: quwoquan_app/test/local_contract/service/assistant_service/assistant/skill_subscription/assistant_skill_subscription_remote__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}

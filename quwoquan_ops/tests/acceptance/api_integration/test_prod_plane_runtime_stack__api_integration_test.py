@@ -8,14 +8,11 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
-from unittest import mock
 
 import yaml
 
 from quwoquan_ops.cli.lib.output_paths import (
-    deployment_render_dir,
-    deployment_target_path,
-    service_deployment_package_dir,
+    deployment_target_path_in_work_root,
 )
 from quwoquan_ops.cli.prod import render_prod_plane_stack as render
 
@@ -30,32 +27,21 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
     @staticmethod
     def _resolver_path(tmp: str, *segments: str) -> Path:
         root = Path(tmp)
-        with mock.patch.dict(
-            os.environ,
-            {
-                "QWQ_OUTPUT_ROOT": str(root / ".qwq_output"),
-                "QWQ_DEPLOY_WORK_ROOT": str(root / "deploy"),
-            },
-            clear=False,
-        ):
-            return deployment_target_path("prod-hosted", *segments)
+        return deployment_target_path_in_work_root(
+            root / "deploy",
+            "prod-hosted",
+            *segments,
+        )
 
     @staticmethod
     def _render_dir(tmp: str, name: str) -> Path:
         root = Path(tmp)
-        with mock.patch.dict(
-            os.environ,
-            {
-                "QWQ_OUTPUT_ROOT": str(root / ".qwq_output"),
-                "QWQ_DEPLOY_WORK_ROOT": str(root / "deploy"),
-            },
-            clear=False,
-        ):
-            return deployment_render_dir(
-                "prod",
-                target="prod-hosted",
-                name=name,
-            )
+        return deployment_target_path_in_work_root(
+            root / "deploy",
+            "prod-hosted",
+            "rendered",
+            name,
+        )
 
     @staticmethod
     def _render_env(tmp: str) -> tuple[dict[str, str], Path]:
@@ -72,57 +58,55 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
                 )
             }
         )
-        with mock.patch.dict(
-            os.environ,
-            {
-                "QWQ_OUTPUT_ROOT": str(output_root),
-                "QWQ_DEPLOY_WORK_ROOT": str(deploy_root),
-            },
-            clear=False,
-        ):
-            for service in service_names:
-                package = service_deployment_package_dir(
-                    "prod",
-                    service,
-                    target="prod-hosted",
-                )
-                package.mkdir(parents=True, exist_ok=True)
-                environment_config = package / "config/config.yaml"
-                environment_config.parent.mkdir(parents=True, exist_ok=True)
-                config_version = "sha256:" + ("a" * 64)
-                environment_config.write_text(
-                    "config:\n  version: sha256:" + ("a" * 64) + "\n",
-                    encoding="utf-8",
-                )
-                digest = lambda path: "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
-                config_digest = digest(environment_config)
-                (package / "provenance.json").write_text(
-                    json.dumps(
-                        {
-                            "schema": "qwq.service_package",
-                            "service": service,
-                            "environment": "prod",
-                            "configVersion": config_version,
-                            "digests": {"config": config_digest},
-                            "releaseEvidence": {
-                                "manifest": str(artifact_manifest),
-                                "evidenceFileDigest": digest(artifact_manifest),
-                                "artifactDigest": ARTIFACT_DIGEST,
-                                "candidateId": CANDIDATE_DIGEST,
-                                "verifiedConfigDigest": config_digest,
-                            }
-                        }
-                    ),
-                    encoding="utf-8",
-                )
-            legal = deployment_target_path(
+        for service in service_names:
+            package = deployment_target_path_in_work_root(
+                deploy_root,
                 "prod-hosted",
                 "packages",
-                "legal-static",
-                "current",
-                "public",
+                "services",
+                service,
             )
-            legal.mkdir(parents=True, exist_ok=True)
+            package.mkdir(parents=True, exist_ok=True)
+            environment_config = package / "config/config.yaml"
+            environment_config.parent.mkdir(parents=True, exist_ok=True)
+            config_version = "sha256:" + ("a" * 64)
+            environment_config.write_text(
+                "config:\n  version: sha256:" + ("a" * 64) + "\n",
+                encoding="utf-8",
+            )
+
+            def digest(path: Path) -> str:
+                return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+
+            config_digest = digest(environment_config)
+            (package / "provenance.json").write_text(
+                json.dumps(
+                    {
+                        "schema": "qwq.service_package",
+                        "service": service,
+                        "environment": "prod",
+                        "configVersion": config_version,
+                        "digests": {"config": config_digest},
+                        "releaseEvidence": {
+                            "manifest": str(artifact_manifest),
+                            "evidenceFileDigest": digest(artifact_manifest),
+                            "artifactDigest": ARTIFACT_DIGEST,
+                            "candidateId": CANDIDATE_DIGEST,
+                            "verifiedConfigDigest": config_digest,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+        legal = deployment_target_path_in_work_root(
+            deploy_root,
+            "prod-hosted",
+            "packages",
+            "legal-static",
+            "current",
+            "public",
+        )
+        legal.mkdir(parents=True, exist_ok=True)
         env = dict(os.environ)
         env["QWQ_OUTPUT_ROOT"] = str(output_root)
         env["QWQ_DEPLOY_WORK_ROOT"] = str(deploy_root)
@@ -130,7 +114,7 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
 
     def test_render_service_plane_outputs_onebox_subset(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            out_dir = self._render_dir(tmp, "service-prod")
+            out_dir = self._render_dir(tmp, "service-prod-r0")
             env, output_root = self._render_env(tmp)
             result = subprocess.run(
                 [
@@ -307,7 +291,7 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
 
     def test_prevalidate_render_is_isolated_digest_pinned_and_systemd_owned(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            out_dir = self._render_dir(tmp, "service-prevalidate")
+            out_dir = self._render_dir(tmp, "service-prevalidate-r0")
             env, _ = self._render_env(tmp)
             result = subprocess.run(
                 [
@@ -440,7 +424,7 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
 
     def test_render_gray_instance_uses_non_prod_ports(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            out_dir = self._render_dir(tmp, "service-gray")
+            out_dir = self._render_dir(tmp, "service-gray-r0")
             env, _ = self._render_env(tmp)
             result = subprocess.run(
                 [
@@ -479,7 +463,7 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            out_dir = self._render_dir(tmp, "edge-prod")
+            out_dir = self._render_dir(tmp, "edge-prod-r0")
             env, _ = self._render_env(tmp)
             result = subprocess.run(
                 [
@@ -553,7 +537,7 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
 
     def test_render_rejects_package_without_release_provenance(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            out_dir = self._render_dir(tmp, "service-prod")
+            out_dir = self._render_dir(tmp, "service-prod-r0")
             env, _ = self._render_env(tmp)
             report = self._resolver_path(
                 tmp,

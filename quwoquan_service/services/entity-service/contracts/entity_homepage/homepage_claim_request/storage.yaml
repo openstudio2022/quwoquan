@@ -1,6 +1,7 @@
 backend: mongodb
 collections:
   homepage_claim_requests:
+    publication_role: not_published
     entity: HomepageClaimRequest
     role: authoritative
     indexes:
@@ -28,6 +29,7 @@ collections:
       unique: true
       description: HomepageClaimRequest CAS commit predicate
   homepage_claim_request_command_receipts:
+    publication_role: not_published
     entity: HomepageClaimRequest
     description: HomepageClaimRequest command 幂等回执；与聚合版本和 outbox 在同一 Mongo transaction 提交。
     indexes:
@@ -38,8 +40,9 @@ collections:
     - name: idx_claim_request_receipts_expire
       keys:
         expiresAt: 1
-      expireAfterSeconds: 0
+      expire_after_seconds: 0
   homepage_claim_request_outbox:
+    publication_role: transactional_outbox
     entity: HomepageClaimRequest
     description: 认领申请领域事实 outbox；审核 approved 由 Homepage 投影消费者幂等推进认领态。
     indexes:
@@ -53,6 +56,7 @@ collections:
         aggregateVersion: 1
       unique: true
   homepage_claim_request_projection_checkpoints:
+    publication_role: publication_accessory
     entity: HomepageClaimRequest
     role: projection
     indexes:

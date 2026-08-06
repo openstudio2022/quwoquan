@@ -1,3 +1,7 @@
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/device-token-register/spec.md#gwt-001
+// readiness_case: upsert-device-push-endpoint-local
+// readiness_case: remove-device-push-endpoint-local
+// readiness_case: invalidate-device-push-endpoint-local
 package local_contract
 
 import (

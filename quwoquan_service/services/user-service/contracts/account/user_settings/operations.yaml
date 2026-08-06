@@ -519,3 +519,148 @@ api_routes:
     response_body: AppearanceSettingsView
     response_body_kind: object
     request_body_kind: object
+readiness_cases:
+  - case_id: get-notification-settings-local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/settings-audit/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: GetNotificationSettings}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/account/user_settings/user_settings_facade__reliability__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: get-notification-settings-api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/settings-audit/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: GetNotificationSettings}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/user_settings/postgres_settings__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+  - case_id: get-privacy-settings-local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/settings-audit/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: GetPrivacySettings}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/account/user_settings/user_settings_facade__reliability__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: get-privacy-settings-api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/settings-audit/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: GetPrivacySettings}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/user_settings/postgres_settings__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+  - case_id: resolve-assistant-delivery-policy-local
+    spec_ref: specs/feature-tree/runtime/runtime-assistant/proactive-subscription-delivery/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: ResolveAssistantDeliveryPolicy}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/account/user_settings/user_settings_facade__reliability__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: resolve-assistant-delivery-policy-api
+    spec_ref: specs/feature-tree/runtime/runtime-assistant/proactive-subscription-delivery/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: ResolveAssistantDeliveryPolicy}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/user_settings/postgres_settings__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+  - case_id: get-call-settings-local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/settings-audit/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: GetCallSettings}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/account/user_settings/user_settings_facade__reliability__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: get-call-settings-api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/settings-audit/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: GetCallSettings}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/user_settings/postgres_settings__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+  - case_id: get-appearance-settings-local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/settings-audit/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: GetAppearanceSettings}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/account/user_settings/user_settings_facade__reliability__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: get-appearance-settings-api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/settings-audit/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: GetAppearanceSettings}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/user_settings/postgres_settings__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+  - case_id: update-notification-settings-local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/settings-audit/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: UpdateNotificationSettings}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/account/user_settings/user_settings_facade__reliability__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: update-notification-settings-api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/settings-audit/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: UpdateNotificationSettings}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/user_settings/postgres_settings__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+  - case_id: update-privacy-settings-local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/settings-audit/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: UpdatePrivacySettings}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/account/user_settings/user_settings_facade__reliability__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: update-privacy-settings-api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/settings-audit/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: UpdatePrivacySettings}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/user_settings/postgres_settings__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+  - case_id: update-call-settings-local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/settings-audit/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: UpdateCallSettings}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/account/user_settings/user_settings_facade__reliability__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: update-call-settings-api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/settings-audit/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: UpdateCallSettings}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/user_settings/postgres_settings__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+  - case_id: update-appearance-settings-local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/settings-audit/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: UpdateAppearanceSettings}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/account/user_settings/user_settings_facade__reliability__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: update-appearance-settings-api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/settings-audit/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: UpdateAppearanceSettings}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/user_settings/postgres_settings__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}

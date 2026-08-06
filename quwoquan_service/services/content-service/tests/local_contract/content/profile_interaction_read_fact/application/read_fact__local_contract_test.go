@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/owner-persona-homepage-unification/spec.md#gwt-004
+// readiness_case: update-profile-interaction-state-local
 package application_test
 
 import (
@@ -7,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
+	"quwoquan_service/runtime/commandmeta"
 	postgenerated "quwoquan_service/services/content-service/generated/content/post"
 	readfactgenerated "quwoquan_service/services/content-service/generated/content/profile_interaction_read_fact"
-	"quwoquan_service/runtime/commandmeta"
 	activityports "quwoquan_service/services/content-service/internal/content/profile_interaction_activity_view/domain/ports"
 	readfactapp "quwoquan_service/services/content-service/internal/content/profile_interaction_read_fact/application"
 	readfactmodel "quwoquan_service/services/content-service/internal/content/profile_interaction_read_fact/domain/model"

@@ -20,23 +20,23 @@ type FollowChangedEvent struct {
 	SourceVersion   int64
 }
 
-// Projector 把已提交的关注事实投影为关注频道行。它被组合进两个 outbox
+// FollowingSubjectProjector 把已提交的关注事实投影为关注频道行。它被组合进两个 outbox
 // relay 的 publisher 链：投影失败会使 relay 不推进 checkpoint 并重试，
 // 幂等 upsert（sourceVersion 单调）保证至少一次投递下的收敛。
-type Projector struct {
+type FollowingSubjectProjector struct {
 	store ProjectionStore
 }
 
-func NewProjector(store ProjectionStore) *Projector {
+func NewFollowingSubjectProjector(store ProjectionStore) *FollowingSubjectProjector {
 	if store == nil {
 		panic("following subject projection store is required")
 	}
-	return &Projector{store: store}
+	return &FollowingSubjectProjector{store: store}
 }
 
 // Apply consumes the object-owned typed projection event. Cross-object outbox
 // payloads are translated only in the cmd composition root.
-func (p *Projector) Apply(ctx context.Context, event FollowChangedEvent) error {
+func (p *FollowingSubjectProjector) Apply(ctx context.Context, event FollowChangedEvent) error {
 	event.ViewerPersonaID = strings.TrimSpace(event.ViewerPersonaID)
 	event.SubjectType = strings.TrimSpace(event.SubjectType)
 	event.SubjectID = strings.TrimSpace(event.SubjectID)

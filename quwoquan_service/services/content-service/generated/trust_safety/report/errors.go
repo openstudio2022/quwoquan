@@ -11,11 +11,39 @@ import (
 //
 //nolint:gochecknoglobals
 var (
-	ErrReportNotFound = errors.New("CONTENT.USER.report_not_found")
+	ErrGatheringSafetyAuthorityUnavailable  = errors.New("CONTENT.SYSTEM.gathering_safety_authority_unavailable")
+	ErrGatheringSafetyAuthorizationConflict = errors.New("CONTENT.USER.gathering_safety_authorization_conflict")
+	ErrGatheringSafetyAuthorizationDenied   = errors.New("CONTENT.USER.gathering_safety_authorization_denied")
+	ErrGatheringSafetyAuthorizationInvalid  = errors.New("CONTENT.USER.gathering_safety_authorization_invalid")
+	ErrReportNotFound                       = errors.New("CONTENT.USER.report_not_found")
 )
+
+// AppErrorFromGatheringSafetyAuthorityUnavailable returns *AppError for CONTENT.SYSTEM.gathering_safety_authority_unavailable (user_message from errors.yaml).
+func AppErrorFromGatheringSafetyAuthorityUnavailable(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("CONTENT.SYSTEM.gathering_safety_authority_unavailable")
+	return rterr.NewAppError(code, "安全处置服务暂时不可用，请稍后重试", debugMessage).WithMetadata("gathering_safety_authority_unavailable", 503).WithRecoveryDirective("retry", "snackbar", 3)
+}
+
+// AppErrorFromGatheringSafetyAuthorizationConflict returns *AppError for CONTENT.USER.gathering_safety_authorization_conflict (user_message from errors.yaml).
+func AppErrorFromGatheringSafetyAuthorizationConflict(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("CONTENT.USER.gathering_safety_authorization_conflict")
+	return rterr.NewAppError(code, "安全处置授权已发生变化", debugMessage).WithMetadata("gathering_safety_authorization_conflict", 409).WithRecoveryDirective("surface", "inlineCard", 0)
+}
+
+// AppErrorFromGatheringSafetyAuthorizationDenied returns *AppError for CONTENT.USER.gathering_safety_authorization_denied (user_message from errors.yaml).
+func AppErrorFromGatheringSafetyAuthorizationDenied(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("CONTENT.USER.gathering_safety_authorization_denied")
+	return rterr.NewAppError(code, "当前安全处置授权不可用", debugMessage).WithMetadata("gathering_safety_authorization_denied", 403).WithRecoveryDirective("surface", "inlineCard", 0)
+}
+
+// AppErrorFromGatheringSafetyAuthorizationInvalid returns *AppError for CONTENT.USER.gathering_safety_authorization_invalid (user_message from errors.yaml).
+func AppErrorFromGatheringSafetyAuthorizationInvalid(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("CONTENT.USER.gathering_safety_authorization_invalid")
+	return rterr.NewAppError(code, "安全处置授权请求无效", debugMessage).WithMetadata("gathering_safety_authorization_invalid", 400).WithRecoveryDirective("surface", "inlineCard", 0)
+}
 
 // AppErrorFromReportNotFound returns *AppError for CONTENT.USER.report_not_found (user_message from errors.yaml).
 func AppErrorFromReportNotFound(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.USER.report_not_found")
-	return rterr.NewAppError(code, "举报不存在", debugMessage).WithMetadata("report_not_found", 404).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "举报不存在", debugMessage).WithMetadata("report_not_found", 404).WithRecoveryDirective("surface", "inlineCard", 0)
 }

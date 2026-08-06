@@ -1,5 +1,7 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-003
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-004
+// readiness_case: recover-notification-account-closure-dead-letter-local
+// readiness_case: apply-notification-account-closure-local
 package local_contract
 
 import (
@@ -190,7 +192,7 @@ func newUserAccountClosedConsumerFixtureWithLogger(
 	}
 	consumer, err := streamadapter.NewUserAccountClosedConsumer(
 		transport,
-		projection,
+		mustUserAccountClosedProjection(t, projection),
 		newUserAccountClosedFailureStoreStub(),
 		"notification-account-closure-test",
 		logger,
@@ -200,6 +202,18 @@ func newUserAccountClosedConsumerFixtureWithLogger(
 		t.Fatalf("create UserAccountClosed consumer: %v", err)
 	}
 	return consumer, client
+}
+
+func mustUserAccountClosedProjection(
+	t *testing.T,
+	store application.UserAccountClosedProjectionStore,
+) *application.UserAccountClosedProjection {
+	t.Helper()
+	projection, err := application.NewUserAccountClosedProjection(store)
+	if err != nil {
+		t.Fatalf("create UserAccountClosed application facet: %v", err)
+	}
+	return projection
 }
 
 func appendUserAccountClosedContractEvent(

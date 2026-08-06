@@ -1,3 +1,6 @@
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-suspension-and-appeal-lifecycle/spec.md#gwt-004
+// readiness_case: issue-account-appeal-credential-local
+// readiness_case: submit-account-appeal-intake-local
 package local_contract
 
 import (

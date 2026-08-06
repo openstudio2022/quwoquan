@@ -1,6 +1,6 @@
 dart_class: AssistantRunEnvelopeWire
-library_path: assistant/generated/contracts/assistant_run_envelope.g.dart
-output_path: assistant/generated/contracts/assistant_run_envelope.g.dart
+library_path: package:quwoquan_cloud_contracts/src/generated/assistant/assistant_run.g.dart
+output_path: packages/quwoquan_cloud_contracts/lib/src/generated/assistant/assistant_run.g.dart
 contract: assistant_run_envelope
 kind: entity_wire_contract
 imports:

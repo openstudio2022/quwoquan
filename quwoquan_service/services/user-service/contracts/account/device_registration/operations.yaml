@@ -353,3 +353,84 @@ contract_test:
       - public endpoint upsert/remove uses trusted account principal and natural identity
       - internal readers and invalidation require service role plus exact scope
       - secret response is no-store and never appears in destination refs or logs
+readiness_cases:
+  - case_id: upsert-device-push-endpoint-local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/device-token-register/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: UpsertDevicePushEndpoint}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/account/device_registration/device_registration_registrar__security_reliability__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: upsert-device-push-endpoint-api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/device-token-register/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: UpsertDevicePushEndpoint}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/device_registration/postgres_registration__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+  - case_id: remove-device-push-endpoint-local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/device-token-register/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: RemoveDevicePushEndpoint}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/account/device_registration/device_registration_registrar__security_reliability__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: remove-device-push-endpoint-api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/device-token-register/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: RemoveDevicePushEndpoint}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/device_registration/postgres_registration__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+  - case_id: resolve-incoming-call-push-destinations-local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/device-token-register/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: ResolveIncomingCallPushDestinations}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/account/device_registration/device_registration_readers__security__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: resolve-incoming-call-push-destinations-api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/device-token-register/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: ResolveIncomingCallPushDestinations}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/device_registration/postgres_registration__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+  - case_id: resolve-push-endpoint-secret-local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/device-token-register/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: ResolvePushEndpointSecret}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/account/device_registration/device_registration_readers__security__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: resolve-push-endpoint-secret-api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/device-token-register/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: ResolvePushEndpointSecret}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/device_registration/postgres_registration__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+  - case_id: invalidate-device-push-endpoint-local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/device-token-register/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: InvalidateDevicePushEndpoint}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/account/device_registration/device_registration_registrar__security_reliability__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: invalidate-device-push-endpoint-api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/device-token-register/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: InvalidateDevicePushEndpoint}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/device_registration/postgres_registration__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}

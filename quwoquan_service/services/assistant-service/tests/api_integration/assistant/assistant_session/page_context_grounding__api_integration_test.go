@@ -9,12 +9,12 @@ import (
 	"time"
 
 	runapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application"
-	assistanthttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/adapters/inbound/http"
 	assistant "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/model"
 	pagehttp "quwoquan_service/services/assistant-service/internal/assistant/page_context/adapters/inbound/http"
 	pageapplication "quwoquan_service/services/assistant-service/internal/assistant/page_context/application"
 	pagemodel "quwoquan_service/services/assistant-service/internal/assistant/page_context/domain/model"
 	pagepersistence "quwoquan_service/services/assistant-service/internal/assistant/page_context/infrastructure/persistence"
+	"quwoquan_service/services/assistant-service/tests/support/assistantingress"
 )
 
 func TestPageContextCrossesObjectHTTPRedisAndTurnBoundary(t *testing.T) {
@@ -90,10 +90,10 @@ func TestPageContextCrossesObjectHTTPRedisAndTurnBoundary(t *testing.T) {
 		}),
 		nil,
 	)
-	runHandler := assistanthttp.NewHandler(
+	runHandler := assistantingress.Routes(
 		service,
-		assistanthttp.WithRunContextResolver(runContext),
-	).Routes()
+		assistantingress.WithRunContextResolver(runContext),
+	)
 	create := assistantAPIRequest(t, runHandler, http.MethodPost, "/assistant/sessions", accountID, map[string]any{
 		"clientRequestId": "page-context-session",
 	})

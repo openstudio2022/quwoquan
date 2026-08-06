@@ -15,7 +15,6 @@ business_rules:
 - 个性化只消费显式偏好和受信页面上下文，缺失时返回同一 contract 的非个性化结果而非 fallback 路由。
 - 账号关闭 tombstone 必须删除入口视图，短期 PageContext 过期不得延长入口投影寿命。
 lifecycle:
-  source_events: [AssistantPreferenceChanged, AssistantPreferenceRevoked, AssistantPolicyReleaseActivated, UserAccountClosed]
-  checkpoint: per_account_projection_sequence
-  rebuild: replay_preference_and_active_policy_events_then_join_live_page_context
+  checkpoint: stored_entry_document_checkpoint
+  rebuild: unsupported_until_canonical_entry_projection_writer_exists
   tombstone: delete_account_entry_keep_closure_checkpoint

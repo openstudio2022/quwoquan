@@ -248,7 +248,13 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	upgradeHandler, err := wsadapter.NewHandler(tickets, hub, logger)
+	operationDescriptors := operationsecurity.ForDomain("realtime")
+	upgradeHandler, err := wsadapter.NewHandler(
+		tickets,
+		hub,
+		logger,
+		operationDescriptors,
+	)
 	if err != nil {
 		return err
 	}
@@ -291,29 +297,19 @@ func run() error {
 			return accountSecurityConsumer.Healthy(10 * time.Second)
 		},
 	)
-	rootMux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status":"ok"}`))
-	})
-	rootMux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
-		if result := readinessChecker.Check(r.Context()); result.Status != "ok" {
-			httpadapter.WriteReadinessUnavailable(w, r)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status":"ready"}`))
-	})
-	rootMux.Handle("/metrics", rtmetrics.Handler())
-	// WS 升级不经 operation guard：鉴权由一次性 ticket 承载（浏览器 WS
-	// 握手无法携带 Bearer header），契约见 connection/operations.yaml。
+	if err := httpadapter.RegisterRuntimeProbeRoutes(
+		rootMux,
+		readinessChecker,
+		rtmetrics.Handler(),
+	); err != nil {
+		return fmt.Errorf("runtime probe routes: %w", err)
+	}
+	// WebSocket 在 handler 内先消费一次性 ticket，注入可信 principal 后再
+	// 执行同一 runtime operation contract；浏览器握手无需伪造 Bearer header。
 	rootMux.HandleFunc("GET /realtime/ws", upgradeHandler.HandleUpgrade)
 	rootMux.Handle(
 		"/",
-		rtauth.RequireGeneratedOperationAuthorization(
-			operationsecurity.ForDomain("realtime"),
-		)(guardedHandler),
+		rtauth.EnforceRuntimeOperationContract(operationDescriptors)(guardedHandler),
 	)
 
 	// 服务日志上云：stdout/stderr 镜像推送到 Product Ops 内部 runtime log
@@ -369,6 +365,9 @@ func run() error {
 	if addr == "" {
 		return fmt.Errorf("service.http.addr is required")
 	}
+	timeouts := rtauth.ContractHTTPServerTimeouts(
+		operationDescriptors,
+	)
 	server := &http.Server{
 		Addr: addr,
 		Handler: rtauth.Middleware(rtauth.MiddlewareConfig{
@@ -377,9 +376,11 @@ func run() error {
 			AccountSecurityAuthority: accountSecurityAuthority,
 		})(withObservability),
 		BaseContext:       func(_ net.Listener) context.Context { return ctx },
-		ReadHeaderTimeout: 5 * time.Second,
-		// WS/LongPoll 是长连接工作负载，不设整体 WriteTimeout。
-		IdleTimeout: 120 * time.Second,
+		ReadHeaderTimeout: timeouts.ReadHeader,
+		// WS 升级后连接被 hijack，Go 不会重置已设置的写截止时间，coder/websocket
+		// 也不清除它，所以这里必须不设 WriteTimeout；LongPoll 的上限由 operation
+		// guard 施加的 reliability.timeout_ms 承担。
+		IdleTimeout: timeouts.Idle,
 	}
 	log.Printf("realtime-gateway listening on %s", server.Addr)
 	return rthttp.ListenAndServeGraceful(server, 15*time.Second)

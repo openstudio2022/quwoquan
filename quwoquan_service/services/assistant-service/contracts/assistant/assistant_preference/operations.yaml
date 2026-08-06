@@ -213,3 +213,100 @@ api_routes:
     principal: owner
     token_transport: bearer
     visibility: private
+readiness_cases:
+- case_id: set-assistant-preference-local
+  spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/session-preference-memory-control/spec.md#gwt-002
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: SetAssistantPreference}
+  runner_source_path: quwoquan_service/services/assistant-service/tests/local_contract/assistant/assistant_preference/assistant_preference_lifecycle__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: set-assistant-preference-api
+  spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/session-preference-memory-control/spec.md#gwt-002
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: SetAssistantPreference}
+  runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/assistant_preference/lifecycle_store__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: list-assistant-preferences-local
+  spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/session-preference-memory-control/spec.md#gwt-002
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ListAssistantPreferences}
+  runner_source_path: quwoquan_service/services/assistant-service/tests/local_contract/assistant/assistant_preference/assistant_preference_lifecycle__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: list-assistant-preferences-api
+  spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/session-preference-memory-control/spec.md#gwt-002
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ListAssistantPreferences}
+  runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/assistant_preference/lifecycle_store__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: revoke-assistant-preference-local
+  spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/session-preference-memory-control/spec.md#gwt-002
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: RevokeAssistantPreference}
+  runner_source_path: quwoquan_service/services/assistant-service/tests/local_contract/assistant/assistant_preference/assistant_preference_lifecycle__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: revoke-assistant-preference-api
+  spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/session-preference-memory-control/spec.md#gwt-002
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: RevokeAssistantPreference}
+  runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/assistant_preference/lifecycle_store__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: restore-assistant-preference-local
+  spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/session-preference-memory-control/spec.md#gwt-002
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: RestoreAssistantPreference}
+  runner_source_path: quwoquan_service/services/assistant-service/tests/local_contract/assistant/assistant_preference/assistant_preference_lifecycle__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: restore-assistant-preference-api
+  spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/session-preference-memory-control/spec.md#gwt-002
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: RestoreAssistantPreference}
+  runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/assistant_preference/lifecycle_store__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: assistant_preference_set_assistant_preference_app_local
+  spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/session-preference-memory-control/spec.md#gwt-002
+  producer: app
+  layer: local_contract
+  target: {kind: operation, id: SetAssistantPreference}
+  runner_source_path: quwoquan_app/test/local_contract/service/assistant_service/assistant/assistant_preference/assistant_preference__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: assistant_preference_list_assistant_preferences_app_local
+  spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/session-preference-memory-control/spec.md#gwt-002
+  producer: app
+  layer: local_contract
+  target: {kind: operation, id: ListAssistantPreferences}
+  runner_source_path: quwoquan_app/test/local_contract/service/assistant_service/assistant/assistant_preference/assistant_preference__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: assistant_preference_revoke_assistant_preference_app_local
+  spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/session-preference-memory-control/spec.md#gwt-002
+  producer: app
+  layer: local_contract
+  target: {kind: operation, id: RevokeAssistantPreference}
+  runner_source_path: quwoquan_app/test/local_contract/service/assistant_service/assistant/assistant_preference/assistant_preference__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: assistant_preference_restore_assistant_preference_app_local
+  spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/session-preference-memory-control/spec.md#gwt-002
+  producer: app
+  layer: local_contract
+  target: {kind: operation, id: RestoreAssistantPreference}
+  runner_source_path: quwoquan_app/test/local_contract/service/assistant_service/assistant/assistant_preference/assistant_preference__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}

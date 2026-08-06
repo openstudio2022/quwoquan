@@ -317,6 +317,7 @@ api_routes:
   - method: GET
     path: /content/posts/{postId}/comments
     operation: ListComments
+    pagination: {default_items: 20, maximum_items: 100}
     actor: none
     application:
       kind: query
@@ -387,6 +388,7 @@ api_routes:
   - method: GET
     path: /content/posts/{postId}/comments/{commentId}/replies
     operation: ListCommentReplies
+    pagination: {default_items: 10, maximum_items: 100}
     actor: none
     application:
       kind: query
@@ -447,6 +449,7 @@ api_routes:
   - method: GET
     path: /content/users/me/comments
     operation: ListCommentsByAuthor
+    pagination: {default_items: 20, maximum_items: 100}
     actor: persona
     application:
       kind: query
@@ -502,6 +505,7 @@ api_routes:
   - method: GET
     path: /content/users/me/received-comments
     operation: ListCommentsForPostAuthor
+    pagination: {default_items: 20, maximum_items: 100}
     actor: persona
     application:
       kind: query
@@ -687,3 +691,196 @@ consumers:
     capabilities:
       - hide_comment
       - restore_comment
+readiness_cases:
+  - case_id: consume-comment-lifecycle-local
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-015
+    producer: service
+    layer: local_contract
+    target: {kind: object, id: content.comment}
+    runner_source_path: quwoquan_service/services/content-service/tests/local_contract/content/comment/application/comment_hot_score_projector__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: consume-comment-lifecycle-api
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-015
+    producer: service
+    layer: api_integration
+    target: {kind: object, id: content.comment}
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/comment/http_mongo_transaction__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb-postgresql, digest_binding: candidate}
+  - case_id: create-comment-local
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-015
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: CreateComment}
+    runner_source_path: quwoquan_service/services/content-service/tests/local_contract/content/comment/adapters/inbound/http/comment_operations__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: create-comment-api
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-015
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: CreateComment}
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/comment/http_mongo_transaction__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: delete-comment-local
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-015
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: DeleteComment}
+    runner_source_path: quwoquan_service/services/content-service/tests/local_contract/content/comment/adapters/inbound/http/comment_operations__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: delete-comment-api
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-015
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: DeleteComment}
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/comment/http_mongo_transaction__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: pin-comment-local
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-015
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: PinComment}
+    runner_source_path: quwoquan_service/services/content-service/tests/local_contract/content/comment/adapters/inbound/http/comment_operations__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: pin-comment-api
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-015
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: PinComment}
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/comment/http_mongo_transaction__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: unpin-comment-local
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-015
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: UnpinComment}
+    runner_source_path: quwoquan_service/services/content-service/tests/local_contract/content/comment/adapters/inbound/http/comment_operations__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: unpin-comment-api
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-015
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: UnpinComment}
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/comment/http_mongo_transaction__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: bind-media-assets-to-comment-local
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-015
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: BindMediaAssetsToComment}
+    runner_source_path: quwoquan_service/services/content-service/tests/local_contract/content/comment/adapters/inbound/http/comment_operations__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: bind-media-assets-to-comment-api
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-015
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: BindMediaAssetsToComment}
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/comment/http_mongo_transaction__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: list-comments-local
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-015
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: ListComments}
+    runner_source_path: quwoquan_service/services/content-service/tests/local_contract/content/comment/adapters/inbound/http/comment_operations__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: list-comments-api
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-015
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: ListComments}
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/comment/http_mongo_transaction__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: list-comment-replies-local
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-015
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: ListCommentReplies}
+    runner_source_path: quwoquan_service/services/content-service/tests/local_contract/content/comment/adapters/inbound/http/comment_operations__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: list-comment-replies-api
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-015
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: ListCommentReplies}
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/comment/http_mongo_transaction__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: list-comments-by-author-local
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-015
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: ListCommentsByAuthor}
+    runner_source_path: quwoquan_service/services/content-service/tests/local_contract/content/comment/adapters/inbound/http/comment_operations__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: list-comments-by-author-api
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-015
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: ListCommentsByAuthor}
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/comment/http_mongo_transaction__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: list-comments-for-post-author-local
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-015
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: ListCommentsForPostAuthor}
+    runner_source_path: quwoquan_service/services/content-service/tests/local_contract/content/comment/adapters/inbound/http/comment_operations__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: list-comments-for-post-author-api
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-015
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: ListCommentsForPostAuthor}
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/comment/http_mongo_transaction__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: hide-comment-local
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-015
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: HideComment}
+    runner_source_path: quwoquan_service/services/content-service/tests/local_contract/content/comment/adapters/inbound/http/comment_operations__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: hide-comment-api
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-015
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: HideComment}
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/comment/http_mongo_transaction__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: restore-comment-local
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-015
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: RestoreComment}
+    runner_source_path: quwoquan_service/services/content-service/tests/local_contract/content/comment/adapters/inbound/http/comment_operations__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: restore-comment-api
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-015
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: RestoreComment}
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/comment/http_mongo_transaction__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}

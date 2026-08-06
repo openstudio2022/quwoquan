@@ -1,5 +1,6 @@
 // spec_ref: specs/feature-tree/assistant-run-learning/learning-event-feedback-injection/learning-event-ingestion/spec.md#gwt-001
 // spec_ref: specs/feature-tree/assistant-run-learning/learning-event-feedback-injection/feedback-aggregation/spec.md#gwt-001
+// readiness_case: get-learning-ops-summary-local
 package local_contract
 
 import (

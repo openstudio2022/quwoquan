@@ -186,10 +186,10 @@ func (s Source) skipsMigration(tableName string) bool {
 
 // --- Storage YAML ---
 
+// StorageYAML 的字段集必须是 contracts/metadata/_schemas/storage.schema.json
+// 顶层键集的子集；schema 是键集唯一真相源，由
+// storage_reader_keyset__contract__local_contract_test.go 断言。
 type StorageYAML struct {
-	Version     int                      `yaml:"version"`
-	Aggregate   string                   `yaml:"aggregate"`
-	Entity      string                   `yaml:"entity"`
 	Backend     string                   `yaml:"backend"`
 	Tables      map[string]TableDef      `yaml:"tables"`
 	Collections map[string]CollectionDef `yaml:"collections"`
@@ -198,7 +198,7 @@ type StorageYAML struct {
 
 type TableDef struct {
 	Entity             string             `yaml:"entity"`
-	PK                 string             `yaml:"pk"`
+	PK                 []string           `yaml:"pk"`
 	FK                 *ForeignKeyDef     `yaml:"fk"`
 	Columns            []ColumnDef        `yaml:"columns"`
 	Indexes            []IndexDef         `yaml:"indexes"`

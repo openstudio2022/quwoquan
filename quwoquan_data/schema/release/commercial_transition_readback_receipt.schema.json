@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/release/commercial_transition_readback_receipt.schema.json",
+  "title": "Environment commercial transition unauthorized-content readback receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "environment",
+    "runId",
+    "researchReleaseId",
+    "researchManifestDigest",
+    "commercialReleaseId",
+    "commercialManifestDigest",
+    "unauthorizedReadbackCount",
+    "unauthorizedAssetIds",
+    "recordedAt",
+    "receiptDigest",
+    "passed"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.commercial_transition_readback"},
+    "environment": {"enum": ["alpha", "beta", "gamma", "prod"]},
+    "runId": {"type": "string", "minLength": 1},
+    "researchReleaseId": {"type": "string", "minLength": 1},
+    "researchManifestDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "commercialReleaseId": {"type": "string", "minLength": 1},
+    "commercialManifestDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "unauthorizedReadbackCount": {"const": 0},
+    "unauthorizedAssetIds": {"type": "array", "maxItems": 0},
+    "recordedAt": {"type": "string", "minLength": 1},
+    "receiptDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "passed": {"const": true}
+  }
+}

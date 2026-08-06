@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-004
+// readiness_case: apply-account-security-terminal-event-local
 package local_contract
 
 import (
@@ -11,7 +12,6 @@ import (
 	"time"
 
 	"quwoquan_service/services/rtc-service/internal/rtc/call_session/application"
-	callsession "quwoquan_service/services/rtc-service/internal/rtc/call_session/domain"
 	"quwoquan_service/services/rtc-service/internal/rtc/call_session/domain/model"
 )
 
@@ -28,7 +28,7 @@ func TestAccountSecurityTerminalEventClosesEveryAffectedSessionAndNeverRestores(
 	)
 	cache := &terminalCallCache{}
 	rooms := &terminalMediaProvider{}
-	orchestrator := newTerminalOrchestrator(store, cache, rooms, now)
+	orchestrator := newTerminalOrchestrator(t, store, cache, rooms, now)
 	securityEvent := application.AccountSecurityTerminalEvent{
 		EventID:      "user-account-closed-event-1",
 		AccountID:    "account-closed",
@@ -141,7 +141,7 @@ func TestAccountSecurityTerminalEventRetriesAfterRoomRevocationFailure(t *testin
 	)
 	cache := &terminalCallCache{}
 	rooms := &terminalMediaProvider{failDeletes: 1}
-	orchestrator := newTerminalOrchestrator(store, cache, rooms, now)
+	orchestrator := newTerminalOrchestrator(t, store, cache, rooms, now)
 	securityEvent := application.AccountSecurityTerminalEvent{
 		EventID:      "user-suspended-event-1",
 		AccountID:    "account-suspended",
@@ -191,7 +191,7 @@ func TestAccountSecurityTerminalEventRevokesRoomBeforeCacheCleanupRetry(
 	)
 	cache := &terminalCallCache{failDeletes: 1}
 	rooms := &terminalMediaProvider{}
-	orchestrator := newTerminalOrchestrator(store, cache, rooms, now)
+	orchestrator := newTerminalOrchestrator(t, store, cache, rooms, now)
 	securityEvent := application.AccountSecurityTerminalEvent{
 		EventID:      "user-closed-cache-retry-event",
 		AccountID:    "account-cache",
@@ -230,15 +230,17 @@ func TestAccountSecurityTerminalEventRevokesRoomBeforeCacheCleanupRetry(
 }
 
 func newTerminalOrchestrator(
+	tb testing.TB,
 	store application.CallStore,
 	cache application.CallStateCache,
 	rooms application.MediaRoomProvider,
 	now time.Time,
 ) *application.CallOrchestrator {
+	tb.Helper()
 	return application.NewCallOrchestrator(
 		store,
 		cache,
-		callsession.NewCallSessionService(),
+		newTestCallSessionService(tb, 17*time.Second, 41*time.Second),
 		rooms,
 		application.AllowRelationshipGateForTest(),
 		application.WithClock(func() time.Time { return now }),

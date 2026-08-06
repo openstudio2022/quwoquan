@@ -1,20 +1,29 @@
-description: ObjectTagIndexView 只由 taxonomy release 与对象标签 typed 事件投影。
+description: ObjectTagIndexView 通过 active taxonomy release 拉取构建基础索引，并仅消费 UserProfileTagsChanged durable 事件更新用户标签绑定。
 api_routes: []
 runtime_entrypoints:
 - name: ProjectObjectTagIndex
   kind: projector
   phase: event_projection
-  source_events:
-  - tag.TagTaxonomyReleaseActivated
-  - tag.ObjectTagsAssigned
-  - tag.ObjectTagsRemoved
-  - tag.TaggedObjectDeleted
-  checkpoint: taxonomy_release_and_object_event_sequence
-  rebuild: load_active_taxonomy_then_replay_object_tag_events
-  tombstone: delete_object_tag_bindings_keep_checkpoint
-  idempotency: aggregate_version
   application:
     kind: command
-    facet: ObjectTagIndexViewProjector
-    method: apply
+    facet: UserProfileTagConsumer
+    method: processOnce
     object_owner: ObjectTagIndexView
+
+readiness_cases:
+- case_id: project-object-tag-index-local
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-006
+  producer: service
+  layer: local_contract
+  target: {kind: object, id: tag.object_tag_index_view}
+  runner_source_path: quwoquan_service/services/tag-service/tests/local_contract/tag/object_tag_index_view/user_profile_tag_consumer__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: project-object-tag-index-api
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-006
+  producer: service
+  layer: api_integration
+  target: {kind: object, id: tag.object_tag_index_view}
+  runner_source_path: quwoquan_service/services/tag-service/tests/api_integration/tag/object_tag_index_view/mongo_projection__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}

@@ -32,8 +32,6 @@ relationships:
   reference_fields:
   - reviewerId
   target_object: user.UserAccount
-capabilities:
-- queryable
 taggable: false
 vector_enabled: false
 business_rules:
@@ -52,3 +50,17 @@ lifecycle:
   - superseded
   optimistic_concurrency: version
   idempotency: command_key
+  source_events:
+  - content.post.PostSubmittedForReview
+  - content.report.ReportCreated
+  event_consumers:
+  - name: OpenCaseFromPostSubmission
+    kind: event_handler
+    facet: PostSubmissionModerationHandler
+    method: openPostModerationCase
+    idempotency: event_id
+  - name: OpenCaseFromReport
+    kind: event_handler
+    facet: ReportModerationHandler
+    method: openPostModerationCase
+    idempotency: event_id

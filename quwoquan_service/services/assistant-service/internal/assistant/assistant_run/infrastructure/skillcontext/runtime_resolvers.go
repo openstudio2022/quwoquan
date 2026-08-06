@@ -269,7 +269,7 @@ func NewRuntimeRegistry(
 
 // NewRuntimeRegistryWithCanonicalReaders is the production assembly boundary:
 // every canonical object Reader is registered into the same immutable runtime
-// registry as the built-in and additional (for example Trip) resolvers.
+// registry as the built-in and additional object-owned resolvers.
 func NewRuntimeRegistryWithCanonicalReaders(
 	descriptors readerports.Catalog,
 	runs RunReader,

@@ -90,19 +90,6 @@ func assistantShutdownTimeout() time.Duration {
 	return time.Duration(seconds) * time.Second
 }
 
-func assistantHTTPWriteTimeout() time.Duration {
-	raw := strings.TrimSpace(os.Getenv("ASSISTANT_HTTP_WRITE_TIMEOUT_SECONDS"))
-	if raw == "" {
-		return 180 * time.Second
-	}
-	seconds, err := strconv.Atoi(raw)
-	if err != nil || seconds <= 0 {
-		log.Printf("WARN: invalid ASSISTANT_HTTP_WRITE_TIMEOUT_SECONDS=%q; using 180s", raw)
-		return 180 * time.Second
-	}
-	return time.Duration(seconds) * time.Second
-}
-
 func hostname() string {
 	name, err := os.Hostname()
 	if err != nil || strings.TrimSpace(name) == "" {

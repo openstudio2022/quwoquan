@@ -17,17 +17,17 @@ var (
 // AppErrorFromPageContextInvalidArgument returns *AppError for ASSISTANT.USER.page_context_invalid_argument (user_message from errors.yaml).
 func AppErrorFromPageContextInvalidArgument(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.page_context_invalid_argument")
-	return rterr.NewAppError(code, "页面上下文无效，请刷新后重试", debugMessage).WithMetadata("page_context_invalid_argument", 400).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "页面上下文无效，请刷新后重试", debugMessage).WithMetadata("page_context_invalid_argument", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromPageContextUnauthorized returns *AppError for ASSISTANT.USER.page_context_unauthorized (user_message from errors.yaml).
 func AppErrorFromPageContextUnauthorized(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.page_context_unauthorized")
-	return rterr.NewAppError(code, "请先登录后上报页面上下文", debugMessage).WithMetadata("page_context_unauthorized", 401).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "请先登录后上报页面上下文", debugMessage).WithMetadata("page_context_unauthorized", 401).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromPageContextUnavailable returns *AppError for ASSISTANT.SYSTEM.page_context_unavailable (user_message from errors.yaml).
 func AppErrorFromPageContextUnavailable(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.SYSTEM.page_context_unavailable")
-	return rterr.NewAppError(code, "页面上下文服务暂不可用，请稍后重试", debugMessage).WithMetadata("page_context_unavailable", 503).WithRecovery("retry", 3)
+	return rterr.NewAppError(code, "页面上下文服务暂不可用，请稍后重试", debugMessage).WithMetadata("page_context_unavailable", 503).WithRecoveryDirective("retry", "snackbar", 3)
 }

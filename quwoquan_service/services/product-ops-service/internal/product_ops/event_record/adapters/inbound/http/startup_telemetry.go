@@ -94,10 +94,49 @@ var allowedStartupTelemetryNetworkClasses = map[string]struct{}{
 }
 
 var allowedStartupTelemetryRecoverySurfaces = map[string]struct{}{
+	"":                          {},
+	"page.app.startup_recovery": {},
+}
+
+var allowedStartupTelemetryRecoveryLifecycles = map[string]struct{}{
+	"":                {},
+	"enter":           {},
+	"phase_change":    {},
+	"external_action": {},
+	"runtime_reentry": {},
+	"exit":            {},
+	"failure":         {},
+}
+
+var allowedStartupTelemetryRecoveryMounts = map[string]struct{}{
 	"":                 {},
-	"flutter_recovery": {},
-	"safe_recovery":    {},
-	"native_recovery":  {},
+	"bootstrap":        {},
+	"runtime_boundary": {},
+	"safe_shell":       {},
+	"router_error":     {},
+}
+
+var allowedStartupTelemetryRecoveryPhases = map[string]struct{}{
+	"":                            {},
+	"startup_checking":            {},
+	"startup_update_required":     {},
+	"startup_latest":              {},
+	"startup_version_unavailable": {},
+	"runtime_unavailable":         {},
+	"runtime_reentering":          {},
+	"runtime_version_checking":    {},
+	"runtime_update_required":     {},
+	"runtime_latest":              {},
+	"runtime_version_unavailable": {},
+}
+
+var allowedStartupTelemetryRecoveryActions = map[string]struct{}{
+	"":                {},
+	"none":            {},
+	"open_update":     {},
+	"open_web":        {},
+	"external_return": {},
+	"runtime_reentry": {},
 }
 
 var allowedStartupTelemetryFailureSources = map[string]struct{}{
@@ -106,6 +145,7 @@ var allowedStartupTelemetryFailureSources = map[string]struct{}{
 	"router":                  {},
 	"startup_deadline":        {},
 	"native_watchdog":         {},
+	"runtime_boundary":        {},
 	"web_error":               {},
 	"web_unhandled_rejection": {},
 	"web_pagehide":            {},
@@ -134,22 +174,26 @@ type startupTelemetryBatchRequest struct {
 // StartupTelemetryEventInput 是匿名入口的固定 wire schema。它故意不复用
 // EventRecord 的通用 payload，确保请求体不能携带账户、内容、原始异常或堆栈。
 type StartupTelemetryEventInput struct {
-	EventID         string `json:"eventId"`
-	AttemptID       string `json:"attemptId"`
-	Sequence        int    `json:"sequence"`
-	Phase           string `json:"phase"`
-	PhaseDurationMs int    `json:"phaseDurationMs"`
-	ElapsedMs       int    `json:"elapsedMs"`
-	Outcome         string `json:"outcome"`
-	OccurredAt      string `json:"occurredAt"`
-	Platform        string `json:"platform"`
-	RuntimeEnv      string `json:"runtimeEnv"`
-	AppVersion      string `json:"appVersion,omitempty"`
-	NetworkClass    string `json:"networkClass,omitempty"`
-	RecoverySurface string `json:"recoverySurface,omitempty"`
-	FailureCode     string `json:"failureCode,omitempty"`
-	FailureSource   string `json:"failureSource,omitempty"`
-	DeadlineOrigin  string `json:"deadlineOrigin,omitempty"`
+	EventID           string `json:"eventId"`
+	AttemptID         string `json:"attemptId"`
+	Sequence          int    `json:"sequence"`
+	Phase             string `json:"phase"`
+	PhaseDurationMs   int    `json:"phaseDurationMs"`
+	ElapsedMs         int    `json:"elapsedMs"`
+	Outcome           string `json:"outcome"`
+	OccurredAt        string `json:"occurredAt"`
+	Platform          string `json:"platform"`
+	RuntimeEnv        string `json:"runtimeEnv"`
+	AppVersion        string `json:"appVersion,omitempty"`
+	NetworkClass      string `json:"networkClass,omitempty"`
+	RecoverySurface   string `json:"recoverySurface,omitempty"`
+	RecoveryLifecycle string `json:"recoveryLifecycle,omitempty"`
+	RecoveryMount     string `json:"recoveryMount,omitempty"`
+	RecoveryPhase     string `json:"recoveryPhase,omitempty"`
+	RecoveryAction    string `json:"recoveryAction,omitempty"`
+	FailureCode       string `json:"failureCode,omitempty"`
+	FailureSource     string `json:"failureSource,omitempty"`
+	DeadlineOrigin    string `json:"deadlineOrigin,omitempty"`
 }
 
 type StartupTelemetryAcceptedObserver func(StartupTelemetryEventInput)
@@ -250,32 +294,89 @@ func (event StartupTelemetryEventInput) validate() error {
 		!isStartupTelemetryAppVersion(event.AppVersion) ||
 		!isStartupTelemetryAllowed(event.NetworkClass, allowedStartupTelemetryNetworkClasses) ||
 		!isStartupTelemetryAllowed(event.RecoverySurface, allowedStartupTelemetryRecoverySurfaces) ||
+		!isStartupTelemetryAllowed(event.RecoveryLifecycle, allowedStartupTelemetryRecoveryLifecycles) ||
+		!isStartupTelemetryAllowed(event.RecoveryMount, allowedStartupTelemetryRecoveryMounts) ||
+		!isStartupTelemetryAllowed(event.RecoveryPhase, allowedStartupTelemetryRecoveryPhases) ||
+		!isStartupTelemetryAllowed(event.RecoveryAction, allowedStartupTelemetryRecoveryActions) ||
 		!isStartupTelemetryAllowed(event.FailureCode, allowedStartupTelemetryFailureCodes) ||
 		!isStartupTelemetryAllowed(event.FailureSource, allowedStartupTelemetryFailureSources) ||
 		!isStartupTelemetryAllowed(event.DeadlineOrigin, allowedStartupTelemetryDeadlineOrigins) {
 		return errStartupTelemetryInvalid
 	}
+	if !event.validRecoveryContract() {
+		return errStartupTelemetryInvalid
+	}
 	return nil
+}
+
+func (event StartupTelemetryEventInput) validRecoveryContract() bool {
+	isRecoveryPhase := event.Phase == "recovery"
+	hasLifecycle := event.RecoveryLifecycle != ""
+	if isRecoveryPhase != hasLifecycle {
+		return false
+	}
+	if !isRecoveryPhase {
+		return event.RecoverySurface == "" && event.RecoveryMount == "" &&
+			event.RecoveryPhase == "" && event.RecoveryAction == ""
+	}
+	if event.RecoverySurface != "page.app.startup_recovery" ||
+		event.RecoveryMount == "" || event.RecoveryPhase == "" ||
+		event.RecoveryAction == "" {
+		return false
+	}
+	switch event.RecoveryLifecycle {
+	case "enter":
+		return event.Outcome == "entered" && event.RecoveryAction == "none"
+	case "phase_change":
+		return event.Outcome == "observed" && event.RecoveryAction == "none"
+	case "external_action":
+		return oneOf(event.Outcome, "started", "success", "failed") &&
+			oneOf(event.RecoveryAction, "open_update", "open_web", "external_return")
+	case "runtime_reentry":
+		return oneOf(event.Outcome, "started", "success", "failed") &&
+			event.RecoveryAction == "runtime_reentry"
+	case "exit":
+		return oneOf(event.Outcome, "success", "failed") &&
+			event.RecoveryAction == "none"
+	case "failure":
+		return event.Outcome == "failed" && event.RecoveryAction == "none" &&
+			event.FailureSource != ""
+	default:
+		return false
+	}
+}
+
+func oneOf(value string, allowed ...string) bool {
+	for _, candidate := range allowed {
+		if value == candidate {
+			return true
+		}
+	}
+	return false
 }
 
 func (event StartupTelemetryEventInput) toDiagnosticRecord() eventapp.StartupDiagnosticRecord {
 	return eventapp.StartupDiagnosticRecord{
-		EventID:         event.EventID,
-		AttemptID:       event.AttemptID,
-		Sequence:        event.Sequence,
-		Phase:           event.Phase,
-		PhaseDurationMS: event.PhaseDurationMs,
-		ElapsedMS:       event.ElapsedMs,
-		Outcome:         event.Outcome,
-		OccurredAt:      event.OccurredAt,
-		Platform:        event.Platform,
-		RuntimeEnv:      event.RuntimeEnv,
-		AppVersion:      event.AppVersion,
-		NetworkClass:    event.NetworkClass,
-		RecoverySurface: event.RecoverySurface,
-		FailureCode:     event.FailureCode,
-		FailureSource:   event.FailureSource,
-		DeadlineOrigin:  event.DeadlineOrigin,
+		EventID:           event.EventID,
+		AttemptID:         event.AttemptID,
+		Sequence:          event.Sequence,
+		Phase:             event.Phase,
+		PhaseDurationMS:   event.PhaseDurationMs,
+		ElapsedMS:         event.ElapsedMs,
+		Outcome:           event.Outcome,
+		OccurredAt:        event.OccurredAt,
+		Platform:          event.Platform,
+		RuntimeEnv:        event.RuntimeEnv,
+		AppVersion:        event.AppVersion,
+		NetworkClass:      event.NetworkClass,
+		RecoverySurface:   event.RecoverySurface,
+		RecoveryLifecycle: event.RecoveryLifecycle,
+		RecoveryMount:     event.RecoveryMount,
+		RecoveryPhase:     event.RecoveryPhase,
+		RecoveryAction:    event.RecoveryAction,
+		FailureCode:       event.FailureCode,
+		FailureSource:     event.FailureSource,
+		DeadlineOrigin:    event.DeadlineOrigin,
 	}
 }
 

@@ -1,8 +1,0 @@
-description: TripPlanPlacement 多场景放置事件。
-events:
-- name: TripPlanPlacementChanged
-  producer: travel-service
-  consumers: [assistant-service, chat-service, circle-service]
-  channel: transactional_outbox
-  payload_entity: TripPlanPlacement
-  payload_fields: [_id, tripId, surfaceKind, surfaceId, version, sourceVersion, status, updatedAt]

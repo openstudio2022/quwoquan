@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-001
+// readiness_case: get-my-footprint-api
 // L2 契约测试：Post 业务对象 — 行为上报与互动操作
 //
 // 守护：点赞、行为上报接口的路由注册和基本语义；收藏概念已全量退场，

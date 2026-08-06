@@ -1,13 +1,7 @@
 events:
 - name: PostSubmittedForReview
-  description: PublishIntent 已被接收为不可公开 pending_review revision；审核 Case opener 消费本事实，只有 allow 或后续 approved
-    才可产生 PostPublished。
-  producer: content-service
-  consumers:
-  - post-moderation-case-opener
-  - notification-service
-  - platform-ops
-  channel: transactional_outbox
+  description: PublishIntent 已被接收为不可公开 pending_review revision；审核 Case opener 消费本事实，只有 allow 或后续 approved 才可产生 PostPublished。
+  delivery_semantics: transactional_outbox
   payload_entity: Post
   payload_fields:
   - postId
@@ -21,17 +15,9 @@ events:
   - contentDigest
   - createdAt
 - name: PostPublished
-  description: 一次性 PublishIntent 被接受并完成发布；引用发布时 payload 自包含 sourcePostId 与源帖作者（sourcePostAuthorId），"被引用"通知由此驱动，不设第二个
-    PostQuoted 事实。
-  producer: content-service
-  consumers:
-  - feed-projection
-  - search-service
-  - recommendation-engine
-  - entity-service
-  - circle-service
-  - notification-service
-  channel: transactional_outbox
+  description: 一次性 PublishIntent 被接受并完成发布；引用发布时 payload 自包含 sourcePostId 与源帖作者（sourcePostAuthorId），"被引用"通知由此驱动，不设第二个 PostQuoted
+    事实。
+  delivery_semantics: transactional_outbox
   payload_entity: Post
   payload_fields:
   - postId
@@ -79,16 +65,7 @@ events:
   - sourcePostAuthorId
 - name: PostModerationRejected
   description: 当前 Post revision 被人工审核拒绝；公开读模型必须下架，作者站内信展示结构化原因和复制为新草稿动作。
-  producer: content-service
-  consumers:
-  - feed-projection
-  - search-service
-  - recommendation-engine
-  - entity-service
-  - circle-service
-  - notification-service
-  - platform-ops
-  channel: transactional_outbox
+  delivery_semantics: transactional_outbox
   payload_entity: Post
   payload_fields:
   - postId
@@ -100,14 +77,7 @@ events:
   - updatedAt
 - name: PostUpdated
   description: 内容更新；携带 Circle/Search/Recommendation 可重建读投影所需的当前公开 Post 快照。
-  producer: content-service
-  consumers:
-  - feed-projection
-  - search-service
-  - recommendation-engine
-  - entity-service
-  - circle-service
-  channel: transactional_outbox
+  delivery_semantics: transactional_outbox
   payload_entity: Post
   payload_fields:
   - postId
@@ -145,13 +115,7 @@ events:
   - updatedAt
 - name: PostSettingsUpdated
   description: 发布后可变设置更新（可见性 / 小趣排除 / Homepage 引用）
-  producer: content-service
-  consumers:
-  - recommendation-engine
-  - assistant-service
-  - entity-service
-  - circle-service
-  channel: transactional_outbox
+  delivery_semantics: transactional_outbox
   payload_entity: Post
   payload_fields:
   - postId
@@ -188,14 +152,7 @@ events:
   - updatedAt
 - name: PostPromotedToWork
   description: 点滴原地升级为作品
-  producer: content-service
-  consumers:
-  - recommendation-engine
-  - notification-service
-  - assistant-service
-  - entity-service
-  - circle-service
-  channel: transactional_outbox
+  delivery_semantics: transactional_outbox
   payload_entity: Post
   payload_fields:
   - postId
@@ -235,17 +192,7 @@ events:
   - promotedAt
 - name: PostDeleted
   description: 内容删除；content-comment-tombstone-projector 消费本事实将该 Post 全部评论级联 tombstoned。
-  producer: content-service
-  consumers:
-  - feed-projection
-  - search-service
-  - recommendation-engine
-  - entity-service
-  - circle-service
-  - notification-service
-  - profile-interaction-activity-projector
-  - content-comment-tombstone-projector
-  channel: transactional_outbox
+  delivery_semantics: transactional_outbox
   payload_entity: Post
   payload_fields:
   - postId
@@ -256,15 +203,7 @@ events:
   - deletedAt
 - name: PostPrivacyRedacted
   description: 隐私删除第一阶段完成，个人字段已脱敏
-  producer: content-service
-  consumers:
-  - feed-projection
-  - search-service
-  - recommendation-engine
-  - entity-service
-  - circle-service
-  - platform-ops
-  channel: transactional_outbox
+  delivery_semantics: transactional_outbox
   payload_entity: Post
   payload_fields:
   - postId
@@ -273,30 +212,14 @@ events:
   - retentionExpiresAt
 - name: PostPurged
   description: retention 到期后 Post 与墓碑硬清除
-  producer: content-service
-  consumers:
-  - feed-projection
-  - search-service
-  - recommendation-engine
-  - entity-service
-  - circle-service
-  - platform-ops
-  channel: transactional_outbox
+  delivery_semantics: transactional_outbox
   payload_entity: Post
   payload_fields:
   - postId
   - purgedAt
 - name: PostImported
   description: 签名不可变 Data release 经 Post release importer 写入权威 Post 并发布生命周期事实
-  producer: content-service
-  consumers:
-  - feed-projection
-  - search-service
-  - recommendation-engine
-  - entity-service
-  - circle-service
-  - platform-ops
-  channel: transactional_outbox
+  delivery_semantics: transactional_outbox
   payload_entity: Post
   payload_fields:
   - postId

@@ -78,3 +78,18 @@ def test_data_output_rejects_reusable_source_truth_but_skips_disposable_cache(tm
 
     assert len(issues) == 2
     assert all("reusable source truth is forbidden" in issue for issue in issues)
+
+
+def test_quarantine_name_alone_does_not_exempt_reusable_source_truth(tmp_path):
+    output = tmp_path / "data"
+    policies = (
+        output
+        / "local/workspace/quarantine/unattested-history/package/resources/policies"
+    )
+    policies.mkdir(parents=True)
+    (policies / "policy.yaml").write_text("mode: active\n", encoding="utf-8")
+
+    issues = gate._output_source_truth_issues(output)
+
+    assert len(issues) == 1
+    assert "reusable source truth is forbidden" in issues[0]

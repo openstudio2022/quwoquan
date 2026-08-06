@@ -1,11 +1,19 @@
+// spec_ref: specs/feature-tree/discovery-content/media-processing-helper-read/image-delivery-variants/spec.md#gwt-004
+// readiness_case: start-media-image-reprocess-run-local
+// readiness_case: pause-media-image-reprocess-run-local
+// readiness_case: resume-media-image-reprocess-run-local
+// readiness_case: rollback-media-image-reprocess-run-local
+// readiness_case: get-media-image-reprocess-run-local
 package reprocess_test
 
 import (
 	"context"
 	. "quwoquan_service/services/content-service/internal/media/media_image_reprocess_run/application"
+	"reflect"
 	"testing"
 	"time"
 
+	"quwoquan_service/runtime/commandmeta"
 	runtimemedia "quwoquan_service/runtime/media"
 	mediaapp "quwoquan_service/services/content-service/internal/media/media_asset/application"
 	mediaprocessing "quwoquan_service/services/content-service/internal/media/media_asset/application/processing"
@@ -13,6 +21,62 @@ import (
 	reprocessmodel "quwoquan_service/services/content-service/internal/media/media_image_reprocess_run/domain/model"
 	reprocessports "quwoquan_service/services/content-service/internal/media/media_image_reprocess_run/domain/ports"
 )
+
+func TestServiceRunsTheProductionLifecycleThroughTheObjectStorePort(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 7, 21, 1, 0, 0, 0, time.UTC)
+	asset := readyImageAsset(t, "image-service-lifecycle", now)
+	store := &fakeRunStore{}
+	service := NewService(store, &fakeAssetReader{assets: map[string]*mediamodel.MediaAsset{
+		asset.ID(): asset,
+	}})
+
+	withKey := func(key string) context.Context {
+		return commandmeta.WithIdempotencyKey(context.Background(), key)
+	}
+	started, replayed, err := service.Start(
+		withKey("reprocess-start"),
+		StartCommand{RunID: "run-service-lifecycle", AssetIDs: []string{asset.ID()}},
+		1,
+	)
+	if err != nil || replayed || started.Status() != reprocessmodel.StatusRunning {
+		t.Fatalf("start=(run=%+v replayed=%v err=%v)", started, replayed, err)
+	}
+	paused, replayed, err := service.Pause(withKey("reprocess-pause"), started.RunID())
+	if err != nil || replayed || paused.Status() != reprocessmodel.StatusPaused {
+		t.Fatalf("pause=(run=%+v replayed=%v err=%v)", paused, replayed, err)
+	}
+	resumed, replayed, err := service.Resume(withKey("reprocess-resume"), started.RunID())
+	if err != nil || replayed || resumed.Status() != reprocessmodel.StatusRunning {
+		t.Fatalf("resume=(run=%+v replayed=%v err=%v)", resumed, replayed, err)
+	}
+	paused, replayed, err = service.Pause(withKey("reprocess-pause-for-rollback"), started.RunID())
+	if err != nil || replayed || paused.Status() != reprocessmodel.StatusPaused {
+		t.Fatalf("pause for rollback=(run=%+v replayed=%v err=%v)", paused, replayed, err)
+	}
+	rollingBack, replayed, err := service.StartRollback(
+		withKey("reprocess-rollback"),
+		started.RunID(),
+	)
+	if err != nil || replayed || rollingBack.Status() != reprocessmodel.StatusRollingBack {
+		t.Fatalf("rollback=(run=%+v replayed=%v err=%v)", rollingBack, replayed, err)
+	}
+	got, err := service.Get(context.Background(), started.RunID())
+	if err != nil || got.Status() != reprocessmodel.StatusRollingBack || got.Version() != 5 {
+		t.Fatalf("get=(run=%+v err=%v)", got, err)
+	}
+	wantCommands := []string{
+		"StartMediaImageReprocessRun",
+		"PauseMediaImageReprocessRun",
+		"ResumeMediaImageReprocessRun",
+		"PauseMediaImageReprocessRun",
+		"RollbackMediaImageReprocessRun",
+	}
+	if !reflect.DeepEqual(store.commands, wantCommands) {
+		t.Fatalf("committed commands=%v want=%v", store.commands, wantCommands)
+	}
+}
 
 func TestWorkerContinuesAfterContentFailureAndRollsBackActivation(t *testing.T) {
 	now := time.Date(2026, 7, 21, 2, 0, 0, 0, time.UTC)
@@ -71,7 +135,10 @@ func TestWorkerContinuesAfterContentFailureAndRollsBackActivation(t *testing.T) 
 	}
 }
 
-type fakeRunStore struct{ run *reprocessmodel.Run }
+type fakeRunStore struct {
+	run      *reprocessmodel.Run
+	commands []string
+}
 
 func (s *fakeRunStore) LoadMediaImageReprocessRun(_ context.Context, runID string) (*reprocessmodel.Run, bool, error) {
 	return s.run, s.run != nil && s.run.RunID() == runID, nil
@@ -81,6 +148,7 @@ func (s *fakeRunStore) FindMediaImageReprocessRunReceipt(context.Context, string
 }
 func (s *fakeRunStore) CommitMediaImageReprocessRun(_ context.Context, commit reprocessports.Commit) (reprocessports.CommitResult, error) {
 	s.run = commit.Aggregate
+	s.commands = append(s.commands, commit.CommandName)
 	return reprocessports.CommitResult{Aggregate: commit.Aggregate}, nil
 }
 func (s *fakeRunStore) ListRunnableMediaImageReprocessRuns(_ context.Context, _ int) ([]*reprocessmodel.Run, error) {

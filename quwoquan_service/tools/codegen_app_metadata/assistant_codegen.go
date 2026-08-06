@@ -84,6 +84,31 @@ type assistantRecallResultSchema struct {
 	CandidateFields []assistantFieldDef           `yaml:"candidate_fields"`
 }
 
+var assistantPackageSharedWireSchemaNames = []string{
+	"assistant_presentation_document",
+	"assistant_presentation_node",
+	"assistant_presentation_template",
+	"assistant_process_timeline",
+	"assistant_run_runtime",
+	"assistant_skill_context",
+	"assistant_skill_manifest",
+	"assistant_structured_response_wire",
+	"assistant_surface_capabilities",
+	"assistant_tool_metadata",
+	"assistant_trace_event",
+	"assistant_web_exploration",
+	"device_context",
+	"tool_use",
+}
+
+func assistantRuntimeArtifactOutputPath(appDir, outputPath string) string {
+	normalized := filepath.Clean(filepath.FromSlash(strings.TrimSpace(outputPath)))
+	if normalized == "packages" || strings.HasPrefix(normalized, "packages"+string(filepath.Separator)) {
+		return filepath.Join(appDir, normalized)
+	}
+	return filepath.Join(appDir, "lib", normalized)
+}
+
 func generateAssistantRuntimeArtifacts(metadataDir, appDir string) error {
 	baseDir := filepath.Join(metadataDir, "assistant")
 	enumsPath := filepath.Join(baseDir, "_shared", "enums.yaml")
@@ -104,28 +129,28 @@ func generateAssistantRuntimeArtifacts(metadataDir, appDir string) error {
 
 	subagentPlanSchema, err := readAssistantSubagentPlanSchema(filepath.Join(baseDir, "subagent_plan", "schema.yaml"))
 	if err == nil {
-		writeFile(filepath.Join(appDir, "lib", subagentPlanSchema.OutputPath), renderSubagentPlanDart(subagentPlanSchema))
+		writeFile(assistantRuntimeArtifactOutputPath(appDir, subagentPlanSchema.OutputPath), renderSubagentPlanDart(subagentPlanSchema))
 	} else if !os.IsNotExist(err) {
 		return err
 	}
 
 	preferenceSnapshotSchema, err := readAssistantSimpleSchema(filepath.Join(baseDir, "assistant_preference_snapshot", "schema.yaml"))
 	if err == nil {
-		writeFile(filepath.Join(appDir, "lib", preferenceSnapshotSchema.OutputPath), renderAssistantPreferenceSnapshotDart(preferenceSnapshotSchema))
+		writeFile(assistantRuntimeArtifactOutputPath(appDir, preferenceSnapshotSchema.OutputPath), renderAssistantPreferenceSnapshotDart(preferenceSnapshotSchema))
 	} else if !os.IsNotExist(err) {
 		return err
 	}
 
 	skillRunSchema, err := readAssistantSimpleSchema(filepath.Join(baseDir, "skill_run", "schema.yaml"))
 	if err == nil {
-		writeFile(filepath.Join(appDir, "lib", skillRunSchema.OutputPath), renderSkillRunDart(skillRunSchema))
+		writeFile(assistantRuntimeArtifactOutputPath(appDir, skillRunSchema.OutputPath), renderSkillRunDart(skillRunSchema))
 	} else if !os.IsNotExist(err) {
 		return err
 	}
 
 	recallResultSchema, err := readAssistantRecallResultSchema(filepath.Join(baseDir, "recall_result", "schema.yaml"))
 	if err == nil {
-		writeFile(filepath.Join(appDir, "lib", recallResultSchema.OutputPath), renderRecallResultDart(recallResultSchema))
+		writeFile(assistantRuntimeArtifactOutputPath(appDir, recallResultSchema.OutputPath), renderRecallResultDart(recallResultSchema))
 	} else if !os.IsNotExist(err) {
 		return err
 	}
@@ -133,21 +158,17 @@ func generateAssistantRuntimeArtifacts(metadataDir, appDir string) error {
 	assistantTurnSchema, err := readAssistantContractSchema(filepath.Join(baseDir, "assistant_turn", "schema.yaml"))
 	if err == nil {
 		writeFile(
-			filepath.Join(appDir, "lib", assistantTurnSchema.OutputPath),
+			assistantRuntimeArtifactOutputPath(appDir, assistantTurnSchema.OutputPath),
 			renderAssistantSchemaDrivenContract(assistantTurnSchema, contractIndex, "assistant/assistant_turn/schema.yaml"),
 		)
 	} else if !os.IsNotExist(err) {
 		return err
 	}
 
-	if err := os.Remove(filepath.Join(appDir, "lib", "assistant", "generated", "contracts", "session_state_decision.g.dart")); err != nil && !os.IsNotExist(err) {
-		return err
-	}
-
 	aggregationStateSchema, err := readAssistantContractSchema(filepath.Join(baseDir, "aggregation_state", "schema.yaml"))
 	if err == nil {
 		writeFile(
-			filepath.Join(appDir, "lib", aggregationStateSchema.OutputPath),
+			assistantRuntimeArtifactOutputPath(appDir, aggregationStateSchema.OutputPath),
 			renderAssistantSchemaDrivenContract(aggregationStateSchema, contractIndex, "assistant/aggregation_state/schema.yaml"),
 		)
 	} else if !os.IsNotExist(err) {
@@ -157,7 +178,7 @@ func generateAssistantRuntimeArtifacts(metadataDir, appDir string) error {
 	assistantJourneySchema, err := readAssistantContractSchema(filepath.Join(baseDir, "assistant_journey", "schema.yaml"))
 	if err == nil {
 		writeFile(
-			filepath.Join(appDir, "lib", assistantJourneySchema.OutputPath),
+			assistantRuntimeArtifactOutputPath(appDir, assistantJourneySchema.OutputPath),
 			renderAssistantSchemaDrivenContract(assistantJourneySchema, contractIndex, "assistant/assistant_journey/schema.yaml"),
 		)
 	} else if !os.IsNotExist(err) {
@@ -167,7 +188,7 @@ func generateAssistantRuntimeArtifacts(metadataDir, appDir string) error {
 	answerBoundaryPolicySchema, err := readAssistantContractSchema(filepath.Join(baseDir, "answer_boundary_policy", "schema.yaml"))
 	if err == nil {
 		writeFile(
-			filepath.Join(appDir, "lib", answerBoundaryPolicySchema.OutputPath),
+			assistantRuntimeArtifactOutputPath(appDir, answerBoundaryPolicySchema.OutputPath),
 			renderAssistantSchemaDrivenContract(answerBoundaryPolicySchema, contractIndex, "assistant/answer_boundary_policy/schema.yaml"),
 		)
 	} else if !os.IsNotExist(err) {
@@ -177,7 +198,7 @@ func generateAssistantRuntimeArtifacts(metadataDir, appDir string) error {
 	toolAssessmentSchema, err := readAssistantContractSchema(filepath.Join(baseDir, "tool_assessment", "schema.yaml"))
 	if err == nil {
 		writeFile(
-			filepath.Join(appDir, "lib", toolAssessmentSchema.OutputPath),
+			assistantRuntimeArtifactOutputPath(appDir, toolAssessmentSchema.OutputPath),
 			renderAssistantSchemaDrivenContract(toolAssessmentSchema, contractIndex, "assistant/tool_assessment/schema.yaml"),
 		)
 	} else if !os.IsNotExist(err) {
@@ -187,7 +208,7 @@ func generateAssistantRuntimeArtifacts(metadataDir, appDir string) error {
 	slotSchema, err := readAssistantContractSchema(filepath.Join(baseDir, "slot_schema", "schema.yaml"))
 	if err == nil {
 		writeFile(
-			filepath.Join(appDir, "lib", slotSchema.OutputPath),
+			assistantRuntimeArtifactOutputPath(appDir, slotSchema.OutputPath),
 			renderAssistantSchemaDrivenContract(slotSchema, contractIndex, "assistant/slot_schema/schema.yaml"),
 		)
 	} else if !os.IsNotExist(err) {
@@ -197,7 +218,7 @@ func generateAssistantRuntimeArtifacts(metadataDir, appDir string) error {
 	reactObservationSchema, err := readAssistantContractSchema(filepath.Join(baseDir, "react_observation", "schema.yaml"))
 	if err == nil {
 		writeFile(
-			filepath.Join(appDir, "lib", reactObservationSchema.OutputPath),
+			assistantRuntimeArtifactOutputPath(appDir, reactObservationSchema.OutputPath),
 			renderAssistantSchemaDrivenContract(reactObservationSchema, contractIndex, "assistant/react_observation/schema.yaml"),
 		)
 	} else if !os.IsNotExist(err) {
@@ -207,7 +228,7 @@ func generateAssistantRuntimeArtifacts(metadataDir, appDir string) error {
 	dialogueRoundScriptSchema, err := readAssistantContractSchema(filepath.Join(baseDir, "dialogue_round_script", "schema.yaml"))
 	if err == nil {
 		writeFile(
-			filepath.Join(appDir, "lib", dialogueRoundScriptSchema.OutputPath),
+			assistantRuntimeArtifactOutputPath(appDir, dialogueRoundScriptSchema.OutputPath),
 			renderAssistantSchemaDrivenContract(dialogueRoundScriptSchema, contractIndex, "assistant/dialogue_round_script/schema.yaml"),
 		)
 	} else if !os.IsNotExist(err) {
@@ -217,12 +238,15 @@ func generateAssistantRuntimeArtifacts(metadataDir, appDir string) error {
 	runArtifactsSchema, err := readAssistantContractSchema(filepath.Join(baseDir, "run_artifacts", "schema.yaml"))
 	if err == nil {
 		writeFile(
-			filepath.Join(appDir, "lib", runArtifactsSchema.OutputPath),
+			assistantRuntimeArtifactOutputPath(appDir, runArtifactsSchema.OutputPath),
 			renderAssistantSchemaDrivenContract(runArtifactsSchema, contractIndex, "assistant/run_artifacts/schema.yaml"),
 		)
 		if keysDart := renderRunArtifactsMapStableKeysDart(runArtifactsSchema, "assistant/run_artifacts/schema.yaml"); keysDart != "" {
 			writeFile(
-				filepath.Join(appDir, "lib", "assistant", "generated", "contracts", "run_artifacts_map_stable_keys.g.dart"),
+				filepath.Join(
+					filepath.Dir(assistantRuntimeArtifactOutputPath(appDir, runArtifactsSchema.OutputPath)),
+					"run_artifacts_map_stable_keys.g.dart",
+				),
 				keysDart,
 			)
 		}
@@ -230,20 +254,10 @@ func generateAssistantRuntimeArtifacts(metadataDir, appDir string) error {
 		return err
 	}
 
-	structuredResponseWireSchema, err := readAssistantContractSchema(filepath.Join(baseDir, "assistant_structured_response_wire", "schema.yaml"))
-	if err == nil {
-		writeFile(
-			filepath.Join(appDir, "lib", structuredResponseWireSchema.OutputPath),
-			renderAssistantSchemaDrivenContract(structuredResponseWireSchema, contractIndex, "assistant/assistant_structured_response_wire/schema.yaml"),
-		)
-	} else if !os.IsNotExist(err) {
-		return err
-	}
-
 	contextFillTaskSchema, err := readAssistantContractSchema(filepath.Join(baseDir, "context_fill_task", "schema.yaml"))
 	if err == nil {
 		writeFile(
-			filepath.Join(appDir, "lib", contextFillTaskSchema.OutputPath),
+			assistantRuntimeArtifactOutputPath(appDir, contextFillTaskSchema.OutputPath),
 			renderAssistantSchemaDrivenContract(contextFillTaskSchema, contractIndex, "assistant/context_fill_task/schema.yaml"),
 		)
 	} else if !os.IsNotExist(err) {
@@ -253,7 +267,7 @@ func generateAssistantRuntimeArtifacts(metadataDir, appDir string) error {
 	plannerContractsSchema, err := readAssistantContractSchema(filepath.Join(baseDir, "planner_contracts", "schema.yaml"))
 	if err == nil {
 		writeFile(
-			filepath.Join(appDir, "lib", plannerContractsSchema.OutputPath),
+			assistantRuntimeArtifactOutputPath(appDir, plannerContractsSchema.OutputPath),
 			renderAssistantSchemaDrivenContract(plannerContractsSchema, contractIndex, "assistant/planner_contracts/schema.yaml"),
 		)
 	} else if !os.IsNotExist(err) {
@@ -263,7 +277,7 @@ func generateAssistantRuntimeArtifacts(metadataDir, appDir string) error {
 	contextContinuityPolicySchema, err := readAssistantContractSchema(filepath.Join(baseDir, "context_continuity_policy", "schema.yaml"))
 	if err == nil {
 		writeFile(
-			filepath.Join(appDir, "lib", contextContinuityPolicySchema.OutputPath),
+			assistantRuntimeArtifactOutputPath(appDir, contextContinuityPolicySchema.OutputPath),
 			renderAssistantSchemaDrivenContract(contextContinuityPolicySchema, contractIndex, "assistant/context_continuity_policy/schema.yaml"),
 		)
 	} else if !os.IsNotExist(err) {
@@ -273,7 +287,7 @@ func generateAssistantRuntimeArtifacts(metadataDir, appDir string) error {
 	contextAssemblyResultSchema, err := readAssistantContractSchema(filepath.Join(baseDir, "context_assembly_result", "schema.yaml"))
 	if err == nil {
 		writeFile(
-			filepath.Join(appDir, "lib", contextAssemblyResultSchema.OutputPath),
+			assistantRuntimeArtifactOutputPath(appDir, contextAssemblyResultSchema.OutputPath),
 			renderAssistantSchemaDrivenContract(contextAssemblyResultSchema, contractIndex, "assistant/context_assembly_result/schema.yaml"),
 		)
 	} else if !os.IsNotExist(err) {
@@ -283,37 +297,20 @@ func generateAssistantRuntimeArtifacts(metadataDir, appDir string) error {
 	synthesisReadinessResultSchema, err := readAssistantContractSchema(filepath.Join(baseDir, "synthesis_readiness_result", "schema.yaml"))
 	if err == nil {
 		writeFile(
-			filepath.Join(appDir, "lib", synthesisReadinessResultSchema.OutputPath),
+			assistantRuntimeArtifactOutputPath(appDir, synthesisReadinessResultSchema.OutputPath),
 			renderAssistantSchemaDrivenContract(synthesisReadinessResultSchema, contractIndex, "assistant/synthesis_readiness_result/schema.yaml"),
 		)
 	} else if !os.IsNotExist(err) {
 		return err
 	}
 
-	assistantSharedWireSchemas := []string{
-		"device_context",
-		"tool_use",
-		"assistant_trace_event",
-		"assistant_run_response",
-		"assistant_process_timeline",
-		"assistant_skill_manifest",
-		"assistant_tool_metadata",
-		"assistant_replay_case",
-		"assistant_web_exploration",
-		"assistant_skill_context",
-		"assistant_presentation_node",
-		"assistant_presentation_template",
-		"assistant_presentation_document",
-		"assistant_surface_capabilities",
-		"assistant_run_runtime",
-	}
-	for _, schemaName := range assistantSharedWireSchemas {
+	for _, schemaName := range assistantPackageSharedWireSchemaNames {
 		schemaPath := filepath.Join(baseDir, schemaName, "schema.yaml")
 		source := filepath.Join("assistant", schemaName, "schema.yaml")
 		schema, err := readAssistantContractSchema(schemaPath)
 		if err == nil {
 			writeFile(
-				filepath.Join(appDir, "lib", schema.OutputPath),
+				assistantRuntimeArtifactOutputPath(appDir, schema.OutputPath),
 				renderAssistantSchemaDrivenContract(schema, contractIndex, source),
 			)
 			continue
@@ -657,7 +654,7 @@ func renderSubagentPlanDart(schema *assistantSubagentPlanSchema) string {
 	var b strings.Builder
 	b.WriteString("// Code generated by tools/codegen_app_metadata from assistant/subagent_plan/schema.yaml. DO NOT EDIT.\n")
 	b.WriteString("// ignore_for_file: prefer_const_constructors\n\n")
-	b.WriteString("import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';\n\n")
+	b.WriteString("import 'package:quwoquan_app/" + assistantRuntimeEnumsLibrary + "';\n\n")
 	b.WriteString(fmt.Sprintf("class %s {\n", schema.DartClass))
 	b.WriteString("  const SubagentPlan({\n")
 	b.WriteString("    required this.subagentId,\n")

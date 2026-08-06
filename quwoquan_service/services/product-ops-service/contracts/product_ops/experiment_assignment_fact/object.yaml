@@ -26,9 +26,6 @@ relationships:
   reference_fields:
   - experimentId
   target_object: ops.Experiment
-capabilities:
-- append_only
-- queryable
 taggable: false
 vector_enabled: false
 business_rules:

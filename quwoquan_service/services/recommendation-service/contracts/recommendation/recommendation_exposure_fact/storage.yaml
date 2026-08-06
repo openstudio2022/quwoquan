@@ -20,13 +20,13 @@ collections:
     - name: ttl_recommendation_exposure_facts
       keys:
         recordedAt: 1
-      ttl_days: 30
+      expire_after_seconds: 2592000
   recommendation_exposure_failures:
     entity: RecommendationExposureFailure
     role: reliable_task
     description: events.content.feed_page_delivered 消费失败的有界尝试状态，成功或进入脱敏 DLQ 后删除。
     indexes:
-    - {name: ttl_recommendation_exposure_failures, keys: {updatedAt: 1}, ttl_days: 7}
+    - {name: ttl_recommendation_exposure_failures, keys: {updatedAt: 1}, expire_after_seconds: 604800}
 streams:
   events.content.feed_page_delivered.recommendation-exposure.dlq:
     entity: RecommendationExposureFact

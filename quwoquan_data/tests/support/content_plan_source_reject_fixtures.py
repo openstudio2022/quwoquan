@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import shutil
 
+import hashlib
+
 import sys
 
 import struct
@@ -97,7 +99,8 @@ def _write_article_source_asset(source_dir: Path, *, label: str) -> Path:
     asset_dir = source_dir / "assets"
     asset_dir.mkdir(parents=True, exist_ok=True)
     asset_file = asset_dir / f"{label}.jpg"
-    asset_file.write_bytes(_real_jpeg(len(label)))
+    asset_bytes = _real_jpeg(hashlib.sha256(label.encode("utf-8")).digest()[0])
+    asset_file.write_bytes(asset_bytes)
     write_json(
         asset_dir / "index.json",
         {
@@ -105,12 +108,18 @@ def _write_article_source_asset(source_dir: Path, *, label: str) -> Path:
                 {
                     "fileName": asset_file.name,
                     "sourceAssetId": f"asset_{label}",
-                    "sha256": f"sha256:{label}",
+                    "sha256": "sha256:" + hashlib.sha256(asset_bytes).hexdigest(),
                     "sourceCollectionId": f"article:{label}",
+                    "acquisitionStatus": "acquired",
+                    "platform": "fixture",
+                    "capturedAt": "2026-08-05T00:00:00Z",
                     "license": "CC-BY-4.0",
                     "credit": "fixture",
                     "sourceUrl": "https://example.com/image.jpg",
                     "termsUrl": "https://example.com/terms",
+                    "authorizationProof": "https://example.com/image.jpg",
+                    "authorizationRequired": False,
+                    "distributionDecision": "commercial_allowed",
                     "usageScope": "commercial_editorial",
                     "rightsAuditStatus": "verified",
                     "rightsAuditIssues": [],

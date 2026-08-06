@@ -41,10 +41,16 @@ class StackctlInspectRemoteFailureTest(unittest.TestCase):
         self.assertEqual(result, observability_root / "logs" / "service")
 
     def test_prod_runtime_failure_propagates_to_report_and_exit_code(self) -> None:
-        runtime_failure = {
-            "error": "inspect command failed",
-            "exitCode": 255,
-        }
+        def runtime_failure(
+            plane: str,
+            *_: object,
+            **__: object,
+        ) -> dict[str, object]:
+            return {
+                "plane": plane,
+                "error": "inspect command failed",
+                "exitCode": 255,
+            }
 
         with TemporaryDirectory() as directory:
             report_dir = Path(directory)
@@ -57,7 +63,7 @@ class StackctlInspectRemoteFailureTest(unittest.TestCase):
             with mock.patch.object(
                 stackctl,
                 "_prod_plane_runtime_report",
-                return_value=runtime_failure,
+                side_effect=runtime_failure,
             ), mock.patch.object(
                 stackctl,
                 "_candidate_workspace_report",

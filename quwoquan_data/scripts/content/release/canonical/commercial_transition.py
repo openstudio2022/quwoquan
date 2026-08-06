@@ -5,6 +5,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
+from content.release.canonical.commercial_transition_evidence import (
+    CommercialTransitionEvidenceError,
+    document_digest,
+    load_commercial_transition_evidence,
+)
 from content.release.canonical.object_transaction_contract import _read_json
 from core.io import write_json
 from core.paths import OUTPUT_ROOT, RELEASE_ROOT
@@ -38,25 +43,6 @@ def _evidence_ref(path: Path, *, output_root: Path) -> str:
         raise CommercialTransitionError(
             "cleanup evidence must be an audited file below QWQ_OUTPUT_ROOT"
         ) from exc
-
-
-def _referenced_evidence(
-    ref: object,
-    *,
-    output_root: Path,
-    label: str,
-) -> tuple[str, dict[str, Any]]:
-    relative = str(ref or "").strip()
-    if not relative:
-        raise CommercialTransitionError(f"{label} is missing")
-    path = (output_root / relative).resolve()
-    try:
-        path.relative_to(output_root.resolve())
-    except ValueError as exc:
-        raise CommercialTransitionError(f"{label} escapes QWQ_OUTPUT_ROOT") from exc
-    if not path.is_file():
-        raise CommercialTransitionError(f"{label} is not a file: {relative}")
-    return relative, _read_json(path)
 
 
 def _assets(admission: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
@@ -179,101 +165,18 @@ def write_commercial_transition(
                 "commercialAssetIds": commercial_ids,
             }
         )
-    cleanup = _read_json(cleanup_evidence_path)
-    if (
-        cleanup.get("researchReleaseId") != research_release_id
-        or cleanup.get("researchManifestDigest") != research_digest
-        or cleanup.get("commercialReleaseId") != commercial_release_id
-        or cleanup.get("commercialManifestDigest") != commercial_digest
-    ):
-        raise CommercialTransitionError("cleanup evidence release identity drift")
-    environment_rows = cleanup.get("environments")
-    if not isinstance(environment_rows, list):
-        raise CommercialTransitionError("cleanup environment evidence is missing")
-    environment_cleanup: list[dict[str, Any]] = []
-    for row in environment_rows:
-        if not isinstance(row, Mapping):
-            raise CommercialTransitionError("cleanup environment row is invalid")
-        required_cleanup = {
-            "environment",
-            "cachePurged",
-            "mediaCopiesPurged",
-            "signedUrlsRevoked",
-            "unauthorizedReadbackCount",
-            "cleanupReceiptRef",
-            "readbackReceiptRef",
-        }
-        if not required_cleanup.issubset(row):
-            raise CommercialTransitionError(
-                "cleanup environment row fields are incomplete"
-            )
-        unauthorized_count = row["unauthorizedReadbackCount"]
-        if not isinstance(unauthorized_count, int) or isinstance(
-            unauthorized_count, bool
-        ):
-            raise CommercialTransitionError(
-                "unauthorizedReadbackCount must be an integer"
-            )
-        environment = str(row.get("environment") or "")
-        cleanup_ref, cleanup_receipt = _referenced_evidence(
-            row.get("cleanupReceiptRef"),
+    try:
+        verified_evidence = load_commercial_transition_evidence(
+            cleanup_evidence_path,
+            research_release_id=research_release_id,
+            research_manifest_digest=research_digest,
+            commercial_release_id=commercial_release_id,
+            commercial_manifest_digest=commercial_digest,
             output_root=output_root,
-            label=f"{environment} cleanupReceiptRef",
         )
-        readback_ref, readback_receipt = _referenced_evidence(
-            row.get("readbackReceiptRef"),
-            output_root=output_root,
-            label=f"{environment} readbackReceiptRef",
-        )
-        if (
-            cleanup_receipt.get("environment") != environment
-            or cleanup_receipt.get("commercialReleaseId") != commercial_release_id
-            or cleanup_receipt.get("commercialManifestDigest") != commercial_digest
-            or cleanup_receipt.get("cachePurged") is not True
-            or cleanup_receipt.get("mediaCopiesPurged") is not True
-            or cleanup_receipt.get("signedUrlsRevoked") is not True
-        ):
-            raise CommercialTransitionError(
-                f"{environment}: cleanup receipt identity or result drift"
-            )
-        if (
-            readback_receipt.get("environment") != environment
-            or readback_receipt.get("commercialReleaseId") != commercial_release_id
-            or readback_receipt.get("commercialManifestDigest") != commercial_digest
-            or readback_receipt.get("unauthorizedReadbackCount") != 0
-            or readback_receipt.get("unauthorizedAssetIds") != []
-        ):
-            raise CommercialTransitionError(
-                f"{environment}: unauthorized readback receipt is not zero"
-            )
-        projected = {
-            "environment": environment,
-            "cachePurged": row.get("cachePurged") is True,
-            "mediaCopiesPurged": row.get("mediaCopiesPurged") is True,
-            "signedUrlsRevoked": row.get("signedUrlsRevoked") is True,
-            "unauthorizedReadbackCount": unauthorized_count,
-            "cleanupReceiptRef": cleanup_ref,
-            "readbackReceiptRef": readback_ref,
-        }
-        if (
-            not projected["cachePurged"]
-            or not projected["mediaCopiesPurged"]
-            or not projected["signedUrlsRevoked"]
-            or projected["unauthorizedReadbackCount"] != 0
-        ):
-            raise CommercialTransitionError(
-                f"{projected['environment']}: commercial cleanup is incomplete"
-            )
-        environment_cleanup.append(projected)
-    if {row["environment"] for row in environment_cleanup} != {
-        "alpha",
-        "beta",
-        "gamma",
-        "prod",
-    } or len(environment_cleanup) != 4:
-        raise CommercialTransitionError(
-            "commercial cleanup requires exact evidence for four environments"
-        )
+    except CommercialTransitionEvidenceError as exc:
+        raise CommercialTransitionError(str(exc)) from exc
+    environment_cleanup = [dict(row) for row in verified_evidence.environments]
     document: dict[str, Any] = {
         "schema": "quwoquan_data.commercial_transition",
         "transitionRunId": transition_run_id,
@@ -291,9 +194,14 @@ def write_commercial_transition(
         "cleanupEvidenceRef": _evidence_ref(
             cleanup_evidence_path, output_root=output_root
         ),
+        "cleanupEvidenceDigest": verified_evidence.evidence_digest,
         "passed": True,
         "recordedAt": datetime.now(timezone.utc).isoformat(),
     }
+    document["receiptDigest"] = document_digest(
+        document,
+        excluded="receiptDigest",
+    )
     assert_valid(
         document,
         "release",

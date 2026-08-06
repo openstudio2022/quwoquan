@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/streaming-feed-performance/spec.md#gwt-001
+// readiness_case: get-feed-api
 // L2 契约测试：Post 业务对象 — Feed 分页查询
 //
 // 守护：Feed 接口的类型过滤、分页语义、光标延续、查询正确性。

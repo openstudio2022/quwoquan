@@ -7,6 +7,7 @@ import (
 	conversationmodel "quwoquan_service/services/chat-service/internal/chat/conversation/domain/model"
 	membershipmodel "quwoquan_service/services/chat-service/internal/chat/conversation_membership/domain/model"
 	messagemodel "quwoquan_service/services/chat-service/internal/chat/message/domain/model"
+	messageports "quwoquan_service/services/chat-service/internal/chat/message/domain/ports"
 	receiptmodel "quwoquan_service/services/chat-service/internal/chat/message_receipt_fact/domain/model"
 )
 
@@ -40,6 +41,12 @@ type GatheringConversationReader interface {
 		ctx context.Context,
 		gatheringID string,
 	) (*conversationmodel.Conversation, error)
+	ApplyGatheringConversationProjection(
+		ctx context.Context,
+		gatheringID string,
+		expectedSourceVersion int64,
+		conversation *conversationmodel.Conversation,
+	) (bool, error)
 }
 
 // CircleGroupMembershipProjectionState 记录 CircleGroupMembership 已应用的
@@ -100,7 +107,7 @@ type MessageStore interface {
 	// 追加事件；(aggregateId, aggregateVersion, eventType) 唯一索引保证重放幂等。
 	AppendMessageOutboxEvent(
 		ctx context.Context,
-		event MessageOutboxEvent,
+		event messageports.OutboxEvent,
 		aggregateID string,
 		aggregateVersion int64,
 	) error
@@ -111,38 +118,15 @@ type UnreadMessageCounts struct {
 	Mentioned int
 }
 
-type MessageOutboxEvent struct {
-	EventID        string
-	EventType      string
-	ConversationID string
-	ActorID        string
-	Payload        map[string]any
-	Status         string
-	Checkpoint     string
-}
-
-type MessageOutboxReader interface {
-	ReadMessageOutboxAfter(ctx context.Context, checkpoint string, limit int) ([]MessageOutboxEvent, error)
-}
-
-type MessageOutboxDispatchStore interface {
-	MarkMessageOutboxDispatched(ctx context.Context, eventID string, dispatchedAt time.Time) error
-}
-
-type MessageOutboxCheckpointStore interface {
-	LoadMessageOutboxCheckpoint(ctx context.Context, consumer string) (string, error)
-	SaveMessageOutboxCheckpoint(ctx context.Context, consumer, checkpoint string) error
-}
-
 type MessageCommit struct {
 	Message       messagemodel.Message
 	CommandDigest string
-	Events        []MessageOutboxEvent
+	Events        []messageports.OutboxEvent
 }
 
 type MessageCommitResult struct {
 	Message  messagemodel.Message
-	Events   []MessageOutboxEvent
+	Events   []messageports.OutboxEvent
 	Replayed bool
 }
 

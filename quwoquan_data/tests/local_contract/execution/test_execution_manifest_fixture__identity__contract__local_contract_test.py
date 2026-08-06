@@ -5,7 +5,9 @@ import shutil
 import pytest
 
 from content.execution import workspace
+from core.runtime_policy import runtime_profile_digest
 from support.execution_manifest_fixture import build_execution_fixture
+from support.semantic_preflight_fixture import ready_semantic_preflight
 
 
 EXECUTION_ID = "20260716--travel-article-manifest-fixture--test-region-b--pilot-991"
@@ -25,15 +27,21 @@ def test_existing_manifest_is_revalidated_not_accepted_by_existence() -> None:
 
     assert resumed == first
     assert first["modelBinding"] == {
-        "provider": "cursor_sdk",
-        "authorModel": "grok-4.5",
-        "authorModelFamily": "grok",
+        "provider": "codex_sdk",
+        "authorModel": "gpt-5.6-terra",
+        "authorModelFamily": "gpt",
         "authorModelParameters": [],
-        "reviewerModel": "composer-2.5",
-        "reviewerModelFamily": "composer",
+        "reviewerModel": "gpt-5.6-terra",
+        "reviewerModelFamily": "gpt",
         "reviewerModelParameters": [],
     }
     assert first["requestRef"] == "0.plan/request.json"
+    assert first["runtimeProfileId"] == "semantic_agent_local_calibrated"
+    assert first["runtimeProfileDigest"] == runtime_profile_digest(
+        "semantic_agent_local_calibrated"
+    )
+    assert first["semanticSelectionId"] == "default"
+    assert first["semanticRuntime"] == "local"
     assert first["targetSetRef"] == "0.plan/target_set.json"
     assert len(first["familyRef"]["sha256"]) == 64
     with pytest.raises(ValueError, match="different frozen target set"):
@@ -59,5 +67,36 @@ def test_fixture_recipe_is_derived_from_content_type(
     try:
         manifest = build_execution_fixture(execution_id)
         assert manifest["familyRef"]["ref"] == expected_recipe
+    finally:
+        shutil.rmtree(workspace.execution_root(execution_id), ignore_errors=True)
+
+
+def test_cursor_auto_manifest_first_use_freezes_exact_binding() -> None:
+    execution_id = "20260716--travel-article-cursor-auto--test-region-b--pilot-997"
+    try:
+        _receipt_path, preflight_binding = ready_semantic_preflight("cursor_auto")
+        manifest = build_execution_fixture(
+            execution_id,
+            semantic_selection_id="cursor_auto",
+            semantic_preflight_binding=preflight_binding,
+        )
+        assert manifest["retryOf"] is None
+        assert manifest["semanticSelectionId"] == "cursor_auto"
+        assert manifest["semanticRuntime"] == "local"
+        assert manifest["semanticPreflightReceipt"] == preflight_binding
+        assert manifest["modelBinding"] == {
+            "provider": "cursor_sdk",
+            "authorModel": "auto",
+            "authorModelFamily": "auto",
+            "authorModelParameters": [],
+            "reviewerModel": "auto",
+            "reviewerModelFamily": "auto",
+            "reviewerModelParameters": [],
+        }
+        with pytest.raises(ValueError, match="does not match expected selection"):
+            build_execution_fixture(
+                execution_id,
+                semantic_selection_id="default",
+            )
     finally:
         shutil.rmtree(workspace.execution_root(execution_id), ignore_errors=True)

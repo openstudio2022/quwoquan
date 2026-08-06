@@ -56,7 +56,7 @@ class CommitGateFastPathTest(unittest.TestCase):
                 "python3",
                 str(COMMIT_SELECT),
                 "--changed-file",
-                "quwoquan_app/lib/ui/chat/widgets/chat_page_widget.dart",
+                "quwoquan_app/lib/service/chat_service/chat/chat_message/presentation/chat_page.dart",
                 "--flutter-cap",
                 "5",
             ],
@@ -73,6 +73,28 @@ class CommitGateFastPathTest(unittest.TestCase):
         # Cap must defer when the mapped suite is larger than flutter-cap.
         if len(plan["flutter_tests"]) + len(plan["deferred_to_ci"]) > 5:
             self.assertGreater(len(plan["deferred_to_ci"]), 0)
+
+    def test_selector_skips_deleted_pytest_paths(self) -> None:
+        existing = "quwoquan_ops/tests/local_contract/test_commit_gate_fast_path__local_contract_test.py"
+        deleted = "quwoquan_ops/tests/local_contract/test_removed_by_this_commit__local_contract_test.py"
+        self.assertFalse((ROOT / deleted).exists())
+        proc = subprocess.run(
+            [
+                "python3",
+                str(COMMIT_SELECT),
+                "--changed-file",
+                existing,
+                "--changed-file",
+                deleted,
+            ],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        plan = json.loads(proc.stdout)
+        self.assertIn(existing, plan["pytest_paths"])
+        self.assertNotIn(deleted, plan["pytest_paths"])
 
     def test_selector_maps_service_and_forbids_full_suite_symbols(self) -> None:
         proc = subprocess.run(

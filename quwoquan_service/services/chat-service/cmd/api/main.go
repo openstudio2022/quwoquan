@@ -42,6 +42,7 @@ import (
 	userstatehttp "quwoquan_service/services/chat-service/internal/chat/conversation_user_state/adapters/inbound/http"
 	userstatepersistence "quwoquan_service/services/chat-service/internal/chat/conversation_user_state/infrastructure/persistence"
 	messagehttp "quwoquan_service/services/chat-service/internal/chat/message/adapters/inbound/http"
+	messageapp "quwoquan_service/services/chat-service/internal/chat/message/application"
 	messageexternal "quwoquan_service/services/chat-service/internal/chat/message/infrastructure/external"
 	receipthttp "quwoquan_service/services/chat-service/internal/chat/message_receipt_fact/adapters/inbound/http"
 	receiptapp "quwoquan_service/services/chat-service/internal/chat/message_receipt_fact/application"
@@ -371,7 +372,7 @@ func main() {
 		realtimeResumeTransport,
 		recipientResolver,
 	)
-	messageOutboxRelay := application.NewMessageOutboxRelay(
+	messageOutboxRelay := messageapp.NewMessageOutboxRelay(
 		chatStore,
 		chatStore,
 		chatStore,
@@ -606,9 +607,12 @@ func main() {
 	)
 	// 公告即触达：公告命令发布成功后经消息主线写 system_announcement 消息。
 	conversationSvc.SetAnnouncementMessageSender(messageSvc)
+	rtcCallLogHandler := messageapp.NewRtcCallLogHandler(
+		rtcCallLogProjectionBackend{writer: messageSvc},
+	)
 	rtcCallLogConsumer := mq.NewRtcCallEndedConsumer(
 		router.Scene("realtime"),
-		messageSvc,
+		rtcCallLogConsumerWriter{handler: rtcCallLogHandler},
 		instanceID,
 	)
 	go func() {
@@ -647,9 +651,12 @@ func main() {
 		membershipStore,
 		gatheringProjectionOutbox{members: membershipCommands, conversations: conversationCommands},
 	)
-	circleGroupChatSyncService := application.NewCircleGroupChatSyncService(
+	circleGroupChatSyncService := application.NewCircleGroupConversationProjectionHandler(
 		conversationSvc,
 		memberSvc,
+	)
+	circleGroupMembershipHandler := membershipapp.NewCircleGroupMembershipProjectionHandler(
+		circleGroupMembershipProjectionBackend{projector: circleGroupChatSyncService},
 	)
 	circleGroupProvisioner, err := mq.NewCircleGroupChatSyncConsumer(
 		router.Scene("general"),
@@ -664,7 +671,7 @@ func main() {
 	}
 	circleGroupMembershipProjector, err := mq.NewCircleGroupChatSyncConsumer(
 		router.Scene("general"),
-		circleGroupChatSyncService,
+		circleGroupMembershipConsumerProjector{handler: circleGroupMembershipHandler},
 		circleGroupChatSyncFailures,
 		"chat-circle-group-membership-projector:"+instanceID,
 		logger,
@@ -823,15 +830,18 @@ func main() {
 	}, ioLogger, processLogger, exceptionLogger)
 	corsHandler := rthttp.WithCORS(observedHandler, rthttp.CORSOptionsFromEnv())
 
+	timeouts := rtauth.ContractHTTPServerTimeouts(
+		operationsecurity.ForDomain("chat"),
+	)
 	server := &http.Server{
 		Addr: addr,
 		Handler: rtauth.Middleware(rtauth.MiddlewareConfig{
 			AccessTokenVerifier:      accessVerifier,
 			AccountSecurityAuthority: accountSecurityAuthority,
 		})(corsHandler),
-		ReadHeaderTimeout: 5 * time.Second,
-		WriteTimeout:      30 * time.Second,
-		IdleTimeout:       60 * time.Second,
+		ReadHeaderTimeout: timeouts.ReadHeader,
+		WriteTimeout:      timeouts.Write,
+		IdleTimeout:       timeouts.Idle,
 	}
 
 	logger.Info("chat-service starting", "addr", addr, "env", appEnv)

@@ -177,6 +177,10 @@ def _run_download_auto_research(
     from content.execution.recovery.download_unresolved import _auto_research_plan_path
     from content.execution.controller.control import _download_auto_research_progress_callback
     from content.source.research.auto_plan_public import write_auto_research_plans
+    from content.execution.campaign_external_input_runtime import (
+        bound_runtime_external_input_context,
+    )
+    from content.execution.identity import parse_execution_id
     ids = [str(entity_id).strip() for entity_id in entity_ids if str(entity_id or "").strip()]
     if not ids:
         return {
@@ -197,6 +201,11 @@ def _run_download_auto_research(
             "throughput": {"maxWorkers": 0, "entityCount": 0, "elapsedSeconds": 0, "entitiesPerMinute": 0},
         }
     selected_lanes = _download_auto_research_lanes(ctx)
+    carrier = parse_execution_id(ctx.execution_id).content_type.value
+    external_input_context = bound_runtime_external_input_context(
+        ctx.execution_id,
+        carrier,
+    )
     runtime_policy = active_runtime_policy()
     worker_count = runtime_policy.research_workers
     wave_size = _auto_research_wave_size(ctx, entity_count=len(ids), worker_count=worker_count)
@@ -257,6 +266,7 @@ def _run_download_auto_research(
             lanes=selected_lanes,
             max_workers=worker_count,
             progress_callback=_download_auto_research_progress_callback(ctx),
+            external_input_context=external_input_context,
         )
         if previous_aggregate is not None:
             write_json(aggregate_path, previous_aggregate)

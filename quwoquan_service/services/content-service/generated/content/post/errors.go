@@ -34,107 +34,107 @@ var (
 // AppErrorFromContentDeleted returns *AppError for CONTENT.USER.content_deleted (user_message from errors.yaml).
 func AppErrorFromContentDeleted(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.USER.content_deleted")
-	return rterr.NewAppError(code, "内容已删除", debugMessage).WithMetadata("content_deleted", 410).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "内容已删除", debugMessage).WithMetadata("content_deleted", 410).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromContentTooLong returns *AppError for CONTENT.USER.content_too_long (user_message from errors.yaml).
 func AppErrorFromContentTooLong(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.USER.content_too_long")
-	return rterr.NewAppError(code, "内容超出长度限制", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "内容超出长度限制", debugMessage).WithMetadata("invalid_argument", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromFeedCapacityUnavailable returns *AppError for CONTENT.SYSTEM.feed_capacity_unavailable (user_message from errors.yaml).
 func AppErrorFromFeedCapacityUnavailable(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.SYSTEM.feed_capacity_unavailable")
-	return rterr.NewAppError(code, "内容服务繁忙，请稍后重试", debugMessage).WithMetadata("feed_capacity_unavailable", 503).WithRecovery("retry", 1)
+	return rterr.NewAppError(code, "内容服务繁忙，请稍后重试", debugMessage).WithMetadata("feed_capacity_unavailable", 503).WithRecoveryDirective("retry", "snackbar", 1)
 }
 
 // AppErrorFromForbiddenDelete returns *AppError for CONTENT.USER.forbidden_delete (user_message from errors.yaml).
 func AppErrorFromForbiddenDelete(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.USER.forbidden_delete")
-	return rterr.NewAppError(code, "无权删除此内容", debugMessage).WithMetadata("forbidden", 403).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "无权删除此内容", debugMessage).WithMetadata("forbidden", 403).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromForbiddenEdit returns *AppError for CONTENT.USER.forbidden_edit (user_message from errors.yaml).
 func AppErrorFromForbiddenEdit(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.USER.forbidden_edit")
-	return rterr.NewAppError(code, "无权编辑此内容", debugMessage).WithMetadata("forbidden", 403).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "无权编辑此内容", debugMessage).WithMetadata("forbidden", 403).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromIdempotencyConflict returns *AppError for CONTENT.USER.idempotency_conflict (user_message from errors.yaml).
 func AppErrorFromIdempotencyConflict(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.USER.idempotency_conflict")
-	return rterr.NewAppError(code, "重复请求与原操作不一致，请刷新后重试", debugMessage).WithMetadata("idempotency_conflict", 409).WithRecovery("refresh", 0)
+	return rterr.NewAppError(code, "重复请求与原操作不一致，请刷新后重试", debugMessage).WithMetadata("idempotency_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromInternalError returns *AppError for CONTENT.SYSTEM.internal_error (user_message from errors.yaml).
 func AppErrorFromInternalError(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.SYSTEM.internal_error")
-	return rterr.NewAppError(code, "服务异常，请稍后重试", debugMessage).WithMetadata("internal_error", 500).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "服务异常，请稍后重试", debugMessage).WithMetadata("internal_error", 500).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromInvalidArgument returns *AppError for CONTENT.USER.invalid_argument (user_message from errors.yaml).
 func AppErrorFromInvalidArgument(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.USER.invalid_argument")
-	return rterr.NewAppError(code, "请求参数有误，请检查后重试", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "请求参数有误，请检查后重试", debugMessage).WithMetadata("invalid_argument", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromInvalidContentType returns *AppError for CONTENT.USER.invalid_content_type (user_message from errors.yaml).
 func AppErrorFromInvalidContentType(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.USER.invalid_content_type")
-	return rterr.NewAppError(code, "不支持的内容类型", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "不支持的内容类型", debugMessage).WithMetadata("invalid_argument", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromPostNotFound returns *AppError for CONTENT.USER.post_not_found (user_message from errors.yaml).
 func AppErrorFromPostNotFound(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.USER.post_not_found")
-	return rterr.NewAppError(code, "内容不存在或已删除", debugMessage).WithMetadata("not_found", 404).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "内容不存在或已删除", debugMessage).WithMetadata("not_found", 404).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromPublicationRejected returns *AppError for CONTENT.USER.publication_rejected (user_message from errors.yaml).
 func AppErrorFromPublicationRejected(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.USER.publication_rejected")
-	return rterr.NewAppError(code, "内容未通过发布安全检查，请修改后重试", debugMessage).WithMetadata("publication_rejected", 422).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "内容未通过发布安全检查，请修改后重试", debugMessage).WithMetadata("publication_rejected", 422).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromRateLimited returns *AppError for CONTENT.USER.rate_limited (user_message from errors.yaml).
 func AppErrorFromRateLimited(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.USER.rate_limited")
-	return rterr.NewAppError(code, "操作太频繁，请稍后重试", debugMessage).WithMetadata("rate_limited", 429).WithRecovery("retry", 60)
+	return rterr.NewAppError(code, "操作太频繁，请稍后重试", debugMessage).WithMetadata("rate_limited", 429).WithRecoveryDirective("retry", "snackbar", 60)
 }
 
 // AppErrorFromRequiredDependencyUnavailable returns *AppError for CONTENT.SYSTEM.required_dependency_unavailable (user_message from errors.yaml).
 func AppErrorFromRequiredDependencyUnavailable(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.SYSTEM.required_dependency_unavailable")
-	return rterr.NewAppError(code, "内容服务依赖暂时不可用，请稍后重试", debugMessage).WithMetadata("required_dependency_unavailable", 503).WithRecovery("retry", 5)
+	return rterr.NewAppError(code, "内容服务依赖暂时不可用，请稍后重试", debugMessage).WithMetadata("required_dependency_unavailable", 503).WithRecoveryDirective("retry", "snackbar", 5)
 }
 
 // AppErrorFromStorageReadFailed returns *AppError for CONTENT.SYSTEM.storage_read_failed (user_message from errors.yaml).
 func AppErrorFromStorageReadFailed(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.SYSTEM.storage_read_failed")
-	return rterr.NewAppError(code, "读取内容失败，请稍后重试", debugMessage).WithMetadata("storage_read_failed", 500).WithRecovery("retry", 5)
+	return rterr.NewAppError(code, "读取内容失败，请稍后重试", debugMessage).WithMetadata("storage_read_failed", 500).WithRecoveryDirective("retry", "snackbar", 5)
 }
 
 // AppErrorFromStorageWriteFailed returns *AppError for CONTENT.SYSTEM.storage_write_failed (user_message from errors.yaml).
 func AppErrorFromStorageWriteFailed(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.SYSTEM.storage_write_failed")
-	return rterr.NewAppError(code, "操作失败，请稍后重试", debugMessage).WithMetadata("storage_write_failed", 500).WithRecovery("retry", 5)
+	return rterr.NewAppError(code, "操作失败，请稍后重试", debugMessage).WithMetadata("storage_write_failed", 500).WithRecoveryDirective("retry", "snackbar", 5)
 }
 
 // AppErrorFromUnauthorized returns *AppError for CONTENT.USER.unauthorized (user_message from errors.yaml).
 func AppErrorFromUnauthorized(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.USER.unauthorized")
-	return rterr.NewAppError(code, "请先登录", debugMessage).WithMetadata("unauthorized", 401).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "请先登录", debugMessage).WithMetadata("unauthorized", 401).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromUpstreamTimeout returns *AppError for CONTENT.MIDDLEWARE.upstream_timeout (user_message from errors.yaml).
 func AppErrorFromUpstreamTimeout(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.MIDDLEWARE.upstream_timeout")
-	return rterr.NewAppError(code, "内容服务响应超时，请稍后重试", debugMessage).WithMetadata("timeout", 504).WithRecovery("retry", 10)
+	return rterr.NewAppError(code, "内容服务响应超时，请稍后重试", debugMessage).WithMetadata("timeout", 504).WithRecoveryDirective("retry", "snackbar", 10)
 }
 
 // AppErrorFromVersionConflict returns *AppError for CONTENT.USER.version_conflict (user_message from errors.yaml).
 func AppErrorFromVersionConflict(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.USER.version_conflict")
-	return rterr.NewAppError(code, "内容已更新，请刷新后重试", debugMessage).WithMetadata("version_conflict", 409).WithRecovery("refresh", 0)
+	return rterr.NewAppError(code, "内容已更新，请刷新后重试", debugMessage).WithMetadata("version_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }

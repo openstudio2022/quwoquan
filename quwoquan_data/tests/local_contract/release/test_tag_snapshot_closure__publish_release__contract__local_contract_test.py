@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from content.release.canonical.object_transaction_audit import validate_canonical_publish
+from content.release.canonical.object_transaction_audit import validate_publish_invariants
 from content.release.canonical.object_transaction_contract import refresh_canonical_tag_snapshots
 
 
@@ -35,17 +35,17 @@ def test_tag_snapshot_closure__publish_release__contract__local_contract(
     monkeypatch.setenv("QWQ_TAGS_ROOT", str(taxonomy))
 
     assert refresh_canonical_tag_snapshots(canonical) == [TAG_REF]
-    assert validate_canonical_publish(canonical)["status"] == "passed"
+    assert validate_publish_invariants(canonical)["status"] == "passed"
 
     _write(canonical / "tags/Topic/孤儿/_definition.json", _definition("孤儿"))
     assert any(
         issue["code"] == "orphan_tag_snapshot"
-        for issue in validate_canonical_publish(canonical)["issues"]
+        for issue in validate_publish_invariants(canonical)["issues"]
     )
 
     assert refresh_canonical_tag_snapshots(canonical) == [TAG_REF]
     assert not (canonical / "tags/Topic/孤儿").exists()
-    assert validate_canonical_publish(canonical)["status"] == "passed"
+    assert validate_publish_invariants(canonical)["status"] == "passed"
 
 
 def test_tag_snapshot_closure_rejects_unmaterialized_consumer_ref(
@@ -54,7 +54,7 @@ def test_tag_snapshot_closure_rejects_unmaterialized_consumer_ref(
     canonical = tmp_path / "publish"
     _write(canonical / "entities/地点/景区/甲/tag.refs.json", {"tagRefs": [TAG_REF]})
 
-    report = validate_canonical_publish(canonical)
+    report = validate_publish_invariants(canonical)
 
     assert report["status"] == "failed"
     assert {issue["code"] for issue in report["issues"]} == {"dangling_tag_ref"}
@@ -72,7 +72,7 @@ def test_entity_creator_profile_must_belong_to_creator_reference_closure(
         {"creatorId": "creator_a"},
     )
 
-    report = validate_canonical_publish(canonical)
+    report = validate_publish_invariants(canonical)
 
     assert report["status"] == "failed"
     assert any(
@@ -81,4 +81,4 @@ def test_entity_creator_profile_must_belong_to_creator_reference_closure(
     )
 
     _write(entity / "creator.refs.json", {"creatorRefs": ["creator_a"]})
-    assert validate_canonical_publish(canonical)["status"] == "passed"
+    assert validate_publish_invariants(canonical)["status"] == "passed"

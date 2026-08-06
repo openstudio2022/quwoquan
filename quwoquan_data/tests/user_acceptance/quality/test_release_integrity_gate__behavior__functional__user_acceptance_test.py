@@ -177,6 +177,7 @@ def _seed_execution_post(
                 "proseStyle", "imageGate", "travelogueDensity", "crossArticleSimilarity",
                 "sectionShape", "generatorProvenance", "factTraceability", "baseDraftFidelity",
                 "writingIntentConsistency", "registerMismatch", "contactInfo", "mechanicalHeading",
+                "sectionBalance", "timelineOrder",
             ]},
         },
     )
@@ -386,7 +387,7 @@ def test_runtime_integrity_allows_same_asset_contract_before_release():
     assert "base draft ledger does not map" in text
 
 
-def test_runtime_integrity_blocks_unverified_travel_rights_without_proof():
+def test_runtime_integrity_allows_recorded_unverified_rights_in_research():
     _reset()
     base = _seed_source("测试实体甲", "01.base", kind="维基百科")
     _seed_execution_post(
@@ -400,8 +401,14 @@ def test_runtime_integrity_blocks_unverified_travel_rights_without_proof():
         / "posts/article/攻略/测试实体甲权利审计/1/manifest.json"
     )
     manifest = read_json(manifest_path)
-    manifest["assets"][0].pop("authorizationProof")
+    manifest["assets"][0]["authorizationProof"] = ""
     manifest["assets"][0]["rightsAuditStatus"] = "unverified"
+    manifest["assets"][0]["rightsStatus"] = "unverified"
+    manifest["assets"][0]["authorizationRequired"] = True
+    manifest["assets"][0]["distributionDecision"] = "research_allowed"
+    manifest["assets"][0]["rightsIssues"] = [
+        "distribution authorization is unverified"
+    ]
     write_json(manifest_path, manifest)
     write_json(
         execution_root(TASK) / "_shared" / "base_draft_ledger.json",
@@ -414,8 +421,8 @@ def test_runtime_integrity_blocks_unverified_travel_rights_without_proof():
     report = scan_runtime_batch_integrity(TASK)
     text = "\n".join(report["issues"])
 
-    assert not report["passed"]
-    assert "missing required rights proof" in text
+    assert report["passed"], text
+    assert "missing required rights proof" not in text
     assert "missing rights audit status" not in text
 
 

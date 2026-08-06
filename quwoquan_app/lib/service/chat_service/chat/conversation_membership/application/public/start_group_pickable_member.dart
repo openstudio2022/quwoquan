@@ -1,0 +1,35 @@
+/// 发起群聊向导中的可选成员（ViewModel，非云 DTO）。
+class StartGroupPickableMember {
+  const StartGroupPickableMember({
+    required this.userId,
+    required this.displayName,
+    required this.avatarUrl,
+    this.userHandle = '',
+  });
+
+  final String userId;
+  final String userHandle;
+  final String displayName;
+  final String avatarUrl;
+}
+
+/// 联系人列表按首字母分组用的一行（仅 UI）。
+class StartGroupFriendLetterRow {
+  const StartGroupFriendLetterRow({
+    required this.displayName,
+    required this.userId,
+    required this.avatarUrl,
+    required this.letter,
+    this.userHandle = '',
+    this.metFrom = '',
+  });
+
+  final String displayName;
+  final String userId;
+  final String userHandle;
+  final String avatarUrl;
+  final String letter;
+
+  /// 事实交集证据：认识来源（云侧 ChatContactRowViewData.metFrom 透传）。
+  final String metFrom;
+}

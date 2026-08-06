@@ -1,11 +1,13 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: 93359367b8614f01bb5e1c51e37af383332b01f117cc1c6cf39e4fdf838e49d2
+// ContractGraph SHA256: 99a8a52d1ede68d6295d252a5c3cfd90ce40fa7e11b50e9fee2dad7a7afdf2b2
 
 library;
 
 import '../operation_request_payload.dart';
+import "../generated/shared_operation_enums.g.dart";
 import "../generated/shared_operation_types.g.dart";
 
+export "../generated/shared_operation_enums.g.dart";
 export "../generated/shared_operation_types.g.dart";
 
 part '../generated/requests/user/user_operation_contracts.g.requests.g.dart';
@@ -45,6 +47,25 @@ enum AppearanceApplyScope {
       "all_accounts" => AppearanceApplyScope.allAccounts,
       "current_persona" => AppearanceApplyScope.currentPersona,
       "inherit_owner_default" => AppearanceApplyScope.inheritOwnerDefault,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum AppearanceSource {
+  ownerDefault("owner_default"),
+  subOverride("sub_override"),
+  systemDefault("system_default");
+
+  const AppearanceSource(this.wireName);
+
+  final String wireName;
+
+  static AppearanceSource fromWire(Object? value, String path) {
+    return switch (value) {
+      "owner_default" => AppearanceSource.ownerDefault,
+      "sub_override" => AppearanceSource.subOverride,
+      "system_default" => AppearanceSource.systemDefault,
       _ => throw FormatException('$path has an invalid enum value'),
     };
   }
@@ -148,6 +169,23 @@ enum FederatedLoginStatus {
     return switch (value) {
       "authenticated" => FederatedLoginStatus.authenticated,
       "phoneBindingRequired" => FederatedLoginStatus.phonebindingrequired,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum FeedPreference {
+  recommend("recommend"),
+  chronological("chronological");
+
+  const FeedPreference(this.wireName);
+
+  final String wireName;
+
+  static FeedPreference fromWire(Object? value, String path) {
+    return switch (value) {
+      "recommend" => FeedPreference.recommend,
+      "chronological" => FeedPreference.chronological,
       _ => throw FormatException('$path has an invalid enum value'),
     };
   }
@@ -428,29 +466,6 @@ enum ProposalStatus {
   }
 }
 
-enum RelationshipState {
-  self("self"),
-  notFollowing("not_following"),
-  following("following"),
-  followedBy("followed_by"),
-  mutual("mutual");
-
-  const RelationshipState(this.wireName);
-
-  final String wireName;
-
-  static RelationshipState fromWire(Object? value, String path) {
-    return switch (value) {
-      "self" => RelationshipState.self,
-      "not_following" => RelationshipState.notFollowing,
-      "following" => RelationshipState.following,
-      "followed_by" => RelationshipState.followedBy,
-      "mutual" => RelationshipState.mutual,
-      _ => throw FormatException('$path has an invalid enum value'),
-    };
-  }
-}
-
 enum SubjectFollowState {
   following("following"),
   unfollowed("unfollowed");
@@ -463,6 +478,25 @@ enum SubjectFollowState {
     return switch (value) {
       "following" => SubjectFollowState.following,
       "unfollowed" => SubjectFollowState.unfollowed,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum SubjectFollowTargetKind {
+  homepage("homepage"),
+  circle("circle"),
+  location("location");
+
+  const SubjectFollowTargetKind(this.wireName);
+
+  final String wireName;
+
+  static SubjectFollowTargetKind fromWire(Object? value, String path) {
+    return switch (value) {
+      "homepage" => SubjectFollowTargetKind.homepage,
+      "circle" => SubjectFollowTargetKind.circle,
+      "location" => SubjectFollowTargetKind.location,
       _ => throw FormatException('$path has an invalid enum value'),
     };
   }
@@ -668,11 +702,11 @@ final class AppearanceSettingsView {
     required this.updatedAt,
   });
 
-  final String themeMode;
-  final String fontSizePreset;
-  final String source;
-  final String ownerDefaultThemeMode;
-  final String ownerDefaultFontSizePreset;
+  final ThemeModeSetting themeMode;
+  final FontSizePreset fontSizePreset;
+  final AppearanceSource source;
+  final ThemeModeSetting ownerDefaultThemeMode;
+  final FontSizePreset ownerDefaultFontSizePreset;
   final bool hasPersonaOverride;
   final int version;
   final DateTime updatedAt;
@@ -680,11 +714,11 @@ final class AppearanceSettingsView {
   factory AppearanceSettingsView.fromWire(Map<String, Object?> map, [String path = "AppearanceSettingsView"]) {
     _rejectUnknownFields(map, const <String>{"themeMode", "fontSizePreset", "source", "ownerDefaultThemeMode", "ownerDefaultFontSizePreset", "hasPersonaOverride", "version", "updatedAt"}, path);
     return AppearanceSettingsView(
-      themeMode: _requiredString(map["themeMode"], '$path.themeMode'),
-      fontSizePreset: _requiredString(map["fontSizePreset"], '$path.fontSizePreset'),
-      source: _requiredString(map["source"], '$path.source'),
-      ownerDefaultThemeMode: _requiredString(map["ownerDefaultThemeMode"], '$path.ownerDefaultThemeMode'),
-      ownerDefaultFontSizePreset: _requiredString(map["ownerDefaultFontSizePreset"], '$path.ownerDefaultFontSizePreset'),
+      themeMode: ThemeModeSetting.fromWire(map["themeMode"], '$path.themeMode'),
+      fontSizePreset: FontSizePreset.fromWire(map["fontSizePreset"], '$path.fontSizePreset'),
+      source: AppearanceSource.fromWire(map["source"], '$path.source'),
+      ownerDefaultThemeMode: ThemeModeSetting.fromWire(map["ownerDefaultThemeMode"], '$path.ownerDefaultThemeMode'),
+      ownerDefaultFontSizePreset: FontSizePreset.fromWire(map["ownerDefaultFontSizePreset"], '$path.ownerDefaultFontSizePreset'),
       hasPersonaOverride: _requiredBool(map["hasPersonaOverride"], '$path.hasPersonaOverride'),
       version: _requiredInt(map["version"], '$path.version'),
       updatedAt: _requiredTimestamp(map["updatedAt"], '$path.updatedAt'),
@@ -692,11 +726,11 @@ final class AppearanceSettingsView {
   }
 
   Map<String, Object?> toWire() => <String, Object?>{
-    "themeMode": themeMode,
-    "fontSizePreset": fontSizePreset,
-    "source": source,
-    "ownerDefaultThemeMode": ownerDefaultThemeMode,
-    "ownerDefaultFontSizePreset": ownerDefaultFontSizePreset,
+    "themeMode": themeMode.wireName,
+    "fontSizePreset": fontSizePreset.wireName,
+    "source": source.wireName,
+    "ownerDefaultThemeMode": ownerDefaultThemeMode.wireName,
+    "ownerDefaultFontSizePreset": ownerDefaultFontSizePreset.wireName,
     "hasPersonaOverride": hasPersonaOverride,
     "version": version,
     "updatedAt": updatedAt.toUtc().toIso8601String(),
@@ -1724,8 +1758,8 @@ final class NotificationSettingsView {
       userId: _requiredString(map["userId"], '$path.userId'),
       enablePush: _requiredBool(map["enablePush"], '$path.enablePush'),
       enableMarketing: _requiredBool(map["enableMarketing"], '$path.enableMarketing'),
-      quietHoursStart: map["quietHoursStart"] == null ? null : _requiredString(map["quietHoursStart"], '$path.quietHoursStart'),
-      quietHoursEnd: map["quietHoursEnd"] == null ? null : _requiredString(map["quietHoursEnd"], '$path.quietHoursEnd'),
+      quietHoursStart: map["quietHoursStart"] == null ? null : _requiredTimeOfDay(map["quietHoursStart"], '$path.quietHoursStart'),
+      quietHoursEnd: map["quietHoursEnd"] == null ? null : _requiredTimeOfDay(map["quietHoursEnd"], '$path.quietHoursEnd'),
       version: _requiredInt(map["version"], '$path.version'),
       updatedAt: _requiredTimestamp(map["updatedAt"], '$path.updatedAt'),
     );
@@ -2188,9 +2222,9 @@ final class PrivacySettingsView {
 
   final String userId;
   final bool allowStrangerMsg;
-  final String profileVisibility;
+  final ProfileVisibility profileVisibility;
   final String? contentLanguage;
-  final String? feedPreference;
+  final FeedPreference? feedPreference;
   final bool assistantEnabled;
   final List<String> blockedKeywords;
   final int version;
@@ -2201,9 +2235,9 @@ final class PrivacySettingsView {
     return PrivacySettingsView(
       userId: _requiredString(map["userId"], '$path.userId'),
       allowStrangerMsg: _requiredBool(map["allowStrangerMsg"], '$path.allowStrangerMsg'),
-      profileVisibility: _requiredString(map["profileVisibility"], '$path.profileVisibility'),
+      profileVisibility: ProfileVisibility.fromWire(map["profileVisibility"], '$path.profileVisibility'),
       contentLanguage: map["contentLanguage"] == null ? null : _requiredString(map["contentLanguage"], '$path.contentLanguage'),
-      feedPreference: map["feedPreference"] == null ? null : _requiredString(map["feedPreference"], '$path.feedPreference'),
+      feedPreference: map["feedPreference"] == null ? null : FeedPreference.fromWire(map["feedPreference"], '$path.feedPreference'),
       assistantEnabled: _requiredBool(map["assistantEnabled"], '$path.assistantEnabled'),
       blockedKeywords: List<String>.unmodifiable(_requiredList(map["blockedKeywords"], '$path.blockedKeywords').asMap().entries.map((entry) => _requiredString(entry.value, '$path.blockedKeywords' + '[${entry.key}]'))),
       version: _requiredInt(map["version"], '$path.version'),
@@ -2214,9 +2248,9 @@ final class PrivacySettingsView {
   Map<String, Object?> toWire() => <String, Object?>{
     "userId": userId,
     "allowStrangerMsg": allowStrangerMsg,
-    "profileVisibility": profileVisibility,
+    "profileVisibility": profileVisibility.wireName,
     if (contentLanguage != null) "contentLanguage": contentLanguage!,
-    if (feedPreference != null) "feedPreference": feedPreference!,
+    if (feedPreference != null) "feedPreference": feedPreference!.wireName,
     "assistantEnabled": assistantEnabled,
     "blockedKeywords": blockedKeywords.map((value) => value).toList(growable: false),
     "version": version,
@@ -2863,7 +2897,7 @@ final class SubjectFollowCommandResult {
   });
 
   final String personaId;
-  final FollowSubjectKind subjectType;
+  final SubjectFollowTargetKind subjectType;
   final String subjectId;
   final SubjectFollowState state;
   final bool idempotentReplay;
@@ -2873,7 +2907,7 @@ final class SubjectFollowCommandResult {
     _rejectUnknownFields(map, const <String>{"personaId", "subjectType", "subjectId", "state", "idempotentReplay", "updatedAt"}, path);
     return SubjectFollowCommandResult(
       personaId: _requiredString(map["personaId"], '$path.personaId'),
-      subjectType: FollowSubjectKind.fromWire(map["subjectType"], '$path.subjectType'),
+      subjectType: SubjectFollowTargetKind.fromWire(map["subjectType"], '$path.subjectType'),
       subjectId: _requiredString(map["subjectId"], '$path.subjectId'),
       state: SubjectFollowState.fromWire(map["state"], '$path.state'),
       idempotentReplay: _requiredBool(map["idempotentReplay"], '$path.idempotentReplay'),
@@ -3321,6 +3355,14 @@ String _requiredNonBlankString(Object? value, String path) {
   final result = _requiredString(value, path);
   if (result.trim().isEmpty) {
     throw FormatException('$path must not be blank');
+  }
+  return result;
+}
+
+String _requiredTimeOfDay(Object? value, String path) {
+  final result = _requiredString(value, path);
+  if (!RegExp(r'^([01][0-9]|2[0-3]):[0-5][0-9]$').hasMatch(result)) {
+    throw FormatException('$path must be a HH:MM wall-clock time');
   }
   return result;
 }

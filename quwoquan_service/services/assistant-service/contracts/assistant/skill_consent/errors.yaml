@@ -1,11 +1,8 @@
-domain: ASSISTANT
-aggregate: SkillConsent
 description: 'SkillConsent 聚合的可信身份与 owner 授权错误。
 
   '
 errors:
 - code: ASSISTANT.USER.consent_unauthorized
-  kind: USER
   reason: consent_unauthorized
   http_status: 401
   emitted_by:
@@ -15,28 +12,26 @@ errors:
     - RevokeSkillConsent
     - ListConsents
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: consentUnauthorized
   go_const: ErrConsentUnauthorized
-  l10n_key: assistant.error.consent_unauthorized
   user_message:
     zh: 请先登录
     en: Please sign in first
 - code: ASSISTANT.USER.consent_invalid_argument
-  kind: USER
   reason: invalid_argument
   http_status: 400
   emitted_by:
   - surface: http
     operations: [GrantSkillConsent, RevokeSkillConsent]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: consentInvalidArgument
   go_const: ErrConsentInvalidArgument
-  l10n_key: assistant.error.consent_invalid_argument
   user_message:
     zh: 授权请求参数有误
     en: Consent request is invalid
 - code: ASSISTANT.SYSTEM.consent_unavailable
-  kind: SYSTEM
   reason: unavailable
   http_status: 503
   emitted_by:
@@ -47,38 +42,36 @@ errors:
     - ListConsents
     - assistant.assistant_run.StartAssistantRun
   recovery_action: retry
+  disruption_level: snackbar
   recovery_after_seconds: 3
   dart_const: consentUnavailable
   go_const: ErrConsentUnavailable
-  l10n_key: assistant.error.consent_unavailable
   user_message:
     zh: 授权服务暂不可用，敏感能力已按未授权处理
     en: Consent service is unavailable; sensitive capabilities are treated as not granted
 - code: ASSISTANT.USER.consent_idempotency_conflict
-  kind: USER
   reason: consent_idempotency_conflict
   http_status: 409
   emitted_by:
   - surface: http
     operations: [GrantSkillConsent, RevokeSkillConsent]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: consentIdempotencyConflict
   go_const: ErrConsentIdempotencyConflict
-  l10n_key: assistant.error.consent_idempotency_conflict
   user_message:
     zh: 请勿将同一请求标识用于不同授权操作
     en: Do not reuse the same request identity for another consent command
 - code: ASSISTANT.USER.consent_scope_conflict
-  kind: USER
   reason: consent_scope_conflict
   http_status: 409
   emitted_by:
   - surface: http
     operations: [GrantSkillConsent]
-  recovery_action: refresh
+  recovery_action: retry
+  disruption_level: snackbar
   dart_const: consentScopeConflict
   go_const: ErrConsentScopeConflict
-  l10n_key: assistant.error.consent_scope_conflict
   user_message:
     zh: 技能所需权限已变化，请撤销原授权后重新确认
     en: The skill permission set changed; revoke the previous grant and confirm again

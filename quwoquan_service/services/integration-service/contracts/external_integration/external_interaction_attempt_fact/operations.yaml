@@ -12,3 +12,20 @@ runtime_entrypoints:
     facet: ExternalInteractionAttemptFactAppender
     method: append
     object_owner: ExternalInteractionAttemptFact
+readiness_cases:
+- case_id: append-external-interaction-attempt-local
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/integration-service-foundation/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: AppendExternalInteractionAttempt}
+  runner_source_path: quwoquan_service/services/integration-service/tests/local_contract/external_integration/external_interaction_attempt_fact/fact_appender__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: append-external-interaction-attempt-api
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/integration-service-foundation/spec.md#gwt-001
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: AppendExternalInteractionAttempt}
+  runner_source_path: quwoquan_service/services/integration-service/tests/api_integration/external_integration/external_interaction_attempt_fact/append_outbox__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}

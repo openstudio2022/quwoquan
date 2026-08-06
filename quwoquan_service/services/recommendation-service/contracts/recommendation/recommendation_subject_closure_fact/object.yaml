@@ -19,3 +19,11 @@ business_rules:
 - 消费者必须在关闭事实持久化后依次删除本域反馈、曝光、长期特征与活动窗口；任一清理失败不得 ACK，重放必须继续执行幂等清理。
 lifecycle:
   immutable: true
+  source_events:
+  - user.user_account.UserAccountClosed
+  event_consumers:
+  - name: AppendRecommendationSubjectClosure
+    kind: subscription
+    facet: UserAccountClosedConsumer
+    method: processOnce
+    idempotency: event_id

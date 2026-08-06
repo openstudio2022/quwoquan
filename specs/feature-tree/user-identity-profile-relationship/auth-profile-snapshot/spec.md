@@ -108,3 +108,16 @@
 - 准出影响：`track`
 - 影响或价值：尚缺实现或直接 `spec_ref`；目标：LoginWithPhone / LoginOneTap / LoginAnonymous / RefreshToken / Logout 的 request/response 字段与 metadata、App DTO、服务端行为一致。
 - 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-002"></a>
+### OPEN-002 UserAccount 公开资料写读边界尚未物理分离
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：当前 `quwoquan_service/services/user-service/contracts/account/user_account/fields.yaml` 在 UserAccount 聚合上挂载的 projection 角色字段多于 authoritative 角色字段，nickname、头像与各类计数器与 Persona 公开资料读模型职责重叠。
+- 该形态当前合法而非门禁违规，角色唯一性约束只覆盖追加事实与投影两种对象 kind、不覆盖聚合根，因此它不会自行变红，属长期设计债。
+- 同一份公开资料同时出现在写模型聚合与投影读模型两处，CQRS 写读边界只靠字段角色注解表达，未在对象与存储层物理分离。
+- 拆分已验证可以保持 wire 兼容，因为 wire 实体在类型段内自描述、不向聚合字段段解析；真正阻塞项是服务端约二十个文件近百处非测试引用，以及公开资料表的归属裁决。
+- 完成判定：`SIT-002` 对应行为满足且真实测试 `spec_ref` 有效
+- 依赖：Persona 公开资料投影 owner 与 UserAccount 只读投影的对象级切分裁决，且该切分不是 metadata-only 改动，必须占用独立施工窗口。

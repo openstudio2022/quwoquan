@@ -16,7 +16,12 @@
     "fleetAcceptedThroughputPerHour",
     "endToEndAcceptedThroughputPerHour",
     "acceptedContentThroughputStatus",
+    "recoveryEligibleCount",
+    "automaticRecoveredCount",
+    "manualRecoveredCount",
+    "automaticRecoveryStatus",
     "automaticRecoveryRate",
+    "firstAttemptSuccessRate",
     "finalizedWithinStageBudgetRate",
     "duplicatePublishCount",
     "missingObjectCount",
@@ -87,6 +92,11 @@
       "minimum": 0,
       "maximum": 1
     },
+    "recoveryEligibleCount": {"type": "integer", "minimum": 0},
+    "automaticRecoveredCount": {"type": "integer", "minimum": 0},
+    "manualRecoveredCount": {"type": "integer", "minimum": 0},
+    "automaticRecoveryStatus": {"enum": ["MEASURED", "NOT_EXERCISED"]},
+    "firstAttemptSuccessRate": {"type": "number", "minimum": 0, "maximum": 1},
     "finalizedWithinStageBudgetRate": {
       "type": "number",
       "minimum": 0,
@@ -178,5 +188,26 @@
     "schema": {
       "const": "quwoquan.reliabletask_fleet_report"
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"recoveryEligibleCount": {"const": 0}},
+        "required": ["recoveryEligibleCount"]
+      },
+      "then": {
+        "properties": {
+          "automaticRecoveredCount": {"const": 0},
+          "manualRecoveredCount": {"const": 0},
+          "automaticRecoveryStatus": {"const": "NOT_EXERCISED"},
+          "automaticRecoveryRate": {"const": 0}
+        }
+      },
+      "else": {
+        "properties": {
+          "automaticRecoveryStatus": {"const": "MEASURED"}
+        }
+      }
+    }
+  ]
 }

@@ -184,8 +184,8 @@ func requiredPersona(w http.ResponseWriter, r *http.Request, requestID string) (
 	}
 	if personaID == "" {
 		appErr := rterrors.NewAppError(
-			rterrors.NewCode(moduleSearch, rterrors.KindUser, "unauthorized"),
-			"请先登录后使用最近搜索", "recent search requires an authenticated persona actor")
+			rterrors.NewCode(rterrors.ModuleGateway, rterrors.KindUser, "unauthorized"),
+			"请先登录后再继续", "recent search requires an authenticated persona actor")
 		appErr.HTTPStatus = http.StatusUnauthorized
 		writeErr(w, requestID, appErr)
 		return "", false

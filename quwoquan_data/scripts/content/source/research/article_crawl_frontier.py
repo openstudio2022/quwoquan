@@ -1,13 +1,17 @@
 """Registry-driven orchestration of the commercial article crawl frontier."""
+
 from __future__ import annotations
 
+import hashlib
+import json
+import urllib.parse
 from collections import deque
 from collections.abc import Mapping
 from datetime import datetime, timezone
 from html.parser import HTMLParser
-import hashlib
-import json
-import urllib.parse
+
+from core.data_issue import DataIssue
+from core.runtime_policy import active_runtime_policy
 
 from content.source.research.article_frontier_contract import (
     ArticleFrontierRecord,
@@ -33,11 +37,11 @@ from content.source.research.article_frontier_robots import (
     policy_issue,
     terms_precheck,
 )
+from content.source.research.article_mediawiki_frontier import (
+    mediawiki_search_frontier_items,
+)
 from content.source.research.article_site_crawl import crawl_article_site
 from content.source.research.text_match import _dedupe_terms
-from core.data_issue import DataIssue
-from core.runtime_policy import active_runtime_policy
-
 
 BRAVE_SEARCH_URL = "https://search.brave.com/search"
 
@@ -70,9 +74,7 @@ class SearchResultParser(HTMLParser):
             return
         title = " ".join(" ".join(self._active_text).split())
         if title:
-            self.results.append(
-                PublicSearchResult(title=title, url=self._active_url)
-            )
+            self.results.append(PublicSearchResult(title=title, url=self._active_url))
         self._active_url = ""
         self._active_text = []
 
@@ -89,9 +91,7 @@ def parse_public_search_results(
         if not canonical or canonical in seen:
             continue
         seen.add(canonical)
-        results.append(
-            PublicSearchResult(title=result.title, url=canonical)
-        )
+        results.append(PublicSearchResult(title=result.title, url=canonical))
     return tuple(results)
 
 
@@ -128,10 +128,7 @@ def _search_frontier_items(
             if not query or query in seen_queries:
                 continue
             seen_queries.add(query)
-            search_url = (
-                f"{BRAVE_SEARCH_URL}?"
-                f"{urllib.parse.urlencode({'q': query})}"
-            )
+            search_url = f"{BRAVE_SEARCH_URL}?{urllib.parse.urlencode({'q': query})}"
             response = fetch_with_backoff(
                 search_url,
                 timeout=timeout,
@@ -142,8 +139,7 @@ def _search_frontier_items(
                     site_id,
                     search_url,
                     message=(
-                        "public search unavailable because network transport "
-                        "failed"
+                        "public search unavailable because network transport failed"
                     ),
                 )
                 issues.append(issue)
@@ -210,6 +206,7 @@ def build_initial_frontier(
     *,
     aliases: tuple[str, ...],
     topics: tuple[str, ...],
+    requested_limit: int,
     timeout: int,
     records: list[ArticleFrontierRecord],
     issues: list[DataIssue],
@@ -243,9 +240,7 @@ def build_initial_frontier(
         aliases=aliases,
         topics=topics,
     ):
-        queue.append(
-            FrontierItem(seed_url, "", "", 0, "declared_seed")
-        )
+        queue.append(FrontierItem(seed_url, "", "", 0, "declared_seed"))
     for sitemap_url in formatted_declared_urls(
         strategy.get("sitemapUrls"),
         aliases=aliases,
@@ -274,9 +269,7 @@ def build_initial_frontier(
                 topics=topics,
             ):
                 try:
-                    page_url = template.format_map(
-                        {**context, "page": str(page)}
-                    )
+                    page_url = template.format_map({**context, "page": str(page)})
                 except (KeyError, ValueError):
                     continue
                 canonical = canonicalize_article_url(page_url)
@@ -296,9 +289,7 @@ def build_initial_frontier(
         and str(profile.get("fetchMode") or "") == "mediawiki_api"
     ):
         domains = tuple(
-            str(value)
-            for value in (site.get("domains") or ())
-            if str(value)
+            str(value) for value in (site.get("domains") or ()) if str(value)
         )
         if domains:
             for alias in aliases[:4]:
@@ -315,14 +306,21 @@ def build_initial_frontier(
                         "entity_seeded_scan",
                     )
                 )
+        queue.extend(
+            mediawiki_search_frontier_items(
+                site,
+                aliases=aliases,
+                requested_limit=requested_limit,
+                timeout=timeout,
+                records=records,
+                issues=issues,
+            )
+        )
     if not queue:
         issue = policy_issue(
             site_id,
             "",
-            message=(
-                "admitted crawl profile has no executable declared frontier "
-                "seed"
-            ),
+            message=("admitted crawl profile has no executable declared frontier seed"),
         )
         issues.append(issue)
         records.append(
@@ -462,6 +460,7 @@ def discover_article_source_frontier(
                 site,
                 aliases=aliases,
                 topics=topic_terms,
+                requested_limit=limit,
                 timeout=timeout,
                 records=records,
                 issues=issues,

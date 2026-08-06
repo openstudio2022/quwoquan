@@ -1,80 +1,64 @@
-entity: RecentSearchState
-domain: SEARCH
 errors:
 - code: SEARCH.USER.recent_invalid_argument
-  kind: USER
   reason: recent_invalid_argument
   http_status: 400
   emitted_by:
   - surface: http
-    operations: [UpsertRecentSearch, RecoverSearchAccountClosureDeadLetter]
+    operations: [UpsertRecentSearch]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: searchRecentInvalidArgument
   go_const: ErrSearchRecentInvalidArgument
   user_message:
     zh: 最近搜索请求格式不正确
     en: Invalid recent search request
-- code: SEARCH.SYSTEM.internal_error
-  kind: SYSTEM
-  reason: internal_error
-  http_status: 500
-  emitted_by:
-  - surface: http
-    operations: [RecoverSearchAccountClosureDeadLetter]
-  recovery_action: retry
-  recovery_after_seconds: 5
-  dart_const: searchInternalError
-  go_const: ErrSearchInternalError
-  user_message:
-    zh: 搜索服务暂时无法完成该操作
-    en: Search service could not complete the operation
 - code: SEARCH.USER.recent_entry_not_found
-  kind: USER
   reason: recent_entry_not_found
   http_status: 404
   emitted_by:
   - surface: http
     operations: [DeleteRecentSearch]
-  recovery_action: refresh
+  recovery_action: retry
+  disruption_level: snackbar
   dart_const: recentEntryNotFound
   go_const: ErrRecentEntryNotFound
   user_message:
     zh: 最近搜索记录不存在或已删除
     en: Recent search entry not found
 - code: SEARCH.USER.recent_version_conflict
-  kind: USER
   reason: recent_version_conflict
   http_status: 409
   emitted_by:
   - surface: http
     operations: [UpsertRecentSearch, DeleteRecentSearch, ClearRecentSearches]
-  recovery_action: refresh
+  recovery_action: retry
+  disruption_level: snackbar
   dart_const: recentVersionConflict
   go_const: ErrRecentVersionConflict
   user_message:
     zh: 最近搜索已更新，请刷新后重试
     en: Recent searches changed, refresh and retry
 - code: SEARCH.USER.recent_idempotency_conflict
-  kind: USER
   reason: recent_idempotency_conflict
   http_status: 409
   emitted_by:
   - surface: http
     operations: [UpsertRecentSearch, DeleteRecentSearch, ClearRecentSearches]
-  recovery_action: refresh
+  recovery_action: retry
+  disruption_level: snackbar
   dart_const: recentIdempotencyConflict
   go_const: ErrRecentIdempotencyConflict
   user_message:
     zh: 重复请求与原操作不一致，请刷新后重试
     en: The repeated request differs from the original operation
 - code: SEARCH.SYSTEM.recent_storage_failed
-  kind: SYSTEM
   reason: recent_storage_failed
   http_status: 500
   emitted_by:
   - surface: http
     operations: [ListRecentSearches, UpsertRecentSearch, DeleteRecentSearch, ClearRecentSearches]
   recovery_action: retry
+  disruption_level: snackbar
   recovery_after_seconds: 5
   dart_const: recentStorageFailed
   go_const: ErrRecentStorageFailed

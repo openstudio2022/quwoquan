@@ -12,6 +12,27 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: false
+- key: sys.rtc-service.call_session.ring_timeout.sweep_interval_ms
+  type: int
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: 5000
+- key: sys.rtc-service.call_session.ring_timeout.one_to_one_timeout_ms
+  type: int
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: 30000
+- key: sys.rtc-service.call_session.ring_timeout.group_timeout_ms
+  type: int
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: 60000
 - key: sys.rtc-service.livekit.api_key
   type: string
   scope: workload

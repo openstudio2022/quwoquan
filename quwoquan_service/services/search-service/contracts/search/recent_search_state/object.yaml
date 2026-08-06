@@ -19,9 +19,6 @@ relationships:
   reference_fields:
   - personaId
   target_object: user.Persona
-capabilities:
-- commandable
-- queryable
 taggable: false
 vector_enabled: false
 business_rules:

@@ -66,20 +66,20 @@ from quwoquan_ops.cli.lib.video_playback_evidence import (
 APP_DIR = REPO_ROOT / "quwoquan_app"
 DEFAULT_REPORT = REPO_ROOT / ".qwq_output" / "env" / "repo" / "runs" / "device-matrix" / "environment-smoke" / "report.json"
 DEFAULT_TARGET = (
-    "test/user_acceptance/patrol/environment/"
+    "test/user_acceptance/journeys/home_video_playback/"
     "video_playback_canary__user_acceptance_test.dart"
 )
 CORE_READBACK_TARGET = (
-    "test/user_acceptance/patrol/environment/"
+    "test/user_acceptance/journeys/app_startup/"
     "app_core_readback__user_acceptance_test.dart"
 )
 FEED_LOAD_TARGET = (
-    "test/user_acceptance/patrol/discovery/"
+    "test/user_acceptance/service/content_service/content/feed_delivery_page/"
     "feed_load__user_acceptance_test.dart"
 )
 FEED_CONTENT_EVIDENCE_PREFIX = "QWQ_FEED_CONTENT_EVIDENCE "
 CONTROLLED_EDGE_FAULT_TARGET = (
-    "test/user_acceptance/patrol/discovery/"
+    "test/user_acceptance/service/content_service/content/feed_delivery_page/"
     "feed_controlled_edge_recovery__user_acceptance_test.dart"
 )
 CONTROLLED_EDGE_RESTORE_REQUEST_PREFIX = (
@@ -109,15 +109,15 @@ RELEASE_APP_UAT_DEFINES = (
     ("data_release_video_attribution", "DATA_RELEASE_VIDEO_ATTRIBUTION"),
 )
 BASIC_VIABILITY_TARGET = (
-    "test/user_acceptance/patrol/environment/"
+    "test/user_acceptance/journeys/app_startup/"
     "basic_viability__user_acceptance_test.dart"
 )
 ACCOUNT_CLOSURE_TARGET = (
-    "test/user_acceptance/patrol/settings/"
+    "test/user_acceptance/journeys/account_closure/"
     "account_closure_journey__user_acceptance_test.dart"
 )
 RUNTIME_RECOVERY_TARGET = (
-    "test/user_acceptance/patrol/environment/"
+    "test/user_acceptance/journeys/app_startup/"
     "runtime_recovery_journey__user_acceptance_test.dart"
 )
 RUNTIME_RECOVERY_EVIDENCE_PREFIX = "QWQ_RUNTIME_RECOVERY_EVIDENCE "
@@ -133,11 +133,11 @@ RUNTIME_RECOVERY_EVIDENCE_FIELDS = frozenset(
 )
 ACCOUNT_ENFORCEMENT_TARGETS = {
     "suspended": (
-        "test/user_acceptance/patrol/user/"
+        "test/user_acceptance/journeys/account_enforcement/"
         "account_enforcement_suspended__user_acceptance_test.dart"
     ),
     "restored": (
-        "test/user_acceptance/patrol/user/"
+        "test/user_acceptance/journeys/account_enforcement/"
         "account_enforcement_restored__user_acceptance_test.dart"
     ),
 }
@@ -165,11 +165,14 @@ XCODE_IOS_SIMULATOR_SDK_PATTERN = re.compile(
     r"-sdk\s+iphonesimulator(\d+)(?:\.(\d+))?"
 )
 XCTEST_EXECUTION_SUMMARY_PATTERN = re.compile(
-    r"Executed\s+(?P<executed>\d+)\s+tests?,\s+with\s+(?P<failed>\d+)\s+failures?",
+    r"Executed\s+(?P<executed>\d+)\s+tests?,\s+with\s+"
+    r"(?:(?P<skipped>\d+)\s+tests?\s+skipped\s+and\s+)?"
+    r"(?P<failed>\d+)\s+failures?",
 )
 PATROL_EXECUTION_SUMMARY_PATTERN = re.compile(
     r"📝\s+Total:\s*(?P<executed>\d+).*?"
-    r"❌\s+Failed:\s*(?P<failed>\d+)",
+    r"❌\s+Failed:\s*(?P<failed>\d+).*?"
+    r"⏩\s+Skipped:\s*(?P<skipped>\d+)",
     re.DOTALL,
 )
 XCODE_GLOBAL_PRODUCTS_DIR = Path.home() / "Library" / "Developer" / "Xcode" / "XcodeDerivedData" / "Build" / "Products"
@@ -1158,10 +1161,18 @@ def _validate_runtime_recovery_device_matrix(
         and not bool(device.get("emulator"))
         for device in devices
     )
-    if not physical_android or not physical_ios:
+    platform = str(args.platform or "").strip().lower()
+    missing_android = platform in {"all", "android"} and not physical_android
+    missing_ios = platform in {"all", "ios"} and not physical_ios
+    if missing_android or missing_ios:
+        required = (
+            "one physical Android device and one physical iPhone"
+            if platform == "all"
+            else f"one physical {platform} device"
+        )
         raise RuntimeError(
-            "GATE_BLOCK: runtime recovery UAT requires one physical Android "
-            "device and one physical iPhone in the same CaseResult matrix"
+            f"GATE_BLOCK: runtime recovery UAT requires {required} "
+            "in the selected CaseResult"
         )
 
 
@@ -1197,6 +1208,7 @@ def patrol_test_execution_summary(output: str) -> dict[str, Any]:
             "framework": "xctest",
             "executed": int(xctest.group("executed")),
             "failed": int(xctest.group("failed")),
+            "skipped": int(xctest.group("skipped") or 0),
         }
     patrol = PATROL_EXECUTION_SUMMARY_PATTERN.search(output)
     if patrol is not None:
@@ -1204,8 +1216,57 @@ def patrol_test_execution_summary(output: str) -> dict[str, Any]:
             "framework": "patrol",
             "executed": int(patrol.group("executed")),
             "failed": int(patrol.group("failed")),
+            "skipped": int(patrol.group("skipped")),
         }
-    return {"framework": "unknown", "executed": None, "failed": None}
+    return {
+        "framework": "unknown",
+        "executed": None,
+        "failed": None,
+        "skipped": None,
+    }
+
+
+def patrol_test_execution_failure_reason(summary: dict[str, Any]) -> str:
+    """Return why a real Patrol/XCTest summary cannot prove a passed run."""
+
+    framework = summary.get("framework")
+    executed = summary.get("executed")
+    failed = summary.get("failed")
+    skipped = summary.get("skipped")
+    if framework not in {"xctest", "patrol"} or any(
+        not isinstance(value, int) or isinstance(value, bool)
+        for value in (executed, failed, skipped)
+    ):
+        return "Patrol/XCTest execution summary is missing or incomplete"
+    if executed <= 0:
+        return "Patrol/XCTest execution summary reports zero executed tests"
+    if failed != 0:
+        return f"Patrol/XCTest execution summary reports {failed} failed tests"
+    if skipped != 0:
+        return f"Patrol/XCTest execution summary reports {skipped} skipped tests"
+    return ""
+
+
+def apply_patrol_test_execution_summary(
+    result: dict[str, Any],
+    output: str,
+    *,
+    dry_run: bool,
+) -> None:
+    """Attach the summary and fail a real run that lacks passing test counts."""
+
+    result["testExecution"] = patrol_test_execution_summary(output)
+    if dry_run:
+        return
+    execution_failure = patrol_test_execution_failure_reason(
+        result["testExecution"]
+    )
+    if not execution_failure:
+        return
+    result["exitCode"] = 1
+    result["outputSummary"] = (
+        str(result.get("outputSummary") or "") + "\n" + execution_failure
+    ).strip()
 
 
 def load_remote_api_evidence(path_value: str) -> dict[str, Any]:
@@ -1870,7 +1931,7 @@ def patrol_command(
         args.target,
         "-d",
         str(device["id"]),
-        "--dart-define=RUN_T4_PATROL=true",
+        "--dart-define=RUN_PATROL_ACCEPTANCE=true",
         "--dart-define=REQUIRE_NATIVE_VIDEO_PLAYBACK_SIGNALS="
         + (
             "true"
@@ -2521,6 +2582,14 @@ def main() -> int:
                     str(result.get("outputSummary") or "")
                     + "\ncontrolled edge UAT did not emit exactly one restore request"
                 ).strip()
+        raw_log_path = run_dir / "patrol.log"
+        apply_patrol_test_execution_summary(
+            result,
+            raw_log_path.read_text(encoding="utf-8")
+            if raw_log_path.is_file()
+            else "",
+            dry_run=args.dry_run,
+        )
         after_screenshot = (
             capture_device_screenshot(device, run_dir / "after.png")
             if result["exitCode"] == 0 and not args.dry_run
@@ -2532,12 +2601,6 @@ def main() -> int:
             else {"status": "skipped", "reason": "command passed"}
         )
         result["device"] = device
-        raw_log_path = run_dir / "patrol.log"
-        result["testExecution"] = patrol_test_execution_summary(
-            raw_log_path.read_text(encoding="utf-8")
-            if raw_log_path.is_file()
-            else ""
-        )
         runtime_recovery_evidence = _read_runtime_recovery_evidence(
             raw_log_path,
         )

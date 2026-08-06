@@ -20,13 +20,15 @@ REQUIRED_SPEC = (
     / "specs/feature-tree/runtime/runtime-client-foundation/cold-start-performance/spec.md"
 )
 REQUIRED_TESTS = (
-    APP_DIR / "test/local_contract/app/startup_ttid__local_contract_test.dart",
-    APP_DIR / "test/local_contract/app/startup_deferred_router__local_contract_test.dart",
-    APP_DIR / "test/local_contract/app/app_startup_welcome__local_contract_test.dart",
-    APP_DIR / "test/local_contract/app/startup_native_launch_screen__local_contract_test.dart",
-    APP_DIR / "test/local_contract/ui/welcome/welcome_screen__local_contract_test.dart",
-    APP_DIR / "test/local_contract/ui/welcome/welcome_motion_golden__local_contract_test.dart",
-    APP_DIR / "test/local_contract/app/startup_probe_parser__local_contract_test.py",
+    APP_DIR / "test/local_contract/runtime/startup_ttid__local_contract_test.dart",
+    APP_DIR / "test/local_contract/runtime/startup_deferred_router__local_contract_test.dart",
+    APP_DIR / "test/local_contract/runtime/app_startup_welcome__local_contract_test.dart",
+    APP_DIR / "test/local_contract/runtime/startup_native_launch_screen__local_contract_test.dart",
+    APP_DIR
+    / "test/local_contract/runtime/shell/welcome/welcome_screen__local_contract_test.dart",
+    APP_DIR
+    / "test/local_contract/runtime/shell/welcome/welcome_motion_golden__local_contract_test.dart",
+    APP_DIR / "test/local_contract/runtime/startup_probe_parser__local_contract_test.py",
 )
 
 

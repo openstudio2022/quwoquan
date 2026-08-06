@@ -297,10 +297,12 @@ api_routes:
     - platform
     - runtime_env
     - outcome
+    - recovery_lifecycle
+    - recovery_mount
   slo:
     latency_p95_ms: 800
     availability_percent: 99.9
-  description: 唯一匿名 Ops 入口；只接收固定阶段、脱敏字段与 startup proof，禁止产品或身份字段。
+  description: 唯一匿名 Ops 入口；同一批次单轨接收固定启动阶段或 page.app.startup_recovery 的受限恢复生命周期、脱敏字段与 startup proof，禁止产品、身份、URL、route、原始异常或堆栈字段。
   security:
     auth_mode: optional
     principal: owner
@@ -678,19 +680,7 @@ consumers:
   - read_product_projection_summary
   - read_product_triage_summary
 contract_test:
-  mock_strategy:
-    app_side:
-      scenarios:
-      - name: report_event_batch
-        route: POST /ops/events
-        assertions:
-        - status_200
-        - exact_ack
-      - name: report_startup_event_batch
-        route: POST /ops/startup-events
-        assertions:
-        - status_200
-        - exact_ack
+  test_strategy:
     service_side:
       description: 使用可控 Provider 协议服务器与 Redis 幂等状态，不以 Mongo 或 Postgres 充当日志 fallback。
       real_engines:
@@ -728,3 +718,163 @@ contract_test:
         - p95_from_connected_raw_samples
         - connection_lost_denominator_is_connected_samples
         - empty_rates_are_null
+
+readiness_cases:
+- case_id: report-event-batch-local
+  spec_ref: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/spec.md#sit-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ReportEventBatch}
+  runner_source_path: quwoquan_service/services/product-ops-service/tests/local_contract/product_ops/event_record/visit_event_contract__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: report-event-batch-api
+  spec_ref: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/spec.md#sit-001
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ReportEventBatch}
+  runner_source_path: quwoquan_service/services/product-ops-service/tests/api_integration/product_ops/event_record/elasticsearch_log_sink__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: elasticsearch, digest_binding: candidate}
+- case_id: report-startup-event-batch-local
+  spec_ref: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/spec.md#sit-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ReportStartupEventBatch}
+  runner_source_path: quwoquan_service/services/product-ops-service/tests/local_contract/product_ops/event_record/startup_telemetry_http__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: report-startup-event-batch-api
+  spec_ref: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/spec.md#sit-001
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ReportStartupEventBatch}
+  runner_source_path: quwoquan_service/services/product-ops-service/tests/api_integration/product_ops/event_record/elasticsearch_log_sink__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: elasticsearch, digest_binding: candidate}
+- case_id: get-runtime-log-summary-local
+  spec_ref: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/spec.md#sit-002
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: GetRuntimeLogSummary}
+  runner_source_path: quwoquan_service/services/product-ops-service/tests/local_contract/product_ops/event_record/event_record_operations__local_contract_test.go
+  executions: [{env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}]
+- case_id: get-runtime-log-drilldown-local
+  spec_ref: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/spec.md#sit-002
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: GetRuntimeLogDrilldown}
+  runner_source_path: quwoquan_service/services/product-ops-service/tests/local_contract/product_ops/event_record/event_record_operations__local_contract_test.go
+  executions: [{env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}]
+- case_id: report-runtime-log-batch-local
+  spec_ref: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/spec.md#sit-002
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ReportRuntimeLogBatch}
+  runner_source_path: quwoquan_service/services/product-ops-service/tests/local_contract/product_ops/event_record/event_record_operations__local_contract_test.go
+  executions: [{env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}]
+- case_id: get-event-summary-local
+  spec_ref: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/spec.md#sit-002
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: GetEventSummary}
+  runner_source_path: quwoquan_service/services/product-ops-service/tests/local_contract/product_ops/event_record/event_record_operations__local_contract_test.go
+  executions: [{env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}]
+- case_id: get-event-drilldown-local
+  spec_ref: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/spec.md#sit-002
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: GetEventDrilldown}
+  runner_source_path: quwoquan_service/services/product-ops-service/tests/local_contract/product_ops/event_record/event_record_operations__local_contract_test.go
+  executions: [{env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}]
+- case_id: get-rtc-media-qoe-summary-local
+  spec_ref: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/spec.md#sit-002
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: GetRtcMediaQoeSummary}
+  runner_source_path: quwoquan_service/services/product-ops-service/tests/local_contract/product_ops/event_record/event_record_operations__local_contract_test.go
+  executions: [{env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}]
+- case_id: list-l1-l4-metric-snapshots-local
+  spec_ref: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/spec.md#sit-002
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ListL1L4MetricSnapshots}
+  runner_source_path: quwoquan_service/services/product-ops-service/tests/local_contract/product_ops/event_record/event_record_operations__local_contract_test.go
+  executions: [{env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}]
+- case_id: get-service-route-red-local
+  spec_ref: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/spec.md#sit-002
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: GetServiceRouteRED}
+  runner_source_path: quwoquan_service/services/product-ops-service/tests/local_contract/product_ops/event_record/event_record_operations__local_contract_test.go
+  executions: [{env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}]
+- case_id: get-growth-overview-local
+  spec_ref: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/spec.md#sit-002
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: GetGrowthOverview}
+  runner_source_path: quwoquan_service/services/product-ops-service/tests/local_contract/product_ops/event_record/event_record_operations__local_contract_test.go
+  executions: [{env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}]
+- case_id: get-page-experience-local
+  spec_ref: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/spec.md#sit-002
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: GetPageExperience}
+  runner_source_path: quwoquan_service/services/product-ops-service/tests/local_contract/product_ops/event_record/event_record_operations__local_contract_test.go
+  executions: [{env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}]
+- case_id: list-product-workflows-local
+  spec_ref: specs/feature-tree/product-ops-growth/product-control-plane-foundation/spec.md#sit-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ListProductWorkflows}
+  runner_source_path: quwoquan_service/services/product-ops-service/tests/local_contract/product_ops/event_record/event_record_operations__local_contract_test.go
+  executions: [{env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}]
+- case_id: list-product-audits-local
+  spec_ref: specs/feature-tree/product-ops-growth/product-control-plane-foundation/spec.md#sit-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ListProductAudits}
+  runner_source_path: quwoquan_service/services/product-ops-service/tests/local_contract/product_ops/event_record/event_record_operations__local_contract_test.go
+  executions: [{env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}]
+- case_id: list-product-approvals-local
+  spec_ref: specs/feature-tree/product-ops-growth/product-control-plane-foundation/spec.md#sit-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ListProductApprovals}
+  runner_source_path: quwoquan_service/services/product-ops-service/tests/local_contract/product_ops/event_record/event_record_operations__local_contract_test.go
+  executions: [{env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}]
+- case_id: get-product-projection-summary-local
+  spec_ref: specs/feature-tree/product-ops-growth/product-control-plane-foundation/spec.md#sit-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: GetProductProjectionSummary}
+  runner_source_path: quwoquan_service/services/product-ops-service/tests/local_contract/product_ops/event_record/event_record_operations__local_contract_test.go
+  executions: [{env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}]
+- case_id: get-product-triage-summary-local
+  spec_ref: specs/feature-tree/product-ops-growth/product-control-plane-foundation/spec.md#sit-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: GetProductTriageSummary}
+  runner_source_path: quwoquan_service/services/product-ops-service/tests/local_contract/product_ops/event_record/event_record_operations__local_contract_test.go
+  executions: [{env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}]
+- case_id: event_record_report_event_batch_app_local
+  spec_ref: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/event-schema-governance/spec.md#gwt-001
+  producer: app
+  layer: local_contract
+  target: {kind: operation, id: ReportEventBatch}
+  runner_source_path: quwoquan_app/test/local_contract/service/product_ops_service/product_ops/event_record/event_record_batch_remote__local_contract_test.dart
+  executions: [{env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}]
+- case_id: event_record_report_startup_event_batch_app_api
+  spec_ref: specs/feature-tree/runtime/runtime-client-foundation/cold-start-performance/spec.md#gwt-004
+  producer: app
+  layer: api_integration
+  target: {kind: operation, id: ReportStartupEventBatch}
+  runner_source_path: quwoquan_app/test/api_integration/service/product_ops_service/product_ops/event_record/event_record_remote__api_integration_test.dart
+  executions: [{env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}]
+- case_id: event_record_report_runtime_log_batch_app_local
+  spec_ref: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/spec.md#sit-002
+  producer: app
+  layer: local_contract
+  target: {kind: operation, id: ReportRuntimeLogBatch}
+  runner_source_path: quwoquan_app/test/local_contract/service/product_ops_service/product_ops/event_record/event_record_batch_remote__local_contract_test.dart
+  executions: [{env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}]

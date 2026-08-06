@@ -1,25 +1,21 @@
-domain: ASSISTANT
-aggregate: AssistantTaskView
 description: AssistantTaskView 身份与投影读取错误。
 errors:
 - code: ASSISTANT.USER.task_unauthorized
-  kind: USER
   reason: task_unauthorized
   http_status: 401
   emitted_by: [{surface: http, operations: [ListAssistantTasks]}]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: taskUnauthorized
   go_const: ErrTaskUnauthorized
-  l10n_key: assistant.error.task_unauthorized
   user_message: {zh: 请先登录后查看助手任务, en: Please sign in to view assistant tasks}
 - code: ASSISTANT.SYSTEM.task_projection_unavailable
-  kind: SYSTEM
   reason: task_projection_unavailable
   http_status: 503
   emitted_by: [{surface: http, operations: [ListAssistantTasks]}]
   recovery_action: retry
+  disruption_level: snackbar
   recovery_after_seconds: 3
   dart_const: taskProjectionUnavailable
   go_const: ErrTaskProjectionUnavailable
-  l10n_key: assistant.error.task_projection_unavailable
   user_message: {zh: 助手任务暂不可用，请稍后重试, en: Assistant tasks are temporarily unavailable}

@@ -16,21 +16,24 @@ import (
 	platformredis "quwoquan_service/internal/platform/redis"
 	"quwoquan_service/internal/platform/testinfra"
 	rtredis "quwoquan_service/runtime/redis"
+	"quwoquan_service/services/notification-service/internal/notification_delivery/notification/application"
 	"quwoquan_service/services/notification-service/internal/notification_delivery/notification/infrastructure/persistence"
 	deliverypersistence "quwoquan_service/services/notification-service/internal/notification_delivery/notification_delivery_job/infrastructure/persistence"
 )
 
 var (
-	notificationMongoClient     *mongo.Client
-	notificationMongoDB         *mongo.Database
-	notificationMongoContainer  *mongomod.MongoDBContainer
-	notificationReliableStore   *deliverypersistence.MongoNotificationDeliveryJobStore
-	notificationAppMessageStore *persistence.MongoAppMessageStore
-	notificationAccountClosure  *persistence.MongoUserAccountClosedProjection
-	notificationRestriction     *persistence.MongoUserAccountRestrictionProjection
-	notificationRedisRuntime    *testinfra.RealRedis
-	notificationRedisRouter     *rtredis.Router
-	notificationRedisClient     rtredis.Client
+	notificationMongoClient      *mongo.Client
+	notificationMongoDB          *mongo.Database
+	notificationMongoContainer   *mongomod.MongoDBContainer
+	notificationReliableStore    *deliverypersistence.MongoNotificationDeliveryJobStore
+	notificationAppMessageStore  *persistence.MongoAppMessageStore
+	notificationAccountClosure   *persistence.MongoUserAccountClosedProjection
+	notificationRestriction      *persistence.MongoUserAccountRestrictionProjection
+	notificationClosureFacet     *application.UserAccountClosedProjection
+	notificationRestrictionFacet *application.UserAccountRestrictionProjection
+	notificationRedisRuntime     *testinfra.RealRedis
+	notificationRedisRouter      *rtredis.Router
+	notificationRedisClient      rtredis.Client
 )
 
 func TestMain(m *testing.M) {
@@ -106,6 +109,18 @@ func TestMain(m *testing.M) {
 	}
 	if err := notificationAccountClosure.EnsureIndexes(startupCtx); err != nil {
 		panic("ensure notification-service account-closure indexes: " + err.Error())
+	}
+	notificationClosureFacet, err = application.NewUserAccountClosedProjection(
+		notificationAccountClosure,
+	)
+	if err != nil {
+		panic("create notification account-closure application facet: " + err.Error())
+	}
+	notificationRestrictionFacet, err = application.NewUserAccountRestrictionProjection(
+		notificationRestriction,
+	)
+	if err != nil {
+		panic("create notification account-restriction application facet: " + err.Error())
 	}
 	notificationRedisRuntime, err = testinfra.StartRealRedis(startupCtx)
 	if err != nil {

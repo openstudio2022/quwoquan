@@ -1,0 +1,281 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/release/resource_soak_evidence.schema.json",
+  "title": "Derived 60-minute four-lane resource soak evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "evidenceId",
+    "rootExecutionId",
+    "runtimeSessionId",
+    "runtimeSessionRef",
+    "runtimeSessionDigest",
+    "runId",
+    "generation",
+    "fencingToken",
+    "status",
+    "sourceRevision",
+    "sourceDigest",
+    "entityCatalogDigest",
+    "rawSamplesRef",
+    "rawSamplesSha256",
+    "soakStartedAt",
+    "soakEndedAt",
+    "durationSeconds",
+    "sampleCount",
+    "maxSampleGapSeconds",
+    "semanticJobsByLane",
+    "fourLaneOverlapSampleCount",
+    "fourLaneOverlapIntervals",
+    "fourLaneOverlapDurationSeconds",
+    "fourLaneLongestContinuousOverlapSeconds",
+    "allSemanticJobsTerminal",
+    "allSemanticJobsTerminalAt",
+    "terminalResidualSampleAt",
+    "terminalResidualMeasuredAfterAllJobs",
+    "releasePayloadBytes",
+    "budgets",
+    "observedPeaks",
+    "budgetBreaches",
+    "recordedAt",
+    "evidenceDigest"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.resource_soak_evidence"},
+    "evidenceId": {"type": "string", "minLength": 1},
+    "rootExecutionId": {"type": "string", "minLength": 1},
+    "runtimeSessionId": {"type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]{2,127}$"},
+    "runtimeSessionRef": {"$ref": "#/$defs/safeRef"},
+    "runtimeSessionDigest": {"$ref": "#/$defs/digest"},
+    "runId": {"type": "string", "minLength": 1},
+    "generation": {"type": "integer", "minimum": 1},
+    "fencingToken": {"$ref": "#/$defs/digest"},
+    "status": {"enum": ["passed", "failed"]},
+    "sourceRevision": {"$ref": "#/$defs/digest"},
+    "sourceDigest": {"$ref": "#/$defs/digest"},
+    "entityCatalogDigest": {"$ref": "#/$defs/digest"},
+    "rawSamplesRef": {"$ref": "#/$defs/safeRef"},
+    "rawSamplesSha256": {"$ref": "#/$defs/digest"},
+    "soakStartedAt": {"type": "string", "format": "date-time"},
+    "soakEndedAt": {"type": "string", "format": "date-time"},
+    "durationSeconds": {"type": "integer", "minimum": 0},
+    "sampleCount": {"type": "integer", "minimum": 2},
+    "maxSampleGapSeconds": {"type": "integer", "minimum": 0},
+    "semanticJobsByLane": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "prefixItems": [
+        {"$ref": "#/$defs/homepageJobs"},
+        {"$ref": "#/$defs/articleJobs"},
+        {"$ref": "#/$defs/imageJobs"},
+        {"$ref": "#/$defs/videoJobs"}
+      ],
+      "items": false
+    },
+    "fourLaneOverlapSampleCount": {"type": "integer", "minimum": 0},
+    "fourLaneOverlapIntervals": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/activeInterval"}
+    },
+    "fourLaneOverlapDurationSeconds": {"type": "integer", "minimum": 0},
+    "fourLaneLongestContinuousOverlapSeconds": {"type": "integer", "minimum": 0},
+    "allSemanticJobsTerminal": {"type": "boolean"},
+    "allSemanticJobsTerminalAt": {
+      "type": ["string", "null"],
+      "format": "date-time"
+    },
+    "terminalResidualSampleAt": {"type": "string", "format": "date-time"},
+    "terminalResidualMeasuredAfterAllJobs": {"type": "boolean"},
+    "releasePayloadBytes": {"type": "integer", "minimum": 0},
+    "budgets": {"$ref": "#/$defs/resourceValues"},
+    "observedPeaks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "controllerP95RssBytes",
+        "nonVideoWorkerP95RssBytes",
+        "videoWorkerP95RssBytes",
+        "totalP95RssBytes",
+        "totalMaxRssBytes",
+        "temporaryWorkspaceMaxBytes",
+        "terminalResidualBytes",
+        "openFdCount",
+        "queueDepth",
+        "oldestReadyAgeSeconds",
+        "progressAgeSeconds",
+        "heartbeatAgeSeconds"
+      ],
+      "properties": {
+        "controllerP95RssBytes": {"type": "integer", "minimum": 0},
+        "nonVideoWorkerP95RssBytes": {"type": "integer", "minimum": 0},
+        "videoWorkerP95RssBytes": {"type": "integer", "minimum": 0},
+        "totalP95RssBytes": {"type": "integer", "minimum": 0},
+        "totalMaxRssBytes": {"type": "integer", "minimum": 0},
+        "temporaryWorkspaceMaxBytes": {"type": "integer", "minimum": 0},
+        "terminalResidualBytes": {"type": "integer", "minimum": 0},
+        "openFdCount": {"type": "integer", "minimum": 0},
+        "queueDepth": {"type": "integer", "minimum": 0},
+        "oldestReadyAgeSeconds": {"type": "integer", "minimum": 0},
+        "progressAgeSeconds": {"type": "integer", "minimum": 0},
+        "heartbeatAgeSeconds": {"type": "integer", "minimum": 0}
+      }
+    },
+    "budgetBreaches": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "controllerP95RssBytes",
+          "nonVideoWorkerP95RssBytes",
+          "videoWorkerP95RssBytes",
+          "totalP95RssBytes",
+          "totalMaxRssBytes",
+          "temporaryWorkspaceMaxBytes",
+          "terminalResidualBytes",
+          "openFdCount",
+          "queueDepth",
+          "oldestReadyAgeSeconds",
+          "progressAgeSeconds",
+          "heartbeatAgeSeconds"
+        ]
+      }
+    },
+    "recordedAt": {"type": "string", "format": "date-time"},
+    "evidenceDigest": {"$ref": "#/$defs/digest"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "passed"}}, "required": ["status"]},
+      "then": {
+        "properties": {
+          "durationSeconds": {"minimum": 3600},
+          "sampleCount": {"minimum": 61},
+          "maxSampleGapSeconds": {"maximum": 90},
+          "fourLaneOverlapDurationSeconds": {"minimum": 3600},
+          "fourLaneLongestContinuousOverlapSeconds": {"minimum": 3600},
+          "allSemanticJobsTerminal": {"const": true},
+          "allSemanticJobsTerminalAt": {"type": "string", "format": "date-time"},
+          "terminalResidualMeasuredAfterAllJobs": {"const": true},
+          "budgetBreaches": {"maxItems": 0},
+          "semanticJobsByLane": {
+            "prefixItems": [
+              {"allOf": [{"$ref": "#/$defs/homepageJobs"}, {"$ref": "#/$defs/passingJobCount"}]},
+              {"allOf": [{"$ref": "#/$defs/articleJobs"}, {"$ref": "#/$defs/passingJobCount"}]},
+              {"allOf": [{"$ref": "#/$defs/imageJobs"}, {"$ref": "#/$defs/passingJobCount"}]},
+              {"allOf": [{"$ref": "#/$defs/videoJobs"}, {"$ref": "#/$defs/passingJobCount"}]}
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "safeRef": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+    },
+    "jobRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "carrier",
+        "executionId",
+        "semanticJobCount",
+        "semanticJobSucceededCount",
+        "semanticJobTerminalCount",
+        "semanticJobIds",
+        "semanticJobSucceededIds",
+        "semanticJobTerminalIds",
+        "activeDurationSeconds",
+        "activeIntervals"
+      ],
+      "properties": {
+        "carrier": {"enum": ["homepage", "article", "image", "video"]},
+        "executionId": {"type": "string", "minLength": 1},
+        "semanticJobCount": {"type": "integer", "minimum": 0},
+        "semanticJobSucceededCount": {"type": "integer", "minimum": 0},
+        "semanticJobTerminalCount": {"type": "integer", "minimum": 0},
+        "semanticJobIds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 8}
+        },
+        "semanticJobSucceededIds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 8}
+        },
+        "semanticJobTerminalIds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 8}
+        },
+        "activeDurationSeconds": {"type": "integer", "minimum": 0},
+        "activeIntervals": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/activeInterval"}
+        }
+      }
+    },
+    "passingJobCount": {
+      "properties": {
+        "semanticJobCount": {"minimum": 10},
+        "semanticJobSucceededCount": {"minimum": 10},
+        "semanticJobTerminalCount": {"minimum": 10},
+        "semanticJobIds": {"minItems": 10},
+        "semanticJobSucceededIds": {"minItems": 10},
+        "semanticJobTerminalIds": {"minItems": 10}
+      }
+    },
+    "activeInterval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["startedAt", "endedAt", "durationSeconds"],
+      "properties": {
+        "startedAt": {"type": "string", "format": "date-time"},
+        "endedAt": {"type": "string", "format": "date-time"},
+        "durationSeconds": {"type": "integer", "minimum": 0}
+      }
+    },
+    "homepageJobs": {"allOf": [{"$ref": "#/$defs/jobRow"}, {"properties": {"carrier": {"const": "homepage"}}}]},
+    "articleJobs": {"allOf": [{"$ref": "#/$defs/jobRow"}, {"properties": {"carrier": {"const": "article"}}}]},
+    "imageJobs": {"allOf": [{"$ref": "#/$defs/jobRow"}, {"properties": {"carrier": {"const": "image"}}}]},
+    "videoJobs": {"allOf": [{"$ref": "#/$defs/jobRow"}, {"properties": {"carrier": {"const": "video"}}}]},
+    "resourceValues": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "maxControllerP95RssBytes",
+        "maxNonVideoWorkerP95RssBytes",
+        "maxVideoWorkerP95RssBytes",
+        "maxTotalP95RssBytes",
+        "maxTotalRssBytes",
+        "maxTemporaryWorkspaceBytes",
+        "maxTerminalResidualBytes",
+        "maxOpenFdCount",
+        "maxQueueDepth",
+        "maxOldestReadyAgeSeconds",
+        "maxProgressAgeSeconds",
+        "maxHeartbeatAgeSeconds"
+      ],
+      "properties": {
+        "maxControllerP95RssBytes": {"const": 536870912},
+        "maxNonVideoWorkerP95RssBytes": {"const": 1073741824},
+        "maxVideoWorkerP95RssBytes": {"const": 2147483648},
+        "maxTotalP95RssBytes": {"const": 8589934592},
+        "maxTotalRssBytes": {"const": 10737418240},
+        "maxTemporaryWorkspaceBytes": {"type": "integer", "minimum": 2147483648},
+        "maxTerminalResidualBytes": {"const": 104857600},
+        "maxOpenFdCount": {"const": 2048},
+        "maxQueueDepth": {"const": 4096},
+        "maxOldestReadyAgeSeconds": {"const": 600},
+        "maxProgressAgeSeconds": {"const": 900},
+        "maxHeartbeatAgeSeconds": {"const": 1800}
+      }
+    }
+  }
+}

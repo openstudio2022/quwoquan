@@ -7,10 +7,10 @@
 
 按触达范围追加：
 
-- 触及 `lib/ui/**/pages/**` 或 `lib/app/shell/*.dart`：补读 `.cursor/rules/09-page-horizontal-quality.mdc`
+- 触及 `lib/ui/**/pages/**` 或 `lib/runtime/shell/*.dart`：补读 `.cursor/rules/09-page-horizontal-quality.mdc`
 - 触及登录入口、登录成功/关闭回退路径：补读 `.cursor/rules/15-auth-entry-no-loop.mdc`
 - 触及平台差异、Web/鸿蒙能力：补读 `.cursor/rules/14-cross-platform-portability.mdc`
-- 触及 `lib/components/pageflip/**` 或 `lib/ui/content/article_reader/pageflip/**`：补读 `.cursor/rules/11-pageflip-geometry-guardrails.mdc`；若为 BACK 方向，再补读 `.cursor/rules/12-pageflip-backward-mainline.mdc`
+- 触及 `lib/design_system/pageflip/**` 或 `lib/service/content_service/content/post/presentation/article_reader/pageflip/**`：补读 `.cursor/rules/11-pageflip-geometry-guardrails.mdc`；若为 BACK 方向，再补读 `.cursor/rules/12-pageflip-backward-mainline.mdc`
 
 ## App 端硬约束
 
@@ -21,10 +21,42 @@
 - 用户可见错误提示必须来自 codegen 错误枚举、`toDisplayMessage(context.l10n)`、`UITextConstants` 或 l10n；禁止在 UI/Provider 中 switch 硬编码错误码字符串或中文提示。
 - `CloudException` 必须由 runtime mapper 生成并暴露 `runtimeFailure`；UI 状态只消费 `RuntimeFailure`、`runtimeErrorDisplayMessage` 和 `RuntimeRecoveryPolicy`，不得展示 raw exception/debugMessage。
 - 新页面或页面行为变化，要同步核对页面横向质量矩阵、metadata-driven UI 清单与相关测试。
+- 搬迁或改名页面文件时**不要手改** `quwoquan_service/contracts/metadata/_shared/page_object_contract.yaml`：
+ 该契约的 `source_path`、`route_registration_evidence`、`mount_evidence` 由
+ `python3 quwoquan_service/scripts/contracts/sync_page_object_source_paths.py` 统一同步，
+ 它是该文件迁移期的唯一写入口，避免多条并发流整文件覆写互相清掉改动。搬完页面跑一次即可；
+ `--check` 只检测不落盘。工具无法唯一定位新落点时会 `MANUAL` 报错退出，此时补人工裁决，
+ 不要绕过它直接改 YAML。
+- 页面的业务归属仍以 `page_object_contract.yaml` 的 `object_ids` 为真相源：多对象页面被物理搬进
+ 某个对象的 `presentation/` **不等于**已经拆页，`object_path_map.py` 会按 `app_target_shape`
+ 判成单对象、`multi_object_page` 信号随之消失。不得为了让派生器闭嘴而删减 `object_ids`；
+ 同步工具会把这类页面报成 `REVIEW [multi_object_single_presentation]` 等待拆页裁决。
 - App 端在 `alpha/beta/gamma/prod` 全部使用同一个 production Remote composition；环境只提供 runtime package/endpoints，App 可见第一方业务数据只来自环境已激活的 canonical immutable release。任何 runner、UAT support 或启动脚本均不得注入 Mock/fixture，也不得保留 Mock/Remote 切换入口。
 - 新页面、入口、详情、搜索、创作、消息或推荐相关改动，必须补曝光、停留、异常、关键点击、`referralSource`/`feedRequestId`/trace 传递；内容消费页还要补消费深度和互动反馈。
 - 用户反馈、点赞/评论/收藏/分享/关注、搜索点击、内容停留等行为必须能回流到推荐和运营分析，不得只停留在 UI 状态。
 - 当前阶段未上线：发现不合理 UI/Repository/Provider/路由实现时直接替换为正确模式，不为旧错误保留兼容分支、fallback 或 allowlist。
+- production 装配按 domain 分片：`lib/runtime/di/<domain>_dependencies.dart` 是该 domain
+ 唯一可以命名 `Remote*` 实现的地方，Provider 只声明 typed port。缺文件时按同一范式新建，
+ 不要重建跨 domain 的单一 composition 或 adapter 枚举。
+- `lib/core/providers/app_providers.dart` 只是 domain 级 barrel，不得声明 Provider。新增或
+ 搬迁 Provider 落到所属 domain 的 provider 库，再由 barrel `export`。
+
+## l10n ARB key 归属约定
+
+`lib/l10n/app_zh.arb` 与 `lib/l10n/app_en.arb` 是无法按 domain 分片的共享写点，只能靠
+key 命名表达归属，避免 16 条 domain 并行流互相覆盖。
+
+- 新增或重命名的 key 一律使用 `<domain>_` 前缀，前缀后仍为 lowerCamelCase，例如
+ `content_postDeleteConfirmTitle`、`user_loginPhoneCodeResendTemplate`。
+- `<domain>` 只能取 `quwoquan_ops/gate/object_path_map.py` 派生出的 16 个 domain：
+ `assistant`、`chat`、`circle`、`content`、`entity`、`gateway`、`integration`、
+ `notification`、`ops`、`realtime`、`recommendation`、`rtc`、`search`、`tag`、`travel`、
+ `user`。不属于任何 domain 的横切文案使用 `runtime_` 或 `design_system_` 前缀，与
+ `object_path_map.py` 的两个横切根同名。
+- 两个 arb 文件必须同 key 同序改动；`@key` 元数据紧跟其 key。
+- 存量 579 个无前缀 key 不做批量重命名：每条 domain 流搬迁自己对象时，顺带把该对象用到的
+ key 改成带前缀形式并同步全部引用；禁止为旧 key 保留别名或双写。
+- 冲突判定只看前缀：两条流同时改 arb 时，只要各自 key 前缀不同就不算语义冲突，按文本合并即可。
 
 ## 错误体验与观测
 
@@ -50,10 +82,83 @@
 - 错误码链路的 `local_contract` 必须覆盖 mapper、Provider 状态、UI 文案、恢复按钮和 typed 错误响应；`api_integration` 必须覆盖 RemoteRepository 对服务错误响应的映射。
 - 新增页面必须同步检查页面矩阵、P1-P8、metadata-driven UI 清单、Mock 隔离、设计系统语义 token 和登录无死循环。
 
+## local_contract 测试的 App↔Cloud 边界
+
+`cloudRuntimeEnvironmentProvider` 走 `CloudRuntimeEnvironment.fromCompileTime()`，因此
+「测试怎样满足 generated operation client 所在的 provider 图」是一个跨全部 domain 的共享
+写点。唯一被认可的机制在 `test/support/harness/cloud_boundary_test_scope.dart`。
+
+- Provider / Widget 的 `local_contract` 测试**不得**让 provider 图解析到 generated
+  operation client：`ProviderScope` / `ProviderContainer` 的 `overrides` 必须以
+  `sealedCloudBoundaryOverrides()` 开头，再叠加本测试真正依赖的对象级 typed port
+  （`*CommandWriter` / `*Query`）override。样板见
+  `test/local_contract/ui/interest_match/interest_match_page__local_contract_test.dart`。
+- 被测对象就是 generated client / decoder / 错误映射本身时，改用
+  `generatedClientBoundaryOverrides(transport: MockClient(...))`：environment 由测试显式
+  声明为字面值，传输必须是测试交出的 `MockClient`。样板见
+  `test/local_contract/runtime/cloud_boundary_test_scope__local_contract_test.dart`。
+- 撞上 `SealedCloudBoundaryError` 时唯一正确动作是补对象级 typed port override。禁止改成
+  给测试注入 environment、放宽 seal、返回 Noop/Mock client 或 skip 测试。失败信息里已经写明
+  缺哪一层边界 provider，按它往上找 `ref.watch` 链即可定位该 override 的 typed port。
+- 禁止新增 `test/flutter_test_config.dart` 之类全局钩子，禁止在测试里调用
+  `CloudRuntimeConfig.hydrateFromNativeRuntimePackage`，也禁止靠 `--dart-define` 让该
+  provider 变得可构造：那会让 Widget 测试摸到真实 Gateway 并留下 pending timer，等于用一批
+  红换另一批红，还掩盖真实的 DI 缺口。
+- 测试是否通过不得依赖 `flutter test` 的调用方式：同一套件在裸 `flutter test` 与
+  `scripts/env/run_flutter_test_guarded.py`（会注入 `APP_RUNTIME_ENV` 等 dart-define）下必须
+  同样绿。搬迁 domain 测试树时顺带完成本节改造，不要留给后续统一整改。
+- 断言被封边界时统一用 `isSealedCloudBoundaryFailure()`；Riverpod 3 会把 provider 构造异常
+  逐层包进 `ProviderException`，各套件不得自己拆包装。
+- 需要确定性 environment 值（provider override 之外，例如直接 `new` 出 Remote adapter 的
+  对象级契约测试）时用 `testCloudRuntimeEnvironment()`，不要各套件自己手写 gateway URI。
+
+### per-suite typed-port override 模板
+
+搬 domain 测试树时按此形状改，一个 suite 一个 `_boundaryOverrides()`：
+
+```dart
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
+
+import '../../../support/harness/cloud_boundary_test_scope.dart';
+
+final class _InMemoryFooCommandWriter implements FooCommandWriter {
+  final List<FooCommand> submitted = <FooCommand>[];
+
+  @override
+  Future<FooReceipt> submit(FooCommand command) async {
+    submitted.add(command);
+    return const FooReceipt(accepted: true);
+  }
+}
+
+List<Override> _boundaryOverrides({
+  FooCommandWriter? fooCommandWriter,
+  List<Override> extra = const <Override>[],
+}) {
+  return <Override>[
+    ...sealedCloudBoundaryOverrides(),
+    fooCommandWriterProvider.overrideWithValue(
+      fooCommandWriter ?? _InMemoryFooCommandWriter(),
+    ),
+    ...extra,
+  ];
+}
+```
+
+要点：in-memory double 只实现被测路径用到的方法，不造业务数据集合、不做聚合 Repository；
+suite 内所有 `ProviderScope` / `ProviderContainer` 都走同一个 `_boundaryOverrides()`；个别
+用例需要观察某个 double 时用具名可选参数传入，不要另起第二套装配。定位「还缺哪个 typed
+port」：跑失败测试，沿 `SealedCloudBoundaryError` 栈上方的 `*Provider.<anonymous closure>`
+逐层往上读，第一个属于本 domain 的 provider 就是要 override 的那一层——不要在栈底的
+generated client / http client 那一层打补丁。
+
 ## 推荐验证
 
 - 改 Dart 文件后读取最近改动文件的 lint。
 - 页面/壳层改动：执行 `make verify-app-page-horizontal-quality`。
+- 搬迁/改名页面文件后：先执行 `python3 quwoquan_service/scripts/contracts/sync_page_object_source_paths.py`
+ 收敛契约路径，再跑页面横向质量门禁。
 - 改动 runtime error 契约相关代码：执行 `dart quwoquan_ops/tools/runtime_error_codegen/bin/check_runtime_error_cutover.dart`。
 - 根据触达范围跑对应 `flutter test`，必要时再跑 `bash quwoquan_ops/gate/gate_repo.sh --scope app`。
 - 涉及环境、包纯度或部署验证时，使用 `python3 quwoquan_ops/cli/stackctl.py package/verify/health/inspect`，不要手写第二套 URL、端口或拓扑。

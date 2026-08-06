@@ -31,6 +31,13 @@ READY_IMPLEMENTATION_STATUSES = frozenset({"production"})
 MESSAGE_TRANSPORT_REMOTE_UAT_PREREQUISITE_SCHEMA = (
     "provider-conformance-user-acceptance-prerequisite"
 )
+MESSAGE_TRANSPORT_CAPABILITY_ID = "runtime.message.transport"
+MESSAGE_TRANSPORT_REQUIRED_METRICS = (
+    "pending_lag",
+    "dead_letter",
+    "publish_p95",
+    "consume_p95",
+)
 CAPABILITY_RE = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$")
 ADAPTER_RE = re.compile(r"^(?:ext|infra|data)\.[a-z0-9_]+(?:\.[a-z0-9_]+)*$")
 ENV_KEY_RE = re.compile(r"^[A-Z][A-Z0-9_]*$")
@@ -298,6 +305,16 @@ def load_registry(path: Path | None = None) -> dict[str, Any]:
                 capabilities.append(existing)
                 continue
             service_id = owner[0] if owner is not None else ""
+            observability = dependency.get("observability") or {}
+            observability_metrics: list[str] = []
+            if isinstance(observability, Mapping):
+                raw_metrics = observability.get("metrics") or []
+                if isinstance(raw_metrics, list):
+                    observability_metrics = [
+                        str(metric)
+                        for metric in raw_metrics
+                        if isinstance(metric, str) and metric.strip()
+                    ]
             capability = {
                 "capability_id": capability_id,
                 "canonical_port": dependency.get("port"),
@@ -306,6 +323,7 @@ def load_registry(path: Path | None = None) -> dict[str, Any]:
                 "adapter_contracts": dict(
                     dependency.get("adapterContracts") or {}
                 ),
+                "observability_metrics": observability_metrics,
                 "owner": f"{domain}.{context}.{object_name}",
                 "service_id": service_id,
                 "binding_roots": [root] if root is not None else [],
@@ -520,6 +538,16 @@ def registry_issues(registry: Mapping[str, Any]) -> list[ProviderGovernanceIssue
                             "allowEnvironmentOverrides contains unsupported fields",
                         )
                     )
+        if capability_id == MESSAGE_TRANSPORT_CAPABILITY_ID:
+            declared_metrics = capability.get("observability_metrics")
+            if tuple(declared_metrics or ()) != MESSAGE_TRANSPORT_REQUIRED_METRICS:
+                issues.append(
+                    ProviderGovernanceIssue(
+                        f"{location}.observability.metrics",
+                        "runtime.message.transport owner must declare fixed "
+                        "pending_lag/dead_letter/publish_p95/consume_p95 metrics",
+                    )
+                )
         roots = capability.get("binding_roots")
         if not isinstance(roots, list) or not roots:
             issues.append(

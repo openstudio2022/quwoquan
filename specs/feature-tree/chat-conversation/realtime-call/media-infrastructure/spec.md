@@ -136,7 +136,7 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：仍缺 Gamma/Prod 真实通话产生的有效 series、告警 firing/resolved 与回滚 receipt 的同版本运行证据；仓库内 emitter、终态去重、受控下钻与 B10 同候选绑定已具备。
+- 影响或价值：仍缺 Gamma/Prod 真实通话产生的有效 series、告警 firing/resolved 与回滚 receipt 的同版本运行证据；仓库内 emitter、终态去重、受控下钻与双设备 UAT 同候选绑定已具备。
 - 完成判定：`GWT-003` 对应行为满足且真实测试 `spec_ref` 有效
 
 <a id="open-004"></a>

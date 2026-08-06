@@ -178,16 +178,7 @@ consumers:
   - revoke_any
   name: platform-ops
 contract_test:
-  mock_strategy:
-    app_side:
-      scenarios:
-      - assertions:
-        - consent_granted
-        - consent_revoked
-        name: consent_lifecycle
-        routes:
-        - POST /assistant/skills/{skillId}/consent
-        - DELETE /assistant/skills/{skillId}/consent
+  test_strategy:
     service_side:
       data_management:
         cleanup: TRUNCATE skill_consent_events, skill_consent_command_receipts, skill_consents CASCADE
@@ -218,3 +209,60 @@ contract_test:
         name: revoke_consent
         seed:
         - fixture.NewSkillConsent()
+readiness_cases:
+- case_id: grant-skill-consent-local
+  spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/skill-user-lifecycle/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: GrantSkillConsent}
+  runner_source_path: quwoquan_service/services/assistant-service/tests/local_contract/assistant/skill_consent/command_facades__security__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: grant-skill-consent-api
+  spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/skill-user-lifecycle/spec.md#gwt-001
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: GrantSkillConsent}
+  runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/skill_consent/command_store__idempotency_and_audit__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: postgres, digest_binding: candidate}
+- case_id: revoke-skill-consent-local
+  spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/skill-user-lifecycle/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: RevokeSkillConsent}
+  runner_source_path: quwoquan_service/services/assistant-service/tests/local_contract/assistant/skill_consent/command_facades__security__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: revoke-skill-consent-api
+  spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/skill-user-lifecycle/spec.md#gwt-001
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: RevokeSkillConsent}
+  runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/skill_consent/command_store__idempotency_and_audit__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: postgres, digest_binding: candidate}
+- case_id: list-consents-local
+  spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/skill-user-lifecycle/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ListConsents}
+  runner_source_path: quwoquan_service/services/assistant-service/tests/local_contract/assistant/skill_consent/command_facades__security__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: list-consents-api
+  spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/skill-user-lifecycle/spec.md#gwt-001
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ListConsents}
+  runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/skill_consent/command_store__idempotency_and_audit__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: postgres, digest_binding: candidate}
+- case_id: skill_consent_grant_skill_consent_app_local
+  spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/skill-user-lifecycle/spec.md#gwt-001
+  producer: app
+  layer: local_contract
+  target: {kind: operation, id: GrantSkillConsent}
+  runner_source_path: quwoquan_app/test/local_contract/service/assistant_service/assistant/skill_consent/assistant_consent_fail_closed__security__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}

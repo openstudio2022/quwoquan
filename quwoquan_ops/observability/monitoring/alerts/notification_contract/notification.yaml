@@ -1,0 +1,145 @@
+# Code generated from quwoquan_service/generated/contract_graph.json.
+# Regenerate with verify_object_alert_coverage.py --write.
+groups:
+  - name: quwoquan_notification_contract_notification
+    rules:
+      - record: quwoquan_notification_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="notification-service",method="POST",route=~"^/app-messages/[^/]+/ack$"})
+        labels:
+          service: "notification-service"
+          operation: "notification.notification.AckAppMessage"
+          contract_metric: "notification_app_message_ack"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_notification_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="notification-service",method="POST",route=~"^/app-messages/[^/]+/ack$"})
+        labels:
+          service: "notification-service"
+          operation: "notification.notification.AckAppMessage"
+          contract_metric: "notification_app_message_ack"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_notification_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="notification-service",method="POST",route="/internal/app-messages"})
+        labels:
+          service: "notification-service"
+          operation: "notification.notification.CreateAppMessage"
+          contract_metric: "notification_app_message_create"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_notification_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="notification-service",method="POST",route="/internal/app-messages"})
+        labels:
+          service: "notification-service"
+          operation: "notification.notification.CreateAppMessage"
+          contract_metric: "notification_app_message_create"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_notification_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="notification-service",method="GET",route=~"^/app-messages/[^/]+$"})
+        labels:
+          service: "notification-service"
+          operation: "notification.notification.GetAppMessage"
+          contract_metric: "notification_app_message_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_notification_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="notification-service",method="GET",route=~"^/app-messages/[^/]+$"})
+        labels:
+          service: "notification-service"
+          operation: "notification.notification.GetAppMessage"
+          contract_metric: "notification_app_message_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_notification_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="notification-service",method="GET",route="/app-messages/unread-count"})
+        labels:
+          service: "notification-service"
+          operation: "notification.notification.GetAppMessageUnreadCount"
+          contract_metric: "notification_app_message_unread_count"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "300"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_notification_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="notification-service",method="GET",route="/app-messages/unread-count"})
+        labels:
+          service: "notification-service"
+          operation: "notification.notification.GetAppMessageUnreadCount"
+          contract_metric: "notification_app_message_unread_count"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "300"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_notification_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="notification-service",method="GET",route="/app-messages"})
+        labels:
+          service: "notification-service"
+          operation: "notification.notification.ListAppMessages"
+          contract_metric: "notification_app_message_inbox_list"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_notification_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="notification-service",method="GET",route="/app-messages"})
+        labels:
+          service: "notification-service"
+          operation: "notification.notification.ListAppMessages"
+          contract_metric: "notification_app_message_inbox_list"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_notification_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="notification-service",method="POST",route=~"^/app-messages/[^/]+/read$"})
+        labels:
+          service: "notification-service"
+          operation: "notification.notification.ReadAppMessage"
+          contract_metric: "notification_app_message_read"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_notification_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="notification-service",method="POST",route=~"^/app-messages/[^/]+/read$"})
+        labels:
+          service: "notification-service"
+          operation: "notification.notification.ReadAppMessage"
+          contract_metric: "notification_app_message_read"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_notification_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="notification-service",method="POST",route="/internal/notification/account-closure/dead-letters:recover"})
+        labels:
+          service: "notification-service"
+          operation: "notification.notification.RecoverNotificationAccountClosureDeadLetter"
+          contract_metric: "notification_account_closure_dead_letter_recover"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_notification_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="notification-service",method="POST",route="/internal/notification/account-closure/dead-letters:recover"})
+        labels:
+          service: "notification-service"
+          operation: "notification.notification.RecoverNotificationAccountClosureDeadLetter"
+          contract_metric: "notification_account_closure_dead_letter_recover"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"

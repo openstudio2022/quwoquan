@@ -20,29 +20,29 @@ var (
 // AppErrorFromClaimMaterialMissing returns *AppError for ENTITY.USER.claim_material_missing (user_message from errors.yaml).
 func AppErrorFromClaimMaterialMissing(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrClaimMaterialMissing.Error()))
-	return rerrors.NewAppError(code, "认领材料不完整，请补充后重试", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "认领材料不完整，请补充后重试", debugMessage).WithMetadata("invalid_argument", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromAlreadyClaimed returns *AppError for ENTITY.USER.already_claimed (user_message from errors.yaml).
 func AppErrorFromAlreadyClaimed(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrAlreadyClaimed.Error()))
-	return rerrors.NewAppError(code, "该主页已被认领", debugMessage).WithMetadata("conflict", 409).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "该主页已被认领", debugMessage).WithMetadata("conflict", 409).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromClaimNotFound returns *AppError for ENTITY.USER.claim_not_found (user_message from errors.yaml).
 func AppErrorFromClaimNotFound(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrClaimNotFound.Error()))
-	return rerrors.NewAppError(code, "认领申请不存在", debugMessage).WithMetadata("not_found", 404).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "认领申请不存在", debugMessage).WithMetadata("not_found", 404).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromDuplicatePendingClaim returns *AppError for ENTITY.USER.duplicate_pending_claim (user_message from errors.yaml).
 func AppErrorFromDuplicatePendingClaim(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrDuplicatePendingClaim.Error()))
-	return rerrors.NewAppError(code, "你已提交过认领申请，请等待审核", debugMessage).WithMetadata("conflict", 409).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "你已提交过认领申请，请等待审核", debugMessage).WithMetadata("conflict", 409).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromInvalidClaimMaterialURL returns *AppError for ENTITY.USER.invalid_claim_material_url (user_message from errors.yaml).
 func AppErrorFromInvalidClaimMaterialURL(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrInvalidClaimMaterialURL.Error()))
-	return rerrors.NewAppError(code, "认领材料链接必须是安全的 HTTPS 地址", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "认领材料链接必须是安全的 HTTPS 地址", debugMessage).WithMetadata("invalid_argument", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }

@@ -4,9 +4,10 @@ import os
 
 from core.control_types import ExecutionStage, ExecutionStateStatus, StageStatus
 from core.runtime_observability import (
-    DataRuntimeLogResource,
     DataRuntimeLogger,
+    DataRuntimeLogResource,
     default_data_exception_code,
+    write_data_run_manifest,
 )
 from content.execution.support import CHECKPOINT, DataIssueCode, DataIssueError, DataIssueStage, DataRecoveryAction, ExecutionContext, MAX_REACT_REWINDS, StageResult, _active_spec, _write_execution_packet, data_issue, ensure_execution_command_layout, load_execution_state, save_execution_state, store, sys
 from content.execution.diagnostics import unexpected_stage_issue
@@ -18,15 +19,13 @@ def _unexpected_stage_issue(stage_name: str, exc: Exception):
 
 def _execution_runtime_logger(ctx: ExecutionContext) -> DataRuntimeLogger:
     from core.paths import OUTPUT_ROOT
-    from quwoquan_ops.cli.lib.observability import write_run_manifest
 
     environment = os.environ.get("APP_ENV", "alpha").strip() or "alpha"
     observability_root = (
         OUTPUT_ROOT / "env" / "repo" / "observability" / ctx.execution_id
     )
-    write_run_manifest(
+    write_data_run_manifest(
         observability_root,
-        env_name="repo",
         run_id=ctx.execution_id,
         command="task execute",
         target=ctx.execution_id,

@@ -1,6 +1,69 @@
 events:
-- {name: SkillDataControlRequested, description: 用户创建待确认 Skill 数据控制请求, producer: assistant-service, consumers: [projection-workers], channel: event_store, payload_entity: SkillDataControlRequest, payload_fields: [requestId, accountId, skillId, requestedActions, status, revision, createdAt]}
-- {name: SkillDataControlConfirmed, description: 用户明确确认执行请求, producer: assistant-service, consumers: [projection-workers], channel: event_store, payload_entity: SkillDataControlRequest, payload_fields: [requestId, accountId, skillId, status, confirmedAt, revision, updatedAt]}
-- {name: SkillDataControlCompleted, description: 请求内全部 Assistant-owned action 已完成, producer: assistant-service, consumers: [projection-workers], channel: event_store, payload_entity: SkillDataControlRequest, payload_fields: [requestId, accountId, skillId, completedActions, status, completedAt, revision, updatedAt]}
-- {name: SkillDataControlCancelled, description: 用户未确认并取消请求, producer: assistant-service, consumers: [projection-workers], channel: event_store, payload_entity: SkillDataControlRequest, payload_fields: [requestId, accountId, skillId, status, completedAt, revision, updatedAt]}
-- {name: SkillDataControlFailed, description: owner action 失败且请求进入可重试失败终态, producer: assistant-service, consumers: [projection-workers], channel: event_store, payload_entity: SkillDataControlRequest, payload_fields: [requestId, accountId, skillId, completedActions, status, failedAction, failureCode, revision, updatedAt]}
+- name: SkillDataControlRequested
+  description: 用户创建待确认 Skill 数据控制请求
+  delivery_semantics: transactional_event_log
+  payload_entity: SkillDataControlRequest
+  payload_fields:
+  - requestId
+  - accountId
+  - skillId
+  - requestedActions
+  - status
+  - revision
+  - createdAt
+  no_consumer_reason: 事件经事务 outbox 追加到耐久 owner activity journal；SkillActivityView 通过 owner named reader 联邦读取，不订阅该日志。
+- name: SkillDataControlConfirmed
+  description: 用户明确确认执行请求
+  delivery_semantics: transactional_event_log
+  payload_entity: SkillDataControlRequest
+  payload_fields:
+  - requestId
+  - accountId
+  - skillId
+  - status
+  - confirmedAt
+  - revision
+  - updatedAt
+  no_consumer_reason: 事件经事务 outbox 追加到耐久 owner activity journal；SkillActivityView 通过 owner named reader 联邦读取，不订阅该日志。
+- name: SkillDataControlCompleted
+  description: 请求内全部 Assistant-owned action 已完成
+  delivery_semantics: transactional_event_log
+  payload_entity: SkillDataControlRequest
+  payload_fields:
+  - requestId
+  - accountId
+  - skillId
+  - completedActions
+  - status
+  - completedAt
+  - revision
+  - updatedAt
+  no_consumer_reason: 事件经事务 outbox 追加到耐久 owner activity journal；SkillActivityView 通过 owner named reader 联邦读取，不订阅该日志。
+- name: SkillDataControlCancelled
+  description: 用户未确认并取消请求
+  delivery_semantics: transactional_event_log
+  payload_entity: SkillDataControlRequest
+  payload_fields:
+  - requestId
+  - accountId
+  - skillId
+  - status
+  - completedAt
+  - revision
+  - updatedAt
+  no_consumer_reason: 事件经事务 outbox 追加到耐久 owner activity journal；SkillActivityView 通过 owner named reader 联邦读取，不订阅该日志。
+- name: SkillDataControlFailed
+  description: owner action 失败且请求进入可重试失败终态
+  delivery_semantics: transactional_event_log
+  payload_entity: SkillDataControlRequest
+  payload_fields:
+  - requestId
+  - accountId
+  - skillId
+  - completedActions
+  - status
+  - failedAction
+  - failureCode
+  - revision
+  - updatedAt
+  no_consumer_reason: 事件经事务 outbox 追加到耐久 owner activity journal；SkillActivityView 通过 owner named reader 联邦读取，不订阅该日志。

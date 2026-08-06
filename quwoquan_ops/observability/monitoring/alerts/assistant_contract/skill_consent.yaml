@@ -1,0 +1,65 @@
+# Code generated from quwoquan_service/generated/contract_graph.json.
+# Regenerate with verify_object_alert_coverage.py --write.
+groups:
+  - name: quwoquan_assistant_contract_skill_consent
+    rules:
+      - record: quwoquan_assistant_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="assistant-service",method="POST",route=~"^/assistant/skills/[^/]+/consent$"})
+        labels:
+          service: "assistant-service"
+          operation: "assistant.skill_consent.GrantSkillConsent"
+          contract_metric: "assistant_skill_consent_command"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_assistant_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="assistant-service",method="POST",route=~"^/assistant/skills/[^/]+/consent$"})
+        labels:
+          service: "assistant-service"
+          operation: "assistant.skill_consent.GrantSkillConsent"
+          contract_metric: "assistant_skill_consent_command"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_assistant_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="assistant-service",method="GET",route="/assistant/consents"})
+        labels:
+          service: "assistant-service"
+          operation: "assistant.skill_consent.ListConsents"
+          contract_metric: "assistant_skill_consent_query"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "300"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_assistant_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="assistant-service",method="GET",route="/assistant/consents"})
+        labels:
+          service: "assistant-service"
+          operation: "assistant.skill_consent.ListConsents"
+          contract_metric: "assistant_skill_consent_query"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "300"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_assistant_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="assistant-service",method="DELETE",route=~"^/assistant/skills/[^/]+/consent$"})
+        labels:
+          service: "assistant-service"
+          operation: "assistant.skill_consent.RevokeSkillConsent"
+          contract_metric: "assistant_skill_consent_command"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_assistant_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="assistant-service",method="DELETE",route=~"^/assistant/skills/[^/]+/consent$"})
+        labels:
+          service: "assistant-service"
+          operation: "assistant.skill_consent.RevokeSkillConsent"
+          contract_metric: "assistant_skill_consent_command"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"

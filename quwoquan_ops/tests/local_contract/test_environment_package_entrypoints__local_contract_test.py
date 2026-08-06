@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from quwoquan_ops.cli import stackctl
+from quwoquan_ops.cli import legal_static, stackctl
 from quwoquan_ops.gate import verify_env_artifact_isolation as isolation
 from quwoquan_ops.gate import verify_environment_packaging_contract as packaging
 
@@ -28,6 +28,88 @@ def _recipe(target: str) -> str:
     start = makefile.index(f"{target}:")
     end = makefile.find("\n\n", start)
     return makefile[start:] if end == -1 else makefile[start:end]
+
+
+def test_legal_static_current_is_a_physical_candidate_snapshot(
+    tmp_path: Path,
+) -> None:
+    legal_root = tmp_path / "legal-static"
+    package_dir = legal_root / "2026-07"
+    package_dir.mkdir(parents=True)
+    (package_dir / "release_metadata.json").write_text("{}\n", encoding="utf-8")
+
+    current_ref = legal_static._refresh_current_pointer(
+        legal_root,
+        package_dir,
+        target_name="alpha-local",
+    )
+
+    current = legal_root / "current"
+    assert current_ref.endswith("/legal-static/current")
+    assert current.is_dir()
+    assert not current.is_symlink()
+    assert (current / "release_metadata.json").read_text(encoding="utf-8") == "{}\n"
+
+
+def test_legal_static_verify_rejects_current_snapshot_digest_drift(
+    tmp_path: Path,
+) -> None:
+    legal_root = tmp_path / "legal-static"
+    package_dir = legal_root / "2026-07"
+    package_dir.mkdir(parents=True)
+    (package_dir / "public" / "legal").mkdir(parents=True)
+    (package_dir / "public" / "legal" / "privacy.html").write_text(
+        "privacy\n",
+        encoding="utf-8",
+    )
+    (package_dir / "checksums.json").write_text(
+        json.dumps(
+            {
+                "public/legal/privacy.html": _sha256(
+                    package_dir / "public" / "legal" / "privacy.html"
+                )
+            },
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (package_dir / "release_metadata.json").write_text(
+        json.dumps(
+            {
+                "schema": "legal-static-release",
+                "packageKind": "legal-static",
+                "env": "alpha",
+                "version": "2026-07",
+                "currentVersion": "2026-07",
+            },
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (package_dir / "public" / "legal" / "manifest.json").write_text(
+        "{}\n",
+        encoding="utf-8",
+    )
+    legal_static._refresh_current_pointer(
+        legal_root,
+        package_dir,
+        target_name="alpha-local",
+    )
+    (legal_root / "current" / "public" / "legal" / "privacy.html").write_text(
+        "tampered\n",
+        encoding="utf-8",
+    )
+
+    issues: list[str] = []
+    legal_static._verify_current_snapshot(package_dir, issues=issues)
+
+    assert any("current snapshot digest drift" in item for item in issues)
 
 
 def test_runtime_shared_package_requires_complete_provenance_and_digests(

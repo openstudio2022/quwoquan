@@ -1,0 +1,84 @@
+#!/usr/bin/env python3
+"""App metadata/codegen gates must scan canonical service contracts."""
+
+from __future__ import annotations
+
+import importlib.util
+import io
+import unittest
+from contextlib import redirect_stderr, redirect_stdout
+from pathlib import Path
+from unittest import mock
+
+
+REPO_ROOT = Path(__file__).resolve().parents[4]
+SCRIPTS_ROOT = REPO_ROOT / "quwoquan_app" / "scripts"
+
+
+def load_verifier(name: str):
+    matches = sorted(SCRIPTS_ROOT.rglob(f"{name}.py"))
+    assert len(matches) == 1, matches
+    path = matches[0]
+    spec = importlib.util.spec_from_file_location(name, path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+class VerifyMetadataAppContractGatesTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.routes = load_verifier("verify_metadata_routes_vs_codegen_app")
+        cls.responses = load_verifier(
+            "verify_metadata_response_body_vs_codegen_app"
+        )
+
+    def test_routes_scan_every_generated_contract_domain(self) -> None:
+        routes = self.routes.collect_yaml_routes_by_domain()
+        app_routes = self.routes.parse_app_operation_routes(
+            self.routes.OPERATION_CONTRACTS
+        )
+        generated_domains = {
+            domain for domain, route_map in app_routes.items() if route_map
+        }
+        routed_domains = {
+            domain for domain, route_map in routes.items() if route_map
+        }
+        self.assertTrue(generated_domains)
+        self.assertTrue(generated_domains.issubset(routed_domains))
+        self.assertTrue(all(routes[domain] for domain in generated_domains))
+        self.assertIn("gateway", routes)
+        self.assertEqual(routes["gateway"], {})
+
+    def test_response_gate_scans_current_canonical_declarations(self) -> None:
+        declarations = self.responses.collect_response_decls()
+        checked = sum(len(operations) for operations in declarations.values())
+        self.assertGreater(checked, 0)
+        self.assertIn("content", declarations)
+        self.assertIn("chat", declarations)
+
+    def test_route_gate_rejects_empty_green_result(self) -> None:
+        with mock.patch.object(
+            self.routes, "collect_yaml_routes_by_domain", return_value={}
+        ), mock.patch.object(
+            self.routes, "parse_app_operation_routes", return_value={}
+        ):
+            with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                self.assertEqual(self.routes.main(), 1)
+
+    def test_response_gate_rejects_empty_green_result(self) -> None:
+        with (
+            mock.patch.object(
+                self.responses, "collect_projection_index", return_value={}
+            ),
+            mock.patch.object(
+                self.responses, "collect_response_decls", return_value={}
+            ),
+        ):
+            with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                self.assertEqual(self.responses.main(), 1)
+
+
+if __name__ == "__main__":
+    unittest.main()

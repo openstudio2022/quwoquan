@@ -530,11 +530,17 @@ sites:
       loginPolicy: public_only
       watermarkPolicy: reject_watermarked_publish_assets
       termsUrl: https://tuchong.com/terms/
+      attributionPublish:
+        allowed: true
+        downloadAllowed: true
+        authorizationBasis: research_unverified_with_attribution
+        evidenceFields: [workUrl, discoveryUrl, originalAssetUrl, sourceAuthor, repostAttribution, watermarkScan, ocrScan, modelReleaseStatus, collectedAt]
+        notes: research 仅消费公开直链、平台支持接口或人工文件；逐图保留作者、作品页、原图、无水印扫描与 rights gap，commercial 仍须作者或图虫创意授权。
       discoveryStrategy:
         mode: site_listing_scan
         seedAxes: [topic, time_window, site_listing, collection]
         precheckGates: [light_fetch, scenery_or_photography_classification, quality_gate, entity_anchor, rights_gate]
-        notes: 摄影社区按作品页/专题页/集合页轻量巡检，不以摄影师主页为主轴；授权字段不完整不得发布。
+        notes: 摄影社区按作品页/专题页/集合页形成 research 候选，不以摄影师主页为主轴；未验证权利可进入受隔离 research，但必须逐图记录授权缺口，commercial 不得放行。
       maxDepth: 0
       maxPagesPerDay: 0
       controlledTrial:
@@ -543,8 +549,8 @@ sites:
         rawFetchAllowed: false
         publishableAssetsAllowed: false
         notes: 仅用于摄影供给线容量、质量分布和 DAG/并发验证；逐资产授权不明时不得发布。
-      notes: 图虫社区只作为 licensed_candidate 线索源；授权字段不完整不得进入 release。
-    notes: 摄影社区参考源，不作为默认真实批量下载或自动发布图片来源。
+      notes: 图虫社区是 Pinterest 之后的 research 补充发现源；不自动抓取，只消费公开直链、支持接口或人工文件，水印/错实体/安全失败仍阻断。
+    notes: 摄影社区 research 候选源；unverified 不等于 verified，commercial 仍只接受逐资产授权。
   - siteId: tuchong_stock_authorized
     platform: 图虫创意
     category: stock_authorized

@@ -7,7 +7,7 @@ description: 外部能力集成网关（先覆盖 location）
 externalDependencies:
   - capability: integration.location.lookup
     port: LocationLookupPort
-    operations: [nearby, search]
+    operations: [nearby]
     conformance: location_lookup
     adapterContracts:
       ext.map.protocol_fixture:
@@ -18,6 +18,24 @@ externalDependencies:
         endpointEnvs: {base: INTEGRATION_LOCATION_BAIDU_BASE_URL}
         secretRefs: [INTEGRATION_LOCATION_BAIDU_AK]
         defaultTimeoutMs: 1200
+  - capability: location.poi.search
+    port: LocationPoiSearchPort
+    operations: [search]
+    conformance: location_poi_search
+    adapterContracts:
+      ext.map.nominatim:
+        endpointEnvs: {base: INTEGRATION_LOCATION_NOMINATIM_BASE_URL}
+        secretRefs: []
+        defaultTimeoutMs: 5000
+  - capability: location.route.read
+    port: LocationRouteReadPort
+    operations: [route]
+    conformance: location_route_read
+    adapterContracts:
+      ext.route.osrm:
+        endpointEnvs: {base: INTEGRATION_LOCATION_OSRM_BASE_URL}
+        secretRefs: []
+        defaultTimeoutMs: 8000
 response_list_key: items
 api_routes:
   - method: GET
@@ -108,6 +126,8 @@ api_routes:
       - INTEGRATION.USER.location_unavailable
       - INTEGRATION.USER.invalid_argument
       - INTEGRATION.MIDDLEWARE.upstream_timeout
+      - INTEGRATION.MIDDLEWARE.location_provider_rate_limited
+      - INTEGRATION.MIDDLEWARE.location_provider_invalid_response
       - INTEGRATION.MIDDLEWARE.location_provider_unavailable
       - INTEGRATION.SYSTEM.location_internal_error
     privacy:
@@ -148,20 +168,112 @@ api_routes:
       visibility: public
     request_entity: LocationSearchQueryParams
     request_body_kind: none
+  - method: GET
+    path: /integration/location/route
+    operation: ReadLocationRoute
+    actor: none
+    application:
+      kind: query
+      facet: LocationQueryFacade
+      method: readLocationRoute
+      reader: LocationRouteReader
+      slice: LocationRoute
+    authorization:
+      principal: public
+      ownership_policy: public_read
+    commercial:
+      status: ready
+    reliability:
+      timeout_ms: 8000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 1
+      idempotency: none
+    error_codes:
+      - INTEGRATION.USER.invalid_argument
+      - INTEGRATION.MIDDLEWARE.upstream_timeout
+      - INTEGRATION.MIDDLEWARE.location_provider_rate_limited
+      - INTEGRATION.MIDDLEWARE.location_provider_invalid_response
+      - INTEGRATION.MIDDLEWARE.location_provider_unavailable
+      - INTEGRATION.SYSTEM.location_internal_error
+    privacy:
+      request_classification: PII
+      response_classification: PII
+      log_policy: metadata_only
+    telemetry:
+      metric: integration_location_route_read
+      trace: true
+      attributes: [outcome, provider, travel_mode]
+    slo:
+      latency_p95_ms: 2500
+      availability_percent: 99.0
+    description: 读取 canonical WGS84 起终点间路线；输出统一 polyline、时长与距离，不暴露供应商 wire。
+    request_bindings:
+      query:
+        - {name: originLat, field: originLat}
+        - {name: originLng, field: originLng}
+        - {name: destinationLat, field: destinationLat}
+        - {name: destinationLng, field: destinationLng}
+        - {name: travelMode, field: travelMode, required: false}
+    response_entity: LocationRoute
+    security:
+      auth_mode: optional
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: allow
+      visibility: public
+    request_entity: LocationRouteReadQueryParams
+    request_body_kind: none
 consumers:
   - name: app
     capabilities:
       - location_nearby
       - location_search
+      - location_route_read
   - name: content-service
     capabilities:
       - location_nearby
       - location_search
+      - location_route_read
   - name: circle-service
     capabilities:
       - location_nearby
       - location_search
+      - location_route_read
   - name: platform-ops
     capabilities:
       - provider_switch
       - quota_management
+readiness_cases:
+- case_id: get-nearby-locations-local
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/integration-service-foundation/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: GetNearbyLocations}
+  runner_source_path: quwoquan_service/services/integration-service/tests/local_contract/external_integration/location/location_handler__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: get-nearby-locations-api
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/integration-service-foundation/spec.md#gwt-001
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: GetNearbyLocations}
+  runner_source_path: quwoquan_service/services/integration-service/tests/api_integration/external_integration/location/location_provider_binding__reliability__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: https-location-provider, digest_binding: candidate}
+- case_id: search-locations-local
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/integration-service-foundation/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: SearchLocations}
+  runner_source_path: quwoquan_service/services/integration-service/tests/local_contract/external_integration/location/location_handler__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: read-location-route-local
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/integration-service-foundation/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ReadLocationRoute}
+  runner_source_path: quwoquan_service/services/integration-service/tests/local_contract/external_integration/location/location_handler__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}

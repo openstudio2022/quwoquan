@@ -1,3 +1,5 @@
+# spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-003
+# readiness_case: project-feature-tag-feedback-local
 from internal.recommendation.recommendation_feature_profile_view.adapters.inbound.stream.tag_feedback_consumer import (
     CONSUMER_GROUP,
     TAG_FEEDBACK_DLQ,

@@ -16,8 +16,8 @@ SCRIPTS_ROOT = DATA_ROOT / "scripts"
 if str(SCRIPTS_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_ROOT))
 
-from core.media_asset_url import resolve_media_cdn_bases  # noqa: E402
-from core.media_library_sync import sync_media_library  # noqa: E402
+from content.release.environment.topology import resolve_media_cdn_bases
+from core.media_library_sync import sync_media_library
 
 
 def _write_cas_object(root: Path, payload: bytes, ext: str = "jpg") -> Path:

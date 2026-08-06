@@ -71,9 +71,11 @@
 
 示例：
 - `sys.api-edge.rate_limit.query.limit`
-- `sys.orchestrator.downstream.timeout_ms`
+- `sys.content-service.feed.max_inflight`
 - `sys.content.mongo.max_pool_size`
 - `sys.assistant.otel.trace_sample_ratio`
+
+> 示例只能取自所属服务 `config/schema.yaml` 已注册的键；未注册的键不是配置项。
 
 ### 3.3 每个配置项必须具备的元数据（规范）
 
@@ -92,7 +94,7 @@
 
 - **审计**：所有变更必须记录：操作者、时间、生效范围、旧值/新值、关联工单/发布号。
 - **回滚**：必须支持一键回滚到上一版本。
-- **灰度**：高风险项必须灰度（尤其是：超时/重试、限流阈值、降级开关、采样率）。
+- **灰度**：高风险项必须灰度（尤其是：限流阈值、并发上限、采样率）。超时不在此列——它由 operation 契约拥有，走契约变更与 codegen，不走配置灰度。
 - **本地/测试环境**：
   - local/test：文件 + 环境变量（见 `技术选型.md` 的配置抽象）
   - cloud：配置中心（Nacos）
@@ -112,10 +114,14 @@
 
 ### 5.2 可靠性（Reliability）
 
-- `sys.<service>.downstream.timeout_ms`
-- `sys.<service>.downstream.retry.max_attempts`
-- `sys.<service>.downstream.circuit_breaker.enabled`
-- `sys.<service>.degrade.enabled`（降级总开关）
+- `sys.<service>.<dependency>.max_inflight`（owner 侧并发背压上限，例如 `sys.content-service.feed.max_inflight`）
+- `sys.<service>.<dependency>.timeout_ms`（**出站**依赖客户端超时，例如 `sys.content-service.rec_model_service.timeout_ms`、`sys.content-service.es.requestTimeoutMs`）
+
+以下不是、也不得成为配置项：
+
+- **入站 operation 超时预算**：唯一真相源是 operation 契约的 `reliability.timeout_ms`，经生成的入口安全描述符在 guard 层以 `context.WithTimeout` 强制。禁止再引入按服务覆盖入站超时的配置键。
+- **下游重试**：当前没有实现，也没有对应配置键；不要按“已存在”规划或引用。
+- **熔断阈值与降级总开关**：熔断阈值当前是调用点的代码常量（`runtimegovernance.NewCircuitBreaker`），不存在全局降级开关。若要改为配置驱动，必须先在所属服务 `config/schema.yaml` 注册键并接线，再写入本清单。
 
 ### 5.3 性能（Performance）
 

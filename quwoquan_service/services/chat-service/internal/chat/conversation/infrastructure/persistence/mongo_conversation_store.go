@@ -13,6 +13,7 @@ import (
 
 	"quwoquan_service/services/chat-service/internal/chat/conversation/application"
 	model "quwoquan_service/services/chat-service/internal/chat/conversation/domain/model"
+	messageports "quwoquan_service/services/chat-service/internal/chat/message/domain/ports"
 )
 
 // MongoChatStore 以 MongoDB 实现应用层的细粒度存储端口。
@@ -37,9 +38,9 @@ var (
 	_ application.CircleGroupMembershipProjectionStore  = (*MongoChatStore)(nil)
 	_ application.CircleGroupChatBindingProjectionStore = (*MongoChatStore)(nil)
 	_ application.MessageStore                          = (*MongoChatStore)(nil)
-	_ application.MessageOutboxReader                   = (*MongoChatStore)(nil)
-	_ application.MessageOutboxDispatchStore            = (*MongoChatStore)(nil)
-	_ application.MessageOutboxCheckpointStore          = (*MongoChatStore)(nil)
+	_ messageports.OutboxReader                         = (*MongoChatStore)(nil)
+	_ messageports.OutboxDispatchStore                  = (*MongoChatStore)(nil)
+	_ messageports.OutboxCheckpointStore                = (*MongoChatStore)(nil)
 	_ application.ConversationMessageProjector          = (*MongoChatStore)(nil)
 )
 
@@ -210,6 +211,36 @@ func (s *MongoChatStore) FindConversationByGatheringID(
 		return nil, fmt.Errorf("find conversation for Gathering %s: %w", gatheringID, err)
 	}
 	return &conversation, nil
+}
+
+func (s *MongoChatStore) ApplyGatheringConversationProjection(
+	ctx context.Context,
+	gatheringID string,
+	expectedSourceVersion int64,
+	conversation *model.Conversation,
+) (bool, error) {
+	if conversation == nil {
+		return false, errors.New("Gathering conversation projection is required")
+	}
+	versionFilter := bson.M{"gatheringSourceVersion": expectedSourceVersion}
+	if expectedSourceVersion == 0 {
+		versionFilter = bson.M{"$or": bson.A{
+			bson.M{"gatheringSourceVersion": 0},
+			bson.M{"gatheringSourceVersion": bson.M{"$exists": false}},
+		}}
+	}
+	filter := bson.M{
+		"$and": bson.A{
+			bson.M{"gatheringId": strings.TrimSpace(gatheringID)},
+			versionFilter,
+		},
+	}
+	conversation.UpdatedAt = time.Now().UTC()
+	result, err := s.conversations.ReplaceOne(ctx, filter, conversation)
+	if err != nil {
+		return false, err
+	}
+	return result.MatchedCount == 1, nil
 }
 
 func (s *MongoChatStore) UpdateConversation(ctx context.Context, id string, conv *model.Conversation) error {

@@ -53,6 +53,72 @@
         }
       }
     },
+    "independentAssetReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reviewId", "assetKind", "objectRef", "receiptRef",
+        "receiptDigest", "receiptFileSha256", "sourceRevision",
+        "sourceDigest", "entityCatalogDigest", "acquisitionReceiptRef",
+        "acquisitionReceiptDigest", "acquisitionReceiptSha256",
+        "acquisitionAssetId", "contentSha256", "casRef",
+        "reviewDecision", "reviewer"
+      ],
+      "properties": {
+        "reviewId": {
+          "type": "string",
+          "pattern": "^asset-review-[0-9a-f]{64}$"
+        },
+        "assetKind": {"enum": ["image", "video"]},
+        "objectRef": {"type": "string", "minLength": 1},
+        "receiptRef": {
+          "type": "string",
+          "pattern": "^asset_reviews/receipts/asset-review-[0-9a-f]{64}\\.json$"
+        },
+        "receiptDigest": {"$ref": "#/$defs/sha256"},
+        "receiptFileSha256": {"$ref": "#/$defs/sha256"},
+        "sourceRevision": {"$ref": "#/$defs/sha256"},
+        "sourceDigest": {"$ref": "#/$defs/sha256"},
+        "entityCatalogDigest": {"$ref": "#/$defs/sha256"},
+        "acquisitionReceiptRef": {
+          "type": "string",
+          "pattern": "^data/local/workspace/source-acquisition/(image|video)/receipts/[0-9a-f]{64}\\.json$"
+        },
+        "acquisitionReceiptDigest": {"$ref": "#/$defs/sha256"},
+        "acquisitionReceiptSha256": {"$ref": "#/$defs/sha256"},
+        "acquisitionAssetId": {"type": "string", "minLength": 1},
+        "contentSha256": {"$ref": "#/$defs/sha256"},
+        "casRef": {"type": "string", "minLength": 1},
+        "reviewDecision": {"const": "accepted"},
+        "mediaProbeDigest": {"$ref": "#/$defs/sha256"},
+        "popularitySignalsDigest": {"$ref": "#/$defs/sha256"},
+        "reviewer": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["provider", "model", "runId"],
+          "properties": {
+            "provider": {"type": "string", "minLength": 1},
+            "model": {"type": "string", "minLength": 1},
+            "runId": {"type": "string", "minLength": 1}
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"assetKind": {"const": "video"}},
+            "required": ["assetKind"]
+          },
+          "then": {
+            "required": ["mediaProbeDigest", "popularitySignalsDigest"]
+          }
+        }
+      ]
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
     "assetRights": {
       "type": "object",
       "additionalProperties": false,
@@ -86,6 +152,13 @@
         "assetId": {
           "type": "string",
           "minLength": 1
+        },
+        "acquisitionReceiptRef": {
+          "type": "string",
+          "pattern": "^data/local/workspace/source-acquisition/(image|video)/receipts/[0-9a-f]{64}\\.json$"
+        },
+        "independentAssetReview": {
+          "$ref": "#/$defs/independentAssetReview"
         },
         "sourceKind": {
           "type": "string",
@@ -209,6 +282,10 @@
           "type": "array",
           "items": { "type": "string", "minLength": 1 }
         }
+      },
+      "dependentRequired": {
+        "acquisitionReceiptRef": ["independentAssetReview"],
+        "independentAssetReview": ["acquisitionReceiptRef"]
       },
       "allOf": [
         {

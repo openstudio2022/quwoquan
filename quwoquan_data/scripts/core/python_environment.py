@@ -7,20 +7,18 @@ import re
 import shutil
 import subprocess
 import sys
-import time
 import venv
-from datetime import datetime, timezone
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable, Mapping
-from urllib import error as urlerror
-from urllib import request as urlrequest
 
+from core.control_types import AgentProvider
 from core.runtime_policy import active_runtime_policy
 
 SCRIPTS_ROOT = Path(__file__).resolve().parents[1]
 DATA_ROOT = SCRIPTS_ROOT.parent
 REPO_ROOT = DATA_ROOT.parent
 REQUIREMENTS_PATH = DATA_ROOT / "requirements.txt"
+CURSOR_REQUIREMENTS_PATH = DATA_ROOT / "requirements-cursor.txt"
 DEFAULT_PYTHON_CACHE_ROOT = (
     Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache")
     / "quwoquan"
@@ -46,8 +44,7 @@ def resolve_python_cache_root(value: str | None = None) -> Path:
 PYTHON_CACHE_ROOT = resolve_python_cache_root()
 DATA_VENV_CACHE_DIR = PYTHON_CACHE_ROOT / "quwoquan-data"
 
-AGENT_RUNTIME_MODULES = (
-    "cursor_sdk",
+BASE_AGENT_RUNTIME_MODULES = (
     "PIL",
     "cv2",
     "numpy",
@@ -65,12 +62,42 @@ DEFAULT_NETWORK_ENDPOINTS = (
     "https://commons.wikimedia.org/",
 )
 _RUNTIME_POLICY = active_runtime_policy()
-DEFAULT_CURSOR_STARTUP_MODEL = _RUNTIME_POLICY.cursor_model_selection
-DEFAULT_CURSOR_STARTUP_RUNTIME = _RUNTIME_POLICY.cursor_runtime.value
-DEFAULT_CURSOR_STARTUP_TIMEOUT_SECONDS = float(_RUNTIME_POLICY.startup_timeout_seconds)
+DEFAULT_SEMANTIC_AGENT_MODEL = _RUNTIME_POLICY.semantic_agent_model_selection
+DEFAULT_SEMANTIC_AGENT_RUNTIME = _RUNTIME_POLICY.semantic_agent_runtime.value
+DEFAULT_SEMANTIC_AGENT_STARTUP_TIMEOUT_SECONDS = float(
+    _RUNTIME_POLICY.startup_timeout_seconds
+)
 
 
-def resolve_cursor_startup_timeout_seconds(
+def agent_runtime_modules(
+    provider: AgentProvider | str | None = None,
+) -> tuple[str, ...]:
+    resolved = (
+        provider
+        if isinstance(provider, AgentProvider)
+        else AgentProvider(str(provider))
+        if provider is not None
+        else active_runtime_policy().semantic_agent_provider
+    )
+    if resolved is AgentProvider.CURSOR_SDK:
+        return ("cursor_sdk", *BASE_AGENT_RUNTIME_MODULES)
+    return ("openai_codex", *BASE_AGENT_RUNTIME_MODULES)
+
+
+def agent_requirements_path(
+    provider: AgentProvider | str | None = None,
+) -> Path:
+    resolved = (
+        provider
+        if isinstance(provider, AgentProvider)
+        else AgentProvider(str(provider))
+        if provider is not None
+        else active_runtime_policy().semantic_agent_provider
+    )
+    return CURSOR_REQUIREMENTS_PATH if resolved is AgentProvider.CURSOR_SDK else REQUIREMENTS_PATH
+
+
+def resolve_semantic_agent_startup_timeout_seconds(
     value: object | None = None,
 ) -> float:
     raw = value
@@ -81,7 +108,7 @@ def resolve_cursor_startup_timeout_seconds(
             else float(active_runtime_policy().startup_timeout_seconds)
         )
     except (TypeError, ValueError):
-        raise ValueError("cursor startup timeout must be numeric") from None
+        raise ValueError("semantic-agent startup timeout must be numeric") from None
     return max(1.0, seconds)
 
 
@@ -180,20 +207,24 @@ def python_has_modules(python: Path, modules: Iterable[str]) -> tuple[bool, list
 
 
 def resolve_python_for_modules(
-    modules: Iterable[str] = AGENT_RUNTIME_MODULES,
+    modules: Iterable[str] | None = None,
     *,
     include_current: bool = True,
 ) -> Path | None:
     """Resolve the first interpreter that can import all requested modules."""
+    required_modules = tuple(modules or agent_runtime_modules())
     for python in candidate_pythons(include_current=include_current):
-        ok, _missing = python_has_modules(python, modules)
+        ok, _missing = python_has_modules(python, required_modules)
         if ok:
             return python
     return None
 
 
 def resolve_data_agent_python(*, include_current: bool = True) -> Path | None:
-    return resolve_python_for_modules(AGENT_RUNTIME_MODULES, include_current=include_current)
+    return resolve_python_for_modules(
+        agent_runtime_modules(),
+        include_current=include_current,
+    )
 
 
 def agent_command_needs_bootstrap(argv: list[str]) -> bool:
@@ -203,9 +234,7 @@ def agent_command_needs_bootstrap(argv: list[str]) -> bool:
         return True
     if len(args) >= 2 and args[:2] == ["verify", "homepage-draft"]:
         return True
-    if len(args) >= 2 and args[:2] == ["governance", "media-probe"]:
-        return True
-    return False
+    return len(args) >= 2 and args[:2] == ["governance", "media-probe"]
 
 
 def maybe_reexec_for_agent_command(argv: list[str]) -> None:
@@ -214,12 +243,13 @@ def maybe_reexec_for_agent_command(argv: list[str]) -> None:
         return
     if not agent_command_needs_bootstrap(argv):
         return
-    ok, _missing = python_has_modules(Path(sys.executable), AGENT_RUNTIME_MODULES)
+    required_modules = agent_runtime_modules()
+    ok, _missing = python_has_modules(Path(sys.executable), required_modules)
     if ok:
         return
     python = resolve_data_agent_python(include_current=False)
     if python is None:
-        missing = ", ".join(AGENT_RUNTIME_MODULES)
+        missing = ", ".join(required_modules)
         print(
             f"[qwq-data env] current Python lacks agent dependencies ({missing}); "
             "run `python3 quwoquan_data/scripts/cli.py task preflight` first.",
@@ -241,7 +271,7 @@ def prepare_data_runtime_cache(
     """Rebuild an optional tool cache solely from repository-owned requirements."""
     target_cache_dir = cache_dir or DATA_VENV_CACHE_DIR
     venv_python = python or _venv_python(target_cache_dir)
-    requirements_path = requirements or REQUIREMENTS_PATH
+    requirements_path = requirements or agent_requirements_path()
     if not requirements_path.is_file():
         raise RuntimeError(f"requirements file missing: {requirements_path}")
     if not venv_python.is_file():
@@ -252,7 +282,7 @@ def prepare_data_runtime_cache(
         text=True,
         check=False,
     )
-    ok, missing = python_has_modules(venv_python, AGENT_RUNTIME_MODULES)
+    ok, missing = python_has_modules(venv_python, agent_runtime_modules())
     missing_binaries = [name for name in AGENT_RUNTIME_BINARIES if shutil.which(name) is None]
     return {
         "python": str(venv_python),
@@ -272,8 +302,10 @@ def runtime_report() -> dict:
     current = Path(sys.executable)
     rows = []
     missing_binaries = [name for name in AGENT_RUNTIME_BINARIES if shutil.which(name) is None]
+    required_modules = agent_runtime_modules()
+    requirements_path = agent_requirements_path()
     for python in candidate_pythons(include_current=True):
-        ok, missing = python_has_modules(python, AGENT_RUNTIME_MODULES)
+        ok, missing = python_has_modules(python, required_modules)
         full_missing = missing + [f"{name}: binary not found on PATH" for name in missing_binaries]
         rows.append({"python": str(python), "ready": ok and not missing_binaries, "missing": full_missing})
     resolved = resolve_data_agent_python(include_current=True)
@@ -282,8 +314,8 @@ def runtime_report() -> dict:
     return {
         "schema": "quwoquan_data.python_runtime",
         "currentPython": str(current),
-        "requirements": str(REQUIREMENTS_PATH),
-        "agentModules": list(AGENT_RUNTIME_MODULES),
+        "requirements": str(requirements_path),
+        "agentModules": list(required_modules),
         "agentBinaries": list(AGENT_RUNTIME_BINARIES),
         "resolvedPython": str(resolved) if resolved else None,
         "ready": resolved is not None,

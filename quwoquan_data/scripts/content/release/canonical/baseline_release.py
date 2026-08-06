@@ -16,9 +16,14 @@ from content.release.canonical.object_transaction_contract import (
     _write_json,
     assert_environment_neutral,
 )
-from content.release.canonical.release_attestation import ReleaseAttestation
 from content.release.canonical.release_admission import (
     build_release_asset_admission,
+)
+from content.release.canonical.release_attestation import ReleaseAttestation
+from content.release.canonical.release_header import validate_release_header
+from content.release.canonical.release_identity_incident import (
+    canonical_release_identity_guard,
+    release_output_root,
 )
 from content.release.model import DataSourceOwner, ReleaseKind
 from core.release_layout import (
@@ -35,7 +40,7 @@ from governance.coverage.distribution import load_content_distribution_policy
 _EMPTY_DESIRED_REFS = {"creators": [], "entities": [], "posts": [], "tags": []}
 
 
-def build_empty_baseline_release(
+def _build_empty_baseline_release(
     *,
     publish_root: Path,
     release_root: Path,
@@ -121,10 +126,8 @@ def build_empty_baseline_release(
             "releaseId": release_id,
             "desiredRefs": _EMPTY_DESIRED_REFS,
         }
-        assert_valid(
+        validate_release_header(
             release_header,
-            "release",
-            "release_header",
             label=f"release_header:{release_id}",
         )
         assert_valid(
@@ -176,6 +179,9 @@ def build_empty_baseline_release(
             creator_count=0,
             tag_count=0,
             canonical_merkle=canonical_merkle,
+            source_revision=None,
+            source_digest=None,
+            entity_catalog_digest=None,
             source_digests=(source_digest,),
             payload_sha256=payload_digest(staging),
             recorded_at=_now(),
@@ -199,3 +205,22 @@ def build_empty_baseline_release(
     except Exception:
         shutil.rmtree(staging, ignore_errors=True)
         raise
+
+
+def build_empty_baseline_release(
+    *,
+    publish_root: Path,
+    release_root: Path,
+    release_id: str,
+) -> dict[str, Any]:
+    """Guard empty-baseline creation against a collided content identity."""
+
+    with canonical_release_identity_guard(
+        output_root=release_output_root(release_root),
+        release_id=release_id,
+    ):
+        return _build_empty_baseline_release(
+            publish_root=publish_root,
+            release_root=release_root,
+            release_id=release_id,
+        )

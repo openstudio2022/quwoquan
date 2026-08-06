@@ -133,7 +133,7 @@
 
 ## 7. 工程归属
 
-- App：`quwoquan_app/lib/ui/assistant`、`quwoquan_app/lib/cloud/services/assistant`
+- App：`quwoquan_app/lib/service/assistant_service`
 - Contracts：`quwoquan_service/services/assistant-service/contracts`、`quwoquan_service/services/recommendation-service/contracts`、`quwoquan_service/services/user-service/contracts/persona_management/profile_update_proposal`
 - Service：`quwoquan_service/services/assistant-service`、`quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime`、`quwoquan_service/services/user-service/internal/persona_management/profile_update_proposal`
 - 测试：

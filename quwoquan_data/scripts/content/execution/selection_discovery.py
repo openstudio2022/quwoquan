@@ -5,17 +5,19 @@
 """
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any
 
 from core.control_types import TargetSelector
 from core.io import read_json
-from content.source.contracts import QualifiedHomepageSource
 from governance.coverage.admin_entity_catalog import (
     ADMIN_REGION_REFERENCE_PATH,
     admin_entity_partitions,
 )
 from governance.coverage.master_list import leaf_coordinates
+
+from content.source.contracts import QualifiedHomepageSource
 
 # 主清单 leaf → coverageTarget 契约字段透传集（task_spec.schema.json coverageTargets 同口径）。
 _MASTER_LIST_LIST_FIELDS = ("geoTagRefs", "typeTagRefs", "aliases")
@@ -171,6 +173,59 @@ def partition_targets(
     return by_name
 
 
+def resolve_target_names(
+    targets: Mapping[str, Mapping[str, Any]],
+    requested_names: Iterable[str],
+) -> tuple[str, ...]:
+    """Resolve source names and aliases to one canonical work identity each.
+
+    Explicit retry names belong to the frozen campaign request and therefore may
+    retain the master-list ``name`` that preceded a later ``canonicalName``.
+    Resolution never changes the selected row identity: the returned names are
+    always keys from ``targets``.  A source name or alias shared by multiple
+    canonical rows is not safe to guess and fails closed.
+    """
+
+    resolved: list[str] = []
+    missing: list[str] = []
+    for raw_name in requested_names:
+        requested_name = str(raw_name).strip()
+        matches: list[str] = []
+        for canonical_name, row in targets.items():
+            reference_names = {
+                str(canonical_name).strip(),
+                str(row.get("name") or "").strip(),
+                str(row.get("sourceName") or "").strip(),
+                *(
+                    str(alias).strip()
+                    for alias in (row.get("aliases") or [])
+                    if str(alias).strip()
+                ),
+            }
+            reference_names.discard("")
+            if requested_name in reference_names:
+                matches.append(str(canonical_name))
+        if not matches:
+            missing.append(requested_name)
+            continue
+        if len(matches) > 1:
+            raise ValueError(
+                "requested target is ambiguous in the region reference: "
+                f"{requested_name} -> {', '.join(sorted(matches))}"
+            )
+        resolved.append(matches[0])
+    if missing:
+        raise ValueError(
+            "requested targets are absent from the region reference: "
+            + ", ".join(missing)
+        )
+    if len(set(resolved)) != len(resolved):
+        raise ValueError(
+            "requested target names resolve to duplicate canonical work identities"
+        )
+    return tuple(resolved)
+
+
 __all__ = [
     "apply_master_list_fields",
     "coverage_target_from_selection",
@@ -178,4 +233,5 @@ __all__ = [
     "load_partitions",
     "ordered_partition_leaves",
     "partition_targets",
+    "resolve_target_names",
 ]

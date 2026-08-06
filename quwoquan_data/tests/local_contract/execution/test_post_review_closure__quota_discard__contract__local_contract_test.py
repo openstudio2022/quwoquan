@@ -8,7 +8,11 @@ from types import SimpleNamespace
 import pytest
 
 from content.execution import handoff, post_review_closure, spec_contract
-from content.execution.controller import post_independent_review, stage_post_review
+from content.execution.controller import (
+    post_independent_review,
+    stage_post_compose,
+    stage_post_review,
+)
 from content.execution.recovery import post_recovery
 from content.post import object_index
 from content.post.article import base_draft
@@ -86,10 +90,11 @@ def test_post_review_quota_met_with_discarded_object_is_publishable(
     )
 
 
-def test_post_review_quota_shortfall_fails_even_with_a_valid_object(
+def test_post_review_quota_shortfall_still_loads_the_qualified_object(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
+    """配额未达成只是统计缺口；有一个合格对象就必须能继续走发布。"""
     monkeypatch.setattr(spec_contract, "approved_quota", lambda _execution_id: 2)
     targets = {
         "article-a": "posts/article/攻略/文章甲/1",
@@ -105,18 +110,27 @@ def test_post_review_quota_shortfall_fails_even_with_a_valid_object(
 
     assert not closure.passed
     assert closure.qualified_count == 1
+    incremental = post_review_closure.load_post_review_closure(
+        EXECUTION_ID,
+        root=tmp_path,
+        expected_object_targets=targets,
+    )
+    assert incremental.qualified_object_refs == ("article-a",)
+    assert not incremental.passed
+    # 只有显式的规模 promotion 才把配额达成当成硬条件。
     with pytest.raises(ValueError, match="quota shortfall"):
         post_review_closure.load_post_review_closure(
             EXECUTION_ID,
             root=tmp_path,
             expected_object_targets=targets,
+            require_quota_milestone=True,
         )
 
 
 def test_canonical_promotion_consumes_the_same_qualified_closure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(spec_contract, "approved_quota", lambda _execution_id: 1)
+    monkeypatch.setattr(spec_contract, "approved_quota", lambda _execution_id: 2)
     targets = {
         "article-a": "posts/article/攻略/文章甲/1",
         "article-b": "posts/article/攻略/文章乙/1",
@@ -132,10 +146,14 @@ def test_canonical_promotion_consumes_the_same_qualified_closure(
         "indexed_post_targets",
         lambda _execution_id: targets,
     )
+    def load_incremental(*_args, **kwargs):
+        assert kwargs["require_quota_milestone"] is False
+        return closure
+
     monkeypatch.setattr(
         post_review_closure,
         "load_post_review_closure",
-        lambda *_args, **_kwargs: closure,
+        load_incremental,
     )
 
     assert post_promotion._qualified_post_refs(EXECUTION_ID) == (
@@ -145,9 +163,9 @@ def test_canonical_promotion_consumes_the_same_qualified_closure(
 
 @pytest.mark.parametrize(
     ("approved_quota", "expected_status"),
-    ((2, StageStatus.DONE), (3, StageStatus.FAILED)),
+    ((2, StageStatus.DONE), (3, StageStatus.DONE)),
 )
-def test_post_review_stage_status_is_decided_only_by_qualified_quota(
+def test_post_review_stage_allows_incremental_publish_before_quota_milestone(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     approved_quota: int,
@@ -169,6 +187,11 @@ def test_post_review_stage_status_is_decided_only_by_qualified_quota(
 
     monkeypatch.setattr(stage_post_review, "_is_homepage_only_execution", lambda _ctx: False)
     monkeypatch.setattr(stage_post_review, "_review_gate_is_stale", lambda *_args: False)
+    monkeypatch.setattr(
+        stage_post_compose,
+        "compose_brief_absorbed_path",
+        lambda _execution_id, ref: tmp_path / f"{ref}.not-absorbed",
+    )
     monkeypatch.setattr(stage_post_review, "_materialize_reviewed_refs", lambda *_args: [])
     monkeypatch.setattr(
         stage_post_review,

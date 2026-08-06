@@ -3,45 +3,101 @@
   "$id": "privacy.schema.json",
   "type": "object",
   "additionalProperties": false,
-  "required": ["aggregate", "description"],
+  "required": ["description"],
   "properties": {
-    "aggregate": {"type": "string", "minLength": 1},
     "description": {"type": "string", "minLength": 1},
     "app_log_policy": {
+      "description": "App 日志的显式允许/净化清单；未列出的字段默认禁止写入 App 日志。",
       "type": "array",
+      "minItems": 1,
       "items": {"$ref": "#/$defs/appLogPolicy"}
     },
     "data_lifecycle": {"$ref": "#/$defs/dataLifecycle"},
     "field_visibility": {
       "type": "array",
+      "minItems": 1,
       "items": {"$ref": "#/$defs/fieldVisibility"}
     }
   },
+  "anyOf": [
+    {"required": ["app_log_policy"]},
+    {"required": ["data_lifecycle"]},
+    {"required": ["field_visibility"]}
+  ],
   "$defs": {
     "fieldName": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
+    "objectId": {"type": "string", "pattern": "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$"},
     "appLogPolicy": {
       "type": "object",
       "additionalProperties": false,
       "required": ["field", "classification", "app_log"],
       "properties": {
         "field": {"$ref": "#/$defs/fieldName"},
-        "classification": {"enum": ["PUBLIC", "PII", "SENSITIVE", "SECRET", "INTERNAL"]},
-        "app_log": {"enum": ["allow", "mask", "drop", "truncate", "count_only", "drop_if_gt_100chars"]},
-        "mask_strategy": {"type": "string", "minLength": 1},
+        "classification": {
+          "description": "App 日志的有效分类；只能等于或严于 fields.yaml 的字段基线。",
+          "enum": ["PUBLIC", "INTERNAL", "PII", "SENSITIVE", "SECRET"]
+        },
+        "app_log": {
+          "enum": ["allow", "mask", "drop", "truncate", "count_only", "drop_if_gt_100chars"]
+        },
+        "mask_strategy": {"enum": ["city_level_only", "strip_detail"]},
         "truncate_chars": {"type": "integer", "minimum": 1},
         "description": {"type": "string", "minLength": 1}
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"app_log": {"const": "mask"}},
+            "required": ["app_log"]
+          },
+          "then": {
+            "required": ["mask_strategy"],
+            "not": {"required": ["truncate_chars"]}
+          },
+          "else": {"not": {"required": ["mask_strategy"]}}
+        },
+        {
+          "if": {
+            "properties": {"app_log": {"const": "truncate"}},
+            "required": ["app_log"]
+          },
+          "then": {
+            "required": ["truncate_chars"],
+            "not": {"required": ["mask_strategy"]}
+          },
+          "else": {"not": {"required": ["truncate_chars"]}}
+        }
+      ]
     },
     "deletionCascade": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["entity", "strategy"],
+      "required": ["object_id", "strategy"],
       "properties": {
-        "entity": {"type": "string", "pattern": "^[A-Z][A-Za-z0-9]*$"},
-        "strategy": {"type": "string", "minLength": 1},
+        "object_id": {"$ref": "#/$defs/objectId"},
+        "strategy": {
+          "description": "hard_delete 物理删除整行；soft_delete 只置删除标记而数据仍在；scrub 保留行但把个人数据原地不可逆覆写。scrub 与 soft_delete 的合规姿态不同，不得互相替代；选 scrub 时必须在 description 写明保留行的正当动因与被覆写的字段范围。",
+          "enum": ["hard_delete", "soft_delete", "soft_delete_then_cdn_purge", "scrub"]
+        },
         "soft_delete_first": {"type": "boolean"},
-        "cdn_purge_delay_hours": {"type": "integer", "minimum": 0},
+        "cdn_purge_delay_hours": {"type": "integer", "minimum": 1},
         "description": {"type": "string", "minLength": 1}
+      },
+      "if": {
+        "properties": {"strategy": {"const": "soft_delete_then_cdn_purge"}},
+        "required": ["strategy"]
+      },
+      "then": {
+        "required": ["soft_delete_first", "cdn_purge_delay_hours"],
+        "properties": {"soft_delete_first": {"const": true}}
+      },
+      "else": {
+        "not": {
+          "anyOf": [
+            {"required": ["soft_delete_first"]},
+            {"required": ["cdn_purge_delay_hours"]}
+          ]
+        }
       }
     },
     "anonymization": {
@@ -50,46 +106,71 @@
       "required": ["field", "strategy"],
       "properties": {
         "field": {"$ref": "#/$defs/fieldName"},
-        "strategy": {"type": "string", "minLength": 1},
-        "placeholder": {"type": "string"}
-      }
+        "strategy": {"enum": ["replace_with_placeholder", "drop"]},
+        "placeholder": {"type": "string", "minLength": 1}
+      },
+      "if": {
+        "properties": {"strategy": {"const": "replace_with_placeholder"}},
+        "required": ["strategy"]
+      },
+      "then": {"required": ["placeholder"]},
+      "else": {"not": {"required": ["placeholder"]}}
     },
     "dataLifecycle": {
       "type": "object",
       "additionalProperties": false,
+      "required": ["retention_days", "deletion_on_user_request"],
       "properties": {
         "retention_days": {"type": "integer", "minimum": 0},
-        "user_deletion_hook": {"type": "boolean"},
         "deletion_on_user_request": {"type": "boolean"},
         "deletion_cascade": {
           "type": "array",
+          "minItems": 1,
           "items": {"$ref": "#/$defs/deletionCascade"}
         },
         "anonymization_on_delete": {
           "type": "array",
+          "minItems": 1,
           "items": {"$ref": "#/$defs/anonymization"}
+        }
+      },
+      "if": {
+        "properties": {"deletion_on_user_request": {"const": false}},
+        "required": ["deletion_on_user_request"]
+      },
+      "then": {
+        "not": {
+          "anyOf": [
+            {"required": ["deletion_cascade"]},
+            {"required": ["anonymization_on_delete"]}
+          ]
         }
       }
     },
     "fieldVisibility": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["field"],
+      "required": ["field", "visibility"],
       "properties": {
         "field": {"$ref": "#/$defs/fieldName"},
         "visibility": {
-          "oneOf": [
-            {"type": "string", "minLength": 1},
-            {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}, "uniqueItems": true}
-          ]
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "never_expose",
+              "all",
+              "app",
+              "self",
+              "platform-ops",
+              "content-service-internal",
+              "user-service-internal"
+            ]
+          }
         },
-        "description": {"type": "string", "minLength": 1},
-        "note": {"type": "string", "minLength": 1}
-      },
-      "anyOf": [
-        {"required": ["visibility"]},
-        {"required": ["description"]}
-      ]
+        "description": {"type": "string", "minLength": 1}
+      }
     }
   }
 }

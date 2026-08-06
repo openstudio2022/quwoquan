@@ -1,35 +1,30 @@
-domain: ASSISTANT
-aggregate: PageContext
 description: PageContext 身份、快照校验与 Redis 会话错误。
 errors:
 - code: ASSISTANT.USER.page_context_unauthorized
-  kind: USER
   reason: page_context_unauthorized
   http_status: 401
   emitted_by: [{surface: http, operations: [ReportPageContext]}]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: pageContextUnauthorized
   go_const: ErrPageContextUnauthorized
-  l10n_key: assistant.error.page_context_unauthorized
   user_message: {zh: 请先登录后上报页面上下文, en: Please sign in before reporting page context}
 - code: ASSISTANT.USER.page_context_invalid_argument
-  kind: USER
   reason: page_context_invalid_argument
   http_status: 400
   emitted_by: [{surface: http, operations: [ReportPageContext]}]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: pageContextInvalidArgument
   go_const: ErrPageContextInvalidArgument
-  l10n_key: assistant.error.page_context_invalid_argument
   user_message: {zh: 页面上下文无效，请刷新后重试, en: Page context is invalid; refresh and try again}
 - code: ASSISTANT.SYSTEM.page_context_unavailable
-  kind: SYSTEM
   reason: page_context_unavailable
   http_status: 503
   emitted_by: [{surface: http, operations: [ReportPageContext]}]
   recovery_action: retry
+  disruption_level: snackbar
   recovery_after_seconds: 3
   dart_const: pageContextUnavailable
   go_const: ErrPageContextUnavailable
-  l10n_key: assistant.error.page_context_unavailable
   user_message: {zh: 页面上下文服务暂不可用，请稍后重试, en: Page context is temporarily unavailable}

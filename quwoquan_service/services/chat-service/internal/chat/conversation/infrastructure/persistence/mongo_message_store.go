@@ -17,6 +17,7 @@ import (
 	"quwoquan_service/services/chat-service/internal/chat/conversation/application"
 	model "quwoquan_service/services/chat-service/internal/chat/conversation/domain/model"
 	messagemodel "quwoquan_service/services/chat-service/internal/chat/message/domain/model"
+	messageports "quwoquan_service/services/chat-service/internal/chat/message/domain/ports"
 )
 
 type messageCommandReceiptDocument struct {
@@ -162,7 +163,7 @@ func (s *MongoChatStore) CommitMessage(
 // (aggregateId, aggregateVersion, eventType) 唯一索引把重放折叠为幂等。
 func (s *MongoChatStore) AppendMessageOutboxEvent(
 	ctx context.Context,
-	event application.MessageOutboxEvent,
+	event messageports.OutboxEvent,
 	aggregateID string,
 	aggregateVersion int64,
 ) error {
@@ -197,9 +198,9 @@ func (s *MongoChatStore) AppendMessageOutboxEvent(
 
 func bindMessageOutboxEvents(
 	message messagemodel.Message,
-	events []application.MessageOutboxEvent,
-) []application.MessageOutboxEvent {
-	bound := make([]application.MessageOutboxEvent, 0, len(events))
+	events []messageports.OutboxEvent,
+) []messageports.OutboxEvent {
+	bound := make([]messageports.OutboxEvent, 0, len(events))
 	for _, event := range events {
 		payload := make(map[string]any, len(event.Payload)+3)
 		for key, value := range event.Payload {
@@ -242,7 +243,7 @@ func (s *MongoChatStore) ReadMessageOutboxAfter(
 	ctx context.Context,
 	checkpoint string,
 	limit int,
-) ([]application.MessageOutboxEvent, error) {
+) ([]messageports.OutboxEvent, error) {
 	if limit <= 0 {
 		limit = 100
 	}
@@ -269,7 +270,7 @@ func (s *MongoChatStore) ReadMessageOutboxAfter(
 	}
 	defer cursor.Close(ctx)
 
-	events := make([]application.MessageOutboxEvent, 0, limit)
+	events := make([]messageports.OutboxEvent, 0, limit)
 	for cursor.Next(ctx) {
 		var document messageOutboxDocument
 		if err := cursor.Decode(&document); err != nil {
@@ -341,7 +342,7 @@ func parseMessageOutboxCheckpoint(checkpoint string) (int64, error) {
 	return sequence, nil
 }
 
-func messageOutboxEventFromDocument(document messageOutboxDocument) application.MessageOutboxEvent {
+func messageOutboxEventFromDocument(document messageOutboxDocument) messageports.OutboxEvent {
 	payload := document.Payload
 	if raw, ok := payload["mentions"].(bson.A); ok {
 		mentions := make([]string, 0, len(raw))
@@ -352,7 +353,7 @@ func messageOutboxEventFromDocument(document messageOutboxDocument) application.
 		}
 		payload["mentions"] = mentions
 	}
-	return application.MessageOutboxEvent{
+	return messageports.OutboxEvent{
 		EventID:        document.ID,
 		EventType:      document.EventType,
 		ConversationID: document.ConversationID,
@@ -387,7 +388,7 @@ func (s *MongoChatStore) loadMessageCommitReplay(
 		return application.MessageCommitResult{}, false, err
 	}
 	defer cursor.Close(ctx)
-	events := make([]application.MessageOutboxEvent, 0)
+	events := make([]messageports.OutboxEvent, 0)
 	for cursor.Next(ctx) {
 		var document messageOutboxDocument
 		if err := cursor.Decode(&document); err != nil {

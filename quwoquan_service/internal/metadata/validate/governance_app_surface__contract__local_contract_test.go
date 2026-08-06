@@ -19,7 +19,7 @@ func TestAppSurfaceGovernanceRejectsSecondTruthAndUntypedOperations(t *testing.T
 	operation.RequestBodyKind = ""
 	operation.ResponseEntity = ""
 	operation.ResponseBody = "PostView"
-	operation.ResponseBodyKind = "ack"
+	operation.ResponseBodyKind = "object"
 	operation.ClientContract = nil
 	operation.ClientContractExplicit = true
 	operation.ErrorCodes = nil
@@ -115,6 +115,69 @@ func TestAppSurfaceGovernanceAcceptsBlockedOperationWithCompleteTypedABI(t *test
 			gotReferences,
 			gotOperations,
 		)
+	}
+}
+
+func TestAppSurfaceGovernanceAcceptsTypedWebSocketUpgradeWithoutJSONResponse(t *testing.T) {
+	contractGraph := appSurfaceTestGraph(t, []appSurfaceContract{{
+		ID:           "appShell",
+		Owner:        "realtime",
+		OperationIDs: []string{"WebSocketUpgrade"},
+	}})
+	operation := &contractGraph.Operations[0]
+	operation.ID = "realtime.connection.WebSocketUpgrade"
+	operation.LocalID = "WebSocketUpgrade"
+	operation.Domain = "realtime"
+	operation.ObjectID = "realtime.connection"
+	operation.RequestEntity = "WebSocketUpgradeRequest"
+	operation.ResponseEntity = ""
+	operation.ResponseBodyKind = "upgrade"
+	operation.ClientContract = &ast.ClientContract{
+		DartImport:      "../realtime/realtime_operation_contracts.g.dart",
+		ResponseType:    "void",
+		ResponseDecoder: "decodeEmptyResponse",
+	}
+	contractGraph.Objects[0] = ast.Object{
+		ID:     "realtime.connection",
+		Domain: "realtime",
+		Name:   "Connection",
+	}
+	contractGraph.Governance.Types = []ast.TypeDefinition{{
+		Name:     "WebSocketUpgradeRequest",
+		ObjectID: "realtime.connection",
+	}}
+	contractGraph.Governance.Fields = []ast.FieldDefinition{{
+		ObjectID: "realtime.connection",
+		Entity:   "WebSocketUpgradeRequest",
+		Name:     "ticket",
+	}}
+	contractGraph.Governance.Objects[0].ObjectID = "realtime.connection"
+	contractGraph.Governance.Objects[0].Errors[0].ObjectID = "realtime.connection"
+
+	if issues := validateAppSurfaceGovernance(contractGraph); len(issues) != 0 {
+		t.Fatalf("typed WebSocket upgrade issues = %+v", issues)
+	}
+}
+
+func TestAppSurfaceGovernanceAcceptsTypedAckWithoutJSONResponse(t *testing.T) {
+	contractGraph := appSurfaceTestGraph(t, []appSurfaceContract{{
+		ID:           "home",
+		Owner:        "content",
+		OperationIDs: []string{"AcknowledgePost"},
+	}})
+	operation := &contractGraph.Operations[0]
+	operation.ID = "content.post.AcknowledgePost"
+	operation.LocalID = "AcknowledgePost"
+	operation.ResponseEntity = ""
+	operation.ResponseBodyKind = "ack"
+	operation.ClientContract = &ast.ClientContract{
+		DartImport:      "../content/content_operation_contracts.g.dart",
+		ResponseType:    "void",
+		ResponseDecoder: "decodeEmptyResponse",
+	}
+
+	if issues := validateAppSurfaceGovernance(contractGraph); len(issues) != 0 {
+		t.Fatalf("typed ack issues = %+v", issues)
 	}
 }
 

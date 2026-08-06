@@ -1,4 +1,7 @@
 // spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-003
+// spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-001
+// readiness_case: list-inbox-api
+// readiness_case: project-chat-inbox-api
 package api_integration
 
 import (
@@ -141,5 +144,108 @@ func TestChatInboxViewHTTPUsesTrustedPersonaAndOpaqueCursor(t *testing.T) {
 	mux.ServeHTTP(invalidResponse, invalid)
 	if invalidResponse.Code != http.StatusBadRequest {
 		t.Fatalf("non-canonical cursor must fail closed: status=%d body=%s", invalidResponse.Code, invalidResponse.Body.String())
+	}
+}
+
+type inboxAPIEventSource struct{ events []inboxapp.Event }
+
+func (source inboxAPIEventSource) ReadAfter(
+	_ context.Context,
+	checkpoint string,
+	_ int,
+) ([]inboxapp.Event, error) {
+	if checkpoint != "" {
+		return nil, nil
+	}
+	return source.events, nil
+}
+
+type inboxAPISnapshotSource struct{ item inboxapp.Item }
+
+func (source inboxAPISnapshotSource) Load(
+	_ context.Context,
+	identity inboxapp.Identity,
+) (inboxapp.Item, bool, error) {
+	item := source.item
+	item.UserID = identity.UserID
+	item.ConversationID = identity.ConversationID
+	return item, true, nil
+}
+
+func (inboxAPISnapshotSource) ListIdentities(
+	context.Context,
+	string,
+	int,
+) ([]inboxapp.Identity, string, error) {
+	return nil, "", nil
+}
+
+type inboxAPIMembers []string
+
+func (members inboxAPIMembers) ListPersonaIDs(context.Context, string) ([]string, error) {
+	return append([]string(nil), members...), nil
+}
+
+type inboxAPIStateAdvancer struct{ calls int }
+
+func (advancer *inboxAPIStateAdvancer) AdvanceUnread(
+	context.Context,
+	inboxapp.Identity,
+	int64,
+	int,
+	int,
+	time.Time,
+) error {
+	advancer.calls++
+	return nil
+}
+
+func TestChatInboxProjectorCommitsCheckpointAndViewThroughRealMongo(t *testing.T) {
+	ctx := t.Context()
+	if _, err := inboxMongoDatabase.Collection("chat_inbox_views").DeleteMany(ctx, map[string]any{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := inboxMongoDatabase.Collection("chat_inbox_view_checkpoints").DeleteMany(ctx, map[string]any{}); err != nil {
+		t.Fatal(err)
+	}
+	advancer := &inboxAPIStateAdvancer{}
+	projector := inboxapp.NewProjector(
+		inboxStore,
+		inboxStore,
+		inboxAPISnapshotSource{item: inboxapp.Item{
+			Type: "group", Title: "projected through production path",
+			LastMessageTime: time.Date(2026, 8, 2, 13, 0, 0, 0, time.UTC),
+		}},
+		inboxAPIMembers{"persona-projector"},
+		advancer,
+		map[string]inboxapp.EventSource{
+			"message": inboxAPIEventSource{events: []inboxapp.Event{{
+				ID: "message-event-101", Type: "MessageSent",
+				ConversationID: "conversation-projector", ActorID: "persona-sender",
+				Checkpoint: "101", Payload: map[string]any{
+					"seq": int64(1), "timestamp": time.Date(2026, 8, 2, 13, 0, 0, 0, time.UTC),
+				},
+			}, {
+				ID: "message-event-102", Type: "MessageRecalled",
+				ConversationID: "conversation-projector", ActorID: "persona-sender",
+				Checkpoint: "102", Payload: map[string]any{
+					"seq": int64(1), "recalledAt": time.Date(2026, 8, 2, 13, 1, 0, 0, time.UTC),
+				},
+			}}},
+		},
+	)
+	if processed, err := projector.Drain(ctx, 100); err != nil || processed != 2 {
+		t.Fatalf("first Drain() processed=%d err=%v", processed, err)
+	}
+	if processed, err := projector.Drain(ctx, 100); err != nil || processed != 0 {
+		t.Fatalf("checkpoint replay Drain() processed=%d err=%v", processed, err)
+	}
+	page, err := inboxStore.List(ctx, "persona-projector", 10, "")
+	if err != nil || len(page.Items) != 1 || page.Items[0].ConversationID != "conversation-projector" {
+		t.Fatalf("projected page=%+v err=%v", page, err)
+	}
+	checkpoint, err := inboxStore.Load(ctx, "chat-inbox-view-message")
+	if err != nil || checkpoint != "102" || advancer.calls != 1 {
+		t.Fatalf("projector checkpoint=%q unread advances=%d err=%v", checkpoint, advancer.calls, err)
 	}
 }

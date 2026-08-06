@@ -6,6 +6,10 @@ import os
 import shlex
 import shutil
 import subprocess
+from pathlib import Path
+
+from core import paths as core_paths
+from core.controller_lease import active_controller_issue
 
 from content.execution.identity import validate_execution_id
 from content.execution.workspace import (
@@ -13,7 +17,12 @@ from content.execution.workspace import (
     execution_root,
     transaction_workspace_root,
 )
-from core.controller_lease import active_controller_issue
+from content.release.canonical.garbage_collection import (
+    release_identity_incident_protected_execution_ids,
+)
+from content.release.canonical.release_identity_incident import (
+    release_identity_protection_lock,
+)
 
 
 def _is_task_execute_command(command: str, execution_id: str) -> bool:
@@ -75,33 +84,53 @@ def _active_execution_processes(execution_id: str) -> tuple[str, ...]:
     )
 
 
-def discard_execution(execution_id: str) -> None:
+def discard_execution(
+    execution_id: str,
+    *,
+    output_root: Path | None = None,
+) -> None:
     """Delete only an inactive execution and its derived transaction workspace."""
 
     normalized_id = validate_execution_id(execution_id)
     root = execution_root(normalized_id)
     if not root.is_dir():
         raise FileNotFoundError(f"execution output does not exist: {normalized_id}")
-    lease_issue = active_controller_issue(normalized_id)
-    if lease_issue:
-        raise RuntimeError(lease_issue)
-    active_processes = _active_execution_processes(normalized_id)
-    if active_processes:
-        raise RuntimeError(
-            "GATE_BLOCK active task execute process owns execution: "
-            + "; ".join(active_processes)
+    selected_output_root = (output_root or core_paths.OUTPUT_ROOT).resolve()
+    with release_identity_protection_lock(
+        output_root=selected_output_root,
+        exclusive=True,
+    ):
+        protected_ids = release_identity_incident_protected_execution_ids(
+            selected_output_root
         )
-    archive_frozen_target_set(normalized_id)
-    if (root / "evidence" / "reliabletask").is_dir():
-        from content.execution.reliabletask_fleet import discard_reliabletask_execution
+        if normalized_id in protected_ids:
+            raise RuntimeError(
+                "GATE_BLOCK DATA.EXECUTION.IDENTITY_INCIDENT_PROTECTED: "
+                f"executionId={normalized_id} is protected by append-only "
+                "release identity incident evidence"
+            )
+        lease_issue = active_controller_issue(normalized_id)
+        if lease_issue:
+            raise RuntimeError(lease_issue)
+        active_processes = _active_execution_processes(normalized_id)
+        if active_processes:
+            raise RuntimeError(
+                "GATE_BLOCK active task execute process owns execution: "
+                + "; ".join(active_processes)
+            )
+        archive_frozen_target_set(normalized_id)
+        if (root / "evidence" / "reliabletask").is_dir():
+            from content.execution.reliabletask_fleet import (
+                discard_reliabletask_execution,
+            )
 
-        discard_reliabletask_execution(normalized_id)
-    shutil.rmtree(root)
-    transaction_root = transaction_workspace_root()
-    if transaction_root.is_dir():
-        for candidate in transaction_root.glob(f"{normalized_id}--*"):
-            if candidate.is_dir():
-                shutil.rmtree(candidate)
+            discard_reliabletask_execution(normalized_id)
+        shutil.rmtree(root)
+        transaction_root = transaction_workspace_root()
+        if transaction_root.is_dir():
+            for candidate in transaction_root.glob(f"{normalized_id}--*"):
+                if candidate.is_dir():
+                    shutil.rmtree(candidate)
 
 
 def handle_discard(args: argparse.Namespace) -> None:

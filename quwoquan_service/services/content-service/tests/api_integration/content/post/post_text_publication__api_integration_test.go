@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-008
+// readiness_case: apply-post-lifecycle-events-api
 package api_integration
 
 import (
@@ -13,11 +15,11 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 
 	rtauth "quwoquan_service/runtime/auth"
+	"quwoquan_service/runtime/commandmeta"
 	rtoperation "quwoquan_service/runtime/operation"
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	contenthttp "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/http"
 	postapp "quwoquan_service/services/content-service/internal/content/post/application"
-	"quwoquan_service/runtime/commandmeta"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 	postgovernance "quwoquan_service/services/content-service/internal/content/post/infrastructure/governance"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence"
@@ -241,7 +243,7 @@ func TestTextPublicationSafetyAndModerationRoundTripThroughHTTP(t *testing.T) {
 			submissionRelay := postapp.NewOutboxRelay(
 				harness.store,
 				harness.store,
-				moderationapp.NewSubmissionCaseOpener(testModerationFacades),
+				moderationapp.NewPostSubmissionModerationHandler(testModerationFacades),
 				fmt.Sprintf("text-safety-submission-%d", index),
 			)
 			if delivered, err := submissionRelay.Drain(
@@ -287,7 +289,7 @@ func TestTextPublicationSafetyAndModerationRoundTripThroughHTTP(t *testing.T) {
 			decisionRelay := moderationapp.NewOutboxRelay(
 				testModerationStore,
 				testModerationStore,
-				postapp.NewPostModerationDecisionConsumer(harness.service),
+				postapp.NewPostModerationDecisionHandler(harness.service),
 				fmt.Sprintf("text-safety-post-lifecycle-%d", index),
 			)
 			if delivered, err := decisionRelay.Drain(

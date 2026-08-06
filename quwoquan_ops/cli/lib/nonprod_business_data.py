@@ -206,7 +206,7 @@ NONPROD_REFERENCE_ASSISTANT_NOTIFICATION_RTC = DatasetRecipe(
         "chat.conversation.CreateConversation",
         "chat.conversation_membership.InviteAssistant",
         "chat.message.SendMessage",
-        "chat.conversation.ListInbox",
+        "chat.chat_inbox_view.ListInbox",
         "notification.notification.ListAppMessages",
         "rtc.call_session.InitiateCall",
         "rtc.call_session.CancelCall",

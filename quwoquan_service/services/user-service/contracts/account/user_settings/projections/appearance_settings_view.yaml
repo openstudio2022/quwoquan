@@ -7,15 +7,20 @@ consumers:
 - app
 fields:
 - name: themeMode
-  type: string
+  type: enum
+  enum_ref: ThemeModeSetting
 - name: fontSizePreset
-  type: string
+  type: enum
+  enum_ref: FontSizePreset
 - name: source
-  type: string
+  type: enum
+  enum_ref: AppearanceSource
 - name: ownerDefaultThemeMode
-  type: string
+  type: enum
+  enum_ref: ThemeModeSetting
 - name: ownerDefaultFontSizePreset
-  type: string
+  type: enum
+  enum_ref: FontSizePreset
 - name: hasPersonaOverride
   type: bool
 - name: version

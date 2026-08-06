@@ -1444,6 +1444,7 @@ types:
       - name: limit
         type: int
         client_dart_type: int
+        client_default: "20"
       - name: blockedKeywords
         type: '[]string'
         client_dart_type: List<String>

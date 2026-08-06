@@ -31,17 +31,17 @@ type stageReceipt struct {
 }
 
 type stageAuditRecord struct {
-	ID              string     `bson:"_id"`
-	EventType       string     `bson:"eventType"`
-	PolicyID        string     `bson:"policyId"`
-	ReleaseDigest   string     `bson:"releaseDigest"`
-	TemplateCount   int        `bson:"templateCount"`
-	RuleCount       int        `bson:"ruleCount"`
-	OccurredAt      time.Time  `bson:"occurredAt"`
-	PublishedAt     *time.Time `bson:"publishedAt,omitempty"`
-	PublishedRef    string     `bson:"publishedRef,omitempty"`
-	ClaimOwner      string     `bson:"claimOwner,omitempty"`
-	ClaimUntil      time.Time  `bson:"claimUntil,omitempty"`
+	ID            string     `bson:"_id"`
+	EventType     string     `bson:"eventType"`
+	PolicyID      string     `bson:"policyId"`
+	ReleaseDigest string     `bson:"releaseDigest"`
+	TemplateCount int        `bson:"templateCount"`
+	RuleCount     int        `bson:"ruleCount"`
+	OccurredAt    time.Time  `bson:"occurredAt"`
+	PublishedAt   *time.Time `bson:"publishedAt,omitempty"`
+	PublishedRef  string     `bson:"publishedRef,omitempty"`
+	ClaimOwner    string     `bson:"claimOwner,omitempty"`
+	ClaimUntil    time.Time  `bson:"claimUntil,omitempty"`
 }
 
 type stageAuditPayload struct {

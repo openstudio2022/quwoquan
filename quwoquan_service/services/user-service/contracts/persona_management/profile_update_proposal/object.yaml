@@ -30,11 +30,6 @@ local_identity_reasons:
   rollbackAuditId: immutable rollback audit record correlation; never used as aggregate identity
   rollbackRequestId: trusted request correlation for the rolling_back checkpoint; never used as aggregate identity
   rollbackTraceId: trusted trace correlation for the rolling_back checkpoint; never used as aggregate identity
-capabilities:
-- commandable
-- queryable
-- idempotent_commands
-- auditable
 business_rules:
 - target persona、source、proposedChanges、reason、evidenceRefs、impactScope 与创建归因创建后不可变
 - proposedChanges 必须是允许字段的强类型 change set，不接受动态 Map

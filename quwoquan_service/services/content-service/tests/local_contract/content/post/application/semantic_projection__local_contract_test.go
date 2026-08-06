@@ -6,8 +6,8 @@ import (
 	"reflect"
 	"testing"
 
-	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 	"quwoquan_service/runtime/commandmeta"
+	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/testsupport"
 )
 

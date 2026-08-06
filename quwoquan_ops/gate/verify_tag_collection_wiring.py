@@ -12,14 +12,14 @@
   发布确认页选中 POI 后只写 `locationPoi`，从不调用它，`Post.geoTagRef` 恒空。
   连锁后果是 `intersection_source.go` 的 `decodeDeclaredVisit` 里区域级同地交集
   分支从未被触发过。
-* `exif` 覆盖 40 个摄影节点，`extractMediaCaptureMetadata` 已实现且有测试，
-  但没有任何生产调用点，`PublishSettings.captureMetadata` 恒为 `empty`，
-  于是 `captureDerivedTagRefs` 恒为空列表。
 * `creator_chip` 覆盖 60 个节点，端侧根本没有打标 chip UI；`state.settings.tagRefs`
   只能由正文内联 `@[label](tag:ref)` 填充，那是 semanticMentions 通道，不是 chip。
 
+`exif` 已经接通（`create_page_state.dart` 调用 `extractMediaCaptureMetadata`），已从
+基线移除，之后被改回未接通即阻断。
+
 因此本门禁不检查「标签定义得好不好」，只检查一件事：**声明了采集通道，就必须有人
-真的去采**。存量三条断点进 `UNWIRED_BASELINE`，只减不增：
+真的去采**。剩余断点进 `UNWIRED_BASELINE`，只减不增：
 
 * 通道被标签使用却没在 `PRODUCERS` 登记 —— 新增通道时忘了想清楚谁来写，阻断。
 * 通道不在基线里却未接通 —— 接通后又被改回去，阻断。
@@ -59,13 +59,13 @@ PRODUCERS: tuple[ChannelProducer, ...] = (
     ChannelProducer(
         channel="poi",
         symbol="GeoTagRefResolver",
-        defined_in="quwoquan_app/lib/application/content/post/geo_tag_ref_resolver.dart",
+        defined_in="quwoquan_app/lib/service/content_service/content/post/application/geo_tag_ref_resolver.dart",
         note="发布确认页选中 POI 后必须解析出 Topic/地理/行政区 路径写入 PublishSettings.geoTagRef",
     ),
     ChannelProducer(
         channel="exif",
         symbol="extractMediaCaptureMetadata",
-        defined_in="quwoquan_app/lib/core/media/media_capture_metadata_extractor.dart",
+        defined_in="quwoquan_app/lib/service/content_service/media/media_upload_session/adapters/media_capture_metadata_extractor.dart",
         note="选中素材后必须解析拍摄事实写入 PublishSettings.captureMetadata",
     ),
     ChannelProducer(
@@ -77,7 +77,7 @@ PRODUCERS: tuple[ChannelProducer, ...] = (
 )
 
 # 当前已知未接通的通道。只减不增：修好一条就必须从这里删掉。
-UNWIRED_BASELINE = frozenset({"poi", "exif", "creator_chip"})
+UNWIRED_BASELINE = frozenset({"poi", "creator_chip"})
 
 _LINE_COMMENT = re.compile(r"^\s*///?")
 _BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)

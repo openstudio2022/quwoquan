@@ -7,29 +7,29 @@ import (
 	rtauth "quwoquan_service/runtime/auth"
 )
 
-// GeneratedPrivilegedOperationHandler applies the generated service/operator
-// guards before dispatching privileged Assistant routes to their owner
-// handlers. Public owner routes continue through the fallback unchanged.
-func GeneratedPrivilegedOperationHandler(next nethttp.Handler) nethttp.Handler {
-	descriptors := operationsecurity.ForDomain("assistant")
-	mux := nethttp.NewServeMux()
-	for _, descriptor := range descriptors {
-		if descriptor.Principal != "service" && descriptor.Principal != "operator" {
-			continue
-		}
-		guarded := rtauth.RequireGeneratedOperationAuthorizationForRoute(
-			descriptors,
-			descriptor.Method,
-			descriptor.PathTemplate,
-		)(next)
-		mux.Handle(descriptor.Method+" "+descriptor.PathTemplate, guarded)
-	}
-	mux.Handle("/", next)
-	return mux
+// GeneratedOperationContractHandler applies the generated assistant descriptor
+// table to every inbound assistant route, not only the privileged ones: the
+// declared reliability.timeout_ms is only a real budget where this middleware
+// runs, so persona routes without it were bounded by nothing but the transport.
+//
+// Commercial fail-closed stays at api-edge. Inside the owner process a blocked
+// operation must remain callable, otherwise it can never produce the candidate
+// evidence that turns it ready.
+func GeneratedOperationContractHandler(next nethttp.Handler) nethttp.Handler {
+	return rtauth.EnforceRuntimeOperationContract(
+		operationsecurity.ForDomain("assistant"),
+	)(next)
 }
 
 func GeneratedOperationPathTemplateResolver() func(*nethttp.Request) string {
 	return rtauth.NewOperationPathTemplateResolver(
 		operationsecurity.ForDomain("assistant"),
 	)
+}
+
+// AssistantOperationDescriptors exposes the generated table to the composition
+// root so transport ceilings are derived from the same descriptors that carry
+// the operation budgets.
+func AssistantOperationDescriptors() []rtauth.OperationSecurityDescriptor {
+	return operationsecurity.ForDomain("assistant")
 }

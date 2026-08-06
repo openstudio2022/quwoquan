@@ -42,10 +42,6 @@ relationships:
   target_objects:
   - user.Persona
   - user.DeviceRegistration
-capabilities:
-- queryable
-- idempotent_commands
-- event_sourced_outbox
 taggable: false
 vector_enabled: false
 business_rules:

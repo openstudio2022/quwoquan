@@ -73,12 +73,30 @@ type RunItem struct {
 }
 
 type DeviceActionExecutionReceipt struct {
-	ActionKind     string    `bson:"actionKind"`
-	IdempotencyKey string    `bson:"idempotencyKey"`
-	Outcome        string    `bson:"outcome"`
-	ExecutedAt     time.Time `bson:"executedAt"`
-	DeviceObjectID string    `bson:"deviceObjectId,omitempty"`
-	FailureCode    string    `bson:"failureCode,omitempty"`
+	InstallationID string    `bson:"installationId" json:"installationId"`
+	DeviceID       string    `bson:"deviceId" json:"deviceId"`
+	Capability     string    `bson:"capability" json:"capability"`
+	InputDigest    string    `bson:"inputDigest" json:"inputDigest"`
+	Permit         string    `bson:"permit" json:"permit"`
+	IdempotencyKey string    `bson:"idempotencyKey" json:"idempotencyKey"`
+	Outcome        string    `bson:"outcome" json:"outcome"`
+	ExecutedAt     time.Time `bson:"executedAt" json:"executedAt"`
+	DeviceObjectID string    `bson:"deviceObjectId,omitempty" json:"deviceObjectId,omitempty"`
+	FailureCode    string    `bson:"failureCode,omitempty" json:"failureCode,omitempty"`
+}
+
+type DeviceActionPermit struct {
+	RunID            string    `bson:"runId" json:"runId"`
+	ToolInvocationID string    `bson:"toolInvocationId" json:"toolInvocationId"`
+	InstallationID   string    `bson:"installationId" json:"installationId"`
+	DeviceID         string    `bson:"deviceId" json:"deviceId"`
+	Capability       string    `bson:"capability" json:"capability"`
+	InputDigest      string    `bson:"inputDigest" json:"inputDigest"`
+	IdempotencyKey   string    `bson:"idempotencyKey" json:"idempotencyKey"`
+	ApprovalRef      string    `bson:"approvalRef" json:"approvalRef"`
+	JTI              string    `bson:"jti" json:"jti"`
+	ExpiresAt        time.Time `bson:"expiresAt" json:"expiresAt"`
+	Permit           string    `bson:"permit" json:"permit"`
 }
 
 // ContextObservationSnapshot is the bounded, user-visible observation state
@@ -103,6 +121,7 @@ type ContextExecutionState struct {
 	NavigationDepth     int                          `bson:"navigationDepth"`
 	SourceIDs           []string                     `bson:"sourceIds"`
 	ToolHistory         []string                     `bson:"toolHistory"`
+	ModelHistory        []string                     `bson:"modelHistory,omitempty"`
 	RecentObservations  []ContextObservationSnapshot `bson:"recentObservations"`
 }
 
@@ -126,6 +145,7 @@ type Checkpoint struct {
 	OpenTaskIDs          []string                       `bson:"openTaskIds"`
 	EvidenceRefs         []string                       `bson:"evidenceRefs"`
 	PendingApprovalRef   string                         `bson:"pendingApprovalRef"`
+	PendingDeviceAction  *DeviceActionPermit            `bson:"pendingDeviceAction,omitempty"`
 	DeviceActionReceipts []DeviceActionExecutionReceipt `bson:"deviceActionReceipts"`
 	BudgetConsumption    BudgetConsumption              `bson:"budgetConsumption"`
 	BudgetReceiptScope   string                         `bson:"budgetReceiptScope"`

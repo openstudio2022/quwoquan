@@ -19,29 +19,29 @@ var (
 // AppErrorFromSessionIdempotencyConflict returns *AppError for ASSISTANT.USER.session_idempotency_conflict (user_message from errors.yaml).
 func AppErrorFromSessionIdempotencyConflict(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.session_idempotency_conflict")
-	return rterr.NewAppError(code, "请求重复提交，请刷新后重试", debugMessage).WithMetadata("idempotency_conflict", 409).WithRecovery("refresh", 0)
+	return rterr.NewAppError(code, "请求重复提交，请刷新后重试", debugMessage).WithMetadata("idempotency_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromSessionInvalidArgument returns *AppError for ASSISTANT.USER.session_invalid_argument (user_message from errors.yaml).
 func AppErrorFromSessionInvalidArgument(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.session_invalid_argument")
-	return rterr.NewAppError(code, "小趣 Session 请求参数有误", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "小趣 Session 请求参数有误", debugMessage).WithMetadata("invalid_argument", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromSessionNotFound returns *AppError for ASSISTANT.USER.session_not_found (user_message from errors.yaml).
 func AppErrorFromSessionNotFound(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.session_not_found")
-	return rterr.NewAppError(code, "小趣 Session 不存在或已失效", debugMessage).WithMetadata("not_found", 404).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "小趣 Session 不存在或已失效", debugMessage).WithMetadata("not_found", 404).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromSessionStorageUnavailable returns *AppError for ASSISTANT.SYSTEM.session_storage_unavailable (user_message from errors.yaml).
 func AppErrorFromSessionStorageUnavailable(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.SYSTEM.session_storage_unavailable")
-	return rterr.NewAppError(code, "小趣 Session 服务暂不可用，请稍后重试", debugMessage).WithMetadata("unavailable", 503).WithRecovery("retry", 3)
+	return rterr.NewAppError(code, "小趣 Session 服务暂不可用，请稍后重试", debugMessage).WithMetadata("unavailable", 503).WithRecoveryDirective("retry", "snackbar", 3)
 }
 
 // AppErrorFromSessionUnauthorized returns *AppError for ASSISTANT.USER.session_unauthorized (user_message from errors.yaml).
 func AppErrorFromSessionUnauthorized(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.session_unauthorized")
-	return rterr.NewAppError(code, "请先登录后使用助手会话", debugMessage).WithMetadata("session_unauthorized", 401).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "请先登录后使用助手会话", debugMessage).WithMetadata("session_unauthorized", 401).WithRecoveryDirective("surface", "inlineCard", 0)
 }

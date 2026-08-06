@@ -70,6 +70,216 @@ def test_code_path_resolves_from_l1_engineering_ownership(tmp_path: Path, monkey
     assert owner.node_id == "domain"
 
 
+def test_canonical_app_object_test_resolves_from_its_production_domain(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    # spec_ref: specs/feature-tree/runtime/runtime-agentpack/feature-context-discovery/spec.md#gwt-001
+    root = build_tree(tmp_path)
+    test_path = (
+        root
+        / "quwoquan_app/test/local_contract/service/content_service/content/post/"
+        "publish_location_selector_initial_timeout__local_contract_test.dart"
+    )
+    write(test_path, "void main() {}\n")
+    write(root / "quwoquan_app/lib/service/content_service/content/post/page.dart", "class Page {}\n")
+    domain_spec = root / "specs/feature-tree/domain/spec.md"
+    domain_spec.write_text(
+        "# L1 Domain Service：领域 (`domain`)\n\n"
+        "## 7. 工程归属\n\n"
+        "- App：`quwoquan_app/lib/service/content_service/content/post`\n",
+        encoding="utf-8",
+    )
+    write(
+        root / "specs/feature-tree/runtime/spec.md",
+        "# L1 Domain Service：运行时 (`runtime`)\n\n"
+        "## 7. 工程归属\n\n"
+        "- App：`quwoquan_app`、`quwoquan_app/lib/runtime`\n",
+    )
+    write(
+        root / "specs/feature-tree/runtime/design.md",
+        "# L1 Design：运行时 (`runtime`)\n",
+    )
+    monkeypatch.setattr(feature_tree, "REPO_ROOT", root)
+    monkeypatch.setattr(feature_tree, "TREE_ROOT", root / "specs/feature-tree")
+
+    owner = feature_tree.resolve_target(test_path, feature_tree.discover_nodes())
+
+    assert owner.node_id == "domain"
+
+
+def test_canonical_app_test_does_not_fall_back_to_project_level_runtime_owner(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    # spec_ref: specs/feature-tree/runtime/runtime-agentpack/feature-context-discovery/spec.md#gwt-001
+    root = build_tree(tmp_path)
+    test_path = (
+        root
+        / "quwoquan_app/test/local_contract/unowned/context/object/"
+        "behavior__local_contract_test.dart"
+    )
+    write(test_path, "void main() {}\n")
+    write(
+        root / "specs/feature-tree/runtime/spec.md",
+        "# L1 Domain Service：运行时 (`runtime`)\n\n"
+        "## 7. 工程归属\n\n"
+        "- App：`quwoquan_app`、`quwoquan_app/lib/runtime`\n",
+    )
+    write(
+        root / "specs/feature-tree/runtime/design.md",
+        "# L1 Design：运行时 (`runtime`)\n",
+    )
+    monkeypatch.setattr(feature_tree, "REPO_ROOT", root)
+    monkeypatch.setattr(feature_tree, "TREE_ROOT", root / "specs/feature-tree")
+
+    try:
+        feature_tree.resolve_target(test_path, feature_tree.discover_nodes())
+    except ValueError as error:
+        assert "未被任何 L1 工程归属认领" in str(error)
+    else:
+        raise AssertionError("project-level runtime ownership swallowed a business test")
+
+
+def test_cross_object_app_journey_does_not_claim_project_level_runtime_owner(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    # spec_ref: specs/feature-tree/runtime/runtime-agentpack/feature-context-discovery/spec.md#gwt-001
+    root = build_tree(tmp_path)
+    journey = (
+        root
+        / "quwoquan_app/test/user_acceptance/journeys/forward_share/"
+        "forward_share__user_acceptance_test.dart"
+    )
+    write(journey, "void main() {}\n")
+    write(
+        root / "specs/feature-tree/runtime/spec.md",
+        "# L1 Domain Service：运行时 (`runtime`)\n\n"
+        "## 7. 工程归属\n\n"
+        "- App：`quwoquan_app`、`quwoquan_app/lib/runtime`\n",
+    )
+    write(
+        root / "specs/feature-tree/runtime/design.md",
+        "# L1 Design：运行时 (`runtime`)\n",
+    )
+    monkeypatch.setattr(feature_tree, "REPO_ROOT", root)
+    monkeypatch.setattr(feature_tree, "TREE_ROOT", root / "specs/feature-tree")
+
+    try:
+        feature_tree.resolve_target(journey, feature_tree.discover_nodes())
+    except ValueError as error:
+        assert "未被任何 L1 工程归属认领" in str(error)
+    else:
+        raise AssertionError("project-level runtime ownership swallowed a Journey")
+
+
+def test_cross_object_app_journey_resolves_from_exact_explicit_l1_claim(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    # spec_ref: specs/feature-tree/runtime/runtime-agentpack/feature-context-discovery/spec.md#gwt-001
+    root = build_tree(tmp_path)
+    journey = (
+        root
+        / "quwoquan_app/test/local_contract/journeys/viewer_profile_state_sync/"
+        "viewer_profile_state_sync__local_contract_test.dart"
+    )
+    write(journey, "void main() {}\n")
+    domain_spec = root / "specs/feature-tree/domain/spec.md"
+    domain_spec.write_text(
+        "# L1 Domain Service：领域 (`domain`)\n\n"
+        "## 7. 工程归属\n\n"
+        "- App：`quwoquan_app/lib/content`\n"
+        "- 测试：\n"
+        "  - `local_contract`："
+        "`quwoquan_app/test/local_contract/journeys/viewer_profile_state_sync`\n",
+        encoding="utf-8",
+    )
+    write(
+        root / "specs/feature-tree/runtime/spec.md",
+        "# L1 Domain Service：运行时 (`runtime`)\n\n"
+        "## 7. 工程归属\n\n"
+        "- App：`quwoquan_app`、`quwoquan_app/lib/runtime`\n",
+    )
+    write(
+        root / "specs/feature-tree/runtime/design.md",
+        "# L1 Design：运行时 (`runtime`)\n",
+    )
+    monkeypatch.setattr(feature_tree, "REPO_ROOT", root)
+    monkeypatch.setattr(feature_tree, "TREE_ROOT", root / "specs/feature-tree")
+
+    owner = feature_tree.resolve_target(journey, feature_tree.discover_nodes())
+
+    assert owner.node_id == "domain"
+
+
+def test_cross_object_app_journey_rejects_non_exact_parent_claim(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    # spec_ref: specs/feature-tree/runtime/runtime-agentpack/feature-context-discovery/spec.md#gwt-001
+    root = build_tree(tmp_path)
+    journey = (
+        root
+        / "quwoquan_app/test/local_contract/journeys/viewer_profile_state_sync/"
+        "viewer_profile_state_sync__local_contract_test.dart"
+    )
+    write(journey, "void main() {}\n")
+    domain_spec = root / "specs/feature-tree/domain/spec.md"
+    domain_spec.write_text(
+        "# L1 Domain Service：领域 (`domain`)\n\n"
+        "## 7. 工程归属\n\n"
+        "- App：`quwoquan_app/test/local_contract/journeys`\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(feature_tree, "REPO_ROOT", root)
+    monkeypatch.setattr(feature_tree, "TREE_ROOT", root / "specs/feature-tree")
+
+    try:
+        feature_tree.resolve_target(journey, feature_tree.discover_nodes())
+    except ValueError as error:
+        assert "未被任何 L1 工程归属认领" in str(error)
+    else:
+        raise AssertionError("a shared journeys parent became an implicit owner")
+
+
+def test_cross_object_app_journey_rejects_duplicate_exact_l1_claims(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    # spec_ref: specs/feature-tree/runtime/runtime-agentpack/feature-context-discovery/spec.md#gwt-001
+    root = build_tree(tmp_path)
+    journey_root = (
+        "quwoquan_app/test/local_contract/journeys/viewer_profile_state_sync"
+    )
+    journey = root / journey_root / "viewer_profile_state_sync__local_contract_test.dart"
+    write(journey, "void main() {}\n")
+    for node_id in ("domain", "other-domain"):
+        write(
+            root / f"specs/feature-tree/{node_id}/spec.md",
+            f"# L1 Domain Service：领域 (`{node_id}`)\n\n"
+            "## 7. 工程归属\n\n"
+            f"- 测试：`{journey_root}`\n",
+        )
+        write(
+            root / f"specs/feature-tree/{node_id}/design.md",
+            f"# L1 Design：领域 (`{node_id}`)\n",
+        )
+    monkeypatch.setattr(feature_tree, "REPO_ROOT", root)
+    monkeypatch.setattr(feature_tree, "TREE_ROOT", root / "specs/feature-tree")
+
+    try:
+        feature_tree.resolve_target(journey, feature_tree.discover_nodes())
+    except ValueError as error:
+        message = str(error)
+        assert "被多个 L1 同优先级认领" in message
+        assert "domain" in message
+        assert "other-domain" in message
+    else:
+        raise AssertionError("duplicate exact Journey owners were not rejected")
+
+
 def test_contract_path_resolves_from_l1_engineering_ownership(tmp_path: Path, monkeypatch) -> None:
     root = build_tree(tmp_path)
     contract = root / "quwoquan_service" / "services" / "demo-service" / "contracts" / "object.yaml"

@@ -1,0 +1,14 @@
+{
+  "_governance": {
+    "owner": "runtime-client-foundation",
+    "reason": "App legacy top-level roots are a temporary architecture ratchet and may only decrease; reverse dependency violations remain zero-tolerance and are never absorbed here",
+    "expires_when": "app_lib_top_level is empty, then delete this baseline and enforce zero legacy roots directly"
+  },
+  "domains": {},
+  "ruleId": "app-architecture/v1",
+  "shared": {
+    "app_lib_top_level": [
+      "cloud/"
+    ]
+  }
+}

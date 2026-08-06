@@ -1,11 +1,11 @@
-commercial_defaults: {status: blocked, block_reason: RankedRecommendationWindow 对象源、Redis adapter 与集成测试尚待本治理波次闭环, gap_id: RECOMMENDATION_WINDOW_MODEL_GOVERNANCE, target_story: app-cloud-business-object-commercial-closure}
+commercial_defaults: {status: blocked, block_reason: 未声明的排序窗口操作默认阻断；只允许窗口创建与稳定续页两个内部操作。, gap_id: RANKED_RECOMMENDATION_WINDOW_UNDECLARED_OPERATION, target_story: app-cloud-business-object-commercial-closure}
 description: 排序窗口创建与稳定续页的唯一内部接口。
 api_routes:
 - method: POST
   path: /internal/recommendation/ranked-pages
   operation: CreateRankedRecommendationWindow
   actor: none
-  commercial: {status: blocked, block_reason: 对象源与集成测试尚待闭环, gap_id: RECOMMENDATION_WINDOW_MODEL_GOVERNANCE, target_story: app-cloud-business-object-commercial-closure}
+  commercial: {status: ready}
   application: {kind: session, facet: RankedRecommendationWindowSessionFacade, method: create, session_owner: RankedRecommendationWindow}
   request_entity: CreateRankedRecommendationWindowCommand
   request_body_kind: object
@@ -24,7 +24,7 @@ api_routes:
   path: /internal/recommendation/ranked-pages/{windowId}
   operation: GetRankedRecommendationPage
   actor: none
-  commercial: {status: blocked, block_reason: 对象源与集成测试尚待闭环, gap_id: RECOMMENDATION_WINDOW_MODEL_GOVERNANCE, target_story: app-cloud-business-object-commercial-closure}
+  commercial: {status: ready}
   application: {kind: query, facet: RankedRecommendationWindowQueryFacade, method: getPage, reader: RankedRecommendationWindowReader, slice: RankedRecommendationPage}
   request_entity: GetRankedRecommendationPageQuery
   request_bindings:
@@ -38,3 +38,36 @@ api_routes:
   slo: {latency_p95_ms: 200, availability_percent: 99.9}
   authorization: {principal: service, scopes: [recommendation.ranked_page], ownership_policy: recommendation_internal_page}
   security: {auth_mode: required, principal: service, token_transport: bearer, anonymous_policy: deny, visibility: internal}
+readiness_cases:
+- case_id: create-ranked-window-local
+  spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/streaming-feed-performance/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: CreateRankedRecommendationWindow}
+  runner_source_path: quwoquan_service/services/recommendation-service/tests/local_contract/recommendation/ranked_recommendation_window/test_ranked_window_http__local_contract_test.py
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: create-ranked-window-api
+  spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/streaming-feed-performance/spec.md#gwt-001
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: CreateRankedRecommendationWindow}
+  runner_source_path: quwoquan_service/services/recommendation-service/tests/api_integration/recommendation/ranked_recommendation_window/test_ranked_window_runtime__api_integration_test.py
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}
+- case_id: get-ranked-page-local
+  spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/streaming-feed-performance/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: GetRankedRecommendationPage}
+  runner_source_path: quwoquan_service/services/recommendation-service/tests/local_contract/recommendation/ranked_recommendation_window/test_ranked_window_http__local_contract_test.py
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: get-ranked-page-api
+  spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/streaming-feed-performance/spec.md#gwt-001
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: GetRankedRecommendationPage}
+  runner_source_path: quwoquan_service/services/recommendation-service/tests/api_integration/recommendation/ranked_recommendation_window/test_ranked_window_runtime__api_integration_test.py
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}

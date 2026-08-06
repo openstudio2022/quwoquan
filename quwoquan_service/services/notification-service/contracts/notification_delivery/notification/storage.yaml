@@ -1,6 +1,7 @@
 backend: mongodb
 collections:
   app_messages:
+    publication_role: not_published
     entity: Notification
     description: Notification aggregate authoritative store。
     indexes:
@@ -18,11 +19,17 @@ collections:
         userId: 1
         read: 1
         createdAt: -1
+    - name: idx_app_messages_owner_source
+      keys:
+        userId: 1
+        source: 1
+        sourceId: 1
     - name: ttl_app_messages_created
       keys:
         createdAt: 1
-      expireAfterSeconds: 7776000
+      expire_after_seconds: 7776000
   notification_user_account_closed_inbox:
+    publication_role: not_published
     entity: Notification
     role: projection
     description: UserAccountClosed 的幂等 inbox，仅保存不可逆摘要；通知、投递和外部账本清理完成后才确认。
@@ -31,6 +38,7 @@ collections:
       keys:
         eventDigest: 1
   notification_user_account_closed_failures:
+    publication_role: not_published
     entity: Notification
     role: projection
     description: UserAccountClosed 有限重试状态，只保存 source stream/message reference、
@@ -43,8 +51,9 @@ collections:
     - name: ttl_notification_user_account_closed_failures
       keys:
         expireAt: 1
-      expireAfterSeconds: 0
+      expire_after_seconds: 0
   notification_user_account_restrictions:
+    publication_role: not_published
     entity: Notification
     role: projection
     description: UserSuspended/UserRestored 的可逆本地阻断状态；只持有 subject 集合与账号版本，不读取 User 数据库。
@@ -57,6 +66,7 @@ collections:
       keys:
         accountVersion: -1
   notification_user_account_restriction_inbox:
+    publication_role: not_published
     entity: Notification
     role: projection
     description: 可逆账号限制事件的 eventId/digest 幂等 inbox；与 Notification 状态和 DeliveryJob typed port mutation 同事务。
@@ -70,6 +80,7 @@ collections:
       keys:
         appliedAt: -1
   notification_user_account_restriction_watermarks:
+    publication_role: not_published
     entity: Notification
     role: projection
     description: 账号限制的单调版本水位；UserAccountClosed 后写入不可逆 terminal marker，迟到恢复事件不得复活通知投递。
@@ -79,12 +90,13 @@ collections:
         terminal: 1
         accountVersion: -1
   interaction_notification_failures:
+    publication_role: not_published
     entity: Notification
     role: projection
-    description: typed interaction notification 投影的有限重试状态；不读取 Integration provider ledger。
+    description: typed interaction 与 Gathering invitation notification 投影的有限重试状态；不读取生产者写模型或 Integration provider ledger。
     indexes:
     - name: ttl_interaction_notification_failures
       keys:
         expiresAt: 1
-      expireAfterSeconds: 0
+      expire_after_seconds: 0
 role: authoritative

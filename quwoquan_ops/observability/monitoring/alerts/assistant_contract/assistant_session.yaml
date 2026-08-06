@@ -1,0 +1,65 @@
+# Code generated from quwoquan_service/generated/contract_graph.json.
+# Regenerate with verify_object_alert_coverage.py --write.
+groups:
+  - name: quwoquan_assistant_contract_assistant_session
+    rules:
+      - record: quwoquan_assistant_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="assistant-service",method="POST",route="/assistant/sessions"})
+        labels:
+          service: "assistant-service"
+          operation: "assistant.assistant_session.CreateAssistantSession"
+          contract_metric: "assistant_session_command"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_assistant_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="assistant-service",method="POST",route="/assistant/sessions"})
+        labels:
+          service: "assistant-service"
+          operation: "assistant.assistant_session.CreateAssistantSession"
+          contract_metric: "assistant_session_command"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_assistant_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="assistant-service",method="GET",route=~"^/assistant/sessions/[^/]+$"})
+        labels:
+          service: "assistant-service"
+          operation: "assistant.assistant_session.GetAssistantSession"
+          contract_metric: "assistant_session_query"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "300"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_assistant_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="assistant-service",method="GET",route=~"^/assistant/sessions/[^/]+$"})
+        labels:
+          service: "assistant-service"
+          operation: "assistant.assistant_session.GetAssistantSession"
+          contract_metric: "assistant_session_query"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "300"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_assistant_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="assistant-service",method="GET",route="/assistant/sessions"})
+        labels:
+          service: "assistant-service"
+          operation: "assistant.assistant_session.ListAssistantSessions"
+          contract_metric: "assistant_session_query"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_assistant_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="assistant-service",method="GET",route="/assistant/sessions"})
+        labels:
+          service: "assistant-service"
+          operation: "assistant.assistant_session.ListAssistantSessions"
+          contract_metric: "assistant_session_query"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"

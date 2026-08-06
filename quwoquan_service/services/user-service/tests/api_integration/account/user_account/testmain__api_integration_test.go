@@ -430,7 +430,13 @@ func rebuildTestHandler(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	personaProfileProjector, err := useraccountpersistence.NewPersonaProfileProjector(pgPool)
+	personaProfileProjectionStore, err := useraccountpersistence.NewPersonaProfileProjector(pgPool)
+	if err != nil {
+		return err
+	}
+	personaProfileProjector, err := application.NewPersonaProfileProjector(
+		personaProfileProjectionStore,
+	)
 	if err != nil {
 		return err
 	}
@@ -471,9 +477,11 @@ func rebuildTestHandler(ctx context.Context) error {
 		if err := followedSubjectVisitStore.EnsureIndexes(ctx); err != nil {
 			return err
 		}
-		followingProjector = followingevent.NewHandler(followingapp.NewProjector(followingSubjectStore))
+		followingProjector = followingevent.NewHandler(
+			followingapp.NewFollowingSubjectProjector(followingSubjectStore),
+		)
 	}
-	followedSubjectVisitService := visitapp.NewVisitService(followedSubjectVisitStore, followingSubjectStore)
+	followedSubjectVisitService := visitapp.NewVisitService(followedSubjectVisitStore)
 	followingSubjectQueryService := followingapp.NewQueryService(followingSubjectStore, personaStore, nil)
 	stopIntegrationRelayRunners()
 	relationshipRelayContext, cancelRelationshipRelay := context.WithCancel(context.Background())

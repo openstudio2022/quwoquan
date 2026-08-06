@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
-"""Shared helpers for physical three-layer test directory governance."""
+"""Shared helpers for service/context/object-mirrored three-layer test governance."""
 
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 
-LAYERS = {"local_contract", "api_integration", "user_acceptance"}
+LAYERS = ("local_contract", "api_integration", "user_acceptance")
 APP_ROOT = ROOT / "quwoquan_app" / "test"
 APP_PACKAGES_ROOT = ROOT / "quwoquan_app" / "packages"
 SERVICE_DOMAIN_ROOT = ROOT / "quwoquan_service"
 SERVICE_ROOT = ROOT / "quwoquan_service" / "services"
+CONTROL_PLANE_ROOT = ROOT / "quwoquan_service" / "control-plane"
 RUNTIME_ROOT = SERVICE_DOMAIN_ROOT / "runtime"
 RUNTIME_TEST_ROOT = RUNTIME_ROOT / "tests"
 DATA_ROOT = ROOT / "quwoquan_data" / "tests"
@@ -76,18 +78,114 @@ def go_suite_names(path: Path) -> tuple[list[str], list[str]]:
     return tests, benches
 
 
-def go_has_test_entrypoint(path: Path) -> bool:
-    text = path.read_text(encoding="utf-8", errors="ignore")
+def go_has_test_entrypoint(path: Path, text: str | None = None) -> bool:
+    if text is None:
+        text = path.read_text(encoding="utf-8", errors="ignore")
     return bool(GO_TEST_RE.search(text) or GO_BENCH_RE.search(text) or GO_TESTMAIN_RE.search(text))
 
 
-def iter_canonical_files() -> list[tuple[str, Path, str]]:
+def _canonical_file_identity(path: Path) -> tuple[str, Path, str] | None:
+    def relative_to(root: Path) -> tuple[str, ...] | None:
+        try:
+            return path.relative_to(root).parts
+        except ValueError:
+            return None
+
+    app_parts = relative_to(APP_ROOT)
+    if app_parts and app_parts[0] in LAYERS:
+        layer = app_parts[0]
+        if path.name.endswith("_test.dart") or (
+            layer == "local_contract" and path.name.endswith("_test.py")
+        ):
+            return ("app", path, layer)
+
+    package_parts = relative_to(APP_PACKAGES_ROOT)
+    if (
+        package_parts
+        and len(package_parts) >= 4
+        and package_parts[1] == "test"
+        and package_parts[2] in LAYERS
+        and path.name.endswith("_test.dart")
+    ):
+        return ("app", path, package_parts[2])
+
+    data_parts = relative_to(DATA_ROOT)
+    if (
+        data_parts
+        and data_parts[0] in LAYERS
+        and path.name.startswith("test_")
+        and path.name.endswith(".py")
+    ):
+        return ("data", path, data_parts[0])
+
+    ops_parts = relative_to(OPS_TEST_ROOT)
+    if (
+        ops_parts
+        and ops_parts[0] == "local_contract"
+        and path.name.startswith("test_")
+        and path.name.endswith(".py")
+    ):
+        return ("quwoquan_ops", path, "local_contract")
+    if (
+        ops_parts
+        and len(ops_parts) >= 3
+        and ops_parts[:2] in {
+            ("acceptance", "api_integration"),
+            ("acceptance", "user_acceptance"),
+        }
+        and path.name.startswith("test_")
+        and path.name.endswith(".py")
+    ):
+        return ("quwoquan_ops", path, ops_parts[1])
+
+    for owner_root in (SERVICE_ROOT, CONTROL_PLANE_ROOT):
+        service_parts = relative_to(owner_root)
+        if (
+            service_parts
+            and len(service_parts) >= 5
+            and service_parts[1] == "tests"
+            and service_parts[2] in {"local_contract", "api_integration"}
+            and path.name.endswith(("_test.go", "_test.py"))
+        ):
+            return ("service", path, service_parts[2])
+
+    runtime_parts = relative_to(RUNTIME_TEST_ROOT)
+    if (
+        runtime_parts
+        and runtime_parts[0] in {"local_contract", "api_integration"}
+        and path.name.endswith("_test.go")
+    ):
+        return ("runtime", path, runtime_parts[0])
+    return None
+
+
+def iter_canonical_files(
+    snapshot_files: Iterable[Path] | None = None,
+) -> list[tuple[str, Path, str]]:
+    if snapshot_files is not None:
+        return sorted(
+            identity
+            for path in snapshot_files
+            if (identity := _canonical_file_identity(path)) is not None
+        )
     files: list[tuple[str, Path, str]] = []
     for layer in LAYERS:
-        for path in sorted((APP_ROOT / layer).rglob("*_test.dart")):
-            files.append(("app", path, layer))
+        # The only Python runner owned by the App repository executes the root
+        # local_contract tree.  Python files below App api_integration/UAT (or
+        # package-local test trees) are therefore static files, not executable
+        # three-layer evidence.
+        app_patterns = (
+            ("*_test.dart", "*_test.py")
+            if layer == "local_contract"
+            else ("*_test.dart",)
+        )
+        for pattern in app_patterns:
+            for path in sorted((APP_ROOT / layer).rglob(pattern)):
+                files.append(("app", path, layer))
         for package_root in sorted(APP_PACKAGES_ROOT.glob("*")):
-            for path in sorted((package_root / "test" / layer).rglob("*_test.dart")):
+            for path in sorted(
+                (package_root / "test" / layer).rglob("*_test.dart")
+            ):
                 files.append(("app", path, layer))
         for path in sorted((DATA_ROOT / layer).rglob("test_*.py")):
             files.append(("data", path, layer))
@@ -96,12 +194,13 @@ def iter_canonical_files() -> list[tuple[str, Path, str]]:
     for layer in ("api_integration", "user_acceptance"):
         for path in sorted((OPS_ACCEPTANCE_ROOT / layer).rglob("test_*.py")):
             files.append(("quwoquan_ops", path, layer))
-    for service_tests_dir in SERVICE_ROOT.glob("*/tests"):
-        for layer in ("local_contract", "api_integration"):
-            for path in sorted((service_tests_dir / layer).rglob("*_test.go")):
-                files.append(("service", path, layer))
-            for path in sorted((service_tests_dir / layer).rglob("test_*.py")):
-                files.append(("service", path, layer))
+    for owner_root in (SERVICE_ROOT, CONTROL_PLANE_ROOT):
+        for service_tests_dir in sorted(owner_root.glob("*/tests")):
+            for layer in ("local_contract", "api_integration"):
+                for path in sorted((service_tests_dir / layer).rglob("*_test.go")):
+                    files.append(("service", path, layer))
+                for path in sorted((service_tests_dir / layer).rglob("*_test.py")):
+                    files.append(("service", path, layer))
     for layer in ("local_contract", "api_integration"):
         for path in sorted((RUNTIME_TEST_ROOT / layer).rglob("*_test.go")):
             files.append(("runtime", path, layer))
@@ -112,8 +211,12 @@ def evidence_path_is_canonical(path_text: str) -> bool:
     if path_text.startswith(".qwq_output/env/repo/runs/tests/") and path_text.endswith("report.json"):
         return True
     if path_text.startswith("quwoquan_app/test/"):
+        if path_text.endswith(".py"):
+            return path_text.startswith("quwoquan_app/test/local_contract/")
         return any(path_text.startswith(f"quwoquan_app/test/{layer}/") for layer in LAYERS)
     if path_text.startswith("quwoquan_app/packages/"):
+        if path_text.endswith(".py"):
+            return False
         parts = Path(path_text).parts
         return len(parts) >= 6 and parts[3] == "test" and parts[4] in LAYERS
     if path_text.startswith("quwoquan_data/tests/"):
@@ -141,8 +244,9 @@ def evidence_path_is_canonical(path_text: str) -> bool:
     return False
 
 
-def contains_generated_bridge_marker(path: Path) -> bool:
-    if not path.is_file():
-        return False
-    text = path.read_text(encoding="utf-8", errors="ignore")
+def contains_generated_bridge_marker(path: Path, text: str | None = None) -> bool:
+    if text is None:
+        if not path.is_file():
+            return False
+        text = path.read_text(encoding="utf-8", errors="ignore")
     return any(marker in text for marker in RETIRED_BRIDGE_MARKERS)

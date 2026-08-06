@@ -234,6 +234,11 @@ def test_alpha_content_release_materializes_manifest_before_runtime_logs(
     monkeypatch.setenv("QWQ_OUTPUT_ROOT", str(output_root))
     monkeypatch.delenv("QWQ_RUN_ROOT", raising=False)
     monkeypatch.delenv("QWQ_OBSERVABILITY_RUN_ROOT", raising=False)
+    monkeypatch.setattr(
+        "quwoquan_ops.cli.alpha.content_release_runtime."
+        "legal_static_deployment_package_dir",
+        lambda *_args, **_kwargs: tmp_path / "deploy" / "legal-static",
+    )
 
     paths = alpha_content_release_paths(new_run=True)
     _materialize_observability_run(paths)

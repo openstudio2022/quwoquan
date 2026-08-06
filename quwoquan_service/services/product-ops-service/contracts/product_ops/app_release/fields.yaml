@@ -89,3 +89,31 @@ fields:
   api_exposure: drop
   ops_exposure: read
   role: projection
+types:
+  GetAppRecoveryVersionQuery:
+    description: 启动恢复页按显式平台、版本与 Build 查询当前已发布恢复事实；不得从 User-Agent、本地缓存或失败响应推断版本结论。
+    fields:
+    - name: platform
+      source: platform
+      type: string
+      constraints: [NOT_NULL, ENUM_ios_android]
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: write
+      ops_exposure: none
+    - name: appVersion
+      source: appVersion
+      type: string
+      constraints: [NOT_BLANK]
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: write
+      ops_exposure: none
+    - name: buildNumber
+      source: buildNumber
+      type: int
+      constraints: [NOT_NULL, POSITIVE]
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: write
+      ops_exposure: none

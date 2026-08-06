@@ -120,6 +120,7 @@ func (r *Run) CreateCheckpoint(
 		return Checkpoint{}, ErrInvalidRun
 	}
 	var deviceActionReceipts []DeviceActionExecutionReceipt
+	var pendingDeviceAction *DeviceActionPermit
 	var budgetConsumption BudgetConsumption
 	var budgetReceiptScope string
 	var budgetReceiptSeq int64
@@ -128,6 +129,10 @@ func (r *Run) CreateCheckpoint(
 	var contextReceiptScope string
 	var contextReceiptSeq int64
 	if r.Checkpoint != nil {
+		if r.Checkpoint.PendingDeviceAction != nil {
+			value := *r.Checkpoint.PendingDeviceAction
+			pendingDeviceAction = &value
+		}
 		deviceActionReceipts = append(
 			[]DeviceActionExecutionReceipt{},
 			r.Checkpoint.DeviceActionReceipts...,
@@ -146,6 +151,7 @@ func (r *Run) CreateCheckpoint(
 		GoalSummary:          strings.TrimSpace(goalSummary),
 		DecisionSummary:      append([]string{}, decisionSummary...),
 		PendingApprovalRef:   strings.TrimSpace(pendingApprovalRef),
+		PendingDeviceAction:  pendingDeviceAction,
 		DeviceActionReceipts: deviceActionReceipts,
 		BudgetConsumption:    budgetConsumption,
 		BudgetReceiptScope:   budgetReceiptScope,

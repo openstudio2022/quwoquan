@@ -16,7 +16,6 @@ fallback: forbidden
 collections:
   ops_user_activity_daily:
     entity: EventRecord
-    projection: UserActivityDailyView
     description: EventRecord 产品事件按 UTC 日期形成的可重建增长聚合；原始事件是唯一权威来源。
     indexes:
     - name: pk_user_activity_date
@@ -25,7 +24,6 @@ collections:
       unique: true
   ops_actor_first_seen:
     entity: EventRecord
-    projection: ActorFirstSeenView
     description: 不可逆 actor hash 的首见日期投影，用于新增与留存口径；可由 EventRecord 重放重建。
     indexes:
     - name: idx_actor_first_seen_date
@@ -147,58 +145,6 @@ logstores:
     - userId
     - callStack
     - _batchKey
-idempotency:
-  request_header: Idempotency-Key
-  digest: canonical_json_sha256
-  batch_key: sha256_hex_256_bits
-  redis_state_ttl_hours: 72
-  raw_deduplication_fields:
-  - _batchKey
-  - _batchIndex
-  duplicate_ack_requires_complete_batch: true
-  proof_is_not_batch_identity: true
-wire_projection:
-  query_metadata:
-    source_field: sourceKind
-    allowed_values:
-    - raw_records
-    - hourly_rollup
-    freshness_field: freshness
-    generated_through_field: generatedThrough
-    lag_seconds_field: lagSeconds
-  backend_identity:
-    response_exposure: forbidden
-    internal_metric_only: true
-environment_adapters:
-  canonical_port: ObservabilityLogSinkPort
-  alpha:
-    backend: elasticsearch
-    endpoint_source: local_env_port_manifest
-    fallback: forbidden
-  beta:
-    backend: elasticsearch
-    endpoint_source: local_env_port_manifest
-    fallback: forbidden
-  gamma:
-    backend: elasticsearch
-    endpoint_source: local_env_port_manifest
-    fallback: forbidden
-  prod:
-    backend: elasticsearch
-    endpoint_source: prod_runtime_topology
-    authentication: api_key
-    fallback: forbidden
-  indices:
-  - app-product-telemetry-raw
-  - app-startup-diagnostic-raw
-  - runtime-diagnostics-raw
-  - app-product-telemetry-hourly
-query_facade:
-  portal_direct_cloud_access: false
-  summary_source: hourly_rollup
-  drilldown_source: raw_records
-  raw_window_days: 3
-  drilldown_max_items: 100
 role: append_only
 redis_cache:
 - key: ops:telemetry:batch:{batchKey}

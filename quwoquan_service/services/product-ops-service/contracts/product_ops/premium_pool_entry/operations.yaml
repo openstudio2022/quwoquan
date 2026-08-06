@@ -77,3 +77,69 @@ api_routes:
 consumers:
 - name: ops-portal
   capabilities: [list_premium_pool_entries, upsert_premium_pool_entry, rollback_premium_pool_entry, takedown_premium_pool_entry]
+
+readiness_cases:
+- case_id: list-premium-pool-entries-local
+  spec_ref: specs/feature-tree/product-ops-growth/product-control-plane-foundation/product-control-plane-contract/spec.md#gwt-002
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ListPremiumPoolEntries}
+  runner_source_path: quwoquan_service/services/product-ops-service/tests/local_contract/product_ops/premium_pool_entry/premium_pool_entry__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: list-premium-pool-entries-api
+  spec_ref: specs/feature-tree/product-ops-growth/product-control-plane-foundation/product-control-plane-contract/spec.md#gwt-002
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ListPremiumPoolEntries}
+  runner_source_path: quwoquan_service/services/product-ops-service/tests/api_integration/product_ops/premium_pool_entry/premium_pool_entry_postgres__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+- case_id: upsert-premium-pool-entry-local
+  spec_ref: specs/feature-tree/product-ops-growth/product-control-plane-foundation/product-control-plane-contract/spec.md#gwt-002
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: UpsertPremiumPoolEntry}
+  runner_source_path: quwoquan_service/services/product-ops-service/tests/local_contract/product_ops/premium_pool_entry/premium_pool_entry__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: upsert-premium-pool-entry-api
+  spec_ref: specs/feature-tree/product-ops-growth/product-control-plane-foundation/product-control-plane-contract/spec.md#gwt-002
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: UpsertPremiumPoolEntry}
+  runner_source_path: quwoquan_service/services/product-ops-service/tests/api_integration/product_ops/premium_pool_entry/premium_pool_entry_postgres__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+- case_id: rollback-premium-pool-entry-local
+  spec_ref: specs/feature-tree/product-ops-growth/product-control-plane-foundation/product-control-plane-contract/spec.md#gwt-002
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: RollbackPremiumPoolEntry}
+  runner_source_path: quwoquan_service/services/product-ops-service/tests/local_contract/product_ops/premium_pool_entry/premium_pool_entry__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: rollback-premium-pool-entry-api
+  spec_ref: specs/feature-tree/product-ops-growth/product-control-plane-foundation/product-control-plane-contract/spec.md#gwt-002
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: RollbackPremiumPoolEntry}
+  runner_source_path: quwoquan_service/services/product-ops-service/tests/api_integration/product_ops/premium_pool_entry/premium_pool_entry_postgres__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+- case_id: takedown-premium-pool-entry-local
+  spec_ref: specs/feature-tree/product-ops-growth/product-control-plane-foundation/product-control-plane-contract/spec.md#gwt-002
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: TakedownPremiumPoolEntry}
+  runner_source_path: quwoquan_service/services/product-ops-service/tests/local_contract/product_ops/premium_pool_entry/premium_pool_entry__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: takedown-premium-pool-entry-api
+  spec_ref: specs/feature-tree/product-ops-growth/product-control-plane-foundation/product-control-plane-contract/spec.md#gwt-002
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: TakedownPremiumPoolEntry}
+  runner_source_path: quwoquan_service/services/product-ops-service/tests/api_integration/product_ops/premium_pool_entry/premium_pool_entry_postgres__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}

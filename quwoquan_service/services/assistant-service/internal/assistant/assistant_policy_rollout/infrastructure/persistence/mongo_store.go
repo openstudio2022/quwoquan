@@ -12,8 +12,8 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
-	runtimemessaging "quwoquan_service/runtime/messaging"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_policy_rollout/domain/model"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_policy_rollout/domain/ports"
 )
 
 type MongoStore struct {
@@ -32,27 +32,29 @@ type commandReceipt struct {
 }
 
 type auditOutboxRecord struct {
-	ID           string                   `bson:"_id"`
-	EventType    string                   `bson:"eventType"`
-	PolicyID     string                   `bson:"policyId"`
-	Revision     int                      `bson:"revision"`
-	Assignments  []model.CohortAssignment `bson:"assignments"`
-	OccurredAt   time.Time                `bson:"occurredAt"`
-	PublishedAt  *time.Time               `bson:"publishedAt,omitempty"`
-	PublishedRef string                   `bson:"publishedRef,omitempty"`
-	ClaimOwner   string                   `bson:"claimOwner,omitempty"`
-	ClaimUntil   time.Time                `bson:"claimUntil,omitempty"`
+	ID            string                   `bson:"_id"`
+	EventType     string                   `bson:"eventType"`
+	PolicyID      string                   `bson:"policyId"`
+	Revision      int                      `bson:"revision"`
+	Status        string                   `bson:"status"`
+	Assignments   []model.CohortAssignment `bson:"assignments"`
+	ActivatedAt   time.Time                `bson:"activatedAt"`
+	OccurredAt    time.Time                `bson:"occurredAt"`
+	PublishedAt   *time.Time               `bson:"publishedAt,omitempty"`
+	PublishedRef  string                   `bson:"publishedRef,omitempty"`
+	ClaimOwner    string                   `bson:"claimOwner,omitempty"`
+	ClaimUntil    *time.Time               `bson:"claimUntil,omitempty"`
+	NextAttemptAt *time.Time               `bson:"nextAttemptAt,omitempty"`
+	AttemptCount  int                      `bson:"attemptCount,omitempty"`
+	LastErrorCode string                   `bson:"lastErrorCode,omitempty"`
 }
 
 type auditOutboxPayload struct {
-	ID               string    `json:"eventId"`
-	EventType        string    `json:"eventType"`
-	AggregateType    string    `json:"aggregateType"`
-	PolicyID         string    `json:"policyId"`
-	AggregateVersion int       `json:"aggregateVersion"`
-	RolloutRevision  int       `json:"rolloutRevision,omitempty"`
-	AssignmentCount  int       `json:"assignmentCount,omitempty"`
-	OccurredAt       time.Time `json:"occurredAt"`
+	PolicyID    string                   `json:"policyId"`
+	Revision    int                      `json:"revision"`
+	Status      string                   `json:"status"`
+	Assignments []model.CohortAssignment `json:"assignments"`
+	ActivatedAt time.Time                `json:"activatedAt"`
 }
 
 func NewMongoStore(database *mongo.Database) *MongoStore {
@@ -86,7 +88,12 @@ func (store *MongoStore) EnsureIndexes(ctx context.Context) error {
 		},
 		store.outbox: {
 			{
-				Keys:    bson.D{{Key: "publishedAt", Value: 1}, {Key: "occurredAt", Value: 1}},
+				Keys: bson.D{
+					{Key: "publishedAt", Value: 1},
+					{Key: "nextAttemptAt", Value: 1},
+					{Key: "claimUntil", Value: 1},
+					{Key: "occurredAt", Value: 1},
+				},
 				Options: options.Index().SetName("idx_assistant_policy_rollout_outbox_pending"),
 			},
 		},
@@ -159,93 +166,72 @@ func (store *MongoStore) GetCommandResult(
 func (store *MongoStore) ClaimPendingOutbox(
 	ctx context.Context,
 	ownerID string,
+	now time.Time,
 	lease time.Duration,
-	limit int,
-) ([]runtimemessaging.LeasedDurableOutboxEvent, error) {
+) (ports.OutboxEvent, bool, error) {
 	if store == nil || store.outbox == nil {
-		return nil, model.ErrStorageUnavailable
+		return ports.OutboxEvent{}, false, model.ErrStorageUnavailable
 	}
 	ownerID = strings.TrimSpace(ownerID)
-	if ownerID == "" || lease <= 0 {
-		return nil, model.ErrInvalidArgument
+	now = now.UTC()
+	if ownerID == "" || now.IsZero() || lease <= 0 {
+		return ports.OutboxEvent{}, false, model.ErrInvalidArgument
 	}
-	if limit <= 0 || limit > 512 {
-		limit = 128
-	}
-	events := make([]runtimemessaging.LeasedDurableOutboxEvent, 0, limit)
-	for len(events) < limit {
-		now := time.Now().UTC()
-		var record auditOutboxRecord
-		err := store.outbox.FindOneAndUpdate(
-			ctx,
-			bson.M{
-				"publishedAt": bson.M{"$exists": false},
-				"$or": bson.A{
-					bson.M{"claimUntil": bson.M{"$exists": false}},
-					bson.M{"claimUntil": bson.M{"$lte": now}},
-				},
-			},
-			bson.M{"$set": bson.M{
-				"claimOwner": ownerID,
-				"claimUntil": now.Add(lease),
-			}},
-			options.FindOneAndUpdate().
-				SetSort(bson.D{{Key: "occurredAt", Value: 1}}).
-				SetReturnDocument(options.After),
-		).Decode(&record)
-		if errors.Is(err, mongo.ErrNoDocuments) {
-			break
-		}
-		if err != nil {
-			return nil, fmt.Errorf("%w: claim policy rollout outbox: %v", model.ErrStorageUnavailable, err)
-		}
-		payload, err := json.Marshal(auditOutboxPayload{
-			ID:               record.ID,
-			EventType:        record.EventType,
-			AggregateType:    "AssistantPolicyRollout",
-			PolicyID:         record.PolicyID,
-			AggregateVersion: record.Revision,
-			RolloutRevision:  record.Revision,
-			AssignmentCount:  len(record.Assignments),
-			OccurredAt:       record.OccurredAt,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("%w: marshal policy rollout outbox payload: %v", model.ErrStorageUnavailable, err)
-		}
-		events = append(events, runtimemessaging.LeasedDurableOutboxEvent{
-			ID:               record.ID,
-			EventType:        record.EventType,
-			AggregateType:    "AssistantPolicyRollout",
-			AggregateID:      record.PolicyID,
-			AggregateVersion: record.Revision,
-			OccurredAt:       record.OccurredAt,
-			Payload:          string(payload),
-		})
-	}
-	return events, nil
-}
-
-func (store *MongoStore) ReleaseOutboxClaim(
-	ctx context.Context,
-	eventID string,
-	ownerID string,
-) error {
-	if store == nil || store.outbox == nil {
-		return model.ErrStorageUnavailable
-	}
-	_, err := store.outbox.UpdateOne(
+	var record auditOutboxRecord
+	err := store.outbox.FindOneAndUpdate(
 		ctx,
 		bson.M{
-			"_id":         strings.TrimSpace(eventID),
-			"claimOwner":  strings.TrimSpace(ownerID),
 			"publishedAt": bson.M{"$exists": false},
+			"$and": bson.A{
+				bson.M{"$or": bson.A{
+					bson.M{"nextAttemptAt": bson.M{"$exists": false}},
+					bson.M{"nextAttemptAt": bson.M{"$lte": now}},
+				}},
+				bson.M{"$or": bson.A{
+					bson.M{"claimUntil": bson.M{"$exists": false}},
+					bson.M{"claimUntil": bson.M{"$lte": now}},
+				}},
+			},
 		},
-		bson.M{"$unset": bson.M{"claimOwner": "", "claimUntil": ""}},
-	)
-	if err != nil {
-		return fmt.Errorf("%w: release policy rollout outbox claim: %v", model.ErrStorageUnavailable, err)
+		bson.M{
+			"$set": bson.M{
+				"claimOwner": ownerID,
+				"claimUntil": now.Add(lease),
+			},
+			"$inc": bson.M{"attemptCount": 1},
+		},
+		options.FindOneAndUpdate().
+			SetSort(bson.D{{Key: "occurredAt", Value: 1}, {Key: "_id", Value: 1}}).
+			SetReturnDocument(options.After),
+	).Decode(&record)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return ports.OutboxEvent{}, false, nil
 	}
-	return nil
+	if err != nil {
+		return ports.OutboxEvent{}, false, fmt.Errorf(
+			"%w: claim policy rollout outbox: %v",
+			model.ErrStorageUnavailable,
+			err,
+		)
+	}
+	payload, err := json.Marshal(auditOutboxPayload{
+		PolicyID: record.PolicyID, Revision: record.Revision,
+		Status: record.Status, Assignments: record.Assignments,
+		ActivatedAt: record.ActivatedAt.UTC(),
+	})
+	if err != nil {
+		return ports.OutboxEvent{}, false, fmt.Errorf(
+			"%w: marshal policy rollout outbox payload: %v",
+			model.ErrStorageUnavailable,
+			err,
+		)
+	}
+	return ports.OutboxEvent{
+		EventID: record.ID, EventType: record.EventType,
+		AggregateID: record.PolicyID, AggregateVersion: record.Revision,
+		OccurredAt: record.OccurredAt.UTC(), Payload: payload,
+		AttemptCount: record.AttemptCount,
+	}, true, nil
 }
 
 func (store *MongoStore) MarkOutboxPublished(
@@ -263,6 +249,7 @@ func (store *MongoStore) MarkOutboxPublished(
 		bson.M{
 			"_id":         strings.TrimSpace(eventID),
 			"claimOwner":  strings.TrimSpace(ownerID),
+			"claimUntil":  bson.M{"$gt": publishedAt.UTC()},
 			"publishedAt": bson.M{"$exists": false},
 		},
 		bson.M{
@@ -270,16 +257,69 @@ func (store *MongoStore) MarkOutboxPublished(
 				"publishedAt":  publishedAt.UTC(),
 				"publishedRef": strings.TrimSpace(publishedRef),
 			},
-			"$unset": bson.M{"claimOwner": "", "claimUntil": ""},
+			"$unset": bson.M{
+				"claimOwner": "", "claimUntil": "", "nextAttemptAt": "",
+				"lastErrorCode": "",
+			},
 		},
 	)
 	if err != nil {
 		return fmt.Errorf("%w: mark policy rollout outbox published: %v", model.ErrStorageUnavailable, err)
 	}
 	if result.MatchedCount == 0 {
-		return fmt.Errorf("%w: policy rollout outbox claim lost", model.ErrStorageUnavailable)
+		return ports.ErrOutboxClaimLost
 	}
 	return nil
+}
+
+func (store *MongoStore) ScheduleOutboxRetry(
+	ctx context.Context,
+	eventID string,
+	ownerID string,
+	failedAt time.Time,
+	nextAttemptAt time.Time,
+	failureCode string,
+) error {
+	if store == nil || store.outbox == nil || strings.TrimSpace(eventID) == "" ||
+		strings.TrimSpace(ownerID) == "" || failedAt.IsZero() ||
+		nextAttemptAt.IsZero() || nextAttemptAt.Before(failedAt) {
+		return model.ErrStorageUnavailable
+	}
+	result, err := store.outbox.UpdateOne(
+		ctx,
+		bson.M{
+			"_id":         strings.TrimSpace(eventID),
+			"claimOwner":  strings.TrimSpace(ownerID),
+			"claimUntil":  bson.M{"$gt": failedAt.UTC()},
+			"publishedAt": bson.M{"$exists": false},
+		},
+		bson.M{
+			"$set": bson.M{
+				"nextAttemptAt": nextAttemptAt.UTC(),
+				"lastErrorCode": boundedOutboxFailureCode(failureCode),
+			},
+			"$unset": bson.M{"claimOwner": "", "claimUntil": ""},
+		},
+	)
+	if err != nil {
+		return fmt.Errorf(
+			"%w: schedule policy rollout outbox retry: %v",
+			model.ErrStorageUnavailable,
+			err,
+		)
+	}
+	if result.MatchedCount != 1 {
+		return ports.ErrOutboxClaimLost
+	}
+	return nil
+}
+
+func boundedOutboxFailureCode(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" || len(value) > 64 {
+		return "delivery_failed"
+	}
+	return value
 }
 
 func (store *MongoStore) Commit(
@@ -363,8 +403,10 @@ func (store *MongoStore) Commit(
 			EventType:   eventType,
 			PolicyID:    next.PolicyID,
 			Revision:    next.Revision,
+			Status:      next.Status,
 			Assignments: append([]model.CohortAssignment(nil), next.Assignments...),
-			OccurredAt:  now,
+			ActivatedAt: next.ActivatedAt,
+			OccurredAt:  next.ActivatedAt,
 		}); outboxErr != nil {
 			return nil, outboxErr
 		}

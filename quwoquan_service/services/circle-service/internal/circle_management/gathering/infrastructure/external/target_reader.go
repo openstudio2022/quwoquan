@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	model "quwoquan_service/services/circle-service/internal/circle_management/gathering/domain/model"
+	contract "quwoquan_service/services/circle-service/generated/circle_management/gathering/contract/model"
 	ports "quwoquan_service/services/circle-service/internal/circle_management/gathering/domain/ports"
 )
 
@@ -66,10 +66,13 @@ func NewTargetReader(config TargetReaderConfig) (*TargetReader, error) {
 	}, nil
 }
 
-func (reader *TargetReader) RequireNavigable(ctx context.Context, target model.TargetRef) error {
-	objectType := strings.TrimSpace(target.ObjectTypeRef)
-	objectID := strings.TrimSpace(target.ObjectID)
-	routeID := strings.TrimSpace(target.RouteID)
+func (reader *TargetReader) RequireNavigable(
+	ctx context.Context,
+	source contract.GatheringSourceRef,
+) error {
+	objectType := strings.TrimSpace(source.ObjectRef.ObjectTypeRef)
+	objectID := strings.TrimSpace(source.ObjectRef.ObjectID)
+	routeID := strings.TrimSpace(source.RouteID)
 	if objectType == "" || objectID == "" || routeID == "" {
 		return fmt.Errorf("%w: target identity is incomplete", ports.ErrTargetNotNavigable)
 	}

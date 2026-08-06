@@ -121,6 +121,7 @@ def validate_strict(
 
     支持 type / required / properties / additionalProperties(false|schema) /
     enum / const / minimum / maximum / minLength / pattern / items /
+    allOf / anyOf / oneOf / not / if-then-else / contains。
     patternProperties(简化: 不支持)。
     未知字段在 additionalProperties=false 时必须失败（fail-closed）。
     """
@@ -145,6 +146,80 @@ def validate_strict(
             path=path,
             _root_schema=root_schema,
         )
+    for index, branch in enumerate(schema.get("allOf") or []):
+        if isinstance(branch, dict):
+            errors.extend(
+                validate_strict(
+                    instance,
+                    branch,
+                    path=path,
+                    _root_schema=root_schema,
+                )
+            )
+        else:
+            errors.append(f"{path}: allOf[{index}] 必须是 schema 对象")
+    any_of = schema.get("anyOf")
+    if isinstance(any_of, list) and not any(
+        isinstance(branch, dict)
+        and not validate_strict(
+            instance,
+            branch,
+            path=path,
+            _root_schema=root_schema,
+        )
+        for branch in any_of
+    ):
+        errors.append(f"{path}: 不满足 anyOf 中任一分支")
+    one_of = schema.get("oneOf")
+    if isinstance(one_of, list):
+        branch_issues = [
+            (
+                validate_strict(
+                    instance,
+                    branch,
+                    path=path,
+                    _root_schema=root_schema,
+                )
+                if isinstance(branch, dict)
+                else [f"{path}: oneOf 分支必须是 schema 对象"]
+            )
+            for branch in one_of
+        ]
+        matched = sum(not issues for issues in branch_issues)
+        if matched != 1:
+            errors.append(f"{path}: oneOf 必须且只能命中一个分支，实得 {matched}")
+            if matched == 0:
+                for index, issues in enumerate(branch_issues):
+                    errors.extend(
+                        f"{path}: oneOf[{index}] {issue.removeprefix(f'{path}: ')}"
+                        for issue in issues
+                    )
+    negated = schema.get("not")
+    if isinstance(negated, dict) and not validate_strict(
+        instance,
+        negated,
+        path=path,
+        _root_schema=root_schema,
+    ):
+        errors.append(f"{path}: 命中 not 禁止分支")
+    condition = schema.get("if")
+    if isinstance(condition, dict):
+        condition_matches = not validate_strict(
+            instance,
+            condition,
+            path=path,
+            _root_schema=root_schema,
+        )
+        selected = schema.get("then" if condition_matches else "else")
+        if isinstance(selected, dict):
+            errors.extend(
+                validate_strict(
+                    instance,
+                    selected,
+                    path=path,
+                    _root_schema=root_schema,
+                )
+            )
     expected_type = schema.get("type")
     if expected_type is not None and not _type_matches(instance, expected_type):
         errors.append(f"{path}: 期望 {expected_type}，实得 {type(instance).__name__}")
@@ -195,16 +270,40 @@ def validate_strict(
                         _root_schema=root_schema,
                     )
                 )
-    if isinstance(instance, list) and isinstance(schema.get("items"), dict):
-        for idx, item in enumerate(instance):
-            errors.extend(
-                validate_strict(
-                    item,
-                    schema["items"],
-                    path=f"{path}[{idx}]",
-                    _root_schema=root_schema,
-                )
+    if isinstance(instance, list):
+        if "minItems" in schema and len(instance) < int(schema["minItems"]):
+            errors.append(
+                f"{path}: 数量 {len(instance)} < minItems {schema['minItems']}"
             )
+        if "maxItems" in schema and len(instance) > int(schema["maxItems"]):
+            errors.append(
+                f"{path}: 数量 {len(instance)} > maxItems {schema['maxItems']}"
+            )
+        if schema.get("uniqueItems") is True and any(
+            item in instance[:index] for index, item in enumerate(instance)
+        ):
+            errors.append(f"{path}: uniqueItems 要求数组元素唯一")
+        if isinstance(schema.get("items"), dict):
+            for idx, item in enumerate(instance):
+                errors.extend(
+                    validate_strict(
+                        item,
+                        schema["items"],
+                        path=f"{path}[{idx}]",
+                        _root_schema=root_schema,
+                    )
+                )
+        contains = schema.get("contains")
+        if isinstance(contains, dict) and not any(
+            not validate_strict(
+                item,
+                contains,
+                path=f"{path}[{idx}]",
+                _root_schema=root_schema,
+            )
+            for idx, item in enumerate(instance)
+        ):
+            errors.append(f"{path}: 不包含满足 contains 的元素")
     return errors
 
 

@@ -829,7 +829,12 @@ func (v *validator) validateStorageEntities(dir, dirName string, fieldsEntities 
 // responseBodyKinds 是 operation 响应体形态闭集：
 //
 //	object = 单读模型对象；page = 分页/列表（items 承载读模型）；ack = 仅状态确认（无读模型）。
-var responseBodyKinds = map[string]bool{"object": true, "page": true, "ack": true}
+var responseBodyKinds = map[string]bool{
+	"object":  true,
+	"page":    true,
+	"ack":     true,
+	"upgrade": true,
+}
 var requestBodyKinds = map[string]bool{"object": true, "none": true}
 
 type requestInvocationField struct {
@@ -935,19 +940,19 @@ func (v *validator) validateServiceEntities(
 			continue
 		}
 		if kind == "" && body != "" {
-			v.errorf("%s/operations.yaml: operation %q declares response_body %q but missing response_body_kind (object|page|ack)",
+			v.errorf("%s/operations.yaml: operation %q declares response_body %q but missing response_body_kind (object|page|ack|upgrade)",
 				dirName, opName, body)
 			continue
 		}
 		if kind != "" && !responseBodyKinds[kind] {
-			v.errorf("%s/operations.yaml: operation %q has invalid response_body_kind %q (allowed: object|page|ack)",
+			v.errorf("%s/operations.yaml: operation %q has invalid response_body_kind %q (allowed: object|page|ack|upgrade)",
 				dirName, opName, kind)
 			continue
 		}
-		if kind == "ack" {
+		if kind == "ack" || kind == "upgrade" {
 			if body != "" {
-				v.errorf("%s/operations.yaml: operation %q response_body_kind=ack must not declare response_body (got %q)",
-					dirName, opName, body)
+				v.errorf("%s/operations.yaml: operation %q response_body_kind=%s must not declare response_body (got %q)",
+					dirName, opName, kind, body)
 			}
 			continue
 		}

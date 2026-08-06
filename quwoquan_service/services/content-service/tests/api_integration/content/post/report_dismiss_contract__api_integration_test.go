@@ -135,12 +135,12 @@ func TestDismissReportRequiresOperatorAndClosesLifecycle(t *testing.T) {
 			report.ReviewerID,
 		)
 	}
-	assertReportOutboxCount(t, suite.PG, "content.report.dismissed", 1)
+	assertReportOutboxCount(t, suite.PG, "content.report.ReportDismissed", 1)
 
 	var rawPayload []byte
 	if err := suite.PG.QueryRow(
 		`SELECT payload_json FROM report_outbox WHERE event_type = $1`,
-		"content.report.dismissed",
+		"content.report.ReportDismissed",
 	).Scan(&rawPayload); err != nil {
 		t.Fatalf("query dismissed report event payload: %v", err)
 	}

@@ -50,10 +50,6 @@ local_identity_reasons:
   sessionId: runtime session correlation key injected by the trusted invocation context
   subjectId: polymorphic intersection feedback target coordinate interpreted by feedbackKind, not a ContentBehaviorFact identity
   taxonomyReleaseId: immutable taxonomy release reference validated by the taxonomy authority, not owned by ContentBehaviorFact
-capabilities:
-- append_only
-- idempotent_append
-- queryable
 business_rules:
 - userId/personaId/deviceActorId 与 sessionId 只来自可信 Runtime Context，业务请求体不得伪造主体。
 - 同一主体与 clientEventId 只能追加一条语义一致的事实；不同语义重用幂等键必须冲突。

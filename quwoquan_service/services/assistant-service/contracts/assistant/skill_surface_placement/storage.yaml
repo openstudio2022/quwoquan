@@ -2,9 +2,11 @@ backend: postgres
 role: authoritative
 tables:
   skill_surface_placements:
+    publication_role: not_published
     entity: SkillSurfacePlacement
     role: authoritative
-    pk: id
+    pk:
+    - id
     columns:
     - {name: id, type: VARCHAR(36), constraints: [PK, NOT_NULL]}
     - {name: surface_kind, type: VARCHAR(24), constraints: [NOT_NULL]}
@@ -20,12 +22,13 @@ tables:
     indexes:
     - {name: uq_skill_surface_placements_surface, columns: [surface_kind, surface_id], unique: true}
     - {name: idx_skill_surface_placements_status_updated, columns: [status, updated_at]}
-    optimistic_lock: revision
   skill_surface_placement_command_receipts:
+    publication_role: not_published
     entity: SkillSurfacePlacement
     role: authoritative
     description: 与 Placement 聚合和审计事件同事务提交的 surface/idempotency-key 命令回执。
   skill_surface_placement_outbox:
+    publication_role: transactional_outbox
     entity: SkillSurfacePlacement
     role: append_only
     description: 与 Placement 聚合和命令回执同事务提交的 SkillSurfacePlacementChanged 事件。

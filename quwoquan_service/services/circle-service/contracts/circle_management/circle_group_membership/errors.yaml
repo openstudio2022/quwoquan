@@ -1,9 +1,6 @@
-domain: CIRCLE
-aggregate: CircleGroupMembership
 description: 'CircleGroupMembership 对象专属错误码。格式：MODULE.KIND.REASON。'
 errors:
 - code: CIRCLE.USER.group_membership_not_found
-  kind: USER
   reason: group_membership_not_found
   emitted_by:
   - surface: http
@@ -15,28 +12,28 @@ errors:
     - RemoveCircleGroupMember
     - UpdateCircleGroupMemberRole
   http_status: 404
-  recovery_action: refresh
+  recovery_action: retry
+  disruption_level: snackbar
   dart_const: groupMembershipNotFound
   go_const: ErrGroupMembershipNotFound
   user_message:
     zh: 群组成员关系不存在
     en: Circle group membership not found
 - code: CIRCLE.USER.group_membership_already_active
-  kind: USER
   reason: group_membership_already_active
   emitted_by:
   - surface: http
     operations:
     - ApplyJoinCircleGroup
   http_status: 409
-  recovery_action: refresh
+  recovery_action: retry
+  disruption_level: snackbar
   dart_const: groupMembershipAlreadyActive
   go_const: ErrGroupMembershipAlreadyActive
   user_message:
     zh: 已经加入该群组
     en: Already joined this circle group
 - code: CIRCLE.USER.group_membership_full
-  kind: USER
   reason: group_membership_full
   emitted_by:
   - surface: http
@@ -45,13 +42,13 @@ errors:
     - ApproveCircleGroupMember
   http_status: 409
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: groupMembershipFull
   go_const: ErrGroupMembershipFull
   user_message:
     zh: 群组成员已达上限
     en: The circle group has reached its member limit
 - code: CIRCLE.USER.group_membership_state_conflict
-  kind: USER
   reason: group_membership_state_conflict
   emitted_by:
   - surface: http
@@ -59,14 +56,14 @@ errors:
     - ApproveCircleGroupMember
     - RejectCircleGroupMember
   http_status: 409
-  recovery_action: refresh
+  recovery_action: retry
+  disruption_level: snackbar
   dart_const: groupMembershipStateConflict
   go_const: ErrGroupMembershipStateConflict
   user_message:
     zh: 群组成员状态已变化，请刷新后重试
     en: Circle group membership state changed
 - code: CIRCLE.USER.group_membership_owner_cannot_leave
-  kind: USER
   reason: group_membership_owner_cannot_leave
   emitted_by:
   - surface: http
@@ -74,13 +71,13 @@ errors:
     - LeaveCircleGroup
   http_status: 409
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: groupMembershipOwnerCannotLeave
   go_const: ErrGroupMembershipOwnerCannotLeave
   user_message:
     zh: 群主不能直接退出群组
     en: Circle group owner cannot leave directly
 - code: CIRCLE.USER.group_membership_owner_cannot_remove
-  kind: USER
   reason: group_membership_owner_cannot_remove
   emitted_by:
   - surface: http
@@ -88,13 +85,13 @@ errors:
     - RemoveCircleGroupMember
   http_status: 409
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: groupMembershipOwnerCannotRemove
   go_const: ErrGroupMembershipOwnerCannotRemove
   user_message:
     zh: 群主不能被移除
     en: Circle group owner cannot be removed
 - code: CIRCLE.USER.group_membership_role_invalid
-  kind: USER
   reason: group_membership_role_invalid
   emitted_by:
   - surface: http
@@ -102,13 +99,13 @@ errors:
     - UpdateCircleGroupMemberRole
   http_status: 400
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: groupMembershipRoleInvalid
   go_const: ErrGroupMembershipRoleInvalid
   user_message:
     zh: 群组成员角色无效
     en: Invalid circle group membership role
 - code: CIRCLE.USER.group_membership_version_conflict
-  kind: USER
   reason: group_membership_version_conflict
   emitted_by:
   - surface: http
@@ -119,14 +116,14 @@ errors:
     - RemoveCircleGroupMember
     - UpdateCircleGroupMemberRole
   http_status: 409
-  recovery_action: refresh
+  recovery_action: retry
+  disruption_level: snackbar
   dart_const: groupMembershipVersionConflict
   go_const: ErrGroupMembershipVersionConflict
   user_message:
     zh: 群组成员状态已更新，请刷新后重试
     en: Circle group membership changed
 - code: CIRCLE.USER.group_membership_idempotency_conflict
-  kind: USER
   reason: group_membership_idempotency_conflict
   emitted_by:
   - surface: http
@@ -138,14 +135,14 @@ errors:
     - RemoveCircleGroupMember
     - UpdateCircleGroupMemberRole
   http_status: 409
-  recovery_action: refresh
+  recovery_action: retry
+  disruption_level: snackbar
   dart_const: groupMembershipIdempotencyConflict
   go_const: ErrGroupMembershipIdempotencyConflict
   user_message:
     zh: 重复请求与原群组成员命令不一致
     en: Idempotency key was reused for another group membership command
 - code: CIRCLE.SYSTEM.group_membership_storage_write_failed
-  kind: SYSTEM
   reason: group_membership_storage_write_failed
   emitted_by:
   - surface: http
@@ -160,6 +157,7 @@ errors:
     - UpdateCircleGroupMemberRole
   http_status: 500
   recovery_action: retry
+  disruption_level: snackbar
   recovery_after_seconds: 5
   dart_const: groupMembershipStorageWriteFailed
   go_const: ErrGroupMembershipStorageWriteFailed

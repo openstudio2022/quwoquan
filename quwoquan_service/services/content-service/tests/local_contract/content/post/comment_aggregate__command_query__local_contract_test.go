@@ -10,13 +10,13 @@ import (
 	"testing"
 	"time"
 
+	"quwoquan_service/runtime/commandmeta"
 	rterr "quwoquan_service/runtime/errors"
 	contentgenerated "quwoquan_service/services/content-service/generated/content/comment"
 	commentapp "quwoquan_service/services/content-service/internal/content/comment/application"
 	commentmodel "quwoquan_service/services/content-service/internal/content/comment/domain/model"
 	commentports "quwoquan_service/services/content-service/internal/content/comment/domain/ports"
 	commenttestsupport "quwoquan_service/services/content-service/internal/content/comment/infrastructure/testsupport"
-	"quwoquan_service/runtime/commandmeta"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/testsupport"
 )
 
@@ -275,7 +275,7 @@ func TestCommentAggregateExpiresReceiptWithoutRemovingCommittedFact(t *testing.T
 		CommandName:      "CreateComment",
 		CommandDigest:    "digest-expired-comment-receipt",
 		ReceiptExpiresAt: now.Add(-time.Second),
-		Events: []commentports.OutboxEvent{{
+		OutboxEvents: []commentports.OutboxEvent{{
 			EventID:          "event-expired-comment-receipt",
 			EventType:        "CommentCreated",
 			AggregateID:      aggregate.ID(),
@@ -533,8 +533,33 @@ func TestBindMediaAssetsToCommentIsOwnerScopedAndIdempotent(t *testing.T) {
 		t.Fatalf("bound media assets must be visible through typed reader: %+v", page)
 	}
 	outbox := store.OutboxEvents()
-	if len(outbox) != 2 || outbox[1].EventType != "CommentAttachmentsBound" {
-		t.Fatalf("bind must emit one canonical event and replay none: %+v", outbox)
+	if len(outbox) != 1 || outbox[0].EventType != "CommentCreated" {
+		t.Fatalf("attachment audit fact must not enter the publishable outbox: %+v", outbox)
+	}
+	eventLog := store.EventLogRecords()
+	if len(eventLog) != 1 ||
+		eventLog[0].EventType != "CommentAttachmentsBound" ||
+		eventLog[0].AggregateID != created.ID ||
+		eventLog[0].AggregateVersion != bound.Version {
+		t.Fatalf("bind must append one canonical event-log fact and replay none: %+v", eventLog)
+	}
+	var loggedPayload struct {
+		CommentID          string   `json:"commentId"`
+		Version            int64    `json:"version"`
+		PostID             string   `json:"postId"`
+		AuthorID           string   `json:"authorId"`
+		AttachmentMediaIDs []string `json:"attachmentMediaIds"`
+	}
+	if err := json.Unmarshal(eventLog[0].Payload, &loggedPayload); err != nil {
+		t.Fatalf("decode CommentAttachmentsBound event-log payload: %v", err)
+	}
+	if loggedPayload.CommentID != created.ID ||
+		loggedPayload.Version != bound.Version ||
+		loggedPayload.PostID != "post-comment-owner" ||
+		loggedPayload.AuthorID != "persona-comment-author" ||
+		len(loggedPayload.AttachmentMediaIDs) != 2 ||
+		loggedPayload.AttachmentMediaIDs[0] != "media-1" {
+		t.Fatalf("CommentAttachmentsBound payload drifted: %+v", loggedPayload)
 	}
 	_, err = service.BindAttachments(
 		commandmeta.WithIdempotencyKey(context.Background(), "comment-bind-denied"),

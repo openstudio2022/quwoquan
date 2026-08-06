@@ -80,7 +80,6 @@ type Config struct {
 	SearchService            ServiceEgressConfig `yaml:"search_service"`
 	EntityService            ServiceEgressConfig `yaml:"entity_service"`
 	ContentService           ServiceEgressConfig `yaml:"content_service"`
-	TravelService            ServiceEgressConfig `yaml:"travel_service"`
 	IntegrationService       ServiceEgressConfig `yaml:"integration_service"`
 	UserProfile              UserProfileConfig   `yaml:"user_profile"`
 	UserService              ServiceEgressConfig `yaml:"user_service"`
@@ -169,9 +168,6 @@ func ApplyEnvOverrides(cfg *Config) error {
 	}
 	if v := strings.TrimSpace(os.Getenv("ASSISTANT_CONTENT_SERVICE_BASE_URL")); v != "" {
 		cfg.ContentService.BaseURL = v
-	}
-	if v := strings.TrimSpace(os.Getenv("ASSISTANT_TRAVEL_SERVICE_BASE_URL")); v != "" {
-		cfg.TravelService.BaseURL = v
 	}
 	if v := strings.TrimSpace(os.Getenv("ASSISTANT_INTEGRATION_BASE_URL")); v != "" {
 		cfg.IntegrationService.BaseURL = v

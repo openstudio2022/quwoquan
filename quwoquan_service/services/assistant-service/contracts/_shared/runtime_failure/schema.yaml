@@ -1,6 +1,6 @@
 dart_class: RuntimeFailureWire
-library_path: assistant/generated/contracts/runtime_failure.g.dart
-output_path: assistant/generated/contracts/runtime_failure.g.dart
+library_path: package:quwoquan_cloud_contracts/src/generated/assistant/assistant_runtime_failure.g.dart
+output_path: packages/quwoquan_cloud_contracts/lib/src/generated/assistant/assistant_runtime_failure.g.dart
 contract: runtime_failure
 kind: shared_wire_contract
 fields:

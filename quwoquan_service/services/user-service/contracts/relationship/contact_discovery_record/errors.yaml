@@ -1,8 +1,5 @@
-domain: USER
-entity: ContactDiscoveryRecord
 errors:
 - code: USER.CONTACT.rate_limited
-  kind: CONTACT
   reason: rate_limited
   emitted_by:
   - surface: http
@@ -10,6 +7,7 @@ errors:
     - InitiateContactDiscovery
   http_status: 429
   recovery_action: retry
+  disruption_level: snackbar
   recovery_after_seconds: 86400
   dart_const: contactDiscoveryRateLimited
   go_const: ErrContactDiscoveryRateLimited
@@ -17,7 +15,6 @@ errors:
     zh: 今日通讯录发现次数已达上限，请明日再试
     en: Daily contact discovery limit reached, please try again tomorrow
 - code: USER.CONTACT.too_many_contacts
-  kind: CONTACT
   reason: payload_too_large
   emitted_by:
   - surface: http
@@ -25,13 +22,13 @@ errors:
     - InitiateContactDiscovery
   http_status: 400
   recovery_action: retry
+  disruption_level: snackbar
   dart_const: tooManyContacts
   go_const: ErrTooManyContacts
   user_message:
     zh: 通讯录条目过多，单次最多支持 5000 条
     en: Too many contacts, maximum 5000 per request
 - code: USER.CONTACT.not_found
-  kind: CONTACT
   reason: not_found
   emitted_by:
   - surface: http
@@ -40,6 +37,7 @@ errors:
     - GetLatestContactDiscovery
   http_status: 404
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: contactDiscoveryNotFound
   go_const: ErrContactDiscoveryNotFound
   user_message:

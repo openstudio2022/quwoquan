@@ -1,8 +1,8 @@
 """Video-source commercial admission matrix backed by the unified registry."""
 from __future__ import annotations
 
-from typing import Any, Mapping
-
+from collections.abc import Mapping
+from typing import Any
 
 VIDEO_SOURCE_KINDS = {
     "douyin",
@@ -36,6 +36,7 @@ REQUIRED_EVIDENCE = {
     "property_release",
     "notice_and_takedown",
 }
+REFERENCE_ONLY_GATE_BLOCK = "GATE_BLOCK DATA.CONTRACT.INVALID"
 
 
 def _video_policy(registry: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -74,6 +75,13 @@ def _video_sources(registry: Mapping[str, Any]) -> dict[str, Mapping[str, Any]]:
     }
 
 
+def _is_reference_only_provider(source: Mapping[str, Any]) -> bool:
+    return (
+        str(source.get("defaultRole") or "").strip() == "reference_only"
+        or str(source.get("fetchMode") or "").strip() == "platform_reference"
+    )
+
+
 def video_commercial_admission(
     registry: Mapping[str, Any],
     *,
@@ -98,6 +106,13 @@ def assert_video_source_admitted(
     source_kind: str,
     publication_admission: str,
 ) -> None:
+    source = _video_sources(registry).get(source_id) or {}
+    if _is_reference_only_provider(source):
+        raise ValueError(
+            f"{REFERENCE_ONLY_GATE_BLOCK}: video source {source_id} is "
+            "reference_only/platform_reference and is not allowed to be "
+            "acquired or admitted to a release"
+        )
     row = video_commercial_admission(registry, source_id=source_id)
     if str(row.get("sourceKind") or "") != source_kind:
         raise ValueError(
@@ -177,15 +192,38 @@ def verify_video_commercial_admission(
         }
         if source_kind not in VIDEO_SOURCE_KINDS:
             issues.append(f"video matrix {source_id}: invalid sourceKind")
-        if not admissions or not admissions <= PUBLICATION_ADMISSIONS:
+        if not admissions <= PUBLICATION_ADMISSIONS:
             issues.append(
                 f"video matrix {source_id}: invalid publicationAdmissions"
             )
-        if "research_release" not in admissions:
-            issues.append(
-                f"video matrix {source_id}: research_release admission is required"
-            )
         source = sources.get(source_id) or {}
+        reference_only = _is_reference_only_provider(source)
+        acquisition_paths = {
+            str(value)
+            for value in source.get("researchAcquisitionPaths") or []
+        }
+        if reference_only:
+            if acquisition_paths:
+                issues.append(
+                    f"{REFERENCE_ONLY_GATE_BLOCK}: video source {source_id} is "
+                    "reference_only/platform_reference but declares research "
+                    "acquisition paths"
+                )
+            if admissions:
+                issues.append(
+                    f"{REFERENCE_ONLY_GATE_BLOCK}: video matrix {source_id} is "
+                    "reference_only/platform_reference but declares release "
+                    "admissions"
+                )
+        else:
+            if not admissions:
+                issues.append(
+                    f"video matrix {source_id}: invalid publicationAdmissions"
+                )
+            if "research_release" not in admissions:
+                issues.append(
+                    f"video matrix {source_id}: research_release admission is required"
+                )
         if "risk_accepted_attribution_only" in admissions and (
             source.get("defaultRole") != "publish_candidate"
             or source.get("fetchMode") != "attribution_manifest"

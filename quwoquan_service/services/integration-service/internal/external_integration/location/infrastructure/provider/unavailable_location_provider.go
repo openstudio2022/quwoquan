@@ -34,6 +34,13 @@ func (p *UnavailableLocationProvider) Search(
 	return nil, p.unavailableError()
 }
 
+func (p *UnavailableLocationProvider) ReadRoute(
+	context.Context,
+	model.RouteQuery,
+) (model.Route, error) {
+	return model.Route{}, p.unavailableError()
+}
+
 func (p *UnavailableLocationProvider) unavailableError() error {
 	reason := p.reason
 	if reason == "" {
@@ -43,3 +50,4 @@ func (p *UnavailableLocationProvider) unavailableError() error {
 }
 
 var _ ports.LocationProvider = (*UnavailableLocationProvider)(nil)
+var _ ports.RouteReadProvider = (*UnavailableLocationProvider)(nil)

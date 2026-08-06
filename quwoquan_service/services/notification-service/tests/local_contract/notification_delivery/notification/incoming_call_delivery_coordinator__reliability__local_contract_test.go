@@ -15,10 +15,9 @@ import (
 	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtredis "quwoquan_service/runtime/redis"
 	"quwoquan_service/runtime/reliabletask"
-	streamadapter "quwoquan_service/services/notification-service/internal/notification_delivery/notification/adapters/inbound/stream"
-	"quwoquan_service/services/notification-service/internal/notification_delivery/notification/application"
-	notification "quwoquan_service/services/notification-service/internal/notification_delivery/notification/domain"
-	deliverydomain "quwoquan_service/services/notification-service/internal/notification_delivery/notification_delivery_job/domain"
+	streamadapter "quwoquan_service/services/notification-service/internal/notification_delivery/notification_delivery_job/adapters/inbound/stream"
+	"quwoquan_service/services/notification-service/internal/notification_delivery/notification_delivery_job/application"
+	notification "quwoquan_service/services/notification-service/internal/notification_delivery/notification_delivery_job/domain"
 )
 
 func TestIncomingCallCoordinatorOnlineAckNoAckOfflineExpiryAndCancellation(
@@ -689,7 +688,7 @@ func (s *incomingCallStoreFake) AckIncomingCallPresentation(
 		return result, nil
 	}
 	return notification.AckIncomingCallPresentationResult{},
-		deliverydomain.ErrDeliveryJobNotFound
+		notification.ErrDeliveryJobNotFound
 }
 
 func (s *incomingCallStoreFake) CancelIncomingCallJobs(

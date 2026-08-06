@@ -1,4 +1,6 @@
 // spec_ref: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/event-schema-governance/spec.md#gwt-001
+// readiness_case: record-visit-local
+// readiness_case: get-visit-stats-local
 package visit_record_test
 
 import (
@@ -110,6 +112,26 @@ func TestVisitHTTPBoundaryRejectsSpoofingAndMapsObjectErrors(t *testing.T) {
 	}
 	if store.lastInput.UserID == "" || store.lastInput.UserID == "persona-local" {
 		t.Fatalf("adapter must persist only a namespaced irreversible actor hash: %+v", store.lastInput)
+	}
+	stats := localRequest(
+		http.MethodGet,
+		"/ops/visits/stats?targetType=page&targetKey=home",
+		"",
+		"",
+		"persona-local",
+	)
+	statsResponse := httptest.NewRecorder()
+	mux.ServeHTTP(statsResponse, stats)
+	if statsResponse.Code != http.StatusOK {
+		t.Fatalf("stats status=%d body=%s", statsResponse.Code, statsResponse.Body.String())
+	}
+	var visitStats visitapplication.VisitStats
+	if err := json.Unmarshal(statsResponse.Body.Bytes(), &visitStats); err != nil {
+		t.Fatalf("decode VisitStats: %v", err)
+	}
+	if visitStats.TotalVisits != 1 || len(visitStats.Items) != 1 ||
+		visitStats.Items[0].UserID != "" {
+		t.Fatalf("unexpected VisitStats: %+v", visitStats)
 	}
 
 	conflict := localRequest(

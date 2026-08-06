@@ -399,7 +399,8 @@ def write_post_api_verification(
         )
     if readiness_phase == "research":
         raise PostApiVerificationError(
-            "GATE_BLOCK research API verification requires a protected, "
+            "DATA.RESEARCH.IDENTITY_ADAPTER_UNAVAILABLE: GATE_BLOCK research "
+            "API verification requires a protected, "
             "whitelisted internal identity adapter; anonymous guest access "
             "cannot be reused as research evidence"
         )

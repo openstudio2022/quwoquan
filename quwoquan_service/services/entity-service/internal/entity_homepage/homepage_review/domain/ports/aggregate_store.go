@@ -98,3 +98,7 @@ type ProjectionCheckpointStore interface {
 	LoadCheckpoint(ctx context.Context, consumer string) (string, error)
 	SaveCheckpoint(ctx context.Context, consumer, checkpoint string) error
 }
+
+type OutboxPublisher interface {
+	Publish(ctx context.Context, event OutboxEvent) error
+}

@@ -1,3 +1,6 @@
+// spec_ref: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/homepage-claim-request-and-review/spec.md#gwt-001
+// spec_ref: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/homepage-offline-report-and-history-retention/spec.md#gwt-001
+// readiness_case: apply-homepage-lifecycle-events-local
 package local_contract
 
 import (
@@ -27,6 +30,7 @@ func TestClaimAndStatusOutboxProjectorsConvergeHomepage(t *testing.T) {
 		t.Fatalf("new homepage store: %v", err)
 	}
 	homepages := application.NewHomepageServiceWithStore(ctx, store)
+	lifecycleHandler := application.NewHomepageLifecycleHandler(homepages)
 	homepageID := seeds[0].ID
 	now := time.Date(2026, 7, 20, 1, 0, 0, 0, time.UTC)
 
@@ -73,7 +77,7 @@ func TestClaimAndStatusOutboxProjectorsConvergeHomepage(t *testing.T) {
 			},
 		},
 	}
-	claimProjector, err := application.NewClaimHomepageProjector(claimSource, homepages)
+	claimProjector, err := application.NewClaimHomepageProjector(claimSource, lifecycleHandler)
 	if err != nil {
 		t.Fatalf("new claim projector: %v", err)
 	}
@@ -92,6 +96,21 @@ func TestClaimAndStatusOutboxProjectorsConvergeHomepage(t *testing.T) {
 			homepage.ClaimStatus,
 			homepage.OwnerPersonaID,
 		)
+	}
+	averageRating := 4.8
+	if err := lifecycleHandler.ApplyReviewSummary(
+		ctx,
+		homepageID,
+		&averageRating,
+		12,
+		[]string{"交通方便", "适合家庭"},
+	); err != nil {
+		t.Fatalf("apply review summary: %v", err)
+	}
+	reviewSummary, err := homepages.GetHomepageReviewSummary(ctx, homepageID)
+	if err != nil || reviewSummary.RatingCount != 12 ||
+		reviewSummary.AverageRating == nil || *reviewSummary.AverageRating != averageRating {
+		t.Fatalf("review summary projection mismatch: summary=%+v err=%v", reviewSummary, err)
 	}
 	if replayed, err := claimProjector.RunOnce(ctx, 10); err != nil || replayed != 0 {
 		t.Fatalf("claim projector replay: processed=%d err=%v", replayed, err)
@@ -118,6 +137,12 @@ func TestClaimAndStatusOutboxProjectorsConvergeHomepage(t *testing.T) {
 	}
 	if processed, err := statusProjector.RunOnce(ctx, 10); err != nil || processed != 1 {
 		t.Fatalf("project status event: processed=%d err=%v", processed, err)
+	}
+	if statusSource.checkpoint != "status-event-1" {
+		t.Fatalf("status projector checkpoint=%q want status-event-1", statusSource.checkpoint)
+	}
+	if replayed, err := statusProjector.RunOnce(ctx, 10); err != nil || replayed != 0 {
+		t.Fatalf("status projector replay: processed=%d err=%v", replayed, err)
 	}
 	status, found, err := homepages.FindHomepageStatus(ctx, homepageID)
 	if err != nil || !found || status != "offline" {

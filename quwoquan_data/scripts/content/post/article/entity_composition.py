@@ -6,68 +6,56 @@
 """
 from __future__ import annotations
 
-import re
-from typing import Any, Mapping, Sequence
+from collections.abc import Mapping, Sequence
+from typing import Any
 
-from core.data_issue import DataIssueCode, DataIssueStage, DataRecoveryAction, data_issues
-from content.post.article.evidence_bundle import gate_route_evidence_bundle, public_byline_label
-from core.creative_brief import creative_brief_contract_issues, creative_governance_issues
-from content.post.object_index import require_title_hint
-from governance.coverage.entity_extract import normalize_entity_refs
-from content.review.annotation.entity_annotation import merge_entity_refs
-from content.post.content_review import fact_traceability_issues, generator_provenance_issues
+from core.content_tags import resolved_content_tag_refs
+from core.creative_brief import (
+    creative_brief_contract_issues,
+)
+from core.data_issue import (
+    DataIssueCode,
+    DataIssueStage,
+    DataRecoveryAction,
+    data_issues,
+)
+
+from content.execution.stage_reports import (
+    write_gate_report,
+    write_repair_report,
+    write_stage_result,
+)
+from content.post.article.article_media_contract import article_media_contract_issues
 from content.post.article.draft_io import (
     GENERATOR_AGENT,
-    draft_asset_reference_issues,
-    is_placeholder,
-    read_draft_article,
     read_draft_meta,
-    read_writing_pack,
-    repair_creative_meta,
     write_image_evidence_draft,
     write_placeholder_draft,
     write_prompt,
     write_writing_pack,
 )
-from core.content_tags import resolved_content_tag_refs
-from content.execution.stage_reports import clear_repair_report, write_gate_report, write_repair_report, write_stage_result
-from core.template_fingerprints import template_fingerprint_issues
+from content.post.article.evidence_bundle import (
+    gate_route_evidence_bundle,
+    public_byline_label,
+)
 from content.post.article.prompt_renderer import render_prompt_md
-from content.post.article.writing_pack import build_writing_pack
-from content.post.article.route_analysis import analyze_route_ref
 from content.post.article.route_assets import _build_route_assets
 from content.post.article.route_compose import _attach_base_draft_text
 from content.post.article.route_core import (
     IMAGE_EVIDENCE_GENERATOR,
-    aggregate_checks,
-    is_route_brief,
-    resolve_carrier,
     _article_without_assets_allowed,
     _build_summary,
     _compact_public_text,
-    _image_caption_from_article,
     _image_caption_from_brief,
-    _jaccard,
     _publish_angle,
-    _section_bodies,
     _unique_strings,
+    is_route_brief,
     load_compose_brief,
+    resolve_carrier,
 )
-from content.post.article.route_review import (
-    _load_source_texts,
-    _persisted_review_payload,
-)
-from content.post.article.route_review_checks import (
-    _check_carrier_consistency,
-    _check_cross_article_similarity,
-    _check_evidence_quality,
-    _check_image_fidelity,
-    _check_image_gate,
-    _check_prose_style,
-    _check_provenance_rewrite,
-    _check_travelogue_density,
-    _resolve_style_opening,
-)
+from content.post.article.writing_pack import build_writing_pack
+from content.post.object_index import require_title_hint
+from content.review.annotation.entity_annotation import merge_entity_refs
 
 
 def is_entity_brief(brief: Mapping[str, Any]) -> bool:
@@ -130,10 +118,9 @@ def _kind_word(brief: Mapping[str, Any]) -> str:
 
 def _entity_section_intents(brief: Mapping[str, Any], name: str) -> list[str]:
     """章节意图：跟随底稿自身结构，仅给最小建议（不再下发固定 6 段骨架）。"""
-    kind = _kind_word(brief)
     return [
         f"结构跟随底稿：保留底稿自身的小标题与叙述顺序（多目的地路书保留全部站点，不要裁成只讲 {name}），只做轻量编辑。",
-        f"轻改重点：去语病/纠错别字/理顺语句/补全可回溯证据/去平台与版权痕迹；不要从零另写，也不要套用固定模板小标题（如「它到底适合谁」）。",
+        "轻改重点：去语病/纠错别字/理顺语句/补全可回溯证据/去平台与版权痕迹；不要从零另写，也不要套用固定模板小标题（如「它到底适合谁」）。",
     ]
 
 
@@ -212,6 +199,12 @@ def build_entity_writing_pack(
     issues.extend(creative_brief_contract_issues(pack))
     if not assets and not _article_without_assets_allowed(brief):
         issues.append("writing pack has no verifiable image assets")
+    issues.extend(
+        article_media_contract_issues(
+            pack,
+            str(pack.get("baseSourceRef") or brief.get("baseSourceRef") or ""),
+        )
+    )
     write_stage_result(execution_id, "post", "compose_brief", ref, pack)
     write_gate_report(
         execution_id=execution_id,
@@ -260,7 +253,7 @@ def _source_ref_from_asset_path(value: Any) -> str:
         return ""
     if "/assets/" in raw:
         return raw.split("/assets/", 1)[0].rstrip("/") + "/source.md"
-    if raw.endswith("/source.md") or raw.endswith("/source.clean.md"):
+    if raw.endswith(("/source.md", "/source.clean.md")):
         return raw.rsplit("/", 1)[0].rstrip("/") + "/source.md"
     return ""
 
@@ -363,6 +356,7 @@ def _compose_payload_from_pack(
         "template": template,
         "assets": assets,
         "publishMediaMode": pack.get("publishMediaMode") or brief.get("publishMediaMode"),
+        "baseSourceRef": pack.get("baseSourceRef") or brief.get("baseSourceRef"),
         "publishLayout": "image" if carrier == "image" else "entity",
         "publishAngle": _publish_angle(brief),
         "publishTitle": (
@@ -396,8 +390,6 @@ def _compose_payload_from_pack(
         payload["articleMarkdown"] = ""
         payload["caption"] = caption
     return payload
-
-
 
 
 

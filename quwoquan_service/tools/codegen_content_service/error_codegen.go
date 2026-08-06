@@ -16,12 +16,12 @@ import (
 
 type errorEntryYAML struct {
 	Code                 string            `yaml:"code"`
-	Kind                 string            `yaml:"kind"`
 	Reason               string            `yaml:"reason"`
 	HTTPStatus           int               `yaml:"http_status"`
 	GoConst              string            `yaml:"go_const"`
 	RecoveryAction       string            `yaml:"recovery_action"`
 	RecoveryAfterSeconds int               `yaml:"recovery_after_seconds"`
+	DisruptionLevel      string            `yaml:"disruption_level"`
 	UserMessage          map[string]string `yaml:"user_message"`
 }
 
@@ -126,7 +126,7 @@ func renderContentErrorConstants(sourcePath string, spec errorsYAML) ([]byte, er
 		if e.GoConst == "" {
 			continue
 		}
-		_, reason := errorKindAndReason(e)
+		reason := errorReason(e)
 		userMessage := strings.TrimSpace(e.UserMessage["zh"])
 		if userMessage == "" {
 			userMessage = "内容服务异常，请稍后重试"
@@ -145,46 +145,33 @@ func renderContentErrorConstants(sourcePath string, spec errorsYAML) ([]byte, er
 	return formatted, nil
 }
 
-func errorKindAndReason(e errorEntryYAML) (string, string) {
-	kind := strings.TrimSpace(e.Kind)
+// errorReason 取 errors.yaml 的 reason，缺失时回退到 code 第三段。
+func errorReason(e errorEntryYAML) string {
 	reason := strings.TrimSpace(e.Reason)
-	parts := strings.Split(strings.TrimSpace(e.Code), ".")
-	if len(parts) == 3 {
-		if kind == "" {
-			kind = parts[1]
-		}
-		if reason == "" {
+	if reason == "" {
+		parts := strings.Split(strings.TrimSpace(e.Code), ".")
+		if len(parts) == 3 {
 			reason = parts[2]
 		}
-	}
-	if kind == "" {
-		kind = "SYSTEM"
 	}
 	if reason == "" {
 		reason = "internal_error"
 	}
-	return kind, reason
-}
-
-func goRuntimeKind(kind string) string {
-	switch strings.TrimSpace(kind) {
-	case "USER":
-		return "rterr.KindUser"
-	case "MIDDLEWARE":
-		return "rterr.KindMiddleware"
-	case "SYSTEM":
-		return "rterr.KindSystem"
-	case "NETWORK":
-		return "rterr.KindNetwork"
-	default:
-		return fmt.Sprintf("rterr.Kind(%q)", strings.TrimSpace(kind))
-	}
+	return reason
 }
 
 func goErrorRecoveryCall(e errorEntryYAML) string {
 	action := strings.TrimSpace(e.RecoveryAction)
 	if action == "" {
 		return ""
+	}
+	if disruption := strings.TrimSpace(e.DisruptionLevel); disruption != "" {
+		return fmt.Sprintf(
+			".WithRecoveryDirective(%q, %q, %d)",
+			action,
+			disruption,
+			e.RecoveryAfterSeconds,
+		)
 	}
 	return fmt.Sprintf(".WithRecovery(%q, %d)", action, e.RecoveryAfterSeconds)
 }

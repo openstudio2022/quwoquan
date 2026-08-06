@@ -65,7 +65,7 @@ ACQUIRE_ALLOWLIST_DOMAINS: tuple[str, ...] = (
 POPULARITY_TIERS: tuple[str, ...] = ("head", "waist", "rising", "niche_expert")
 OUTPUT_TIERS: tuple[str, ...] = ("prolific", "steady", "seasonal")
 
-# 规范 3 级叶子（唯一真相源 = control-plane taxonomy + bootstrap_tags_topic_verticals_part1.py）。
+# 规范 3 级叶子（唯一真相源 = control-plane taxonomy + bootstrap_tags_topic_travel.py）。
 # 禁止退回 2 级短标签：creator-lint 经 tag_exists 校验目录化标签树，2 级短标签不存在即 BLOCK。
 TRAVEL_TOPIC_REFS: tuple[str, ...] = (
     "Topic/旅行/出行方式/自驾",

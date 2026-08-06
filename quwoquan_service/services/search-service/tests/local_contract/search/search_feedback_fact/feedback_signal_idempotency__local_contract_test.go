@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-storage-topology-and-elasticity/spec.md#gwt-004
+// readiness_case: report-search-feedback-local
 package local_contract
 
 import (

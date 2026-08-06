@@ -13,7 +13,7 @@ import (
 
 	serviceclients "quwoquan_service/generated/serviceclients"
 	rtauth "quwoquan_service/runtime/auth"
-	"quwoquan_service/services/notification-service/internal/notification_delivery/notification/application"
+	"quwoquan_service/services/notification-service/internal/notification_delivery/notification_delivery_job/application"
 )
 
 const presenceResponseLimit = 1 << 20

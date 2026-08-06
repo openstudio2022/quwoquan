@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/spec.md#sit-002
+// spec_ref: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/spec.md#sit-003
 package local_contract
 
 import (
@@ -46,6 +48,22 @@ func TestElasticsearchLogSinkUsesDeterministicDocumentsAndProviderNeutralPrivacy
 		}
 		if _, exists := mapping["coerce"]; exists {
 			t.Fatalf("raw template %s must not set unsupported boolean coerce", field)
+		}
+	}
+	startupTemplateProperties := harness.indexTemplateProperties(
+		t,
+		"app-startup-diagnostic-raw-template",
+	)
+	for _, field := range []string{
+		"recoverySurface",
+		"recoveryLifecycle",
+		"recoveryMount",
+		"recoveryPhase",
+		"recoveryAction",
+	} {
+		mapping, ok := startupTemplateProperties[field].(map[string]any)
+		if !ok || mapping["type"] != "keyword" {
+			t.Fatalf("startup template %s mapping = %#v; want keyword", field, mapping)
 		}
 	}
 
@@ -133,13 +151,18 @@ func TestElasticsearchLogSinkUsesDeterministicDocumentsAndProviderNeutralPrivacy
 		ctx,
 		startupBatchKey,
 		[]application.StartupDiagnosticRecord{{
-			EventID:    "event-1",
-			AttemptID:  "attempt-1",
-			Phase:      "flutter_first_frame",
-			Outcome:    "succeeded",
-			OccurredAt: now.Format(time.RFC3339Nano),
-			Platform:   "ios",
-			RuntimeEnv: "gamma",
+			EventID:           "event-1",
+			AttemptID:         "attempt-1",
+			Phase:             "recovery",
+			Outcome:           "observed",
+			OccurredAt:        now.Format(time.RFC3339Nano),
+			Platform:          "ios",
+			RuntimeEnv:        "gamma",
+			RecoverySurface:   "page.app.startup_recovery",
+			RecoveryLifecycle: "phase_change",
+			RecoveryMount:     "runtime_boundary",
+			RecoveryPhase:     "runtime_version_checking",
+			RecoveryAction:    "none",
 		}},
 	); err != nil {
 		t.Fatalf("PutStartupDiagnostics() error = %v", err)
@@ -151,6 +174,21 @@ func TestElasticsearchLogSinkUsesDeterministicDocumentsAndProviderNeutralPrivacy
 			complete,
 			err,
 		)
+	}
+	startupDocument := harness.document(
+		"app-startup-diagnostic-raw",
+		startupBatchKey+":0",
+	)
+	for field, want := range map[string]string{
+		"recoverySurface":   "page.app.startup_recovery",
+		"recoveryLifecycle": "phase_change",
+		"recoveryMount":     "runtime_boundary",
+		"recoveryPhase":     "runtime_version_checking",
+		"recoveryAction":    "none",
+	} {
+		if got := fmt.Sprint(startupDocument[field]); got != want {
+			t.Fatalf("startup document %s = %q; want %q", field, got, want)
+		}
 	}
 
 	runtimeBatchKey := strings.Repeat("c", 64)

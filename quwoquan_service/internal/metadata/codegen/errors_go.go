@@ -5,22 +5,15 @@ import (
 	"strings"
 )
 
-// ErrorRecovery 是 errors.yaml 中结构化恢复指令的 ContractGraph 视图。
-type ErrorRecovery struct {
-	Action          string `yaml:"action"`
-	DisruptionLevel string `yaml:"disruptionLevel"`
-	AfterSeconds    int    `yaml:"afterSeconds"`
-}
-
-// ErrorDefinition 是稳定端云错误的 ContractGraph 视图。
+// ErrorDefinition 是稳定端云错误的 ContractGraph 视图。恢复语义只有扁平一轨:
+// recovery_action / recovery_after_seconds / disruption_level。
 type ErrorDefinition struct {
 	Code              string            `yaml:"code"`
-	Kind              string            `yaml:"kind"`
 	Reason            string            `yaml:"reason"`
 	HTTPStatus        int               `yaml:"http_status"`
 	RecoveryAction    string            `yaml:"recovery_action"`
 	RecoveryAfterSecs int               `yaml:"recovery_after_seconds"`
-	Recovery          ErrorRecovery     `yaml:"recovery"`
+	DisruptionLevel   string            `yaml:"disruption_level"`
 	DartConst         string            `yaml:"dart_const"`
 	GoConst           string            `yaml:"go_const"`
 	L10nKey           string            `yaml:"l10n_key"`
@@ -135,18 +128,12 @@ func errorUserMessage(definition ErrorDefinition) string {
 }
 
 func errorRecoveryCall(definition ErrorDefinition) string {
-	action := strings.TrimSpace(definition.Recovery.Action)
-	if action == "" {
-		action = strings.TrimSpace(definition.RecoveryAction)
-	}
+	action := strings.TrimSpace(definition.RecoveryAction)
 	if action == "" {
 		return ""
 	}
-	afterSeconds := definition.Recovery.AfterSeconds
-	if afterSeconds <= 0 {
-		afterSeconds = definition.RecoveryAfterSecs
-	}
-	if disruption := strings.TrimSpace(definition.Recovery.DisruptionLevel); disruption != "" {
+	afterSeconds := definition.RecoveryAfterSecs
+	if disruption := strings.TrimSpace(definition.DisruptionLevel); disruption != "" {
 		return fmt.Sprintf(".WithRecoveryDirective(%q, %q, %d)", action, disruption, afterSeconds)
 	}
 	return fmt.Sprintf(".WithRecovery(%q, %d)", action, afterSeconds)

@@ -26,6 +26,11 @@ import (
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-suspension-and-appeal-lifecycle/spec.md#gwt-001
 // spec_ref: specs/feature-tree/product-ops-growth/product-control-plane-foundation/account-moderation-and-appeal-enforcement/spec.md#gwt-002
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-suspension-and-appeal-lifecycle/spec.md#gwt-003
+// readiness_case: open-account-moderation-case-api
+// readiness_case: open-account-appeal-case-api
+// readiness_case: review-account-enforcement-case-api
+// readiness_case: retry-account-enforcement-delivery-api
+// readiness_case: get-account-enforcement-case-api
 func TestAccountEnforcementCaseAtomicProducerDispatchReplayConflictAndRecovery(t *testing.T) {
 	if accountEnforcementPGPool == nil {
 		t.Fatal("real PostgreSQL pool was not initialized")
@@ -485,9 +490,9 @@ func newTestDispatcher(
 	store *persistence.PostgresStore,
 	target *accountenforcementuser.HTTPClient,
 	owner string,
-) *application.Dispatcher {
+) *application.DeliveryRelay {
 	t.Helper()
-	dispatcher, err := application.NewDispatcher(store, target, nil, application.DispatcherConfig{
+	dispatcher, err := application.NewDeliveryRelay(store, target, nil, application.DispatcherConfig{
 		Owner: owner, PollInterval: time.Second, LeaseDuration: 5 * time.Second,
 		RequestTimeout: 2 * time.Second, InitialBackoff: time.Millisecond,
 		MaxBackoff: time.Second, MaxPendingAge: time.Minute, MaxAttempts: 3, BatchSize: 10,
@@ -505,7 +510,7 @@ func applyUserSetupDecision(
 	decision model.Decision,
 ) {
 	t.Helper()
-	receipt, err := target.Apply(ctx, decision)
+	receipt, err := target.Publish(ctx, decision)
 	if err != nil {
 		t.Fatalf("apply real UserAccount setup decision: %v", err)
 	}

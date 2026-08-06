@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/source/professional_image_discovery_plan.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "planId", "planDigest", "catalogRef", "catalogDigest",
+    "generatedAt", "dimensions", "candidateCount", "providerCandidateCounts", "candidates"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.professional_image_discovery_plan"},
+    "planId": {"type": "string", "pattern": "^professional-image-discovery-[0-9a-f]{16}$"},
+    "planDigest": {"$ref": "#/$defs/digest"},
+    "catalogRef": {"type": "string", "minLength": 1},
+    "catalogDigest": {"$ref": "#/$defs/digest"},
+    "generatedAt": {"type": "string", "minLength": 1},
+    "dimensions": {"$ref": "#/$defs/dimensions"},
+    "candidateCount": {"type": "integer", "minimum": 1},
+    "providerCandidateCounts": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["provider", "displayName", "plannedAssetCount"],
+        "properties": {
+          "provider": {"type": "string", "minLength": 1},
+          "displayName": {"type": "string", "minLength": 1},
+          "plannedAssetCount": {"type": "integer", "minimum": 1}
+        }
+      }
+    },
+    "candidates": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/candidate"}
+    }
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "dimensions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entities", "category", "season", "style", "viewpoint", "popularity"],
+      "properties": {
+        "entities": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+        "category": {"type": "string", "minLength": 1},
+        "season": {"type": "string", "minLength": 1},
+        "style": {"type": "string", "minLength": 1},
+        "viewpoint": {"type": "string", "minLength": 1},
+        "popularity": {"type": "string", "minLength": 1}
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidateId", "provider", "displayName", "priority", "entity",
+        "queryText", "discoveryUrl", "manualSearchRequired", "acquisitionPaths", "termsUrl"
+      ],
+      "properties": {
+        "candidateId": {"type": "string", "pattern": "^[a-z0-9_-]+:[0-9a-f]{16}$"},
+        "provider": {"type": "string", "minLength": 1},
+        "displayName": {"type": "string", "minLength": 1},
+        "priority": {"type": "integer", "minimum": 0},
+        "entity": {"type": "string", "minLength": 1},
+        "queryText": {"type": "string", "minLength": 1},
+        "discoveryUrl": {"type": "string", "pattern": "^https://"},
+        "manualSearchRequired": {"type": "boolean"},
+        "acquisitionPaths": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"enum": ["public_direct", "supported_api", "manual_file"]}
+        },
+        "termsUrl": {"type": "string", "pattern": "^https://"}
+      }
+    }
+  }
+}

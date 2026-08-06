@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/circle-community/circle-management-and-stats/kpi-reporting/spec.md#gwt-001
+// readiness_case: get-circle-stats-api
 package api_integration
 
 import (

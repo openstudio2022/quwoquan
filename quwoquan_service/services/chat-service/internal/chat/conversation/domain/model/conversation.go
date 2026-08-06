@@ -21,19 +21,23 @@ var (
 
 // Conversation is the aggregate root for the chat domain.
 type Conversation struct {
-	ID                    string `json:"id" bson:"_id"`
-	Type                  string `json:"type" bson:"type"`
-	Title                 string `json:"title" bson:"title"`
-	AvatarUrl             string `json:"avatarUrl" bson:"avatarUrl"`
-	GroupAvatarAssetId    string `json:"groupAvatarAssetId" bson:"groupAvatarAssetId"`
-	GroupAvatarVersion    int64  `json:"groupAvatarVersion" bson:"groupAvatarVersion"`
-	GroupAvatarSourceHash string `json:"groupAvatarSourceHash" bson:"groupAvatarSourceHash"`
-	CreatorId             string `json:"creatorId" bson:"creatorId"`
-	CircleId              string `json:"circleId" bson:"circleId"`
-	CircleGroupId         string `json:"circleGroupId" bson:"circleGroupId,omitempty"`
-	GatheringId           string `json:"gatheringId" bson:"gatheringId,omitempty"`
-	EntityId              string `json:"entityId" bson:"entityId"`
-	OriginType            string `json:"originType" bson:"originType"`
+	ID                     string `json:"id" bson:"_id"`
+	Type                   string `json:"type" bson:"type"`
+	Title                  string `json:"title" bson:"title"`
+	AvatarUrl              string `json:"avatarUrl" bson:"avatarUrl"`
+	GroupAvatarAssetId     string `json:"groupAvatarAssetId" bson:"groupAvatarAssetId"`
+	GroupAvatarVersion     int64  `json:"groupAvatarVersion" bson:"groupAvatarVersion"`
+	GroupAvatarSourceHash  string `json:"groupAvatarSourceHash" bson:"groupAvatarSourceHash"`
+	CreatorId              string `json:"creatorId" bson:"creatorId"`
+	CircleId               string `json:"circleId" bson:"circleId"`
+	CircleGroupId          string `json:"circleGroupId" bson:"circleGroupId,omitempty"`
+	GatheringId            string `json:"gatheringId" bson:"gatheringId,omitempty"`
+	GatheringSourceVersion int64  `json:"gatheringSourceVersion" bson:"gatheringSourceVersion,omitempty"`
+	GatheringSourceEventID string `json:"gatheringSourceEventId" bson:"gatheringSourceEventId,omitempty"`
+	AccessMode             string `json:"accessMode" bson:"accessMode,omitempty"`
+	PostingPolicy          string `json:"postingPolicy" bson:"postingPolicy,omitempty"`
+	EntityId               string `json:"entityId" bson:"entityId"`
+	OriginType             string `json:"originType" bson:"originType"`
 	// OriginGreetingRequestID 是升级来源的 GreetingRequest.id，只在
 	// originType=greeting_reply 时有值（contracts/chat/conversation/fields.yaml）。
 	// 它让「打招呼被回复而成的会话」与冷启动私信可区分，是漏斗归因的唯一依据。

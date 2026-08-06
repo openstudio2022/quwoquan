@@ -1,8 +1,0 @@
-description: TripShareSnapshot 创建事件。
-events:
-- name: TripShareSnapshotCreated
-  producer: travel-service
-  consumers: [content-service, assistant-service]
-  channel: transactional_outbox
-  payload_entity: TripShareSnapshot
-  payload_fields: [_id, tripId, sourceRevisionId, sourceRevisionNumber, sourceDigest, scope, visibility, privacyPolicyDigest, createdByPersonaId, createdAt]

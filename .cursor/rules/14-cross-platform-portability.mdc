@@ -12,9 +12,13 @@ alwaysApply: true
 
 ```text
 业务/页面关心：能力是否可用、体验应该如何降级
-防腐层关心：当前平台如何实现这些能力       —— lib/core/platform/**
+防腐层关心：当前平台如何实现这些能力       —— lib/runtime/platform/**
 平台原生层关心：Android / iOS / OHOS / Web 的具体 API
 ```
+
+`lib/runtime/platform/**` 是平台能力防腐层的唯一物理位置；业务对象、页面、其他 runtime
+模块与 design system 只依赖这里公开的 capability/bridge/gateway，不得重新建立
+`lib/core/platform/**` 或领域私有平台判断入口。
 
 防腐层入口：
 
@@ -27,10 +31,10 @@ alwaysApply: true
 
 ## 1. 必守（GATE_BLOCK）
 
-- **R-XP1 能力优先（最高原则）**：业务层（`lib/ui` `lib/core`(除 `lib/core/platform`) `lib/cloud`）禁止基于平台做体验分叉。需要平台差异时，**先在 `PlatformCapabilities` 登记能力位**，业务只读能力位决定「展示入口 / 如何降级」。
-- **R-XP2 平台判断单一真相源**：业务层禁止裸用 `Platform.isAndroid/isIOS/...`、`Platform.operatingSystem`、`kIsWeb`。平台判断只允许出现在 `lib/core/platform/**`（用于装配与 observability）。
+- **R-XP1 能力优先（最高原则）**：业务层（`lib/ui`、`lib/core`、`lib/cloud`、`lib/runtime` 中除 `lib/runtime/platform` 外的目录）禁止基于平台做体验分叉。需要平台差异时，**先在 `PlatformCapabilities` 登记能力位**，业务只读能力位决定「展示入口 / 如何降级」。
+- **R-XP2 平台判断单一真相源**：业务层禁止裸用 `Platform.isAndroid/isIOS/...`、`Platform.operatingSystem`、`kIsWeb`。平台判断只允许出现在 `lib/runtime/platform/**`（用于装配与 observability）。
 - **R-XP3 dart:io 收口**：业务层禁止**新增** `import 'dart:io'`；文件/路径/目录能力走 `FileStorageGateway`。存量 32 处进 allowlist 基线，**只减不增**。
-- **R-XP4 原生能力走防腐接口**：业务层禁止**新增**裸 `MethodChannel` / `EventChannel` / `BasicMessageChannel`。必须经 `NativeBridge` 抽象；未实现平台返回符合 `quwoquan_app/AGENTS.md` 的结构化「不可用」，禁止 crash。
+- **R-XP4 原生能力走防腐接口**：业务层禁止**新增**裸 `MethodChannel` / `EventChannel` / `BasicMessageChannel`；裸 channel 只能出现在 `lib/runtime/platform/**`。必须经 `NativeBridge` 抽象：抽象接口 + `MethodChannel*` 实现 + 未实现平台的 `Unsupported*` 实现返回符合 `quwoquan_app/AGENTS.md` 的结构化「不可用」，禁止 crash；由 `platformCapabilitiesProvider` 决定装配哪一个。
 - **R-XP5 缺失即一致降级**：任何平台特有能力（相机、相册、RTC、来电、视频编辑、安全存储、后台音频）必须有 capability 探测 + 降级路径；降级的权限/错误/提示语义必须遵循所属服务 `errors.yaml` 与 App runtime mapper。禁止「仅某平台可用」的硬编码直连。
 
 ## 2. 必守（PR_WARN / 评审拦截）
@@ -48,8 +52,8 @@ alwaysApply: true
 
 ## 4. 门禁
 
-- `python3 quwoquan_app/scripts/runtime/verify_lib_dart_io_budget.py`（R-XP3，allowlist 只减不增，白名单 `lib/core/platform/**`）。
-- `python3 quwoquan_app/scripts/runtime/verify_lib_platform_check_isolation.py`（R-XP2/R-XP4/R-XP7，扫描裸 `Platform.is*`/`kIsWeb`/裸 channel/页面私有宽屏断点，基线只减不增）。
+- `python3 quwoquan_app/scripts/runtime/platform/verify_lib_dart_io_budget.py`（R-XP3，allowlist 只减不增，白名单为 `lib/runtime/platform/**`）。
+- `python3 quwoquan_app/scripts/runtime/platform/verify_lib_platform_check_isolation.py`（R-XP2/R-XP4/R-XP7，扫描裸 `Platform.is*`/`kIsWeb`/裸 channel/页面私有宽屏断点；无 allowlist，防腐层两段之外命中即 BLOCK）。
 - 两者已串联 `make gate` → `quwoquan_ops/gate/gate_repo.sh` 的 `run_app` 阶段。
 
 ## 5. 规则边界

@@ -40,39 +40,41 @@ var (
 )
 
 type Authorization struct {
-	AuthorizationID       string     `json:"authorizationId" bson:"authorizationId"`
-	AccountID             string     `json:"-" bson:"accountId"`
-	ConnectorID           string     `json:"connectorId" bson:"connectorId"`
-	AuthorizationMode     string     `json:"authorizationMode" bson:"authorizationMode"`
-	RequestedCapabilities []string   `json:"requestedCapabilities" bson:"requestedCapabilities"`
-	GrantedCapabilities   []string   `json:"grantedCapabilities" bson:"grantedCapabilities"`
-	Status                string     `json:"status" bson:"status"`
-	ContinuationDigest    string     `json:"-" bson:"continuationDigest"`
-	ProofDigest           string     `json:"-" bson:"proofDigest,omitempty"`
-	GrantReceiptDigest    string     `json:"-" bson:"grantReceiptDigest,omitempty"`
-	CredentialRef         string     `json:"-" bson:"credentialRef,omitempty"`
-	ExpiresAt             time.Time  `json:"expiresAt" bson:"expiresAt"`
-	VerifiedAt            *time.Time `json:"verifiedAt,omitempty" bson:"verifiedAt,omitempty"`
-	ConsumedAt            *time.Time `json:"-" bson:"consumedAt,omitempty"`
-	Revision              int64      `json:"revision" bson:"revision"`
-	CreatedAt             time.Time  `json:"createdAt" bson:"createdAt"`
-	UpdatedAt             time.Time  `json:"updatedAt" bson:"updatedAt"`
+	AuthorizationID              string     `json:"authorizationId" bson:"authorizationId"`
+	AccountID                    string     `json:"-" bson:"accountId"`
+	ConnectorID                  string     `json:"connectorId" bson:"connectorId"`
+	AuthorizationMode            string     `json:"authorizationMode" bson:"authorizationMode"`
+	RequestedCapabilities        []string   `json:"requestedCapabilities" bson:"requestedCapabilities"`
+	GrantedCapabilities          []string   `json:"grantedCapabilities" bson:"grantedCapabilities"`
+	Status                       string     `json:"status" bson:"status"`
+	ContinuationDigest           string     `json:"-" bson:"continuationDigest"`
+	ProofDigest                  string     `json:"-" bson:"proofDigest,omitempty"`
+	GrantReceiptDigest           string     `json:"-" bson:"grantReceiptDigest,omitempty"`
+	CredentialRef                string     `json:"-" bson:"credentialRef,omitempty"`
+	ProviderAccountSubjectDigest string     `json:"-" bson:"providerAccountSubjectDigest,omitempty"`
+	ExpiresAt                    time.Time  `json:"expiresAt" bson:"expiresAt"`
+	VerifiedAt                   *time.Time `json:"verifiedAt,omitempty" bson:"verifiedAt,omitempty"`
+	ConsumedAt                   *time.Time `json:"-" bson:"consumedAt,omitempty"`
+	Revision                     int64      `json:"revision" bson:"revision"`
+	CreatedAt                    time.Time  `json:"createdAt" bson:"createdAt"`
+	UpdatedAt                    time.Time  `json:"updatedAt" bson:"updatedAt"`
 }
 
 type GrantReceipt struct {
-	AuthorizationID        string     `bson:"authorizationId"`
-	AccountID              string     `bson:"accountId"`
-	ConnectorID            string     `bson:"connectorId"`
-	AuthorizationMode      string     `bson:"authorizationMode"`
-	GrantedCapabilities    []string   `bson:"grantedCapabilities"`
-	CredentialRef          string     `bson:"credentialRef"`
-	ProofDigest            string     `bson:"proofDigest"`
-	GrantReceiptDigest     string     `bson:"grantReceiptDigest"`
-	ExpiresAt              time.Time  `bson:"expiresAt"`
-	CredentialExpiresAt    *time.Time `bson:"credentialExpiresAt,omitempty"`
-	ConsumedByConnectionID string     `bson:"consumedByConnectionId,omitempty"`
-	ConsumedAt             *time.Time `bson:"consumedAt,omitempty"`
-	CreatedAt              time.Time  `bson:"createdAt"`
+	AuthorizationID              string     `bson:"authorizationId"`
+	AccountID                    string     `bson:"accountId"`
+	ConnectorID                  string     `bson:"connectorId"`
+	AuthorizationMode            string     `bson:"authorizationMode"`
+	GrantedCapabilities          []string   `bson:"grantedCapabilities"`
+	CredentialRef                string     `bson:"credentialRef"`
+	ProviderAccountSubjectDigest string     `bson:"providerAccountSubjectDigest,omitempty"`
+	ProofDigest                  string     `bson:"proofDigest"`
+	GrantReceiptDigest           string     `bson:"grantReceiptDigest"`
+	ExpiresAt                    time.Time  `bson:"expiresAt"`
+	CredentialExpiresAt          *time.Time `bson:"credentialExpiresAt,omitempty"`
+	ConsumedByConnectionID       string     `bson:"consumedByConnectionId,omitempty"`
+	ConsumedAt                   *time.Time `bson:"consumedAt,omitempty"`
+	CreatedAt                    time.Time  `bson:"createdAt"`
 }
 
 type StartInput struct {
@@ -98,10 +100,23 @@ type CompleteInput struct {
 }
 
 type VerifiedProof struct {
-	CredentialRef       string
-	ProofDigest         string
-	GrantedCapabilities []string
-	CredentialExpiresAt *time.Time
+	CredentialRef                string
+	ProviderAccountSubjectDigest string
+	ProofDigest                  string
+	GrantedCapabilities          []string
+	CredentialExpiresAt          *time.Time
+	OAuthVerification            *OAuthVerification
+}
+
+// OAuthVerification is emitted only by the trusted callback adapter after it
+// has resolved the opaque callback reference against protected authorization
+// material. A body accountId is not part of this evidence.
+type OAuthVerification struct {
+	StateVerified           bool
+	NonceVerified           bool
+	PKCEVerified            bool
+	AccountSubjectVerified  bool
+	CapabilityProbeVerified bool
 }
 
 type VerifyCommand struct {
@@ -190,6 +205,7 @@ func NewVerifyCommand(
 	input.IdempotencyKey = strings.TrimSpace(input.IdempotencyKey)
 	mode = strings.TrimSpace(mode)
 	proof.CredentialRef = strings.TrimSpace(proof.CredentialRef)
+	proof.ProviderAccountSubjectDigest = strings.TrimSpace(proof.ProviderAccountSubjectDigest)
 	proof.ProofDigest = strings.TrimSpace(proof.ProofDigest)
 	proof.GrantedCapabilities = NormalizeCapabilities(proof.GrantedCapabilities)
 	grantReceiptRef = strings.TrimSpace(grantReceiptRef)
@@ -210,6 +226,9 @@ func NewVerifyCommand(
 	if !current.ExpiresAt.After(now) {
 		return VerifyCommand{}, ErrExpired
 	}
+	if mode == ModeOAuth2 && !validOAuthProof(proof) {
+		return VerifyCommand{}, ErrOAuthCallbackInvalid
+	}
 	if !sameCapabilities(current.RequestedCapabilities, proof.GrantedCapabilities) {
 		return VerifyCommand{}, ErrCapabilityDenied
 	}
@@ -220,22 +239,24 @@ func NewVerifyCommand(
 	next.ProofDigest = proof.ProofDigest
 	next.GrantReceiptDigest = grantReceiptDigest
 	next.CredentialRef = proof.CredentialRef
+	next.ProviderAccountSubjectDigest = proof.ProviderAccountSubjectDigest
 	next.ExpiresAt = grantExpiresAt
 	next.VerifiedAt = timePointer(now)
 	next.Revision++
 	next.UpdatedAt = now
 	receipt := GrantReceipt{
-		AuthorizationID:     next.AuthorizationID,
-		AccountID:           next.AccountID,
-		ConnectorID:         next.ConnectorID,
-		AuthorizationMode:   next.AuthorizationMode,
-		GrantedCapabilities: append([]string(nil), next.GrantedCapabilities...),
-		CredentialRef:       next.CredentialRef,
-		ProofDigest:         next.ProofDigest,
-		GrantReceiptDigest:  grantReceiptDigest,
-		ExpiresAt:           grantExpiresAt,
-		CredentialExpiresAt: credentialExpiresAt,
-		CreatedAt:           now,
+		AuthorizationID:              next.AuthorizationID,
+		AccountID:                    next.AccountID,
+		ConnectorID:                  next.ConnectorID,
+		AuthorizationMode:            next.AuthorizationMode,
+		GrantedCapabilities:          append([]string(nil), next.GrantedCapabilities...),
+		CredentialRef:                next.CredentialRef,
+		ProviderAccountSubjectDigest: next.ProviderAccountSubjectDigest,
+		ProofDigest:                  next.ProofDigest,
+		GrantReceiptDigest:           grantReceiptDigest,
+		ExpiresAt:                    grantExpiresAt,
+		CredentialExpiresAt:          credentialExpiresAt,
+		CreatedAt:                    now,
 	}
 	return VerifyCommand{
 		Authorization:    next,
@@ -303,6 +324,17 @@ func ValidDigest(value string) bool {
 
 func validMode(value string) bool {
 	return value == ModeDeviceNative || value == ModeOAuth2
+}
+
+func validOAuthProof(proof VerifiedProof) bool {
+	verification := proof.OAuthVerification
+	return ValidDigest(strings.TrimSpace(proof.ProviderAccountSubjectDigest)) &&
+		verification != nil &&
+		verification.StateVerified &&
+		verification.NonceVerified &&
+		verification.PKCEVerified &&
+		verification.AccountSubjectVerified &&
+		verification.CapabilityProbeVerified
 }
 
 func sameCapabilities(left, right []string) bool {

@@ -26,15 +26,20 @@ relationships:
   target_objects:
   - user.UserAccount
   - user.Persona
+- access: named_reader
+  cardinality: N:N
+  consistency: eventual
+  kind: reference
+  name: managers
+  on_delete: detach
+  reference_fields:
+  - managerPersonaIds
+  target_object: user.Persona
 local_identity_reasons:
   canonicalEntityId: external data-catalog entity key resolved only through the EntityHomepage external
     projection port
   sourceReleaseId: stable catalog or release key; resolved through its typed catalog reader and never
     used as an aggregate Store identity
-capabilities:
-- queryable
-- searchable
-- aggregatable
 taggable: true
 vector_enabled: false
 business_rules:
@@ -51,14 +56,36 @@ lifecycle:
   - candidate
   - published
   - offline
-  transitions:
-  - from: candidate
-    command: PublishHomepage
-    to: published
-  - from: published
-    command: TakeHomepageOffline
-    to: offline
   transition_notes: TakeHomepageOffline 是内部行为，无公开 API；仅由 HomepageStatusReportReviewed(confirmed_offline)
     事件消费或数据工程 reload 驱动
   optimistic_concurrency: version
   idempotency: command_receipt
+  source_events:
+  - entity.homepage_claim_request.HomepageClaimRequested
+  - entity.homepage_claim_request.HomepageClaimReviewed
+  - entity.homepage_status_report.HomepageStatusReported
+  - entity.homepage_status_report.HomepageStatusReportReviewed
+  - entity.homepage_review.HomepageReviewPublished
+  - entity.homepage_review.HomepageReviewUpdated
+  - entity.homepage_review.HomepageReviewRemoved
+  event_consumers:
+  - name: ApplyHomepageClaimRequested
+    kind: event_handler
+    facet: HomepageLifecycleHandler
+    method: applyClaimRequestedProjection
+    idempotency: event_id
+  - name: ApplyHomepageClaimReviewed
+    kind: event_handler
+    facet: HomepageLifecycleHandler
+    method: applyClaimReviewedProjection
+    idempotency: event_id
+  - name: ApplyHomepageStatusLifecycle
+    kind: event_handler
+    facet: StatusHomepageProjector
+    method: runOnce
+    idempotency: event_id
+  - name: ApplyHomepageReviewSummary
+    kind: event_handler
+    facet: HomepageLifecycleHandler
+    method: applyReviewSummary
+    idempotency: event_id

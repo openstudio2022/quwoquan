@@ -101,6 +101,7 @@ services:
       default:
         aliases:
           - "${QWQ_PUBLIC_UPLOAD_HOST:?QWQ_PUBLIC_UPLOAD_HOST is required}"
+      edge:
     environment:
       MINIO_ROOT_USER: "${LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_ID:?LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_ID is required}"
       MINIO_ROOT_PASSWORD: "${LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_SECRET:?LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_SECRET is required}"
@@ -154,6 +155,9 @@ services:
     profiles: ["edge-media"]
     image: "livekit/livekit-server:v1.7.2@sha256:27d72fa264baa4db4e635b3b6df12d185b4a95fee5f2ddce03e06d150d599e0e"
     command: ["--config", "/etc/livekit/livekit.yaml"]
+    networks:
+      - default
+      - edge
     environment:
       LIVEKIT_KEYS: "${RTC_MEDIA_API_KEY:?RTC_MEDIA_API_KEY is required}: ${RTC_MEDIA_API_SECRET:?RTC_MEDIA_API_SECRET is required}"
     ports:
@@ -166,6 +170,9 @@ services:
   coturn:
     profiles: ["edge-media"]
     image: "coturn/coturn:4.6-alpine@sha256:e2bca2f79a4269d7240de5872ab60a9305013ad37296d2acf14f9510874346be"
+    networks:
+      - default
+      - edge
     command:
       - "-n"
       - "--log-file=stdout"
@@ -233,6 +240,11 @@ services:
   # network. Keeping them only on the internal default network leaves
   # NetworkSettings.Ports empty and Colima tunnels with nothing to forward
   # (default is internal: true).
+  #
+  # Only workloads whose Compose fragment is unconditionally loaded may appear
+  # here. Conditionally loaded fragments (the debug Provider substitutes) attach
+  # to `edge` inside their own fragment, otherwise this file declares an
+  # image-less service whenever that fragment is absent.
   user-service:
     networks:
       - default
@@ -285,39 +297,11 @@ services:
     networks:
       - default
       - edge
-  recommendation-service:
-    networks:
-      - default
-      - edge
-  travel-service:
-    networks:
-      - default
-      - edge
   realtime-gateway:
     networks:
       - default
       - edge
   rtc-service:
-    networks:
-      - default
-      - edge
-  sms-provider-substitute:
-    networks:
-      - default
-      - edge
-  provider-protocol-substitute:
-    networks:
-      - default
-      - edge
-  livekit-sfu:
-    networks:
-      - default
-      - edge
-  coturn:
-    networks:
-      - default
-      - edge
-  object-storage:
     networks:
       - default
       - edge

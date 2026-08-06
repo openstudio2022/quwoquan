@@ -1,10 +1,6 @@
 events:
 - name: HomepageReviewPublished
-  producer: entity-service
-  consumers:
-  - homepage-review-projection
-  - recommendation-engine
-  channel: event_store
+  delivery_semantics: transactional_outbox
   payload_entity: HomepageReview
   payload_fields:
   - reviewId
@@ -16,11 +12,7 @@ events:
   - createdAt
   - version
 - name: HomepageReviewUpdated
-  producer: entity-service
-  consumers:
-  - homepage-review-projection
-  - recommendation-engine
-  channel: event_store
+  delivery_semantics: transactional_outbox
   payload_entity: HomepageReview
   payload_fields:
   - reviewId
@@ -32,11 +24,7 @@ events:
   - updatedAt
   - version
 - name: HomepageReviewRemoved
-  producer: entity-service
-  consumers:
-  - homepage-review-projection
-  - recommendation-engine
-  channel: event_store
+  delivery_semantics: transactional_outbox
   payload_entity: HomepageReview
   payload_fields:
   - reviewId

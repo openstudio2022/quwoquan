@@ -1,3 +1,7 @@
+// spec_ref: specs/feature-tree/circle-community/circle-collaboration-tools/circle-group-chat-binding-sync/spec.md#gwt-001
+// spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-conversation-binding/spec.md#gwt-002
+// readiness_case: project-circle-group-conversation-local
+// readiness_case: project-gathering-conversation-local
 package local_contract
 
 import (
@@ -50,7 +54,7 @@ func TestCircleGroupChatSyncProjectsLifecycleAndRejectsLateMembership(t *testing
 		nil,
 		syncNoopGroupAvatarScheduler{},
 	)
-	syncService := NewCircleGroupChatSyncService(conversationService, memberService)
+	syncService := NewCircleGroupConversationProjectionHandler(conversationService, memberService)
 	now := time.Date(2026, 7, 21, 1, 2, 3, 0, time.UTC)
 
 	if err := syncService.Apply(context.Background(), CircleGroupChatSourceEvent{
@@ -264,7 +268,7 @@ func TestProvisionCircleGroupConversationRecoversConcurrentBinding(t *testing.T)
 }
 
 // spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-conversation-binding/spec.md#gwt-002
-func TestProvisionGatheringConversationCommitsSoleBindingOwnerAndOutbox(t *testing.T) {
+func TestProvisionGatheringConversationCommitsSoleBindingOwnerWithoutRedundantReverseEvent(t *testing.T) {
 	store := newCircleGroupChatSyncMemoryStore()
 	commands := newMemoryAggregateCommandStore()
 	service := NewConversationService(
@@ -276,8 +280,9 @@ func TestProvisionGatheringConversationCommitsSoleBindingOwnerAndOutbox(t *testi
 		noopCache{}, syncNoopEventPublisher{}, nil, nil, nil, nil, syncNoopGroupAvatarScheduler{},
 	)
 	request := GatheringConversationProvisioningRequest{
-		SourceEventID: "gathering-1:created:1", GatheringID: "gathering-1",
-		OwnerPersonaID: "owner-1", Title: "贡嘎同行", MaxGroupSize: 8,
+		SourceEventID: "gathering-1:created:1", SourceVersion: 1, GatheringID: "gathering-1",
+		OwnerPersonaID: "owner-1", Title: "贡嘎同行",
+		AccessMode: ConversationAccessModeActive, PostingPolicy: ConversationPostingPolicyMemberChat,
 	}
 	conversation, err := service.ProvisionGatheringConversation(context.Background(), request)
 	if err != nil {
@@ -290,8 +295,12 @@ func TestProvisionGatheringConversationCommitsSoleBindingOwnerAndOutbox(t *testi
 	if _, err := store.FindMember(context.Background(), conversation.ID, "owner-1"); err != nil {
 		t.Fatalf("owner membership missing: %v", err)
 	}
-	if !containsAggregateEvent(commands.events, "GatheringConversationProvisioned") {
-		t.Fatalf("Gathering binding event missing: %#v", commands.eventTypes())
+	if containsAggregateEvent(commands.events, "GatheringConversationProvisioned") {
+		t.Fatalf("synchronous Gathering binding must not emit an unconsumed reverse event: %#v", commands.eventTypes())
+	}
+	if !containsAggregateEvent(commands.events, "ConversationCreated") ||
+		!containsAggregateEvent(commands.events, "ConversationRosterUpdated") {
+		t.Fatalf("Conversation creation events missing: %#v", commands.eventTypes())
 	}
 	replayed, err := service.ProvisionGatheringConversation(context.Background(), request)
 	if err != nil || replayed.ID != conversation.ID || len(store.conversations) != 1 {
@@ -442,6 +451,26 @@ func (s *circleGroupChatSyncMemoryStore) FindConversationByGatheringID(_ context
 		}
 	}
 	return nil, model.ErrConversationNotFound
+}
+
+func (s *circleGroupChatSyncMemoryStore) ApplyGatheringConversationProjection(
+	_ context.Context,
+	gatheringID string,
+	expectedSourceVersion int64,
+	value *model.Conversation,
+) (bool, error) {
+	for id, current := range s.conversations {
+		if current.GatheringId != gatheringID {
+			continue
+		}
+		if current.GatheringSourceVersion != expectedSourceVersion {
+			return false, nil
+		}
+		copy := *value
+		s.conversations[id] = &copy
+		return true, nil
+	}
+	return false, model.ErrConversationNotFound
 }
 
 func (s *circleGroupChatSyncMemoryStore) UpdateConversation(_ context.Context, id string, value *model.Conversation) error {

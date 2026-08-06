@@ -1,39 +1,56 @@
 """Validate one immutable content execution work package before release."""
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
+from collections.abc import Mapping
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 SCRIPTS_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPTS_ROOT))
 
-from core.article_package import compute_document_sha256
+from content.execution.identity import parse_execution_id
+from content.execution.post_review_closure import load_post_review_closure
 from content.execution.runtime_contract import file_sha256
+from content.execution.workspace import load_execution_manifest
+from core.article_package import compute_document_sha256
+from core.control_types import ContentType, expected_content_generator
 from core.io import read_json
 from core.paths import DATA_EXECUTIONS_ROOT, is_execution_id
 from core.schema import assert_valid
-from content.execution.workspace import load_execution_manifest
-from content.execution.identity import parse_execution_id
-from content.execution.post_review_closure import load_post_review_closure
-from core.control_types import ContentType, expected_content_generator
 from verify.verify_content_execution_layout import content_execution_layout_issues
 from verify.verify_homepage_media_completeness import homepage_media_completeness_report
+from verify.verify_execution_readiness_assets import _asset_admission_issues
 
 
 _STAGES = ("1.download", "2.quality", "3.compose", "4.draft", "5.review")
+READINESS_MODES = ("calibration", "research", "commercial")
+_LIFECYCLE_MODES = frozenset({"research", "commercial"})
+
+
+@dataclass(frozen=True, slots=True)
+class ReadinessOutcome:
+    """准出判定与持续改进统计分离：只有 ``issues`` 决定放行。"""
+
+    issues: list[str]
+    statistics: dict[str, Any] | None
+
+
+def _blocked(issues: list[str], reason: str) -> ReadinessOutcome:
+    """Readiness 在拿到对象集之前失败，统计量此时无定义。"""
+    return ReadinessOutcome(issues=[*issues, reason], statistics=None)
+
+
+def _rate(numerator: int, denominator: int) -> float:
+    return round(numerator / denominator, 6) if denominator else 0.0
 
 
 def _normalize_model_id(model: object) -> str:
-    """Normalize provider-prefixed model ids so readiness aliases compare equal.
-
-    Cursor Agent may persist `cursor-grok-4-5` while execution readiness records
-    `grok-4.5`; those name the same commercial model family binding.
-    """
     text = str(model or "").strip().lower().replace("_", "-")
-    if text.startswith("cursor-"):
-        text = text[len("cursor-") :]
+    text = text.removeprefix("cursor-")
     text = text.replace("grok-4-5", "grok-4.5")
     return text
 
@@ -95,13 +112,39 @@ def _execution_model_readiness(root: Path, execution_id: str, issues: list[str])
     return payload
 
 
+def _object_document(path: Path, issues: list[str]) -> dict[str, Any]:
+    if not path.is_file():
+        issues.append(f"{path}: required immutable object evidence is missing")
+        return {}
+    try:
+        payload = read_json(path)
+    except (OSError, TypeError, ValueError) as exc:
+        issues.append(f"{path}: invalid immutable object evidence ({exc})")
+        return {}
+    if not isinstance(payload, dict):
+        issues.append(f"{path}: immutable object evidence must be an object")
+        return {}
+    return payload
+
+
+def _transaction_object(root: Path, object_root: Path, content_type: ContentType) -> Path:
+    kind = "entity" if content_type is ContentType.HOMEPAGE else "post"
+    parent = root / ("entities" if kind == "entity" else f"posts/{content_type.value}")
+    ref = object_root.relative_to(parent).as_posix()
+    if kind == "post":
+        ref = f"{content_type.value}/{ref}"
+    suffix = hashlib.sha256(ref.encode("utf-8")).hexdigest()[:12]
+    return root / "evidence/object-transactions" / f"{root.name}--{kind}-{suffix}" / "object"
+
+
 def _resolve_homepage_quota_verdict(execution_id: str) -> Any:
     """Resolve the canonical homepage quota verdict behind an isolation seam."""
+    from types import SimpleNamespace
+
+    from content.execution import store as execution_store
     from content.execution.controller.homepage_authoring import (
         homepage_quota_verdict,
     )
-    from content.execution import store as execution_store
-    from types import SimpleNamespace
 
     return homepage_quota_verdict(
         SimpleNamespace(
@@ -254,27 +297,43 @@ def execution_readiness_issues(
     execution_id: str,
     *,
     require_reviewed: bool,
-    min_pass_rate: float = 1.0,
-    mode: str = "commercial",
-    fail_on_no_go: bool = True,
+    mode: str,
 ) -> list[str]:
+    return execution_readiness_outcome(
+        execution_id,
+        require_reviewed=require_reviewed,
+        mode=mode,
+    ).issues
+
+
+def execution_readiness_outcome(
+    execution_id: str,
+    *,
+    require_reviewed: bool,
+    mode: str,
+) -> ReadinessOutcome:
+    """Admission is「至少 1 个合格对象 + 每个将发布对象逐条硬校验」。
+
+    合格率与配图率只作为持续改进的统计量随 outcome 返回，不参与判定。
+    """
     issues = content_execution_layout_issues(execution_id=execution_id)
-    if not 0 <= min_pass_rate <= 1:
-        return [*issues, "minPassRate must be between 0 and 1"]
-    if mode not in {"calibration", "commercial"}:
-        return [*issues, f"readiness mode is invalid: {mode}"]
+    if mode not in READINESS_MODES:
+        return _blocked(issues, f"readiness mode is invalid: {mode}")
+    if mode in _LIFECYCLE_MODES and not require_reviewed:
+        return _blocked(
+            issues, f"{mode} readiness requires independently reviewed objects"
+        )
     if not is_execution_id(execution_id):
-        return [*issues, f"invalid executionId: {execution_id}"]
+        return _blocked(issues, f"invalid executionId: {execution_id}")
     root = DATA_EXECUTIONS_ROOT / execution_id
     if not root.is_dir():
-        return [*issues, f"execution work package does not exist: {root}"]
+        return _blocked(issues, f"execution work package does not exist: {root}")
     try:
         load_execution_manifest(execution_id)
     except (OSError, ValueError) as exc:
-        issues.append(f"execution manifest is invalid: {exc}")
-        return issues
+        return _blocked(issues, f"execution manifest is invalid: {exc}")
     if not require_reviewed:
-        return issues
+        return ReadinessOutcome(issues=issues, statistics=None)
 
     issues.extend(_terminal_execution_issues(root, execution_id))
     model_readiness = _execution_model_readiness(root, execution_id, issues)
@@ -299,46 +358,42 @@ def execution_readiness_issues(
     )
     objects = [path.parent for path in object_search_root.rglob("1.download")]
     if not objects:
-        issues.append("reviewed execution has no content objects")
-        return issues
-    if content_type is not ContentType.HOMEPAGE and mode == "commercial":
+        return _blocked(issues, "reviewed execution has no content objects")
+    discovered_count = len(objects)
+    if content_type is not ContentType.HOMEPAGE and mode in _LIFECYCLE_MODES:
         try:
             closure = load_post_review_closure(
                 execution_id,
                 root=root,
             )
         except (OSError, TypeError, ValueError) as exc:
-            issues.append(f"commercial post review closure is invalid: {exc}")
-            return issues
+            return _blocked(issues, f"{mode} post review closure is invalid: {exc}")
         if closure.carrier != content_type.value:
-            issues.append(
-                "commercial post review closure carrier drift: "
-                f"expected={content_type.value} actual={closure.carrier}"
+            return _blocked(
+                issues,
+                f"{mode} post review closure carrier drift: "
+                f"expected={content_type.value} actual={closure.carrier}",
             )
-            return issues
         objects_by_publish_ref = {
             object_root.relative_to(root).as_posix(): object_root
             for object_root in objects
         }
-        closure_publish_refs = {
-            row.publish_ref for row in closure.objects
-        }
+        closure_publish_refs = {row.publish_ref for row in closure.objects}
         if closure_publish_refs != set(objects_by_publish_ref):
-            issues.append(
-                "commercial post review closure differs from execution post objects"
+            return _blocked(
+                issues,
+                f"{mode} post review closure differs from execution post objects",
             )
-            return issues
         objects = [
             objects_by_publish_ref[publish_ref]
             for publish_ref in closure.qualified_publish_refs
         ]
 
-    if content_type is ContentType.HOMEPAGE and mode == "commercial":
+    if content_type is ContentType.HOMEPAGE and mode in _LIFECYCLE_MODES:
         try:
             verdict = _resolve_homepage_quota_verdict(execution_id)
         except (OSError, TypeError, ValueError) as exc:
-            issues.append(f"homepage review partition is invalid: {exc}")
-            return issues
+            return _blocked(issues, f"homepage review partition is invalid: {exc}")
         qualified_names = {
             str(label).split("/", 2)[-1]
             for label in verdict.qualified_refs
@@ -350,34 +405,51 @@ def execution_readiness_issues(
             if object_root.name in qualified_names
         ]
         if verdict.qualified_count > 0 and not objects:
-            issues.append(
-                "homepage readiness could not map qualified refs to objects"
+            return _blocked(
+                issues, "homepage readiness could not map qualified refs to objects"
             )
-            return issues
 
-    object_issue_groups = [
-        _reviewed_object_issues(
+    object_issue_groups: list[list[str]] = []
+    article_states: list[str] = []
+    for object_root in objects:
+        group = _reviewed_object_issues(
             root,
             object_root,
             execution_id,
             model_readiness=model_readiness,
             content_type=content_type,
         )
-        for object_root in objects
-    ]
-    # Pass-rate denominator is the qualified set only; typed discards never veto.
+        if mode in _LIFECYCLE_MODES:
+            admission, state = _asset_admission_issues(
+                _transaction_object(root, object_root, content_type),
+                content_type=content_type,
+                mode=mode,
+            )
+            group.extend(admission)
+            article_states.append(state)
+        object_issue_groups.append(group)
+    # Denominator is the qualified set only; objects discarded upstream never count.
     selected_count = len(objects)
     passed_count = sum(1 for group in object_issue_groups if not group)
-    pass_rate = passed_count / selected_count if selected_count else 0.0
-    if pass_rate < min_pass_rate:
-        issues.append(
-            f"reviewed object pass rate below contract: "
-            f"required={min_pass_rate:.6f} actual={pass_rate:.6f}"
-        )
-    if mode == "commercial" or fail_on_no_go:
-        for group in object_issue_groups:
-            issues.extend(group)
-    return issues
+    illustrated_count = article_states.count("illustrated")
+    statistics = {
+        "discoveredCount": discovered_count,
+        "selectedCount": selected_count,
+        "passedCount": passed_count,
+        "discardedCount": max(0, discovered_count - selected_count),
+        "objectPassRate": _rate(passed_count, selected_count),
+        "discardRate": _rate(discovered_count - selected_count, discovered_count),
+    }
+    if content_type is ContentType.ARTICLE and mode in _LIFECYCLE_MODES:
+        statistics["illustratedCount"] = illustrated_count
+        statistics["illustratedRate"] = _rate(illustrated_count, len(article_states))
+    # 批次级唯一硬条件：至少一个合格对象。比率不参与判定。
+    if not passed_count:
+        issues.append("reviewed execution has no qualified content object")
+    # 逐对象硬校验对所有模式无条件展开：进入发布的对象必须逐条成立。
+    for group in object_issue_groups:
+        issues.extend(group)
+    return ReadinessOutcome(issues=issues, statistics=statistics)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -386,29 +458,20 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--execution-id", required=True)
     parser.add_argument("--require-reviewed", action="store_true")
-    parser.add_argument("--min-pass-rate", type=float, default=1.0)
-    parser.add_argument(
-        "--mode",
-        choices=("calibration", "commercial"),
-        default="commercial",
-    )
-    parser.add_argument("--fail-on-no-go", action="store_true")
+    parser.add_argument("--mode", choices=READINESS_MODES, required=True)
     args = parser.parse_args(argv)
-    issues = execution_readiness_issues(
+    outcome = execution_readiness_outcome(
         args.execution_id,
         require_reviewed=bool(args.require_reviewed),
-        min_pass_rate=float(args.min_pass_rate),
         mode=str(args.mode),
-        fail_on_no_go=bool(args.fail_on_no_go),
     )
     report = {
         "executionId": args.execution_id,
         "requireReviewed": bool(args.require_reviewed),
-        "minPassRate": float(args.min_pass_rate),
         "mode": str(args.mode),
-        "failOnNoGo": bool(args.fail_on_no_go),
-        "passed": not issues,
-        "issues": issues,
+        "passed": not outcome.issues,
+        "issues": outcome.issues,
+        "statistics": outcome.statistics,
     }
     print(json.dumps(report, ensure_ascii=False, indent=2))
-    return 0 if not issues else 1
+    return 0 if not outcome.issues else 1

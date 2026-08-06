@@ -151,7 +151,7 @@ objectCards:
   allowedKinds:
   - entity_homepage
 recallFusion:
-  # 轻量融合（W9/B10，S0 反过度设计）：policy 权重表 + 源配额，不做 RRF。
+  # 轻量融合（source-quota，S0 反过度设计）：policy 权重表 + 源配额，不做 RRF。
   # sourceQuotaPct 限制单源候选占召回池比例（防单源霸屏）；sourceBoost 做
   # 源间精排分校准（默认全 1.0 中性起步，运营按 replay 证据调参）。
   enabled: true

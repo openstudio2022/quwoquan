@@ -2,7 +2,6 @@ package httpadapter
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -11,21 +10,17 @@ import (
 	rtauth "quwoquan_service/runtime/auth"
 	rterr "quwoquan_service/runtime/errors"
 	generated "quwoquan_service/services/notification-service/generated/notification_delivery/notification"
-	jobgenerated "quwoquan_service/services/notification-service/generated/notification_delivery/notification_delivery_job"
 	"quwoquan_service/services/notification-service/internal/notification_delivery/notification/application"
-	deliverydomain "quwoquan_service/services/notification-service/internal/notification_delivery/notification_delivery_job/domain"
 )
 
 type Handler struct {
 	appMessageCommands *application.AppMessageCommandFacade
 	appMessageQueries  *application.AppMessageQueryFacade
-	incomingCalls      *application.IncomingCallDeliveryCoordinator
 }
 
 type HandlerDependencies struct {
 	AppMessageCommands *application.AppMessageCommandFacade
 	AppMessageQueries  *application.AppMessageQueryFacade
-	IncomingCalls      *application.IncomingCallDeliveryCoordinator
 }
 
 func NewHandler(dependencies HandlerDependencies) (*Handler, error) {
@@ -35,13 +30,9 @@ func NewHandler(dependencies HandlerDependencies) (*Handler, error) {
 	if dependencies.AppMessageQueries == nil {
 		return nil, fmt.Errorf("app message query facade is required")
 	}
-	if dependencies.IncomingCalls == nil {
-		return nil, fmt.Errorf("incoming call delivery coordinator is required")
-	}
 	return &Handler{
 		appMessageCommands: dependencies.AppMessageCommands,
 		appMessageQueries:  dependencies.AppMessageQueries,
-		incomingCalls:      dependencies.IncomingCalls,
 	}, nil
 }
 
@@ -58,68 +49,6 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /app-messages/{messageId}", h.handleGetAppMessage)
 	mux.HandleFunc("POST /app-messages/{messageId}/ack", h.handleAckAppMessage)
 	mux.HandleFunc("POST /app-messages/{messageId}/read", h.handleReadAppMessage)
-	mux.HandleFunc("POST /notifications/incoming-calls/presentation:ack", h.handleAckIncomingCallPresentation)
-}
-
-func (h *Handler) handleAckIncomingCallPresentation(
-	w http.ResponseWriter,
-	r *http.Request,
-) {
-	principal, ok := rtauth.PrincipalFromContext(r.Context())
-	if !ok ||
-		strings.TrimSpace(principal.Actor.AccountID) == "" ||
-		strings.TrimSpace(principal.Actor.PersonaID) == "" ||
-		strings.TrimSpace(principal.Actor.DeviceActorID) == "" {
-		writeHTTPError(
-			w,
-			r,
-			jobgenerated.AppErrorFromDeliveryJobUnauthorized(
-				"incoming call presentation ACK requires trusted persona and device",
-			),
-		)
-		return
-	}
-	var command struct {
-		DeliveryKey string `json:"deliveryKey"`
-	}
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&command); err != nil ||
-		strings.TrimSpace(command.DeliveryKey) == "" {
-		debugMessage := "deliveryKey is required"
-		if err != nil {
-			debugMessage = err.Error()
-		}
-		writeHTTPError(
-			w,
-			r,
-			jobgenerated.AppErrorFromDeliveryJobInvalidArgument(debugMessage),
-		)
-		return
-	}
-	result, err := h.incomingCalls.AckPresentation(
-		r.Context(),
-		principal.Actor.PersonaID,
-		principal.Actor.DeviceActorID,
-		command.DeliveryKey,
-	)
-	if err != nil {
-		if errors.Is(err, deliverydomain.ErrDeliveryJobNotFound) {
-			writeHTTPError(
-				w,
-				r,
-				jobgenerated.AppErrorFromDeliveryJobNotFound(err.Error()),
-			)
-			return
-		}
-		writeHTTPError(
-			w,
-			r,
-			jobgenerated.AppErrorFromDeliveryJobStorageWriteFailed(err.Error()),
-		)
-		return
-	}
-	writeJSON(w, http.StatusOK, result)
 }
 
 func (h *Handler) handleCreateAppMessage(w http.ResponseWriter, r *http.Request) {

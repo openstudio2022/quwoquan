@@ -35,7 +35,7 @@ class BehaviorEventTypeContractTest(unittest.TestCase):
         )
 
         self.assertEqual(len(failures), 1)
-        self.assertIn("Dart CircleBehaviorEventType drift", failures[0])
+        self.assertIn("Dart BehaviorEventType drift", failures[0])
 
 
 if __name__ == "__main__":

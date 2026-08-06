@@ -363,7 +363,7 @@ def scan_all() -> list[str]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="目录与资产证据链静态门 (T1)")
+    parser = argparse.ArgumentParser(description="目录与资产证据链静态证据门")
     parser.add_argument("--execution-id", default="")
     parser.add_argument(
         "--no-require-stage-tree",

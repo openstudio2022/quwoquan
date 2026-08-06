@@ -180,7 +180,7 @@ WHERE persona_id=$1 AND version=$18`,
 	if _, err := tx.Exec(ctx, `
 INSERT INTO personas_outbox(
   event_id, aggregate_id, aggregate_version, event_type, payload_json, occurred_at
-) VALUES ($1,$2,$3,'PersonaProfileProposalApplied',$4,$5)`,
+) VALUES ($1,$2,$3,'PersonaUpdated',$4,$5)`,
 		eventID, command.PersonaID, after.Version, eventPayload, occurredAt,
 	); err != nil {
 		return personaports.ProfileProposalMutationResult{}, err
@@ -338,7 +338,7 @@ WHERE persona_id=$1 AND version=$13`,
 	if _, err := tx.Exec(ctx, `
 INSERT INTO personas_outbox(
   event_id, aggregate_id, aggregate_version, event_type, payload_json, occurred_at
-) VALUES ($1,$2,$3,'PersonaProfileProposalRolledBack',$4,$5)`,
+) VALUES ($1,$2,$3,'PersonaUpdated',$4,$5)`,
 		stablePersonaPacketID("rollback-event", command.ProposalID),
 		command.PersonaID,
 		after.Version,

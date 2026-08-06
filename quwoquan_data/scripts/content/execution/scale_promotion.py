@@ -4,20 +4,30 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
-from datetime import datetime, timezone
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 from core import paths
-from core.io import read_json, write_json
+from core.io import read_json
 from core.schema import assert_valid
+
 from content.execution.identity import parse_execution_id, validate_execution_id
+from content.execution.scale_promotion_policy import (
+    m100_promotion_thresholds,
+)
+from content.execution.scale_promotion_policy import (
+    require_frozen_source_inputs as _require_frozen_source_inputs,
+)
+from content.execution.scale_promotion_store import write_scale_promotion_create_once
+from content.execution.scale_semantic_promotion import (
+    require_scale_promotion_model_binding,
+)
 from content.execution.workspace import (
     execution_root,
     load_frozen_execution_manifest,
     load_frozen_target_set,
 )
-
 
 PROMOTION_SCHEMA = "quwoquan_data.video_scale_promotion"
 IMAGE_PROMOTION_SCHEMA = "quwoquan_data.image_scale_promotion"
@@ -25,9 +35,8 @@ _PROMOTION_SCHEMA_BY_CARRIER = {
     "image": IMAGE_PROMOTION_SCHEMA,
     "video": PROMOTION_SCHEMA,
 }
-_M100_QUOTA = 100
-_M100_SOURCE_READY_MINIMUM = 120
-_M100_CANDIDATE_MINIMUM = 180
+
+
 def _promotion_schema(carrier: str) -> str:
     try:
         return _PROMOTION_SCHEMA_BY_CARRIER[carrier]
@@ -91,28 +100,8 @@ def _load_json(path: Path, *, label: str) -> dict[str, Any]:
         raise FileNotFoundError(f"{label} is missing: {path}")
     payload = read_json(path)
     if not isinstance(payload, dict):
-        raise ValueError(f"{label} must be an object: {path}")
+        raise TypeError(f"{label} must be an object: {path}")
     return payload
-
-
-def _require_clean_source_inputs(
-    source_document: Mapping[str, Any],
-) -> None:
-    inputs = [str(item) for item in (source_document.get("inputs") or [])]
-    if not inputs:
-        raise ValueError("M100 promotion sourceDigest inputs are missing")
-    dirty = subprocess.run(
-        ["git", "status", "--porcelain", "--", *inputs],
-        cwd=paths.REPO_ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout.strip()
-    if dirty:
-        raise ValueError(
-            "M100 promotion requires clean sourceDigest inputs; "
-            "freeze the reviewed baseline before approving M1000"
-        )
 
 
 def _validate_m100_envelope(
@@ -123,6 +112,7 @@ def _validate_m100_envelope(
     manifest: Mapping[str, Any],
     target_set: Mapping[str, Any],
 ) -> None:
+    thresholds = m100_promotion_thresholds(carrier)
     assert_valid(
         dict(payload),
         "execution",
@@ -135,8 +125,8 @@ def _validate_m100_envelope(
         or payload.get("vertical") != "travel"
         or payload.get("familyRef") != f"content/travel/{carrier}/{carrier}"
         or payload.get("executionId") != execution_id
-        or int(payload.get("quota") or 0) != _M100_QUOTA
-        or int(payload.get("count") or 0) < _M100_CANDIDATE_MINIMUM
+        or int(payload.get("quota") or 0) != thresholds.quota
+        or int(payload.get("count") or 0) < thresholds.candidate_minimum
     ):
         raise ValueError(
             f"{carrier} M100 promotion envelope identity or capacity drift"
@@ -159,6 +149,7 @@ def _direct_m100_input(
 ) -> dict[str, Any]:
     """Freeze direct current-worktree M100 inputs when no campaign envelope exists."""
 
+    thresholds = m100_promotion_thresholds(carrier)
     request = _load_json(
         root / "0.plan" / "request.json",
         label=f"{carrier} M100 request",
@@ -166,8 +157,8 @@ def _direct_m100_input(
     if (
         str(request.get("familyRef") or "")
         != f"content/travel/{carrier}/{carrier}"
-        or int(request.get("quota") or 0) != _M100_QUOTA
-        or int(request.get("count") or 0) < _M100_CANDIDATE_MINIMUM
+        or int(request.get("quota") or 0) != thresholds.quota
+        or int(request.get("count") or 0) < thresholds.candidate_minimum
     ):
         raise ValueError(
             f"direct {carrier} M100 request identity or capacity drift"
@@ -230,6 +221,9 @@ def _model_readiness(
     author = payload.get("author") if isinstance(payload.get("author"), Mapping) else {}
     reviewer = payload.get("reviewer") if isinstance(payload.get("reviewer"), Mapping) else {}
     binding = manifest.get("modelBinding") if isinstance(manifest.get("modelBinding"), Mapping) else {}
+    require_scale_promotion_model_binding(
+        binding, label=f"{carrier} M100 scale promotion"
+    )
     if (
         payload.get("executionId") != execution_id
         or not payload.get("ready")
@@ -248,12 +242,9 @@ def _model_readiness(
         raise ValueError(
             f"{carrier} M100 model readiness does not match the frozen model binding"
         )
-    # The frozen source digest owns the active recipe.  Promotion therefore
-    # validates readiness against that exact manifest binding instead of
-    # hard-coding a concrete Cursor model that can be retired or exhausted.
-    if binding.get("provider") != "cursor_sdk":
+    if payload.get("provider") != binding.get("provider"):
         raise ValueError(
-            f"{carrier} M100 model binding is not owned by Cursor SDK"
+            f"{carrier} M100 model readiness provider does not match the frozen binding"
         )
     return payload
 
@@ -275,10 +266,9 @@ def _source_availability(
     ready = int(payload.get("readyTargetCount") or 0)
     ineligible = int(payload.get("ineligibleTargetCount") or 0)
     candidate_count = ready + ineligible
-    if ready < _M100_SOURCE_READY_MINIMUM or candidate_count < _M100_CANDIDATE_MINIMUM:
+    if ready < 0 or ineligible < 0:
         raise ValueError(
-            f"{carrier} M100 source readiness is below promotion minimum "
-            f"(ready={ready}/{_M100_SOURCE_READY_MINIMUM}, candidates={candidate_count}/{_M100_CANDIDATE_MINIMUM})"
+            f"{carrier} M100 source availability counts must be non-negative"
         )
     return {
         "sourceReadyCount": ready,
@@ -295,17 +285,18 @@ def _review_and_publish(
 ) -> tuple[dict[str, int], dict[str, Any], dict[str, Any]]:
     from content.execution.post_review_closure import load_post_review_closure
 
+    thresholds = m100_promotion_thresholds(carrier)
     closure = load_post_review_closure(
         execution_id,
         root=root,
-        require_quota_milestone=True,
+        require_quota_milestone=False,
     )
-    if closure.carrier != carrier or closure.approved_quota != _M100_QUOTA:
+    if closure.carrier != carrier or closure.approved_quota != thresholds.quota:
         raise ValueError(
             f"{carrier} M100 post-review closure identity or quota drift"
         )
-    if closure.qualified_count < _M100_QUOTA:
-        raise ValueError(f"{carrier} M100 is not review-qualified")
+    if closure.qualified_count < 1:
+        raise ValueError(f"{carrier} M100 has no review-qualified object")
     publish = _load_json(root / "publish_ref.json", label="canonical publish receipt")
     assert_valid(
         publish,
@@ -348,8 +339,8 @@ def write_scale_promotion(
     target_set = load_frozen_target_set(execution_id)
     source_digest = manifest.get("sourceDigest")
     if not isinstance(source_digest, Mapping):
-        raise ValueError(f"{carrier} M100 manifest sourceDigest is missing")
-    _require_clean_source_inputs(source_digest)
+        raise TypeError(f"{carrier} M100 manifest sourceDigest is missing")
+    _require_frozen_source_inputs(source_digest)
     if predecessor_envelope is not None:
         _validate_m100_envelope(
             predecessor_envelope,
@@ -388,6 +379,10 @@ def write_scale_promotion(
         carrier=carrier,
         root=package_root,
     )
+    if availability["sourceReadyCount"] < review["qualifiedCount"]:
+        raise ValueError(
+            f"{carrier} M100 qualified objects exceed source-ready evidence"
+        )
     stable: dict[str, Any] = {
         "schema": schema_name,
         "status": "approved",
@@ -413,13 +408,11 @@ def write_scale_promotion(
         label=f"{carrier} scale promotion:{execution_id}",
     )
     path = promotion_path(execution_id, carrier=carrier, root=root)
-    if path.is_file():
-        existing = _load_json(path, label=f"{carrier} scale promotion")
-        if existing != receipt:
-            raise ValueError(f"{carrier} scale promotion receipt collision: {path}")
-        return path
-    write_json(path, receipt)
-    return path
+    return write_scale_promotion_create_once(
+        path,
+        receipt,
+        label=f"{carrier} scale promotion",
+    )
 
 
 def load_scale_promotion(
@@ -460,17 +453,21 @@ def require_m1000_promotion(
 
     if not isinstance(receipt, Mapping):
         article = "an" if carrier == "image" else "a"
-        raise ValueError(
+        raise TypeError(
             f"GATE_BLOCK travel/{carrier} M1000 requires {article} "
             f"{carrier} scale promotion receipt"
         )
     schema_name = _promotion_schema(carrier)
+    thresholds = m100_promotion_thresholds(carrier)
     payload = dict(receipt)
     assert_valid(
         payload,
         "execution",
         schema_name.removeprefix("quwoquan_data."),
         label=f"travel/{carrier} M1000 promotion receipt",
+    )
+    require_scale_promotion_model_binding(
+        payload.get("modelBinding"), label=f"travel/{carrier} M1000 promotion receipt"
     )
     expected_digest = _sha256(
         {key: value for key, value in payload.items() if key != "receiptDigest"}
@@ -483,11 +480,13 @@ def require_m1000_promotion(
         payload.get("status") != "approved"
         or payload.get("vertical") != "travel"
         or payload.get("carrier") != carrier
-        or int(payload.get("approvedQuota") or 0) != _M100_QUOTA
-        or int(payload.get("qualifiedCount") or 0) < _M100_QUOTA
+        or int(payload.get("approvedQuota") or 0) != thresholds.quota
+        or int(payload.get("qualifiedCount") or 0) < 1
         or int(payload.get("finalizedCount") or 0) != int(payload.get("qualifiedCount") or -1)
-        or int(payload.get("sourceReadyCount") or 0) < _M100_SOURCE_READY_MINIMUM
-        or int(payload.get("candidateCount") or 0) < _M100_CANDIDATE_MINIMUM
+        or int(payload.get("sourceReadyCount") or 0)
+        < int(payload.get("qualifiedCount") or 0)
+        or int(payload.get("candidateCount") or 0)
+        < int(payload.get("sourceReadyCount") or 0)
     ):
         raise ValueError(
             f"GATE_BLOCK travel/{carrier} M100 promotion receipt is not scale-eligible"

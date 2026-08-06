@@ -48,4 +48,4 @@
 - Elasticsearch 告警消费 `connection_lost`，LiveKit 告警只消费官方。
 - 完成告警触发、通知、恢复与 prod `gray_initial` 回滚演练。
 - 离线来电采用 `Integration attempt + result outbox -> Redis Stream -> Notification attempt inbox -> per-device timeline` 单轨；`external_accepted`、provider result、presentation ACK 不得互相代写。
-- B10 operator readback 仅携带 call/device/session 摘要和 receipt reference；hosted release receipt 必须由 `prod-hosted` service-plane 原子 CAS 提交并回读验签，本机 release-state 只是可删除缓存。
+- 双设备 Provider UAT operator readback 仅携带 call/device/session 摘要和 receipt reference；hosted release receipt 必须由 `prod-hosted` service-plane 原子 CAS 提交并回读验签，本机 release-state 只是可删除缓存。

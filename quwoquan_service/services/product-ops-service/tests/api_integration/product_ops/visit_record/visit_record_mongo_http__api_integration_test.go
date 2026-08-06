@@ -1,4 +1,6 @@
 // spec_ref: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/event-schema-governance/spec.md#gwt-001
+// readiness_case: record-visit-api
+// readiness_case: get-visit-stats-api
 package api_integration
 
 import (

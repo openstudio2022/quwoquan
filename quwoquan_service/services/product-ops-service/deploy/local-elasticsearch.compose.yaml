@@ -1,10 +1,21 @@
 # Product Ops 在 Alpha/Beta/Gamma 的唯一 Elasticsearch workload。
-# 该片段只由 stackctl 本地环境入口装配；Prod renderer 不扫描本文件。
+# stackctl package 从本文件选择目标架构的不可变镜像与 JVM 参数，并把解析后的
+# Compose 复制进 candidate；up 只允许消费该 candidate artifact。
+x-qwq-package-elasticsearch:
+  runtimeEndpoint: "http://elasticsearch:9200"
+  platforms:
+    arm64:
+      image: "docker.elastic.co/elasticsearch/elasticsearch@sha256:5af05323c9bfc52fcee63a47c682412a6ef5955ac85966f045a68ba8623db2e1"
+      cliJavaOpts: "-XX:UseSVE=0"
+      esJavaOpts: "-XX:UseSVE=0 -Xms512m -Xmx512m"
+    amd64:
+      image: "docker.elastic.co/elasticsearch/elasticsearch@sha256:dfd318b417be1356d9c7fdd6a5577c8a45553ac9d34354929a416c69c85daa9f"
+      cliJavaOpts: ""
+      esJavaOpts: "-Xms512m -Xmx512m"
 services:
   elasticsearch:
-    # Default is the ES 8.13.4 multi-arch index digest (amd64+arm64). Host-native
-    # selection is provided by QWQ_COMPOSE_ELASTICSEARCH_IMAGE from the local
-    # start script; do not pin linux/amd64 platform or an amd64-only manifest.
+    # This expression is a checked-in source default only. The packaged copy
+    # contains the exact platform image and no runtime selector.
     image: "${QWQ_COMPOSE_ELASTICSEARCH_IMAGE:-docker.elastic.co/elasticsearch/elasticsearch@sha256:dfd318b417be1356d9c7fdd6a5577c8a45553ac9d34354929a416c69c85daa9f}"
     networks:
       - default

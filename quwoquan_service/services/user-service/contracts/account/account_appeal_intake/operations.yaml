@@ -145,3 +145,52 @@ api_routes:
     token_transport: bearer
     anonymous_policy: deny
     visibility: internal
+readiness_cases:
+- case_id: issue-account-appeal-credential-local
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-suspension-and-appeal-lifecycle/spec.md#gwt-004
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: IssueAccountAppealCredential}
+  runner_source_path: quwoquan_service/services/user-service/tests/local_contract/account/account_appeal_intake/account_appeal_intake_facade__security_reliability__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: issue-account-appeal-credential-api
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-suspension-and-appeal-lifecycle/spec.md#gwt-004
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: IssueAccountAppealCredential}
+  runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/account_appeal_intake/account_appeal_intake__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+- case_id: submit-account-appeal-intake-local
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-suspension-and-appeal-lifecycle/spec.md#gwt-004
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: SubmitAccountAppealIntake}
+  runner_source_path: quwoquan_service/services/user-service/tests/local_contract/account/account_appeal_intake/account_appeal_intake_facade__security_reliability__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: submit-account-appeal-intake-api
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-suspension-and-appeal-lifecycle/spec.md#gwt-004
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: SubmitAccountAppealIntake}
+  runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/account_appeal_intake/account_appeal_intake__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+- case_id: claim-account-appeal-intake-local
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-suspension-and-appeal-lifecycle/spec.md#gwt-004
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ClaimAccountAppealIntake}
+  runner_source_path: quwoquan_service/services/user-service/tests/local_contract/account/account_appeal_intake/account_appeal_intake_handler__security__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: claim-account-appeal-intake-api
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-suspension-and-appeal-lifecycle/spec.md#gwt-004
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ClaimAccountAppealIntake}
+  runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/account_appeal_intake/account_appeal_intake__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}

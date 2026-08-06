@@ -43,6 +43,14 @@
 - 隔离投影不得继承正式 credentials；商业登录、Push、模型、Elasticsearch Log sink 与 RTC Provider 只能明确 unavailable，禁止切到非生产 fixture 或 Mock。
 - 缺 Provider、SFU/TURN、正式数据、观测、灾备、DNS/TLS 或灰度回滚证据时，正式发布资格始终保持 `GATE_BLOCK`。
 
+<a id="req-004"></a>
+### REQ-004 最终稳定性只接受 hosted soak authority
+
+- full rollout 的 hosted receipt `receiptId`、candidate、rollout artifact、source commit、配置图与契约图摘要必须由同一 hosted release ledger 绑定。
+- soak 起点取 full hosted receipt 的 `verifiedAt`，终点取 hosted ledger commit 时间；真实 Prometheus 窗口、Alertmanager 无 firing、full health、未过期凭据引用与 reviewed-main approval 任一缺失均 `GATE_BLOCK`。
+- 凭据证据只持久化安全引用、公钥摘要、issuer、expiry 与校验时间，禁止私钥、token 或本地路径进入 receipt。
+- 最终聚合器必须按 receipt identity 远程回读并比较 exact bytes；本地 fixture、自算 hash、任意 `fresh` 或字符串 approval ref 不建立 authority。
+
 ## 4. 契约引用
 
 - canonical：`specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md`
@@ -82,6 +90,15 @@
 - THEN container runtime 与 Provider readiness 分轴输出；被排除的 Elasticsearch Log sink 等 readiness 保持 `GATE_BLOCK`，不得污染第一方镜像/进程部署结论。
 - THEN 报告可将第一方容器部署标为 passed，但正式发布资格仍为 `GATE_BLOCK`，且 hosted release ledger/receipt 均未写入。
 
+<a id="gwt-004"></a>
+### GWT-004 hosted soak、凭据与审批闭环
+
+- GIVEN production protected environment 已配置 required reviewers、Alertmanager URL，以及 edge/service SSH 凭据的 reference/public digest/issuer/expiry metadata。
+- WHEN released full receipt 满足 canonical soak 窗口并提交 hosted soak request。
+- THEN hosted ledger 以权威 start/end 生成 immutable receipt，随后独立 receipt readback 与提交返回 exact-byte 一致。
+- THEN final acceptance 重新远程回读并只在 candidate、artifact、source、config/contract、SLO、alerts、health、credentials、approval 全部复验后返回 `soak/fresh/credentials/approval` claims。
+- THEN forged self-hash、stale soak、missing credential、unapproved、candidate drift 与 local synthetic receipt 全部 fail-closed。
+
 ## 6. 依赖
 
 - 前置要求：[`commercial-readiness-risk-closure`](../spec.md) 的范围、要求与 SIT。
@@ -107,3 +124,12 @@
 - 准出影响：`track`
 - 影响或价值：尚缺实现或直接 `spec_ref`；目标：stackctl release report、health/inspect/doctor、rollback/restore receipt 均可复验。
 - 完成判定：`GWT-002` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-003"></a>
+### OPEN-003 完成 production protected-environment 外部配置
+
+- 类型：`external_blocker`
+- 优先级：`P1`
+- 准出影响：`block`
+- 影响或价值：仓库无法证明 GitHub `production` environment 的 required reviewers，也无法创建 `PROD_ALERTMANAGER_URL` 与 `PROD_{EDGE,SERVICE}_SSH_KEY_{REFERENCE,PUBLIC_DIGEST,ISSUER,EXPIRES_AT}` variables；缺任一值时 producer 必须 `GATE_BLOCK`。
+- 完成判定：仓外管理员配置并审计上述 protection/variables，真实 `prod_soak_acceptance` job 产出 hosted exact-byte readback，且 `GWT-004` user_acceptance 证据有效。

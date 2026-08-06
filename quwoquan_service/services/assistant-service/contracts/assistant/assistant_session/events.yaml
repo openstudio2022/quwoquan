@@ -1,17 +1,13 @@
 events:
 - name: AssistantSessionCreated
-  producer: assistant-service
-  consumers:
-  - projection-workers
-  channel: event_store
+  delivery_semantics: transactional_event_log
   payload_entity: AssistantSession
   payload_fields:
   - sessionId
+  no_consumer_reason: 会话事实经事务 outbox 追加到耐久 session audit stream；当前没有下游订阅者。
 - name: AssistantSessionArchived
-  producer: assistant-service
-  consumers:
-  - projection-workers
-  channel: event_store
+  delivery_semantics: transactional_event_log
   payload_entity: AssistantSession
   payload_fields:
   - sessionId
+  no_consumer_reason: 会话事实经事务 outbox 追加到耐久 session audit stream；当前没有下游订阅者。

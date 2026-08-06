@@ -25,11 +25,6 @@ relationships:
   reference_fields:
   - assetIds
   target_object: content.MediaAsset
-capabilities:
-- queryable
-- versioned
-- auditable
-- idempotent_commands
 business_rules:
 - runId、assetIds、targetDerivativePolicyVersion 在创建后不可变；assetIds 必须去重、非空且数量为 1..500
 - 仅显式传入的 processing=ready image MediaAsset 可进入 run；非 image、未 ready 或 deleted asset 必须被拒绝
@@ -50,30 +45,5 @@ lifecycle:
   - failed
   - rolled_back
   initial: running
-  transitions:
-  - - running
-    - paused
-    - PauseMediaImageReprocessRun
-  - - paused
-    - running
-    - ResumeMediaImageReprocessRun
-  - - running
-    - completed
-    - CompleteMediaImageReprocessRun
-  - - running
-    - failed
-    - FailMediaImageReprocessRun
-  - - paused
-    - rolling_back
-    - RollbackMediaImageReprocessRun
-  - - completed
-    - rolling_back
-    - RollbackMediaImageReprocessRun
-  - - failed
-    - rolling_back
-    - RollbackMediaImageReprocessRun
-  - - rolling_back
-    - rolled_back
-    - CompleteMediaImageReprocessRollback
   optimistic_concurrency: version
   idempotency: command_receipt

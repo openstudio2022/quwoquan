@@ -61,7 +61,7 @@ def test_baseline_entry_must_be_removed_once_wired() -> None:
         {"poi": 4059},
         (_producer("poi"),),
         frozenset({"poi"}),
-        {"poi": ["quwoquan_app/lib/ui/content/entry/widgets/create_publish_confirm_sheet.dart"]},
+        {"poi": ["quwoquan_app/lib/service/content_service/content/post/presentation/create_publish_confirm_sheet.dart"]},
     )
 
     assert any("UNWIRED_BASELINE" in issue for issue in issues)

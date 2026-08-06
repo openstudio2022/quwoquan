@@ -1,17 +1,13 @@
 events:
 - name: CredentialBound
-  producer: user-service
-  consumers:
-  - security-audit
-  channel: transactional_outbox
+  delivery_semantics: transactional_event_log
   payload_entity: CredentialBinding
   payload_fields:
   - id
+  no_consumer_reason: 绑定状态与 hash-only 安全审计事实在同一 PostgreSQL transaction 内提交；认证边界直接读取 CredentialBinding，不以异步事件授予权限。基础设施 audit mirror 不属于领域 consumer。
 - name: CredentialRevoked
-  producer: user-service
-  consumers:
-  - security-audit
-  channel: transactional_outbox
+  delivery_semantics: transactional_event_log
   payload_entity: CredentialBinding
   payload_fields:
   - id
+  no_consumer_reason: 吊销状态与 hash-only 安全审计事实在同一 PostgreSQL transaction 内提交；认证边界同步复核 active 状态，不依赖异步事件撤权。基础设施 audit mirror 不属于领域 consumer。

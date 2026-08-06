@@ -1,10 +1,16 @@
 // spec_ref: specs/feature-tree/assistant-run-learning/assistant-runtime-foundation/assistant-object-runtime/spec.md#gwt-001
+// spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/skill-user-lifecycle/spec.md#gwt-002
+// readiness_case: list-skill-subscriptions-api
+// readiness_case: create-skill-subscription-api
+// readiness_case: get-skill-subscription-api
+// readiness_case: update-skill-subscription-status-api
 package api_integration
 
 import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -20,6 +26,7 @@ import (
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
 	subscriptionhttp "quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/adapters/inbound/http"
 	subscriptionapplication "quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/application"
+	subscriptionports "quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/domain/ports"
 	subscriptionpersistence "quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/infrastructure/persistence"
 )
 
@@ -92,6 +99,68 @@ func TestSkillSubscriptionCommandsCommitAggregateReceiptAndOutboxAtomically(t *t
 	}
 	if createdResult.SubscriptionID == "" || createdResult.Version != 1 || createdResult.Status != "active" {
 		t.Fatalf("unexpected create result: %+v", createdResult)
+	}
+	listed := skillSubscriptionRequest(
+		t,
+		mux,
+		http.MethodGet,
+		"/assistant/skill-subscriptions?status=active&limit=20",
+		"account-subscription",
+		"",
+		nil,
+	)
+	if listed.Code != http.StatusOK {
+		t.Fatalf("list status=%d body=%s", listed.Code, listed.Body.String())
+	}
+	var listResult struct {
+		Items []struct {
+			SubscriptionID string `json:"subscriptionId"`
+			Status         string `json:"status"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(listed.Body.Bytes(), &listResult); err != nil {
+		t.Fatalf("decode list result: %v", err)
+	}
+	if len(listResult.Items) != 1 ||
+		listResult.Items[0].SubscriptionID != createdResult.SubscriptionID ||
+		listResult.Items[0].Status != "active" {
+		t.Fatalf("unexpected list result: %+v", listResult)
+	}
+	loaded := skillSubscriptionRequest(
+		t,
+		mux,
+		http.MethodGet,
+		"/assistant/skill-subscriptions/"+createdResult.SubscriptionID,
+		"account-subscription",
+		"",
+		nil,
+	)
+	if loaded.Code != http.StatusOK {
+		t.Fatalf("get status=%d body=%s", loaded.Code, loaded.Body.String())
+	}
+	var loadedResult struct {
+		SubscriptionID string `json:"subscriptionId"`
+		Version        int64  `json:"version"`
+		Status         string `json:"status"`
+	}
+	if err := json.Unmarshal(loaded.Body.Bytes(), &loadedResult); err != nil {
+		t.Fatalf("decode get result: %v", err)
+	}
+	if loadedResult.SubscriptionID != createdResult.SubscriptionID ||
+		loadedResult.Version != 1 || loadedResult.Status != "active" {
+		t.Fatalf("unexpected get result: %+v", loadedResult)
+	}
+	foreign := skillSubscriptionRequest(
+		t,
+		mux,
+		http.MethodGet,
+		"/assistant/skill-subscriptions/"+createdResult.SubscriptionID,
+		"account-other",
+		"",
+		nil,
+	)
+	if foreign.Code != http.StatusNotFound {
+		t.Fatalf("foreign get status=%d body=%s", foreign.Code, foreign.Body.String())
 	}
 
 	replay := skillSubscriptionRequest(
@@ -171,6 +240,91 @@ func TestSkillSubscriptionCommandsCommitAggregateReceiptAndOutboxAtomically(t *t
 	)
 	assertSkillSubscriptionConflict(t, statusConflict)
 	assertMongoCount(t, runtime.Database.Collection("skill_subscriptions"), bson.M{"version": int64(2), "status": "paused"}, 1)
+	publicationClaimAt := time.Now().UTC().Truncate(time.Millisecond)
+	publication, found, err := store.ClaimPendingOutbox(
+		startupCtx,
+		"subscription-publication-owner-a",
+		publicationClaimAt,
+		10*time.Second,
+	)
+	if err != nil || !found {
+		t.Fatalf("ClaimPendingOutbox()=%+v found=%v error=%v", publication, found, err)
+	}
+	if publication.AggregateID != createdResult.SubscriptionID ||
+		string(publication.Payload) != `{"subscriptionId":"`+createdResult.SubscriptionID+`"}` {
+		t.Fatalf("subscription publication leaked or drifted: %+v", publication)
+	}
+	if _, err := runtime.Database.Collection("skill_subscription_outbox").UpdateMany(
+		startupCtx,
+		bson.M{"_id": bson.M{"$ne": publication.EventID}},
+		bson.M{"$set": bson.M{"nextAttemptAt": publicationClaimAt.Add(24 * time.Hour)}},
+	); err != nil {
+		t.Fatalf("isolate subscription retry event: %v", err)
+	}
+	failedAt := publicationClaimAt.Add(time.Second)
+	retryAt := failedAt.Add(5 * time.Second)
+	if err := store.ScheduleOutboxRetry(
+		startupCtx, publication.EventID, "subscription-publication-owner-a",
+		failedAt, retryAt, "transport_unavailable",
+	); err != nil {
+		t.Fatalf("ScheduleOutboxRetry() error=%v", err)
+	}
+	var deliveryState struct {
+		AttemptCount  int       `bson:"attemptCount"`
+		NextAttemptAt time.Time `bson:"nextAttemptAt"`
+		LastErrorCode string    `bson:"lastErrorCode"`
+		ClaimOwner    string    `bson:"claimOwner"`
+	}
+	if err := runtime.Database.Collection("skill_subscription_outbox").FindOne(
+		startupCtx, bson.M{"_id": publication.EventID},
+	).Decode(&deliveryState); err != nil {
+		t.Fatalf("load subscription retry state: %v", err)
+	}
+	if deliveryState.AttemptCount != 1 || !deliveryState.NextAttemptAt.Equal(retryAt) ||
+		deliveryState.LastErrorCode != "transport_unavailable" || deliveryState.ClaimOwner != "" {
+		t.Fatalf("persisted subscription retry state=%+v", deliveryState)
+	}
+	if beforeDue, found, err := store.ClaimPendingOutbox(
+		startupCtx, "subscription-publication-owner-b",
+		retryAt.Add(-time.Millisecond), 3*time.Second,
+	); err != nil || found {
+		t.Fatalf("claim subscription before retry due=%+v found=%t err=%v", beforeDue, found, err)
+	}
+	retried, found, err := store.ClaimPendingOutbox(
+		startupCtx, "subscription-publication-owner-b", retryAt, 3*time.Second,
+	)
+	if err != nil || !found || retried.EventID != publication.EventID || retried.AttemptCount != 2 {
+		t.Fatalf("claim subscription retry=%+v found=%t err=%v", retried, found, err)
+	}
+	expiredAt := retryAt.Add(3 * time.Second)
+	if err := store.MarkOutboxPublished(
+		startupCtx, retried.EventID, "subscription-publication-owner-b", expiredAt,
+	); !errors.Is(err, subscriptionports.ErrOutboxClaimLost) {
+		t.Fatalf("expired subscription checkpoint error=%v, want claim lost", err)
+	}
+	if err := store.ScheduleOutboxRetry(
+		startupCtx, retried.EventID, "subscription-publication-owner-b",
+		expiredAt, expiredAt.Add(time.Second), "expired_owner",
+	); !errors.Is(err, subscriptionports.ErrOutboxClaimLost) {
+		t.Fatalf("expired subscription retry error=%v, want claim lost", err)
+	}
+	takeover, found, err := store.ClaimPendingOutbox(
+		startupCtx, "subscription-publication-owner-c", expiredAt, 10*time.Second,
+	)
+	if err != nil || !found || takeover.EventID != publication.EventID || takeover.AttemptCount != 3 {
+		t.Fatalf("subscription lease takeover=%+v found=%t err=%v", takeover, found, err)
+	}
+	if err := store.MarkOutboxPublished(
+		startupCtx, takeover.EventID, "subscription-publication-owner-c", expiredAt,
+	); err != nil {
+		t.Fatalf("MarkOutboxPublished(takeover) error=%v", err)
+	}
+	assertMongoCount(
+		t,
+		runtime.Database.Collection("skill_subscription_outbox"),
+		bson.M{"publishedAt": bson.M{"$exists": true}},
+		1,
+	)
 }
 
 func skillSubscriptionRequest(

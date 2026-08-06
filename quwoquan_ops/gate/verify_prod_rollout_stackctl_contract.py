@@ -6,7 +6,6 @@ from pathlib import Path
 
 import yaml
 
-
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS = [
     ROOT / ".github" / "workflows" / "deploy-prod-auto.yml",
@@ -26,6 +25,14 @@ OCI_SUPPLY_CHAIN = (
 HOSTED_LEDGER = (
     ROOT / "quwoquan_ops" / "cli" / "prod" / "hosted_release_ledger.py"
 )
+FINAL_ACCEPTANCE = (
+    ROOT
+    / "quwoquan_ops"
+    / "cli"
+    / "lib"
+    / "environment_stability_final_acceptance.py"
+)
+SOAK_COLLECTOR = ROOT / "quwoquan_ops" / "ci" / "collect_prod_soak_observations.py"
 REQUIRED_ROLLOUT_TOKENS = (
     "quwoquan_ops/cli/stackctl.py deploy",
     "--target prod-hosted",
@@ -73,6 +80,36 @@ FORBIDDEN_ROLLOUT_TOKENS = (
     "--from-config",
     "--to-config",
 )
+
+
+PROD_ENVIRONMENT_JOBS = ("prod_rollout", "prod_soak_acceptance")
+
+
+def prod_environment_job_issues(path: Path) -> list[str]:
+    """受控 prod 事务的唯一允许清单：只有这些 job 可以绑定 production 环境。"""
+    try:
+        rel: Path | str = path.relative_to(ROOT)
+    except ValueError:
+        rel = path.name
+    document = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    jobs = document.get("jobs") or {}
+    bound = sorted(
+        name
+        for name, spec in jobs.items()
+        if isinstance(spec, dict) and spec.get("environment") == "production"
+    )
+    issues: list[str] = []
+    for name in bound:
+        if name not in PROD_ENVIRONMENT_JOBS:
+            issues.append(
+                f"{rel} job {name} binds environment: production outside the controlled prod transaction"
+            )
+    for name in PROD_ENVIRONMENT_JOBS:
+        if name not in bound:
+            issues.append(
+                f"{rel} job {name} must bind environment: production for manual prod admission"
+            )
+    return issues
 
 
 def workflow_rollout_issues(path: Path) -> list[str]:
@@ -149,11 +186,67 @@ def candidate_identity_issues() -> list[str]:
     return issues
 
 
+def hosted_soak_authority_issues() -> list[str]:
+    issues: list[str] = []
+    workflow_text = WORKFLOWS[0].read_text(encoding="utf-8")
+    ledger_text = HOSTED_LEDGER.read_text(encoding="utf-8")
+    verifier_text = FINAL_ACCEPTANCE.read_text(encoding="utf-8")
+    collector_text = SOAK_COLLECTOR.read_text(encoding="utf-8")
+    for token in (
+        "prod_soak_acceptance:",
+        "environment: production",
+        "collect_prod_soak_observations.py",
+        "release-ledger-soak-commit",
+        "release-ledger-soak-receipt",
+        "PROD_ALERTMANAGER_URL",
+        "PROD_EDGE_SSH_KEY_PUBLIC_DIGEST",
+        "PROD_SERVICE_SSH_KEY_EXPIRES_AT",
+        'cmp "$COMMITTED" "$READBACK"',
+    ):
+        if token not in workflow_text:
+            issues.append(f"prod workflow missing hosted soak authority token: {token}")
+    for token in (
+        'SOAK_REQUEST_SCHEMA = "prod-hosted-soak-request"',
+        'SOAK_RECEIPT_SCHEMA = "prod-hosted-soak-receipt"',
+        '"fullRolloutReceiptId"',
+        '"configGraphDigest"',
+        '"contractGraphDigest"',
+        '"credentialPolicyDigest"',
+        "authoritative prod soak window is incomplete",
+        "fetch_soak_receipt",
+    ):
+        if token not in ledger_text:
+            issues.append(f"hosted release ledger missing soak authority token: {token}")
+    for token in (
+        "verify_canonical_hosted_prod_soak",
+        "remote_raw != raw",
+        "receipt.get(\"soakPolicyDigest\")",
+        "actual_credentials != expected_credentials",
+        "soak_authority_verifier: SoakAuthorityVerifier = verify_canonical_hosted_prod_soak",
+    ):
+        if token not in verifier_text:
+            issues.append(f"final acceptance missing hosted soak verifier token: {token}")
+    for token in (
+        "_wait_for_authoritative_window",
+        "_read_prometheus_slo",
+        "_read_alertmanager",
+        '"prod-hosted"',
+        '"full"',
+    ):
+        if token not in collector_text:
+            issues.append(f"Prod soak collector missing authority token: {token}")
+    if "approvalReceiptRef" in ledger_text or "approvalReceiptRef" in verifier_text:
+        issues.append("Prod soak authority must not trust string approvalReceiptRef")
+    return issues
+
+
 def main() -> int:
     issues: list[str] = []
     for path in WORKFLOWS:
         issues.extend(workflow_rollout_issues(path))
+        issues.extend(prod_environment_job_issues(path))
     issues.extend(candidate_identity_issues())
+    issues.extend(hosted_soak_authority_issues())
 
     controlled_rollout = (
         ROOT / ".github" / "workflows" / "deploy-prod-auto.yml"
@@ -231,7 +324,10 @@ def main() -> int:
         "matrix: ${{ fromJSON(needs.prepare-release.outputs.image_matrix) }}",
         "${{ matrix.service }}",
         "${{ matrix.image_name }}",
-        '--require-count "build_release_images=15"',
+        "BUILD_IMAGE_COUNT: ${{ needs.prepare-release.outputs.build_count }}",
+        "REUSE_IMAGE_COUNT: ${{ needs.prepare-release.outputs.reuse_count }}",
+        "IMAGE_JOB_COUNT=$((BUILD_IMAGE_COUNT + REUSE_IMAGE_COUNT))",
+        '--require-count "build_release_images=${IMAGE_JOB_COUNT}"',
         "id: base_images",
         "runs-on: [self-hosted, macOS, ARM64]",
         "docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130",

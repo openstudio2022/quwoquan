@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -19,7 +20,7 @@ import (
 
 var objectTopLevelKeys = stringSet(
 	"kind", "description", "identity", "access", "relationships",
-	"capabilities", "taggable", "vector_enabled", "members",
+	"taggable", "vector_enabled", "members",
 	"counter_strategy", "relation_signal", "business_rules", "lifecycle",
 	"local_identity_reasons", "external_authority",
 )
@@ -27,11 +28,31 @@ var objectTopLevelKeys = stringSet(
 var operationsTopLevelKeys = stringSet(
 	"api_routes", "runtime_entrypoints", "commercial_defaults", "consumers", "contract_test",
 	"delivery_slo", "description", "incoming_call_slo", "privacy_contract",
-	"response_list_key", "upstreams", "externalDependencies",
+	"readiness_cases", "response_list_key", "upstreams", "externalDependencies",
 )
 
+// Option 配置 loader 的仓库级输入。metadata-dir 是 PPID 作用域的契约拷贝视图
+// （见 `quwoquan_service/Makefile` 的 CONTRACT_VIEW），从它读不到仓库源码树，因此
+// 需要物理树输入的派生必须由调用方显式传入仓库根。
+type Option func(*settings)
+
+type settings struct {
+	repoRoot string
+}
+
+// WithRepoRoot 打开派生式 readiness evidence：loader 会从 repoRoot 之下的云侧、端侧
+// 与 Ops 物理树反推每个对象的 evidence packet。不传该 option 时 catalog 不携带任何
+// evidence，因为 metadata 本身不允许声明 evidence。
+func WithRepoRoot(repoRoot string) Option {
+	return func(target *settings) { target.repoRoot = strings.TrimSpace(repoRoot) }
+}
+
 // Load 将 metadata 规范化为单一 AST。它只读取业务对象目录，不把控制面域清单计入业务对象。
-func Load(metadataDir string) (*ast.Catalog, error) {
+func Load(metadataDir string, options ...Option) (*ast.Catalog, error) {
+	resolved := settings{}
+	for _, option := range options {
+		option(&resolved)
+	}
 	catalog := &ast.Catalog{}
 	var loadErrors []error
 
@@ -76,6 +97,22 @@ func Load(metadataDir string) (*ast.Catalog, error) {
 					catalog.RuntimeEntrypoints,
 					runtimeEntrypoints...,
 				)
+				readinessCases, readinessErr := loadReadinessCases(
+					metadataDir,
+					operationsPath,
+					object,
+					operations,
+					runtimeEntrypoints,
+					resolved.repoRoot,
+				)
+				if readinessErr != nil {
+					loadErrors = append(loadErrors, readinessErr)
+				} else {
+					catalog.ReadinessCases = append(
+						catalog.ReadinessCases,
+						readinessCases...,
+					)
+				}
 			}
 		}
 		projections, _, projectionErr := loadProjections(metadataDir, objectDir, object)
@@ -93,6 +130,9 @@ func Load(metadataDir string) (*ast.Catalog, error) {
 	deriveBusinessObjectMaps(catalog, &loadErrors)
 	if governanceErr := loadMetadataGovernance(metadataDir, catalog); governanceErr != nil {
 		loadErrors = append(loadErrors, governanceErr)
+	}
+	if resolved.repoRoot != "" {
+		deriveReadinessEvidence(catalog, resolved.repoRoot, &loadErrors)
 	}
 	if len(loadErrors) > 0 {
 		return nil, errors.Join(loadErrors...)
@@ -157,10 +197,16 @@ func loadObject(metadataDir, path string) (ast.Object, error) {
 		AggregateOwner: "",
 		SourcePath:     relativePath(metadataDir, path),
 	}
-	if storageTop, storageErr := loadOptionalTopLevelMapping(filepath.Join(filepath.Dir(path), "storage.yaml")); storageErr != nil {
+	if lifecycle := top["lifecycle"]; lifecycle != nil {
+		object.Lifecycle, err = decodeLifecycle(lifecycle, object.SourcePath)
+		if err != nil {
+			return ast.Object{}, fmt.Errorf("%s: lifecycle: %w", path, err)
+		}
+	}
+	if storage, storageErr := loadOptionalStorageDocument(filepath.Join(filepath.Dir(path), "storage.yaml")); storageErr != nil {
 		return ast.Object{}, storageErr
-	} else if storageTop != nil {
-		object.StorageBackend = scalarString(storageTop["backend"])
+	} else if storage != nil {
+		object.StorageBackend = strings.TrimSpace(storage.Backend)
 	}
 	if members := top["members"]; members != nil {
 		object.Members, err = decodeMembers(members)
@@ -254,11 +300,7 @@ type runtimeEntrypointDocument struct {
 	Name          string   `yaml:"name"`
 	RuntimeKind   string   `yaml:"kind"`
 	Phase         string   `yaml:"phase"`
-	SourceEvents  []string `yaml:"source_events"`
 	SourceObjects []string `yaml:"source_objects"`
-	Checkpoint    string   `yaml:"checkpoint"`
-	Rebuild       string   `yaml:"rebuild"`
-	Tombstone     string   `yaml:"tombstone"`
 	Idempotency   string   `yaml:"idempotency"`
 	Application   struct {
 		Kind        string `yaml:"kind"`
@@ -291,6 +333,7 @@ type routeDocument struct {
 	ResponseEntityRef string                    `yaml:"response_entity_ref"`
 	ResponseBody      string                    `yaml:"response_body"`
 	ResponseBodyKind  string                    `yaml:"response_body_kind"`
+	SuccessStatus     int                       `yaml:"success_status"`
 	Actor             string                    `yaml:"actor"`
 	Security          map[string]string         `yaml:"security"`
 	Authorization     struct {
@@ -301,11 +344,16 @@ type routeDocument struct {
 	} `yaml:"authorization"`
 	Commercial  commercialDocument `yaml:"commercial"`
 	Reliability struct {
-		TimeoutMilliseconds int    `yaml:"timeout_ms"`
-		Cancellation        string `yaml:"cancellation"`
-		RetryMode           string `yaml:"retry_mode"`
-		MaxAttempts         int    `yaml:"max_attempts"`
-		Idempotency         string `yaml:"idempotency"`
+		TimeoutMilliseconds *int `yaml:"timeout_ms"`
+		StreamBudget        *struct {
+			HandshakeMilliseconds   int `yaml:"handshake_ms"`
+			IdleMilliseconds        int `yaml:"idle_ms"`
+			MaxDurationMilliseconds int `yaml:"max_duration_ms"`
+		} `yaml:"stream_budget"`
+		Cancellation string `yaml:"cancellation"`
+		RetryMode    string `yaml:"retry_mode"`
+		MaxAttempts  int    `yaml:"max_attempts"`
+		Idempotency  string `yaml:"idempotency"`
 	} `yaml:"reliability"`
 	Pagination *struct {
 		DefaultItems int `yaml:"default_items"`
@@ -348,6 +396,7 @@ type routeDocument struct {
 		Method          string `yaml:"method"`
 		AggregateOwner  string `yaml:"aggregate_owner"`
 		AppendSink      string `yaml:"append_sink"`
+		LifecycleOwner  string `yaml:"lifecycle_owner"`
 		MutationTarget  string `yaml:"mutation_target"`
 		InvariantTarget string `yaml:"invariant_target"`
 		SessionOwner    string `yaml:"session_owner"`
@@ -505,6 +554,30 @@ func loadService(
 				TerminalValues:      trimStrings(route.Streaming.TerminalValues),
 			}
 		}
+		reliability := ast.ReliabilityPolicy{
+			Cancellation: strings.TrimSpace(route.Reliability.Cancellation),
+			RetryMode:    strings.TrimSpace(route.Reliability.RetryMode),
+			MaxAttempts:  route.Reliability.MaxAttempts,
+			Idempotency:  strings.TrimSpace(route.Reliability.Idempotency),
+		}
+		if route.Reliability.TimeoutMilliseconds != nil {
+			reliability.TimeoutMilliseconds = *route.Reliability.TimeoutMilliseconds
+			reliability.TimeoutExplicit = true
+		}
+		if budget := route.Reliability.StreamBudget; budget != nil {
+			reliability.StreamBudget = &ast.StreamBudgetPolicy{
+				HandshakeMilliseconds:   budget.HandshakeMilliseconds,
+				IdleMilliseconds:        budget.IdleMilliseconds,
+				MaxDurationMilliseconds: budget.MaxDurationMilliseconds,
+			}
+			// The connection ceiling is the streaming form of the whole-request
+			// budget, so every existing timeout consumer keeps reading one
+			// number instead of learning a streaming special case. Authoring
+			// timeout_ms next to a stream_budget is rejected by validate.
+			if !reliability.TimeoutExplicit {
+				reliability.TimeoutMilliseconds = budget.MaxDurationMilliseconds
+			}
+		}
 		operations = append(operations, ast.Operation{
 			ID:                     object.ID + "." + localID,
 			LocalID:                localID,
@@ -518,6 +591,7 @@ func loadService(
 			FacadeMethod:           strings.TrimSpace(route.Application.Method),
 			AggregateOwner:         strings.TrimSpace(route.Application.AggregateOwner),
 			AppendSink:             strings.TrimSpace(route.Application.AppendSink),
+			LifecycleOwner:         strings.TrimSpace(route.Application.LifecycleOwner),
 			MutationTarget:         strings.TrimSpace(route.Application.MutationTarget),
 			InvariantTarget:        strings.TrimSpace(route.Application.InvariantTarget),
 			SessionOwner:           strings.TrimSpace(route.Application.SessionOwner),
@@ -536,6 +610,7 @@ func loadService(
 			ResponseEntityRef:      strings.TrimSpace(route.ResponseEntityRef),
 			ResponseBody:           strings.TrimSpace(route.ResponseBody),
 			ResponseBodyKind:       strings.TrimSpace(route.ResponseBodyKind),
+			SuccessStatus:          route.SuccessStatus,
 			SourcePath:             relativePath(metadataDir, path),
 			Security:               route.Security,
 			AuthMode:               resolveAuthMode(route.Security),
@@ -554,17 +629,7 @@ func loadService(
 				GapID:       strings.TrimSpace(commercial.GapID),
 				TargetStory: strings.TrimSpace(commercial.TargetStory),
 			},
-			Reliability: ast.ReliabilityPolicy{
-				TimeoutMilliseconds: route.Reliability.TimeoutMilliseconds,
-				Cancellation: strings.TrimSpace(
-					route.Reliability.Cancellation,
-				),
-				RetryMode:   strings.TrimSpace(route.Reliability.RetryMode),
-				MaxAttempts: route.Reliability.MaxAttempts,
-				Idempotency: strings.TrimSpace(
-					route.Reliability.Idempotency,
-				),
-			},
+			Reliability:       reliability,
 			Pagination:        pagination,
 			ResponseAdmission: responseAdmission,
 			Concurrency: ast.ConcurrencyPolicy{
@@ -632,11 +697,7 @@ func loadService(
 			Facet:           strings.TrimSpace(entrypoint.Application.Facet),
 			FacadeMethod:    strings.TrimSpace(entrypoint.Application.Method),
 			ObjectOwner:     strings.TrimSpace(entrypoint.Application.ObjectOwner),
-			SourceEvents:    trimStrings(entrypoint.SourceEvents),
 			SourceObjects:   trimStrings(entrypoint.SourceObjects),
-			Checkpoint:      strings.TrimSpace(entrypoint.Checkpoint),
-			Rebuild:         strings.TrimSpace(entrypoint.Rebuild),
-			Tombstone:       strings.TrimSpace(entrypoint.Tombstone),
 			Idempotency:     strings.TrimSpace(entrypoint.Idempotency),
 			SourcePath:      relativePath(metadataDir, path),
 		})
@@ -902,6 +963,7 @@ func rejectUnknownTopLevel(path string, mapping map[string]*yaml.Node, allowed m
 	if len(unknown) == 0 {
 		return nil
 	}
+	sort.Strings(unknown)
 	return fmt.Errorf("%s: unknown top-level fields: %s", path, strings.Join(unknown, ", "))
 }
 
@@ -951,6 +1013,44 @@ func pascalCaseIdentifier(value string) string {
 		upperNext = false
 	}
 	return result.String()
+}
+
+// SourceDocuments loads an explicit set of canonical metadata documents with
+// the same normalization used by the full ContractGraph compiler. It does not
+// scan sibling contracts, so metadata-only generators are not coupled to
+// unrelated object validation or App operation handoff state.
+func SourceDocuments(
+	root string,
+	relativePaths []string,
+) ([]ast.SourceDocument, error) {
+	catalog := &ast.Catalog{}
+	var errs []error
+	for _, relative := range relativePaths {
+		normalized := filepath.ToSlash(filepath.Clean(relative))
+		if normalized == "." ||
+			filepath.IsAbs(relative) ||
+			normalized == ".." ||
+			strings.HasPrefix(normalized, "../") {
+			errs = append(
+				errs,
+				fmt.Errorf("metadata document path escapes root: %s", relative),
+			)
+			continue
+		}
+		addSourceDocument(
+			catalog,
+			root,
+			filepath.Join(root, filepath.FromSlash(normalized)),
+			&errs,
+		)
+	}
+	if len(errs) > 0 {
+		return nil, errors.Join(errs...)
+	}
+	sort.Slice(catalog.Documents, func(i, j int) bool {
+		return catalog.Documents[i].Path < catalog.Documents[j].Path
+	})
+	return append([]ast.SourceDocument(nil), catalog.Documents...), nil
 }
 
 func addSourceDocument(catalog *ast.Catalog, root, path string, errs *[]error) {

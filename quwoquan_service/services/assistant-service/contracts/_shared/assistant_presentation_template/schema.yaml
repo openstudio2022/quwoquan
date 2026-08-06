@@ -1,10 +1,11 @@
 dart_class: AssistantPresentationTemplateWire
-library_path: assistant/generated/contracts/assistant_presentation_template.g.dart
-output_path: assistant/generated/contracts/assistant_presentation_template.g.dart
+library_path: package:quwoquan_cloud_contracts/src/generated/assistant/assistant_presentation_template.g.dart
+output_path: packages/quwoquan_cloud_contracts/lib/src/generated/assistant/assistant_presentation_template.g.dart
 contract: assistant_presentation_template
 kind: shared_wire_contract
 imports:
-  - package:quwoquan_app/assistant/generated/contracts/assistant_presentation_node.g.dart
+  - assistant_presentation_node.g.dart
+  - assistant_runtime_enums.g.dart
 fields:
   - { name: templateId, type: string, required: true }
   - { name: skillId, type: string, required: true }

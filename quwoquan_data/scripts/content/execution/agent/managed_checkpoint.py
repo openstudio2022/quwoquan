@@ -129,6 +129,7 @@ def _run_managed_checkpoint(ctx: ExecutionContext, stage: str) -> bool:
                     outcome = AgentRunOutcome.failed(
                         AgentFailureKind.SDK_EXECUTION_FAILED,
                         message=f"managed agent runner failed: {type(exc).__name__}: {exc}",
+                        provider=ctx.agent_provider,
                     )
                 checkpoint_ref = _managed_checkpoint_ref(ctx, stage, prompts[index])
                 job_outcome = ManagedAgentJobOutcome(
@@ -170,6 +171,7 @@ def _run_managed_checkpoint(ctx: ExecutionContext, stage: str) -> bool:
                                 f"{int(now - started_at)}s for {stage}/{lane}"
                             ),
                             retryable=True,
+                            provider=ctx.agent_provider,
                         ),
                         job_index=index,
                         lane=lane,

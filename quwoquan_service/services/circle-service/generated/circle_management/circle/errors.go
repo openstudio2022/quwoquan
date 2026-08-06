@@ -23,47 +23,47 @@ var (
 // AppErrorFromInvalidArgument returns *AppError for CIRCLE.USER.invalid_argument (user_message from errors.yaml).
 func AppErrorFromInvalidArgument(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrInvalidArgument.Error()))
-	return rerrors.NewAppError(code, "请求参数无效", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "请求参数无效", debugMessage).WithMetadata("invalid_argument", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromCircleNotFound returns *AppError for CIRCLE.USER.not_found (user_message from errors.yaml).
 func AppErrorFromCircleNotFound(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrCircleNotFound.Error()))
-	return rerrors.NewAppError(code, "圈子不存在", debugMessage).WithMetadata("not_found", 404).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "圈子不存在", debugMessage).WithMetadata("not_found", 404).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromCircleArchived returns *AppError for CIRCLE.USER.circle_archived (user_message from errors.yaml).
 func AppErrorFromCircleArchived(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrCircleArchived.Error()))
-	return rerrors.NewAppError(code, "圈子已归档，无法修改", debugMessage).WithMetadata("circle_archived", 409).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "圈子已归档，无法修改", debugMessage).WithMetadata("circle_archived", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromCircleVersionConflict returns *AppError for CIRCLE.USER.circle_version_conflict (user_message from errors.yaml).
 func AppErrorFromCircleVersionConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrCircleVersionConflict.Error()))
-	return rerrors.NewAppError(code, "圈子信息已被更新，请刷新后重试", debugMessage).WithMetadata("circle_version_conflict", 409).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "圈子信息已被更新，请刷新后重试", debugMessage).WithMetadata("circle_version_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromCircleIdempotencyConflict returns *AppError for CIRCLE.USER.circle_idempotency_conflict (user_message from errors.yaml).
 func AppErrorFromCircleIdempotencyConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrCircleIdempotencyConflict.Error()))
-	return rerrors.NewAppError(code, "重复请求与原命令不一致", debugMessage).WithMetadata("circle_idempotency_conflict", 409).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "重复请求与原命令不一致", debugMessage).WithMetadata("circle_idempotency_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromCircleStorageWriteFailed returns *AppError for CIRCLE.SYSTEM.circle_storage_write_failed (user_message from errors.yaml).
 func AppErrorFromCircleStorageWriteFailed(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrCircleStorageWriteFailed.Error()))
-	return rerrors.NewAppError(code, "圈子操作失败，请稍后重试", debugMessage).WithMetadata("circle_storage_write_failed", 500).WithRecovery("retry", 0)
+	return rerrors.NewAppError(code, "圈子操作失败，请稍后重试", debugMessage).WithMetadata("circle_storage_write_failed", 500).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromPermissionDenied returns *AppError for CIRCLE.USER.permission_denied (user_message from errors.yaml).
 func AppErrorFromPermissionDenied(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrPermissionDenied.Error()))
-	return rerrors.NewAppError(code, "权限不足", debugMessage).WithMetadata("forbidden", 403).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "权限不足", debugMessage).WithMetadata("forbidden", 403).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromInternalError returns *AppError for CIRCLE.SYSTEM.internal_error (user_message from errors.yaml).
 func AppErrorFromInternalError(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrInternalError.Error()))
-	return rerrors.NewAppError(code, "服务异常，请稍后重试", debugMessage).WithMetadata("internal_error", 500).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "服务异常，请稍后重试", debugMessage).WithMetadata("internal_error", 500).WithRecoveryDirective("surface", "inlineCard", 0)
 }

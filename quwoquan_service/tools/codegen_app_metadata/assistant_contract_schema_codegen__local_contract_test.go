@@ -47,6 +47,58 @@ func TestAssistantSkillManifestCodegenIncludesCanonicalPackageProfiles(t *testin
 	}
 }
 
+// spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/trajectory-replay-evaluation-gate/spec.md#gwt-001
+func TestAssistantPackageSchemaUsesRelativeSiblingImports(t *testing.T) {
+	schema := &assistantContractSchema{
+		DartClass:   "AssistantPresentationDocumentWire",
+		LibraryPath: "package:quwoquan_cloud_contracts/src/generated/assistant/assistant_presentation_document.g.dart",
+		Imports:     []string{"assistant_presentation_node.g.dart"},
+		Fields: []assistantContractField{
+			{
+				Name: "nodes",
+				Type: "list<object>",
+				Ref:  "AssistantPresentationNodeWire",
+			},
+		},
+	}
+	index := &assistantContractIndex{
+		libraryByClass: map[string]string{
+			"AssistantPresentationNodeWire": "package:quwoquan_cloud_contracts/src/generated/assistant/assistant_presentation_node.g.dart",
+		},
+		fieldsByClass: map[string][]assistantContractField{},
+	}
+	rendered := renderAssistantSchemaDrivenContract(
+		schema,
+		index,
+		"assistant/assistant_presentation_document/schema.yaml",
+	)
+	if strings.Count(rendered, "import 'assistant_presentation_node.g.dart';") != 1 {
+		t.Fatalf("package-owned schema must import its sibling exactly once:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "package:quwoquan_app/") {
+		t.Fatalf("package-owned schema retained an App reverse dependency:\n%s", rendered)
+	}
+}
+
+// spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/trajectory-replay-evaluation-gate/spec.md#gwt-001
+func TestAssistantRuntimeArtifactOutputPathUsesTheDeclaredOwnerRoot(t *testing.T) {
+	appDir := filepath.Join("workspace", "quwoquan_app")
+	appOutput := assistantRuntimeArtifactOutputPath(
+		appDir,
+		"service/assistant_service/assistant/assistant_run/domain/generated/example.g.dart",
+	)
+	if want := filepath.Join(appDir, "lib", "service", "assistant_service", "assistant", "assistant_run", "domain", "generated", "example.g.dart"); appOutput != want {
+		t.Fatalf("App-owned Assistant output = %q, want %q", appOutput, want)
+	}
+	packageOutput := assistantRuntimeArtifactOutputPath(
+		appDir,
+		"packages/quwoquan_cloud_contracts/lib/src/generated/assistant/example.g.dart",
+	)
+	if want := filepath.Join(appDir, "packages", "quwoquan_cloud_contracts", "lib", "src", "generated", "assistant", "example.g.dart"); packageOutput != want {
+		t.Fatalf("package-owned Assistant output = %q, want %q", packageOutput, want)
+	}
+}
+
 func TestAssistantRequiredObjectDecoderFailsClosedWhenMissing(t *testing.T) {
 	field := assistantContractField{
 		Name:     "destination",
@@ -185,7 +237,7 @@ func TestAssistantTurnImportsCanonicalPreferenceSnapshot(t *testing.T) {
 		"assistant/assistant_turn/schema.yaml",
 	)
 	for _, expected := range []string{
-		"import 'package:quwoquan_app/assistant/contracts/assistant_preference_snapshot.dart';",
+		"import 'package:quwoquan_app/service/assistant_service/assistant/assistant_preference/domain/assistant_preference_snapshot.dart';",
 		"this.sessionPreferences = const <AssistantPreferenceSnapshot>[]",
 		"this.longTermPreferences = const <AssistantPreferenceSnapshot>[]",
 		"final List<AssistantPreferenceSnapshot> sessionPreferences",

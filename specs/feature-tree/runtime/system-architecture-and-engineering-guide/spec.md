@@ -14,7 +14,8 @@
 
 - service-local contracts 与 context/object/layer 物理路径唯一反向映射
 - 从服务本地契约扫描发现全部 context、独立对象根、聚合成员及五类 object kind，不维护冻结数量清单
-- 服务源码、metadata 和服务测试目录统一
+- 服务与 App 源码、metadata 和三层测试按同一 domain/context/object 身份反向映射
+- App 业务纵切、页面 source owner/participants、层间依赖和唯一 composition root
 - 服务自治 config/resources/deploy、四环境差异、secret reference 与 release package 边界
 - 服务四环境 Kustomize 入口与 Ops 可执行装配闭环
 - 外部 capability、environment binding、adapter/workload 与 conformance evidence 闭环
@@ -86,11 +87,17 @@
 ### REQ-002 服务目录、DDD 依赖与 CQRS 规则
 
 - 任意服务文件符合 services/<service>/internal/<context>/<object>/<layer>/file，domain 唯一来自服务 contracts/domain.yaml
+- 任意 App 业务文件符合 `quwoquan_app/lib/<domain>/<context>/<object>/<layer>/file`，其中 layer 只允许 domain、application、adapters、presentation；domain/context/object 必须来自 canonical ContractGraph 与所属 L1 工程归属，禁止由文件名启发式、人工 registry 或旧目录别名决定 owner。
+- App 的 `runtime`、`design_system` 与 `l10n` 是唯一横切根；业务对象不得落入旧 `ui/cloud/core/app/application/infrastructure` 大桶，横切根也不得成为无 owner 业务文件的 fallback。
+- App 层义务按 canonical 端侧能力事实派生：App-exposed operation 要求 application/adapters，页面认领要求 application/presentation，端侧不变式或状态机才要求 domain；未被 App 消费的纯云对象不要求 App 空目录或占位实现，append-only fact 不直接拥有 presentation。
+- 每个页面必须声明唯一 source owner，并保留全部 participant object；页面物理文件位于 source owner 的 presentation，其他 participant 只经公开 application port/facade 参与，移动文件不得删除语义参与关系。
 - 任意声明 api_routes 的对象必须有同 context/object 源码 owner，禁止将实现集中到同服务“主对象”目录或用空占位冒充实现
 - 每个源码对象有唯一 service owner，不存在跨服务 internal import
 - domain 对 HTTP、数据库、MQ、配置框架和 generated transport DTO 的依赖数量为零
 - infrastructure 不被 domain/application/adapters 反向依赖
 - 对象 adapters/infrastructure 不被兄弟对象导入；跨对象仅经 domain/application port 或事件协作，adapter 组合只发生在 cmd
+- App 依赖方向只允许 presentation 使用 application/domain、application 使用自身 domain、adapters 实现 application port 并使用 domain；具体 adapter 只在 `runtime/di` 组合，presentation 不得导入具体 adapter，domain 不得依赖 Flutter、IO、generated transport 或其他层。
+- App 跨对象协作只经显式公开 port/facade/event；兄弟对象私有层、barrel re-export、旧路径 shim、双轨 import 和兼容 fallback 数量均为零。
 - command 写 projection/external_reference/append_only_fact update-delete 的违规数量为零
 - query 使用 named reader/slice，runtime session 绑定同 packet session owner
 - generated 只存在于服务根 generated/<context>/<object>，internal 下生成产物数量为零
@@ -138,11 +145,12 @@
 ### REQ-006 三层证据与 readiness 计算
 
 - UAT/DOM/SIT/GWT 仅在所属节点定义，真实测试直接写稳定 `spec_ref`，不登记测试文件路径清单
-- runner 可由 `spec_ref` 定位实际测试、结果、环境和 commit/config/image 摘要
+- App 三层测试与生产对象同构为 `test/<layer>/<domain>/<context>/<object>`；服务 local_contract/api_integration 与生产对象同构为 `tests/<layer>/<context>/<object>`，`support` 只承载 harness、fixture factory 和 typed double 定义，不承载测试用例或生产成功事实。
+- runner 可由 `spec_ref` 定位实际测试、结果、环境和 commit/config/image 摘要；测试入口的路径与摘要属于结构证据，实际 CaseResult、环境和用户验收回执属于结果证据，两类必须分字段且不得互相替代。
 - local_contract 覆盖对象规则、kind、mapper/provider/widget 本地行为
 - api_integration 覆盖真实 HTTP/WS、字段、错误、鉴权、存储与 adapter 边界
 - user_acceptance 覆盖 Journey/Scenario、环境行为和用户可见恢复动作
-- readiness 由 runner 结果计算，metadata 不声明 implemented/commercial-ready
+- readiness 由静态结构证据与 runner 结果证据分阶段计算，metadata source 不手写 implemented/commercial-ready；文件存在最多证明结构入口，不产生通过结果
 - gamma/prod 当前证据缺失时结论保持 structure-governance-complete 或更低
 
 <a id="req-007"></a>
@@ -179,11 +187,15 @@
 - GIVEN 执行“服务目录、DDD 依赖与 CQRS 规则”所需的身份、输入与上游事实均有效。
 - WHEN 参与者发起“服务目录、DDD 依赖与 CQRS 规则”对应动作。
 - THEN 任意服务文件符合 services/<service>/internal/<context>/<object>/<layer>/file，domain 唯一来自服务 contracts/domain.yaml
+- THEN 任意 App 业务文件都能按 domain/context/object/layer 精确反向定位到 canonical 对象和唯一 L1 owner，旧业务大桶、人工 owner registry、无 owner 文件与占位层均不存在
+- THEN App 必需层由 operation、页面认领与端侧不变式等 canonical 能力事实派生，纯云对象不会为目录完整性生成空 App 实现，append-only fact 不直接拥有 presentation
+- THEN 每个页面有唯一 source owner 且保留全部 participant object，多对象页面只经 participant 的公开 application 边界组合
 - THEN 任意声明 api_routes 的对象均有同 context/object 源码 owner，且不存在借住主对象目录或空占位的实现
 - THEN 每个源码对象有唯一 service owner，不存在跨服务 internal import
 - THEN domain 对 HTTP、数据库、MQ、配置框架和 generated transport DTO 的依赖数量为零
 - THEN infrastructure 不被 domain/application/adapters 反向依赖
 - THEN 对象 adapters/infrastructure 不被兄弟对象导入；跨对象仅经 domain/application port 或事件协作，adapter 组合只发生在 cmd
+- THEN App 的 domain/application/adapters/presentation 依赖方向、跨对象公开边界和唯一 `runtime/di` composition root 均成立，旧路径 shim、barrel re-export 与双轨 import 均不存在
 - THEN command 写 projection/external_reference/append_only_fact update-delete 的违规数量为零
 - THEN query 使用 named reader/slice，runtime session 绑定同 packet session owner
 - THEN generated 只存在于服务根 generated/<context>/<object>，internal 下生成产物数量为零
@@ -238,11 +250,12 @@
 - GIVEN 执行“三层证据与 readiness 计算”所需的身份、输入与上游事实均有效。
 - WHEN 参与者发起“三层证据与 readiness 计算”对应动作。
 - THEN UAT/DOM/SIT/GWT 仅在所属节点定义，真实测试直接写稳定 `spec_ref`，不登记测试文件路径清单
-- THEN runner 可由 `spec_ref` 定位实际测试、结果、环境和 commit/config/image 摘要
+- THEN App 与服务测试均按生产对象身份同构落位，support 只提供共享 harness 或 typed double 且不承载测试用例
+- THEN runner 可由 `spec_ref` 定位实际测试、结果、环境和 commit/config/image 摘要，结构证据与执行结果使用不同字段且文件存在不会被解释为通过
 - THEN local_contract 覆盖对象规则、kind、mapper/provider/widget 本地行为
 - THEN api_integration 覆盖真实 HTTP/WS、字段、错误、鉴权、存储与 adapter 边界
 - THEN user_acceptance 覆盖 Journey/Scenario、环境行为和用户可见恢复动作
-- THEN readiness 由 runner 结果计算，metadata 不声明 implemented/commercial-ready
+- THEN readiness 由静态结构证据与 runner 结果证据分阶段计算，metadata source 不手写 implemented/commercial-ready，且文件存在不会产生通过结果
 - THEN gamma/prod 当前证据缺失时结论保持 structure-governance-complete 或更低
 
 ## 8. 开放事项
@@ -261,8 +274,8 @@
 
 - 类型：`capability_gap`
 - 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：任意服务文件符合 services/<service>/internal/<context>/<object>/<layer>/file，domain 唯一来自服务 contracts/domain.yaml
+- 准出影响：`block`
+- 影响或价值：当前服务对象目录已形成稳定基线，但 App 仍处于旧业务大桶与对象纵切并存状态，尚不能证明全部业务文件精确归属、能力驱动层义务、页面 source owner/participants、依赖 DAG 与零 shim 同时成立。
 - 完成判定：`SIT-002` 对应行为满足且真实测试 `spec_ref` 有效
 
 <a id="open-003"></a>
@@ -297,6 +310,6 @@
 
 - 类型：`capability_gap`
 - 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：acceptance 仅登记稳定 case ID，不登记测试文件路径
+- 准出影响：`block`
+- 影响或价值：当前三层入口和静态 evidence 尚不能分别证明 App 与服务的对象级测试完整性，也没有把结构入口与 runner CaseResult、四环境和用户验收回执完整分字段承载；缺结果证据时不得把对象升为 commercial-ready。
 - 完成判定：`SIT-006` 对应行为满足且真实测试 `spec_ref` 有效

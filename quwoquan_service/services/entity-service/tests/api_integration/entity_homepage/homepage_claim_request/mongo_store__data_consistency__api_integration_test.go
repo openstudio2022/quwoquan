@@ -1,4 +1,7 @@
 // spec_ref: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/homepage-claim-request-and-review/spec.md#gwt-001
+// readiness_case: list-homepage-claim-requests-api
+// readiness_case: create-homepage-claim-request-api
+// readiness_case: review-homepage-claim-request-api
 package api_integration
 
 import (
@@ -72,7 +75,7 @@ func TestHomepageClaimRequestMongoPacket(t *testing.T) {
 	}
 	defer func() { _ = client.Disconnect(context.Background()) }()
 
-	store := claimpersistence.NewMongoStore(client.Database("entity_claim_packet_it"), true)
+	store := claimpersistence.NewMongoStore(client.Database("entity_claim_packet_it"))
 	if err := store.EnsureIndexes(ctx); err != nil {
 		t.Fatalf("ensure claim indexes: %v", err)
 	}
@@ -135,6 +138,14 @@ func TestHomepageClaimRequestMongoPacket(t *testing.T) {
 	})
 	if err != nil || approved.Version != 2 {
 		t.Fatalf("approve claim through transaction: %+v err=%v", approved, err)
+	}
+	queue, err := facade.ListQueue(ctx, claimapp.QueueQuery{
+		Status: claimmodel.StatusApproved,
+		Limit:  20,
+	})
+	if err != nil || len(queue.Items) != 1 ||
+		queue.Items[0].ClaimRequestID != approved.ClaimRequestID {
+		t.Fatalf("list approved claim queue through MongoDB: %+v err=%v", queue, err)
 	}
 	noop, err := facade.Review(claimContext("claim-review-noop"), claimapp.ReviewCommand{
 		HomepageID:     created.HomepageID,

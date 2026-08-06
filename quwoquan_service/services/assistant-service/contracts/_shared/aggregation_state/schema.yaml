@@ -1,6 +1,6 @@
 dart_class: AggregationStateDto
-library_path: assistant/contracts/aggregation_state.dart
-output_path: assistant/generated/contracts/aggregation_state.g.dart
+library_path: service/assistant_service/assistant/assistant_run/domain/aggregation_state.dart
+output_path: service/assistant_service/assistant/assistant_run/domain/generated/aggregation_state.g.dart
 contract: aggregation_state
 kind: runtime_policy_contract
 fields:

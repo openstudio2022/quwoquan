@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/execution_state_event.schema.json",
+  "title": "Execution state append-only delta event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "executionId",
+    "sequence",
+    "previousEventDigest",
+    "previousSnapshotDigest",
+    "resultSnapshotDigest",
+    "createdAt",
+    "stateDelta",
+    "eventDigest"
+  ],
+  "properties": {
+    "schema": {
+      "const": "quwoquan.content.execution_state_event"
+    },
+    "executionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "previousEventDigest": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "previousSnapshotDigest": {
+      "type": "string",
+      "pattern": "^(absent|sha256:[a-f0-9]{64})$"
+    },
+    "resultSnapshotDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "createdAt": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stateDelta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "set",
+        "remove"
+      ],
+      "properties": {
+        "set": {
+          "type": "object"
+        },
+        "remove": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "eventDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    }
+  }
+}

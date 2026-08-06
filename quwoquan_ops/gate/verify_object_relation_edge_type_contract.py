@@ -20,9 +20,13 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 TYPES_PATH = ROOT / "quwoquan_service/contracts/metadata/_shared/types.yaml"
 GO_PATH = ROOT / "quwoquan_service/runtime/recommendation/object_relation_edge_type.go"
-DART_PATH = ROOT / "quwoquan_app/lib/core/models/object_relation_edge_type.dart"
+DART_PATH = (
+    ROOT
+    / "quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/entity/"
+    "entity_operation_contracts.g.dart"
+)
 DART_LABEL_PATH = (
-    ROOT / "quwoquan_app/lib/components/object_page/object_page_sections.dart"
+    ROOT / "quwoquan_app/lib/design_system/object_page/object_page_sections.dart"
 )
 ENUM_NAME = "ObjectRelationEdgeType"
 
@@ -84,6 +88,7 @@ def load_go_values(path: Path) -> tuple[str, ...]:
 
 
 def load_dart_values(path: Path) -> tuple[str, ...]:
+    """Read the generated Cloud-contract enum, never an App-owned copy."""
     source = path.read_text(encoding="utf-8")
     match = re.search(
         rf"enum {ENUM_NAME} \{{(?P<body>.*?)\n\s*const {ENUM_NAME}",
@@ -92,7 +97,7 @@ def load_dart_values(path: Path) -> tuple[str, ...]:
     )
     if match is None:
         raise ValueError(f"{path.relative_to(ROOT)} {ENUM_NAME} is missing")
-    return tuple(re.findall(r"\b\w+\('([^']+)'\)[,;]", match.group("body")))
+    return tuple(re.findall(r'\b\w+\("([^"]+)"\)[,;]', match.group("body")))
 
 
 def load_dart_labelled_values(path: Path) -> tuple[str, ...]:

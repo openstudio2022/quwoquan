@@ -1,3 +1,7 @@
+// readiness_case: like-post-local
+// readiness_case: unlike-post-local
+// readiness_case: react-to-comment-local
+// readiness_case: get-content-reaction-state-local
 // spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-006
 package reaction_test
 
@@ -8,11 +12,11 @@ import (
 	"testing"
 	"time"
 
+	"quwoquan_service/runtime/commandmeta"
 	reactionerrors "quwoquan_service/services/content-service/generated/content/content_reaction"
 	reactionapp "quwoquan_service/services/content-service/internal/content/content_reaction/application/reaction"
 	reactiondomain "quwoquan_service/services/content-service/internal/content/content_reaction/domain/reaction"
 	reactionports "quwoquan_service/services/content-service/internal/content/content_reaction/domain/reaction/ports"
-	"quwoquan_service/runtime/commandmeta"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/testsupport"
 )
 
@@ -98,6 +102,21 @@ func TestContentReaction_ReaderReturnsSliceWithoutAggregateLeak(t *testing.T) {
 		if _, exists := sliceType.FieldByName(forbidden); exists {
 			t.Fatalf("reader slice must not leak %s", forbidden)
 		}
+	}
+
+	unliked, err := service.UnlikePost(
+		commandmeta.WithIdempotencyKey(context.Background(), "reaction-read-unlike"),
+		reactionapp.UnlikePostCommand{PostID: "post-reader", Actor: actor},
+	)
+	if err != nil || !unliked.Changed || unliked.Liked {
+		t.Fatalf("unlike result=%+v err=%v", unliked, err)
+	}
+	cleared, err := service.GetContentReactionState(
+		context.Background(),
+		reactionapp.GetContentReactionStateQuery{PostID: "post-reader", Actor: actor},
+	)
+	if err != nil || !cleared.Found || cleared.Liked || cleared.Version != unliked.Version {
+		t.Fatalf("cleared reader slice=%+v err=%v", cleared, err)
 	}
 }
 

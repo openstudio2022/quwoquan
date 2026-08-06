@@ -1,73 +1,28 @@
-description: HomepageSearchItemView 只由 Homepage 的 typed 公共事件投影。
-api_routes:
-- method: GET
-  path: /homepages/search
-  operation: SearchHomepages
-  actor: none
-  commercial:
-    status: ready
-  authorization:
-    principal: public
-    ownership_policy: published_homepage_search
-  reliability:
-    timeout_ms: 6000
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: optional
-  error_codes:
-  - ENTITY.USER.invalid_argument
-  - ENTITY.SYSTEM.internal_error
-  privacy:
-    request_classification: PUBLIC
-    response_classification: PUBLIC
-    log_policy: metadata_only
-  telemetry:
-    metric: entity_homepage_search
-    trace: true
-    attributes: [homepage_type, outcome]
-  slo:
-    latency_p95_ms: 300
-    availability_percent: 99.5
-  security:
-    auth_mode: optional
-    principal: public
-    token_transport: bearer
-    anonymous_policy: allow
-    visibility: public
-  application:
-    kind: query
-    facet: HomepageSearchItemViewQueryFacade
-    method: search
-    reader: HomepageSearchItemViewReader
-    slice: HomepageSearchSlice
-  description: 搜索公开的共享主页投影
-  request_bindings:
-    query:
-    - {name: query, field: query}
-    - {name: homepageType, field: homepageType, required: false}
-    - {name: city, field: city, required: false}
-    - {name: status, field: status, required: false}
-    - {name: cursor, field: cursor, required: false}
-    - {name: limit, field: limit}
-  response_entity: HomepageSearchSlice
-  request_entity: HomepageSearchQuery
-  request_body_kind: none
+description: HomepageSearchItemView 只由 Homepage 的 typed 公共事件投影，不拥有 HTTP 查询入口。
+api_routes: []
 runtime_entrypoints:
 - name: ProjectHomepageSearchItem
   kind: projector
   phase: event_projection
-  source_events:
-  - entity.HomepageCreated
-  - entity.HomepageUpdated
-  - entity.HomepagePublished
-  - entity.HomepageRetired
-  checkpoint: homepage_outbox_sequence
-  rebuild: replay_homepage_public_outbox
-  tombstone: delete_search_item_keep_checkpoint
-  idempotency: aggregate_version
   application:
     kind: command
     facet: HomepageSearchItemViewProjector
     method: apply
     object_owner: HomepageSearchItemView
+readiness_cases:
+- case_id: project-homepage-search-item-local
+  spec_ref: specs/feature-tree/shared-homepage-network/homepage-discovery-and-attach/homepage-search-and-picker/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target: {kind: object, id: entity.homepage_search_item_view}
+  runner_source_path: quwoquan_service/services/entity-service/tests/local_contract/entity_homepage/homepage_search_item_view/projector__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: project-homepage-search-item-api
+  spec_ref: specs/feature-tree/shared-homepage-network/homepage-discovery-and-attach/homepage-search-and-picker/spec.md#gwt-001
+  producer: service
+  layer: api_integration
+  target: {kind: object, id: entity.homepage_search_item_view}
+  runner_source_path: quwoquan_service/services/entity-service/tests/api_integration/entity_homepage/homepage_search_item_view/mongo_es_projection__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb-https-search-substitute, digest_binding: candidate}

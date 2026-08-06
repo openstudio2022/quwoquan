@@ -3,12 +3,6 @@ package circlegroup
 
 import "time"
 
-// GeoPoint represents a geographic coordinate.
-type GeoPoint struct {
-	Latitude  float64 `json:"latitude" bson:"latitude"`
-	Longitude float64 `json:"longitude" bson:"longitude"`
-}
-
 var _ = time.Now
 
 // CircleGroupJoinPolicy enumerates allowed wire values for CircleGroupJoinPolicy.

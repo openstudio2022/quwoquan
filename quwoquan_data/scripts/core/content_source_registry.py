@@ -19,8 +19,6 @@ VALID_SOURCE_TIERS = (
     "tier5_reject",
 )
 VALID_WORKS_AFFINITIES = ("work_strong", "work", "neutral", "moment", "reject")
-
-
 def load_content_source_registry() -> dict[str, Any]:
     if not CONTENT_SOURCE_REGISTRY_PATH.is_file():
         raise FileNotFoundError(f"missing content source registry: {CONTENT_SOURCE_REGISTRY_PATH}")
@@ -46,8 +44,6 @@ def content_source_catalog_digest(
 
 def _as_list(value: Any) -> list[Any]:
     return value if isinstance(value, list) else []
-
-
 def _as_string_set(value: Any) -> set[str]:
     return {
         str(item).strip().casefold()
@@ -61,8 +57,6 @@ def _matches_policy_token(text: str, tokens: set[str]) -> bool:
     if not lowered:
         return False
     return any(token and token in lowered for token in tokens)
-
-
 def _homepage_lane_policy(data: Mapping[str, Any]) -> Mapping[str, Any]:
     lane_policies = data.get("lanePolicies") if isinstance(data.get("lanePolicies"), dict) else {}
     policy = lane_policies.get("homepage")
@@ -166,8 +160,6 @@ def homepage_primary_authority_rank(source_kind: str) -> int:
     from core.baike_source_contract import SOURCE_AUTHORITY_RANKS
 
     return SOURCE_AUTHORITY_RANKS.get(str(source_kind or "").strip(), 100)
-
-
 def homepage_core_source_limit() -> int:
     value = _homepage_lane_policy(load_content_source_registry()).get("maxCoreSources")
     if isinstance(value, bool) or not isinstance(value, int) or value < 1:
@@ -300,6 +292,9 @@ def verify_content_source_registry(
     allowed_roles = {str(item) for item in _as_list(allowed.get("defaultRoles"))}
     allowed_fetch_modes = {str(item) for item in _as_list(allowed.get("fetchModes"))}
     allowed_rights = {str(item) for item in _as_list(allowed.get("rightsPolicies"))}
+    allowed_acquisition_paths = {
+        str(item) for item in _as_list(allowed.get("researchAcquisitionPaths"))
+    }
     required = {
         "sourceId",
         "platform",
@@ -340,6 +335,25 @@ def verify_content_source_registry(
         rights = str(row.get("rightsPolicy") or "").strip()
         if rights and rights not in allowed_rights:
             issues.append(f"{prefix}: unknown rightsPolicy {rights}")
+        acquisition_paths = {
+            str(item).strip()
+            for item in _as_list(row.get("researchAcquisitionPaths"))
+            if str(item).strip()
+        }
+        unknown_acquisition_paths = sorted(acquisition_paths - allowed_acquisition_paths)
+        if unknown_acquisition_paths:
+            issues.append(
+                f"{prefix}: unknown researchAcquisitionPaths {unknown_acquisition_paths}"
+            )
+        if source_id in {"pinterest", "tuchong"} and acquisition_paths != {
+            "public_direct",
+            "supported_api",
+            "manual_file",
+        }:
+            issues.append(
+                f"{prefix}: professional research source must declare public_direct, "
+                "supported_api and manual_file acquisition paths"
+            )
         prompt_facts = row.get("promptFacts")
         if not isinstance(prompt_facts, list) or not all(str(item).strip() for item in prompt_facts):
             issues.append(f"{prefix}: promptFacts must be a non-empty string list")
@@ -480,6 +494,11 @@ def build_content_source_guidance(vertical: str = "travel") -> dict[str, Any]:
                     "defaultRole": str(row.get("defaultRole") or ""),
                     "fetchMode": str(row.get("fetchMode") or ""),
                     "rightsPolicy": str(row.get("rightsPolicy") or ""),
+                    "researchAcquisitionPaths": [
+                        str(item)
+                        for item in _as_list(row.get("researchAcquisitionPaths"))
+                        if str(item).strip()
+                    ],
                     "rateLimit": str(row.get("rateLimit") or ""),
                     "promptFacts": [str(item) for item in _as_list(row.get("promptFacts"))],
                     "scope": str(row.get("scope") or ""),
@@ -561,10 +580,12 @@ def render_lane_source_prompt(
             )
         else:
             lines.append(
-                f"至少形成 {int(per_target_image_works or 1)} 个图片作品容量；"
-                "Pinterest、小红书、微博、抖音、B站等可做发现；其中 Pinterest 只有在 "
-                "attribution_no_watermark 证据链完整时才可进入 collections，其他来源未形成逐图授权链不得进入 collections。"
+                f"至少形成 {int(per_target_image_works or 1)} 个图片作品容量。"
             )
+        lines.append(
+            "Pinterest 与图虫可通过公开直链、平台支持 API 或人工文件进入 research collections；"
+            "取得文件不等于商用授权，必须逐图记录作者、来源、rightsStatus、rightsIssues 与撤换标识。"
+        )
     elif lane == "video":
         lines.append(
             "只做视频素材/参考检索。通用视频平台、素材视频库、官方账号和垂类视频源都可进入发现。"

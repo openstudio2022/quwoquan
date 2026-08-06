@@ -8,6 +8,7 @@ api_routes:
   - method: GET
     path: /circles/{circleId}/groups
     operation: ListCircleGroups
+    pagination: {default_items: 20, maximum_items: 100}
     request_bindings:
       path:
         - name: circleId
@@ -72,6 +73,7 @@ api_routes:
   - method: GET
     path: /circles/{circleId}/groups/search
     operation: SearchCircleGroups
+    pagination: {default_items: 20, maximum_items: 100}
     request_bindings:
       path:
         - name: circleId
@@ -348,7 +350,7 @@ contract_test:
     - actor and group membership BOLA negative cases covered
     - aggregate, command receipt and outbox commit in one real Mongo transaction
     - Reader never exposes aggregate storage identity or derived state as writable fields
-  mock_strategy:
+  test_strategy:
     service_side:
       description: 使用 MongoDB 7 replica set testcontainers，不 mock Store/outbox/Reader
       real_engines:
@@ -375,3 +377,124 @@ contract_test:
           assertions:
             - non-member cannot enumerate private group data
             - reader emits CircleGroupSlice without _id or createdByPersonaId
+readiness_cases:
+  - case_id: project-circle-group-search-local
+    spec_ref: specs/feature-tree/circle-community/spec.md#dom-001
+    producer: service
+    layer: local_contract
+    target: {kind: object, id: circle.circle_group}
+    runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/circle_group/search_projection__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: bind-circle-group-conversation-local
+    spec_ref: specs/feature-tree/circle-community/circle-collaboration-tools/circle-group-chat-binding-sync/spec.md#gwt-002
+    producer: service
+    layer: local_contract
+    target: {kind: object, id: circle.circle_group}
+    runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/circle_group/circle_group_conversation_binding_consumer__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: bind-circle-group-conversation-api
+    spec_ref: specs/feature-tree/circle-community/circle-collaboration-tools/circle-group-chat-binding-sync/spec.md#gwt-002
+    producer: service
+    layer: api_integration
+    target: {kind: object, id: circle.circle_group}
+    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle_group/conversation_binding__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}
+  - case_id: create-circle-group-api
+    spec_ref: specs/feature-tree/circle-community/circle-collaboration-tools/spec.md#sit-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: CreateCircleGroup}
+    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle_group/group_http_mongo__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: list-circle-groups-local
+    spec_ref: specs/feature-tree/circle-community/circle-collaboration-tools/spec.md#sit-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: ListCircleGroups}
+    runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/circle_group/group_facades__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: search-circle-groups-local
+    spec_ref: specs/feature-tree/circle-community/circle-collaboration-tools/spec.md#sit-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: SearchCircleGroups}
+    runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/circle_group/group_facades__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: create-circle-group-local
+    spec_ref: specs/feature-tree/circle-community/circle-collaboration-tools/spec.md#sit-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: CreateCircleGroup}
+    runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/circle_group/group_facades__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: get-circle-group-local
+    spec_ref: specs/feature-tree/circle-community/circle-collaboration-tools/spec.md#sit-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: GetCircleGroup}
+    runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/circle_group/group_facades__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: update-circle-group-local
+    spec_ref: specs/feature-tree/circle-community/circle-collaboration-tools/spec.md#sit-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: UpdateCircleGroup}
+    runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/circle_group/group_facades__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: archive-circle-group-local
+    spec_ref: specs/feature-tree/circle-community/circle-collaboration-tools/spec.md#sit-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: ArchiveCircleGroup}
+    runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/circle_group/group_facades__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: list-circle-groups-api
+    spec_ref: specs/feature-tree/circle-community/circle-collaboration-tools/spec.md#sit-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: ListCircleGroups}
+    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle_group/group_http_mongo__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: search-circle-groups-api
+    spec_ref: specs/feature-tree/circle-community/circle-collaboration-tools/spec.md#sit-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: SearchCircleGroups}
+    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle_group/group_http_mongo__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: get-circle-group-api
+    spec_ref: specs/feature-tree/circle-community/circle-collaboration-tools/spec.md#sit-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: GetCircleGroup}
+    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle_group/group_http_mongo__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: update-circle-group-api
+    spec_ref: specs/feature-tree/circle-community/circle-collaboration-tools/spec.md#sit-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: UpdateCircleGroup}
+    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle_group/group_http_mongo__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: archive-circle-group-api
+    spec_ref: specs/feature-tree/circle-community/circle-collaboration-tools/spec.md#sit-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: ArchiveCircleGroup}
+    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle_group/group_http_mongo__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}

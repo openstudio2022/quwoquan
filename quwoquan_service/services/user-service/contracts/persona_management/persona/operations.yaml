@@ -431,3 +431,153 @@ api_routes:
     response_body: ProfileUpdateSnapshot
     response_body_kind: object
     request_body_kind: object
+  - method: POST
+    path: /internal/user/personas/{personaId}/gathering-host-authority:evaluate
+    operation: EvaluatePersonaGatheringHostAuthority
+    request_bindings:
+      path:
+        - {name: personaId, field: hostSubjectId}
+    actor: none
+    commercial:
+      status: ready
+    application:
+      kind: query
+      facet: PersonaGatheringHostAuthorityQueryFacet
+      method: evaluate
+      reader: PersonaOwnerAuthorityReader
+      slice: PersonaGatheringHostAuthorityEvidence
+    description: Persona canonical owner 验证本人、存续状态、动作、证据版本与撤销状态并签发短时 typed evidence；调用方不得自行判断 Persona 权限。
+    authorization:
+      principal: service
+      ownership_policy: persona_canonical_owner_authority
+      scopes: [user.persona.gathering_host_authority.evaluate]
+    reliability:
+      timeout_ms: 800
+      cancellation: supported
+      retry_mode: none
+      max_attempts: 1
+      idempotency: none
+    error_codes:
+      - USER.USER.invalid_argument
+      - USER.PERSONA.not_found
+      - USER.USER.unauthorized
+      - USER.SYSTEM.internal_error
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: user_persona_gathering_host_authority_evaluate
+      trace: true
+      attributes: [outcome, action]
+    slo:
+      latency_p95_ms: 300
+      availability_percent: 99.9
+    security:
+      auth_mode: required
+      principal: service
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: internal
+    request_entity: PersonaGatheringHostAuthorityEvaluationQuery
+    request_body_kind: object
+    response_entity: PersonaGatheringHostAuthorityEvidence
+    response_body: PersonaGatheringHostAuthorityEvidence
+    response_body_kind: object
+readiness_cases:
+  - case_id: create-persona-local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: CreatePersona}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/persona_management/persona/operation_facades__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: create-persona-api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: CreatePersona}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/persona_management/persona/persona_operations__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgres, digest_binding: candidate}
+  - case_id: update-persona-local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: UpdatePersona}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/persona_management/persona/operation_facades__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: update-persona-api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: UpdatePersona}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/persona_management/persona/persona_operations__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgres, digest_binding: candidate}
+  - case_id: apply-persona-profile-sync-local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: ApplyPersonaProfileSync}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/persona_management/persona/operation_facades__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: apply-persona-profile-sync-api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: ApplyPersonaProfileSync}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/persona_management/persona/persona_operations__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgres, digest_binding: candidate}
+  - case_id: retire-persona-local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/spec.md#gwt-003
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: RetirePersona}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/persona_management/persona/operation_facades__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: retire-persona-api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/spec.md#gwt-003
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: RetirePersona}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/persona_management/persona/persona_operations__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgres, digest_binding: candidate}
+  - case_id: activate-persona-local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: ActivatePersona}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/persona_management/persona/operation_facades__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: activate-persona-api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: ActivatePersona}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/persona_management/persona/persona_operations__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgres, digest_binding: candidate}
+  - case_id: update-user-profile-local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/profile-read-update/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: UpdateUserProfile}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/persona_management/persona/operation_facades__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: update-user-profile-api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/profile-read-update/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: UpdateUserProfile}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/persona_management/persona/persona_operations__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgres, digest_binding: candidate}

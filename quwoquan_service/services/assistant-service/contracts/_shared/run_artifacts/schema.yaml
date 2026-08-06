@@ -1,12 +1,11 @@
 dart_class: RunArtifacts
-library_path: assistant/contracts/run_artifacts.dart
-output_path: assistant/generated/contracts/run_artifacts.g.dart
+library_path: service/assistant_service/assistant/assistant_run/domain/run_artifacts.dart
+output_path: service/assistant_service/assistant/assistant_run/domain/generated/run_artifacts.g.dart
 contract: run_artifacts
 kind: runtime_persistence_contract
 imports:
-  - package:quwoquan_app/assistant/contracts/assistant_journey.dart
+  - package:quwoquan_app/service/assistant_service/assistant/assistant_run/domain/assistant_journey.dart
   - package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart
-  - package:quwoquan_app/assistant/generated/contracts/assistant_presentation_document.g.dart
 fields:
   - { name: displayMarkdown, type: string, default: '' }
   - { name: displayPlainText, type: string, default: '' }

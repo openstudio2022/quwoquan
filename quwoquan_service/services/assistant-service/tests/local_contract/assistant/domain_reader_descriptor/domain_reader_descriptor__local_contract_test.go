@@ -1,4 +1,6 @@
 // spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/domain-reader-connector-grant/spec.md#gwt-001
+// readiness_case: get-domain-reader-descriptor-local
+// readiness_case: list-domain-reader-descriptors-local
 package local_contract
 
 import (
@@ -15,7 +17,7 @@ import (
 )
 
 func TestDescriptorDigestCoversPolicyAndRejectsStaleImmutableDigest(t *testing.T) {
-	descriptor := testDescriptor("travel.trip", "trip.current_context")
+	descriptor := testDescriptor("circle.gathering", "gathering.current_context")
 	if !strings.HasPrefix(descriptor.DescriptorDigest, "sha256:") ||
 		len(descriptor.DescriptorDigest) != len("sha256:")+64 {
 		t.Fatalf("descriptor digest=%q", descriptor.DescriptorDigest)
@@ -44,7 +46,7 @@ func TestDescriptorDigestCoversPolicyAndRejectsStaleImmutableDigest(t *testing.T
 
 func TestCatalogIsImmutableUniqueAndSharedByQueryService(t *testing.T) {
 	first := testDescriptor("assistant.input", "turn.slot")
-	second := testDescriptor("travel.trip", "trip.current_context")
+	second := testDescriptor("circle.gathering", "gathering.current_context")
 	catalog, err := resource.NewCatalog([]model.Descriptor{second, first})
 	if err != nil {
 		t.Fatal(err)
@@ -55,7 +57,7 @@ func TestCatalogIsImmutableUniqueAndSharedByQueryService(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(listed) != 2 || listed[0].DescriptorID != "assistant.input" ||
-		listed[1].DescriptorID != "travel.trip" {
+		listed[1].DescriptorID != "circle.gathering" {
 		t.Fatalf("catalog ordering=%+v", listed)
 	}
 	listed[0].AcceptedSourceKinds[0] = "mutated"
@@ -77,9 +79,9 @@ func TestCatalogIsImmutableUniqueAndSharedByQueryService(t *testing.T) {
 	}
 	detail, err := queries.GetDescriptor(
 		context.Background(),
-		application.GetDescriptorQuery{DescriptorID: "travel.trip"},
+		application.GetDescriptorQuery{DescriptorID: "circle.gathering"},
 	)
-	if err != nil || detail.ResolverRef != "trip.current_context" {
+	if err != nil || detail.ResolverRef != "gathering.current_context" {
 		t.Fatalf("GetDescriptor view=%+v err=%v", detail, err)
 	}
 }
@@ -120,11 +122,11 @@ func testDescriptor(descriptorID string, resolverRef string) model.Descriptor {
 	descriptor, err := model.NewDescriptor(model.Descriptor{
 		DescriptorID:        descriptorID,
 		ResolverRef:         resolverRef,
-		OwnerService:        "travel-service",
-		OwnerOperationRefs:  []string{"travel.trip_timeline_view.GetTripTimeline"},
-		InputSchemaRef:      "travel.GetTripTimelineQuery",
+		OwnerService:        "circle-service",
+		OwnerOperationRefs:  []string{"circle.gathering.GetPublicGathering"},
+		InputSchemaRef:      "circle.GatheringIDQuery",
 		OutputSchemaRef:     "assistant.ContextSegment",
-		ObjectTypeRefs:      []string{"travel.TripTimelineView"},
+		ObjectTypeRefs:      []string{"circle.Gathering"},
 		AcceptedSourceKinds: []string{"domain"},
 		Authority:           generated.AssistantContextAuthorityDomainCanonical,
 		Sensitivity:         generated.AssistantContextSensitivityInternal,

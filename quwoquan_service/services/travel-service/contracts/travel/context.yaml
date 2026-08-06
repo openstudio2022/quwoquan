@@ -1,6 +1,0 @@
-role: core
-access:
-  child_objects: aggregate_root_only
-  commands: aggregate_facade_only
-  cross_context: public_contract_only
-  queries: named_reader_slice_only

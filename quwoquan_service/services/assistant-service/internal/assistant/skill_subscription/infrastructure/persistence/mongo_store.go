@@ -12,7 +12,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
-	rterr "quwoquan_service/runtime/errors"
+	skillgenerated "quwoquan_service/services/assistant-service/generated/assistant/skill_subscription"
 	skillmodel "quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/domain/model"
 )
 
@@ -50,6 +50,11 @@ type outboxDocument struct {
 	Payload          skillmodel.SkillSubscription `bson:"payload"`
 	OccurredAt       time.Time                    `bson:"occurredAt"`
 	PublishedAt      *time.Time                   `bson:"publishedAt,omitempty"`
+	ClaimOwner       string                       `bson:"claimOwner,omitempty"`
+	ClaimUntil       *time.Time                   `bson:"claimUntil,omitempty"`
+	NextAttemptAt    *time.Time                   `bson:"nextAttemptAt,omitempty"`
+	AttemptCount     int                          `bson:"attemptCount,omitempty"`
+	LastErrorCode    string                       `bson:"lastErrorCode,omitempty"`
 }
 
 func (s *MongoStore) EnsureIndexes(ctx context.Context) error {
@@ -75,7 +80,12 @@ func (s *MongoStore) EnsureIndexes(ctx context.Context) error {
 			Options: options.Index().SetName("uq_skill_subscription_outbox_version").SetUnique(true),
 		},
 		{
-			Keys:    bson.D{{Key: "publishedAt", Value: 1}, {Key: "occurredAt", Value: 1}},
+			Keys: bson.D{
+				{Key: "publishedAt", Value: 1},
+				{Key: "nextAttemptAt", Value: 1},
+				{Key: "claimUntil", Value: 1},
+				{Key: "occurredAt", Value: 1},
+			},
 			Options: options.Index().SetName("idx_skill_subscription_outbox_pending"),
 		},
 		{
@@ -150,7 +160,7 @@ func (s *MongoStore) CreateSkillSubscription(
 		if insertErr := s.insertReceipt(txCtx, commandID, commandDigest, "create", stored); insertErr != nil {
 			return nil, insertErr
 		}
-		return nil, s.insertOutbox(txCtx, "SkillSubscriptionCreated", stored, stored.CreatedAt)
+		return nil, s.insertOutbox(txCtx, skillmodel.EventCreated, stored, stored.CreatedAt)
 	})
 	if err != nil {
 		if errors.Is(err, skillmodel.ErrIdempotencyConflict) {
@@ -188,12 +198,12 @@ func (s *MongoStore) ListSkillSubscriptions(ctx context.Context, userID, status 
 	}
 	cur, err := s.coll.Find(ctx, filter, options.Find().SetSort(bson.D{{Key: "updatedAt", Value: -1}}).SetLimit(int64(limit)))
 	if err != nil {
-		return nil, rterr.NewUnavailable(rterr.ModuleAssistant, "读取订阅失败", err.Error())
+		return nil, skillgenerated.AppErrorFromSubscriptionStorageUnavailable("read skill subscription: " + err.Error())
 	}
 	defer cur.Close(ctx)
 	items := []skillmodel.SkillSubscription{}
 	if err := cur.All(ctx, &items); err != nil {
-		return nil, rterr.NewUnavailable(rterr.ModuleAssistant, "解析订阅失败", err.Error())
+		return nil, skillgenerated.AppErrorFromSubscriptionStorageUnavailable("decode skill subscription: " + err.Error())
 	}
 	return items, nil
 }
@@ -319,20 +329,12 @@ func (s *MongoStore) ListActiveSkillSubscriptionsForDelivery(
 			SetLimit(int64(limit)),
 	)
 	if err != nil {
-		return nil, rterr.NewUnavailable(
-			rterr.ModuleAssistant,
-			"读取待投递订阅失败",
-			err.Error(),
-		)
+		return nil, skillgenerated.AppErrorFromSubscriptionStorageUnavailable(err.Error())
 	}
 	defer cursor.Close(ctx)
 	items := []skillmodel.SkillSubscription{}
 	if err := cursor.All(ctx, &items); err != nil {
-		return nil, rterr.NewUnavailable(
-			rterr.ModuleAssistant,
-			"解析待投递订阅失败",
-			err.Error(),
-		)
+		return nil, skillgenerated.AppErrorFromSubscriptionStorageUnavailable(err.Error())
 	}
 	return items, nil
 }
@@ -419,7 +421,7 @@ func (s *MongoStore) UpdateSkillSubscriptionStatus(
 				return nil, updateErr
 			}
 			stored = updated
-			if outboxErr := s.insertOutbox(txCtx, "SkillSubscriptionStatusChanged", stored, stored.UpdatedAt); outboxErr != nil {
+			if outboxErr := s.insertOutbox(txCtx, skillmodel.EventStatusChanged, stored, stored.UpdatedAt); outboxErr != nil {
 				return nil, outboxErr
 			}
 		}
@@ -476,11 +478,7 @@ func (s *MongoStore) BeginSkillSubscriptionDelivery(
 	if errors.Is(err, mongo.ErrNoDocuments) {
 		return skillmodel.SkillSubscription{}, false, nil
 	}
-	return skillmodel.SkillSubscription{}, false, rterr.NewUnavailable(
-		rterr.ModuleAssistant,
-		"更新订阅投递状态失败",
-		err.Error(),
-	)
+	return skillmodel.SkillSubscription{}, false, skillgenerated.AppErrorFromSubscriptionStorageUnavailable(err.Error())
 }
 
 func (s *MongoStore) CompleteSkillSubscriptionDelivery(
@@ -525,7 +523,7 @@ func (s *MongoStore) CompleteSkillSubscriptionDelivery(
 		if updateErr != nil {
 			return nil, updateErr
 		}
-		return nil, s.insertOutbox(txCtx, "SkillSubscriptionTriggered", item, deliveredAt)
+		return nil, s.insertOutbox(txCtx, skillmodel.EventTriggered, item, deliveredAt)
 	})
 	if err != nil {
 		return skillmodel.SkillSubscription{}, unavailable("commit delivery completion transaction", err)
@@ -566,11 +564,7 @@ func (s *MongoStore) RecordSkillSubscriptionDeliveryFailure(
 		options.FindOneAndUpdate().SetReturnDocument(options.After),
 	).Decode(&item)
 	if err != nil {
-		return skillmodel.SkillSubscription{}, rterr.NewUnavailable(
-			rterr.ModuleAssistant,
-			"记录订阅投递失败状态失败",
-			err.Error(),
-		)
+		return skillmodel.SkillSubscription{}, skillgenerated.AppErrorFromSubscriptionStorageUnavailable(err.Error())
 	}
 	return item, nil
 }
@@ -604,11 +598,7 @@ func (s *MongoStore) ClearPendingSkillSubscriptionDelivery(
 		},
 	)
 	if err != nil {
-		return rterr.NewUnavailable(
-			rterr.ModuleAssistant,
-			"清理订阅投递状态失败",
-			err.Error(),
-		)
+		return skillgenerated.AppErrorFromSubscriptionStorageUnavailable(err.Error())
 	}
 	return nil
 }
@@ -678,9 +668,5 @@ func (s *MongoStore) insertOutbox(
 }
 
 func unavailable(operation string, err error) error {
-	return rterr.NewUnavailable(
-		rterr.ModuleAssistant,
-		"订阅存储暂不可用",
-		strings.TrimSpace(operation)+": "+err.Error(),
-	)
+	return skillgenerated.AppErrorFromSubscriptionStorageUnavailable(strings.TrimSpace(operation) + ": " + err.Error())
 }

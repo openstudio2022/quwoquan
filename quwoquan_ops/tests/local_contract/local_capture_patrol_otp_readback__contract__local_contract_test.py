@@ -27,7 +27,7 @@ PATROL_RUNNER = (
 )
 PATROL_DART = (
     ROOT
-    / "quwoquan_app/test/user_acceptance/patrol/user"
+    / "quwoquan_app/test/user_acceptance/service/user_service/account/authentication_challenge"
     / "sms_otp_provider__user_acceptance_test.dart"
 )
 
@@ -68,6 +68,25 @@ class LocalCapturePatrolOtpReadbackContractTest(unittest.TestCase):
             source,
         )
         self.assertIn("QWQ_PROVIDER_UAT_OTP_BROKER_URL", source)
+
+    def test_patrol_dart_accepts_only_exact_https_loopback_broker(self) -> None:
+        source = PATROL_DART.read_text(encoding="utf-8")
+        for required in (
+            "uri.scheme != 'https'",
+            "uri?.host == '127.0.0.1'",
+            "uri?.host == 'localhost'",
+            "!uri.hasAuthority",
+            "!uri.hasPort",
+            "uri.userInfo.isNotEmpty",
+            "uri.path != '/v1/otp'",
+            "uri.hasQuery",
+            "uri.hasFragment",
+            "_validatedOtpBrokerUri(brokerUrl)",
+        ):
+            self.assertIn(required, source)
+        self.assertNotIn("badCertificateCallback", source)
+        self.assertNotIn("http://127.0.0.1", source)
+        self.assertNotIn("http://localhost", source)
 
 
 if __name__ == "__main__":

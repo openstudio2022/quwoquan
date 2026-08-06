@@ -117,6 +117,67 @@ assistantAssistantRunStreamAssistantRunEvents(
             )
         )
 
+    def test_upgrade_operation_requires_descriptor_and_canonical_encoder(self) -> None:
+        source = """
+abstract final class AppCloudOperationUpgradeDescriptors {
+  static final CloudOperationUpgradeDescriptor<realtimeContracts.WebSocketUpgradeRequest>
+      realtimeConnectionWebSocketUpgrade =
+      CloudOperationUpgradeDescriptor<realtimeContracts.WebSocketUpgradeRequest>(
+        operation: appCloudOperationContracts[AppCloudOperationIds.realtimeConnectionWebSocketUpgrade]!,
+        requestEncoder: realtimeContracts.encodeRealtimeConnectionWebSocketUpgradeGeneratedRequest,
+      );
+}
+"""
+
+        self.assertTrue(
+            MODULE._has_typed_upgrade_descriptor(
+                source,
+                request_type="WebSocketUpgradeRequest",
+                method_name="realtimeConnectionWebSocketUpgrade",
+                request_encoder=(
+                    "encodeRealtimeConnectionWebSocketUpgradeGeneratedRequest"
+                ),
+            )
+        )
+
+    def test_upgrade_descriptor_rejects_wrong_encoder_or_dummy_future(self) -> None:
+        descriptor = """
+static final CloudOperationUpgradeDescriptor<
+  realtimeContracts.WebSocketUpgradeRequest
+> realtimeConnectionWebSocketUpgrade = CloudOperationUpgradeDescriptor<
+  realtimeContracts.WebSocketUpgradeRequest
+>(
+  operation: appCloudOperationContracts[
+    AppCloudOperationIds.realtimeConnectionWebSocketUpgrade
+  ]!,
+  requestEncoder: realtimeContracts.encodeWrongRequest,
+);
+"""
+        dummy = """
+Future<void> realtimeConnectionWebSocketUpgrade(
+  realtimeContracts.WebSocketUpgradeRequest request,
+) async {}
+"""
+
+        self.assertFalse(
+            MODULE._has_typed_upgrade_descriptor(
+                descriptor,
+                request_type="WebSocketUpgradeRequest",
+                method_name="realtimeConnectionWebSocketUpgrade",
+                request_encoder=(
+                    "encodeRealtimeConnectionWebSocketUpgradeGeneratedRequest"
+                ),
+            )
+        )
+        self.assertTrue(
+            MODULE._has_typed_method(
+                dummy,
+                response_type="void",
+                method_name="realtimeConnectionWebSocketUpgrade",
+                transport="json",
+            )
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

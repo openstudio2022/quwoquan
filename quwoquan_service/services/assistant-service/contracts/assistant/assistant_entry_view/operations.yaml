@@ -1,4 +1,3 @@
-commercial_defaults: {status: blocked, block_reason: AssistantEntryView 对象源与投影测试尚待本治理波次闭环, gap_id: ASSISTANT_ENTRY_VIEW_MODEL_GOVERNANCE, target_story: app-cloud-business-object-commercial-closure}
 description: AssistantEntryView 的无版本单一入口。
 api_routes:
 - method: GET
@@ -7,7 +6,7 @@ api_routes:
   actor: persona
   request_entity: AssistantEntryQuery
   request_body_kind: none
-  commercial: {status: blocked, block_reason: AssistantEntryView 对象源与投影测试尚待闭环, gap_id: ASSISTANT_ENTRY_VIEW_MODEL_GOVERNANCE, target_story: app-cloud-business-object-commercial-closure}
+  commercial: {status: ready}
   application: {kind: query, facet: AssistantEntryViewQueryFacade, method: getEntry, reader: AssistantEntryViewReader, slice: AssistantEntryResponse}
   request_bindings:
     query: [{name: pageType, field: pageType, required: false}, {name: objectId, field: objectId, required: false}]
@@ -19,3 +18,20 @@ api_routes:
   slo: {latency_p95_ms: 500, availability_percent: 99.5}
   authorization: {principal: persona, ownership_policy: requester_self}
   security: {auth_mode: required, principal: owner, token_transport: bearer, anonymous_policy: deny, visibility: private}
+readiness_cases:
+- case_id: get-assistant-entry-local
+  spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: GetAssistantEntry}
+  runner_source_path: quwoquan_service/services/assistant-service/tests/local_contract/assistant/assistant_entry_view/query_facade__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: get-assistant-entry-api
+  spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-001
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: GetAssistantEntry}
+  runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/assistant_entry_view/query_projection__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}

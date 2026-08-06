@@ -613,6 +613,7 @@ def open_reference_acceptance_session(
     expected_owner = str(row.get("ownerId") or "").strip()
     cached = _try_cached_reference_session(
         base_url,
+        environment=environment,
         target_name=target_name,
         baseline_id=baseline_id,
         package_digest=package_digest,
@@ -631,6 +632,7 @@ def open_reference_acceptance_session(
     try:
         cached = _try_cached_reference_session(
             base_url,
+            environment=environment,
             target_name=target_name,
             baseline_id=baseline_id,
             package_digest=package_digest,
@@ -703,6 +705,7 @@ def open_reference_acceptance_session(
 def _try_cached_reference_session(
     base_url: str,
     *,
+    environment: str,
     target_name: str,
     baseline_id: str,
     package_digest: str,
@@ -720,6 +723,15 @@ def _try_cached_reference_session(
         owner_id=owner_id,
     )
     if cached is None:
+        return None
+    if not _local_access_token_matches_identity(
+        cached.access_token,
+        environment=environment,
+        target_name=target_name,
+        owner_id=cached.owner_id,
+        persona_id=cached.persona_id,
+    ):
+        _clear_reference_session_cache(target_name)
         return None
     try:
         me = request_local_environment_json(
@@ -810,6 +822,14 @@ def _restore_retained_reference_session(
         persona_id=persona_id,
         access_token=token,
     )
+    if not _local_access_token_matches_identity(
+        token,
+        environment=environment,
+        target_name=target_name,
+        owner_id=owner_id,
+        persona_id=persona_id,
+    ):
+        return None
     deadline = datetime.now(timezone.utc).timestamp() + max(1.0, timeout_seconds)
     last_error: Exception | None = None
     while datetime.now(timezone.utc).timestamp() < deadline:
@@ -895,6 +915,80 @@ def _mint_local_access_token(
     ).digest()
     signature = base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
     return signing_input + "." + signature
+
+
+def _local_access_token_matches_identity(
+    token: str,
+    *,
+    environment: str,
+    target_name: str,
+    owner_id: str,
+    persona_id: str,
+) -> bool:
+    """Verify one retained/minted JWT against its target-scoped identity."""
+
+    try:
+        _require_nonprod_target(environment, target_name)
+        auth = prepare_local_environment_auth(environment, target_name)
+        expected_issuer = f"quwoquan.{environment}.local"
+        expected_audience = "quwoquan-app"
+        if (
+            auth.environment["AUTH_JWT_ISSUER"] != expected_issuer
+            or auth.environment["AUTH_JWT_AUDIENCE"] != expected_audience
+        ):
+            return False
+        parts = token.split(".")
+        if len(parts) != 3:
+            return False
+        encoded_header = parts[0] + "=" * (-len(parts[0]) % 4)
+        header = json.loads(
+            base64.urlsafe_b64decode(encoded_header.encode("ascii")).decode("utf-8")
+        )
+        if not isinstance(header, dict) or header.get("alg") != "HS256":
+            return False
+        expected_signature = hmac.new(
+            auth.environment["AUTH_JWT_SECRET"].encode("utf-8"),
+            f"{parts[0]}.{parts[1]}".encode("ascii"),
+            hashlib.sha256,
+        ).digest()
+        encoded_signature = parts[2] + "=" * (-len(parts[2]) % 4)
+        actual_signature = base64.urlsafe_b64decode(encoded_signature.encode("ascii"))
+        if not hmac.compare_digest(actual_signature, expected_signature):
+            return False
+        claims = _decode_local_jwt_claims(
+            token,
+            label="local acceptance access token",
+        )
+        now = int(datetime.now(timezone.utc).timestamp())
+        issued_at = claims.get("iat")
+        not_before = claims.get("nbf")
+        expires_at = claims.get("exp")
+        return bool(
+            claims.get("iss") == expected_issuer
+            and claims.get("aud") == expected_audience
+            and claims.get("tkn") == "access"
+            and claims.get("sub") == owner_id
+            and claims.get("psn") == persona_id
+            and claims.get("ae") == 1
+            and claims.get("ver")
+            == int(auth.environment["AUTH_JWT_TOKEN_VERSION"])
+            and isinstance(issued_at, int)
+            and isinstance(not_before, int)
+            and isinstance(expires_at, int)
+            and issued_at <= now
+            and not_before <= now
+            and expires_at > now
+        )
+    except (
+        KeyError,
+        OSError,
+        RuntimeError,
+        TypeError,
+        ValueError,
+        UnicodeError,
+        json.JSONDecodeError,
+    ):
+        return False
 
 
 def _clear_local_otp_send_throttle(*, target_name: str, phone: str) -> None:

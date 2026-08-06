@@ -35,9 +35,6 @@ relationships:
   on_delete: cascade
   reference_fields: []
   target_object: assistant.AssistantPolicyLearningContextDefinition
-capabilities:
-- auditable
-- idempotent_commands
 business_rules:
 - policyId、releaseDigest、templates、routingRules、learningContextPolicy 和 defaultTemplateId 在 Stage 后不可变
 - templateId 与 ruleId 在 release 内唯一，defaultTemplateId 必须引用同 release 内模板

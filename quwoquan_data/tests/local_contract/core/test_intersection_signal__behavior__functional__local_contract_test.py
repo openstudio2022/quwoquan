@@ -37,7 +37,12 @@ from core.intersection_signal import (  # noqa: E402
 )
 from content.post.article.draft_io import write_agent_draft  # noqa: E402
 from core.io import read_json, write_json  # noqa: E402
-from core.paths import execution_command_root, ensure_execution_command_layout, ensure_execution_layout  # noqa: E402
+from core.paths import (  # noqa: E402
+    ensure_execution_command_layout,
+    ensure_execution_layout,
+    execution_command_root,
+    execution_root,
+)
 from content.execution.stage_reports import write_stage_result  # noqa: E402
 from content.post.materialize_apply import materialize_posts  # noqa: E402
 
@@ -113,6 +118,27 @@ def _seed_and_materialize() -> Path:
     if posts.exists():
         shutil.rmtree(posts)
     ref = "九寨沟"
+    source_dir = (
+        execution_root(task)
+        / "entities/地点/景区/九寨沟/1.download/sources/001-intersection"
+    )
+    source_dir.mkdir(parents=True, exist_ok=True)
+    (source_dir / "source.md").write_text(
+        "九寨沟看水攻略的测试底稿。" * 80,
+        encoding="utf-8",
+    )
+    write_json(
+        source_dir / "meta.json",
+        {
+            "title": "九寨沟看水攻略",
+            "platform": "local_contract",
+            "assetCount": 0,
+        },
+    )
+    write_json(source_dir / "assets/index.json", {"assets": []})
+    base_source_ref = (
+        (source_dir / "source.md").relative_to(execution_root(task)).as_posix()
+    )
     from content.post.object_index import register_content_object
     register_content_object(task, ref, content_type="article", angle="攻略", title="九寨沟看水攻略")
     write_stage_result(task, "post", "review", ref, {"decision": "approved"})
@@ -127,6 +153,8 @@ def _seed_and_materialize() -> Path:
             "title": "九寨沟看水攻略",
             "publishTitle": "九寨沟看水攻略",
             "carrier": "article",
+            "baseSourceRef": base_source_ref,
+            "publishMediaMode": "text_only",
             "entityRefs": ["/entity/地点/景区/九寨沟"],
             "normalizedEntityRefs": ["entity:景区:九寨沟"],
             "tagRefs": ["主题/山水风光", "Format/内容角度/攻略"],
@@ -139,7 +167,7 @@ def _seed_and_materialize() -> Path:
         ref,
         article,
         model="test-agent/intersection",
-        cited_source_paths=[],
+        cited_source_paths=[base_source_ref],
         covered_facts=[],
         agent_run_id="run-intersection",
         agent_id="agent-intersection",

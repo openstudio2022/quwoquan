@@ -5,7 +5,7 @@
 // evidenceRank / iconKey / route / asset / actionKeys / actionLabel switch（§23 去桥接）。
 //
 // 与端侧 Dart codegen (tools/codegen_app_metadata) 共用 tools/recintersectionmeta 解析层，
-// registry 是唯一真相源；门禁 scripts/recommendation/verify_intersection_kind_registry.py
+// registry 是唯一真相源；门禁 scripts/recommendation-service/recommendation/recommendation_model_release/verify_intersection_kind_registry.py
 // 校验本产物逐字段 == registry，禁止手改生成文件。
 package main
 

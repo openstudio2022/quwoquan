@@ -1,3 +1,6 @@
+# spec_ref: specs/feature-tree/recommendation-platform/spec.md#dom-001
+# readiness_case: stage-model-release-local
+# readiness_case: activate-model-release-local
 from __future__ import annotations
 
 import hashlib

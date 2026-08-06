@@ -1,5 +1,3 @@
-domain: ASSISTANT
-aggregate: SkillSubscription
 description: 'SkillSubscription 聚合错误码。格式：MODULE.KIND.REASON。
 
   覆盖订阅创建、状态迁移与调度租约。
@@ -7,131 +5,122 @@ description: 'SkillSubscription 聚合错误码。格式：MODULE.KIND.REASON。
   '
 errors:
 - code: ASSISTANT.USER.subscription_unauthorized
-  kind: USER
   reason: subscription_unauthorized
   http_status: 401
   emitted_by:
   - surface: http
     operations: [ListSkillSubscriptions, CreateSkillSubscription, GetSkillSubscription, UpdateSkillSubscriptionStatus]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: subscriptionUnauthorized
   go_const: ErrSubscriptionUnauthorized
-  l10n_key: assistant.error.subscription_unauthorized
   user_message:
     zh: 请先登录后管理技能订阅
     en: Please sign in to manage skill subscriptions
 - code: ASSISTANT.USER.subscription_not_found
-  kind: USER
   reason: not_found
   http_status: 404
   emitted_by:
   - surface: http
     operations: [GetSkillSubscription, UpdateSkillSubscriptionStatus]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: subscriptionNotFound
   go_const: ErrSubscriptionNotFound
-  l10n_key: assistant.error.subscription_not_found
   user_message:
     zh: 订阅不存在或已删除
     en: Subscription not found or removed
 - code: ASSISTANT.USER.subscription_invalid_argument
-  kind: USER
   reason: invalid_argument
   http_status: 400
   emitted_by:
   - surface: http
     operations: [CreateSkillSubscription, UpdateSkillSubscriptionStatus, TickSkillSubscriptionCron]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: subscriptionInvalidArgument
   go_const: ErrSubscriptionInvalidArgument
-  l10n_key: assistant.error.subscription_invalid_argument
   user_message:
     zh: 订阅请求参数有误
     en: Subscription request is invalid
 - code: ASSISTANT.USER.subscription_invalid_transition
-  kind: USER
   reason: invalid_transition
   http_status: 409
   emitted_by:
   - surface: http
     operations: [UpdateSkillSubscriptionStatus]
-  recovery_action: refresh
+  recovery_action: retry
+  disruption_level: snackbar
   dart_const: subscriptionInvalidTransition
   go_const: ErrSubscriptionInvalidTransition
-  l10n_key: assistant.error.subscription_invalid_transition
   user_message:
     zh: 订阅状态已变化，请刷新后重试
     en: Subscription state changed, please refresh and retry
 - code: ASSISTANT.USER.subscription_idempotency_conflict
-  kind: USER
   reason: idempotency_conflict
   http_status: 409
   emitted_by:
   - surface: http
     operations: [CreateSkillSubscription, UpdateSkillSubscriptionStatus]
-  recovery_action: refresh
+  recovery_action: retry
+  disruption_level: snackbar
   dart_const: subscriptionIdempotencyConflict
   go_const: ErrSubscriptionIdempotencyConflict
-  l10n_key: assistant.error.subscription_idempotency_conflict
   user_message:
     zh: 请求重复提交，请刷新后重试
     en: Duplicate request, please refresh and retry
 - code: ASSISTANT.USER.subscription_destination_forbidden
-  kind: USER
   reason: forbidden
   http_status: 403
   emitted_by:
   - surface: http
     operations: [CreateSkillSubscription]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: subscriptionDestinationForbidden
   go_const: ErrSubscriptionDestinationForbidden
-  l10n_key: assistant.error.subscription_destination_forbidden
   user_message:
     zh: 你已不在该群聊中，无法创建或继续投递此订阅
     en: You are no longer a member of this chat conversation
 - code: ASSISTANT.SYSTEM.subscription_storage_unavailable
-  kind: SYSTEM
   reason: unavailable
   http_status: 503
   emitted_by:
   - surface: http
     operations: [ListSkillSubscriptions, CreateSkillSubscription, GetSkillSubscription, UpdateSkillSubscriptionStatus, TickSkillSubscriptionCron]
   recovery_action: retry
+  disruption_level: snackbar
   recovery_after_seconds: 3
   dart_const: subscriptionStorageUnavailable
   go_const: ErrSubscriptionStorageUnavailable
-  l10n_key: assistant.error.subscription_storage_unavailable
   user_message:
     zh: 订阅服务暂不可用，请稍后重试
     en: Subscription service is temporarily unavailable
 - code: ASSISTANT.SYSTEM.subscription_destination_validation_unavailable
-  kind: SYSTEM
   reason: destination_validation_unavailable
   http_status: 503
   emitted_by:
   - surface: http
     operations: [CreateSkillSubscription]
   recovery_action: retry
+  disruption_level: snackbar
   recovery_after_seconds: 3
   dart_const: subscriptionDestinationValidationUnavailable
   go_const: ErrSubscriptionDestinationValidationUnavailable
-  l10n_key: assistant.error.subscription_destination_validation_unavailable
   user_message:
     zh: 暂时无法验证群聊成员资格，请稍后重试
     en: Chat conversation membership cannot be verified right now
 - code: ASSISTANT.SYSTEM.subscription_delivery_failed
-  kind: SYSTEM
   reason: delivery_failed
   http_status: 503
   emitted_by:
   - surface: http
     operations: [TickSkillSubscriptionCron]
   recovery_action: retry
+  disruption_level: snackbar
   recovery_after_seconds: 300
   dart_const: subscriptionDeliveryFailed
   go_const: ErrSubscriptionDeliveryFailed
-  l10n_key: assistant.error.subscription_delivery_failed
   user_message:
     zh: 主动订阅本次投递失败，系统将自动重试
     en: Proactive subscription delivery failed and will be retried automatically

@@ -1,8 +1,28 @@
 # Code generated from quwoquan_service/generated/contract_graph.json.
-# Regenerate with verify_content_object_alert_coverage.py --write-recording-rules.
+# Regenerate with verify_object_alert_coverage.py --write.
 groups:
   - name: quwoquan_content_contract_report
     rules:
+      - record: quwoquan_content_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="content-service",method="POST",route="/internal/content/gathering-safety-termination:authorize"})
+        labels:
+          service: "content-service"
+          operation: "content.report.AuthorizeGatheringSafetyTermination"
+          contract_metric: "content_gathering_safety_authorize"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "250"
+          slo_availability_percent: "99.95"
+      - record: quwoquan_content_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="POST",route="/internal/content/gathering-safety-termination:authorize"})
+        labels:
+          service: "content-service"
+          operation: "content.report.AuthorizeGatheringSafetyTermination"
+          contract_metric: "content_gathering_safety_authorize"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "250"
+          slo_availability_percent: "99.95"
       - record: quwoquan_content_contract_operation_requests_total
         expr: |
           sum by (status) (http_server_requests_total{service="content-service",method="POST",route=~"^/content/reports/[^/]+/review$"})
@@ -85,6 +105,26 @@ groups:
           slo_availability_percent: "99.9"
       - record: quwoquan_content_contract_operation_requests_total
         expr: |
+          sum by (status) (http_server_requests_total{service="content-service",method="POST",route=~"^/content/reports/[^/]+:grant-gathering-safety-termination$"})
+        labels:
+          service: "content-service"
+          operation: "content.report.GrantGatheringSafetyTermination"
+          contract_metric: "content_gathering_safety_grant"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="POST",route=~"^/content/reports/[^/]+:grant-gathering-safety-termination$"})
+        labels:
+          service: "content-service"
+          operation: "content.report.GrantGatheringSafetyTermination"
+          contract_metric: "content_gathering_safety_grant"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_requests_total
+        expr: |
           sum by (status) (http_server_requests_total{service="content-service",method="GET",route="/content/users/me/reports"})
         labels:
           service: "content-service"
@@ -142,4 +182,24 @@ groups:
           contract_metric: "content_report_resolve"
           commercial_status: "ready"
           slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="content-service",method="POST",route=~"^/content/reports/[^/]+:revoke-gathering-safety-termination$"})
+        labels:
+          service: "content-service"
+          operation: "content.report.RevokeGatheringSafetyTermination"
+          contract_metric: "content_gathering_safety_revoke"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="POST",route=~"^/content/reports/[^/]+:revoke-gathering-safety-termination$"})
+        labels:
+          service: "content-service"
+          operation: "content.report.RevokeGatheringSafetyTermination"
+          contract_metric: "content_gathering_safety_revoke"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
           slo_availability_percent: "99.9"

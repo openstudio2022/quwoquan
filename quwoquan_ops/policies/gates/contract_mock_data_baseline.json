@@ -12,11 +12,11 @@
       "maxFiles": 0
     },
     "CircleMockData": {
-      "maxOccurrences": 6,
-      "maxFiles": 3
+      "maxOccurrences": 0,
+      "maxFiles": 0
     },
     "ContentMockData": {
-      "maxOccurrences": 36,
+      "maxOccurrences": 33,
       "maxFiles": 5
     },
     "PrototypeMockData": {

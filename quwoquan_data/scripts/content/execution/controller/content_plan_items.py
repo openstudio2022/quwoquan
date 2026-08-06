@@ -3,10 +3,14 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.entity_focus import VERDICT_STRONG
+
 from content.execution.support import ExecutionContext
+from content.post.article.source_unit_freeze import (
+    write_article_source_unit_freeze,
+)
 from content.post.content_plan import ARTICLE_MIN_BASE_DRAFT_CHARS
 from content.post.object_index import write_brief_object
-from core.entity_focus import VERDICT_STRONG
 
 
 def append_article_plan_items(
@@ -31,6 +35,16 @@ def append_article_plan_items(
             intent=intent,
         )
         publish_schedule = scheduler.schedule(creator_assignment)
+        asset_refs = list(candidate.get("assetRefs") or [])
+        source_unit_freeze = (
+            write_article_source_unit_freeze(
+                execution_id=ctx.execution_id,
+                source_dir=candidate["sourceDir"],
+                asset_refs=asset_refs,
+            )
+            if asset_refs
+            else None
+        )
         brief = {
             "titleHint": title,
             "carrier": "article",
@@ -41,11 +55,13 @@ def append_article_plan_items(
             "writingIntent": intent,
             "evidenceRequirements": {"emotion": {"required": False}},
             "baseSourceRef": candidate["sourceRef"],
-            "assetRefs": list(candidate.get("assetRefs") or []),
+            "assetRefs": asset_refs,
             "publishSchedule": publish_schedule,
             **creator_assignment,
         }
-        if not brief["assetRefs"]:
+        if source_unit_freeze is not None:
+            brief["articleSourceUnitFreeze"] = source_unit_freeze
+        else:
             brief["publishMediaMode"] = "text_only"
         write_brief_object(ctx.execution_id, ref, brief, content_type="article")
         item = {
@@ -65,7 +81,7 @@ def append_article_plan_items(
             "writingIntent": intent,
             "evidenceRequirements": brief["evidenceRequirements"],
             "baseSourceRef": candidate["sourceRef"],
-            "assetRefs": list(candidate.get("assetRefs") or []),
+            "assetRefs": asset_refs,
             "sourceUseMode": candidate["sourceUseMode"],
             "entityFocusScore": float(candidate.get("entityFocusScore") or 0.0),
             "entityFocusVerdict": str(
@@ -74,7 +90,9 @@ def append_article_plan_items(
             "publishSchedule": publish_schedule,
             **creator_assignment,
         }
-        if not item["assetRefs"]:
+        if source_unit_freeze is not None:
+            item["articleSourceUnitFreeze"] = source_unit_freeze
+        else:
             item["publishMediaMode"] = "text_only"
         items.append(item)
 

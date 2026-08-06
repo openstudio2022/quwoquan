@@ -107,6 +107,19 @@ func loadMetadataGovernance(metadataDir string, catalog *ast.Catalog) error {
 	return nil
 }
 
+// sortedMappingKeys 是 YAML mapping 展开成 slice 时的唯一顺序来源。mappingFromNode 返回
+// Go map，`range` 顺序被运行时刻意随机化，任何直接展开都会把随机顺序带进 governance
+// slice，再经下游非稳定排序泄漏成非确定性产物。装配处按 key 收敛，产物就不依赖下游排序键
+// 是否恰好全序。
+func sortedMappingKeys(mapping map[string]*yaml.Node) []string {
+	keys := make([]string, 0, len(mapping))
+	for key := range mapping {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
 func sortMetadataGovernance(governance *ast.MetadataGovernance) {
 	sort.Slice(governance.Objects, func(left, right int) bool {
 		return governance.Objects[left].ObjectID < governance.Objects[right].ObjectID
@@ -188,8 +201,8 @@ func loadSharedTypeFields(
 	}
 	sourcePath := relativePath(metadataDir, path)
 	var result []ast.FieldDefinition
-	for name, definition := range mapping {
-		definitionMap, mapErr := mappingFromNode(definition)
+	for _, name := range sortedMappingKeys(mapping) {
+		definitionMap, mapErr := mappingFromNode(mapping[name])
 		if mapErr != nil {
 			continue
 		}
@@ -239,7 +252,7 @@ func loadSharedDefinitions(
 		if mapErr != nil {
 			return nil, nil, fmt.Errorf("%s: types: %w", path, mapErr)
 		}
-		for name := range mapping {
+		for _, name := range sortedMappingKeys(mapping) {
 			if trimmed := strings.TrimSpace(name); trimmed != "" {
 				types = append(types, ast.TypeDefinition{
 					Name:       trimmed,
@@ -263,25 +276,7 @@ func loadObjectGovernance(
 		ObjectID:   object.ID,
 		Domain:     object.Domain,
 		SourcePath: object.SourcePath,
-	}
-
-	top, err := loadTopLevelMapping(objectPath)
-	if err != nil {
-		return packet, nil, nil, err
-	}
-	if lifecycle := top["lifecycle"]; lifecycle != nil {
-		definition, lifecycleErr := decodeLifecycle(
-			lifecycle,
-			object.SourcePath,
-		)
-		if lifecycleErr != nil {
-			return packet, nil, nil, fmt.Errorf(
-				"%s: lifecycle: %w",
-				objectPath,
-				lifecycleErr,
-			)
-		}
-		packet.Lifecycle = definition
+		Lifecycle:  object.Lifecycle,
 	}
 
 	fieldsPath := filepath.Join(objectDir, "fields.yaml")
@@ -336,62 +331,15 @@ func loadPrivacyGovernance(
 	} else if err != nil {
 		return nil, err
 	}
-	top, err := loadTopLevelMapping(privacyPath)
+	document, err := loadPrivacyDocument(privacyPath)
 	if err != nil {
 		return nil, err
 	}
-	definition := &ast.PrivacyDefinition{
+	return &ast.PrivacyDefinition{
 		ObjectID:   object.ID,
-		Aggregate:  strings.TrimSpace(scalarString(top["aggregate"])),
+		Document:   document,
 		SourcePath: relativePath(metadataDir, privacyPath),
-	}
-	definition.AppLogFields = privacyFieldReferences(top["app_log_policy"])
-	definition.VisibilityFields = privacyFieldReferences(top["field_visibility"])
-	if lifecycle, mapErr := mappingFromNode(top["data_lifecycle"]); mapErr == nil {
-		definition.AnonymizationFields = privacyFieldReferences(
-			lifecycle["anonymization_on_delete"],
-		)
-		definition.DeletionTargets = privacyEntityReferences(
-			lifecycle["deletion_cascade"],
-		)
-	} else if top["data_lifecycle"] != nil {
-		return nil, fmt.Errorf("%s: data_lifecycle: %w", privacyPath, mapErr)
-	}
-	return definition, nil
-}
-
-func privacyFieldReferences(node *yaml.Node) []string {
-	if node == nil || node.Kind != yaml.SequenceNode {
-		return nil
-	}
-	result := make([]string, 0, len(node.Content))
-	for _, item := range node.Content {
-		mapping, err := mappingFromNode(item)
-		if err != nil {
-			continue
-		}
-		if field := strings.TrimSpace(scalarString(mapping["field"])); field != "" {
-			result = append(result, field)
-		}
-	}
-	return result
-}
-
-func privacyEntityReferences(node *yaml.Node) []string {
-	if node == nil || node.Kind != yaml.SequenceNode {
-		return nil
-	}
-	result := make([]string, 0, len(node.Content))
-	for _, item := range node.Content {
-		mapping, err := mappingFromNode(item)
-		if err != nil {
-			continue
-		}
-		if entity := strings.TrimSpace(scalarString(mapping["entity"])); entity != "" {
-			result = append(result, entity)
-		}
-	}
-	return result
+	}, nil
 }
 
 func decodeLifecycle(
@@ -408,12 +356,60 @@ func decodeLifecycle(
 			return nil, fmt.Errorf("immutable: %w", err)
 		}
 	}
+	eventConsumers, err := decodeLifecycleEventConsumers(mapping["event_consumers"])
+	if err != nil {
+		return nil, fmt.Errorf("event_consumers: %w", err)
+	}
 	return &ast.LifecycleDefinition{
-		States:     stringSequence(mapping["states"]),
-		StateField: strings.TrimSpace(scalarString(mapping["state_field"])),
-		Immutable:  immutable,
-		SourcePath: sourcePath,
+		States:         stringSequence(mapping["states"]),
+		StateField:     strings.TrimSpace(scalarString(mapping["state_field"])),
+		Immutable:      immutable,
+		SourceEvents:   trimStrings(stringSequence(mapping["source_events"])),
+		Checkpoint:     strings.TrimSpace(scalarString(mapping["checkpoint"])),
+		Rebuild:        strings.TrimSpace(scalarString(mapping["rebuild"])),
+		Tombstone:      strings.TrimSpace(scalarString(mapping["tombstone"])),
+		Idempotency:    strings.TrimSpace(scalarString(mapping["idempotency"])),
+		EventConsumers: eventConsumers,
+		SourcePath:     sourcePath,
 	}, nil
+}
+
+func decodeLifecycleEventConsumers(
+	node *yaml.Node,
+) ([]ast.LifecycleEventConsumer, error) {
+	if node == nil {
+		return nil, nil
+	}
+	if node.Kind != yaml.SequenceNode || len(node.Content) == 0 {
+		return nil, fmt.Errorf("must be a non-empty sequence")
+	}
+	result := make([]ast.LifecycleEventConsumer, 0, len(node.Content))
+	for index, item := range node.Content {
+		mapping, err := mappingFromNode(item)
+		if err != nil {
+			return nil, fmt.Errorf("[%d]: %w", index, err)
+		}
+		for key := range mapping {
+			switch key {
+			case "name", "kind", "facet", "method", "idempotency":
+			default:
+				return nil, fmt.Errorf("[%d]: unknown field %q", index, key)
+			}
+		}
+		consumer := ast.LifecycleEventConsumer{
+			Name:        strings.TrimSpace(scalarString(mapping["name"])),
+			Kind:        strings.TrimSpace(scalarString(mapping["kind"])),
+			Facet:       strings.TrimSpace(scalarString(mapping["facet"])),
+			Method:      strings.TrimSpace(scalarString(mapping["method"])),
+			Idempotency: strings.TrimSpace(scalarString(mapping["idempotency"])),
+		}
+		if consumer.Name == "" || consumer.Kind == "" || consumer.Facet == "" ||
+			consumer.Method == "" || consumer.Idempotency == "" {
+			return nil, fmt.Errorf("[%d]: name, kind, facet, method and idempotency are required", index)
+		}
+		result = append(result, consumer)
+	}
+	return result, nil
 }
 
 func loadFieldsGovernance(
@@ -457,13 +453,13 @@ func loadFieldsGovernance(
 		if mapErr != nil {
 			return nil, nil, nil, fmt.Errorf("%s: %s: %w", path, section, mapErr)
 		}
-		for name, definition := range mapping {
-			name = strings.TrimSpace(name)
+		for _, key := range sortedMappingKeys(mapping) {
+			name := strings.TrimSpace(key)
 			if name == "" {
 				continue
 			}
 			declared[name] = struct{}{}
-			definitionMap, definitionErr := mappingFromNode(definition)
+			definitionMap, definitionErr := mappingFromNode(mapping[key])
 			if definitionErr != nil {
 				continue
 			}
@@ -500,6 +496,7 @@ func loadFieldsGovernance(
 	for name := range declared {
 		declaredList = append(declaredList, name)
 	}
+	sort.Strings(declaredList)
 	return fields, declaredList, enums, nil
 }
 
@@ -569,15 +566,17 @@ func decodeFields(
 		}
 		fieldType := strings.TrimSpace(scalarString(mapping["type"]))
 		result = append(result, ast.FieldDefinition{
-			ObjectID:     object.ID,
-			Domain:       object.Domain,
-			Entity:       entity,
-			Name:         strings.TrimSpace(scalarString(mapping["name"])),
-			Type:         fieldType,
-			EnumRef:      strings.TrimSpace(scalarString(mapping["enum_ref"])),
-			InlineValues: stringSequence(mapping["values"]),
-			SemanticType: strings.TrimSpace(scalarString(mapping["semantic_type"])),
-			SourcePath:   sourcePath,
+			ObjectID:       object.ID,
+			Domain:         object.Domain,
+			Entity:         entity,
+			Name:           strings.TrimSpace(scalarString(mapping["name"])),
+			Type:           fieldType,
+			EnumRef:        strings.TrimSpace(scalarString(mapping["enum_ref"])),
+			InlineValues:   stringSequence(mapping["values"]),
+			SemanticType:   strings.TrimSpace(scalarString(mapping["semantic_type"])),
+			Classification: strings.TrimSpace(scalarString(mapping["classification"])),
+			LogPolicy:      strings.TrimSpace(scalarString(mapping["log_policy"])),
+			SourcePath:     sourcePath,
 		})
 	}
 	return result, nil
@@ -614,7 +613,8 @@ func decodeEnumDefinitions(
 		if err != nil {
 			return nil, err
 		}
-		for name, definition := range mapping {
+		for _, name := range sortedMappingKeys(mapping) {
+			definition := mapping[name]
 			if definition.Kind == yaml.MappingNode {
 				definitionMap, mapErr := mappingFromNode(definition)
 				if mapErr != nil {
@@ -767,17 +767,49 @@ func loadEventsGovernance(
 		if mapErr != nil {
 			return nil, fmt.Errorf("%s: events: %w", path, mapErr)
 		}
+		clientPayloadDefaults, defaultsErr := scalarStringMapping(
+			mapping["client_payload_defaults"],
+		)
+		if defaultsErr != nil {
+			return nil, fmt.Errorf(
+				"%s: event %q client_payload_defaults: %w",
+				path,
+				scalarString(mapping["name"]),
+				defaultsErr,
+			)
+		}
 		result = append(result, ast.EventDefinition{
-			ObjectID:         object.ID,
-			Name:             strings.TrimSpace(scalarString(mapping["name"])),
-			Channel:          strings.TrimSpace(scalarString(mapping["channel"])),
-			PayloadEntity:    strings.TrimSpace(scalarString(mapping["payload_entity"])),
-			PayloadShape:     strings.TrimSpace(scalarString(mapping["payload_shape"])),
-			PayloadFields:    stringSequence(mapping["payload_fields"]),
-			Consumers:        stringSequence(mapping["consumers"]),
-			NoConsumerReason: strings.TrimSpace(scalarString(mapping["no_consumer_reason"])),
-			SourcePath:       sourcePath,
+			ObjectID:              object.ID,
+			Name:                  strings.TrimSpace(scalarString(mapping["name"])),
+			DeliverySemantics:     strings.TrimSpace(scalarString(mapping["delivery_semantics"])),
+			Topic:                 strings.TrimSpace(scalarString(mapping["topic"])),
+			PayloadEntity:         strings.TrimSpace(scalarString(mapping["payload_entity"])),
+			PayloadShape:          strings.TrimSpace(scalarString(mapping["payload_shape"])),
+			PayloadFields:         stringSequence(mapping["payload_fields"]),
+			ClientWSType:          strings.TrimSpace(scalarString(mapping["client_ws_type"])),
+			ClientPayloadDefaults: clientPayloadDefaults,
+			NoConsumerReason:      strings.TrimSpace(scalarString(mapping["no_consumer_reason"])),
+			SourcePath:            sourcePath,
 		})
+	}
+	return result, nil
+}
+
+func scalarStringMapping(node *yaml.Node) (map[string]string, error) {
+	if node == nil {
+		return nil, nil
+	}
+	mapping, err := mappingFromNode(node)
+	if err != nil {
+		return nil, err
+	}
+	result := make(map[string]string, len(mapping))
+	for _, key := range sortedMappingKeys(mapping) {
+		value := scalarString(mapping[key])
+		if value == "" {
+			return nil, fmt.Errorf("%q must map to a non-empty string", key)
+		}
+		result[strings.TrimSpace(key)] = value
 	}
 	return result, nil
 }

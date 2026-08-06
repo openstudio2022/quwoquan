@@ -13,3 +13,16 @@ type AppMessageAggregateStore interface {
 	Acknowledge(ctx context.Context, userID, messageID string, at time.Time) (AppMessage, error)
 	MarkRead(ctx context.Context, userID, messageID string, at time.Time) (AppMessage, error)
 }
+
+// GatheringInvitationProjectionStore owns the idempotent, monotonic materialized
+// view written from Circle's public Gathering invitation events.
+type GatheringInvitationProjectionStore interface {
+	UpsertGatheringInvitation(
+		context.Context,
+		AppMessage,
+	) (AppMessage, bool, error)
+	CancelGatheringInvitations(
+		context.Context,
+		string,
+	) error
+}

@@ -1,10 +1,6 @@
 events:
 - name: CircleGroupMembershipRequested
-  producer: circle-service
-  consumers:
-  - circle-group-membership-stream
-  - notification-service
-  channel: transactional_outbox
+  delivery_semantics: transactional_outbox
   payload_entity: CircleGroupMembership
   payload_fields:
   - id
@@ -17,12 +13,7 @@ events:
   - state
   - createdAt
 - name: CircleGroupMembershipActivated
-  producer: circle-service
-  consumers:
-  - chat-conversation-membership-projector
-  - circle-group-membership-stream
-  - notification-service
-  channel: transactional_outbox
+  delivery_semantics: transactional_outbox
   payload_entity: CircleGroupMembership
   payload_fields:
   - id
@@ -35,11 +26,7 @@ events:
   - state
   - joinedAt
 - name: CircleGroupMembershipRejected
-  producer: circle-service
-  consumers:
-  - circle-group-membership-stream
-  - notification-service
-  channel: transactional_outbox
+  delivery_semantics: transactional_outbox
   payload_entity: CircleGroupMembership
   payload_fields:
   - id
@@ -52,11 +39,7 @@ events:
   - state
   - decidedAt
 - name: CircleGroupMembershipLeft
-  producer: circle-service
-  consumers:
-  - chat-conversation-membership-projector
-  - circle-group-membership-stream
-  channel: transactional_outbox
+  delivery_semantics: transactional_outbox
   payload_entity: CircleGroupMembership
   payload_fields:
   - id
@@ -68,11 +51,7 @@ events:
   - state
   - leftAt
 - name: CircleGroupMembershipRemoved
-  producer: circle-service
-  consumers:
-  - chat-conversation-membership-projector
-  - circle-group-membership-stream
-  channel: transactional_outbox
+  delivery_semantics: transactional_outbox
   payload_entity: CircleGroupMembership
   payload_fields:
   - id
@@ -84,11 +63,7 @@ events:
   - state
   - leftAt
 - name: CircleGroupMembershipRoleChanged
-  producer: circle-service
-  consumers:
-  - chat-conversation-membership-projector
-  - circle-group-membership-stream
-  channel: transactional_outbox
+  delivery_semantics: transactional_outbox
   payload_entity: CircleGroupMembership
   payload_fields:
   - id

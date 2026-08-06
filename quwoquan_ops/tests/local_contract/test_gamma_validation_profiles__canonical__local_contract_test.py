@@ -51,6 +51,29 @@ class GammaValidationProfilesCanonicalContractTest(unittest.TestCase):
             self.verifier.verify_canonical_structure(self.registry), []
         )
 
+    def test_assistant_scenario_uses_the_real_remote_api_integration(self) -> None:
+        scenario = self.registry["smokeCases"][
+            "assistant_alpha_beta_ui_simulator"
+        ]
+        expected_path = (
+            "quwoquan_app/test/api_integration/service/assistant_service/assistant/"
+            "assistant_run/assistant_scenario_simulator__api_integration_test.dart"
+        )
+
+        self.assertEqual(scenario["path"], expected_path)
+        self.assertEqual(scenario["runner"], "flutter_test")
+        source = (ROOT / expected_path).read_text(encoding="utf-8")
+        self.assertIn("AssistantRunRemoteApiHarness.fromEnvironment", source)
+        self.assertIn("harness.execute", source)
+        for forbidden in (
+            "ProviderScope",
+            "testWidgets(",
+            "Mock",
+            "Fake",
+            "overrideWith",
+        ):
+            self.assertNotIn(forbidden, source)
+
     def test_numbered_top_level_envelope_is_rejected(self) -> None:
         candidate = copy.deepcopy(self.registry)
         candidate["version"] = 5

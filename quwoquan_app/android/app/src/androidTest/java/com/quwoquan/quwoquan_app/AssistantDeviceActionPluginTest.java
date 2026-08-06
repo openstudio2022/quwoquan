@@ -23,48 +23,45 @@ import org.junit.Test;
 
 public final class AssistantDeviceActionPluginTest {
   @Test
-  public void validatesCanonicalCalendarReminderArguments() {
-    Map<String, Object> arguments = validArguments();
-
+  public void validatesCanonicalCrudArguments() {
+    Map<String, Object> create = eventArguments("create-1");
     assertTrue(
         AssistantDeviceActionPlugin.validArguments(
-            new MethodCall("createCalendarReminder", arguments)));
+            "create", new MethodCall("createEvent", create)));
 
-    arguments.put("idempotencyKey", "");
+    create.put("inputDigest", "not-a-digest");
     assertFalse(
         AssistantDeviceActionPlugin.validArguments(
-            new MethodCall("createCalendarReminder", arguments)));
+            "create", new MethodCall("createEvent", create)));
+
+    Map<String, Object> delete = deleteArguments("delete-1", "42");
+    assertTrue(
+        AssistantDeviceActionPlugin.validArguments(
+            "delete", new MethodCall("deleteEvent", delete)));
+    delete.put("deviceEventId", "");
+    assertFalse(
+        AssistantDeviceActionPlugin.validArguments(
+            "delete", new MethodCall("deleteEvent", delete)));
   }
 
   @Test
-  public void clampsNativeCalendarBounds() {
-    Map<String, Object> arguments = validArguments();
-    arguments.put("durationMinutes", -20);
-    arguments.put("reminderMinutes", 99_999);
-    MethodCall call = new MethodCall("createCalendarReminder", arguments);
+  public void returnsPrivacySafeReceiptShape() {
+    String digest =
+        AssistantDeviceActionPlugin.receiptDigest(
+            "create", "idempotency-1", canonicalDigest('a'), "event-1");
+    Map<String, Object> response =
+        AssistantDeviceActionPlugin.success("event-1", digest, false);
 
-    assertEquals(
-        1,
-        AssistantDeviceActionPlugin.boundedIntArgument(
-            call, "durationMinutes", 60, 1, 1440));
-    assertEquals(
-        10_080,
-        AssistantDeviceActionPlugin.boundedIntArgument(
-            call, "reminderMinutes", 10, 0, 10_080));
+    assertEquals("succeeded", response.get("status"));
+    assertEquals("event-1", response.get("deviceEventId"));
+    assertTrue(response.get("receiptDigest").toString().matches("^sha256:[0-9a-f]{64}$"));
+    assertFalse(response.containsKey("title"));
+    assertFalse(response.containsKey("notes"));
+    assertFalse(response.containsKey("location"));
   }
 
   @Test
-  public void returnsTypedNativeReceiptShape() {
-    Map<String, Object> expected = new HashMap<>();
-    expected.put("status", "created");
-    expected.put("deviceObjectId", "event-1");
-    assertEquals(
-        expected,
-        AssistantDeviceActionPlugin.status("created", "event-1"));
-  }
-
-  @Test
-  public void createsOneReadableCalendarEventForIdempotentReplay() {
+  public void createUpdateDeleteAndReplayAreIdempotent() {
     Context context =
         InstrumentationRegistry.getInstrumentation().getTargetContext();
     InstrumentationRegistry.getInstrumentation()
@@ -77,10 +74,7 @@ public final class AssistantDeviceActionPluginTest {
             context.getPackageName(), Manifest.permission.WRITE_CALENDAR);
     Uri calendarUri = insertLocalCalendar(context.getContentResolver());
     long calendarId = ContentUris.parseId(calendarUri);
-    String idempotencyKey = "native-test-" + System.nanoTime();
-    Map<String, Object> arguments = validArguments();
-    arguments.put("idempotencyKey", idempotencyKey);
-    arguments.put("title", "小趣 Android 原生合同测试");
+    String suffix = Long.toString(System.nanoTime());
     long[] eventId = {0L};
 
     try (ActivityScenario<MainActivity> scenario =
@@ -89,58 +83,54 @@ public final class AssistantDeviceActionPluginTest {
           activity -> {
             AssistantDeviceActionPlugin plugin =
                 new AssistantDeviceActionPlugin(activity);
-            Map<String, Object> first = invoke(plugin, arguments);
-            assertEquals("created", first.get("status"));
+            Map<String, Object> create = eventArguments("create-" + suffix);
+            create.put("calendarId", Long.toString(calendarId));
+            Map<String, Object> created =
+                invoke(plugin, "createEvent", create);
+            assertEquals("succeeded", created.get("status"));
             eventId[0] =
-                Long.parseLong(first.get("deviceObjectId").toString());
-            assertReadableEvent(
-                context.getContentResolver(),
-                eventId[0],
-                "小趣 Android 原生合同测试");
-            assertReadableReminder(context.getContentResolver(), eventId[0], 10);
-            assertEventMarker(
-                context.getContentResolver(),
-                eventId[0],
-                idempotencyKey,
-                context.getPackageName());
+                Long.parseLong(created.get("deviceEventId").toString());
+            assertEventTitle(
+                context.getContentResolver(), eventId[0], "Android 合同测试");
 
-            Map<String, Object> replay = invoke(plugin, arguments);
-            assertEquals("created", replay.get("status"));
+            AssistantDeviceActionPlugin restartedPlugin =
+                new AssistantDeviceActionPlugin(activity);
+            Map<String, Object> createReplay =
+                invoke(restartedPlugin, "createEvent", create);
+            assertEquals("succeeded", createReplay.get("status"));
+            assertEquals(Boolean.TRUE, createReplay.get("replayed"));
             assertEquals(
                 Long.toString(eventId[0]),
-                replay.get("deviceObjectId"));
+                createReplay.get("deviceEventId"));
 
-            context
-                .getSharedPreferences(
-                    "quwoquan.assistant.device_actions",
-                    Context.MODE_PRIVATE)
-                .edit()
-                .remove(idempotencyKey)
-                .commit();
-            Map<String, Object> recovered = invoke(plugin, arguments);
-            assertEquals("created", recovered.get("status"));
-            assertEquals(
-                Long.toString(eventId[0]),
-                recovered.get("deviceObjectId"));
-
-            context
-                .getContentResolver()
-                .delete(
-                    ContentUris.withAppendedId(
-                        CalendarContract.Events.CONTENT_URI, eventId[0]),
-                    null,
-                    null);
-            Map<String, Object> recreated = invoke(plugin, arguments);
-            assertEquals("created", recreated.get("status"));
-            long recreatedEventId =
-                Long.parseLong(recreated.get("deviceObjectId").toString());
-            assertFalse(recreatedEventId == eventId[0]);
-            eventId[0] = recreatedEventId;
-            assertReadableEvent(
+            Map<String, Object> update = eventArguments("update-" + suffix);
+            update.put("deviceEventId", Long.toString(eventId[0]));
+            update.put("calendarId", Long.toString(calendarId));
+            update.put("title", "Android 合同测试（更新）");
+            update.put("inputDigest", canonicalDigest('b'));
+            Map<String, Object> updated =
+                invoke(restartedPlugin, "updateEvent", update);
+            assertEquals("succeeded", updated.get("status"));
+            assertEventTitle(
                 context.getContentResolver(),
                 eventId[0],
-                "小趣 Android 原生合同测试");
-            assertReadableReminder(context.getContentResolver(), eventId[0], 10);
+                "Android 合同测试（更新）");
+
+            Map<String, Object> updateReplay =
+                invoke(restartedPlugin, "updateEvent", update);
+            assertEquals(Boolean.TRUE, updateReplay.get("replayed"));
+
+            Map<String, Object> delete =
+                deleteArguments("delete-" + suffix, Long.toString(eventId[0]));
+            Map<String, Object> deleted =
+                invoke(restartedPlugin, "deleteEvent", delete);
+            assertEquals("succeeded", deleted.get("status"));
+            assertFalse(eventExists(context.getContentResolver(), eventId[0]));
+
+            Map<String, Object> deleteReplay =
+                invoke(restartedPlugin, "deleteEvent", delete);
+            assertEquals("succeeded", deleteReplay.get("status"));
+            assertEquals(Boolean.TRUE, deleteReplay.get("replayed"));
           });
     } finally {
       if (eventId[0] > 0) {
@@ -153,23 +143,23 @@ public final class AssistantDeviceActionPluginTest {
                 null);
       }
       context
-          .getSharedPreferences(
-              "quwoquan.assistant.device_actions",
-              Context.MODE_PRIVATE)
+          .getSharedPreferences("quwoquan.device_calendar", Context.MODE_PRIVATE)
           .edit()
-          .remove(idempotencyKey)
+          .clear()
           .commit();
-      context.getContentResolver().delete(
-          syncAdapterUri(
-              ContentUris.withAppendedId(
-                  CalendarContract.Calendars.CONTENT_URI, calendarId)),
-          null,
-          null);
+      context
+          .getContentResolver()
+          .delete(
+              syncAdapterUri(
+                  ContentUris.withAppendedId(
+                      CalendarContract.Calendars.CONTENT_URI, calendarId)),
+              null,
+              null);
     }
   }
 
   private static Uri insertLocalCalendar(ContentResolver resolver) {
-    String account = "quwoquan-native-test";
+    String account = "quwoquan-device-calendar-test";
     ContentValues values = new ContentValues();
     values.put(CalendarContract.Calendars.ACCOUNT_NAME, account);
     values.put(
@@ -178,7 +168,7 @@ public final class AssistantDeviceActionPluginTest {
     values.put(CalendarContract.Calendars.NAME, account);
     values.put(
         CalendarContract.Calendars.CALENDAR_DISPLAY_NAME,
-        "小趣原生合同测试");
+        "DeviceCalendar 合同测试");
     values.put(CalendarContract.Calendars.CALENDAR_COLOR, 0xFF0A84FF);
     values.put(
         CalendarContract.Calendars.CALENDAR_ACCESS_LEVEL,
@@ -188,8 +178,7 @@ public final class AssistantDeviceActionPluginTest {
     values.put(CalendarContract.Calendars.SYNC_EVENTS, 1);
     Uri inserted =
         resolver.insert(
-            syncAdapterUri(CalendarContract.Calendars.CONTENT_URI),
-            values);
+            syncAdapterUri(CalendarContract.Calendars.CONTENT_URI), values);
     if (inserted == null) {
       throw new AssertionError("failed to insert local test calendar");
     }
@@ -198,21 +187,18 @@ public final class AssistantDeviceActionPluginTest {
 
   private static Uri syncAdapterUri(Uri uri) {
     return uri.buildUpon()
-        .appendQueryParameter(
-            CalendarContract.CALLER_IS_SYNCADAPTER, "true")
+        .appendQueryParameter(CalendarContract.CALLER_IS_SYNCADAPTER, "true")
         .appendQueryParameter(
             CalendarContract.Calendars.ACCOUNT_NAME,
-            "quwoquan-native-test")
+            "quwoquan-device-calendar-test")
         .appendQueryParameter(
             CalendarContract.Calendars.ACCOUNT_TYPE,
             CalendarContract.ACCOUNT_TYPE_LOCAL)
         .build();
   }
 
-  private static void assertReadableEvent(
-      ContentResolver resolver,
-      long eventId,
-      String title) {
+  private static void assertEventTitle(
+      ContentResolver resolver, long eventId, String title) {
     try (Cursor cursor =
         resolver.query(
             ContentUris.withAppendedId(
@@ -226,60 +212,28 @@ public final class AssistantDeviceActionPluginTest {
     }
   }
 
-  private static void assertReadableReminder(
-      ContentResolver resolver,
-      long eventId,
-      int expectedMinutes) {
-    try (Cursor cursor =
-        resolver.query(
-            CalendarContract.Reminders.CONTENT_URI,
-            new String[] {
-              CalendarContract.Reminders.MINUTES,
-              CalendarContract.Reminders.METHOD
-            },
-            CalendarContract.Reminders.EVENT_ID + "=?",
-            new String[] {Long.toString(eventId)},
-            null)) {
-      assertTrue(cursor != null && cursor.moveToFirst());
-      assertEquals(expectedMinutes, cursor.getInt(0));
-      assertEquals(CalendarContract.Reminders.METHOD_ALERT, cursor.getInt(1));
-      assertFalse(cursor.moveToNext());
-    }
-  }
-
-  private static void assertEventMarker(
-      ContentResolver resolver,
-      long eventId,
-      String idempotencyKey,
-      String expectedPackage) {
+  private static boolean eventExists(
+      ContentResolver resolver, long eventId) {
     try (Cursor cursor =
         resolver.query(
             ContentUris.withAppendedId(
                 CalendarContract.Events.CONTENT_URI, eventId),
-            new String[] {
-              CalendarContract.Events.CUSTOM_APP_PACKAGE,
-              CalendarContract.Events.CUSTOM_APP_URI
-            },
+            new String[] {CalendarContract.Events._ID},
             null,
             null,
             null)) {
-      assertTrue(cursor != null && cursor.moveToFirst());
-      assertEquals(expectedPackage, cursor.getString(0));
-      String marker = cursor.getString(1);
-      assertEquals(
-          AssistantDeviceActionPlugin.eventMarker(idempotencyKey),
-          marker);
-      assertFalse(marker.contains(idempotencyKey));
+      return cursor != null && cursor.moveToFirst();
     }
   }
 
   @SuppressWarnings("unchecked")
   private static Map<String, Object> invoke(
       AssistantDeviceActionPlugin plugin,
+      String method,
       Map<String, Object> arguments) {
     AtomicReference<Object> value = new AtomicReference<>();
     plugin.handle(
-        new MethodCall("createCalendarReminder", arguments),
+        new MethodCall(method, arguments),
         new MethodChannel.Result() {
           @Override
           public void success(Object result) {
@@ -287,8 +241,7 @@ public final class AssistantDeviceActionPluginTest {
           }
 
           @Override
-          public void error(
-              String code, String message, Object details) {
+          public void error(String code, String message, Object details) {
             throw new AssertionError(code + ": " + message);
           }
 
@@ -299,19 +252,35 @@ public final class AssistantDeviceActionPluginTest {
         });
     Object result = value.get();
     if (!(result instanceof Map)) {
-      throw new AssertionError("missing device action result");
+      throw new AssertionError("missing device calendar result");
     }
     return (Map<String, Object>) result;
   }
 
-  private static Map<String, Object> validArguments() {
+  private static Map<String, Object> eventArguments(String idempotencyKey) {
     Map<String, Object> arguments = new HashMap<>();
-    arguments.put("idempotencyKey", "arn_1:tool_1");
-    arguments.put("title", "提交周报");
-    arguments.put("startsAtEpochMs", 1_800_000_000_000L);
-    arguments.put("durationMinutes", 30);
-    arguments.put("reminderMinutes", 10);
-    arguments.put("notes", "来自小趣确认动作");
+    arguments.put("idempotencyKey", idempotencyKey);
+    arguments.put("inputDigest", canonicalDigest('a'));
+    arguments.put("calendarId", "");
+    arguments.put("title", "Android 合同测试");
+    arguments.put("startEpochMs", 1_800_000_000_000L);
+    arguments.put("endEpochMs", 1_800_003_600_000L);
+    arguments.put("timezone", "Asia/Shanghai");
+    arguments.put("location", "西湖");
+    arguments.put("notes", "DeviceCalendar 原生合同");
     return arguments;
+  }
+
+  private static Map<String, Object> deleteArguments(
+      String idempotencyKey, String eventId) {
+    Map<String, Object> arguments = new HashMap<>();
+    arguments.put("idempotencyKey", idempotencyKey);
+    arguments.put("inputDigest", canonicalDigest('c'));
+    arguments.put("deviceEventId", eventId);
+    return arguments;
+  }
+
+  private static String canonicalDigest(char value) {
+    return "sha256:" + new String(new char[64]).replace('\0', value);
   }
 }

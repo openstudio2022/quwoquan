@@ -93,16 +93,167 @@ api_routes:
   authorization: {principal: service, scopes: [recommendation.feature_profile.read], ownership_policy: recommendation_internal_feature_profile}
   security: {auth_mode: required, principal: service, token_transport: bearer, anonymous_policy: deny, visibility: internal}
   commercial: {status: ready}
-runtime_entrypoints:
-- name: ProjectRecommendationFeatureProfile
-  kind: projector
-  phase: event_projection
-  source_events: [recommendation.RecommendationExposureRecorded, recommendation.RecommendationFeedbackRecorded, tag.TagFeedbackRecorded, content.ContentBehaviorRecorded, user.PersonaFollowStateChanged, user.PersonaBlocked, user.PersonaUnblocked, circle.CircleMembershipRequested, circle.CircleMembershipJoined, circle.CircleMembershipApproved, circle.CircleMembershipLeft, circle.CircleMembershipRoleChanged, circle.CircleMembershipRejected, content.PostPublished, content.PostUpdated, content.PostSettingsUpdated, content.PostPromotedToWork, content.PostDeleted, content.PostPrivacyRedacted, content.PostPurged, recommendation.RecommendationSubjectClosed]
-  checkpoint: per_subject_applied_event_revision_with_source_event_receipt
-  rebuild: replay_authoritative_facts_and_relationship_events_for_open_subjects
-  tombstone: purge_identifying_features_keep_irreversible_closure_checkpoint
-  idempotency: event_id
-  application: {kind: command, facet: RecommendationFeatureProfileViewProjector, method: apply, object_owner: RecommendationFeatureProfileView}
 consumers:
 - {name: recommendation-ranking, capabilities: [read_subject_features, read_candidate_features, read_intersection_features]}
 - {name: recommendation-model-training, capabilities: [read_training_feature_snapshots]}
+readiness_cases:
+- case_id: list-subject-intersections-local
+  spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-003
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ListRecommendationSubjectIntersections}
+  runner_source_path: quwoquan_service/services/recommendation-service/tests/local_contract/recommendation/recommendation_feature_profile_view/test_author_impact_http__local_contract_test.py
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: list-subject-intersections-api
+  spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-003
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ListRecommendationSubjectIntersections}
+  runner_source_path: quwoquan_service/services/recommendation-service/tests/api_integration/recommendation/recommendation_feature_profile_view/test_mongo_feature_checkpoint__api_integration_test.py
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: list-object-intersections-local
+  spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-003
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ListRecommendationObjectIntersections}
+  runner_source_path: quwoquan_service/services/recommendation-service/tests/local_contract/recommendation/recommendation_feature_profile_view/test_author_impact_http__local_contract_test.py
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: list-object-intersections-api
+  spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-003
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ListRecommendationObjectIntersections}
+  runner_source_path: quwoquan_service/services/recommendation-service/tests/api_integration/recommendation/recommendation_feature_profile_view/test_mongo_feature_checkpoint__api_integration_test.py
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: get-intersection-supply-local
+  spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-003
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: GetRecommendationIntersectionSupply}
+  runner_source_path: quwoquan_service/services/recommendation-service/tests/local_contract/recommendation/recommendation_feature_profile_view/test_author_impact_http__local_contract_test.py
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: get-intersection-supply-api
+  spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-003
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: GetRecommendationIntersectionSupply}
+  runner_source_path: quwoquan_service/services/recommendation-service/tests/api_integration/recommendation/recommendation_feature_profile_view/test_mongo_feature_checkpoint__api_integration_test.py
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: get-author-impact-local
+  spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-003
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: GetRecommendationAuthorImpact}
+  runner_source_path: quwoquan_service/services/recommendation-service/tests/local_contract/recommendation/recommendation_feature_profile_view/test_author_impact_http__local_contract_test.py
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: get-author-impact-api
+  spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-003
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: GetRecommendationAuthorImpact}
+  runner_source_path: quwoquan_service/services/recommendation-service/tests/api_integration/recommendation/recommendation_feature_profile_view/test_mongo_feature_checkpoint__api_integration_test.py
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: list-author-impact-evidence-local
+  spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-003
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ListRecommendationAuthorImpactEvidence}
+  runner_source_path: quwoquan_service/services/recommendation-service/tests/local_contract/recommendation/recommendation_feature_profile_view/test_author_impact_http__local_contract_test.py
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: list-author-impact-evidence-api
+  spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-003
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ListRecommendationAuthorImpactEvidence}
+  runner_source_path: quwoquan_service/services/recommendation-service/tests/api_integration/recommendation/recommendation_feature_profile_view/test_mongo_feature_checkpoint__api_integration_test.py
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: project-feature-profile-local
+  spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-003
+  producer: service
+  layer: local_contract
+  target: {kind: object, id: recommendation.recommendation_feature_profile_view}
+  runner_source_path: quwoquan_service/services/recommendation-service/tests/local_contract/recommendation/recommendation_feature_profile_view/test_intersection_event_consumers__durability__local_contract_test.py
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: project-feature-profile-api
+  spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-003
+  producer: service
+  layer: api_integration
+  target: {kind: object, id: recommendation.recommendation_feature_profile_view}
+  runner_source_path: quwoquan_service/services/recommendation-service/tests/api_integration/recommendation/recommendation_feature_profile_view/test_mongo_feature_checkpoint__api_integration_test.py
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: project-feature-tag-feedback-local
+  spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-003
+  producer: service
+  layer: local_contract
+  target: {kind: object, id: recommendation.recommendation_feature_profile_view}
+  runner_source_path: quwoquan_service/services/recommendation-service/tests/local_contract/recommendation/recommendation_feature_profile_view/test_tag_feedback_consumer__durability__local_contract_test.py
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: project-feature-tag-feedback-api
+  spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-003
+  producer: service
+  layer: api_integration
+  target: {kind: object, id: recommendation.recommendation_feature_profile_view}
+  runner_source_path: quwoquan_service/services/recommendation-service/tests/api_integration/recommendation/recommendation_feature_profile_view/test_mongo_feature_checkpoint__api_integration_test.py
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: project-feature-persona-relationship-local
+  spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-003
+  producer: service
+  layer: local_contract
+  target: {kind: object, id: recommendation.recommendation_feature_profile_view}
+  runner_source_path: quwoquan_service/services/recommendation-service/tests/local_contract/recommendation/recommendation_feature_profile_view/test_intersection_event_consumers__durability__local_contract_test.py
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: project-feature-persona-relationship-api
+  spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-003
+  producer: service
+  layer: api_integration
+  target: {kind: object, id: recommendation.recommendation_feature_profile_view}
+  runner_source_path: quwoquan_service/services/recommendation-service/tests/api_integration/recommendation/recommendation_feature_profile_view/test_mongo_feature_checkpoint__api_integration_test.py
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: project-feature-circle-membership-local
+  spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-003
+  producer: service
+  layer: local_contract
+  target: {kind: object, id: recommendation.recommendation_feature_profile_view}
+  runner_source_path: quwoquan_service/services/recommendation-service/tests/local_contract/recommendation/recommendation_feature_profile_view/test_intersection_event_consumers__durability__local_contract_test.py
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: project-feature-circle-membership-api
+  spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-003
+  producer: service
+  layer: api_integration
+  target: {kind: object, id: recommendation.recommendation_feature_profile_view}
+  runner_source_path: quwoquan_service/services/recommendation-service/tests/api_integration/recommendation/recommendation_feature_profile_view/test_mongo_feature_checkpoint__api_integration_test.py
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: project-feature-post-lifecycle-local
+  spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-003
+  producer: service
+  layer: local_contract
+  target: {kind: object, id: recommendation.recommendation_feature_profile_view}
+  runner_source_path: quwoquan_service/services/recommendation-service/tests/local_contract/recommendation/recommendation_feature_profile_view/test_intersection_event_consumers__durability__local_contract_test.py
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: project-feature-post-lifecycle-api
+  spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-003
+  producer: service
+  layer: api_integration
+  target: {kind: object, id: recommendation.recommendation_feature_profile_view}
+  runner_source_path: quwoquan_service/services/recommendation-service/tests/api_integration/recommendation/recommendation_feature_profile_view/test_mongo_feature_checkpoint__api_integration_test.py
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}

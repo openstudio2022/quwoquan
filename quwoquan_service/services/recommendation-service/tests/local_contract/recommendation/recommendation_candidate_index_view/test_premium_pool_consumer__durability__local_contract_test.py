@@ -1,3 +1,5 @@
+# spec_ref: specs/feature-tree/product-ops-growth/product-control-plane-foundation/product-control-plane-contract/spec.md#gwt-002
+# readiness_case: project-candidate-premium-pool-local
 import json
 
 import pytest

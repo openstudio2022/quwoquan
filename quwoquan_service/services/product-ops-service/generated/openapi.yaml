@@ -1416,7 +1416,7 @@ paths:
             operationId: GetAppRecoveryVersion
             x-contract-operation-id: ops.app_release.GetAppRecoveryVersion
             x-object-id: ops.app_release
-            x-actor: device
+            x-actor: none
             x-application:
                 kind: query
                 facet: AppReleaseRecoveryQueryFacade
@@ -1445,7 +1445,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/GetAppRecoveryVersionResponse'
+                                $ref: '#/components/schemas/AppReleaseRecoveryView'
                 default:
                     description: Runtime failure
                     content:
@@ -1759,14 +1759,14 @@ paths:
             operationId: ReportRecoveryFailure
             x-contract-operation-id: ops.recovery_failure.ReportRecoveryFailure
             x-object-id: ops.recovery_failure
-            x-actor: device
+            x-actor: none
             x-application:
                 kind: command
                 facet: RecoveryFailureCommandFacade
                 method: reportRecoveryFailure
                 appendSink: RecoveryFailure
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
@@ -2125,6 +2125,11 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: AcknowledgeAlertRequest
             x-contract-placeholder: true
+        AppReleaseRecoveryView:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: AppReleaseRecoveryView
+            x-contract-placeholder: true
         ConfigDomainSlice:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -2194,11 +2199,6 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ExperimentStatsSlice
-            x-contract-placeholder: true
-        GetAppRecoveryVersionResponse:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: GetAppRecoveryVersionResponse
             x-contract-placeholder: true
         GetEventSummaryResponse:
             type: object

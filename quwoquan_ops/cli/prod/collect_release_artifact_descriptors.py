@@ -20,12 +20,16 @@ from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
     APPLICATION_PACKAGES,
     ENVIRONMENTS,
     OCI_DIGEST_REF_PATTERN,
-    REQUIRED_RELEASE_EVIDENCE,
+    RELEASE_CLOSURE_PATHS,
+    TEST_RELEASE_CLOSURE_LABELS,
     application_package_digest,
     sha256_tree,
     validate_application_package_payload,
     validate_manifest,
     validate_manifest_files,
+)
+from quwoquan_ops.ci.render_provider_conformance_source import (
+    expected_required_cell_count_from_readiness,
 )
 
 EVIDENCE_SOURCE_SCHEMAS = {
@@ -137,6 +141,64 @@ def _validate_source(artifact_id: str, payload: dict[str, Any]) -> None:
                 or DIGEST_PATTERN.fullmatch(str(item.get("artifactDigest") or "")) is None
             ):
                 raise ValueError(f"testEvidence layer is not passed and immutable: {layer}")
+        evidence = payload.get("evidence")
+        files = evidence.get("files") if isinstance(evidence, dict) else None
+        if not isinstance(files, dict) or set(files) != set(
+            TEST_RELEASE_CLOSURE_LABELS
+        ):
+            raise ValueError("testEvidence release closure file set is incomplete")
+        for label, descriptor in files.items():
+            if (
+                not isinstance(descriptor, dict)
+                or set(descriptor) != {"path", "digest"}
+                or descriptor.get("path") != RELEASE_CLOSURE_PATHS[label]
+                or DIGEST_PATTERN.fullmatch(str(descriptor.get("digest") or ""))
+                is None
+            ):
+                raise ValueError(
+                    f"testEvidence release closure descriptor is invalid: {label}"
+                )
+
+
+def _resolve_test_evidence_files(
+    *,
+    payload: dict[str, Any],
+    source_path: Path,
+) -> dict[str, tuple[Path, str]]:
+    source_path = source_path.expanduser()
+    if source_path.is_symlink() or not source_path.is_file():
+        raise ValueError("testEvidence source is missing or unsafe")
+    source_root = source_path.resolve(strict=True).parent
+    files = payload["evidence"]["files"]
+    resolved: dict[str, tuple[Path, str]] = {}
+    for label, descriptor in sorted(files.items()):
+        relative = Path(str(descriptor["path"]))
+        if (
+            relative.is_absolute()
+            or "." in relative.parts
+            or ".." in relative.parts
+        ):
+            raise ValueError(
+                f"testEvidence release closure path is unsafe: {label}"
+            )
+        candidate = source_root / relative
+        if candidate.is_symlink():
+            raise ValueError(
+                f"testEvidence release closure is a symbolic link: {label}"
+            )
+        source = candidate.resolve(strict=True)
+        try:
+            source.relative_to(source_root)
+        except ValueError as error:
+            raise ValueError(
+                f"testEvidence release closure escapes its source root: {label}"
+            ) from error
+        if not source.is_file() or _sha256(source) != descriptor["digest"]:
+            raise ValueError(
+                f"testEvidence release closure digest mismatch: {label}"
+            )
+        resolved[label] = (source, relative.as_posix())
+    return resolved
 
 
 def _validate_provider_evidence(
@@ -154,7 +216,9 @@ def _validate_provider_evidence(
         "candidateMaterial",
         "sourceEvidence",
         "evidenceCount",
+        "sourceCoverageIssues",
         "readiness",
+        "issues",
     }:
         raise ValueError("providerEvidence fields are not canonical")
     if payload.get("schema") != EVIDENCE_SOURCE_SCHEMAS["providerEvidence"]:
@@ -163,8 +227,16 @@ def _validate_provider_evidence(
         raise ValueError("providerEvidence status must be passed")
     if not isinstance(payload.get("generatedAt"), str) or not payload["generatedAt"]:
         raise ValueError("providerEvidence generatedAt is missing")
-    if not isinstance(payload.get("evidenceCount"), int) or payload["evidenceCount"] <= 0:
-        raise ValueError("providerEvidence evidenceCount must be positive")
+    if payload.get("issues") != [] or payload.get("sourceCoverageIssues") != []:
+        raise ValueError("providerEvidence readiness issues must be empty")
+    expected_evidence_count = expected_required_cell_count_from_readiness(
+        payload.get("readiness")
+    )
+    if payload.get("evidenceCount") != expected_evidence_count:
+        raise ValueError(
+            "providerEvidence evidenceCount must equal the readiness-derived "
+            f"required cell count {expected_evidence_count}"
+        )
     source = payload.get("source")
     manifest_source = manifest["source"]
     expected_source = {
@@ -218,37 +290,6 @@ def _validate_provider_evidence(
         "contractGraphDigest": contract_graph_digest,
     }:
         raise ValueError("providerEvidence candidate material binding mismatch")
-    readiness = payload.get("readiness")
-    prod = readiness.get("prod") if isinstance(readiness, dict) else None
-    if not isinstance(prod, dict) or not prod:
-        raise ValueError("providerEvidence prod readiness is missing")
-    required = {
-        capability: item
-        for capability, item in prod.items()
-        if isinstance(item, dict) and item.get("required") is True
-    }
-    if not required:
-        raise ValueError("providerEvidence has no required prod capability")
-    blocked = sorted(
-        capability
-        for capability, item in required.items()
-        if item.get("capability_ready") is not True
-    )
-    malformed = sorted(
-        capability
-        for capability, item in prod.items()
-        if not isinstance(capability, str)
-        or not capability
-        or not isinstance(item, dict)
-        or not isinstance(item.get("required"), bool)
-        or not isinstance(item.get("capability_ready"), bool)
-    )
-    if malformed:
-        raise ValueError(f"providerEvidence readiness is malformed: {malformed}")
-    if blocked:
-        raise ValueError(f"providerEvidence prod readiness is blocked: {blocked}")
-
-
 def _validate_user_acceptance_candidate_material(
     *,
     test_evidence: dict[str, Any],
@@ -463,6 +504,10 @@ def collect(
         contract_graph_digest=_sha256(sources["contractGraph"].expanduser().resolve()),
         provider_raw_dir=provider_raw_dir,
     )
+    test_evidence_files = _resolve_test_evidence_files(
+        payload=source_payloads["testEvidence"],
+        source_path=sources["testEvidence"],
+    )
     generic_payloads: dict[tuple[str, str], dict[str, Any]] = {}
     for key, source_value in application_package_sources.items():
         payload = _load_json(
@@ -542,6 +587,21 @@ def collect(
         copied_digest = _copy_immutable(source, destination, "provider raw evidence")
         if copied_digest != digest:
             raise ValueError(f"provider raw evidence digest drift: {relative}")
+
+    for label, (source, archive_path) in sorted(test_evidence_files.items()):
+        destination = artifact_dir / archive_path
+        copied_digest = _copy_immutable(
+            source,
+            destination,
+            f"test evidence release closure {label}",
+        )
+        expected_digest = source_payloads["testEvidence"]["evidence"]["files"][
+            label
+        ]["digest"]
+        if copied_digest != expected_digest:
+            raise ValueError(
+                f"test evidence release closure digest drift: {label}"
+            )
 
     for key, source_value in sorted(application_package_sources.items()):
         environment, surface = key

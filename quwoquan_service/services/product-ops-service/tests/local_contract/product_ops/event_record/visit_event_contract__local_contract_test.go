@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/spec.md#sit-001
+// readiness_case: report-event-batch-local
 package local_contract
 
 import (
@@ -442,6 +444,38 @@ func TestStartupDiagnosticsSameProofDoesNotCollapseDistinctBatch(t *testing.T) {
 	)
 	if err != nil || second.DuplicateBatch {
 		t.Fatalf("distinct batch must not be duplicate=%+v err=%v", second, err)
+	}
+}
+
+func TestStartupDiagnosticsRecoveryDimensionsArePartOfBatchIdentity(t *testing.T) {
+	store := telemetrypersistence.NewMemoryTelemetryStore()
+	service := application.NewTelemetryService(store, store)
+	firstRecord := application.StartupDiagnosticRecord{
+		EventID: "attempt_000000000003_1", AttemptID: "attempt_000000000003",
+		Phase: "recovery", Outcome: "observed", OccurredAt: time.Now().UTC().Format(time.RFC3339Nano),
+		Platform: "android", RuntimeEnv: "gamma", Sequence: 1,
+		RecoverySurface: "page.app.startup_recovery", RecoveryLifecycle: "phase_change",
+		RecoveryMount: "bootstrap", RecoveryPhase: "startup_checking", RecoveryAction: "none",
+	}
+	secondRecord := firstRecord
+	secondRecord.RecoveryMount = "runtime_boundary"
+	secondRecord.RecoveryPhase = "runtime_version_checking"
+
+	first, err := service.ReportStartupDiagnostics(
+		context.Background(),
+		"proof_shared_across_recovery_transitions",
+		[]application.StartupDiagnosticRecord{firstRecord},
+	)
+	if err != nil || first.DuplicateBatch {
+		t.Fatalf("first recovery batch=%+v err=%v", first, err)
+	}
+	second, err := service.ReportStartupDiagnostics(
+		context.Background(),
+		"proof_shared_across_recovery_transitions",
+		[]application.StartupDiagnosticRecord{secondRecord},
+	)
+	if err != nil || second.DuplicateBatch {
+		t.Fatalf("distinct recovery dimensions collapsed batch=%+v err=%v", second, err)
 	}
 }
 

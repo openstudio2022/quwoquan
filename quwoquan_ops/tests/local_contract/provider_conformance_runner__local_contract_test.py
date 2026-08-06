@@ -8,6 +8,7 @@ import tempfile
 import argparse
 from unittest import mock
 
+import pytest
 import yaml
 
 
@@ -18,6 +19,76 @@ if str(ROOT) not in sys.path:
 from quwoquan_ops.cli import provider_conformance_runner
 from quwoquan_ops.cli.lib import external_provider_governance as governance
 from quwoquan_ops.cli.lib import provider_conformance
+
+
+def test_runner_has_no_hardcoded_active_candidate_escape() -> None:
+    source = (
+        ROOT / "quwoquan_ops/cli/provider_conformance_runner.py"
+    ).read_text(encoding="utf-8")
+    assert "candidate_active=True" not in source
+    assert "candidate_receipt_bound=active_candidate.get(\"active\") is True" in source
+    assert "resolve_nonprod_active_candidate(" in source
+    assert "resolve_prod_active_candidate(" in source
+
+
+def test_formal_producer_rejects_local_or_receiptless_identity() -> None:
+    with mock.patch.dict(
+        os.environ,
+        {"QWQ_PROVIDER_CONFORMANCE_REQUIRE_PROMOTABLE": "true"},
+        clear=False,
+    ):
+        with pytest.raises(ValueError, match="formal Provider producer"):
+            provider_conformance_runner._require_formal_promotability(
+                {
+                    "nonPromotable": True,
+                    "attestationAuthority": "local",
+                    "candidateStatus": "unverified",
+                }
+            )
+        provider_conformance_runner._require_formal_promotability(
+            {
+                "nonPromotable": False,
+                "attestationAuthority": "ci",
+                "candidateStatus": "active_immutable",
+            }
+        )
+
+
+def test_environment_matrix_preflight_requires_active_startup_receipt() -> None:
+    with (
+        mock.patch.object(
+            provider_conformance_runner.provider_conformance,
+            "candidate_image_digest",
+            return_value="sha256:" + "1" * 64,
+        ),
+        mock.patch.object(
+            provider_conformance_runner.provider_conformance,
+            "resolve_nonprod_active_candidate",
+            return_value={
+                "active": False,
+                "receiptRef": "",
+                "receiptDigest": "",
+                "reason": "canonical startup receipt is missing",
+            },
+        ),
+        mock.patch.object(
+            provider_conformance_runner,
+            "_current_commit",
+            return_value="a" * 40,
+        ),
+        mock.patch.object(
+            provider_conformance_runner,
+            "_contract_graph_digest",
+            return_value="sha256:" + "2" * 64,
+        ),
+        pytest.raises(ValueError, match="canonical active Provider candidate"),
+    ):
+        provider_conformance_runner.preflight_environment_matrix(
+            environment="alpha",
+            registry={"capabilities": []},
+            compiled={"selectedBindings": {"alpha": {}}},
+            sources={},
+        )
 
 
 def test_candidate_image_digest_is_derived_from_environment_packages() -> None:
@@ -209,9 +280,7 @@ def test_runner_emits_evidence_only_from_test_owned_case_results() -> None:
             ],
         }
         os.environ["QWQ_OUTPUT_ROOT"] = str(output_root)
-        os.environ["QWQ_PROVIDER_CONFORMANCE_ATTESTATION_KEY"] = (
-            "provider-conformance-runner-local-contract-key"
-        )
+        os.environ.pop("QWQ_PROVIDER_CONFORMANCE_ATTESTATION_KEY", None)
         os.environ["QWQ_PROVIDER_CONFORMANCE_EXPECTED_IMAGE_DIGEST"] = (
             f"sha256:{'1' * 64}"
         )
@@ -220,6 +289,18 @@ def test_runner_emits_evidence_only_from_test_owned_case_results() -> None:
                 provider_conformance_runner.provider_conformance,
                 "candidate_image_digest",
                 return_value=f"sha256:{'1' * 64}",
+            ), mock.patch.object(
+                provider_conformance_runner.provider_conformance,
+                "resolve_nonprod_active_candidate",
+                return_value={
+                    "active": True,
+                    "receiptRef": (
+                        ".qwq_output/env/alpha/local/alpha-local/process/"
+                        "startup_attempt.json"
+                    ),
+                    "receiptDigest": f"sha256:{'4' * 64}",
+                    "reason": "",
+                },
             ):
                 evidence_path = provider_conformance_runner._execute_cell(
                     argparse.Namespace(
@@ -249,21 +330,34 @@ def test_runner_emits_evidence_only_from_test_owned_case_results() -> None:
                     },
                 )
             evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
-            issues = provider_conformance.validate_evidence(
-                [evidence],
-                registry=registry,
-                root=output_root,
-                current_commit=provider_conformance._current_commit(),
-                compiled=compiled,
-                source_catalog={
-                    (
-                        "assistant.model.generation",
-                        "ext.llm.protocol_fixture",
-                        "local_contract",
-                    ): source
+            with mock.patch.object(
+                provider_conformance,
+                "resolve_nonprod_active_candidate",
+                return_value={
+                    "active": True,
+                    "receiptRef": (
+                        ".qwq_output/env/alpha/local/alpha-local/process/"
+                        "startup_attempt.json"
+                    ),
+                    "receiptDigest": f"sha256:{'4' * 64}",
+                    "reason": "",
                 },
-                expected_image_digest=f"sha256:{'1' * 64}",
-            )
+            ):
+                issues = provider_conformance.validate_evidence(
+                    [evidence],
+                    registry=registry,
+                    root=output_root,
+                    current_commit=provider_conformance._current_commit(),
+                    compiled=compiled,
+                    source_catalog={
+                        (
+                            "assistant.model.generation",
+                            "ext.llm.protocol_fixture",
+                            "local_contract",
+                        ): source
+                    },
+                    expected_image_digest=f"sha256:{'1' * 64}",
+                )
             execution_report = json.loads(
                 (
                     output_root
@@ -314,6 +408,12 @@ def test_runner_emits_evidence_only_from_test_owned_case_results() -> None:
     assert runner_environment["adapterDigest"] == evidence["adapterDigest"]
     assert evidence["testTarget"] == "assistant-model-real-adapter-harness"
     assert evidence["observabilityRefs"]["metrics"] == ["metric:provider-test"]
+    assert evidence["nonPromotable"] is True
+    assert evidence["attestationAuthority"] == "local"
+    assert evidence["candidateStatus"] == "active_immutable"
+    assert evidence["candidateReceiptRef"].endswith("startup_attempt.json")
+    assert evidence["candidateReceiptDigest"] == f"sha256:{'4' * 64}"
+    assert evidence["artifactAttestation"].startswith("local-sha256:")
     assert "version" not in evidence
     assert "version" not in execution_report
 
@@ -377,6 +477,7 @@ def test_runner_rejects_static_derived_source_without_emitting_evidence() -> Non
 def test_matrix_executes_every_actual_binding_cell() -> None:
     compiled, _ = governance.load_and_compile()
     calls: list[tuple[str, str, str]] = []
+    evidence_paths: list[Path] = []
 
     def execute_cell(
         args: argparse.Namespace,
@@ -405,7 +506,8 @@ def test_matrix_executes_every_actual_binding_cell() -> None:
                 "--execute",
                 "--image-digest",
                 f"sha256:{'1' * 64}",
-            ]
+            ],
+            evidence_paths_out=evidence_paths,
         )
 
     expected = [
@@ -421,6 +523,11 @@ def test_matrix_executes_every_actual_binding_cell() -> None:
     ]
     assert result == 0
     assert calls == expected
+    assert evidence_paths == [
+        Path(f"/tmp/{environment}-{layer}.evidence.json")
+        for environment in provider_conformance.ENVIRONMENTS
+        for layer in provider_conformance.LAYERS
+    ]
 
 
 def test_runner_rejects_stale_image_digest_before_emitting_evidence() -> None:

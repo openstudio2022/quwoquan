@@ -93,8 +93,8 @@ type CallNoopReceipt struct {
 }
 
 // CallStateCache 是通话编排所需的短期状态缓存端口（storage.yaml redis_cache 同源）。
-// already_in_call 冲突检测走 Mongo FindActiveCallForUser，振铃超时走进程内
-// sweeper（lifecycle_timers.ring_timeout）；不存在 Redis active_call/timeout key。
+// already_in_call 冲突检测走 Mongo FindActiveCallForUser；振铃超时由消费 typed
+// service runtime configuration 的进程内 sweeper 承担，不存在 Redis timeout key。
 type CallStateCache interface {
 	SetCallState(ctx context.Context, session *model.CallSession) error
 	GetCallState(ctx context.Context, callID string) (*model.CallSession, error)

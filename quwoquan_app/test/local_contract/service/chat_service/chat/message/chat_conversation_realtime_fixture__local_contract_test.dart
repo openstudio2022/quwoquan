@@ -1,0 +1,104 @@
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:hive/hive.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
+import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/presentation/realtime_connection_notifier.dart';
+import 'package:quwoquan_app/runtime/auth/auth_session.dart';
+import 'package:quwoquan_app/runtime/di/app_providers.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation/presentation/chat_conversation_page.dart';
+import 'package:quwoquan_app/service/chat_service/chat/message/application/chat_message_provider.dart';
+import 'package:quwoquan_app/service/chat_service/chat/message/application/chat_send_outbox.dart';
+import 'package:quwoquan_app/service/chat_service/chat/message/application/public/voice_message_interaction.dart';
+
+import '../../../../../support/service/user_service/relationship/greeting_request/user_typed_facet_test_support.dart';
+import '../../../../../support/service/realtime_gateway/realtime/connection/connection_typed_double.dart';
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUp(() {
+    Hive.init(
+      '${Directory.systemTemp.path}/qwq_chat_realtime_journey_${DateTime.now().microsecondsSinceEpoch}',
+    );
+  });
+
+  tearDown(() async {
+    await Hive.deleteFromDisk();
+  });
+
+  testWidgets('会话页进入后 contract fixture realtime 追加新消息', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authSessionControllerProvider.overrideWith(
+            TestAuthenticatedSessionController.new,
+          ),
+          realtimeConnectionManagerProvider.overrideWith(
+            () => RealtimeConnectionNotifier(
+              delegateFactory:
+                  ({
+                    required ref,
+                    required onStateChanged,
+                    required currentUserIdResolver,
+                  }) => FixtureRealtimeConnectionDelegate(
+                    read: ref.read,
+                    invalidate: ref.invalidate,
+                    onStateChanged: onStateChanged,
+                  ),
+            ),
+          ),
+          chatRepositoryCompositionProvider.overrideWithValue(
+            MockChatRepository(),
+          ),
+          relationshipCapabilityRepositoryProvider.overrideWithValue(
+            mutualRelationshipCapabilityRepository(),
+          ),
+          voiceQueuedSenderProvider.overrideWithValue(
+            (_, _) async => VoiceSendStatus.completed,
+          ),
+        ],
+        child: MaterialApp(
+          navigatorObservers: <NavigatorObserver>[chatRouteObserver],
+          home: ChatConversationPage(conversationId: 'conv_001', onBack: _noop),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    final beforeCount = tester
+        .container()
+        .read(chatMessageProvider('conv_001'))
+        .messages
+        .length;
+
+    await tester.pump(const Duration(milliseconds: 400));
+
+    final afterMessages = tester
+        .container()
+        .read(chatMessageProvider('conv_001'))
+        .messages;
+    expect(afterMessages.length, greaterThan(beforeCount));
+    expect(
+      afterMessages.any(
+        (message) =>
+            message.content?.contains('Fixture Realtime 新消息：咖啡馆门口见。') ?? false,
+      ),
+      isTrue,
+    );
+
+    tester
+        .container()
+        .read(realtimeConnectionManagerProvider.notifier)
+        .onAppBackground();
+    await tester.pump();
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 50));
+  });
+}
+
+void _noop() {}

@@ -10,10 +10,12 @@ import (
 
 func TestGenerateAndCheckAreIdempotent(t *testing.T) {
 	metadataDir := t.TempDir()
+	repoRoot := t.TempDir()
 	writeOpenAPICLIFixture(t, metadataDir)
 	if err := run([]string{
 		"generate-openapi",
 		"--metadata-dir", metadataDir,
+		"--repo-root", repoRoot,
 	}, &bytes.Buffer{}); err != nil {
 		t.Fatalf("generate OpenAPI fixture: %v", err)
 	}
@@ -27,6 +29,7 @@ func TestGenerateAndCheckAreIdempotent(t *testing.T) {
 	args := []string{
 		"generate",
 		"--metadata-dir", metadataDir,
+		"--repo-root", repoRoot,
 		"--profile", "baseline",
 		"--output", output,
 		"--go-security-output", securityOutput,
@@ -69,6 +72,7 @@ func TestGenerateAndCheckAreIdempotent(t *testing.T) {
 	if err := run([]string{
 		"check",
 		"--metadata-dir", metadataDir,
+		"--repo-root", repoRoot,
 		"--profile", "baseline",
 		"--input", output,
 	}, &stdout); err != nil {
@@ -81,12 +85,14 @@ func TestGenerateAndCheckAreIdempotent(t *testing.T) {
 
 func TestGenerateOpenAPIAndCheckOpenAPIUseTemporaryMetadata(t *testing.T) {
 	metadataDir := t.TempDir()
+	repoRoot := t.TempDir()
 	writeOpenAPICLIFixture(t, metadataDir)
 
 	var generateOutput bytes.Buffer
 	if err := run([]string{
 		"generate-openapi",
 		"--metadata-dir", metadataDir,
+		"--repo-root", repoRoot,
 	}, &generateOutput); err != nil {
 		t.Fatalf("generate-openapi: %v", err)
 	}
@@ -109,6 +115,7 @@ func TestGenerateOpenAPIAndCheckOpenAPIUseTemporaryMetadata(t *testing.T) {
 	if err := run([]string{
 		"generate-openapi",
 		"--metadata-dir", metadataDir,
+		"--repo-root", repoRoot,
 	}, &bytes.Buffer{}); err != nil {
 		t.Fatalf("second generate-openapi: %v", err)
 	}
@@ -124,6 +131,7 @@ func TestGenerateOpenAPIAndCheckOpenAPIUseTemporaryMetadata(t *testing.T) {
 	if err := run([]string{
 		"check-openapi",
 		"--metadata-dir", metadataDir,
+		"--repo-root", repoRoot,
 	}, &checkOutput); err != nil {
 		t.Fatalf("check-openapi current snapshot: %v", err)
 	}
@@ -141,9 +149,66 @@ func TestGenerateOpenAPIAndCheckOpenAPIUseTemporaryMetadata(t *testing.T) {
 	err = run([]string{
 		"check-openapi",
 		"--metadata-dir", metadataDir,
+		"--repo-root", repoRoot,
 	}, &bytes.Buffer{})
 	if err == nil || !strings.Contains(err.Error(), "stale: content/openapi.yaml") {
 		t.Fatalf("check-openapi must reject stale artifact, got %v", err)
+	}
+}
+
+// 缺 --repo-root 必须 fail-closed：metadata-dir 是只含 YAML 的一次性契约视图，读不到
+// internal/**、tests/** 与端侧目录。静默接受空 repo-root 会让全仓 readinessEvidence 恒为
+// 0 条、readiness 恒停在 contract-ready，看上去只是「运行证据还没接入」。
+func TestLoadBearingSubcommandsRejectMissingRepoRoot(t *testing.T) {
+	metadataDir := t.TempDir()
+	writeOpenAPICLIFixture(t, metadataDir)
+
+	for _, subcommand := range []string{
+		"validate",
+		"generate",
+		"check",
+		"generate-openapi",
+		"check-openapi",
+		"coverage",
+	} {
+		t.Run(subcommand, func(t *testing.T) {
+			args := []string{
+				subcommand,
+				"--metadata-dir", metadataDir,
+				"--profile", "baseline",
+			}
+			switch subcommand {
+			case "generate-openapi", "check-openapi", "coverage":
+				args = args[:len(args)-2]
+			case "check":
+				args = append(args, "--input", filepath.Join(t.TempDir(), "graph.json"))
+			}
+			err := run(args, &bytes.Buffer{})
+			if err == nil {
+				t.Fatal("missing --repo-root must fail, got success")
+			}
+			if !strings.Contains(err.Error(), "--repo-root is required") {
+				t.Fatalf("error must name the missing repo root, got %v", err)
+			}
+		})
+	}
+}
+
+func TestRepoRootMustBeADirectory(t *testing.T) {
+	metadataDir := t.TempDir()
+	writeOpenAPICLIFixture(t, metadataDir)
+	notADirectory := filepath.Join(t.TempDir(), "repo-root")
+	if err := os.WriteFile(notADirectory, []byte("x"), 0o644); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+
+	err := run([]string{
+		"coverage",
+		"--metadata-dir", metadataDir,
+		"--repo-root", notADirectory,
+	}, &bytes.Buffer{})
+	if err == nil || !strings.Contains(err.Error(), "is not a directory") {
+		t.Fatalf("repo root must be a directory, got %v", err)
 	}
 }
 

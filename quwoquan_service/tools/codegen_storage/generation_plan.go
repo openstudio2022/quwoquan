@@ -142,12 +142,6 @@ func deriveGenerationPlan(serviceDir string) (*Manifest, error) {
 }
 
 func deriveRootEntity(storage StorageYAML) string {
-	if storage.Aggregate != "" {
-		return storage.Aggregate
-	}
-	if storage.Entity != "" {
-		return storage.Entity
-	}
 	entities := map[string]struct{}{}
 	for _, table := range storage.Tables {
 		if table.Entity != "" {

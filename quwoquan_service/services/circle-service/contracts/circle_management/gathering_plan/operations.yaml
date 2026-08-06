@@ -1,0 +1,399 @@
+description: GatheringPlan owner 的 typed proposal/commit Command Facade 与 named Reader；禁止通用状态写、成员副本与 last-write-wins。
+commercial_defaults:
+  status: blocked
+  block_reason: Chat Board/App Remote、durable consumer 与跨域 user_acceptance 尚未接线；三层证据未闭合
+  gap_id: CIRCLE_GATHERING_PLAN_COMMERCIAL_CLOSURE
+  target_story: circle-community-gathering-plan-collaboration
+api_routes:
+- method: POST
+  path: /gatherings/{gatheringId}/plan
+  operation: CreateGatheringPlan
+  request_bindings:
+    path:
+    - name: gatheringId
+      field: gatheringId
+  actor: persona
+  security:
+    auth_mode: required
+    principal: persona
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+  application:
+    kind: command
+    facet: GatheringPlanCommandFacet
+    method: createGatheringPlan
+    aggregate_owner: GatheringPlan
+    mutation_target: GatheringPlan
+    invariant_target: GatheringPlan
+  description: 为 canonical Gathering 创建唯一 optional Plan 与 immutable initial Revision；禁止复制活动根事实。
+  request_entity: CreateGatheringPlanCommand
+  response_entity: GatheringPlanCommandResult
+  success_status: 201
+  authorization:
+    principal: persona
+    ownership_policy: delegated_current_gathering_host
+  reliability:
+    timeout_ms: 3000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CIRCLE.USER.gathering_plan_invalid
+  - CIRCLE.USER.gathering_plan_permission_denied
+  - CIRCLE.USER.gathering_plan_gathering_unavailable
+  - CIRCLE.USER.gathering_plan_already_exists
+  - CIRCLE.USER.gathering_plan_idempotency_conflict
+  - CIRCLE.SYSTEM.gathering_plan_storage_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: gathering_plan_create
+    trace: true
+    attributes:
+    - outcome
+    - authority_kind
+  slo:
+    latency_p95_ms: 1500
+    availability_percent: 99.9
+  request_body_kind: object
+- method: POST
+  path: /gathering-plans/{planId}/proposals
+  operation: ProposeGatheringPlan
+  request_bindings:
+    path:
+    - name: planId
+      field: planId
+  actor: persona
+  security:
+    auth_mode: required
+    principal: persona
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+  application:
+    kind: command
+    facet: GatheringPlanCommandFacet
+    method: proposeGatheringPlan
+    aggregate_owner: GatheringPlan
+    mutation_target: GatheringPlan
+    invariant_target: GatheringPlan
+  description: current Host 或 active Participation 基于 current Revision 提交 typed Proposal；不推进 current pointer。
+  request_entity: ProposeGatheringPlanCommand
+  response_entity: GatheringPlanCommandResult
+  authorization:
+    principal: persona
+    ownership_policy: delegated_current_gathering_host_or_active_participation
+  reliability:
+    timeout_ms: 3000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CIRCLE.USER.gathering_plan_not_found
+  - CIRCLE.USER.gathering_plan_invalid
+  - CIRCLE.USER.gathering_plan_permission_denied
+  - CIRCLE.USER.gathering_plan_gathering_unavailable
+  - CIRCLE.USER.gathering_plan_version_conflict
+  - CIRCLE.USER.gathering_plan_revision_conflict
+  - CIRCLE.USER.gathering_plan_idempotency_conflict
+  - CIRCLE.SYSTEM.gathering_plan_storage_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: gathering_plan_propose
+    trace: true
+    attributes:
+    - outcome
+    - authority_kind
+  slo:
+    latency_p95_ms: 1500
+    availability_percent: 99.9
+  request_body_kind: object
+- method: POST
+  path: /gathering-plans/{planId}/commit
+  operation: CommitGatheringPlanProposal
+  request_bindings:
+    path:
+    - name: planId
+      field: planId
+  actor: persona
+  security:
+    auth_mode: required
+    principal: persona
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+  application:
+    kind: command
+    facet: GatheringPlanCommandFacet
+    method: commitGatheringPlanProposal
+    aggregate_owner: GatheringPlan
+    mutation_target: GatheringPlan
+    invariant_target: GatheringPlan
+  description: current Host 对匹配 CAS/base/proposal digest 的 Proposal 追加 immutable Revision 并推进 current pointer。
+  request_entity: CommitGatheringPlanProposalCommand
+  response_entity: GatheringPlanCommandResult
+  authorization:
+    principal: persona
+    ownership_policy: delegated_current_gathering_host
+  reliability:
+    timeout_ms: 3000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CIRCLE.USER.gathering_plan_not_found
+  - CIRCLE.USER.gathering_plan_invalid
+  - CIRCLE.USER.gathering_plan_proposal_not_found
+  - CIRCLE.USER.gathering_plan_permission_denied
+  - CIRCLE.USER.gathering_plan_gathering_unavailable
+  - CIRCLE.USER.gathering_plan_version_conflict
+  - CIRCLE.USER.gathering_plan_revision_conflict
+  - CIRCLE.USER.gathering_plan_proposal_conflict
+  - CIRCLE.USER.gathering_plan_idempotency_conflict
+  - CIRCLE.SYSTEM.gathering_plan_storage_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: gathering_plan_commit
+    trace: true
+    attributes:
+    - outcome
+    - acknowledgement_mode
+  slo:
+    latency_p95_ms: 1500
+    availability_percent: 99.9
+  request_body_kind: object
+- method: GET
+  path: /gatherings/{gatheringId}/plan
+  operation: GetGatheringPlan
+  request_bindings:
+    path:
+    - name: gatheringId
+      field: gatheringId
+  actor: persona
+  security:
+    auth_mode: required
+    principal: persona
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+  application:
+    kind: query
+    facet: GatheringPlanQueryFacet
+    method: getGatheringPlan
+    reader: GatheringPlanReader
+    slice: GatheringPlan
+  description: 按 gatheringId 读取 current Plan、typed Proposal/Revision 与 Plan-level acknowledgement refs。
+  request_entity: GatheringPlanByGatheringQuery
+  response_entity: GatheringPlan
+  authorization:
+    principal: persona
+    ownership_policy: delegated_current_gathering_host_or_active_participation
+  reliability:
+    timeout_ms: 1000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  error_codes:
+  - CIRCLE.USER.gathering_plan_not_found
+  - CIRCLE.USER.gathering_plan_permission_denied
+  - CIRCLE.USER.gathering_plan_gathering_unavailable
+  - CIRCLE.SYSTEM.gathering_plan_storage_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: gathering_plan_get
+    trace: true
+    attributes:
+    - outcome
+    - authority_kind
+  slo:
+    latency_p95_ms: 400
+    availability_percent: 99.9
+  request_body_kind: none
+- method: GET
+  path: /gathering-plans/{planId}/revisions
+  operation: ListGatheringPlanRevisions
+  request_bindings:
+    path:
+    - name: planId
+      field: planId
+    query:
+    - name: cursor
+      field: cursor
+      required: false
+    - name: limit
+      field: limit
+      required: false
+  actor: persona
+  security:
+    auth_mode: required
+    principal: persona
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+  application:
+    kind: query
+    facet: GatheringPlanQueryFacet
+    method: listGatheringPlanRevisions
+    reader: GatheringPlanReader
+    slice: GatheringPlanRevisionPageSlice
+  description: 按稳定 revisionNumber/planId typed keyset 游标列出 immutable PlanRevision history。
+  request_entity: GatheringPlanRevisionPageQuery
+  response_entity: GatheringPlanRevisionPageSlice
+  authorization:
+    principal: persona
+    ownership_policy: delegated_current_gathering_host_or_active_participation
+  reliability:
+    timeout_ms: 1000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  error_codes:
+  - CIRCLE.USER.gathering_plan_not_found
+  - CIRCLE.USER.gathering_plan_permission_denied
+  - CIRCLE.USER.gathering_plan_gathering_unavailable
+  - CIRCLE.USER.gathering_plan_cursor_invalid
+  - CIRCLE.SYSTEM.gathering_plan_storage_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: gathering_plan_revision_list
+    trace: true
+    attributes:
+    - outcome
+    - has_more
+  slo:
+    latency_p95_ms: 400
+    availability_percent: 99.9
+  request_body_kind: none
+readiness_cases:
+- case_id: gathering-plan-create-propose-commit-local
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-plan-collaboration/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target:
+    kind: object
+    id: circle.gathering_plan
+  runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/gathering_plan/create_propose_commit__local_contract_test.go
+  executions:
+  - env: alpha
+    platform: service
+    device: runner
+    provider: none
+    digest_binding: candidate
+- case_id: gathering-plan-cas-idempotency-authority-local
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-plan-collaboration/spec.md#gwt-002
+  producer: service
+  layer: local_contract
+  target:
+    kind: object
+    id: circle.gathering_plan
+  runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/gathering_plan/cas_idempotency_authority__local_contract_test.go
+  executions:
+  - env: alpha
+    platform: service
+    device: runner
+    provider: none
+    digest_binding: candidate
+- case_id: gathering-plan-closed-authority-local
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-plan-collaboration/spec.md#gwt-003
+  producer: service
+  layer: local_contract
+  target:
+    kind: object
+    id: circle.gathering_plan
+  runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/gathering_plan/closed_authority__local_contract_test.go
+  executions:
+  - env: alpha
+    platform: service
+    device: runner
+    provider: none
+    digest_binding: candidate
+- case_id: create-gathering-plan-api
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-plan-collaboration/spec.md#gwt-001
+  producer: service
+  layer: api_integration
+  target:
+    kind: operation
+    id: CreateGatheringPlan
+  runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/gathering_plan/gathering_plan_http_mongo__api_integration_test.go
+  executions:
+  - env: beta
+    platform: service
+    device: runner
+    provider: mongodb
+    digest_binding: candidate
+- case_id: propose-gathering-plan-api
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-plan-collaboration/spec.md#gwt-001
+  producer: service
+  layer: api_integration
+  target:
+    kind: operation
+    id: ProposeGatheringPlan
+  runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/gathering_plan/gathering_plan_http_mongo__api_integration_test.go
+  executions:
+  - env: beta
+    platform: service
+    device: runner
+    provider: mongodb
+    digest_binding: candidate
+- case_id: commit-gathering-plan-proposal-api
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-plan-collaboration/spec.md#gwt-001
+  producer: service
+  layer: api_integration
+  target:
+    kind: operation
+    id: CommitGatheringPlanProposal
+  runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/gathering_plan/gathering_plan_http_mongo__api_integration_test.go
+  executions:
+  - env: beta
+    platform: service
+    device: runner
+    provider: mongodb
+    digest_binding: candidate
+- case_id: get-gathering-plan-api
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-plan-collaboration/spec.md#gwt-001
+  producer: service
+  layer: api_integration
+  target:
+    kind: operation
+    id: GetGatheringPlan
+  runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/gathering_plan/gathering_plan_http_mongo__api_integration_test.go
+  executions:
+  - env: beta
+    platform: service
+    device: runner
+    provider: mongodb
+    digest_binding: candidate
+- case_id: list-gathering-plan-revisions-api
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-plan-collaboration/spec.md#gwt-001
+  producer: service
+  layer: api_integration
+  target:
+    kind: operation
+    id: ListGatheringPlanRevisions
+  runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/gathering_plan/gathering_plan_http_mongo__api_integration_test.go
+  executions:
+  - env: beta
+    platform: service
+    device: runner
+    provider: mongodb
+    digest_binding: candidate

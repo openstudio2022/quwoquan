@@ -109,7 +109,7 @@ PY
   elif ! (
     cd "$ROOT/quwoquan_app"
     SEARCH_REMOTE_EVIDENCE_PATH="$EVIDENCE" flutter test \
-      test/api_integration/cloud/search/search_remote_roundtrip__api_integration_test.dart \
+      test/api_integration/service/search_service/search/search_index_view/search_remote_roundtrip__api_integration_test.dart \
       "--dart-define-from-file=$SESSION_DEFINES" \
       "--dart-define=GAMMA_GATEWAY_URL=$GATEWAY_BASE_URL" \
       --dart-define=GAMMA_GATEWAY_RESOLVE_HOST=127.0.0.1 \

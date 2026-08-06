@@ -70,11 +70,12 @@ func (verifier *MongoVerifier) Verify(
 		}
 	}
 	return connectionmodel.VerifiedGrant{
-		AuthorizationID:     document.AuthorizationID,
-		CredentialRef:       document.CredentialRef,
-		ReceiptDigest:       document.GrantReceiptDigest,
-		GrantedCapabilities: granted,
-		ExpiresAt:           document.CredentialExpiresAt,
+		AuthorizationID:              document.AuthorizationID,
+		CredentialRef:                document.CredentialRef,
+		ProviderAccountSubjectDigest: document.ProviderAccountSubjectDigest,
+		ReceiptDigest:                document.GrantReceiptDigest,
+		GrantedCapabilities:          granted,
+		ExpiresAt:                    document.CredentialExpiresAt,
 	}, nil
 }
 

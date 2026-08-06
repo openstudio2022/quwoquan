@@ -2,10 +2,64 @@ package ports
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	reportmodel "quwoquan_service/services/content-service/internal/trust_safety/report/domain/model"
 )
+
+var (
+	ErrGatheringSafetyAuthorizationNotFound = errors.New("Gathering safety authorization not found")
+	ErrGatheringSafetyAuthorizationDenied   = errors.New("Gathering safety authorization denied")
+	ErrGatheringSafetyAuthorizationConflict = errors.New("Gathering safety authorization conflict")
+)
+
+const GatheringSafetyActionTerminate = "terminate_gathering"
+
+type GatheringSafetyAuthorization struct {
+	ActorPersonaID  string
+	GatheringID     string
+	Action          string
+	EvidenceRef     string
+	DecisionRef     string
+	DecisionVersion int64
+	DecisionDigest  string
+	ExpiresAt       time.Time
+	IssuedAt        time.Time
+	RevokedAt       time.Time
+}
+
+type IssueGatheringSafetyAuthorizationRequest struct {
+	ReportID              string
+	ExpectedReportVersion int64
+	ActorPersonaID        string
+	ExpiresAt             time.Time
+	IdempotencyKey        string
+}
+
+type RevokeGatheringSafetyAuthorizationRequest struct {
+	ReportID       string
+	DecisionRef    string
+	IdempotencyKey string
+	RevokedAt      time.Time
+}
+
+// GatheringSafetyAuthorityStore is Report's canonical short-lived authority
+// owner. Reads must return the current revocation and expiry state.
+type GatheringSafetyAuthorityStore interface {
+	IssueGatheringSafetyAuthorization(
+		context.Context,
+		IssueGatheringSafetyAuthorizationRequest,
+	) (GatheringSafetyAuthorization, bool, error)
+	RevokeGatheringSafetyAuthorization(
+		context.Context,
+		RevokeGatheringSafetyAuthorizationRequest,
+	) (GatheringSafetyAuthorization, bool, error)
+	ReadGatheringSafetyAuthorization(
+		context.Context,
+		string,
+	) (GatheringSafetyAuthorization, bool, error)
+}
 
 // OutboxCheckpoint 是 Report outbox 全序中的不透明水位。消费者只能持久化
 // Reader 附在 OutboxEvent 上的值，不能自行拼接或解释。

@@ -21,13 +21,16 @@
     "creatorCount": {"type": "integer", "minimum": 0},
     "tagCount": {"type": "integer", "minimum": 0},
     "canonicalMerkle": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "sourceRevision": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "sourceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "entityCatalogDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "sourceDigests": {"type": "array", "minItems": 1, "items": {"type": "object", "required": ["algorithm", "digest", "inputs"], "additionalProperties": false, "properties": {"algorithm": {"const": "sha256"}, "digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}, "inputs": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}}}},
     "payloadSha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "recordedAt": {"type": "string", "minLength": 1}
   },
   "allOf": [
-    {"if": {"properties": {"releaseKind": {"const": "content"}}}, "then": {"properties": {"executionIds": {"minItems": 1}}, "anyOf": [{"properties": {"entityCount": {"minimum": 1}}}, {"properties": {"postCount": {"minimum": 1}}}]}},
-    {"if": {"properties": {"releaseKind": {"const": "empty_baseline"}}}, "then": {"properties": {"executionIds": {"maxItems": 0}, "entityCount": {"const": 0}, "postCount": {"const": 0}, "creatorCount": {"const": 0}, "tagCount": {"const": 0}, "containsUnverifiedAssets": {"const": false}, "authorizationRequiredAssetIds": {"maxItems": 0}, "researchAcceptedCount": {"const": 0}, "commercialAcceptedCount": {"const": 0}}}},
+    {"if": {"properties": {"releaseKind": {"const": "content"}}}, "then": {"required": ["sourceRevision", "sourceDigest", "entityCatalogDigest"], "properties": {"executionIds": {"minItems": 1}}, "anyOf": [{"properties": {"entityCount": {"minimum": 1}}}, {"properties": {"postCount": {"minimum": 1}}}]}},
+    {"if": {"properties": {"releaseKind": {"const": "empty_baseline"}}}, "then": {"not": {"anyOf": [{"required": ["sourceRevision"]}, {"required": ["sourceDigest"]}, {"required": ["entityCatalogDigest"]}]}, "properties": {"executionIds": {"maxItems": 0}, "entityCount": {"const": 0}, "postCount": {"const": 0}, "creatorCount": {"const": 0}, "tagCount": {"const": 0}, "containsUnverifiedAssets": {"const": false}, "authorizationRequiredAssetIds": {"maxItems": 0}, "researchAcceptedCount": {"const": 0}, "commercialAcceptedCount": {"const": 0}}}},
     {"if": {"properties": {"releaseClass": {"const": "commercial"}}}, "then": {"properties": {"productLifecycleState": {"const": "commercial"}, "containsUnverifiedAssets": {"const": false}, "authorizationRequiredAssetIds": {"maxItems": 0}}}, "else": {"properties": {"productLifecycleState": {"const": "research"}}}}
   ]
 }

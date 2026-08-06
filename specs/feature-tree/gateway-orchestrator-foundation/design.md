@@ -40,6 +40,17 @@
 - 关联要求：`REQ-001`
 - 关联能力：[`orchestration-degradation-rollback`](./orchestration-degradation-rollback/spec.md)、[`realtime-gateway`](./realtime-gateway/spec.md)、[`request-context-propagation`](./request-context-propagation/spec.md)、[`unified-entry-security`](./unified-entry-security/spec.md)
 
+<a id="dec-002"></a>
+### DEC-002 商用治理态只在对外边界 fail-closed，进程内 guard 只强制 deadline 与身份授权
+- 决策：operation 商用状态未达 ready 时的拒绝只在对外边界强制；业务服务进程内的入口 guard 只强制请求 deadline、身份验签与 operation 授权，不读取商用治理态。
+- 理由：对外边界已对全部生成的 operation 描述符施加该门，生产流量必然先经过边界，进程内重复施加对真实流量的收益为零。
+- 理由：进程内一并施加会掐死直连服务的取证路径，让未达 ready 的 operation 永远拿不到转 ready 所需的运行证据，形成自锁。
+- 被否决方案：在进程内 guard 复制商用状态判定、按环境放宽该判定、或为取证单独开一条绕过 guard 的旁路。
+- 约束与影响：商用治理态是准出与发布决策的输入，不是进程内访问控制的输入。
+- 约束与影响：取证调用仍必须完整通过身份、授权与 deadline 三项强制，不因免除治理态判定而降低安全边界。
+- 关联要求：`REQ-002`
+- 关联能力：[`unified-entry-security`](./unified-entry-security/spec.md)、[`orchestration-degradation-rollback`](./orchestration-degradation-rollback/spec.md)
+
 ## 6. 质量与运行约束
 
 - 沿用 AppRoot 全局质量约束并保持 metadata/code/test 单轨。

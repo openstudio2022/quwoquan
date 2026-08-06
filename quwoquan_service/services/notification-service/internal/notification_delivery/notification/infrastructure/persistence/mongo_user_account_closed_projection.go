@@ -55,7 +55,7 @@ type MongoUserAccountClosedProjection struct {
 	deliveryLifecycle jobapplication.AccountLifecycle
 }
 
-var _ application.UserAccountClosedProjection = (*MongoUserAccountClosedProjection)(nil)
+var _ application.UserAccountClosedProjectionStore = (*MongoUserAccountClosedProjection)(nil)
 
 func NewMongoUserAccountClosedProjection(
 	db *mongo.Database,

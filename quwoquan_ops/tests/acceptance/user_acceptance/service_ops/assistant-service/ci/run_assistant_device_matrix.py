@@ -40,7 +40,7 @@ ASSISTANT_SERVICE_DIR = (
     REPO_ROOT / "quwoquan_service" / "services" / "assistant-service"
 )
 DEFAULT_REPORT_PATH = REPO_ROOT / ".qwq_output" / "env" / "beta" / "runs" / "assistant-device-matrix" / "report.json"
-TEST_PATH = "test/local_contract/quality/shared/assistant/assistant_environment_smoke__local_contract_test.dart"
+TEST_PATH = "test/user_acceptance/service/assistant_service/assistant/assistant_run/assistant_environment_smoke__user_acceptance_test.dart"
 ASSISTANT_SCENARIO_FIXTURE = (
     REPO_ROOT
     / "quwoquan_service"

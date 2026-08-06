@@ -24,8 +24,10 @@ import (
 	rtmetrics "quwoquan_service/runtime/metrics"
 	rtobs "quwoquan_service/runtime/observability"
 	rtotel "quwoquan_service/runtime/otel"
+	admissiondecision "quwoquan_service/services/api-edge/internal/edge_security/operation_admission_decision/application"
+	admissiondecisioninfra "quwoquan_service/services/api-edge/internal/edge_security/operation_admission_decision/infrastructure"
 	httpadapter "quwoquan_service/services/api-edge/internal/edge_security/rate_limit_bucket/adapters/inbound/http"
-	"quwoquan_service/services/api-edge/internal/edge_security/rate_limit_bucket/application"
+	admissionapp "quwoquan_service/services/api-edge/internal/edge_security/rate_limit_bucket/application"
 	admissionmetrics "quwoquan_service/services/api-edge/internal/edge_security/rate_limit_bucket/infrastructure/observability"
 	"quwoquan_service/services/api-edge/internal/edge_security/rate_limit_bucket/infrastructure/redisstore"
 )
@@ -106,7 +108,7 @@ func run() error {
 		return fmt.Errorf("shared admission store invalid: %w", err)
 	}
 	defer store.Close()
-	admission, err := application.NewService(
+	admission, err := admissionapp.NewService(
 		environment,
 		store,
 		config.policySet(),
@@ -116,12 +118,12 @@ func run() error {
 		return fmt.Errorf("admission service invalid: %w", err)
 	}
 
-	descriptors := application.AllOperationDescriptors()
+	descriptors := admissionapp.AllOperationDescriptors()
 	ownerRoutes, err := buildOwnerRoutes(config.Upstreams)
 	if err != nil {
 		return err
 	}
-	if err := application.ValidateDescriptorOwners(descriptors); err != nil {
+	if err := admissionapp.ValidateDescriptorOwners(descriptors); err != nil {
 		return err
 	}
 	ownerProxy, err := httpadapter.NewOwnerProxy(httpadapter.OwnerProxyConfig{
@@ -137,7 +139,10 @@ func run() error {
 		admission,
 		httpadapter.SubjectResolver{TrustedNetworkHeader: config.Edge.TrustedNetworkHeader},
 	)(ownerProxy)
-	businessHandler = rtauth.RequireGeneratedOperationAuthorization(descriptors)(businessHandler)
+	operationAdmission := admissiondecision.NewFacade(
+		admissiondecisioninfra.NewGeneratedOperationPort(descriptors),
+	)
+	businessHandler = operationAdmission.Wrap(businessHandler)
 	businessHandler = rtauth.Middleware(rtauth.MiddlewareConfig{
 		AccessTokenVerifier:      accessVerifier,
 		DeviceTicketVerifier:     deviceVerifier,
@@ -227,12 +232,17 @@ func run() error {
 		processLogger,
 		exceptionLogger,
 	)
+	// The edge fronts every domain, so its transport ceiling is the widest
+	// declared operation budget: a hand-written value here would silently cut
+	// the longest streaming operation short.
+	timeouts := rtauth.ContractHTTPServerTimeouts(descriptors)
 	server := &http.Server{
 		Addr:              config.Service.HTTP.Addr,
 		Handler:           observed,
 		BaseContext:       func(net.Listener) context.Context { return context.Background() },
-		ReadHeaderTimeout: 5 * time.Second,
-		IdleTimeout:       120 * time.Second,
+		ReadHeaderTimeout: timeouts.ReadHeader,
+		WriteTimeout:      timeouts.Write,
+		IdleTimeout:       timeouts.Idle,
 	}
 	log.Printf("api-edge listening on %s contractGraph=%s", server.Addr, operationsecurity.ContractGraphSHA256)
 	return rthttp.ListenAndServeGraceful(server, 15*time.Second)

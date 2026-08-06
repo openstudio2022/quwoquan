@@ -6,6 +6,21 @@ import (
 	"strings"
 )
 
+// delegatedPersonaCompatibilityScopes freezes the legacy persona-bearing
+// service credential surface. The credential remains usable only for safe
+// reads; operation_guard rejects it on every write method. New integrations
+// must use DelegatedQueryGrant or account-authority-approved
+// DelegatedCommandGrant instead of expanding this set.
+var delegatedPersonaCompatibilityScopes = map[string]struct{}{
+	"chat.conversation.internal_direct": {},
+	"chat.member.list":                  {},
+	"circle.members.self":               {},
+	"content.my_intersections.read":     {},
+	"content.object_intersections.read": {},
+	"travel.trip.read":                  {},
+	"user.relationship.read":            {},
+}
+
 // ServiceAuthorizationProvider creates a short-lived authorization header for
 // one service-to-service request. Production composition derives it from the
 // same runtime signing config used by inbound verifiers; long-lived bearer
@@ -84,6 +99,14 @@ func NewHS256DelegatedPersonaAuthorizationProvider(
 	}
 	if len(scopes) == 0 {
 		return nil, fmt.Errorf("delegated credential scope is required")
+	}
+	for _, scope := range normalizedGrants(scopes) {
+		if _, allowed := delegatedPersonaCompatibilityScopes[scope]; !allowed {
+			return nil, fmt.Errorf(
+				"delegated persona compatibility scope is not allowlisted: %s",
+				scope,
+			)
+		}
 	}
 	signer, err := NewHS256Signer(config)
 	if err != nil {

@@ -1,0 +1,61 @@
+backend: mongodb
+role: authoritative
+description: GatheringPlan、typed Proposal、immutable Revision、receipt 与 event log 在独立 owner Mongo 边界持久化；不修改 Gathering collection。
+collections:
+  gathering_plans:
+    publication_role: not_published
+    entity: GatheringPlan
+    role: authoritative
+    description: optional Plan root 文档；gatheringId 唯一，Proposal、Revision 与 acknowledgement 只能经 aggregate facade 改写。
+    indexes:
+    - name: uq_gathering_plan_gathering
+      keys: {gatheringId: 1}
+      unique: true
+    - name: idx_gathering_plan_current_revision
+      keys: {_id: 1, currentRevisionNumber: -1}
+    - name: idx_gathering_plan_proposal
+      keys: {_id: 1, proposals.proposalId: 1}
+    - name: idx_gathering_plan_updated
+      keys: {updatedAt: -1, _id: 1}
+  gathering_plan_command_receipts:
+    publication_role: not_published
+    entity: GatheringPlanCommandReceipt
+    role: idempotency_receipt
+    description: 与 Plan state 和 event log 同一 MongoDB transaction 提交的 actor/idempotency/digest 回执。
+    indexes:
+    - name: uq_gathering_plan_command_receipt
+      keys: {_id: 1}
+      unique: true
+    - name: ttl_gathering_plan_command_receipt
+      keys: {expiresAt: 1}
+      expire_after_seconds: 0
+  gathering_plan_event_log:
+    publication_role: transactional_event_log
+    entity: GatheringPlanEventLog
+    role: append_only
+    description: owner typed 事务事件日志；可靠追加即完成当前义务，不声明 publication、retry 或 consumer checkpoint。
+    indexes:
+    - name: uq_gathering_plan_event_log_sequence
+      keys: {eventLogSequence: 1}
+      unique: true
+    - name: uq_gathering_plan_event_log_event
+      keys: {eventId: 1}
+      unique: true
+    - name: idx_gathering_plan_event_log_aggregate
+      keys: {aggregateId: 1, aggregateVersion: 1}
+      unique: true
+  gathering_plan_event_log_sequences:
+    publication_role: not_published
+    entity: GatheringPlanEventLog
+    role: authoritative
+    description: GatheringPlan owner event log 单调序列分配器；不承担发布 checkpoint。
+transaction:
+  scope: [gathering_plans, gathering_plan_command_receipts, gathering_plan_event_log, gathering_plan_event_log_sequences]
+  isolation: mongo_transaction
+  guarantees:
+  - aggregate_version_cas
+  - one_plan_per_gathering
+  - append_only_revision_history
+  - no_last_write_wins
+  - command_idempotency
+  - owner_state_receipt_event_log_atomicity

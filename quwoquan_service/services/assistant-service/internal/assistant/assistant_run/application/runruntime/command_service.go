@@ -35,14 +35,23 @@ type StartCommand struct {
 	DefinitionOfDone    DefinitionOfDone
 }
 
-type ContinueToolUseCommand struct {
-	UserID            string
-	RunID             string
-	ToolUseID         string
-	CommandID         string
-	Decision          string
-	ContinuationToken string
-	ExecutionReceipt  *DeviceActionExecutionReceipt
+type ApproveToolUseCommand struct {
+	UserID           string
+	RunID            string
+	ToolInvocationID string
+	CommandID        string
+	Decision         string
+	ApprovalPermit   string
+	InstallationID   string
+	DeviceID         string
+}
+
+type SubmitDeviceActionReceiptCommand struct {
+	UserID           string
+	RunID            string
+	ToolInvocationID string
+	CommandID        string
+	Receipt          DeviceActionExecutionReceipt
 }
 
 type SessionResolver interface {
@@ -606,83 +615,88 @@ func (s *CommandService) Cancel(
 	return run, err
 }
 
-func (s *CommandService) ContinueToolUse(
+func (s *CommandService) ApproveToolUse(
 	ctx context.Context,
-	command ContinueToolUseCommand,
-) (Run, error) {
+	command ApproveToolUseCommand,
+) (Run, *DeviceActionPermit, error) {
 	decision := strings.TrimSpace(command.Decision)
 	if decision != "approved" && decision != "rejected" {
-		return Run{}, ErrInvalidRun
+		return Run{}, nil, ErrInvalidRun
 	}
-	executionOutcome := ""
-	if command.ExecutionReceipt != nil {
-		executionOutcome = strings.TrimSpace(command.ExecutionReceipt.Outcome)
+	if decision == "approved" &&
+		(strings.TrimSpace(command.InstallationID) == "" ||
+			strings.TrimSpace(command.DeviceID) == "") {
+		return Run{}, nil, ErrInvalidRun
 	}
-	return s.mutate(
+	permitValue, jti, err := newDeviceActionPermitIdentity()
+	if err != nil {
+		return Run{}, nil, err
+	}
+	run, err := s.mutate(
 		ctx,
 		command.UserID,
 		command.RunID,
 		command.CommandID,
-		"tool_use_continued",
+		"tool_use_approved",
 		map[string]string{
-			"toolUseId":        command.ToolUseID,
+			"toolInvocationId": command.ToolInvocationID,
 			"decision":         decision,
-			"executionOutcome": executionOutcome,
 		},
 		func(run *Run, now time.Time) error {
 			if run.State != generated.AssistantRunStateWaitingApproval ||
 				run.Checkpoint == nil ||
-				run.Checkpoint.PendingApprovalRef != strings.TrimSpace(command.ToolUseID) ||
-				strings.TrimSpace(command.ContinuationToken) !=
-					assistantRunContinuationToken(run.RunID, command.ToolUseID) {
+				run.Checkpoint.PendingApprovalRef !=
+					strings.TrimSpace(command.ToolInvocationID) ||
+				strings.TrimSpace(command.ApprovalPermit) !=
+					assistantRunContinuationToken(
+						run.RunID,
+						command.ToolInvocationID,
+					) {
 				return ErrInvalidTransition
 			}
-			expectedActionKind, valid := pendingDeviceActionKind(
+			binding, valid := pendingDeviceActionBinding(
 				run.PresentationDocument,
-				strings.TrimSpace(command.ToolUseID),
-				strings.TrimSpace(command.ContinuationToken),
+				run.RunID,
+				strings.TrimSpace(command.ToolInvocationID),
+				strings.TrimSpace(command.ApprovalPermit),
+				decision,
+				now,
 			)
 			if !valid {
 				return ErrInvalidRun
 			}
-			if err := validateDeviceActionExecutionReceipt(
-				command,
-				decision,
-				expectedActionKind,
-			); err != nil {
-				return err
+			if decision == "approved" {
+				permit := DeviceActionPermit{
+					RunID:            run.RunID,
+					ToolInvocationID: strings.TrimSpace(command.ToolInvocationID),
+					InstallationID:   strings.TrimSpace(command.InstallationID),
+					DeviceID:         strings.TrimSpace(command.DeviceID),
+					Capability:       binding.Capability,
+					InputDigest:      binding.InputDigest,
+					IdempotencyKey:   strings.TrimSpace(command.ToolInvocationID),
+					ApprovalRef:      strings.TrimSpace(command.ApprovalPermit),
+					JTI:              jti,
+					ExpiresAt:        now.UTC().Add(time.Minute),
+					Permit:           permitValue,
+				}
+				run.Checkpoint.PendingApprovalRef = ""
+				run.Checkpoint.PendingDeviceAction = &permit
+				run.Checkpoint.DecisionSummary = append(
+					run.Checkpoint.DecisionSummary,
+					"device_action_approved:"+
+						strings.TrimSpace(command.ToolInvocationID),
+				)
+				return run.Transition(
+					generated.AssistantRunStateWaitingExternal,
+					"device_action_receipt_pending",
+					now,
+				)
 			}
 			run.Checkpoint.PendingApprovalRef = ""
-			if command.ExecutionReceipt != nil {
-				receipt := *command.ExecutionReceipt
-				receipt.ActionKind = strings.TrimSpace(receipt.ActionKind)
-				receipt.IdempotencyKey = strings.TrimSpace(receipt.IdempotencyKey)
-				receipt.Outcome = strings.TrimSpace(receipt.Outcome)
-				receipt.ExecutedAt = receipt.ExecutedAt.UTC()
-				receipt.DeviceObjectID = strings.TrimSpace(receipt.DeviceObjectID)
-				receipt.FailureCode = strings.TrimSpace(receipt.FailureCode)
-				run.Checkpoint.DeviceActionReceipts = append(
-					run.Checkpoint.DeviceActionReceipts,
-					receipt,
-				)
-			}
-			if decision == "approved" {
-				run.Checkpoint.DecisionSummary = append(
-					run.Checkpoint.DecisionSummary,
-					"device_action_completed:"+strings.TrimSpace(command.ToolUseID),
-				)
-				return run.Transition(generated.AssistantRunStateExecuting, "", now)
-			}
-			if command.ExecutionReceipt != nil {
-				run.Checkpoint.DecisionSummary = append(
-					run.Checkpoint.DecisionSummary,
-					"device_action_failed:"+
-						strings.TrimSpace(command.ToolUseID)+":"+
-						strings.TrimSpace(command.ExecutionReceipt.Outcome),
-				)
-			}
+			run.Checkpoint.PendingDeviceAction = nil
 			for index := range run.Items {
-				if run.Items[index].ItemID == strings.TrimSpace(command.ToolUseID) &&
+				if run.Items[index].ItemID ==
+					strings.TrimSpace(command.ToolInvocationID) &&
 					run.Items[index].Status == generated.AssistantRunItemStatusStarted {
 					if err := run.CompleteItem(
 						run.Items[index].ItemID,
@@ -700,69 +714,161 @@ func (s *CommandService) ContinueToolUse(
 			return run.Transition(generated.AssistantRunStateCancelled, "user_rejected", now)
 		},
 	)
+	if err != nil {
+		return Run{}, nil, err
+	}
+	if run.Checkpoint == nil || run.Checkpoint.PendingDeviceAction == nil {
+		return run, nil, nil
+	}
+	permit := *run.Checkpoint.PendingDeviceAction
+	return run, &permit, nil
 }
 
-func validateDeviceActionExecutionReceipt(
-	command ContinueToolUseCommand,
-	decision string,
-	expectedActionKind string,
-) error {
-	receipt := command.ExecutionReceipt
-	expectedActionKind = strings.TrimSpace(expectedActionKind)
-	if expectedActionKind == "" {
-		return ErrInvalidRun
-	}
-	if decision == "rejected" {
-		if receipt == nil {
-			return nil
-		}
-		outcome := strings.TrimSpace(receipt.Outcome)
-		if strings.TrimSpace(receipt.ActionKind) != expectedActionKind ||
-			strings.TrimSpace(receipt.IdempotencyKey) != strings.TrimSpace(command.ToolUseID) ||
-			(outcome != "unavailable" && outcome != "denied" && outcome != "failed") ||
-			receipt.ExecutedAt.IsZero() ||
-			strings.TrimSpace(receipt.FailureCode) == "" {
-			return ErrInvalidRun
-		}
-		return nil
-	}
-	if receipt == nil ||
-		strings.TrimSpace(receipt.ActionKind) != expectedActionKind ||
-		strings.TrimSpace(receipt.IdempotencyKey) != strings.TrimSpace(command.ToolUseID) ||
-		strings.TrimSpace(receipt.Outcome) != "completed" ||
-		receipt.ExecutedAt.IsZero() ||
-		strings.TrimSpace(receipt.FailureCode) != "" {
-		return ErrInvalidRun
-	}
-	return nil
+func (s *CommandService) SubmitDeviceActionReceipt(
+	ctx context.Context,
+	command SubmitDeviceActionReceiptCommand,
+) (Run, error) {
+	return s.mutate(
+		ctx,
+		command.UserID,
+		command.RunID,
+		command.CommandID,
+		"device_action_receipt_submitted",
+		map[string]string{
+			"toolInvocationId": command.ToolInvocationID,
+			"outcome":          command.Receipt.Outcome,
+		},
+		func(run *Run, now time.Time) error {
+			if run.State != generated.AssistantRunStateWaitingExternal ||
+				run.Checkpoint == nil ||
+				run.Checkpoint.PendingDeviceAction == nil {
+				return ErrInvalidTransition
+			}
+			permit := *run.Checkpoint.PendingDeviceAction
+			receipt := command.Receipt
+			if now.UTC().After(permit.ExpiresAt) ||
+				permit.RunID != strings.TrimSpace(command.RunID) ||
+				permit.ToolInvocationID != strings.TrimSpace(command.ToolInvocationID) ||
+				permit.InstallationID != strings.TrimSpace(receipt.InstallationID) ||
+				permit.DeviceID != strings.TrimSpace(receipt.DeviceID) ||
+				permit.Capability != strings.TrimSpace(receipt.Capability) ||
+				permit.InputDigest != strings.TrimSpace(receipt.InputDigest) ||
+				permit.IdempotencyKey != strings.TrimSpace(receipt.IdempotencyKey) ||
+				permit.IdempotencyKey != strings.TrimSpace(command.CommandID) ||
+				permit.Permit != strings.TrimSpace(receipt.Permit) ||
+				receipt.ExecutedAt.IsZero() {
+				return ErrInvalidRun
+			}
+			outcome := strings.TrimSpace(receipt.Outcome)
+			switch outcome {
+			case "completed":
+				if strings.TrimSpace(receipt.FailureCode) != "" {
+					return ErrInvalidRun
+				}
+			case "unavailable", "denied", "failed":
+				if strings.TrimSpace(receipt.FailureCode) == "" {
+					return ErrInvalidRun
+				}
+			default:
+				return ErrInvalidRun
+			}
+			receipt.InstallationID = strings.TrimSpace(receipt.InstallationID)
+			receipt.DeviceID = strings.TrimSpace(receipt.DeviceID)
+			receipt.Capability = strings.TrimSpace(receipt.Capability)
+			receipt.InputDigest = strings.TrimSpace(receipt.InputDigest)
+			receipt.Permit = strings.TrimSpace(receipt.Permit)
+			receipt.IdempotencyKey = strings.TrimSpace(receipt.IdempotencyKey)
+			receipt.Outcome = outcome
+			receipt.ExecutedAt = receipt.ExecutedAt.UTC()
+			receipt.DeviceObjectID = strings.TrimSpace(receipt.DeviceObjectID)
+			receipt.FailureCode = strings.TrimSpace(receipt.FailureCode)
+			run.Checkpoint.DeviceActionReceipts = append(
+				run.Checkpoint.DeviceActionReceipts,
+				receipt,
+			)
+			run.Checkpoint.PendingDeviceAction = nil
+			if outcome == "completed" {
+				run.Checkpoint.DecisionSummary = append(
+					run.Checkpoint.DecisionSummary,
+					"device_action_completed:"+permit.ToolInvocationID,
+				)
+				return run.Transition(generated.AssistantRunStateExecuting, "", now)
+			}
+			run.Checkpoint.DecisionSummary = append(
+				run.Checkpoint.DecisionSummary,
+				"device_action_failed:"+permit.ToolInvocationID+":"+outcome,
+			)
+			for index := range run.Items {
+				if run.Items[index].ItemID == permit.ToolInvocationID &&
+					run.Items[index].Status == generated.AssistantRunItemStatusStarted {
+					if err := run.CompleteItem(
+						run.Items[index].ItemID,
+						generated.AssistantRunItemStatusCancelled,
+						nil,
+						"device_action_"+outcome,
+						now,
+					); err != nil {
+						return err
+					}
+					break
+				}
+			}
+			run.CancelActiveWork("device_action_"+outcome, now)
+			return run.Transition(
+				generated.AssistantRunStateCancelled,
+				"device_action_"+outcome,
+				now,
+			)
+		},
+	)
 }
 
-func pendingDeviceActionKind(
+type pendingDeviceActionIntentBinding struct {
+	Capability  string
+	InputDigest string
+}
+
+func pendingDeviceActionBinding(
 	presentation map[string]any,
-	toolUseID string,
-	continuationToken string,
-) (string, bool) {
+	runID string,
+	toolInvocationID string,
+	approvalPermit string,
+	decision string,
+	now time.Time,
+) (pendingDeviceActionIntentBinding, bool) {
 	for _, rawNode := range objectSlice(presentation["nodes"]) {
 		action := objectValue(rawNode["action"])
-		if strings.TrimSpace(stringValue(action["operation"])) != "ContinueAssistantToolUse" ||
-			strings.TrimSpace(stringValue(action["objectTypeRef"])) != "assistant_tool_use" ||
-			strings.TrimSpace(stringValue(action["objectId"])) != toolUseID {
+		if strings.TrimSpace(stringValue(action["kind"])) != "ApproveTool" {
 			continue
 		}
-		payload := objectValue(action["payload"])
-		if strings.TrimSpace(stringValue(payload["decision"])) != "approved" ||
-			strings.TrimSpace(stringValue(payload["continuationToken"])) != continuationToken {
+		approveTool := objectValue(action["approveTool"])
+		if strings.TrimSpace(stringValue(approveTool["runId"])) != runID ||
+			strings.TrimSpace(stringValue(approveTool["toolInvocationId"])) !=
+				toolInvocationID ||
+			strings.TrimSpace(stringValue(approveTool["decision"])) != decision ||
+			strings.TrimSpace(stringValue(approveTool["approvalPermit"])) !=
+				approvalPermit {
 			continue
 		}
-		deviceAction := objectValue(payload["deviceAction"])
-		kind := strings.TrimSpace(stringValue(deviceAction["kind"]))
-		if kind == "" ||
-			strings.TrimSpace(stringValue(deviceAction["idempotencyKey"])) != toolUseID {
+		expiresAt, err := time.Parse(
+			time.RFC3339Nano,
+			strings.TrimSpace(stringValue(action["expiresAt"])),
+		)
+		capability := strings.TrimSpace(stringValue(approveTool["capability"]))
+		inputDigest := strings.TrimSpace(stringValue(approveTool["inputDigest"]))
+		expectedDigest := actionIntentRequestDigest(approveTool)
+		if err != nil || !now.UTC().Before(expiresAt.UTC()) ||
+			capability == "" || inputDigest == "" ||
+			expectedDigest == "" ||
+			expectedDigest != strings.TrimSpace(stringValue(action["requestDigest"])) {
 			continue
 		}
-		return kind, true
+		return pendingDeviceActionIntentBinding{
+			Capability:  capability,
+			InputDigest: inputDigest,
+		}, true
 	}
-	return "", false
+	return pendingDeviceActionIntentBinding{}, false
 }
 
 func objectSlice(value any) []map[string]any {
@@ -795,6 +901,29 @@ func stringValue(value any) string {
 func assistantRunContinuationToken(runID string, toolUseID string) string {
 	digest := sha256.Sum256([]byte(strings.TrimSpace(runID) + "\x00" + strings.TrimSpace(toolUseID)))
 	return "ct_" + hex.EncodeToString(digest[:16])
+}
+
+func actionIntentRequestDigest(value map[string]any) string {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return ""
+	}
+	digest := sha256.Sum256(encoded)
+	return "sha256:" + hex.EncodeToString(digest[:])
+}
+
+func newDeviceActionPermitIdentity() (string, string, error) {
+	permitBytes := make([]byte, 32)
+	if _, err := rand.Read(permitBytes); err != nil {
+		return "", "", err
+	}
+	jtiBytes := make([]byte, 16)
+	if _, err := rand.Read(jtiBytes); err != nil {
+		return "", "", err
+	}
+	return "dap_" + hex.EncodeToString(permitBytes),
+		"dapjti_" + hex.EncodeToString(jtiBytes),
+		nil
 }
 
 func (s *CommandService) EventsAfter(

@@ -1,8 +1,10 @@
 package server
 
 import (
+	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -17,33 +19,42 @@ import (
 
 const AdapterID = "ops.provider_protocol_substitute"
 
-var allowedScenarios = map[string]struct{}{
-	"success":     {},
-	"validation":  {},
-	"auth":        {},
-	"timeout":     {},
-	"throttle":    {},
-	"unavailable": {},
-}
-
 type Config struct {
-	Environment         string
-	ConfigurationDigest string
-	OperatorToken       string
-	DefaultScenario     string
+	Environment              string
+	ConfigurationDigest      string
+	RuntimeCompositionDigest string
+	OperatorToken            string
 }
 
 type Server struct {
-	environment         string
-	configurationDigest string
-	operatorToken       string
-	ready               atomic.Bool
-	scenario            atomic.Value
-	mu                  sync.Mutex
-	counts              map[string]uint64
+	environment              string
+	target                   string
+	configurationDigest      string
+	runtimeCompositionDigest string
+	operatorToken            string
+	ready                    atomic.Bool
+	mu                       sync.Mutex
+	counts                   map[string]uint64
+	effectCounts             map[string]uint64
+	leases                   map[string]*FaultLease
+	activeLeaseByScope       map[string]string
+	idempotencyRecords       map[string]*idempotencyRecord
+	callbackChannels         map[string]*CallbackChannel
+	ledger                   []InvocationLedgerEntry
+	callOrdinal              uint64
+	now                      func() time.Time
+	sleep                    func(time.Duration)
 }
 
 func New(cfg Config) (*Server, error) {
+	return newServer(cfg, time.Now, time.Sleep)
+}
+
+func newServer(
+	cfg Config,
+	now func() time.Time,
+	sleep func(time.Duration),
+) (*Server, error) {
 	environment := strings.TrimSpace(cfg.Environment)
 	switch environment {
 	case "alpha", "beta", "gamma":
@@ -51,24 +62,35 @@ func New(cfg Config) (*Server, error) {
 		return nil, fmt.Errorf("provider protocol substitute forbids environment %q", environment)
 	}
 	configurationDigest := strings.TrimSpace(cfg.ConfigurationDigest)
-	if !strings.HasPrefix(configurationDigest, "sha256:") {
+	if !isSHA256Digest(configurationDigest) {
 		return nil, errors.New("provider protocol substitute configuration digest is required")
+	}
+	runtimeCompositionDigest := strings.TrimSpace(cfg.RuntimeCompositionDigest)
+	if !isSHA256Digest(runtimeCompositionDigest) {
+		return nil, errors.New("provider protocol substitute runtime composition digest is required")
 	}
 	operatorToken := strings.TrimSpace(cfg.OperatorToken)
 	if len(operatorToken) < 24 {
 		return nil, errors.New("provider protocol substitute operator token is too short")
 	}
-	scenario := normalizeScenario(cfg.DefaultScenario)
-	if _, found := allowedScenarios[scenario]; !found {
-		return nil, fmt.Errorf("unsupported provider substitute scenario %q", scenario)
+	if now == nil || sleep == nil {
+		return nil, errors.New("provider protocol substitute clock is required")
 	}
 	server := &Server{
-		environment:         environment,
-		configurationDigest: configurationDigest,
-		operatorToken:       operatorToken,
-		counts:              make(map[string]uint64),
+		environment:              environment,
+		target:                   environment + "-local",
+		configurationDigest:      configurationDigest,
+		runtimeCompositionDigest: runtimeCompositionDigest,
+		operatorToken:            operatorToken,
+		counts:                   make(map[string]uint64),
+		effectCounts:             make(map[string]uint64),
+		leases:                   make(map[string]*FaultLease),
+		activeLeaseByScope:       make(map[string]string),
+		idempotencyRecords:       make(map[string]*idempotencyRecord),
+		callbackChannels:         make(map[string]*CallbackChannel),
+		now:                      now,
+		sleep:                    sleep,
 	}
-	server.scenario.Store(scenario)
 	server.ready.Store(true)
 	return server, nil
 }
@@ -76,73 +98,58 @@ func New(cfg Config) (*Server, error) {
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", s.health)
-	mux.HandleFunc("GET /control/receipts", s.authorizeOperator(s.receipts))
-	mux.HandleFunc("PUT /control/scenario", s.authorizeOperator(s.updateScenario))
-	mux.HandleFunc("POST /v1/chat/completions", s.provider("assistant.model.generation", s.modelCompletion))
-	mux.HandleFunc("POST /v1/embeddings", s.provider("content.embedding.generation", s.embedding))
-	mux.HandleFunc("GET /search/html", s.provider("assistant.public.search", s.search))
-	mux.HandleFunc("GET /weather/geocoding", s.provider("assistant.weather.forecast.geocoding", s.weatherGeocoding))
-	mux.HandleFunc("GET /weather/forecast", s.provider("assistant.weather.forecast", s.weatherForecast))
-	mux.HandleFunc("GET /finance/chart/", s.provider("assistant.finance.quote", s.financeChart))
-	mux.HandleFunc("GET /map/reverse_geocoding/v3/", s.provider("integration.location.lookup.nearby", s.locationNearby))
-	mux.HandleFunc("GET /map/place/v2/search", s.provider("integration.location.lookup.search", s.locationSearch))
-	mux.HandleFunc("POST /carrier/resolve", s.provider("identity.carrier.one_tap", s.carrierResolve))
-	mux.HandleFunc("POST /federated/verify", s.provider("identity.social.login", s.federatedVerify))
-	mux.HandleFunc("POST /push/send", s.provider("integration.push.delivery", s.pushSend))
+	mux.HandleFunc("POST /control/fault-leases", s.authorizeOperator(s.acquireFaultLease))
+	mux.HandleFunc("GET /control/fault-leases/{leaseId}", s.authorizeOperator(s.readFaultLease))
+	mux.HandleFunc("DELETE /control/fault-leases/{leaseId}", s.authorizeOperator(s.releaseFaultLease))
+	mux.HandleFunc("POST /control/callback-channels", s.authorizeOperator(s.acquireCallbackChannel))
+	mux.HandleFunc("GET /control/callback-channels/{channelId}", s.authorizeOperator(s.readCallbackChannel))
+	mux.HandleFunc("DELETE /control/callback-channels/{channelId}", s.authorizeOperator(s.releaseCallbackChannel))
+	mux.HandleFunc("GET /control/readback", s.authorizeOperator(s.readback))
+	mux.HandleFunc("POST /v1/chat/completions", s.modelCompletion)
+	mux.HandleFunc("POST /v1/embeddings", s.provider("content.embedding.generation", "embed", s.embedding))
+	mux.HandleFunc("GET /search/html", s.provider("assistant.public.search", "search", s.search))
+	mux.HandleFunc("GET /weather/geocoding", s.provider("assistant.weather.forecast", "forecast", s.weatherGeocoding))
+	mux.HandleFunc("GET /weather/forecast", s.provider("assistant.weather.forecast", "forecast", s.weatherForecast))
+	mux.HandleFunc("GET /finance/chart/", s.provider("assistant.finance.quote", "quote", s.financeChart))
+	mux.HandleFunc("GET /map/reverse_geocoding/v3/", s.provider("integration.location.lookup", "nearby", s.locationNearby))
+	mux.HandleFunc("GET /map/place/v2/search", s.provider("integration.location.lookup", "search", s.locationSearch))
+	mux.HandleFunc("POST /carrier/resolve", s.provider("identity.carrier.one_tap", "resolvePhone", s.carrierResolve))
+	mux.HandleFunc("POST /federated/verify", s.federatedDispatch)
+	mux.HandleFunc("POST /push/send", s.provider("integration.push.delivery", "deliver", s.pushSend))
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Cache-Control", "no-store")
 		writer.Header().Set("X-Content-Type-Options", "nosniff")
 		writer.Header().Set("Referrer-Policy", "no-referrer")
-		mux.ServeHTTP(writer, request)
+		prepared, ok := s.prepareProviderRequest(writer, request)
+		if !ok {
+			return
+		}
+		mux.ServeHTTP(writer, prepared)
 	})
 }
 
 func (s *Server) provider(
 	capability string,
+	operation string,
 	next http.HandlerFunc,
 ) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
-		if !s.ready.Load() {
-			http.Error(writer, "unavailable", http.StatusServiceUnavailable)
-			return
-		}
-		if s.applyScenario(writer) {
-			s.record(capability + ".fault")
-			return
-		}
-		next(writer, request)
-		s.record(capability)
+		s.invokeProvider(writer, request, capability, operation, next)
 	}
-}
-
-func (s *Server) applyScenario(writer http.ResponseWriter) bool {
-	switch s.scenario.Load().(string) {
-	case "success":
-		return false
-	case "validation":
-		http.Error(writer, "invalid request", http.StatusBadRequest)
-	case "auth":
-		http.Error(writer, "unauthorized", http.StatusUnauthorized)
-	case "timeout":
-		time.Sleep(5 * time.Second)
-		http.Error(writer, "provider timeout", http.StatusGatewayTimeout)
-	case "throttle":
-		writer.Header().Set("Retry-After", "1")
-		http.Error(writer, "throttled", http.StatusTooManyRequests)
-	case "unavailable":
-		http.Error(writer, "provider unavailable", http.StatusServiceUnavailable)
-	default:
-		http.Error(writer, "provider scenario invalid", http.StatusInternalServerError)
-	}
-	return true
 }
 
 func (s *Server) authorizeOperator(next http.HandlerFunc) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
-		provided := strings.TrimSpace(strings.TrimPrefix(
-			request.Header.Get("Authorization"),
-			"Bearer ",
-		))
+		values := request.Header.Values("Authorization")
+		if len(values) != 1 || !strings.HasPrefix(values[0], "Bearer ") {
+			http.Error(writer, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		provided := strings.TrimPrefix(values[0], "Bearer ")
+		if strings.TrimSpace(provided) != provided || strings.ContainsAny(provided, " \t\r\n") {
+			http.Error(writer, "unauthorized", http.StatusUnauthorized)
+			return
+		}
 		if subtle.ConstantTimeCompare([]byte(provided), []byte(s.operatorToken)) != 1 {
 			http.Error(writer, "unauthorized", http.StatusUnauthorized)
 			return
@@ -157,41 +164,20 @@ func (s *Server) health(writer http.ResponseWriter, _ *http.Request) {
 		status = http.StatusServiceUnavailable
 	}
 	writeJSON(writer, status, map[string]any{
-		"status":              map[bool]string{true: "ready", false: "unavailable"}[s.ready.Load()],
-		"adapterId":           AdapterID,
-		"environment":         s.environment,
-		"configurationDigest": s.configurationDigest,
+		"status":                   map[bool]string{true: "ready", false: "unavailable"}[s.ready.Load()],
+		"adapterId":                AdapterID,
+		"environment":              s.environment,
+		"target":                   s.target,
+		"configurationDigest":      s.configurationDigest,
+		"runtimeCompositionDigest": s.runtimeCompositionDigest,
+		"nonPromotable":            true,
+		"conformanceMechanisms": []string{
+			"tls_dns_authority",
+			"idempotency_ledger",
+			"callback_channel_ordering",
+		},
+		"activeFaultLeases": s.activeLeaseSummaries(),
 	})
-}
-
-func (s *Server) receipts(writer http.ResponseWriter, _ *http.Request) {
-	s.mu.Lock()
-	counts := make(map[string]uint64, len(s.counts))
-	for capability, count := range s.counts {
-		counts[capability] = count
-	}
-	s.mu.Unlock()
-	writeJSON(writer, http.StatusOK, map[string]any{
-		"adapterId": AdapterID,
-		"scenario":  s.scenario.Load().(string),
-		"calls":     counts,
-	})
-}
-
-func (s *Server) updateScenario(writer http.ResponseWriter, request *http.Request) {
-	var payload struct {
-		Scenario string `json:"scenario"`
-	}
-	if err := decodeJSON(writer, request, 4096, &payload); err != nil {
-		return
-	}
-	scenario := normalizeScenario(payload.Scenario)
-	if _, found := allowedScenarios[scenario]; !found {
-		http.Error(writer, "unsupported scenario", http.StatusBadRequest)
-		return
-	}
-	s.scenario.Store(scenario)
-	writeJSON(writer, http.StatusOK, map[string]string{"scenario": scenario})
 }
 
 type modelCompletionRequest struct {
@@ -207,6 +193,19 @@ func (s *Server) modelCompletion(writer http.ResponseWriter, request *http.Reque
 	if err := decodeJSON(writer, request, 1<<20, &payload); err != nil {
 		return
 	}
+	operation := "complete"
+	if payload.Stream {
+		operation = "stream"
+	}
+	s.invokeProvider(writer, request, "assistant.model.generation", operation, func(
+		writer http.ResponseWriter,
+		_ *http.Request,
+	) {
+		s.writeModelCompletion(writer, payload)
+	})
+}
+
+func (s *Server) writeModelCompletion(writer http.ResponseWriter, payload modelCompletionRequest) {
 	content := modelResponse(payload)
 	usage := map[string]int{"prompt_tokens": 8, "completion_tokens": 8, "total_tokens": 16}
 	if payload.Stream {
@@ -369,14 +368,71 @@ func (s *Server) carrierResolve(writer http.ResponseWriter, request *http.Reques
 	})
 }
 
-func (s *Server) federatedVerify(writer http.ResponseWriter, request *http.Request) {
-	var payload struct {
-		Provider string `json:"provider"`
-		Code     string `json:"code"`
-	}
+type federatedProtocolRequest struct {
+	Action   string `json:"action"`
+	Provider string `json:"provider"`
+	Code     string `json:"code"`
+}
+
+func (s *Server) federatedDispatch(writer http.ResponseWriter, request *http.Request) {
+	var payload federatedProtocolRequest
 	if err := decodeJSON(writer, request, 64<<10, &payload); err != nil {
 		return
 	}
+	payload.Action = strings.TrimSpace(payload.Action)
+	if payload.Action == "" {
+		payload.Action = "resolveIdentity"
+	}
+	switch payload.Action {
+	case "authorize":
+		s.invokeProvider(
+			writer,
+			request,
+			"identity.social.login",
+			"authorize",
+			func(writer http.ResponseWriter, _ *http.Request) {
+				s.federatedAuthorize(writer, payload)
+			},
+		)
+	case "resolveIdentity":
+		s.invokeProvider(
+			writer,
+			request,
+			"identity.social.login",
+			"resolveIdentity",
+			func(writer http.ResponseWriter, _ *http.Request) {
+				s.federatedVerify(writer, payload)
+			},
+		)
+	default:
+		http.Error(writer, "invalid federated action", http.StatusBadRequest)
+	}
+}
+
+func (s *Server) federatedAuthorize(
+	writer http.ResponseWriter,
+	payload federatedProtocolRequest,
+) {
+	provider := strings.TrimSpace(payload.Provider)
+	if provider == "" || strings.TrimSpace(payload.Code) != "" {
+		http.Error(writer, "provider is required", http.StatusBadRequest)
+		return
+	}
+	nonce := make([]byte, 24)
+	if _, err := rand.Read(nonce); err != nil {
+		http.Error(writer, "authorization unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	writeJSON(writer, http.StatusOK, map[string]any{
+		"payload":   base64.RawURLEncoding.EncodeToString(nonce),
+		"expiresAt": s.now().UTC().Add(5 * time.Minute),
+	})
+}
+
+func (s *Server) federatedVerify(
+	writer http.ResponseWriter,
+	payload federatedProtocolRequest,
+) {
 	if strings.TrimSpace(payload.Provider) == "" || strings.TrimSpace(payload.Code) == "" {
 		http.Error(writer, "provider and code are required", http.StatusBadRequest)
 		return
@@ -401,20 +457,6 @@ func (s *Server) pushSend(writer http.ResponseWriter, request *http.Request) {
 	writeJSON(writer, http.StatusAccepted, map[string]string{
 		"providerRequestId": "nonprod-" + stableID("push", requestID),
 	})
-}
-
-func (s *Server) record(capability string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.counts[capability]++
-}
-
-func normalizeScenario(value string) string {
-	value = strings.ToLower(strings.TrimSpace(value))
-	if value == "" {
-		return "success"
-	}
-	return value
 }
 
 func stableID(kind, value string) string {

@@ -1,0 +1,3 @@
+description: VisitRecord 只在同一 MongoDB transaction 内提交访问计数与幂等回执，仓内没有 visit_record publisher、outbox 或 stream；统计只经具名 Reader GetVisitStats
+  读取，推荐反馈由 BehaviorSignal 独立承担，因此这里不声明第二路访问事件。
+events: []

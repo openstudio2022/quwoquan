@@ -25,59 +25,59 @@ var (
 // AppErrorFromJoinApprovalRequired returns *AppError for CIRCLE.USER.join_approval_required (user_message from errors.yaml).
 func AppErrorFromJoinApprovalRequired(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrJoinApprovalRequired.Error()))
-	return rerrors.NewAppError(code, "该圈子需要审批才能加入", debugMessage).WithMetadata("forbidden", 403).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "该圈子需要审批才能加入", debugMessage).WithMetadata("forbidden", 403).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromMembershipAlreadyActive returns *AppError for CIRCLE.USER.membership_already_active (user_message from errors.yaml).
 func AppErrorFromMembershipAlreadyActive(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrMembershipAlreadyActive.Error()))
-	return rerrors.NewAppError(code, "已经加入该圈子", debugMessage).WithMetadata("membership_already_active", 409).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "已经加入该圈子", debugMessage).WithMetadata("membership_already_active", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromMembershipNotFound returns *AppError for CIRCLE.USER.membership_not_found (user_message from errors.yaml).
 func AppErrorFromMembershipNotFound(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrMembershipNotFound.Error()))
-	return rerrors.NewAppError(code, "成员关系不存在", debugMessage).WithMetadata("membership_not_found", 404).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "成员关系不存在", debugMessage).WithMetadata("membership_not_found", 404).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromMembershipOwnerCannotLeave returns *AppError for CIRCLE.USER.membership_owner_cannot_leave (user_message from errors.yaml).
 func AppErrorFromMembershipOwnerCannotLeave(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrMembershipOwnerCannotLeave.Error()))
-	return rerrors.NewAppError(code, "圈主不能直接退出圈子", debugMessage).WithMetadata("membership_owner_cannot_leave", 409).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "圈主不能直接退出圈子", debugMessage).WithMetadata("membership_owner_cannot_leave", 409).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromMembershipRoleInvalid returns *AppError for CIRCLE.USER.membership_role_invalid (user_message from errors.yaml).
 func AppErrorFromMembershipRoleInvalid(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrMembershipRoleInvalid.Error()))
-	return rerrors.NewAppError(code, "成员角色无效", debugMessage).WithMetadata("membership_role_invalid", 400).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "成员角色无效", debugMessage).WithMetadata("membership_role_invalid", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromMembershipStateConflict returns *AppError for CIRCLE.USER.membership_state_conflict (user_message from errors.yaml).
 func AppErrorFromMembershipStateConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrMembershipStateConflict.Error()))
-	return rerrors.NewAppError(code, "成员申请状态已变化，请刷新后重试", debugMessage).WithMetadata("membership_state_conflict", 409).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "成员申请状态已变化，请刷新后重试", debugMessage).WithMetadata("membership_state_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromMembershipVersionConflict returns *AppError for CIRCLE.USER.membership_version_conflict (user_message from errors.yaml).
 func AppErrorFromMembershipVersionConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrMembershipVersionConflict.Error()))
-	return rerrors.NewAppError(code, "成员状态已更新，请刷新后重试", debugMessage).WithMetadata("membership_version_conflict", 409).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "成员状态已更新，请刷新后重试", debugMessage).WithMetadata("membership_version_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromMembershipIdempotencyConflict returns *AppError for CIRCLE.USER.membership_idempotency_conflict (user_message from errors.yaml).
 func AppErrorFromMembershipIdempotencyConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrMembershipIdempotencyConflict.Error()))
-	return rerrors.NewAppError(code, "重复请求与原命令不一致", debugMessage).WithMetadata("membership_idempotency_conflict", 409).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "重复请求与原命令不一致", debugMessage).WithMetadata("membership_idempotency_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromMembershipStorageWriteFailed returns *AppError for CIRCLE.SYSTEM.membership_storage_write_failed (user_message from errors.yaml).
 func AppErrorFromMembershipStorageWriteFailed(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrMembershipStorageWriteFailed.Error()))
-	return rerrors.NewAppError(code, "成员操作失败，请稍后重试", debugMessage).WithMetadata("membership_storage_write_failed", 500).WithRecovery("retry", 0)
+	return rerrors.NewAppError(code, "成员操作失败，请稍后重试", debugMessage).WithMetadata("membership_storage_write_failed", 500).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromNotMember returns *AppError for CIRCLE.USER.not_member (user_message from errors.yaml).
 func AppErrorFromNotMember(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrNotMember.Error()))
-	return rerrors.NewAppError(code, "您不是该圈子成员", debugMessage).WithMetadata("forbidden", 403).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "您不是该圈子成员", debugMessage).WithMetadata("forbidden", 403).WithRecoveryDirective("surface", "inlineCard", 0)
 }

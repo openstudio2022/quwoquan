@@ -648,6 +648,7 @@ api_routes:
   - method: GET
     path: /rtc/calls
     operation: ListCalls
+    pagination: {default_items: 20, maximum_items: 100}
     request_bindings:
       query:
         - name: limit
@@ -1030,76 +1031,7 @@ consumers:
     capabilities:
       - get_call
 contract_test:
-  mock_strategy:
-    app_side:
-      mock_target: rtc-service API
-      data_source: fields.yaml
-      scenarios:
-        - name: initiate_1v1_audio_call
-          route: POST /rtc/calls
-          assertions:
-            - status_201
-            - callId_returned
-            - token_returned
-            - roomId_returned
-            - livekit_url_returned
-        - name: initiate_group_video_call
-          route: POST /rtc/calls
-          assertions:
-            - status_201
-            - callId_returned
-            - max_participants_32
-        - name: answer_call
-          route: POST /rtc/calls/{callId}/answer
-          assertions:
-            - status_200
-            - token_returned
-            - livekit_url_returned
-        - name: reject_call
-          route: POST /rtc/calls/{callId}/reject
-          assertions:
-            - status_200
-            - call_status_ended
-            - end_reason_rejected
-        - name: hangup_call
-          route: POST /rtc/calls/{callId}/hangup
-          assertions:
-            - status_200
-            - call_status_ended
-        - name: cancel_call_before_answer
-          route: POST /rtc/calls/{callId}/cancel
-          assertions:
-            - status_200
-            - call_status_ended
-            - end_reason_cancelled
-        - name: leave_group_call_keeps_session
-          route: POST /rtc/calls/{callId}/leave
-          assertions:
-            - status_200
-            - call_still_active_for_others
-        - name: join_group_call
-          route: POST /rtc/calls/{callId}/join
-          assertions:
-            - status_200
-            - token_returned
-            - participant_count_incremented
-        - name: report_media_connected
-          route: POST /rtc/calls/{callId}/connected
-          assertions:
-            - status_200
-            - second_connected_enters_in_call
-            - started_at_recorded
-            - repeat_is_noop
-        - name: call_full_error
-          route: POST /rtc/calls/{callId}/join
-          assertions:
-            - status_409
-            - error_code_call_full
-        - name: list_calls_with_missed_filter
-          route: GET /rtc/calls?missed=true
-          assertions:
-            - status_200
-            - only_missed_calls
+  test_strategy:
     service_side:
       description: 使用真实测试数据库与 operation guard 在链的鉴权中间件，媒体房间通过 mock adapter
       real_engines:
@@ -1173,3 +1105,292 @@ contract_test:
     - 服务端内部 CAS 有限重放与 no-op receipt 幂等
     - operation guard 与 auth 中间件在链的越权负例（非参与者 403/404）
     - 500 并发基准测试
+readiness_cases:
+- case_id: initiate-call-local
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-002
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: InitiateCall}
+  runner_source_path: quwoquan_service/services/rtc-service/tests/local_contract/rtc/call_session/call_operation_facets__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: initiate-call-api
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-002
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: InitiateCall}
+  runner_source_path: quwoquan_service/services/rtc-service/tests/api_integration/rtc/call_session/call_lifecycle_contract__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}
+- case_id: answer-call-local
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-002
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: AnswerCall}
+  runner_source_path: quwoquan_service/services/rtc-service/tests/local_contract/rtc/call_session/call_operation_facets__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: answer-call-api
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-002
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: AnswerCall}
+  runner_source_path: quwoquan_service/services/rtc-service/tests/api_integration/rtc/call_session/call_lifecycle_contract__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}
+- case_id: reject-call-local
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-002
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: RejectCall}
+  runner_source_path: quwoquan_service/services/rtc-service/tests/local_contract/rtc/call_session/call_operation_facets__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: reject-call-api
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-002
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: RejectCall}
+  runner_source_path: quwoquan_service/services/rtc-service/tests/api_integration/rtc/call_session/call_lifecycle_contract__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}
+- case_id: cancel-call-local
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-002
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: CancelCall}
+  runner_source_path: quwoquan_service/services/rtc-service/tests/local_contract/rtc/call_session/call_operation_facets__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: cancel-call-api
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-002
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: CancelCall}
+  runner_source_path: quwoquan_service/services/rtc-service/tests/api_integration/rtc/call_session/call_lifecycle_contract__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}
+- case_id: hangup-call-local
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-002
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: HangupCall}
+  runner_source_path: quwoquan_service/services/rtc-service/tests/local_contract/rtc/call_session/call_operation_facets__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: hangup-call-api
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-002
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: HangupCall}
+  runner_source_path: quwoquan_service/services/rtc-service/tests/api_integration/rtc/call_session/call_lifecycle_contract__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}
+- case_id: join-call-local
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-003
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: JoinCall}
+  runner_source_path: quwoquan_service/services/rtc-service/tests/local_contract/rtc/call_session/call_operation_facets__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: join-call-api
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-003
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: JoinCall}
+  runner_source_path: quwoquan_service/services/rtc-service/tests/api_integration/rtc/call_session/room_management_contract__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}
+- case_id: leave-call-local
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-003
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: LeaveCall}
+  runner_source_path: quwoquan_service/services/rtc-service/tests/local_contract/rtc/call_session/call_operation_facets__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: leave-call-api
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-003
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: LeaveCall}
+  runner_source_path: quwoquan_service/services/rtc-service/tests/api_integration/rtc/call_session/room_management_contract__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}
+- case_id: report-media-connected-local
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-002
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ReportMediaConnected}
+  runner_source_path: quwoquan_service/services/rtc-service/tests/local_contract/rtc/call_session/call_operation_facets__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: report-media-connected-api
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-002
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ReportMediaConnected}
+  runner_source_path: quwoquan_service/services/rtc-service/tests/api_integration/rtc/call_session/call_timeout_and_connected_contract__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}
+- case_id: invite-to-call-local
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-003
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: InviteToCall}
+  runner_source_path: quwoquan_service/services/rtc-service/tests/local_contract/rtc/call_session/call_operation_facets__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: invite-to-call-api
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-003
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: InviteToCall}
+  runner_source_path: quwoquan_service/services/rtc-service/tests/api_integration/rtc/call_session/room_management_contract__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}
+- case_id: get-call-local
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-002
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: GetCall}
+  runner_source_path: quwoquan_service/services/rtc-service/tests/local_contract/rtc/call_session/call_query_facade__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: get-call-api
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-002
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: GetCall}
+  runner_source_path: quwoquan_service/services/rtc-service/tests/api_integration/rtc/call_session/call_lifecycle_contract__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}
+- case_id: list-calls-local
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-002
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ListCalls}
+  runner_source_path: quwoquan_service/services/rtc-service/tests/local_contract/rtc/call_session/call_query_facade__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: list-calls-api
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-002
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ListCalls}
+  runner_source_path: quwoquan_service/services/rtc-service/tests/api_integration/rtc/call_session/call_lifecycle_contract__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}
+- case_id: toggle-mute-local
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-002
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ToggleMute}
+  runner_source_path: quwoquan_service/services/rtc-service/tests/local_contract/rtc/call_session/call_operation_facets__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: toggle-mute-api
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-002
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ToggleMute}
+  runner_source_path: quwoquan_service/services/rtc-service/tests/api_integration/rtc/call_session/call_lifecycle_contract__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}
+- case_id: toggle-camera-local
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-002
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ToggleCamera}
+  runner_source_path: quwoquan_service/services/rtc-service/tests/local_contract/rtc/call_session/call_operation_facets__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: toggle-camera-api
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-002
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ToggleCamera}
+  runner_source_path: quwoquan_service/services/rtc-service/tests/api_integration/rtc/call_session/call_lifecycle_contract__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}
+- case_id: start-screen-share-local
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-008
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: StartScreenShare}
+  runner_source_path: quwoquan_service/services/rtc-service/tests/local_contract/rtc/call_session/call_operation_facets__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: start-screen-share-api
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-008
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: StartScreenShare}
+  runner_source_path: quwoquan_service/services/rtc-service/tests/api_integration/rtc/call_session/call_lifecycle_contract__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}
+- case_id: stop-screen-share-local
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-008
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: StopScreenShare}
+  runner_source_path: quwoquan_service/services/rtc-service/tests/local_contract/rtc/call_session/call_operation_facets__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: stop-screen-share-api
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-008
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: StopScreenShare}
+  runner_source_path: quwoquan_service/services/rtc-service/tests/api_integration/rtc/call_session/call_lifecycle_contract__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}
+- case_id: recover-rtc-account-closure-dead-letter-local
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-004
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: RecoverRtcAccountClosureDeadLetter}
+  runner_source_path: quwoquan_service/services/rtc-service/tests/local_contract/rtc/call_session/account_security_consumer__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: recover-rtc-account-closure-dead-letter-api
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-004
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: RecoverRtcAccountClosureDeadLetter}
+  runner_source_path: quwoquan_service/services/rtc-service/tests/api_integration/rtc/call_session/account_security_recovery__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: redis, digest_binding: candidate}
+- case_id: apply-account-security-terminal-event-local
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-004
+  producer: service
+  layer: local_contract
+  target: {kind: object, id: rtc.call_session}
+  runner_source_path: quwoquan_service/services/rtc-service/tests/local_contract/rtc/call_session/account_security_terminal__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: apply-account-security-terminal-event-api
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-004
+  producer: service
+  layer: api_integration
+  target: {kind: object, id: rtc.call_session}
+  runner_source_path: quwoquan_service/services/rtc-service/tests/api_integration/rtc/call_session/account_security_terminal__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}
+- case_id: deliver-realtime-call-signals-local
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-005
+  producer: service
+  layer: local_contract
+  target: {kind: object, id: rtc.call_session}
+  runner_source_path: quwoquan_service/services/rtc-service/tests/local_contract/rtc/call_session/call_signal_delivery_coordinator__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: deliver-realtime-call-signals-api
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-005
+  producer: service
+  layer: api_integration
+  target: {kind: object, id: rtc.call_session}
+  runner_source_path: quwoquan_service/services/rtc-service/tests/api_integration/rtc/call_session/call_lifecycle_contract__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}

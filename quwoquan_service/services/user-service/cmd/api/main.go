@@ -20,6 +20,7 @@ import (
 	"quwoquan_service/runtime/controlplane"
 	rthealth "quwoquan_service/runtime/health"
 	rthttp "quwoquan_service/runtime/http"
+	runtimemessaging "quwoquan_service/runtime/messaging"
 	robs "quwoquan_service/runtime/observability"
 	rtotel "quwoquan_service/runtime/otel"
 	"quwoquan_service/runtime/otpseal"
@@ -40,6 +41,7 @@ import (
 	challengepersistence "quwoquan_service/services/user-service/internal/account/authentication_challenge/infrastructure/persistence"
 	credentialhttp "quwoquan_service/services/user-service/internal/account/credential_binding/adapters/inbound/http"
 	credentialapp "quwoquan_service/services/user-service/internal/account/credential_binding/application"
+	credentialmessaging "quwoquan_service/services/user-service/internal/account/credential_binding/infrastructure/messaging"
 	credentialpersistence "quwoquan_service/services/user-service/internal/account/credential_binding/infrastructure/persistence"
 	registrationhttp "quwoquan_service/services/user-service/internal/account/device_registration/adapters/inbound/http"
 	registrationapp "quwoquan_service/services/user-service/internal/account/device_registration/application"
@@ -69,7 +71,9 @@ import (
 	usersettingsapp "quwoquan_service/services/user-service/internal/account/user_settings/application"
 	usersettingspersistence "quwoquan_service/services/user-service/internal/account/user_settings/infrastructure/persistence"
 	personaadapter "quwoquan_service/services/user-service/internal/persona_management/persona/adapters/inbound/application"
+	personahttp "quwoquan_service/services/user-service/internal/persona_management/persona/adapters/inbound/http"
 	personaapp "quwoquan_service/services/user-service/internal/persona_management/persona/application/persona"
+	personamessaging "quwoquan_service/services/user-service/internal/persona_management/persona/infrastructure/persona/messaging"
 	personapersistence "quwoquan_service/services/user-service/internal/persona_management/persona/infrastructure/persona/persistence"
 	proposalhttp "quwoquan_service/services/user-service/internal/persona_management/profile_update_proposal/adapters/inbound/http"
 	proposalapp "quwoquan_service/services/user-service/internal/persona_management/profile_update_proposal/application"
@@ -225,6 +229,31 @@ func main() {
 	if err != nil {
 		log.Fatalf("CredentialBinding store init failed: %v", err)
 	}
+	credentialAuditTransport, ok := messageTransport.(runtimemessaging.DurableRecordAppender)
+	if !ok {
+		log.Fatal("CredentialBinding audit requires durable retention transport")
+	}
+	credentialAuditPublisher, err := credentialmessaging.NewSecurityAuditPublisher(
+		credentialAuditTransport,
+	)
+	if err != nil {
+		log.Fatalf("CredentialBinding audit publisher init failed: %v", err)
+	}
+	credentialAuditRelay, err := credentialapp.NewSecurityAuditRelay(
+		credentialStore,
+		credentialAuditPublisher,
+	)
+	if err != nil {
+		log.Fatalf("CredentialBinding audit relay init failed: %v", err)
+	}
+	if _, err := credentialAuditRelay.Drain(ctx, 1); err != nil {
+		log.Fatalf("CredentialBinding audit relay preflight failed: %v", err)
+	}
+	go func() {
+		if err := credentialAuditRelay.Run(ctx, time.Second); err != nil && ctx.Err() == nil {
+			log.Printf("ERROR: CredentialBinding audit relay stopped: %v", err)
+		}
+	}()
 	credentialCommands := credentialapp.NewCredentialCommandFacade(
 		credentialStore,
 	)
@@ -335,9 +364,45 @@ func main() {
 	if err != nil {
 		log.Fatalf("Persona command store init failed: %v", err)
 	}
-	personaProfileProjector, err := useraccountpersistence.NewPersonaProfileProjector(pgPool)
+	personaDurableTransport, ok := messageTransport.(runtimemessaging.DurableRecordAppender)
+	if !ok {
+		log.Fatal("Persona publication requires durable retention transport")
+	}
+	if err := personaDurableTransport.SetDurableRetention(
+		ctx,
+		personamessaging.PersonaEventStream,
+		personamessaging.PersonaEventStreamRetention,
+	); err != nil {
+		log.Fatalf("Persona event stream retention setup failed: %v", err)
+	}
+	personaEventPublisher, err := personamessaging.NewEventPublisher(personaDurableTransport)
+	if err != nil {
+		log.Fatalf("Persona event publisher init failed: %v", err)
+	}
+	personaOutboxRelay, err := personaapp.NewOutboxRelay(
+		personaCommandStore,
+		personaEventPublisher,
+	)
+	if err != nil {
+		log.Fatalf("Persona outbox relay init failed: %v", err)
+	}
+	if _, err := personaOutboxRelay.Drain(ctx, 1); err != nil {
+		log.Fatalf("Persona outbox relay preflight failed: %v", err)
+	}
+	go func() {
+		if err := personaOutboxRelay.Run(ctx, time.Second); err != nil && ctx.Err() == nil {
+			log.Printf("ERROR: Persona outbox relay stopped: %v", err)
+		}
+	}()
+	personaProfileProjectionStore, err := useraccountpersistence.NewPersonaProfileProjector(pgPool)
 	if err != nil {
 		log.Fatalf("Persona profile projector init failed: %v", err)
+	}
+	personaProfileProjector, err := application.NewPersonaProfileProjector(
+		personaProfileProjectionStore,
+	)
+	if err != nil {
+		log.Fatalf("Persona profile application facet init failed: %v", err)
 	}
 	go func() {
 		if err := personaProfileProjector.Run(ctx, time.Second); err != nil && ctx.Err() == nil {
@@ -503,7 +568,9 @@ func main() {
 		if err := followedSubjectVisitStore.EnsureIndexes(ctx); err != nil {
 			log.Fatalf("followed subject visit index ensure failed: %v", err)
 		}
-		followingProjector = followingevent.NewHandler(followingapp.NewProjector(followingSubjectStore))
+		followingProjector = followingevent.NewHandler(
+			followingapp.NewFollowingSubjectProjector(followingSubjectStore),
+		)
 	}
 	subjectFollowPublisher := &subjectFollowFanout{
 		events:    relationshipEventPublisher,
@@ -530,10 +597,21 @@ func main() {
 			log.Printf("ERROR: persona relationship outbox relay stopped: %v", err)
 		}
 	}()
-	followedSubjectVisitService := visitapp.NewVisitService(
-		followedSubjectVisitStore,
-		followingSubjectStore,
-	)
+	// FollowedSubjectVisitState packet：Mongo 水位 + FollowedSubjectVisited
+	// outbox 同事务提交；relay 是投影的唯一投递主线，命令路径不再在提交后
+	// 尽力 apply 投影。
+	followedSubjectVisitService := visitapp.NewVisitService(followedSubjectVisitStore)
+	if followedSubjectVisitStore != nil && followingSubjectStore != nil {
+		followedSubjectVisitRelay := visitapp.NewOutboxRelay(
+			followedSubjectVisitStore,
+			&followedSubjectVisitFanout{projection: followingSubjectStore},
+		)
+		go func() {
+			if err := followedSubjectVisitRelay.Run(ctx, time.Second); err != nil && ctx.Err() == nil {
+				log.Printf("ERROR: followed subject visit outbox relay stopped: %v", err)
+			}
+		}()
+	}
 	var homepageDisplayResolver followingapp.SubjectDisplayResolver
 	if entityServiceBaseURL := strings.TrimSpace(
 		getenvOrDefault("ENTITY_SERVICE_BASE_URL", ""),
@@ -715,6 +793,12 @@ func main() {
 	healthChecker.Register("profile_update_proposal_outbox_relay", func(hctx context.Context) error {
 		return profileProposalOutboxRelay.Healthy(hctx, 15*time.Second)
 	})
+	healthChecker.Register("persona_outbox_relay", func(context.Context) error {
+		return personaOutboxRelay.Healthy(15 * time.Second)
+	})
+	healthChecker.Register("credential_binding_audit_relay", func(context.Context) error {
+		return credentialAuditRelay.Healthy(15 * time.Second)
+	})
 	go func() {
 		if err := profileProposalOutboxRelay.Run(ctx, time.Second); err != nil &&
 			ctx.Err() == nil {
@@ -724,7 +808,6 @@ func main() {
 			)
 		}
 	}()
-
 	// 8. Handler
 	var interestReader application.InterestProfileReader
 	if mongoDB != nil {
@@ -827,8 +910,19 @@ func main() {
 	if err != nil {
 		log.Fatalf("FederatedPhoneBinding HTTP composition failed: %v", err)
 	}
+	personaHostAuthorityEvaluator, err := personaapp.NewHostAuthorityEvaluator(
+		personapersistence.NewHostAuthorityReader(pgPool),
+		time.Now,
+	)
+	if err != nil {
+		log.Fatalf("Persona Host authority composition failed: %v", err)
+	}
+	personaHostAuthorityHandler := personahttp.NewHostAuthorityHandler(
+		personaHostAuthorityEvaluator,
+	)
 	serviceMux := http.NewServeMux()
 	userHandler.RegisterRoutes(serviceMux)
+	personaHostAuthorityHandler.RegisterRoutes(serviceMux)
 	accountAppealHandler.RegisterRoutes(serviceMux)
 	federatedPhoneBindingHandler.RegisterRoutes(serviceMux)
 	profileProposalHandler.RegisterRoutes(serviceMux)
@@ -886,15 +980,16 @@ func main() {
 	}
 
 	// 9. Start
+	timeouts := rtauth.ContractHTTPServerTimeouts(userOperationDescriptors())
 	server := &http.Server{
 		Addr: addr,
 		// Authentication must run before observability builds ActorContext.
 		Handler: rtauth.Middleware(rtauth.MiddlewareConfig{
 			AccessTokenVerifier: accessVerifier,
 		})(corsHandler),
-		ReadHeaderTimeout: 5 * time.Second,
-		WriteTimeout:      30 * time.Second,
-		IdleTimeout:       60 * time.Second,
+		ReadHeaderTimeout: timeouts.ReadHeader,
+		WriteTimeout:      timeouts.Write,
+		IdleTimeout:       timeouts.Idle,
 	}
 	log.Printf("user-service listening on %s (env=%s)", addr, appEnv)
 	if err := rthttp.ListenAndServeGraceful(server, 15*time.Second); err != nil {

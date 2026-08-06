@@ -1,6 +1,7 @@
 backend: postgres
 tables:
   personas:
+    publication_role: not_published
     entity: Persona
     role: authoritative
     columns:
@@ -147,6 +148,7 @@ tables:
       - NOT_NULL
       default: NOW()
   personas_command_receipts:
+    publication_role: not_published
     entity: Persona
     role: authoritative
     infrastructure_only: true
@@ -178,6 +180,7 @@ tables:
       constraints:
       - NOT_NULL
   personas_outbox:
+    publication_role: transactional_outbox
     entity: Persona
     role: append_only
     infrastructure_only: true

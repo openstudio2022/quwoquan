@@ -1,16 +1,31 @@
 events:
 - name: ConnectorConnectionChanged
   description: 账号连接完成、刷新、过期或失败后的脱敏状态变化。
-  producer: integration-service
-  consumers: [assistant-service]
-  channel: integration.connector_connection
+  delivery_semantics: transactional_event_log
+  topic: integration.connector_connection
   payload_entity: ConnectorConnection
-  payload_fields: [connectionId, accountId, connectorId, grantedCapabilities, status, freshnessAt, expiresAt, revision, updatedAt]
+  payload_fields:
+  - connectionId
+  - accountId
+  - connectorId
+  - grantedCapabilities
+  - status
+  - freshnessAt
+  - expiresAt
+  - revision
+  - updatedAt
+  no_consumer_reason: 连接状态与脱敏安全审计记录在同一 Mongo transaction 内提交；当前调用方在每个 capability 安全边界同步读取 Connection，不存在异步状态消费者。
 - name: ConnectorConnectionRevoked
   description: 账号撤权完成；消费者必须在下一个安全边界失效 capability。
-  producer: integration-service
-  consumers: [assistant-service]
-  channel: integration.connector_connection
+  delivery_semantics: transactional_event_log
+  topic: integration.connector_connection
   payload_entity: ConnectorConnection
-  payload_fields: [connectionId, accountId, connectorId, status, revokedAt, revision, updatedAt]
-
+  payload_fields:
+  - connectionId
+  - accountId
+  - connectorId
+  - status
+  - revokedAt
+  - revision
+  - updatedAt
+  no_consumer_reason: 撤权状态与脱敏安全审计记录在同一 Mongo transaction 内提交；后续 invocation 同步复核 Connection，不依赖事件传播撤权。

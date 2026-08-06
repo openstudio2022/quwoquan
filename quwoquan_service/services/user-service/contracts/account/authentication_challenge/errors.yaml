@@ -1,5 +1,3 @@
-domain: USER
-aggregate: AuthenticationChallenge
 description: 'AuthenticationChallenge 对象专属错误码。格式：MODULE.KIND.REASON。
 
   覆盖 OTP 发送、校验与一次性消费语义；codegen 与 user 域其余对象
@@ -9,7 +7,6 @@ description: 'AuthenticationChallenge 对象专属错误码。格式：MODULE.KI
   '
 errors:
 - code: USER.AUTH.otp_expired
-  kind: AUTH
   reason: otp_expired
   emitted_by:
   - surface: http
@@ -19,17 +16,14 @@ errors:
     - user.credential_binding.BindPhoneCredential
     - user.credential_binding.CompleteFederatedPhoneBinding
   http_status: 400
-  recovery:
-    action: retry
-    disruptionLevel: inlineCard
-  l10n_key: userAuthOtpExpired
+  recovery_action: retry
+  disruption_level: inlineCard
   dart_const: otpExpired
   go_const: ErrOtpExpired
   user_message:
     zh: 验证码已失效
     en: Verification code is no longer valid
 - code: USER.AUTH.otp_mismatch
-  kind: AUTH
   reason: otp_mismatch
   emitted_by:
   - surface: http
@@ -39,17 +33,14 @@ errors:
     - user.credential_binding.BindPhoneCredential
     - user.credential_binding.CompleteFederatedPhoneBinding
   http_status: 400
-  recovery:
-    action: retry
-    disruptionLevel: inlineCard
-  l10n_key: userAuthOtpMismatch
+  recovery_action: retry
+  disruption_level: inlineCard
   dart_const: otpMismatch
   go_const: ErrOtpMismatch
   user_message:
     zh: 验证码不正确
     en: Verification code is incorrect
 - code: USER.AUTH.otp_attempts_exceeded
-  kind: AUTH
   reason: otp_attempts_exceeded
   emitted_by:
   - surface: http
@@ -59,53 +50,44 @@ errors:
     - user.credential_binding.BindPhoneCredential
     - user.credential_binding.CompleteFederatedPhoneBinding
   http_status: 429
-  recovery:
-    action: retry
-    disruptionLevel: inlineCard
-    afterSeconds: 60
-  l10n_key: userAuthOtpAttemptsExceeded
+  recovery_action: retry
+  recovery_after_seconds: 60
+  disruption_level: inlineCard
   dart_const: otpAttemptsExceeded
   go_const: ErrOtpAttemptsExceeded
   user_message:
     zh: 尝试次数较多
     en: Too many attempts
 - code: USER.AUTH.otp_rate_limited
-  kind: AUTH
   reason: rate_limited
   emitted_by:
   - surface: http
     operations:
     - SendOtp
   http_status: 429
-  recovery:
-    action: retry
-    disruptionLevel: inlineCard
-    afterSeconds: 60
-  l10n_key: userAuthOtpRateLimited
+  recovery_action: retry
+  recovery_after_seconds: 60
+  disruption_level: inlineCard
   dart_const: otpRateLimited
   go_const: ErrOtpRateLimited
   user_message:
     zh: 尝试次数较多
     en: Too many attempts
 - code: USER.AUTH.otp_provider_failed
-  kind: AUTH
   reason: third_party_failure
   emitted_by:
   - surface: http
     operations:
     - SendOtp
   http_status: 502
-  recovery:
-    action: retry
-    disruptionLevel: inlineCard
-  l10n_key: userAuthOtpProviderFailed
+  recovery_action: retry
+  disruption_level: inlineCard
   dart_const: otpProviderFailed
   go_const: ErrOtpProviderFailed
   user_message:
     zh: 验证码发送失败
     en: Verification code could not be sent
 - code: USER.AUTH.challenge_consumed
-  kind: AUTH
   reason: challenge_consumed
   emitted_by:
   - surface: http
@@ -114,10 +96,8 @@ errors:
     - user.credential_binding.BindPhoneCredential
     - user.credential_binding.CompleteFederatedPhoneBinding
   http_status: 400
-  recovery:
-    action: retry
-    disruptionLevel: inlineCard
-  l10n_key: userAuthChallengeConsumed
+  recovery_action: retry
+  disruption_level: inlineCard
   dart_const: challengeConsumed
   go_const: ErrChallengeConsumed
   user_message:

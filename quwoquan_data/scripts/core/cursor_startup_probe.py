@@ -1,40 +1,36 @@
 """Run and classify real Cursor SDK startup probes for data execution admission."""
+
 from __future__ import annotations
 
 import json
 import os
 import subprocess
 import sys
-import threading
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 
+from core.cursor_model import CursorModelSelection
 from core.cursor_probe_classification import (
     cursor_probe_attempt_has_5xx as _cursor_probe_attempt_has_5xx,
     cursor_probe_attempt_is_auth as _cursor_probe_attempt_is_auth,
     cursor_probe_attempt_is_bridge_disconnect as _cursor_probe_attempt_is_bridge_disconnect,
-    cursor_probe_is_startup_timeout as _cursor_probe_is_startup_timeout,
-    p95 as _p95,
 )
-
-from core.cursor_model import CursorModelSelection
-from core.runtime_policy import active_runtime_policy
 from core.python_environment import (
-    DEFAULT_CURSOR_STARTUP_MODEL,
-    DEFAULT_CURSOR_STARTUP_RUNTIME,
+    DEFAULT_SEMANTIC_AGENT_MODEL,
+    DEFAULT_SEMANTIC_AGENT_RUNTIME,
     REPO_ROOT,
     _redact_secret_text,
     _redact_secret_value,
     resolve_data_agent_python,
 )
+from core.runtime_policy import active_runtime_policy
 
 
 def cursor_startup_probe(
     *,
-    model: str | CursorModelSelection = DEFAULT_CURSOR_STARTUP_MODEL,
-    runtime: str = DEFAULT_CURSOR_STARTUP_RUNTIME,
+    model: str | CursorModelSelection = DEFAULT_SEMANTIC_AGENT_MODEL,
+    runtime: str = DEFAULT_SEMANTIC_AGENT_RUNTIME,
     timeout_seconds: float | None = None,
     cwd: Path | None = None,
 ) -> dict:
@@ -47,11 +43,17 @@ def cursor_startup_probe(
 
     selection = CursorModelSelection.from_value(model)
     try:
-        from core.cursor_credentials import resolve_cursor_api_key
+        from core.cursor_credentials import (
+            cursor_credential_subprocess_env,
+            protected_cursor_api_key_fd,
+            resolve_cursor_api_key,
+        )
     except Exception:  # noqa: BLE001
-        from cursor_credentials import resolve_cursor_api_key  # type: ignore
-    # Pass the key only through stdin to this short-lived probe. Its environment
-    # and argv remain credential-free, including for any bridge it spawns.
+        from cursor_credentials import (  # type: ignore
+            cursor_credential_subprocess_env,
+            protected_cursor_api_key_fd,
+            resolve_cursor_api_key,
+        )
     key = resolve_cursor_api_key()
     if not key:
         return {
@@ -70,19 +72,23 @@ def cursor_startup_probe(
         else runtime_policy.startup_timeout_seconds
     )
     probe_cwd = str((cwd or REPO_ROOT).resolve())
-    probe_python = resolve_data_agent_python(include_current=True) or Path(sys.executable)
-    code = r'''
+    probe_python = resolve_data_agent_python(include_current=True) or Path(
+        sys.executable
+    )
+    code = r"""
 import importlib.metadata
 import json
 import os
 import sys
+
+sys.path.insert(0, sys.argv[5])
+from core.cursor_bridge_transport import protected_cursor_client
 
 try:
     from cursor_sdk import (
         Agent,
         AgentOptions,
         CloudAgentOptions,
-        Client,
         CursorAgentError,
         LocalAgentOptions,
         ModelParameterValue,
@@ -92,7 +98,9 @@ except Exception as exc:
     print(json.dumps({"ready": False, "started": False, "error": f"cursor_sdk unavailable: {exc}"}, ensure_ascii=False))
     raise SystemExit(0)
 
-api_key = sys.stdin.readline().strip()
+credential_fd = int(os.environ.pop("QWQ_CURSOR_API_KEY_FD"))
+with os.fdopen(credential_fd, "r", encoding="utf-8", closefd=True) as credential_stream:
+    api_key = credential_stream.readline().strip()
 model_doc = json.loads(sys.argv[1])
 model = ModelSelection(
     id=str(model_doc["id"]),
@@ -118,11 +126,10 @@ def is_provider_rejection(message):
     )
 
 try:
-    with Client.launch_bridge(
+    with protected_cursor_client(
         workspace=cwd,
         timeout=bridge_timeout,
-        local=LocalAgentOptions(cwd=cwd, setting_sources=[]),
-        allow_api_key_env_fallback=False,
+        max_retries=0,
     ) as client:
         if runtime == "cloud":
             opts = AgentOptions(api_key=api_key, model=model, cloud=CloudAgentOptions(repos=[]))
@@ -207,37 +214,46 @@ except Exception as exc:
         "error": str(exc),
         "sdkVersion": importlib.metadata.version("cursor-sdk"),
     }, ensure_ascii=False))
-'''
+"""
     deadline = time.monotonic() + max(1, effective_timeout_seconds)
     attempts: list[dict] = []
-    payload: dict = {"ready": False, "started": False, "error": "cursor startup probe not run"}
+    payload: dict = {
+        "ready": False,
+        "started": False,
+        "error": "cursor startup probe not run",
+    }
     returncode = 0
     for attempt in range(1, runtime_policy.preflight_startup_attempts + 1):
         attempt_started_at = datetime.now(timezone.utc).isoformat()
         remaining = max(1, int(deadline - time.monotonic()))
         try:
-            proc = subprocess.run(
-                [
-                    str(probe_python),
-                    "-c",
-                    code,
-                    json.dumps(selection.to_sdk_document(), ensure_ascii=True, sort_keys=True),
-                    str(runtime),
-                    probe_cwd,
-                    str(runtime_policy.cursor_bridge_handshake_timeout_seconds),
-                ],
-                capture_output=True,
-                text=True,
-                check=False,
-                timeout=remaining,
-                env={
-                    name: value
-                    for name, value in os.environ.items()
-                    if name != "CURSOR_API_KEY"
-                },
-                input=f"{key}\n",
-                cwd=probe_cwd,
-            )
+            with protected_cursor_api_key_fd(key) as credential_fd:
+                proc = subprocess.run(
+                    [
+                        str(probe_python),
+                        "-c",
+                        code,
+                        json.dumps(
+                            selection.to_sdk_document(),
+                            ensure_ascii=True,
+                            sort_keys=True,
+                        ),
+                        str(runtime),
+                        probe_cwd,
+                        str(runtime_policy.cursor_bridge_handshake_timeout_seconds),
+                        str(Path(__file__).resolve().parents[1]),
+                    ],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                    timeout=remaining,
+                    env=cursor_credential_subprocess_env(
+                        os.environ, credential_fd=credential_fd
+                    ),
+                    stdin=subprocess.DEVNULL,
+                    pass_fds=(credential_fd,),
+                    cwd=probe_cwd,
+                )
         except subprocess.TimeoutExpired:
             attempts.append(
                 {
@@ -277,7 +293,9 @@ except Exception as exc:
                 "retryAfter": None,
                 "attemptCount": attempt,
                 "attempts": attempts,
-                "issues": [f"cursor startup probe timed out after {int(effective_timeout_seconds)}s"],
+                "issues": [
+                    f"cursor startup probe timed out after {int(effective_timeout_seconds)}s"
+                ],
             }
         returncode = proc.returncode
         try:
@@ -287,22 +305,29 @@ except Exception as exc:
                 "ready": False,
                 "started": False,
                 "status": "error",
-                "error": proc.stderr.strip() or "cursor startup probe did not return JSON",
+                "error": proc.stderr.strip()
+                or "cursor startup probe did not return JSON",
             }
-        payload = payload if isinstance(payload, dict) else {"ready": False, "started": False, "error": "invalid probe payload"}
+        payload = (
+            payload
+            if isinstance(payload, dict)
+            else {"ready": False, "started": False, "error": "invalid probe payload"}
+        )
         if returncode != 0 and payload.get("ready"):
             payload["ready"] = False
             payload["error"] = f"cursor startup probe exited {returncode}"
         retryable = bool(payload.get("retryable", False))
         if not payload.get("ready") and not _cursor_probe_attempt_is_auth(payload):
-            retryable = retryable or _cursor_probe_attempt_has_5xx(
-                payload
-            ) or _cursor_probe_attempt_is_bridge_disconnect(payload)
+            retryable = (
+                retryable
+                or _cursor_probe_attempt_has_5xx(payload)
+                or _cursor_probe_attempt_is_bridge_disconnect(payload)
+            )
         payload["retryable"] = retryable
         attempts.append(
             {
                 "attempt": attempt,
-                    "startedAt": attempt_started_at,
+                "startedAt": attempt_started_at,
                 "ready": bool(payload.get("ready")),
                 "status": payload.get("status"),
                 "errorClass": _redact_secret_value(
@@ -398,202 +423,3 @@ except Exception as exc:
         "attempts": attempts,
         "issues": issues,
     }
-
-
-def cursor_startup_probe_suite(
-    *,
-    model: str | CursorModelSelection = DEFAULT_CURSOR_STARTUP_MODEL,
-    runtime: str = DEFAULT_CURSOR_STARTUP_RUNTIME,
-    attempts: int | None = None,
-    timeout_seconds: float | None = None,
-    cwd: Path | None = None,
-    include_catalog: bool = False,
-) -> dict:
-    """Run repeated Cursor startup probes and classify admission blockers.
-
-    This is the formal P0 report used before scaled authoring.  A single
-    preflight can hide intermittent startup failures; the suite assigns each
-    attempt exactly one *primary* class with precedence
-    ``ready > auth > startupTimeout > true5xx > bridgeDisconnect > other`` so
-    that a probe whose final verdict is a subprocess timeout is bucketed as
-    ``startupTimeout`` and is **never** counted as ``true5xx`` (cold-start 5xx
-    sub-attempts under a timeout are not a stable backend 5xx verdict).
-    """
-    runtime_policy = active_runtime_policy()
-    selection = CursorModelSelection.from_value(model)
-    total = int(
-        attempts
-        if attempts is not None
-        else runtime_policy.startup_probe_suite_attempts
-    )
-    effective_timeout_seconds = float(
-        timeout_seconds
-        if timeout_seconds is not None
-        else runtime_policy.startup_timeout_seconds
-    )
-    started_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    suite_started = time.monotonic()
-    if include_catalog:
-        from core.cursor_workspace_probe import cursor_model_catalog
-
-        catalog = cursor_model_catalog()
-    else:
-        catalog = None
-    rows: list[dict] = []
-    latencies: list[float] = []
-    success_count = 0
-    auth_failures = 0
-    true_5xx_count = 0
-    startup_timeout_count = 0
-    bridge_disconnect_count = 0
-    cold_start_5xx_observed = 0
-    worker_limit = min(
-        total,
-        runtime_policy.author_workers,
-        runtime_policy.cursor_bridge_instances,
-    )
-    active_workers = 0
-    maximum_active_workers = 0
-    active_lock = threading.Lock()
-
-    def run_probe(index: int) -> tuple[int, dict, float]:
-        nonlocal active_workers, maximum_active_workers
-        with active_lock:
-            active_workers += 1
-            maximum_active_workers = max(maximum_active_workers, active_workers)
-        begin = time.monotonic()
-        try:
-            payload = cursor_startup_probe(
-                model=selection,
-                runtime=runtime,
-                timeout_seconds=effective_timeout_seconds,
-                cwd=cwd,
-            )
-        except Exception as exc:  # noqa: BLE001 - external SDK boundary
-            payload = {
-                "ready": False,
-                "status": "error",
-                "errorClass": type(exc).__name__,
-                "error": _redact_secret_text(str(exc)),
-            }
-        finally:
-            with active_lock:
-                active_workers -= 1
-        return index, payload, round(time.monotonic() - begin, 4)
-
-    with ThreadPoolExecutor(max_workers=worker_limit) as executor:
-        futures = [executor.submit(run_probe, index) for index in range(1, total + 1)]
-        outcomes = [future.result() for future in as_completed(futures)]
-
-    for index, payload, elapsed in outcomes:
-        latencies.append(elapsed)
-        ready = bool(payload.get("ready"))
-        has_auth = _cursor_probe_attempt_is_auth(payload)
-        is_startup_timeout = _cursor_probe_is_startup_timeout(payload)
-        raw_5xx = _cursor_probe_attempt_has_5xx(payload)
-        has_bridge_disconnect = _cursor_probe_attempt_is_bridge_disconnect(payload)
-        # 单一 primary 归类（互斥），timeout 优先于 5xx：终态超时不计 5xx。
-        if ready:
-            primary = "ready"
-        elif has_auth:
-            primary = "auth"
-        elif is_startup_timeout:
-            primary = "startupTimeout"
-        elif raw_5xx:
-            primary = "true5xx"
-        elif has_bridge_disconnect:
-            primary = "bridgeDisconnect"
-        else:
-            primary = "other"
-        if primary == "ready":
-            success_count += 1
-        elif primary == "auth":
-            auth_failures += 1
-        elif primary == "startupTimeout":
-            startup_timeout_count += 1
-        elif primary == "true5xx":
-            true_5xx_count += 1
-        elif primary == "bridgeDisconnect":
-            bridge_disconnect_count += 1
-        if raw_5xx:
-            cold_start_5xx_observed += 1
-        rows.append(
-            {
-                "attempt": index,
-                "ready": ready,
-                "latencySeconds": elapsed,
-                "status": payload.get("status"),
-                "errorClass": _redact_secret_value(payload.get("errorClass")),
-                "errorCode": payload.get("errorCode"),
-                "httpStatus": payload.get("httpStatus"),
-                "agentId": payload.get("agentId"),
-                "runId": payload.get("runId"),
-                "sdkVersion": payload.get("sdkVersion"),
-                "primaryClass": primary,
-                "authFailure": primary == "auth",
-                "startupTimeout": primary == "startupTimeout",
-                "true5xx": primary == "true5xx",
-                "bridgeDisconnect": primary == "bridgeDisconnect",
-                "coldStart5xxObserved": raw_5xx,
-                "attemptCount": payload.get("attemptCount"),
-            }
-        )
-    rows.sort(key=lambda row: int(row["attempt"]))
-    elapsed_seconds = round(time.monotonic() - suite_started, 4)
-    probe_jobs_per_hour = (
-        round((success_count / elapsed_seconds) * 3600, 4)
-        if elapsed_seconds > 0
-        else 0.0
-    )
-    true_5xx_rate = round(true_5xx_count / total, 4)
-    startup_timeout_rate = round(startup_timeout_count / total, 4)
-    bridge_disconnect_rate = round(bridge_disconnect_count / total, 4)
-    issues: list[str] = []
-    if auth_failures:
-        issues.append(f"Cursor auth failures observed: {auth_failures}/{total}")
-    if true_5xx_rate >= runtime_policy.cursor_true_5xx_rate_limit:
-        issues.append(
-            f"Cursor true 5xx rate {true_5xx_rate:.2%} >= "
-            f"{runtime_policy.cursor_true_5xx_rate_limit:.0%}"
-        )
-    if startup_timeout_rate >= runtime_policy.cursor_startup_timeout_rate_limit:
-        issues.append(
-            f"Cursor startup timeout rate {startup_timeout_rate:.2%} >= "
-            f"{runtime_policy.cursor_startup_timeout_rate_limit:.0%} "
-            f"(raise --startup-timeout-seconds / warm bridge reuse; not a backend 5xx)"
-        )
-    if success_count == 0:
-        issues.append("Cursor startup probe never succeeded")
-    if catalog is not None and not catalog.get("ready"):
-        issues.extend(str(issue) for issue in catalog.get("issues") or [])
-    return {
-        "schema": "quwoquan_data.cursor_startup_probe_suite",
-        "model": selection.model_id,
-        "modelParameters": selection.parameters_document(),
-        "modelCatalog": catalog,
-        "runtime": runtime,
-        "attempts": total,
-        "timeoutSeconds": round(effective_timeout_seconds, 4),
-        "successCount": success_count,
-        "authFailures": auth_failures,
-        "true5xxCount": true_5xx_count,
-        "true5xxRate": true_5xx_rate,
-        "startupTimeoutCount": startup_timeout_count,
-        "startupTimeoutRate": startup_timeout_rate,
-        "coldStart5xxObservedCount": cold_start_5xx_observed,
-        "bridgeDisconnectCount": bridge_disconnect_count,
-        "bridgeDisconnectRate": bridge_disconnect_rate,
-        "startupLatencyP95": _p95(latencies),
-        "elapsedSeconds": elapsed_seconds,
-        "configuredConcurrency": worker_limit,
-        "effectiveConcurrency": maximum_active_workers,
-        "probeJobsPerHour": probe_jobs_per_hour,
-        "unrecoveredFailures": total - success_count,
-        "ready": not issues,
-        "issues": issues,
-        "startedAt": started_at,
-        "finishedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "results": rows,
-    }
-
-

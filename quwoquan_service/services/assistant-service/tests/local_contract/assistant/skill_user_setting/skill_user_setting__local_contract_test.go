@@ -1,4 +1,7 @@
 // spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/skill-user-lifecycle/spec.md#gwt-001
+// readiness_case: list-skill-user-settings-local
+// readiness_case: get-skill-user-setting-local
+// readiness_case: put-skill-user-setting-local
 package local_contract
 
 import (
@@ -126,6 +129,16 @@ func TestSkillUserSettingDefaultAndExplicitDisableAreIndependent(t *testing.T) {
 	})
 	if err != nil || !result.Changed || result.Setting.Revision != 1 {
 		t.Fatalf("Put() result=%+v error=%v", result, err)
+	}
+	loaded, err := queries.Get(
+		context.Background(),
+		"account-a",
+		"travel_companion",
+	)
+	if err != nil || loaded.ID != result.Setting.ID ||
+		loaded.AccountID != "account-a" || loaded.SkillID != "travel_companion" ||
+		loaded.Revision != result.Setting.Revision {
+		t.Fatalf("Get() setting=%+v error=%v", loaded, err)
 	}
 	enabled, err = queries.IsEnabled(context.Background(), "account-a", "travel_companion")
 	if err != nil || enabled {

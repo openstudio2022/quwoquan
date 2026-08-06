@@ -1,5 +1,3 @@
-entity: OutboundShareFact
-domain: CONTENT
 description: 'OutboundShareFact 无对象专属错误码：append 复用共享错误码
 
   （invalid_argument/idempotency_conflict/storage_write_failed），

@@ -2,29 +2,80 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://quwoquan.local/contracts/metadata/events.schema.json",
   "type": "object",
-  "additionalProperties": true,
+  "additionalProperties": false,
   "required": [
     "events"
   ],
   "properties": {
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
     "events": {
       "type": "array",
       "items": {
         "type": "object",
-        "additionalProperties": true,
-        "required": ["name"],
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "delivery_semantics",
+          "payload_entity",
+          "payload_fields"
+        ],
         "properties": {
-          "name": { "type": "string", "minLength": 1 },
-          "channel": { "type": "string", "minLength": 1 },
+          "name": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Za-z0-9]*$"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "delivery_semantics": { "$ref": "#/$defs/deliverySemantics" },
+          "topic": {
+            "description": "事件落在哪个具名主题/流上。它只是名字，不表达任何投递保证——保证只由 delivery_semantics 表达。没有具名主题的事件不写这个键。",
+            "type": "string",
+            "minLength": 1
+          },
           "payload_entity": { "type": "string", "minLength": 1 },
-          "consumers": {
+          "payload_shape": {
+            "const": "exact"
+          },
+          "payload_fields": {
             "type": "array",
+            "minItems": 1,
             "uniqueItems": true,
             "items": { "type": "string", "minLength": 1 }
+          },
+          "client_ws_type": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)*$"
+          },
+          "client_payload_defaults": {
+            "type": "object",
+            "propertyNames": {
+              "pattern": "^[a-z][A-Za-z0-9]*$"
+            },
+            "additionalProperties": {
+              "type": "string"
+            }
           },
           "no_consumer_reason": { "type": "string", "minLength": 1 }
         }
       }
+    }
+  },
+  "$defs": {
+    "deliverySemantics": {
+      "description": "这条事件离开（或不离开）产出聚合时的投递保证。与 storage.yaml 的 publicationRole 共用同一批词：同一件事在两处必须写成同一个词，见 contracts/metadata/DESIGN.md 第 9.1、9.2 节。",
+      "enum": [
+        "transactional_outbox",
+        "transactional_event_log",
+        "durable_stream",
+        "synchronous_call",
+        "best_effort_ephemeral",
+        "not_published"
+      ]
     }
   }
 }

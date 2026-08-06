@@ -17,5 +17,5 @@ var (
 // AppErrorFromContentReactionTargetNotFound returns *AppError for CONTENT.USER.content_reaction_target_not_found (user_message from errors.yaml).
 func AppErrorFromContentReactionTargetNotFound(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.USER.content_reaction_target_not_found")
-	return rterr.NewAppError(code, "互动目标不存在或已失效", debugMessage).WithMetadata("content_reaction_target_not_found", 404).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "互动目标不存在或已失效", debugMessage).WithMetadata("content_reaction_target_not_found", 404).WithRecoveryDirective("surface", "inlineCard", 0)
 }

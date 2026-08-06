@@ -1,7 +1,0 @@
-events:
-- name: TripPlanRevisionAppended
-  producer: travel-service
-  consumers: [trip-timeline-projector, trip-map-projector, assistant-service]
-  channel: transactional_outbox
-  payload_entity: TripPlanRevision
-  payload_fields: [_id, tripId, revisionNumber, previousRevisionId, changeReason, severity, changes, affectedPersonaIds, createdAt]

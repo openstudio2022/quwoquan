@@ -251,6 +251,7 @@ def prepare_reliable_publish_jobs(
     closure = load_post_review_closure(
         ctx.execution_id,
         expected_object_targets=indexed_post_targets(ctx.execution_id),
+        require_quota_milestone=False,
     )
     for verdict in closure.qualified:
         ref = verdict.object_ref

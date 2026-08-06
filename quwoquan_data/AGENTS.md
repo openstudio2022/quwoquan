@@ -65,7 +65,11 @@
 
 - 优先使用 `python3 quwoquan_data/scripts/cli.py ...` 执行对应流程
 - 启动托管工作流前先跑唯一环境门：`python3 quwoquan_data/scripts/cli.py task preflight`；它会检查 `cursor_sdk`、CV/OCR 依赖、仓外 `$HOME/.config/quwoquan/cursor_api_key`（显式 `QWQ_CURSOR_API_KEY_FILE` 仅用于受控替换）和网络可达性。
-- 数据工程校验优先跑 `python3 quwoquan_data/scripts/cli.py verify all`
-- 若触及 CLI 入口约束，再补跑 `python3 quwoquan_data/scripts/verify/verify_cli_first.py`
+- Data verify 只分三类，禁止再建第二套静态组合入口：
+  1. **static all**：`python3 quwoquan_data/scripts/cli.py verify all` 是唯一静态 gate 组合。
+  2. **on-demand**：需要具体 release/execution/环境参数的命令，如 `verify release-lifecycle`、`verify execution-readiness`、`verify publish-purity`。
+  3. **runtime library**：`scripts/verify/*.py` 与领域模块可被 CLI/gate import；`__main__` 只供调试，不算正式入口。
+- 若触及 CLI 入口契约，再跑 `python3 quwoquan_data/scripts/cli.py verify cli-first`
 - 发布准出：`python3 quwoquan_data/scripts/cli.py verify release-lifecycle --release <releaseId>`
 - 发布、采样、导入或环境数据变化后，补跑对应 `ship`、服务侧 importer 测试和与环境职责匹配的 `stackctl verify --env <env> --kind all --profile integration|release`。
+- `scripts/` 顶层只允许 `cli.py`、`core/`、`content/`、`governance/`、`verify/`；稳定脚本名禁止任何阶段编号、批次编号或数字分片名。

@@ -37,7 +37,6 @@ func TestHomepageMongoStoreIdentityCASReceiptOutboxAndProjections(t *testing.T) 
 	defer func() { _ = client.Disconnect(context.Background()) }()
 	store := homepagepersistence.NewMongoHomepageStore(
 		client.Database("entity_homepage_it"),
-		true,
 	)
 	if err := store.EnsureIndexes(ctx); err != nil {
 		t.Fatalf("ensure homepage indexes: %v", err)
@@ -182,7 +181,6 @@ func TestHomepageMongoImporterUpsertsBySourceIdentity(t *testing.T) {
 	defer func() { _ = client.Disconnect(context.Background()) }()
 	store := homepagepersistence.NewMongoHomepageStore(
 		client.Database("entity_homepage_import_it"),
-		true,
 	)
 	if err := store.EnsureIndexes(ctx); err != nil {
 		t.Fatalf("ensure homepage indexes: %v", err)

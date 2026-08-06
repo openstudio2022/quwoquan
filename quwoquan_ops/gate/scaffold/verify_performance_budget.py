@@ -14,15 +14,15 @@ from nonfunctional_coverage_lib import Failures, ROOT
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from quwoquan_ops.gate.verify_runtime_media_t4_evidence import validate_evidence_document
+from quwoquan_ops.gate.verify_runtime_media_playback_evidence import validate_evidence_document
 
 
-EVIDENCE_GATE = ROOT / "quwoquan_ops/gate/verify_runtime_media_t4_evidence.py"
-ARTIFACT_GATE = ROOT / "quwoquan_ops/gate/runtime_media_t4_artifacts.py"
+EVIDENCE_GATE = ROOT / "quwoquan_ops/gate/verify_runtime_media_playback_evidence.py"
+ARTIFACT_GATE = ROOT / "quwoquan_ops/gate/runtime_media_playback_artifacts.py"
 EVIDENCE_TEST = (
     ROOT
     / "quwoquan_ops/tests/local_contract/"
-    "test_runtime_media_t4_evidence__local_contract_test.py"
+    "test_runtime_media_playback_evidence__local_contract_test.py"
 )
 
 
@@ -36,7 +36,7 @@ def _parse_args() -> argparse.Namespace:
 
 def _verify_static_contract(failures: Failures) -> None:
     for path, label in (
-        (EVIDENCE_GATE, "runtime-media T4 evidence gate"),
+        (EVIDENCE_GATE, "runtime-media playback evidence gate"),
         (ARTIFACT_GATE, "runtime-media artifact validator"),
         (EVIDENCE_TEST, "runtime-media evidence local_contract"),
     ):

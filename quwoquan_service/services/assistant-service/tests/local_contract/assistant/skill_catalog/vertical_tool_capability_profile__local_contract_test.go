@@ -34,6 +34,10 @@ func TestOfficialVerticalSkillsComposeTypedToolsOnlyThroughCapabilityProfiles(
 			"finance_quote", "web_search", "web_open", "web_find",
 		},
 		"travel_companion": {
+			"gathering.search_public", "gathering.read_public",
+			"gathering.read_private", "gathering.propose_create_draft",
+			"gathering.propose_update", "gathering.watch_availability",
+			"gathering.propose_plan",
 			"app_search", "weather_lookup", "web_search", "web_open",
 			"web_find", "calendar_create_reminder",
 		},

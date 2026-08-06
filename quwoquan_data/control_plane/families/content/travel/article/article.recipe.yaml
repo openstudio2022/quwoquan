@@ -2,7 +2,7 @@ schema: quwoquan.content.recipe
 recipeId: content/travel/article/article
 title: 旅行文章执行（通用模板）
 presetRef: content/travel/article/base
-runtimeProfile: cursor_local_calibrated
+runtimeProfile: semantic_agent_local_calibrated
 selection:
   # Article selection spans every admitted 地点 subtype; source readiness,
   # rather than a scenic-only recipe label, decides the frozen pool.
@@ -14,14 +14,12 @@ selection:
 contract:
   requireActiveStatus: true
 execution:
-  model: auto
-  modelFamily: auto
+  model: gpt-5.6-terra
+  modelFamily: gpt
   modelParameters: []
-  reviewModel: auto
-  reviewModelFamily: auto
+  reviewModel: gpt-5.6-terra
+  reviewModelFamily: gpt
   reviewModelParameters: []
 readiness:
-  minPassRate: 1.0
-  mode: commercial
-  failOnNoGo: true
+  mode: research
   requireReviewed: true

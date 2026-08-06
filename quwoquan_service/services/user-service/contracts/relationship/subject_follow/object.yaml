@@ -32,10 +32,6 @@ relationships:
   - entity.Homepage
   - circle.Circle
   - integration.Location
-capabilities:
-- queryable
-- idempotent_commands
-- transactional_outbox
 business_rules:
 - subjectType 不得为 persona，persona 间关系只能写 PersonaRelationship
 - personaId + subjectType + subjectId 全局唯一

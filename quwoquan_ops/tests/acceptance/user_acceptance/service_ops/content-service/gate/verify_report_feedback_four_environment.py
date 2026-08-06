@@ -44,9 +44,9 @@ LIFECYCLE_FACTS = frozenset(
 )
 
 REQUIRED_CODE_EVIDENCE = (
-    "quwoquan_app/test/local_contract/ui/content/more_action_popup__functional__local_contract_test.dart",
-    "quwoquan_app/test/user_acceptance/patrol/settings/my_reports_page__user_acceptance_test.dart",
-    "quwoquan_app/test/local_contract/ui/settings/pages/blocked_keywords/blocked_keywords_page__local_contract_test.dart",
+    "quwoquan_app/test/local_contract/service/content_service/content/post/more_action_popup__functional__local_contract_test.dart",
+    "quwoquan_app/test/user_acceptance/service/content_service/trust_safety/report/my_reports_page__user_acceptance_test.dart",
+    "quwoquan_app/test/local_contract/service/user_service/account/user_settings/blocked_keywords_page__local_contract_test.dart",
     "quwoquan_service/services/content-service/tests/api_integration/content/post/report_crud_contract__api_integration_test.go",
     "quwoquan_service/services/content-service/tests/api_integration/content/post/report_dismiss_contract__api_integration_test.go",
     "quwoquan_service/services/notification-service/tests/api_integration/notification_delivery/notification/interaction_notification_stream__api_integration_test.go",

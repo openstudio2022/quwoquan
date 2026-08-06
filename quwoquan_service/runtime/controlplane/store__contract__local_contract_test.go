@@ -120,7 +120,7 @@ func TestPutDocumentIfAbsentPreservesFirstImmutableFact(t *testing.T) {
 func TestEffectiveConfigHashIsStableAndOrderSensitive(t *testing.T) {
 	values := []ResolvedConfigValue{
 		{Key: "sys.api-edge.rate_limit.query.limit", Value: 50, ScopeLevel: "workload", ScopeID: "api-edge", SourceLayer: "release-package"},
-		{Key: "sys.orchestrator.downstream.timeout_ms", Value: 780, ScopeLevel: "service", ScopeID: "product-ops-service", SourceLayer: "release-package"},
+		{Key: "sys.config_center.poll_interval_sec", Value: 45, ScopeLevel: "service", ScopeID: "product-ops-service", SourceLayer: "release-package"},
 	}
 	first := EffectiveConfigHash(values)
 	second := EffectiveConfigHash(values)

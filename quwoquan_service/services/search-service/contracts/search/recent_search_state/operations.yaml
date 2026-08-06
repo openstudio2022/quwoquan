@@ -230,57 +230,6 @@ api_routes:
       visibility: private
     request_entity: ClearRecentSearchesCommand
     request_body_kind: none
-  - method: POST
-    path: /internal/search/account-closure/dead-letters:recover
-    operation: RecoverSearchAccountClosureDeadLetter
-    actor: none
-    application:
-      kind: command
-      facet: RecentSearchAccountClosureRecoveryCommandFacet
-      method: recoverAccountClosureDeadLetter
-      aggregate_owner: RecentSearchState
-      mutation_target: RecentSearchState
-      invariant_target: RecentSearchState
-    authorization:
-      principal: operator
-      scopes:
-        - ops.account_closure.write
-      permissions:
-        - search.account_closure.recover
-      ownership_policy: service_owned_projection_delivery
-    commercial:
-      status: ready
-    reliability:
-      timeout_ms: 1500
-      cancellation: supported
-      retry_mode: idempotent
-      max_attempts: 2
-      idempotency: required
-    error_codes:
-      - SEARCH.USER.recent_invalid_argument
-      - SEARCH.SYSTEM.internal_error
-    privacy:
-      request_classification: INTERNAL
-      response_classification: INTERNAL
-      log_policy: metadata_only
-    telemetry:
-      metric: search_account_closure_dead_letter_recover
-      trace: true
-      attributes:
-        - outcome
-    slo:
-      latency_p95_ms: 500
-      availability_percent: 99.9
-    request_entity: SearchAccountClosureDeadLetterRecoveryRequest
-    response_entity: SearchAccountClosureDeadLetterRecoveryAccepted
-    success_status: 202
-    security:
-      auth_mode: required
-      principal: operator
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: internal
-    description: operator 只释放 Search 自有 terminal marker，使原 events.user.account PEL 重新进入有限重试；禁止从脱敏 DLQ 重建 payload。
 consumers:
   - name: app
     capabilities:
@@ -289,20 +238,7 @@ consumers:
       - delete_recent_search
       - clear_recent_searches
 contract_test:
-  mock_strategy:
-    app_side:
-      mock_target: search-service API
-      scenarios:
-        - name: recent_list_after_upsert
-          route: GET /search/recent
-          assertions:
-            - status_200
-            - entries_ordered_by_recency
-        - name: recent_upsert_dedupes_semantic_key
-          route: POST /search/recent
-          assertions:
-            - status_200
-            - same_semantic_key_single_entry
+  test_strategy:
     service_side:
       description: 真实 Mongo（testcontainers）验证 CAS、bounded entries、receipt 重放
       real_engines:
@@ -314,3 +250,69 @@ contract_test:
             - 同语义键重复 upsert 只保留一条 entry 并提升顺序
             - 相同 Idempotency-Key 重放返回首次结果
             - entries 数量不超过上限，最旧条目被淘汰
+
+readiness_cases:
+- case_id: list-recent-searches-local
+  spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/recent-search-sync-and-voice-asr/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ListRecentSearches}
+  runner_source_path: quwoquan_service/services/search-service/tests/local_contract/search/recent_search_state/command_query__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: list-recent-searches-api
+  spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/recent-search-sync-and-voice-asr/spec.md#gwt-001
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ListRecentSearches}
+  runner_source_path: quwoquan_service/services/search-service/tests/api_integration/search/recent_search_state/recent_search_state_store__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: upsert-recent-search-local
+  spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/recent-search-sync-and-voice-asr/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: UpsertRecentSearch}
+  runner_source_path: quwoquan_service/services/search-service/tests/local_contract/search/recent_search_state/command_query__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: upsert-recent-search-api
+  spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/recent-search-sync-and-voice-asr/spec.md#gwt-001
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: UpsertRecentSearch}
+  runner_source_path: quwoquan_service/services/search-service/tests/api_integration/search/recent_search_state/recent_search_state_store__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: delete-recent-search-local
+  spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/recent-search-sync-and-voice-asr/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: DeleteRecentSearch}
+  runner_source_path: quwoquan_service/services/search-service/tests/local_contract/search/recent_search_state/command_query__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: delete-recent-search-api
+  spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/recent-search-sync-and-voice-asr/spec.md#gwt-001
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: DeleteRecentSearch}
+  runner_source_path: quwoquan_service/services/search-service/tests/api_integration/search/recent_search_state/recent_search_state_store__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: clear-recent-searches-local
+  spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/recent-search-sync-and-voice-asr/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ClearRecentSearches}
+  runner_source_path: quwoquan_service/services/search-service/tests/local_contract/search/recent_search_state/command_query__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: clear-recent-searches-api
+  spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/recent-search-sync-and-voice-asr/spec.md#gwt-001
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ClearRecentSearches}
+  runner_source_path: quwoquan_service/services/search-service/tests/api_integration/search/recent_search_state/recent_search_state_store__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}

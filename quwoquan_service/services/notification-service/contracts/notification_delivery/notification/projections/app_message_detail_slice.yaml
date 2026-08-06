@@ -33,6 +33,9 @@ fields:
   type: string
 - name: target
   type: AppMessageTarget
+- name: gatheringInvitation
+  type: AppMessageGatheringInvitation
+  nullable: true
 - name: read
   type: bool
 - name: createdAt

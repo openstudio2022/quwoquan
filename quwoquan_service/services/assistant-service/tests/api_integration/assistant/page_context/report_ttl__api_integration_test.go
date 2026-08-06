@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/runtime/runtime-assistant/context-grounded-answering/spec.md#gwt-001
+// readiness_case: report-page-context-api
 package api_integration
 
 import (

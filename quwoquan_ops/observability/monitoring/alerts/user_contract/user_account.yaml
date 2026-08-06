@@ -1,0 +1,385 @@
+# Code generated from quwoquan_service/generated/contract_graph.json.
+# Regenerate with verify_object_alert_coverage.py --write.
+groups:
+  - name: quwoquan_user_contract_user_account
+    rules:
+      - record: quwoquan_user_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="user-service",method="GET",route="/internal/user/account-security/health"})
+        labels:
+          service: "user-service"
+          operation: "user.user_account.CheckAccountSecurityAuthority"
+          contract_metric: "user_account_security_authority_health"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "80"
+          slo_availability_percent: "99.99"
+      - record: quwoquan_user_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="user-service",method="GET",route="/internal/user/account-security/health"})
+        labels:
+          service: "user-service"
+          operation: "user.user_account.CheckAccountSecurityAuthority"
+          contract_metric: "user_account_security_authority_health"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "80"
+          slo_availability_percent: "99.99"
+      - record: quwoquan_user_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="user-service",method="POST",route="/owner/account/close"})
+        labels:
+          service: "user-service"
+          operation: "user.user_account.CloseAccount"
+          contract_metric: "user_account_close"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="user-service",method="POST",route="/owner/account/close"})
+        labels:
+          service: "user-service"
+          operation: "user.user_account.CloseAccount"
+          contract_metric: "user_account_close"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="user-service",method="GET",route="/user/personas/active"})
+        labels:
+          service: "user-service"
+          operation: "user.user_account.GetActivePersonaContext"
+          contract_metric: "user_persona_active_context_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="user-service",method="GET",route="/user/personas/active"})
+        labels:
+          service: "user-service"
+          operation: "user.user_account.GetActivePersonaContext"
+          contract_metric: "user_persona_active_context_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="user-service",method="GET",route="/me"})
+        labels:
+          service: "user-service"
+          operation: "user.user_account.GetMeProfile"
+          contract_metric: "user_me_profile_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="user-service",method="GET",route="/me"})
+        labels:
+          service: "user-service"
+          operation: "user.user_account.GetMeProfile"
+          contract_metric: "user_me_profile_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="user-service",method="GET",route=~"^/user/personas/[^/]+/lifecycle-guard$"})
+        labels:
+          service: "user-service"
+          operation: "user.user_account.GetPersonaLifecycleGuard"
+          contract_metric: "user_persona_lifecycle_guard_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="user-service",method="GET",route=~"^/user/personas/[^/]+/lifecycle-guard$"})
+        labels:
+          service: "user-service"
+          operation: "user.user_account.GetPersonaLifecycleGuard"
+          contract_metric: "user_persona_lifecycle_guard_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="user-service",method="GET",route="/user/personas/summary"})
+        labels:
+          service: "user-service"
+          operation: "user.user_account.GetPersonaManagementSummary"
+          contract_metric: "user_persona_summary_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="user-service",method="GET",route="/user/personas/summary"})
+        labels:
+          service: "user-service"
+          operation: "user.user_account.GetPersonaManagementSummary"
+          contract_metric: "user_persona_summary_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="user-service",method="GET",route=~"^/user/[^/]+$"})
+        labels:
+          service: "user-service"
+          operation: "user.user_account.GetPersonaProfile"
+          contract_metric: "user_persona_profile_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="user-service",method="GET",route=~"^/user/[^/]+$"})
+        labels:
+          service: "user-service"
+          operation: "user.user_account.GetPersonaProfile"
+          contract_metric: "user_persona_profile_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="user-service",method="GET",route="/user/profile/edit-snapshot"})
+        labels:
+          service: "user-service"
+          operation: "user.user_account.GetProfileEditSnapshot"
+          contract_metric: "user_profile_edit_snapshot_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="user-service",method="GET",route="/user/profile/edit-snapshot"})
+        labels:
+          service: "user-service"
+          operation: "user.user_account.GetProfileEditSnapshot"
+          contract_metric: "user_profile_edit_snapshot_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="user-service",method="GET",route="/user/profile/qr-card"})
+        labels:
+          service: "user-service"
+          operation: "user.user_account.GetProfileQrCard"
+          contract_metric: "user_profile_qr_card_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="user-service",method="GET",route="/user/profile/qr-card"})
+        labels:
+          service: "user-service"
+          operation: "user.user_account.GetProfileQrCard"
+          contract_metric: "user_profile_qr_card_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="user-service",method="GET",route=~"^/user/personas/[^/]+/homepage-bundle$"})
+        labels:
+          service: "user-service"
+          operation: "user.user_account.GetUserHomepageBundle"
+          contract_metric: "user_homepage_bundle_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="user-service",method="GET",route=~"^/user/personas/[^/]+/homepage-bundle$"})
+        labels:
+          service: "user-service"
+          operation: "user.user_account.GetUserHomepageBundle"
+          contract_metric: "user_homepage_bundle_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="user-service",method="GET",route=~"^/users/[^/]+/interest-profile$"})
+        labels:
+          service: "user-service"
+          operation: "user.user_account.GetUserInterestProfile"
+          contract_metric: "user_interest_profile_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="user-service",method="GET",route=~"^/users/[^/]+/interest-profile$"})
+        labels:
+          service: "user-service"
+          operation: "user.user_account.GetUserInterestProfile"
+          contract_metric: "user_interest_profile_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="user-service",method="GET",route=~"^/user/profile/[^/]+$"})
+        labels:
+          service: "user-service"
+          operation: "user.user_account.GetUserProfile"
+          contract_metric: "user_profile_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="user-service",method="GET",route=~"^/user/profile/[^/]+$"})
+        labels:
+          service: "user-service"
+          operation: "user.user_account.GetUserProfile"
+          contract_metric: "user_profile_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="user-service",method="GET",route="/user/personas"})
+        labels:
+          service: "user-service"
+          operation: "user.user_account.ListPersonas"
+          contract_metric: "user_personas_list"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="user-service",method="GET",route="/user/personas"})
+        labels:
+          service: "user-service"
+          operation: "user.user_account.ListPersonas"
+          contract_metric: "user_personas_list"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="user-service",method="POST",route="/user/sync"})
+        labels:
+          service: "user-service"
+          operation: "user.user_account.PullUserSync"
+          contract_metric: "user_sync_pull"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="user-service",method="POST",route="/user/sync"})
+        labels:
+          service: "user-service"
+          operation: "user.user_account.PullUserSync"
+          contract_metric: "user_sync_pull"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="user-service",method="GET",route=~"^/internal/user/accounts/[^/]+/security$"})
+        labels:
+          service: "user-service"
+          operation: "user.user_account.ReadAccountSecurity"
+          contract_metric: "user_account_security_read"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "80"
+          slo_availability_percent: "99.99"
+      - record: quwoquan_user_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="user-service",method="GET",route=~"^/internal/user/accounts/[^/]+/security$"})
+        labels:
+          service: "user-service"
+          operation: "user.user_account.ReadAccountSecurity"
+          contract_metric: "user_account_security_read"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "80"
+          slo_availability_percent: "99.99"
+      - record: quwoquan_user_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="user-service",method="GET",route="/public/profile/qr/resolve"})
+        labels:
+          service: "user-service"
+          operation: "user.user_account.ResolveProfileQrToken"
+          contract_metric: "user_profile_qr_resolve"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="user-service",method="GET",route="/public/profile/qr/resolve"})
+        labels:
+          service: "user-service"
+          operation: "user.user_account.ResolveProfileQrToken"
+          contract_metric: "user_profile_qr_resolve"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="user-service",method="POST",route=~"^/internal/user/accounts/[^/]+/restore$"})
+        labels:
+          service: "user-service"
+          operation: "user.user_account.RestoreAccount"
+          contract_metric: "user_account_restore"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.95"
+      - record: quwoquan_user_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="user-service",method="POST",route=~"^/internal/user/accounts/[^/]+/restore$"})
+        labels:
+          service: "user-service"
+          operation: "user.user_account.RestoreAccount"
+          contract_metric: "user_account_restore"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.95"
+      - record: quwoquan_user_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="user-service",method="GET",route="/user/search/social-relations"})
+        labels:
+          service: "user-service"
+          operation: "user.user_account.SearchSocialRelations"
+          contract_metric: "user_social_relation_search"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="user-service",method="GET",route="/user/search/social-relations"})
+        labels:
+          service: "user-service"
+          operation: "user.user_account.SearchSocialRelations"
+          contract_metric: "user_social_relation_search"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="user-service",method="POST",route=~"^/internal/user/accounts/[^/]+/suspend$"})
+        labels:
+          service: "user-service"
+          operation: "user.user_account.SuspendAccount"
+          contract_metric: "user_account_suspend"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.95"
+      - record: quwoquan_user_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="user-service",method="POST",route=~"^/internal/user/accounts/[^/]+/suspend$"})
+        labels:
+          service: "user-service"
+          operation: "user.user_account.SuspendAccount"
+          contract_metric: "user_account_suspend"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.95"

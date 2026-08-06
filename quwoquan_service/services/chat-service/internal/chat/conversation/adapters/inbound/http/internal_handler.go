@@ -102,8 +102,8 @@ func (h *ChatHandler) handleInternalLookupDirect(w http.ResponseWriter, r *http.
 
 func writeInternalRouteForbidden(w http.ResponseWriter, r *http.Request) {
 	writeHTTPError(w, r, rterr.NewAppError(
-		rterr.NewCode(rterr.ModuleChat, rterr.KindUser, "forbidden"),
-		"无权访问内部接口",
+		rterr.NewCode(rterr.ModuleGateway, rterr.KindUser, "forbidden"),
+		"当前账号没有该操作权限",
 		"internal chat route requires delegated user-service persona authorization",
 	))
 }

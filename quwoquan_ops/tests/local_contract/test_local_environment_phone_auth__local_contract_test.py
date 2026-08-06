@@ -5,6 +5,9 @@ spec_ref: specs/feature-tree/spec.md#uat-009
 
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
 import json
 import os
 import tempfile
@@ -14,6 +17,51 @@ from pathlib import Path
 from unittest import mock
 
 from quwoquan_ops.cli.lib import local_environment_auth
+
+
+def _test_auth(
+    environment: str,
+    *,
+    secret: str | None = None,
+    issuer: str | None = None,
+    audience: str = "quwoquan-app",
+) -> SimpleNamespace:
+    return SimpleNamespace(
+        environment={
+            "AUTH_JWT_SECRET": secret or f"{environment}-jwt-secret",
+            "AUTH_JWT_ISSUER": issuer or f"quwoquan.{environment}.local",
+            "AUTH_JWT_AUDIENCE": audience,
+            "AUTH_JWT_TOKEN_VERSION": "1",
+        }
+    )
+
+
+def _test_access_token(
+    *,
+    environment: str = "gamma",
+    target_name: str = "gamma-local",
+    owner_id: str = "owner-token",
+    persona_id: str = "persona-token",
+    secret: str | None = None,
+    issuer: str | None = None,
+    audience: str = "quwoquan-app",
+) -> str:
+    with mock.patch.object(
+        local_environment_auth,
+        "prepare_local_environment_auth",
+        return_value=_test_auth(
+            environment,
+            secret=secret,
+            issuer=issuer,
+            audience=audience,
+        ),
+    ):
+        return local_environment_auth._mint_local_access_token(
+            environment=environment,
+            target_name=target_name,
+            owner_id=owner_id,
+            persona_id=persona_id,
+        )
 
 
 class LocalEnvironmentPhoneAuthContractTest(unittest.TestCase):
@@ -157,6 +205,10 @@ class LocalEnvironmentPhoneAuthContractTest(unittest.TestCase):
                 encoding="utf-8",
             )
             cache = secret_root / "nonprod-reference-session.cache.json"
+            cached_token = _test_access_token(
+                owner_id="owner-cache",
+                persona_id="persona-cache",
+            )
             cache.write_text(
                 json.dumps(
                     {
@@ -168,7 +220,7 @@ class LocalEnvironmentPhoneAuthContractTest(unittest.TestCase):
                         "actorIndex": 0,
                         "ownerId": "owner-cache",
                         "personaId": "persona-cache",
-                        "accessToken": "cached-token",
+                        "accessToken": cached_token,
                         "expiresAt": "2099-01-01T00:00:00+00:00",
                     }
                 ),
@@ -204,6 +256,11 @@ class LocalEnvironmentPhoneAuthContractTest(unittest.TestCase):
                 ),
                 mock.patch.object(
                     local_environment_auth,
+                    "prepare_local_environment_auth",
+                    return_value=_test_auth("gamma"),
+                ),
+                mock.patch.object(
+                    local_environment_auth,
                     "request_local_environment_json",
                     return_value={"ownerId": "owner-cache"},
                 ) as me_request,
@@ -221,8 +278,157 @@ class LocalEnvironmentPhoneAuthContractTest(unittest.TestCase):
 
         self.assertEqual(session.owner_id, "owner-cache")
         self.assertEqual(session.persona_id, "persona-cache")
-        self.assertEqual(session.access_token, "cached-token")
+        self.assertEqual(session.access_token, cached_token)
         me_request.assert_called_once()
+
+    def test_cached_reference_session_rejects_jwt_identity_and_environment_drift(
+        self,
+    ) -> None:
+        baseline = "sha256:" + "1" * 64
+        package = "sha256:" + "2" * 64
+        epoch = "3" * 64
+        expected_owner = "owner-token"
+        expected_persona = "persona-token"
+        invalid_tokens = {
+            "owner": _test_access_token(
+                owner_id="other-owner",
+                persona_id=expected_persona,
+            ),
+            "persona": _test_access_token(
+                owner_id=expected_owner,
+                persona_id="other-persona",
+            ),
+            "environment": _test_access_token(
+                environment="beta",
+                target_name="beta-local",
+                owner_id=expected_owner,
+                persona_id=expected_persona,
+            ),
+            "audience": _test_access_token(
+                owner_id=expected_owner,
+                persona_id=expected_persona,
+                audience="other-audience",
+            ),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            secret_root = Path(directory) / "gamma-local/secrets"
+            secret_root.mkdir(parents=True)
+            cache = secret_root / "nonprod-reference-session.cache.json"
+            for mismatch, token in invalid_tokens.items():
+                with self.subTest(mismatch=mismatch):
+                    cache.write_text(
+                        json.dumps(
+                            {
+                                "schema": "qwq.nonprod_reference_session_cache",
+                                "target": "gamma-local",
+                                "baselineId": baseline,
+                                "packageDigest": package,
+                                "datasetEpoch": epoch,
+                                "actorIndex": 0,
+                                "ownerId": expected_owner,
+                                "personaId": expected_persona,
+                                "accessToken": token,
+                                "expiresAt": "2099-01-01T00:00:00+00:00",
+                            }
+                        ),
+                        encoding="utf-8",
+                    )
+                    cache.chmod(0o600)
+                    with (
+                        mock.patch.object(
+                            local_environment_auth,
+                            "deployment_target_path",
+                            return_value=secret_root,
+                        ),
+                        mock.patch.object(
+                            local_environment_auth,
+                            "prepare_local_environment_auth",
+                            return_value=_test_auth("gamma"),
+                        ),
+                        mock.patch.object(
+                            local_environment_auth,
+                            "request_local_environment_json",
+                            side_effect=AssertionError(
+                                "mismatched JWT must fail before /me"
+                            ),
+                        ),
+                    ):
+                        session = (
+                            local_environment_auth._try_cached_reference_session(
+                                "https://api.gamma.quwoquan.com:19000",
+                                environment="gamma",
+                                target_name="gamma-local",
+                                baseline_id=baseline,
+                                package_digest=package,
+                                dataset_epoch=epoch,
+                                actor_index=0,
+                                owner_id=expected_owner,
+                                timeout_seconds=1.0,
+                            )
+                        )
+
+                    self.assertIsNone(session)
+                    self.assertFalse(cache.exists())
+
+    def test_retained_session_rejects_minted_jwt_identity_and_environment_drift(
+        self,
+    ) -> None:
+        expected_owner = "owner-retained"
+        expected_persona = "persona-retained"
+        invalid_tokens = {
+            "owner": _test_access_token(
+                owner_id="other-owner",
+                persona_id=expected_persona,
+            ),
+            "persona": _test_access_token(
+                owner_id=expected_owner,
+                persona_id="other-persona",
+            ),
+            "environment": _test_access_token(
+                environment="beta",
+                target_name="beta-local",
+                owner_id=expected_owner,
+                persona_id=expected_persona,
+            ),
+            "audience": _test_access_token(
+                owner_id=expected_owner,
+                persona_id=expected_persona,
+                audience="other-audience",
+            ),
+        }
+        for mismatch, token in invalid_tokens.items():
+            with self.subTest(mismatch=mismatch):
+                with (
+                    mock.patch.object(
+                        local_environment_auth,
+                        "_mint_local_access_token",
+                        return_value=token,
+                    ),
+                    mock.patch.object(
+                        local_environment_auth,
+                        "prepare_local_environment_auth",
+                        return_value=_test_auth("gamma"),
+                    ),
+                    mock.patch.object(
+                        local_environment_auth,
+                        "request_local_environment_json",
+                        side_effect=AssertionError(
+                            "mismatched minted JWT must fail before /me"
+                        ),
+                    ),
+                ):
+                    session = (
+                        local_environment_auth._restore_retained_reference_session(
+                            "https://api.gamma.quwoquan.com:19000",
+                            environment="gamma",
+                            target_name="gamma-local",
+                            owner_id=expected_owner,
+                            persona_id=expected_persona,
+                            timeout_seconds=1.0,
+                        )
+                    )
+
+                self.assertIsNone(session)
 
     def test_reference_session_rechecks_cache_under_lock_without_otp(self) -> None:
         epoch = "d" * 64
@@ -520,6 +726,50 @@ class LocalEnvironmentPhoneAuthContractTest(unittest.TestCase):
                 self.assertTrue(
                     (secret_root / "nonprod-reference-session.cache.json").is_file()
                 )
+
+    def test_mint_local_access_token_reuses_auth_jwt_without_otp(self) -> None:
+        auth = SimpleNamespace(
+            environment={
+                "AUTH_JWT_SECRET": "unit-test-auth-jwt-secret",
+                "AUTH_JWT_ISSUER": "gamma-local-issuer",
+                "AUTH_JWT_AUDIENCE": "gamma-local-audience",
+                "AUTH_JWT_TOKEN_VERSION": "1",
+            }
+        )
+        with mock.patch.object(
+            local_environment_auth,
+            "prepare_local_environment_auth",
+            return_value=auth,
+        ) as prepare:
+            token = local_environment_auth._mint_local_access_token(
+                environment="gamma",
+                target_name="gamma-local",
+                owner_id="owner-mint",
+                persona_id="persona-mint",
+            )
+
+        prepare.assert_called_once_with("gamma", "gamma-local")
+        parts = token.split(".")
+        self.assertEqual(len(parts), 3)
+
+        def _pad(segment: str) -> bytes:
+            return base64.urlsafe_b64decode(segment + "=" * (-len(segment) % 4))
+
+        claims = json.loads(_pad(parts[1]).decode("utf-8"))
+        self.assertEqual(claims["sub"], "owner-mint")
+        self.assertEqual(claims["psn"], "persona-mint")
+        self.assertEqual(claims["tkn"], "access")
+        self.assertEqual(claims["iss"], "gamma-local-issuer")
+        self.assertEqual(claims["aud"], "gamma-local-audience")
+        digest = hmac.new(
+            b"unit-test-auth-jwt-secret",
+            f"{parts[0]}.{parts[1]}".encode("ascii"),
+            hashlib.sha256,
+        ).digest()
+        self.assertEqual(
+            base64.urlsafe_b64encode(digest).decode("ascii").rstrip("="),
+            parts[2],
+        )
 
 
 if __name__ == "__main__":

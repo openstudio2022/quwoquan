@@ -59,6 +59,10 @@ func (h *ChatHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /chat/message-home", h.handleListMessageHome)
 	mux.HandleFunc("GET /chat/contact-home", h.handleListContactHome)
 	mux.HandleFunc("GET /chat/groups/{conversationId}/home", h.handleGetGroupHome)
+	mux.HandleFunc(
+		"GET /chat/gathering-conversations/{conversationId}/board",
+		h.handleGetGatheringChatBoard,
+	)
 	mux.HandleFunc("DELETE /chat/conversations/{conversationId}", h.handleDissolveConversation)
 	RegisterGeneratedRoutes(mux, h)
 }
@@ -82,11 +86,7 @@ func (h *ChatHandler) handlePullUserSync(w http.ResponseWriter, r *http.Request)
 		writeHTTPError(
 			w,
 			r,
-			rterr.NewAppError(
-				rterr.NewCode(rterr.ModuleChat, rterr.KindSystem, "sync_not_configured"),
-				"同步暂不可用",
-				"chat user sync service is not configured",
-			),
+			generated.AppErrorFromInternalError("chat user sync service is not configured"),
 		)
 		return
 	}
@@ -201,6 +201,24 @@ func (h *ChatHandler) handleGetConversation(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	writeJSON(w, http.StatusOK, h.conversationToWire(r.Context(), *conv))
+}
+
+func (h *ChatHandler) handleGetGatheringChatBoard(w http.ResponseWriter, r *http.Request) {
+	conversationID := extractPathParam(
+		r.URL.Path,
+		"/chat/gathering-conversations/{conversationId}/board",
+		"conversationId",
+	)
+	board, err := h.conversationService.GetGatheringChatBoard(
+		r.Context(),
+		conversationID,
+		resolvePersonaID(r),
+	)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, board)
 }
 
 func (h *ChatHandler) handleUpdateConversationTitle(w http.ResponseWriter, r *http.Request) {

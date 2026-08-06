@@ -25,7 +25,19 @@ from governance.coverage.coverage_matrix import (  # noqa: E402
     record_cell_page,
 )
 from governance.coverage.coverage_finalize import finalize_discovery_source_cells  # noqa: E402
+from governance.coverage import coverage_matrix as coverage_matrix_module  # noqa: E402
 from core.runtime_policy import active_runtime_policy  # noqa: E402
+from core.source_digest import SourceDigest  # noqa: E402
+
+
+def _freeze_source_digest(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Resume 契约只比较修订相等性；冻结 digest 避免脏工作树抖动假失败。"""
+    frozen = SourceDigest(digest="sha256:" + ("0" * 64))
+    monkeypatch.setattr(
+        coverage_matrix_module,
+        "current_source_digest",
+        lambda: frozen,
+    )
 
 
 def _guardrails(**overrides: object) -> CoverageMatrixGuardrails:
@@ -43,7 +55,11 @@ def test_matrix_runtime_root_uses_canonical_data_runtime(monkeypatch, tmp_path: 
     assert _runtime_root() == tmp_path / "output" / "data" / "local" / "workspace" / "coverage" / "matrix"
 
 
-def test_matrix_is_city_sharded_and_resume_preserves_terminal_cells(tmp_path: Path) -> None:
+def test_matrix_is_city_sharded_and_resume_preserves_terminal_cells(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _freeze_source_digest(monkeypatch)
     admin_tree = {
         "浙江省": {
             "杭州市": ["上城区", "西湖区"],
@@ -264,7 +280,11 @@ def test_incremental_source_finalization_persists_completed_shards_for_resume(
     )
 
 
-def test_resume_rejects_guardrail_drift(tmp_path: Path) -> None:
+def test_resume_rejects_guardrail_drift(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _freeze_source_digest(monkeypatch)
     kwargs = {
         "run_id": "matrix-guardrails",
         "provinces": ["浙江省"],

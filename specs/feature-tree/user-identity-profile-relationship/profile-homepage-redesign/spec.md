@@ -123,8 +123,8 @@
 - 上游能力：[`user-identity-profile-relationship`](../spec.md) 声明的领域入口。
 - 下游能力：本目录直接 Story 及其公开结果。
 - 一致性要求：遵循本层或父 L1 DEC 声明的一致性边界。
-- Gamma API 证据：`quwoquan_app/test/api_integration/cloud/content/onboarding_author_impact_gamma__api_integration_test.dart`
-- Gamma 真机证据：`quwoquan_app/test/user_acceptance/patrol/user/profile_journey__user_acceptance_test.dart`
+- Gamma API 证据：`quwoquan_app/test/api_integration/service/content_service/content/post/author_impact_gamma__api_integration_test.dart`
+- Gamma 真机证据：`quwoquan_app/test/user_acceptance/journeys/profile/profile_journey__user_acceptance_test.dart`
 
 ## 7. 集成验收
 

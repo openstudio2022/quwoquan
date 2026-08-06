@@ -22,44 +22,53 @@ from pathlib import Path
 sys.path.insert(0, str(SCRIPTS_ROOT))
 _RUNTIME_ROOT = Path(tempfile.mkdtemp(prefix="hitl_execution_rt_"))
 
-import numpy as np  # noqa: E402
-import cv2  # noqa: E402
+import cv2
+import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from core.evidence_contract import post_manifest_contract_issues, quality_payload_contract_issues  # noqa: E402
-from core.entity_object import find_entity_object_dir  # noqa: E402
-from governance.coverage.entity_extract import _governance_root  # noqa: E402
-from core.io import read_json, write_json  # noqa: E402
-from core.paths import (  # noqa: E402
-    execution_inputs_dir,
+import core.paths as _paths_mod
+from content.execution.planning.brief import resolve_compose_brief
+from content.execution.runtime_state import write_execution_runtime_state
+from content.post.article.draft_io import write_agent_draft
+from content.post.article.evidence_bundle import public_byline_label
+from content.post.article.route_analysis import analyze_route_ref
+from content.post.article.route_compose import build_route_writing_pack
+from content.post.article.route_review import review_route_draft
+from content.post.materialize_apply import materialize_posts
+from content.review.ledger import load_ledger
+from content.source.source_unit import (
+    resolve_entity_object_dir,
+    write_source_unit,
+)
+from content.templates.registry import TemplateRegistry
+from content.templates.router import RouteRequest
+from core.control_types import ReviewItemKind
+from core.entity_object import find_entity_object_dir
+from core.evidence_contract import (
+    post_manifest_contract_issues,
+    quality_payload_contract_issues,
+)
+from core.io import read_json, write_json
+from core.paths import (
     ensure_execution_command_layout,
     ensure_execution_layout,
+    execution_inputs_dir,
 )
-import core.paths as _paths_mod  # noqa: E402
-from content.execution.runtime_state import write_execution_runtime_state  # noqa: E402
-from content.post.article.evidence_bundle import public_byline_label  # noqa: E402
-from content.post.article.draft_io import write_agent_draft  # noqa: E402
-from core.control_types import ReviewItemKind  # noqa: E402
-from content.review.ledger import load_ledger  # noqa: E402
-from content.source.source_unit import resolve_entity_object_dir, write_source_unit  # noqa: E402
-from content.execution.planning.brief import resolve_compose_brief  # noqa: E402
-from content.post.article.route_analysis import analyze_route_ref  # noqa: E402
-from content.post.article.route_compose import build_route_writing_pack  # noqa: E402
-from content.post.article.route_review import review_route_draft  # noqa: E402
-from content.post.materialize_apply import materialize_posts  # noqa: E402
-from content.templates.registry import TemplateRegistry  # noqa: E402
-from content.templates.router import RouteRequest  # noqa: E402
-from support.helpers.agent_draft_kit import route_article  # noqa: E402
-from support.execution_manifest_fixture import build_execution_fixture  # noqa: E402
-from governance.creators.candidates.store import CandidateRepository  # noqa: E402
+from governance.coverage.entity_extract import _governance_root
+from governance.creators.candidates.store import CandidateRepository
+from support.execution_manifest_fixture import build_execution_fixture
+from support.helpers.agent_draft_kit import route_article
 
 TASK = "20260711--travel-article-hitl-execution--test-region-b--pilot-001"
 REF = "川西大环线慢游_跟团_夏"
-ENTITIES = ["九寨沟", "稻城亚丁", "色达", "新都桥"]
+# Article fixtures bind one work to one base source unit. Additional named
+# places discovered by the draft continue through the governed entity sidecar.
+ENTITIES = ["九寨沟"]
 MINED = "洛绒牛场"
 TAG_LABEL = "晨雾"
 TAG_DIMENSION = "摄影"
+_CONTROLLER_RESULT: Path | None = None
 
 
 def _retarget_runtime() -> None:
@@ -95,7 +104,10 @@ def _clean_image(path: Path, seed: int) -> None:
 
 
 def _run_controller() -> Path:
+    global _CONTROLLER_RESULT
     _retarget_runtime()
+    if _CONTROLLER_RESULT is not None:
+        return _CONTROLLER_RESULT
     build_execution_fixture(TASK)
     ensure_execution_layout(TASK)
     ensure_execution_command_layout(TASK, "source")
@@ -106,18 +118,18 @@ def _run_controller() -> Path:
         registry,
         RouteRequest(
             vertical="travel",
-            subject_kind="topic",
-            subject_type="旅行/线路",
-            intent="跟团指南",
+            subject_kind="entity",
+            subject_type="地点/景区",
+            intent="体验",
             audience="groupTourTraveler",
             region="高原",
             season="夏",
         ),
-        title="川西大环线慢游跟团深度攻略（夏季）",
+        title="九寨沟清晨慢游体验（夏季）",
         entity_refs=[f"地点/景区/{n}" for n in ENTITIES],
     )
-    write_json(execution_inputs_dir(TASK, "post", "compose") / f"{REF}.json", brief)
     image_root = Path(tempfile.mkdtemp(prefix="hitl_execution_sources_"))
+    base_source_ref = ""
     for idx, entity in enumerate(ENTITIES):
         obj = resolve_entity_object_dir(TASK, entity, etype_hint="景区")
         image_paths: list[Path] = []
@@ -125,7 +137,7 @@ def _run_controller() -> Path:
             image_path = image_root / f"{entity}_{k}.jpg"
             _clean_image(image_path, seed=idx * 7 + k + 1)
             image_paths.append(image_path)
-        write_source_unit(
+        source_manifest = write_source_unit(
             obj,
             ordinal=1,
             source_id="curated_story",
@@ -140,18 +152,38 @@ def _run_controller() -> Path:
             },
             platform="curated",
             source_category="internal-curated",
+            source_use_mode="factual_reference_only",
+            rights_mode="factual_reference_only",
+            publish_media_mode="illustrated",
+            source_role="base",
+            research_lane="article",
             url=f"https://example.com/{entity}",
             title="sample",
             target_ref=f"/entity/地点/景区/{entity}",
             relevance=f"{entity} 线路证据",
             images=[{"sourcePath": str(path), "caption": f"{entity} 图{k}", "relevance": f"{entity} 图{k}"} for k, path in enumerate(image_paths)],
         )
+        if idx == 0:
+            base_source_ref = str(source_manifest.get("sourceRef") or "")
+
+    assert base_source_ref.endswith("/source.md")
+    brief["baseSourceRef"] = base_source_ref
+    brief["sourceUseMode"] = "factual_reference_only"
+    brief["publishMediaMode"] = "illustrated"
+    write_json(execution_inputs_dir(TASK, "post", "compose") / f"{REF}.json", brief)
 
     quality = analyze_route_ref(TASK, REF, brief)
     assert quality_payload_contract_issues(quality) == []
     pack = build_route_writing_pack(TASK, REF, brief, quality)
     byline = public_byline_label(str(brief.get("templateId")), brief.get("creator") or {})
     article = route_article(brief["titleHint"], byline, ENTITIES, pack.get("mustIncludeFacts") or [])
+    article += (
+        "\n\n如果把清晨留给湖水和雪山，行程就要从票务与观光车时间倒推。"
+        "进门后先确认当天的换乘节奏，不把每一站都塞满，遇到排队也能保留停留空间。\n"
+        "\n午后天气变化快，返程缓冲比多赶一个点更重要。"
+        "连续坐车时要观察体力和高原反应，出现不适就缩短停留；"
+        "雨势增大时优先回到明确的接驳节点，不临时增加陌生支线。\n"
+    )
     article += f"\n\n返程前经过{MINED}，这里作为沿途自然景观只做短暂停留。\n"
     article += f"\n清晨适合拍{TAG_LABEL}，光线柔和层次分明。\n"
     write_agent_draft(
@@ -170,7 +202,8 @@ def _run_controller() -> Path:
     assert review["decision"] == "approved", review["issues"]
     posts = materialize_posts(TASK, "article")
     assert posts, "materialize produced no posts"
-    return posts[0]
+    _CONTROLLER_RESULT = posts[0]
+    return _CONTROLLER_RESULT
 
 
 def test_manifest_is_minimal_and_trace_offloaded():

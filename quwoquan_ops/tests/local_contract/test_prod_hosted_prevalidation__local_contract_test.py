@@ -118,17 +118,29 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
         evidence_root.mkdir(parents=True, exist_ok=True)
         contract_graph = evidence_root / "contractGraph.json"
         contract_graph.write_text("{}", encoding="utf-8")
-        provider_raw = (
-            root
-            / "evidence/raw/provider/env/prod/runs/provider-check/provider-conformance.evidence.json"
+        provider_readiness = {
+            environment: {
+                "fixture.capability": {
+                    "required": True,
+                    "capability_ready": True,
+                }
+            }
+            for environment in finalizer.ENVIRONMENTS
+        }
+        provider_evidence_count = (
+            finalizer.expected_required_cell_count_from_readiness(provider_readiness)
         )
-        provider_raw.parent.mkdir(parents=True, exist_ok=True)
-        provider_raw.write_text(
-            json.dumps(
-                {"provider": "search", "environment": "prod", "status": "passed"}
-            ),
-            encoding="utf-8",
-        )
+        provider_raw_files: dict[str, str] = {}
+        for index in range(provider_evidence_count):
+            provider_raw = root / f"evidence/raw/provider/{index:03d}.json"
+            provider_raw.parent.mkdir(parents=True, exist_ok=True)
+            provider_raw.write_text(
+                json.dumps({"status": "passed", "cell": index}),
+                encoding="utf-8",
+            )
+            provider_raw_files[provider_raw.relative_to(root).as_posix()] = (
+                "sha256:" + hashlib.sha256(provider_raw.read_bytes()).hexdigest()
+            )
         provider_source_digest = "sha256:" + ("f" * 64)
         provider = evidence_root / "providerEvidence.json"
         provider.write_text(
@@ -136,26 +148,43 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
                 {
                     "schema": "provider-conformance-readiness",
                     "status": "passed",
-                    "evidenceCount": 1,
+                    "evidenceCount": provider_evidence_count,
+                    "readiness": provider_readiness,
                     "sourceEvidence": {
                         "ref": (
                             "oci://ghcr.io/owner/repo/provider-evidence@"
                             + provider_source_digest
                         ),
                         "digest": provider_source_digest,
-                        "files": {
-                            provider_raw.relative_to(root).as_posix(): (
-                                "sha256:"
-                                + hashlib.sha256(provider_raw.read_bytes()).hexdigest()
-                            )
-                        },
+                        "files": provider_raw_files,
                     },
                 }
             ),
             encoding="utf-8",
         )
+        test_evidence_files: dict[str, dict[str, str]] = {}
+        for label, relative in finalizer.RELEASE_CLOSURE_PATHS.items():
+            source = root / relative
+            source.parent.mkdir(parents=True, exist_ok=True)
+            source.write_text(
+                json.dumps({"label": label, "status": "passed"}),
+                encoding="utf-8",
+            )
+            test_evidence_files[label] = {
+                "path": relative,
+                "digest": "sha256:" + hashlib.sha256(source.read_bytes()).hexdigest(),
+            }
+        test_evidence = {
+            "schema": "qwq.three-layer-case-results",
+            "status": "passed",
+            "layers": {
+                layer: {"status": "passed", "artifactDigest": digest}
+                for layer in finalizer.TEST_LAYERS
+            },
+            "evidence": {"files": test_evidence_files},
+        }
         test = evidence_root / "testEvidence.json"
-        test.write_text("{}", encoding="utf-8")
+        test.write_text(json.dumps(test_evidence), encoding="utf-8")
         payload = finalizer.seal_manifest({
             "schema": finalizer.SCHEMA,
             "candidateId": None,
@@ -198,13 +227,14 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
                     layer: {"status": "passed", "artifactDigest": digest}
                     for layer in finalizer.TEST_LAYERS
                 },
+                "evidence": test_evidence["evidence"],
             },
             "providerEvidence": {
                 "path": provider.relative_to(root).as_posix(),
                 "digest": "sha256:"
                 + hashlib.sha256(provider.read_bytes()).hexdigest(),
                 "status": "passed",
-                "evidenceCount": 1,
+                "evidenceCount": provider_evidence_count,
             },
             "environmentReceipts": {},
             "rolloutReceipt": None,

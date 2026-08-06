@@ -131,6 +131,56 @@ func TestCircleGroupRealMongoTransactionReplayReaderBOLAAndStream(t *testing.T) 
 	if err != nil || len(messages) != 2 || messages[0].Values["aggregateType"] != "CircleGroup" {
 		t.Fatalf("CircleGroup stream envelope drift: messages=%#v err=%v", messages, err)
 	}
+
+	bindingFailures := grouppersistence.NewMongoConversationBindingFailureStore(mongoDB)
+	if err := bindingFailures.EnsureIndexes(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	bindingConsumer, err := groupmessaging.NewCircleGroupConversationBindingConsumer(
+		circleMessageTransport,
+		groupapp.NewConversationBindingProjector(store),
+		bindingFailures,
+		"circle-group-binding-api-test",
+		nil,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := redisRouter.Scene("general").XAdd(
+		context.Background(),
+		groupmessaging.CircleGroupConversationProvisionedStream,
+		map[string]string{
+			"eventId":    "conversation-binding-api-1",
+			"eventType":  "CircleGroupConversationProvisioned",
+			"payload":    `{"conversationId":"conversation-api-1","circleId":"circle-group","circleGroupId":"` + groupID + `"}`,
+			"occurredAt": time.Now().UTC().Format(time.RFC3339Nano),
+		},
+	); err != nil {
+		t.Fatal(err)
+	}
+	if processed, err := bindingConsumer.ProcessOnce(context.Background()); err != nil || processed != 1 {
+		t.Fatalf("conversation binding processed=%d err=%v", processed, err)
+	}
+	var bound struct {
+		ConversationID string `bson:"conversationId"`
+	}
+	if err := mongoDB.Collection("circle_groups").FindOne(
+		context.Background(), bson.M{"_id": groupID},
+	).Decode(&bound); err != nil || bound.ConversationID != "conversation-api-1" {
+		t.Fatalf("conversation binding state=%+v err=%v", bound, err)
+	}
+	pending, _, err := redisRouter.Scene("general").XAutoClaim(
+		context.Background(),
+		groupmessaging.CircleGroupConversationProvisionedStream,
+		groupmessaging.CircleGroupConversationBindingGroup,
+		"circle-group-binding-observer",
+		0,
+		"0-0",
+		10,
+	)
+	if err != nil || len(pending) != 0 {
+		t.Fatalf("conversation binding pending=%d err=%v", len(pending), err)
+	}
 }
 
 func seedGroupCirclePolicy(t *testing.T, circleID, ownerPersonaID, memberPersonaID string) {

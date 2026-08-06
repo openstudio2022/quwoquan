@@ -1,6 +1,6 @@
 overrides:
   sys.product-ops-service.account_security_authority.base_url: http://user-service:18081
-  sys.product-ops-service.account_security_authority.timeout_ms: 300
+  sys.product-ops-service.account_security_authority.timeout_ms: 1500
   sys.product-ops-service.redis.general.mode: cluster
   sys.product-ops-service.redis.general.tls: true
   sys.product-ops-service.redis.rec.mode: cluster

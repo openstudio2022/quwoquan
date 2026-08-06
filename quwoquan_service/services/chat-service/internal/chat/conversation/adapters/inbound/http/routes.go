@@ -40,6 +40,8 @@ func dispatchGeneratedOperation(h *ChatHandler, operation string, w http.Respons
 		h.handleListSelectableGroupContactMembers(w, r)
 	case "ProjectGatheringConversation":
 		h.handleProjectGatheringConversation(w, r)
+	case "GetGatheringChatBoard":
+		h.handleGetGatheringChatBoard(w, r)
 	default:
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleChat, "接口不存在", "operation not found"))
 	}

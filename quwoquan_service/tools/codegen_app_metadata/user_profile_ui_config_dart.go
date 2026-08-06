@@ -269,5 +269,3 @@ func renderUserProfileUIConfigDart(uc *uiConfigFile) string {
 	b.WriteString("}\n")
 	return b.String()
 }
-
-// renderIntegrationLocationMetadataDart 生成 integration/external_integration/location API 元数据常量。

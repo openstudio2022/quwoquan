@@ -28,10 +28,6 @@ relationships:
   - lowerPersonaId
   - upperPersonaId
   target_object: user.Persona
-capabilities:
-- queryable
-- idempotent_commands
-- transactional_outbox
 business_rules:
 - lowerPersonaId 必须小于 upperPersonaId，且 source/target 只能来自该 pair
 - directions 最多两个，每个方向唯一

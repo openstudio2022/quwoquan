@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/release/resource_soak_samples.schema.json",
+  "title": "Raw one-minute campaign resource samples",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "rootExecutionId",
+    "sourceRevision",
+    "sourceDigest",
+    "entityCatalogDigest",
+    "samples"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.resource_soak_samples"},
+    "runtimeSessionId": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]{2,127}$"
+    },
+    "runtimeSessionRef": {"$ref": "#/$defs/safeRef"},
+    "runtimeSessionDigest": {"$ref": "#/$defs/digest"},
+    "rootExecutionId": {"type": "string", "minLength": 1},
+    "runId": {"type": "string", "minLength": 1},
+    "generation": {"type": "integer", "minimum": 1},
+    "fencingToken": {"$ref": "#/$defs/digest"},
+    "sourceRevision": {"$ref": "#/$defs/digest"},
+    "sourceDigest": {"$ref": "#/$defs/digest"},
+    "entityCatalogDigest": {"$ref": "#/$defs/digest"},
+    "sampleReceipts": {
+      "type": "array",
+      "minItems": 2,
+      "items": {"$ref": "#/$defs/sampleReceipt"}
+    },
+    "samples": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "capturedAt",
+          "controllerRssBytes",
+          "nonVideoWorkerMaxRssBytes",
+          "videoWorkerMaxRssBytes",
+          "totalRssBytes",
+          "temporaryWorkspaceBytes",
+          "terminalResidualBytes",
+          "openFdCount",
+          "queueDepth",
+          "oldestReadyAgeSeconds",
+          "progressAgeSeconds",
+          "heartbeatAgeSeconds"
+        ],
+        "properties": {
+          "capturedAt": {"type": "string", "format": "date-time"},
+          "controllerRssBytes": {"type": "integer", "minimum": 0},
+          "nonVideoWorkerMaxRssBytes": {"type": "integer", "minimum": 0},
+          "videoWorkerMaxRssBytes": {"type": "integer", "minimum": 0},
+          "totalRssBytes": {"type": "integer", "minimum": 0},
+          "temporaryWorkspaceBytes": {"type": "integer", "minimum": 0},
+          "terminalResidualBytes": {"type": "integer", "minimum": 0},
+          "openFdCount": {"type": "integer", "minimum": 0},
+          "queueDepth": {"type": "integer", "minimum": 0},
+          "oldestReadyAgeSeconds": {"type": "integer", "minimum": 0},
+          "progressAgeSeconds": {"type": "integer", "minimum": 0},
+          "heartbeatAgeSeconds": {"type": "integer", "minimum": 0}
+        }
+      }
+    },
+    "recordedAt": {"type": "string", "format": "date-time"},
+    "evidenceDigest": {"$ref": "#/$defs/digest"}
+  },
+  "allOf": [
+    {
+      "if": {"required": ["runtimeSessionId"]},
+      "then": {
+        "required": [
+          "runtimeSessionRef",
+          "runtimeSessionDigest",
+          "runId",
+          "generation",
+          "fencingToken",
+          "sampleReceipts",
+          "recordedAt",
+          "evidenceDigest"
+        ]
+      }
+    }
+  ],
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "safeRef": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+    },
+    "sampleReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sampleId",
+        "capturedAt",
+        "receiptRef",
+        "receiptDigest"
+      ],
+      "properties": {
+        "sampleId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]{2,127}$"
+        },
+        "capturedAt": {"type": "string", "format": "date-time"},
+        "receiptRef": {"$ref": "#/$defs/safeRef"},
+        "receiptDigest": {"$ref": "#/$defs/digest"}
+      }
+    }
+  }
+}

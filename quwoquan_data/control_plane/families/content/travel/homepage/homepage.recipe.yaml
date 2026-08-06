@@ -6,7 +6,7 @@ schema: quwoquan.content.recipe
 recipeId: content/travel/homepage/homepage
 title: 旅行地点主页执行（通用模板）
 presetRef: content/travel/homepage/base
-runtimeProfile: cursor_local_calibrated
+runtimeProfile: semantic_agent_local_calibrated
 selection:
   # 全旅游地点：在冻结前以地点实体分区选取，覆盖景区、博物馆、古镇等地点类型。
   category: 地点
@@ -19,14 +19,12 @@ selection:
 contract:
   requireActiveStatus: true
 execution:
-  model: auto
-  modelFamily: auto
+  model: gpt-5.6-terra
+  modelFamily: gpt
   modelParameters: []
-  reviewModel: auto
-  reviewModelFamily: auto
+  reviewModel: gpt-5.6-terra
+  reviewModelFamily: gpt
   reviewModelParameters: []
 readiness:
-  minPassRate: 1.0
-  mode: commercial
-  failOnNoGo: true
+  mode: research
   requireReviewed: true

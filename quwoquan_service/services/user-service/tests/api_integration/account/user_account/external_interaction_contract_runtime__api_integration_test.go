@@ -20,11 +20,11 @@ import (
 )
 
 type externalInteractionContractRuntime struct {
-	server         *httptest.Server
-	client         *capturingExternalInteractionClient
-	captureBridge  *localCaptureBridge
-	forceFailNext  bool
-	mu             sync.Mutex
+	server        *httptest.Server
+	client        *capturingExternalInteractionClient
+	captureBridge *localCaptureBridge
+	forceFailNext bool
+	mu            sync.Mutex
 }
 
 type capturingExternalInteractionClient struct {

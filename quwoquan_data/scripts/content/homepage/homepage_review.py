@@ -459,7 +459,7 @@ def apply_independent_homepage_review(
         return [str(exc)]
     run_id = run_id.strip()
     if not run_id or run_id.startswith("contract-output:"):
-        return [f"{review_dir}: independent reviewer must bind a real Cursor SDK runId"]
+        return [f"{review_dir}: independent reviewer must bind a real provider runId"]
     decision = str(result_payload.get("decision") or "")
     issues = [str(item).strip() for item in result_payload.get("issues") or [] if str(item).strip()]
     findings = [str(item).strip() for item in result_payload.get("findings") or [] if str(item).strip()]

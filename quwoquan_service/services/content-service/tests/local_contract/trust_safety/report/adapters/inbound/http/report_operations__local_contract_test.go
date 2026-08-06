@@ -1,3 +1,11 @@
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-008
+// spec_ref: specs/feature-tree/discovery-content/content-display-consistency/content-action-intent-contract/spec.md#gwt-001
+// readiness_case: create-report-local
+// readiness_case: list-reports-local
+// readiness_case: get-report-local
+// readiness_case: begin-report-review-local
+// readiness_case: dismiss-report-local
+// readiness_case: resolve-report-local
 package http_test
 
 import (
@@ -369,7 +377,7 @@ func TestReportOperatorQueueReviewResolveTransitionAndIdempotency(t *testing.T) 
 	}
 	resolvedEvents := 0
 	for _, event := range store.OutboxEvents() {
-		if event.EventType == "content.report.resolved" {
+		if event.EventType == "content.report.ReportResolved" {
 			resolvedEvents++
 			var payload map[string]any
 			if err := json.Unmarshal(event.Payload, &payload); err != nil {

@@ -75,9 +75,6 @@ func ValidateRuntimeDependenciesConfig(cfg runtimeconfig.Config) error {
 	if strings.TrimSpace(cfg.ContentService.BaseURL) == "" {
 		return NewDependencyError("content-service", "configuration", errors.New("content_service.base_url is required"))
 	}
-	if strings.TrimSpace(cfg.TravelService.BaseURL) == "" {
-		return NewDependencyError("travel-service", "configuration", errors.New("travel_service.base_url is required"))
-	}
 	if strings.TrimSpace(cfg.IntegrationService.BaseURL) == "" {
 		return NewDependencyError("integration-service", "configuration", errors.New("integration_service.base_url is required"))
 	}

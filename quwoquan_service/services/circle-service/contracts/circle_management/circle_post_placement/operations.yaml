@@ -215,3 +215,84 @@ api_routes:
       latency_p95_ms: 600
       availability_percent: 99.9
     request_body_kind: object
+readiness_cases:
+  - case_id: place-post-in-circle-local
+    spec_ref: specs/feature-tree/circle-community/spec.md#dom-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: PlacePostInCircle}
+    runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/circle_post_placement/circle_post_placement_command_facade__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: place-post-in-circle-api
+    spec_ref: specs/feature-tree/circle-community/spec.md#dom-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: PlacePostInCircle}
+    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle_post_placement/placement_http_mongo__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: remove-post-from-circle-local
+    spec_ref: specs/feature-tree/circle-community/spec.md#dom-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: RemovePostFromCircle}
+    runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/circle_post_placement/circle_post_placement_command_facade__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: remove-post-from-circle-api
+    spec_ref: specs/feature-tree/circle-community/spec.md#dom-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: RemovePostFromCircle}
+    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle_post_placement/placement_http_mongo__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: pin-circle-post-local
+    spec_ref: specs/feature-tree/circle-community/spec.md#dom-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: PinCirclePost}
+    runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/circle_post_placement/circle_post_placement_command_facade__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: pin-circle-post-api
+    spec_ref: specs/feature-tree/circle-community/spec.md#dom-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: PinCirclePost}
+    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle_post_placement/placement_http_mongo__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: feature-circle-post-local
+    spec_ref: specs/feature-tree/circle-community/spec.md#dom-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: FeatureCirclePost}
+    runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/circle_post_placement/circle_post_placement_command_facade__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: feature-circle-post-api
+    spec_ref: specs/feature-tree/circle-community/spec.md#dom-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: FeatureCirclePost}
+    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle_post_placement/placement_http_mongo__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: project-content-post-lifecycle-local
+    spec_ref: specs/feature-tree/circle-community/spec.md#dom-001
+    producer: service
+    layer: local_contract
+    target: {kind: object, id: circle.circle_post_placement}
+    runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/circle_post_placement/content_post_consumer__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: project-content-post-lifecycle-api
+    spec_ref: specs/feature-tree/circle-community/spec.md#dom-001
+    producer: service
+    layer: api_integration
+    target: {kind: object, id: circle.circle_post_placement}
+    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle_post_placement/post_lifecycle_feed_projection__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}

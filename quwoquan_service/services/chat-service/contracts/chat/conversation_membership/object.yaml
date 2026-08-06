@@ -36,10 +36,6 @@ relationships:
   reference_fields:
   - userId
   target_object: user.Persona
-capabilities:
-- commandable
-- queryable
-- idempotent_commands
 business_rules:
 - identity 固定为 conversationId + memberType + memberId
 - direct conversation 只能拥有两个 persona 成员
@@ -47,6 +43,9 @@ business_rules:
 - 私建 group 的 AddMembers 操作者必须是活跃成员；新成员与操作者互关且无屏蔽
 - circleGroupId 或 gatheringId 非空的会话只接受所属来源对象的 durable membership projector 写入；普通 Chat AddMembers、RemoveMember、LeaveConversation、TransferOwnership
   与管理员角色修改统一拒绝为 source_managed_conversation
+- Gathering OrganizerAssignment active 派生 admin，Participation active 派生 participant；closed/revoked 或 Block blocked 立即重算并撤销无剩余授权的 access
+- Gathering 角色与 access 只从受信 sourceType/state 派生，投影命令不接受客户端 role；Organizer/admin 不参与 Circle seat 计算
+- Gathering 每个 sourceType 独立维护 sourceVersion；旧版本 no-op，同版本不同事实 fail-closed，Block blocked 优先于其它 active grant
 - 私建 group 的 RemoveMember 仅 owner/admin；owner 可移出任何非 owner 成员，admin 只能移出普通成员
 - 私建 group 的自愿退出走 LeaveConversation（left 终态）；owner 退出前必须完成 TransferOwnership
 - 成员进入 left 或 removed 终态时，必须在同一事务删除其 ConversationUserState，令 ChatInbox、 本地离线副本与未读投影均不再拥有该会话；迟到的 MessageSent
@@ -62,3 +61,14 @@ lifecycle:
   terminal_persistence: row is deleted after the corresponding domain event is committed
   optimistic_concurrency: version
   idempotency: command_receipt
+  source_events:
+  - circle.circle_group_membership.CircleGroupMembershipActivated
+  - circle.circle_group_membership.CircleGroupMembershipLeft
+  - circle.circle_group_membership.CircleGroupMembershipRemoved
+  - circle.circle_group_membership.CircleGroupMembershipRoleChanged
+  event_consumers:
+  - name: ProjectCircleGroupMembership
+    kind: event_handler
+    facet: CircleGroupMembershipProjectionHandler
+    method: apply
+    idempotency: event_id

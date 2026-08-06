@@ -10,7 +10,12 @@ for _path in (DATA_ROOT, SCRIPTS_ROOT):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
-from core.content_source_registry import (  # noqa: E402
+from core.baike_source_contract import (
+    BAIDU_BAIKE_CANONICAL_RESOLUTION,
+    TOUTIAO_BAIKE_CANONICAL_RESOLUTION,
+    source_contract_issues,
+)
+from core.content_source_registry import (
     STRUCTURED_FACTS_FIELDS,
     build_content_source_guidance,
     content_source_catalog_digest,
@@ -21,10 +26,8 @@ from core.content_source_registry import (  # noqa: E402
     resolve_homepage_source_role,
     verify_content_source_registry,
 )
-from core.baike_source_contract import (  # noqa: E402
-    BAIDU_BAIKE_CANONICAL_RESOLUTION,
-    TOUTIAO_BAIKE_CANONICAL_RESOLUTION,
-    source_contract_issues,
+from core.video_source_admission import (
+    assert_video_source_admitted,
 )
 
 
@@ -154,6 +157,58 @@ def test_registry_rejects_dropping_the_narrative_guard():
     assert any("allowedSourceClasses" in issue for issue in issues)
 
 
+def test_reference_only_video_sources_have_no_acquisition_or_release_admission():
+    data = load_content_source_registry()
+    matrix = {
+        row["sourceId"]: row
+        for row in data["lanePolicies"]["video"]["commercialAdmissionMatrix"]
+    }
+    video_sources = {
+        row["sourceId"]: row
+        for row in data["common"]["video"]
+    }
+    for source_id in ("youtube", "vimeo", "bilibili"):
+        source = video_sources[source_id]
+        assert source["defaultRole"] == "reference_only"
+        assert source["fetchMode"] == "platform_reference"
+        assert source.get("researchAcquisitionPaths") in (None, [])
+        assert matrix[source_id]["publicationAdmissions"] == []
+        try:
+            assert_video_source_admitted(
+                data,
+                source_id=source_id,
+                source_kind="tourism_video_site",
+                publication_admission="research_release",
+            )
+        except ValueError as exc:
+            assert "GATE_BLOCK DATA.CONTRACT.INVALID" in str(exc)
+        else:
+            raise AssertionError(f"{source_id} reference-only admission was accepted")
+
+
+def test_registry_typed_gate_blocks_reference_only_video_configuration_conflicts():
+    data = load_content_source_registry()
+    matrix = data["lanePolicies"]["video"]["commercialAdmissionMatrix"]
+    next(row for row in matrix if row["sourceId"] == "bilibili")[
+        "publicationAdmissions"
+    ] = ["research_release", "commercial_release"]
+    bilibili = next(
+        row for row in data["common"]["video"] if row["sourceId"] == "bilibili"
+    )
+    bilibili["researchAcquisitionPaths"] = ["public_direct"]
+
+    issues = verify_content_source_registry(data)
+
+    assert (
+        "GATE_BLOCK DATA.CONTRACT.INVALID: video source bilibili is "
+        "reference_only/platform_reference but declares research acquisition paths"
+    ) in issues
+    assert (
+        "GATE_BLOCK DATA.CONTRACT.INVALID: video matrix bilibili is "
+        "reference_only/platform_reference but declares release admissions"
+    ) in issues
+
+
 def test_lane_prompt_is_rendered_from_registry_policy():
     article_prompt = render_lane_source_prompt(
         "article",
@@ -165,14 +220,15 @@ def test_lane_prompt_is_rendered_from_registry_policy():
         "image",
         vertical="travel",
         per_target_image_works=2,
-        image_asset_strategy="ai_generated_original",
+        image_asset_strategy="attribution_audited_publish",
     )
     homepage_prompt = render_lane_source_prompt("homepage", vertical="travel")
     assert "不得因 UGC/垂类专业/平台文章类别天然升降级" in article_prompt
     assert "去哪儿攻略" in article_prompt and "马蜂窝" in article_prompt
     assert "Pinterest" in image_prompt and "图虫" in image_prompt
-    assert "imageAssetStrategy=ai_generated_original" in image_prompt
-    assert "逐图授权链" in image_prompt
+    assert "imageAssetStrategy=attribution_audited_publish" in image_prompt
+    assert "公开直链、平台支持 API 或人工文件" in image_prompt
+    assert "rightsStatus" in image_prompt
     assert "最多保留 5 个核心来源" in homepage_prompt
     assert "维基导游" in homepage_prompt and "不得进入主页" in homepage_prompt
     assert "今日头条百科" in homepage_prompt

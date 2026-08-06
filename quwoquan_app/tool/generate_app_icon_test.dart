@@ -6,8 +6,8 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/ui/welcome/welcome_appearance.dart';
-import 'package:quwoquan_app/ui/welcome/widgets/welcome_flower_mark.dart';
+import 'package:quwoquan_app/runtime/shell/welcome/welcome_appearance.dart';
+import 'package:quwoquan_app/runtime/shell/welcome/welcome_flower_mark.dart';
 
 void main() {
   testWidgets('generate launcher icons from welcome flower painter', (

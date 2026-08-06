@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quwoquan.local/contracts/metadata/journey_readiness_receipt.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["binding", "evidenceSha256"],
+  "properties": {
+    "binding": { "$ref": "#/$defs/binding" },
+    "evidenceSha256": { "$ref": "#/$defs/sha256" }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "gitCommit": { "type": "string", "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$" },
+    "identity": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$" },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "id"],
+      "properties": {
+        "kind": { "enum": ["page", "journey"] },
+        "id": { "$ref": "#/$defs/identity" }
+      }
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "journeyId", "specRef", "caseId", "producer", "layer", "status", "target",
+        "commitSha", "contractGraphSourceHash", "deploymentTarget", "baselineId",
+        "packageDigest", "configurationDigest", "candidateManifestSha256", "environment",
+        "platform", "deviceClass", "provider", "startedAt", "completedAt", "runnerIdentity",
+        "runnerSourcePath", "remoteComposition", "fixtureFree", "dependenciesReady",
+        "providerVerified", "physicalDevice"
+      ],
+      "properties": {
+        "journeyId": { "$ref": "#/$defs/identity" },
+        "specRef": { "type": "string", "pattern": "^specs/feature-tree/spec\\.md#uat-[0-9]{3,}$" },
+        "caseId": { "type": "string", "pattern": "^[a-z][a-z0-9_-]*$" },
+        "producer": { "enum": ["app", "ops"] },
+        "layer": { "enum": ["user_acceptance", "environment_acceptance", "rollback", "replay"] },
+        "status": { "enum": ["passed", "failed", "blocked", "skipped"] },
+        "target": { "$ref": "#/$defs/target" },
+        "commitSha": { "$ref": "#/$defs/gitCommit" },
+        "contractGraphSourceHash": { "$ref": "#/$defs/sha256" },
+        "deploymentTarget": { "$ref": "#/$defs/identity" },
+        "baselineId": { "$ref": "#/$defs/identity" },
+        "packageDigest": { "$ref": "#/$defs/digest" },
+        "configurationDigest": { "$ref": "#/$defs/digest" },
+        "candidateManifestSha256": { "$ref": "#/$defs/sha256" },
+        "candidateDigest": { "$ref": "#/$defs/digest" },
+        "releaseDigest": { "$ref": "#/$defs/digest" },
+        "environment": { "enum": ["alpha", "beta", "gamma", "prod"] },
+        "platform": { "$ref": "#/$defs/identity" },
+        "deviceClass": { "$ref": "#/$defs/identity" },
+        "provider": { "$ref": "#/$defs/identity" },
+        "startedAt": { "type": "string", "format": "date-time" },
+        "completedAt": { "type": "string", "format": "date-time" },
+        "runnerIdentity": { "$ref": "#/$defs/identity" },
+        "runnerSourcePath": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "remoteComposition": { "type": "boolean" },
+        "fixtureFree": { "type": "boolean" },
+        "dependenciesReady": { "type": "boolean" },
+        "providerVerified": { "type": "boolean" },
+        "physicalDevice": { "type": "boolean" }
+      }
+    }
+  }
+}

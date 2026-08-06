@@ -1,11 +1,16 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-003
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-004
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-suspension-and-appeal-lifecycle/spec.md#gwt-003
+// readiness_case: apply-search-request-account-closure-api
+// readiness_case: recover-search-account-closure-dead-letter-api
 package api_integration
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -13,12 +18,120 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 
 	"quwoquan_service/runtime/accountrestriction"
+	rterr "quwoquan_service/runtime/errors"
+	runtimemessaging "quwoquan_service/runtime/messaging"
 	recentsearchstore "quwoquan_service/services/search-service/internal/search/recent_search_state/infrastructure/persistence"
 	feedbackstore "quwoquan_service/services/search-service/internal/search/search_feedback_fact/infrastructure/feedbackstore"
 	accountrestrictioninfra "quwoquan_service/services/search-service/internal/search/search_index_view/infrastructure/accountrestriction"
+	mqadapter "quwoquan_service/services/search-service/internal/search/search_request_fact/adapters/inbound/mq"
 	"quwoquan_service/services/search-service/internal/search/search_request_fact/application"
 	"quwoquan_service/services/search-service/internal/search/search_request_fact/infrastructure/accountclosure"
 )
+
+func TestRecoverSearchAccountClosureDeadLetterHTTPReleasesMongoTerminalMarker(
+	t *testing.T,
+) {
+	cleanSearchCollections(t)
+	ctx := t.Context()
+	restrictionProjection, err :=
+		accountrestrictioninfra.NewMongoAccountRestrictionProjection(mongoDB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	projection, err := accountclosure.NewMongoProjection(
+		mongoDB,
+		restrictionProjection,
+		newClosureRecentSearchStore(t),
+		newClosureFeedbackStore(t),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := projection.EnsureIndexes(ctx); err != nil {
+		t.Fatal(err)
+	}
+	const sourceStreamID = "1710000000000-73"
+	if _, err := projection.RecordUserAccountClosedFailure(
+		ctx,
+		mqadapter.UserAccountEventStream,
+		sourceStreamID,
+		"search-account-closure-event-73",
+		errors.New("scripted cleanup dependency failure"),
+	); err != nil {
+		t.Fatalf("record terminal failure: %v", err)
+	}
+	if err := projection.MarkUserAccountClosedDeadLettered(
+		ctx,
+		mqadapter.UserAccountEventStream,
+		sourceStreamID,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	transport, err := runtimemessaging.NewRedisMessageTransport(
+		realRedisClient,
+		realRedisClient,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	consumer, err := mqadapter.NewUserAccountClosedConsumer(
+		transport,
+		projection,
+		projection,
+		"search-account-closure-api-contract",
+		nil,
+		mqadapter.UserAccountClosedConsumerConfig{
+			BatchSize: 10, MaxAttempts: 2, MinIdle: 0,
+			PollInterval: time.Millisecond,
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	recoveryFacet, err :=
+		application.NewSearchRequestAccountClosureRecoveryCommandFacet(consumer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler, err := runtimemessaging.WithDeadLetterRecoveryRoute(
+		http.NotFoundHandler(),
+		runtimemessaging.DeadLetterRecoveryRouteConfig{
+			Path:     "/internal/search/account-closure/dead-letters:recover",
+			Module:   rterr.ModuleSearch,
+			Releaser: recoveryFacet,
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/internal/search/account-closure/dead-letters:recover",
+		bytes.NewBufferString(`{"sourceStreamId":"1710000000000-73"}`),
+	)
+	request.Header.Set("Idempotency-Key", "recover-search-account-closure-73")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusAccepted {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), `"sourceStreamId":"1710000000000-73"`) ||
+		!strings.Contains(response.Body.String(), `"recoveryAccepted":true`) {
+		t.Fatalf("typed recovery receipt=%s", response.Body.String())
+	}
+	deadLettered, err := projection.IsUserAccountClosedDeadLettered(
+		ctx,
+		mqadapter.UserAccountEventStream,
+		sourceStreamID,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if deadLettered {
+		t.Fatal("HTTP recovery must clear the canonical Mongo terminal marker")
+	}
+}
 
 func TestUserAccountClosedTerminalMarkerRetainsSourcePELReference(
 	t *testing.T,

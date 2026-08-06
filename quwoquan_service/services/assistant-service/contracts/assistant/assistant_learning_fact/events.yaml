@@ -1,9 +1,6 @@
 events:
 - name: AssistantLearningFactAppended
-  producer: assistant-service
-  consumers:
-  - assistant-learning-projection
-  channel: transactional_outbox
+  delivery_semantics: transactional_event_log
   payload_entity: AssistantLearningFact
   payload_fields:
   - eventId
@@ -37,3 +34,4 @@ events:
   - trainingEligible
   - occurredAt
   - recordedAt
+  no_consumer_reason: 事实经事务 outbox 追加到耐久 learning audit stream；当前没有下游订阅者，SkillActivityView 通过 owner named reader 联邦读取。

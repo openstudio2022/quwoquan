@@ -1,6 +1,7 @@
 backend: mongodb
 collections:
   posts:
+    publication_role: not_published
     entity: Post
     indexes:
     - name: idx_posts_author_status
@@ -96,7 +97,6 @@ collections:
         _id: 1
         version: 1
       unique: true
-    search_indexes:
     - name: search_posts_text
       source: search_posts_text
       type: text
@@ -114,26 +114,13 @@ collections:
         locationName: 3
         body: 1
         articleMarkdown: 1
-    vector_indexes:
     - name: vector_posts_embedding
+      type: vector
       field: embedding
       dimensions: 1536
       similarity: cosine
-    change_streams:
-    - pipeline:
-      - $match:
-          operationType:
-            $in:
-            - insert
-            - update
-      consumers:
-      - recommendation-projector
-      - search-indexer
-    sharding:
-      key:
-        _id: hashed
-      description: 按 _id 哈希分片，均匀分布
   post_command_receipts:
+    publication_role: not_published
     entity: Post
     description: Post command 幂等结果；与聚合版本和 outbox 在同一 Mongo transaction 提交
     indexes:
@@ -148,8 +135,9 @@ collections:
     - name: idx_post_command_receipts_expire
       keys:
         expiresAt: 1
-      expireAfterSeconds: 0
+      expire_after_seconds: 0
   content_outbox:
+    publication_role: transactional_outbox
     entity: Post
     description: Mongo authoritative aggregate 的同库事务 outbox；projection worker 以 checkpoint 幂等消费
     indexes:
@@ -169,10 +157,12 @@ collections:
         aggregateVersion: 1
       unique: true
   content_outbox_sequences:
+    publication_role: publication_accessory
     entity: Post
     role: authoritative
     description: Post 事务 outbox 的单调全序分配器；仅与聚合状态和 outbox 在同一事务中推进。
   projection_checkpoints:
+    publication_role: publication_accessory
     entity: Post
     description: Feed/Search/Recommendation/Homepage/Circle replay/rebuild checkpoint
     indexes:
@@ -181,10 +171,12 @@ collections:
         _id: 1
       unique: true
   data_release_state:
+    publication_role: not_published
     entity: Post
     role: projection
     description: canonical immutable content release 的当前激活投影；只由 release import facade 原子推进。
   post_import_task_outbox:
+    publication_role: not_published
     entity: Post
     role: authoritative
     description: 不可变 Data release 中单个 Post import job 的宣告 outbox；与 Integration reliable-task 物理隔离。
@@ -202,6 +194,7 @@ collections:
     - name: idx_post_import_task_outbox_execution
       keys: {payload.executionId: 1, payload.stage: 1, status: 1, startAt: 1}
   post_import_task:
+    publication_role: not_published
     entity: Post
     role: authoritative
     description: Post import job 的租约、重试与终态；仅 data-content-worker 的 typed store 可读写。
@@ -214,6 +207,7 @@ collections:
     - name: idx_post_import_task_execution
       keys: {payload.executionId: 1, payload.jobId: 1}
   post_import_task_recovery_receipt:
+    publication_role: not_published
     entity: Post
     role: authoritative
     description: 已审计 dead Post import task 的幂等恢复回执。
@@ -222,8 +216,9 @@ collections:
       keys: {taskId: 1}
     - name: idx_post_import_task_recovery_expiry
       keys: {expiresAt: 1}
-      expireAfterSeconds: 0
+      expire_after_seconds: 0
   rm_search_intent:
+    publication_role: not_published
     entity: SearchIntentProjection
     role: projection
     description: 搜索 query/click 形成的 24 小时短期推荐特征；与长期 rm_recommend_feature 物理隔离。
@@ -231,8 +226,9 @@ collections:
     - name: idx_rm_search_intent_expire
       keys:
         expiresAt: 1
-      expireAfterSeconds: 0
+      expire_after_seconds: 0
   content_persona_access_projection:
+    publication_role: not_published
     entity: Post
     role: projection
     description: Content 为 Post/Comment/Feed 服务端可见性维护的 Persona 拉黑访问投影；只保存 block/unblock，不复制 User follow 状态。
@@ -253,6 +249,7 @@ collections:
         blocked: 1
         sourcePersonaId: 1
   content_persona_access_projection_inbox:
+    publication_role: not_published
     entity: Post
     role: inbox
     description: Persona relationship durable stream 的 Content 访问投影幂等 checkpoint；账号关闭时按 source/target Persona 删除。
@@ -263,18 +260,21 @@ collections:
       unique: true
 streams:
   events.content.post_lifecycle:
+    publication_role: publication_accessory
     entity: Post
     role: append_only
     idempotency_key: eventId
     retention_seconds: 604800
     description: Post outbox 的唯一 durable 生命周期 transport；Circle、Recommendation 等只消费 typed event。
   events.search.recommendation_signals.dlq:
+    publication_role: not_published
     entity: Post
     role: dead_letter
     idempotency_key: sourceStreamId
     retention_seconds: 604800
     description: Content 旧推荐 signal consumer 的脱敏失败记录；该 consumer 随推荐逻辑迁出一并删除。
   events.user.persona_access.dlq:
+    publication_role: not_published
     entity: Post
     role: dead_letter
     idempotency_key: sourceStreamId

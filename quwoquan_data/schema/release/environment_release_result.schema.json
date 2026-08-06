@@ -19,6 +19,10 @@
     "runId": {"type": "string", "minLength": 1},
     "importRunId": {"type": "string", "minLength": 1},
     "readinessPhase": {"enum": ["research", "consumer", "commercial"]},
+    "lifecycleExitRef": {
+      "type": "string",
+      "pattern": "^env/(alpha|beta|gamma|prod)/runs/release-lifecycle-exit/.+/lifecycle-exit\\.json$"
+    },
     "status": {"enum": ["completed", "dry_run", "prepared", "failed"]},
     "homepageVerificationCasesRef": {"type": "string"},
     "tagImportReportRef": {"type": "string"},
@@ -27,6 +31,10 @@
     "homepageImportReportRef": {"type": "string"},
     "postApiVerificationRef": {"type": "string"},
     "releaseReadinessRef": {"type": "string", "pattern": "^env/(alpha|beta|gamma|prod)/runs/data-release/"},
+    "researchIsolationVerificationRef": {
+      "type": "string",
+      "pattern": "^env/(alpha|beta|gamma|prod)/runs/data-release/.+/research-isolation-verification\\.json$"
+    },
     "tagConsumerVerificationRef": {"type": "string"},
     "homepageApiVerificationRef": {"type": "string"},
     "baselineApiVerificationRef": {"type": "string"},

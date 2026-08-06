@@ -58,8 +58,6 @@ services:
         condition: service_healthy
       user-service:
         condition: service_healthy
-      travel-service:
-        condition: service_healthy
     volumes:
       - ${QWQ_COMPOSE_CONFIG_ROOT:?QWQ_COMPOSE_CONFIG_ROOT is required}:/etc/qwq-config:ro
     ports:

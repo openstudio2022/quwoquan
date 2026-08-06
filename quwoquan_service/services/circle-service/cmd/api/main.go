@@ -42,16 +42,17 @@ import (
 	fileexternal "quwoquan_service/services/circle-service/internal/circle_management/circle_file/infrastructure/external"
 	filemessaging "quwoquan_service/services/circle-service/internal/circle_management/circle_file/infrastructure/messaging"
 	filepersistence "quwoquan_service/services/circle-service/internal/circle_management/circle_file/infrastructure/persistence"
+	groupievents "quwoquan_service/services/circle-service/internal/circle_management/circle_group/adapters/inbound/events"
 	groupapp "quwoquan_service/services/circle-service/internal/circle_management/circle_group/application"
 	groupmessaging "quwoquan_service/services/circle-service/internal/circle_management/circle_group/infrastructure/messaging"
 	groupersistence "quwoquan_service/services/circle-service/internal/circle_management/circle_group/infrastructure/persistence"
-	groupsearchindex "quwoquan_service/services/circle-service/internal/circle_management/circle_group/infrastructure/searchindex"
 	groupmembershipapp "quwoquan_service/services/circle-service/internal/circle_management/circle_group_membership/application"
 	groupmembershipmessaging "quwoquan_service/services/circle-service/internal/circle_management/circle_group_membership/infrastructure/messaging"
 	groupmembershippersistence "quwoquan_service/services/circle-service/internal/circle_management/circle_group_membership/infrastructure/persistence"
 	membershipapp "quwoquan_service/services/circle-service/internal/circle_management/circle_membership/application"
 	membershipmessaging "quwoquan_service/services/circle-service/internal/circle_management/circle_membership/infrastructure/messaging"
 	membershippersistence "quwoquan_service/services/circle-service/internal/circle_management/circle_membership/infrastructure/persistence"
+	placementevents "quwoquan_service/services/circle-service/internal/circle_management/circle_post_placement/adapters/inbound/events"
 	placementapp "quwoquan_service/services/circle-service/internal/circle_management/circle_post_placement/application"
 	placementports "quwoquan_service/services/circle-service/internal/circle_management/circle_post_placement/domain/ports"
 	placementmessaging "quwoquan_service/services/circle-service/internal/circle_management/circle_post_placement/infrastructure/messaging"
@@ -63,6 +64,7 @@ import (
 	gatheringhttp "quwoquan_service/services/circle-service/internal/circle_management/gathering/adapters/inbound/http"
 	gatheringapp "quwoquan_service/services/circle-service/internal/circle_management/gathering/application"
 	gatheringexternal "quwoquan_service/services/circle-service/internal/circle_management/gathering/infrastructure/external"
+	gatheringmessaging "quwoquan_service/services/circle-service/internal/circle_management/gathering/infrastructure/messaging"
 	gatheringpersistence "quwoquan_service/services/circle-service/internal/circle_management/gathering/infrastructure/persistence"
 )
 
@@ -286,6 +288,22 @@ func run() error {
 	if err != nil {
 		log.Fatalf("content-service credential init failed: %v", err)
 	}
+	gatheringSafetyCredentials, err := rtauth.NewHS256ServiceAuthorizationProvider(
+		accessTokenConfig,
+		"circle-service",
+		[]string{"content.gathering.safety.authorize"},
+	)
+	if err != nil {
+		log.Fatalf("Gathering safety authority credential init failed: %v", err)
+	}
+	gatheringSafetyAuthority, err := gatheringexternal.NewHTTPSafetyTerminationAuthorizer(
+		os.Getenv("CONTENT_SERVICE_BASE_URL"),
+		gatheringSafetyCredentials,
+		nil,
+	)
+	if err != nil {
+		log.Fatalf("Gathering safety authority invalid: %v", err)
+	}
 	gatheringChatCredentials, err := rtauth.NewHS256ServiceAuthorizationProvider(
 		accessTokenConfig, "circle-service", []string{"chat.gathering.write"},
 	)
@@ -307,10 +325,69 @@ func run() error {
 	if err != nil {
 		log.Fatalf("Gathering target reader invalid: %v", err)
 	}
-	gatheringCommands := gatheringapp.NewCommandFacade(
-		gatheringStore, gatheringTargetReader, gatheringConversationPort,
+	gatheringCommands := gatheringapp.NewCommandFacade(gatheringStore)
+	gatheringQueryReader := gatheringpersistence.NewMongoGatheringQueryReader(db)
+	gatheringQueries := gatheringapp.NewGatheringQueryFacade(
+		gatheringQueryReader,
+		time.Now,
 	)
-	gatheringQueries := gatheringapp.NewQueryFacade(gatheringStore)
+	circleHostAuthorityEvaluator, err := application.NewHostAuthorityEvaluator(
+		circleAggregateStore,
+		membershipStore,
+		time.Now,
+	)
+	if err != nil {
+		log.Fatalf("Circle Host authority evaluator invalid: %v", err)
+	}
+	personaHostAuthorityCredentials, err := rtauth.NewHS256ServiceAuthorizationProvider(
+		accessTokenConfig,
+		"circle-service",
+		[]string{"user.persona.gathering_host_authority.evaluate"},
+	)
+	if err != nil {
+		log.Fatalf("Persona Host authority credential init failed: %v", err)
+	}
+	personaHostAuthorityClient, err := gatheringexternal.NewPersonaHostAuthorityHTTPClient(
+		os.Getenv("USER_SERVICE_BASE_URL"),
+		personaHostAuthorityCredentials,
+		nil,
+	)
+	if err != nil {
+		log.Fatalf("Persona Host authority client invalid: %v", err)
+	}
+	entityHostAuthorityCredentials, err := rtauth.NewHS256ServiceAuthorizationProvider(
+		accessTokenConfig,
+		"circle-service",
+		[]string{"entity.homepage.gathering_host_authority.evaluate"},
+	)
+	if err != nil {
+		log.Fatalf("EntityHomepage Host authority credential init failed: %v", err)
+	}
+	entityHostAuthorityClient, err := gatheringexternal.NewEntityHomepageHostAuthorityHTTPClient(
+		os.Getenv("ENTITY_SERVICE_BASE_URL"),
+		entityHostAuthorityCredentials,
+		nil,
+	)
+	if err != nil {
+		log.Fatalf("EntityHomepage Host authority client invalid: %v", err)
+	}
+	gatheringHostAuthority := gatheringexternal.NewHostAuthorityReader(
+		personaHostAuthorityClient,
+		entityHostAuthorityClient,
+		gatheringexternal.NewLocalCircleHostAuthorityClient(circleHostAuthorityEvaluator),
+	)
+	gatheringHostOutcome := gatheringapp.NewHostOutcomeFacade(
+		gatheringStore,
+		gatheringHostAuthority,
+	)
+	gatheringLifecycle := gatheringapp.NewLifecycleFacade(
+		gatheringStore,
+		gatheringTargetReader,
+		gatheringHostOutcome,
+		gatheringHostOutcome,
+		gatheringHostOutcome,
+		gatheringSafetyAuthority,
+	)
 	gatheringReconciler := gatheringapp.NewReconciler(
 		gatheringStore, gatheringStore, gatheringConversationPort,
 	)
@@ -345,7 +422,7 @@ func run() error {
 	if strings.TrimSpace(instanceID) == "" {
 		instanceID = "circle-service"
 	}
-	contentPostConsumer := placementmessaging.NewContentPostConsumer(
+	contentPostConsumer := placementevents.NewContentPostConsumer(
 		messageTransport, postLifecycleProjection, postLifecycleProjection, instanceID, nil,
 	).WithDiscoveryFeedCacheInvalidator(func(ctx context.Context) error {
 		return cache.InvalidateCircleDiscoveryFeed(ctx, redisClient)
@@ -396,7 +473,9 @@ func run() error {
 	}
 	placementCountRelay := placementapp.NewOutboxRelay(
 		placementStore, placementStore,
-		placementpersistence.NewMongoPostCountProjector(db, cachedCircleStore),
+		circlePostCountConsumer{handler: application.NewCirclePostCountProjectionHandler(
+			persistence.NewMongoPostCountProjector(db, cachedCircleStore),
+		)},
 		"circle-post-count",
 	)
 	placementStreamRelay := placementapp.NewOutboxRelay(
@@ -406,7 +485,9 @@ func run() error {
 	)
 	membershipCountRelay := membershipapp.NewOutboxRelay(
 		membershipStore, membershipStore,
-		membershippersistence.NewMongoMemberCountProjector(db, cachedCircleStore),
+		circleMembershipCountConsumer{handler: application.NewCircleMemberCountProjectionHandler(
+			persistence.NewMongoMemberCountProjector(db, cachedCircleStore),
+		)},
 		"circle-member-count",
 	)
 	membershipStreamRelay := membershipapp.NewOutboxRelay(
@@ -416,7 +497,9 @@ func run() error {
 	)
 	behaviorWeeklyActiveRelay := behaviorfactapp.NewOutboxRelay(
 		behaviorFactStore, behaviorFactStore,
-		behaviorfactpersistence.NewMongoWeeklyActiveProjector(db, cachedCircleStore),
+		circleWeeklyActiveConsumer{handler: application.NewCircleWeeklyActiveProjectionHandler(
+			persistence.NewMongoWeeklyActiveProjector(db, cachedCircleStore),
+		)},
 		"circle-weekly-active",
 	)
 	behaviorStreamRelay := behaviorfactapp.NewOutboxRelay(
@@ -429,6 +512,24 @@ func run() error {
 		groupmessaging.NewCircleGroupStreamPublisher(messageTransport),
 		"circle-group-stream",
 	)
+	gatheringEventPublisher, err := gatheringmessaging.NewEventPublisher(messageTransport)
+	if err != nil {
+		return fmt.Errorf("Gathering event publisher init failed: %w", err)
+	}
+	gatheringOutboxRelay, err := gatheringapp.NewOutboxRelay(
+		gatheringStore,
+		gatheringEventPublisher,
+	)
+	if err != nil {
+		return fmt.Errorf("Gathering outbox relay init failed: %w", err)
+	}
+	if err := messageTransport.SetDurableRetention(
+		ctx,
+		gatheringmessaging.GatheringEventStream,
+		gatheringmessaging.GatheringEventRetention,
+	); err != nil {
+		return fmt.Errorf("Gathering event stream retention preflight failed: %w", err)
+	}
 	groupOwnerMembershipRelay := groupapp.NewOutboxRelay(
 		groupStore, groupStore,
 		groupmembershipapp.NewCircleGroupOwnerProjector(groupMembershipCommands),
@@ -439,7 +540,7 @@ func run() error {
 		groupSearchRelay = groupapp.NewOutboxRelay(
 			groupStore,
 			groupStore,
-			groupsearchindex.NewProjector(searchBuilt.Indexer, groupStore),
+			groupievents.NewCircleGroupSearchIndexHandler(searchBuilt.Indexer, groupStore),
 			"circle-group-search-index",
 		)
 	}
@@ -453,6 +554,23 @@ func run() error {
 		filemessaging.NewCircleFileStreamPublisher(messageTransport),
 		"circle-file-stream",
 	)
+	circleEventPublisher, err := messaging.NewCircleEventStreamPublisher(messageTransport)
+	if err != nil {
+		return fmt.Errorf("Circle event publisher init failed: %w", err)
+	}
+	circleOutboxRelay := application.NewCircleOutboxRelay(
+		circleAggregateStore,
+		circleAggregateStore,
+		circleEventPublisher,
+		"circle-event-stream",
+	)
+	if err := messageTransport.SetDurableRetention(
+		ctx,
+		messaging.CircleEventStream,
+		messaging.CircleEventStreamRetention,
+	); err != nil {
+		return fmt.Errorf("Circle event stream retention preflight failed: %w", err)
+	}
 	var circleSearchRelay *searchviewapp.Relay
 	if searchBuilt.Index != nil {
 		searchProjector := searchviewapp.NewProjector(searchBuilt.Index)
@@ -469,13 +587,23 @@ func run() error {
 	}
 
 	circleHandler := newCircleObjectRoutes(
-		httpadapter.NewCircleHandler(circleService, circleCommands).Routes(),
+		httpadapter.NewCircleHandler(circleService, circleCommands).
+			WithHostAuthorityEvaluator(circleHostAuthorityEvaluator).
+			Routes(),
 		fileCommands, fileQueries, behaviorFactWriter, groupCommands, groupQueries,
 		groupMembershipCommands, groupMembershipQueries,
 		membershipCommands, membershipQueries, placementCommands,
 	)
 	objectRoutes := http.NewServeMux()
-	gatheringhttp.NewHandler(gatheringCommands, gatheringQueries).Register(objectRoutes)
+	gatheringhttp.NewHandler(
+		gatheringLifecycle,
+		gatheringCommands,
+		gatheringHostOutcome,
+		gatheringQueries,
+	).Register(objectRoutes)
+	if err := registerGatheringPlanRuntime(ctx, objectRoutes, db, gatheringStore); err != nil {
+		log.Fatalf("GatheringPlan runtime composition failed: %v", err)
+	}
 	objectRoutes.Handle("/", circleHandler)
 	var handler http.Handler = objectRoutes
 	handler, err = runtimemessaging.WithDeadLetterRecoveryRoute(
@@ -527,6 +655,9 @@ func run() error {
 	healthChecker.Register("gathering-chat-reconciliation", func(_ context.Context) error {
 		return gatheringReconciler.Healthy(10 * time.Second)
 	})
+	healthChecker.Register("gathering-outbox-relay", func(hctx context.Context) error {
+		return gatheringOutboxRelay.Healthy(hctx, 5*time.Second)
+	})
 	healthChecker.Register("circle-group-conversation-binding-projector", func(_ context.Context) error {
 		return groupConversationBindingConsumer.Healthy(30 * time.Second)
 	})
@@ -565,6 +696,9 @@ func run() error {
 	healthChecker.Register("circle-file-stream", func(_ context.Context) error {
 		return fileStreamRelay.Healthy(5 * time.Second)
 	})
+	healthChecker.Register("circle-event-stream", func(_ context.Context) error {
+		return circleOutboxRelay.Healthy(5 * time.Second)
+	})
 	if circleSearchRelay != nil {
 		healthChecker.Register("circle-search-index-relay", func(_ context.Context) error {
 			return circleSearchRelay.Healthy(5 * time.Second)
@@ -586,6 +720,7 @@ func run() error {
 			log.Printf("Gathering Chat reconciliation stopped: %v", err)
 		}
 	}()
+	go gatheringOutboxRelay.Run(ctx, time.Second)
 	go func() {
 		if err := placementCountRelay.Run(ctx, 250*time.Millisecond); err != nil && ctx.Err() == nil {
 			log.Printf("circle post-count projection stopped: %v", err)
@@ -643,6 +778,11 @@ func run() error {
 			log.Printf("circle file stream relay stopped: %v", err)
 		}
 	}()
+	go func() {
+		if err := circleOutboxRelay.Run(ctx, 250*time.Millisecond); err != nil && ctx.Err() == nil {
+			log.Printf("circle event stream relay stopped: %v", err)
+		}
+	}()
 	if circleSearchRelay != nil {
 		go func() {
 			if err := circleSearchRelay.Run(ctx, 250*time.Millisecond); err != nil && ctx.Err() == nil {
@@ -687,6 +827,9 @@ func run() error {
 
 	hotConfigStore := controlplane.NewHotConfigStore()
 	go startConfigSyncLoop(serviceName, appEnv, configRoot, configVersion, imageVersion, instanceID, hotConfigStore)
+	timeouts := rtauth.ContractHTTPServerTimeouts(
+		operationsecurity.ForDomain("circle"),
+	)
 	server := &http.Server{
 		Addr: addr,
 		Handler: rtauth.Middleware(rtauth.MiddlewareConfig{
@@ -694,9 +837,9 @@ func run() error {
 			DeviceTicketVerifier:     deviceTicketVerifier,
 			AccountSecurityAuthority: accountSecurityAuthority,
 		})(observed),
-		ReadHeaderTimeout: 5 * time.Second,
-		WriteTimeout:      30 * time.Second,
-		IdleTimeout:       60 * time.Second,
+		ReadHeaderTimeout: timeouts.ReadHeader,
+		WriteTimeout:      timeouts.Write,
+		IdleTimeout:       timeouts.Idle,
 	}
 	log.Printf("circle-service listening on %s (env=%s)", addr, appEnv)
 	serverErr := rthttp.ListenAndServeGraceful(server, 15*time.Second)

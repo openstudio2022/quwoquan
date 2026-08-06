@@ -17,8 +17,8 @@ func testSkillPackageIdentityResolver() runruntime.SkillPackageIdentityResolver 
 }
 
 // integrationConsentSkillCatalog is an object-level active-package double.
-// It reuses the canonical official package and marks the existing Trip reader
-// requirement required only for the revocation/start-gate integration case.
+// It reuses the canonical official package and marks the existing feedback
+// context requirement required only for the revocation/start-gate integration case.
 // Production package semantics remain unchanged.
 type integrationConsentSkillCatalog struct{}
 
@@ -40,7 +40,7 @@ func (integrationConsentSkillCatalog) Load(
 		)
 		for requirementIndex := range requirements {
 			for _, scope := range requirements[requirementIndex].ConsentScopes {
-				if strings.TrimSpace(scope) == "travel.trip.read" {
+				if strings.TrimSpace(scope) == "assistant.learning.feedback_context.read" {
 					requirements[requirementIndex].Required = true
 				}
 			}

@@ -156,9 +156,13 @@ def load_post_review_closure(
     *,
     root: Path | None = None,
     expected_object_targets: Mapping[str, str] | None = None,
-    require_quota_milestone: bool = True,
+    require_quota_milestone: bool = False,
 ) -> PostReviewClosure:
-    """Load and re-derive all closure invariants; never accept a stale quota."""
+    """Load and re-derive all closure invariants; never accept a stale quota.
+
+    配额达成只是统计目标，不是准出条件，所以默认不作要求；只有显式的规模
+    promotion 才传 ``require_quota_milestone=True``。
+    """
     path = (root or execution_root(execution_id)) / POST_REVIEW_CLOSURE_REF
     if not path.is_file():
         raise FileNotFoundError(f"post review closure is missing: {path}")

@@ -1,10 +1,15 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Mapping
 
 from pymongo import ASCENDING, DESCENDING, ReturnDocument
 
+from ..application.gathering_projector import (
+    GatheringCandidateSnapshot,
+    decide_gathering_projection,
+    gathering_event_receipt_is_duplicate,
+)
 from ..application.projector import (
     CandidateLifecycleSnapshot,
     PremiumAdmissionSnapshot,
@@ -17,6 +22,7 @@ class MongoCandidateIndexStore:
     def __init__(self, database: Any) -> None:
         self._database = database
         self._candidates = database["rm_discovery_feed"]
+        self._gathering_candidates = database["rm_gathering_candidates"]
         self._premium = database["rm_premium_pool"]
         self._entity_tags = database["rm_entity_tags"]
         self._tombstones = database["recommendation_candidate_tombstones"]
@@ -44,6 +50,15 @@ class MongoCandidateIndexStore:
         self._candidates.create_index(
             [("scenario", ASCENDING), ("updatedAt", DESCENDING), ("contentId", ASCENDING)],
             name="idx_recommendation_candidate_rank_scan",
+        )
+        self._gathering_candidates.create_index(
+            [("sourceKey", ASCENDING)],
+            unique=True,
+            name="uq_recommendation_gathering_candidate_source",
+        )
+        self._gathering_candidates.create_index(
+            [("updatedAt", DESCENDING), ("sourceKey", ASCENDING)],
+            name="idx_recommendation_gathering_candidate_rank_scan",
         )
         self._premium.create_index(
             [("scenario", ASCENDING), ("contentId", ASCENDING)],
@@ -305,6 +320,174 @@ class MongoCandidateIndexStore:
                         "contentId": snapshot.content_id if snapshot else removal[1] if removal else None,
                         "sourceSequence": snapshot.source_sequence if snapshot else removal[2] if removal else None,
                         "changed": changed,
+                        "appliedAt": datetime.now(timezone.utc),
+                    },
+                    session=session,
+                )
+                return changed
+
+    @staticmethod
+    def _gathering_identity(gathering_id: str) -> str:
+        return f"gathering\x1f{gathering_id.strip()}"
+
+    def apply_gathering_source_event(
+        self,
+        *,
+        event_id: str,
+        event_digest: str,
+        snapshot: GatheringCandidateSnapshot | None = None,
+        removal: tuple[str, int] | None = None,
+    ) -> bool:
+        normalized_event_id = event_id.strip()
+        normalized_digest = event_digest.strip().lower()
+        if (
+            not normalized_event_id
+            or len(normalized_digest) != 64
+            or any(value not in "0123456789abcdef" for value in normalized_digest)
+            or (snapshot is None) == (removal is None)
+        ):
+            raise ValueError("Gathering candidate source event is incomplete")
+        gathering_id = (
+            snapshot.gathering_id.strip() if snapshot is not None else removal[0].strip()
+        )
+        source_version = (
+            snapshot.source_version if snapshot is not None else int(removal[1])
+        )
+        if not gathering_id or source_version <= 0:
+            raise ValueError("Gathering candidate source identity is incomplete")
+        identity = self._gathering_identity(gathering_id)
+
+        with self._database.client.start_session() as session:
+            with session.start_transaction():
+                receipt = self._inbox.find_one(
+                    {"_id": normalized_event_id},
+                    session=session,
+                )
+                if gathering_event_receipt_is_duplicate(
+                    recorded_event_digest=(
+                        str(receipt.get("eventDigest")) if receipt is not None else None
+                    ),
+                    incoming_event_digest=normalized_digest,
+                ):
+                    return False
+
+                current = self._gathering_candidates.find_one(
+                    {"_id": identity},
+                    session=session,
+                )
+                tombstone = self._tombstones.find_one(
+                    {"_id": identity},
+                    session=session,
+                )
+                current_version = int((current or {}).get("sourceVersion") or 0)
+                tombstone_version = int((tombstone or {}).get("sourceVersion") or 0)
+                changed = False
+                decision = decide_gathering_projection(
+                    current_version=current_version,
+                    current_card_digest=(current or {}).get("cardDigest"),
+                    tombstone_version=tombstone_version,
+                    incoming_version=source_version,
+                    incoming_card_digest=(
+                        snapshot.card_digest if snapshot is not None else None
+                    ),
+                    removal=removal is not None,
+                )
+                stale = decision == "ignore"
+
+                if snapshot is not None and decision == "upsert":
+                    document = {
+                            "_id": identity,
+                            "objectKind": "gathering",
+                            "sourceKey": gathering_id,
+                            "sourceVersion": source_version,
+                            "cardDigest": snapshot.card_digest,
+                            "hostSubjectKind": snapshot.host_subject_kind.strip(),
+                            "hostSubjectId": snapshot.host_subject_id.strip(),
+                            "title": snapshot.title.strip(),
+                            "summary": (
+                                snapshot.summary.strip() if snapshot.summary else None
+                            ),
+                            "coverRef": (
+                                {
+                                    "objectTypeRef": snapshot.cover_object_type_ref,
+                                    "objectId": snapshot.cover_object_id,
+                                }
+                                if snapshot.cover_object_id
+                                else None
+                            ),
+                            "tagRefs": list(snapshot.tag_refs),
+                            "startAt": (
+                                snapshot.start_at.astimezone(timezone.utc)
+                                if snapshot.start_at
+                                else None
+                            ),
+                            "endAt": (
+                                snapshot.end_at.astimezone(timezone.utc)
+                                if snapshot.end_at
+                                else None
+                            ),
+                            "dateLabel": snapshot.date_label,
+                            "placeMode": snapshot.place_mode.strip(),
+                            "coarsePlaceRef": (
+                                {
+                                    "objectTypeRef": (
+                                        snapshot.coarse_place_object_type_ref
+                                    ),
+                                    "objectId": snapshot.coarse_place_object_id,
+                                }
+                                if snapshot.coarse_place_object_id
+                                else None
+                            ),
+                            "coarsePlaceLabel": snapshot.coarse_place_label,
+                            "maxParticipants": snapshot.max_participants,
+                            "occupiedSeats": snapshot.occupied_seats,
+                            "remainingSeats": snapshot.remaining_seats,
+                            "full": snapshot.full,
+                            "admissionState": snapshot.admission_state.strip(),
+                            "lifecycleStatus": snapshot.lifecycle_status,
+                            "updatedAt": snapshot.updated_at.astimezone(timezone.utc),
+                    }
+                    self._gathering_candidates.replace_one(
+                        {"_id": identity},
+                        document,
+                        upsert=True,
+                        session=session,
+                    )
+                    self._tombstones.delete_one(
+                        {"_id": identity},
+                        session=session,
+                    )
+                    changed = True
+                elif removal is not None and decision == "remove":
+                    card_digest = (current or {}).get("cardDigest")
+                    self._tombstones.replace_one(
+                        {"_id": identity},
+                        {
+                            "_id": identity,
+                            "objectKind": "gathering",
+                            "sourceKey": gathering_id,
+                            "sourceVersion": source_version,
+                            "cardDigest": card_digest,
+                            "removedAt": datetime.now(timezone.utc),
+                        },
+                        upsert=True,
+                        session=session,
+                    )
+                    self._gathering_candidates.delete_one(
+                        {"_id": identity},
+                        session=session,
+                    )
+                    changed = True
+
+                self._inbox.insert_one(
+                    {
+                        "_id": normalized_event_id,
+                        "source": "circle_gathering",
+                        "sourceKey": gathering_id,
+                        "sourceVersion": source_version,
+                        "eventDigest": normalized_digest,
+                        "changed": changed,
+                        "stale": stale,
                         "appliedAt": datetime.now(timezone.utc),
                     },
                     session=session,
@@ -725,7 +908,8 @@ class MongoCandidateIndexStore:
         )
 
     def list_object_card_candidates(self, *, limit: int = 400) -> list[dict[str, Any]]:
-        return list(
+        bounded_limit = max(1, min(limit, 400))
+        entity_candidates = list(
             self._candidates.find(
                 {
                     "scenario": "content_feed",
@@ -741,5 +925,47 @@ class MongoCandidateIndexStore:
                 },
             )
             .sort([("updatedAt", DESCENDING), ("primaryHomepageId", ASCENDING)])
-            .limit(max(1, min(limit, 400)))
+            .limit(bounded_limit)
         )
+        for candidate in entity_candidates:
+            candidate["objectKind"] = "entity_homepage"
+        gathering_candidates = list(
+            self._gathering_candidates.find(
+                {"lifecycleStatus": "published"},
+                {
+                    "_id": 0,
+                    "objectKind": 1,
+                    "sourceKey": 1,
+                    "sourceVersion": 1,
+                    "cardDigest": 1,
+                    "title": 1,
+                    "summary": 1,
+                    "coverRef": 1,
+                    "tagRefs": 1,
+                    "startAt": 1,
+                    "endAt": 1,
+                    "dateLabel": 1,
+                    "placeMode": 1,
+                    "coarsePlaceRef": 1,
+                    "coarsePlaceLabel": 1,
+                    "updatedAt": 1,
+                },
+            )
+            .sort([("updatedAt", DESCENDING), ("sourceKey", ASCENDING)])
+            .limit(bounded_limit)
+        )
+
+        def order_key(value: Mapping[str, Any]) -> tuple[float, str]:
+            updated_at = value.get("updatedAt")
+            timestamp = (
+                updated_at.timestamp() if isinstance(updated_at, datetime) else 0.0
+            )
+            identity = str(
+                value.get("sourceKey") or value.get("primaryHomepageId") or ""
+            )
+            return (-timestamp, identity)
+
+        return sorted(
+            [*entity_candidates, *gathering_candidates],
+            key=order_key,
+        )[:bounded_limit]

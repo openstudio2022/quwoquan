@@ -32,8 +32,8 @@ func (p *ReportNotificationStreamPublisher) Publish(
 	ctx context.Context,
 	event reportports.OutboxEvent,
 ) error {
-	if event.EventType != "content.report.resolved" &&
-		event.EventType != "content.report.dismissed" {
+	if event.EventType != "content.report.ReportResolved" &&
+		event.EventType != "content.report.ReportDismissed" {
 		return nil
 	}
 	if p == nil || p.redis == nil {

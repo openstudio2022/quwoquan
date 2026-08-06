@@ -31,6 +31,7 @@ func chatStoragePorts(store *persistence.MongoChatStore) application.ChatStorage
 	return application.ChatStoragePorts{
 		Transactions:             store,
 		Conversations:            store,
+		GatheringConversations:   store,
 		CircleGroupConversations: store,
 		Messages:                 store,
 		MessageProjection:        store,

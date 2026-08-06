@@ -1,6 +1,6 @@
 dart_class: DeviceContextWire
-library_path: assistant/generated/contracts/device_context.g.dart
-output_path: assistant/generated/contracts/device_context.g.dart
+library_path: package:quwoquan_cloud_contracts/src/generated/assistant/device_context.g.dart
+output_path: packages/quwoquan_cloud_contracts/lib/src/generated/assistant/device_context.g.dart
 contract: device_context
 kind: shared_wire_contract
 fields:

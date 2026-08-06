@@ -5,7 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	rterr "quwoquan_service/runtime/errors"
+	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	"strings"
 	"time"
 )
@@ -185,21 +185,13 @@ type PostCounterSlice struct {
 func (s *PostService) GetCounters(ctx context.Context, postID string) (PostCounterSlice, error) {
 	post, ok := s.store.FindByID(ctx, strings.TrimSpace(postID))
 	if !ok {
-		return PostCounterSlice{}, rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
-			"内容不存在",
-			"post not found",
-		)
+		return PostCounterSlice{}, contentgenerated.AppErrorFromPostNotFound("post not found")
 	}
 	// 评论数取 DB 权威 count（含二级、排除软删），与 ListComments.totalCount 同源；
 	// post.CommentCount 仅作 feed/详情页去规范化加速器。读路径机会式自愈：发现加速器
 	// 与权威 count 漂移时按权威值单 $set 收敛（无整文档改写），保证最终一致。
 	if s.commentCounts == nil {
-		return PostCounterSlice{}, rterr.NewUnavailable(
-			rterr.ModuleContent,
-			"互动计数加载失败，请稍后重试",
-			"Comment CountReader is required",
-		)
+		return PostCounterSlice{}, contentgenerated.AppErrorFromRequiredDependencyUnavailable("Comment CountReader is required")
 	}
 	commentCount := post.CommentCount
 	if n, err := s.commentCounts.CountByPost(ctx, post.ID); err == nil {

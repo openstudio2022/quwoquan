@@ -41,9 +41,9 @@
 
 ## 4. 契约引用
 
-- canonical：`quwoquan_app/lib/app/navigation/native_back_navigation.dart#appRoutePage`
-- canonical：`quwoquan_app/lib/app/navigation/native_back_navigation.dart#NativeBackNavigationPolicy`
-- canonical：`quwoquan_app/lib/app/navigation/native_back_navigation.dart#AppBackGuard`
+- canonical：`quwoquan_app/lib/runtime/shell/navigation/native_back_navigation.dart#appRoutePage`
+- canonical：`quwoquan_app/lib/runtime/shell/navigation/native_back_navigation.dart#NativeBackNavigationPolicy`
+- canonical：`quwoquan_app/lib/runtime/shell/navigation/native_back_navigation.dart#AppBackGuard`
 
 ## 5. 验收场景
 

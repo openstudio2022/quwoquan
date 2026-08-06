@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	rtauth "quwoquan_service/runtime/auth"
 	rthttp "quwoquan_service/runtime/http"
 	rtmetrics "quwoquan_service/runtime/metrics"
 	robs "quwoquan_service/runtime/observability"
@@ -18,6 +19,7 @@ import (
 	policyreleasehttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_policy_release/adapters/inbound/http"
 	policyrollouthttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_policy_rollout/adapters/inbound/http"
 	preferencehttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_preference/adapters/inbound/http"
+	runhttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/adapters/inbound/http"
 	httpadapter "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/adapters/inbound/http"
 	taskhttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_task_view/adapters/inbound/http"
 	taskapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_task_view/application"
@@ -47,16 +49,16 @@ func buildAssistantHTTPServer(
 	assistant *assistantComponents,
 ) *http.Server {
 	deps := infrastructure.dependencies
-	baseHandler := httpadapter.NewHandler(
-		assistant.service,
-		httpadapter.WithRunCommandService(assistant.runCommands),
-		httpadapter.WithRunPreferenceSnapshots(assistant.preferenceQueries),
-		httpadapter.WithRunContextResolver(assistant.runContextResolver),
-	).Routes()
+	baseHandler := httpadapter.NewHandler(assistant.service).Routes()
 	skillCatalogQueries := skillcatalogapplication.NewQueryService(
 		assistant.activeSkillCatalog,
 	)
 	serviceMux := http.NewServeMux()
+	runhttp.NewHandler(
+		assistant.runCommands,
+		runhttp.WithPreferenceSnapshots(assistant.preferenceQueries),
+		runhttp.WithContextResolver(assistant.runContextResolver),
+	).RegisterRoutes(serviceMux)
 	subscriptionUseCases := subscriptionapplication.NewUseCases(
 		deps.subscriptionStore,
 		assistant.chatGroundingClient,
@@ -138,7 +140,7 @@ func buildAssistantHTTPServer(
 	})
 	outerMux.HandleFunc("/readyz", infrastructure.healthChecker.Handler())
 	outerMux.Handle("/metrics", rtmetrics.Handler())
-	outerMux.Handle("/", httpadapter.GeneratedPrivilegedOperationHandler(baseHandler))
+	outerMux.Handle("/", httpadapter.GeneratedOperationContractHandler(baseHandler))
 	observedHandler := rthttp.NewHTTPServerMiddleware(
 		outerMux,
 		rthttp.HTTPServerMiddlewareConfig{
@@ -156,6 +158,9 @@ func buildAssistantHTTPServer(
 		runtime.exceptionLogger,
 	)
 	corsHandler := rthttp.WithCORS(observedHandler, rthttp.CORSOptionsFromEnv())
+	timeouts := rtauth.ContractHTTPServerTimeouts(
+		httpadapter.AssistantOperationDescriptors(),
+	)
 	return &http.Server{
 		Addr: runtime.addr,
 		Handler: withAssistantAccessMiddleware(
@@ -163,9 +168,9 @@ func buildAssistantHTTPServer(
 			runtime.accessVerifier,
 			runtime.accountSecurityAuthority,
 		),
-		ReadHeaderTimeout: 5 * time.Second,
-		WriteTimeout:      assistantHTTPWriteTimeout(),
-		IdleTimeout:       60 * time.Second,
+		ReadHeaderTimeout: timeouts.ReadHeader,
+		WriteTimeout:      timeouts.Write,
+		IdleTimeout:       timeouts.Idle,
 	}
 }
 

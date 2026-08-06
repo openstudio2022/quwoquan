@@ -19,10 +19,13 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
 from pathlib import Path
 
 CURSOR_API_KEY_ENV = "CURSOR_API_KEY"
 CURSOR_API_KEY_FILE_ENV = "QWQ_CURSOR_API_KEY_FILE"
+CURSOR_API_KEY_FD_ENV = "QWQ_CURSOR_API_KEY_FD"
 DEFAULT_CURSOR_API_KEY_FILE = Path.home() / ".config" / "quwoquan" / "cursor_api_key"
 
 # 明确的凭据失效信号。刻意避免裸 "auth" 子串，以免误判 bridge 的
@@ -122,6 +125,49 @@ def resolve_cursor_api_key(*, refresh: bool = True) -> str | None:
     if not file_key:
         return None
     return file_key
+
+
+@contextmanager
+def protected_cursor_api_key_fd(api_key: str) -> Iterator[int]:
+    """Expose one credential to one child through a short-lived anonymous pipe.
+
+    The value never enters argv, stdin, an environment value, a generated
+    script, or a filesystem artifact. ``pass_fds`` grants the selected child
+    the read end; the child must read and close it before launching the SDK
+    bridge so descendants cannot inherit the capability.
+    """
+    if not api_key:
+        raise ValueError("Cursor API key is required for protected FD transport")
+    read_fd, write_fd = os.pipe()
+    try:
+        payload = f"{api_key}\n".encode()
+        with os.fdopen(write_fd, "wb", closefd=True) as handle:
+            write_fd = -1
+            handle.write(payload)
+            handle.flush()
+        yield read_fd
+    finally:
+        if write_fd >= 0:
+            os.close(write_fd)
+        try:
+            os.close(read_fd)
+        except OSError:
+            pass
+
+
+def cursor_credential_subprocess_env(
+    base: Mapping[str, str], *, credential_fd: int
+) -> dict[str, str]:
+    """Return a scrubbed child environment containing only the FD capability."""
+    if credential_fd < 0:
+        raise ValueError("Cursor credential FD must be non-negative")
+    env = {
+        str(name): str(value)
+        for name, value in base.items()
+        if name not in {CURSOR_API_KEY_ENV, CURSOR_API_KEY_FD_ENV}
+    }
+    env[CURSOR_API_KEY_FD_ENV] = str(credential_fd)
+    return env
 
 
 def is_cursor_auth_error(

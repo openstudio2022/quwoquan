@@ -52,10 +52,6 @@ relationships:
   reference_fields:
   - attachmentMediaIds
   target_object: content.MediaAsset
-capabilities:
-- commandable
-- queryable
-- evented
 taggable: false
 vector_enabled: false
 relation_signal: true
@@ -77,26 +73,23 @@ lifecycle:
   - hidden
   - deleted
   - tombstoned
-  transitions:
-  - from: active
-    to: deleted
-    trigger: DeleteComment
-    actor: comment_author
-  - from: active
-    to: hidden
-    trigger: HideComment
-    actor: operator
-  - from: hidden
-    to: active
-    trigger: RestoreComment
-    actor: operator
-  - from: active
-    to: tombstoned
-    trigger: PostDeleted_cascade
-    actor: system
-  - from: hidden
-    to: tombstoned
-    trigger: PostDeleted_cascade
-    actor: system
   optimistic_concurrency: version
   idempotency: command_key
+  source_events:
+  - content.comment.CommentCreated
+  - content.comment.CommentDeleted
+  - content.comment.CommentModerated
+  - content.content_reaction.ContentReactionSet
+  - content.content_reaction.ContentReactionCleared
+  - content.report.ReportResolved
+  event_consumers:
+  - name: RecomputeCommentHotScore
+    kind: event_handler
+    facet: CommentHotScoreProjectionHandler
+    method: apply
+    idempotency: event_id
+  - name: ApplyResolvedReportModeration
+    kind: event_handler
+    facet: CommentReportResolutionHandler
+    method: hideComment
+    idempotency: event_id

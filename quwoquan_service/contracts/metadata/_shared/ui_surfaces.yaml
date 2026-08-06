@@ -166,7 +166,8 @@ surfaces:
       - PauseAssistantRun
       - ResumeAssistantRun
       - SteerAssistantRun
-      - ContinueAssistantToolUse
+      - ApproveAssistantToolUse
+      - SubmitDeviceActionReceipt
       - StreamAssistantRunEvents
       - GetMediaAsset
       - ListAppMessages
@@ -520,6 +521,7 @@ surfaces:
       - RecordVisit
       - ReportStartupEventBatch
       - IssueConnectionTicket
+      - WebSocketUpgrade
       - LongPoll
       - ReportEventBatch
       - ReportRuntimeLogBatch
@@ -561,7 +563,9 @@ surfaces:
     route_id: welcome
     path_template: /welcome
     description: Flutter 唯一启动欢迎页
-    operation_ids: []
+    operation_ids:
+      - GetAppRecoveryVersion
+      - ReportRecoveryFailure
 
   - id: circlesList
     owner: circle
@@ -760,6 +764,54 @@ surfaces:
       - RevokeConnectorConnection
       - ListConnectorInvocations
       - GetConnectorInvocation
+
+
+
+
+
+
+  - id: gatheringCreate
+    owner: circle
+    route_id: gatheringCreate
+    path_template: /gatherings/create
+    description: 从 C 位、内容或主页进入同一 Gathering 草稿与发布流程
+    operation_ids:
+      - CreateGatheringDraft
+      - PublishGathering
+
+  - id: gatheringDetail
+    owner: circle
+    route_id: gatheringDetail
+    path_template: /gatherings/{id}
+    description: Gathering 公开详情、动态主动作与 Host 管理入口
+    operation_ids:
+      - GetPublicGathering
+      - GetGathering
+      - UpdateGathering
+      - JoinOpenGathering
+      - ApplyToGathering
+      - AcceptGatheringInvitation
+      - ReviewGatheringApplication
+      - InviteToGathering
+      - RemoveGatheringParticipant
+      - PauseGatheringAdmission
+      - ResumeGatheringAdmission
+      - ChangeGatheringCapacity
+      - CancelGathering
+      - CompleteGatheringSelf
+      - CompleteGathering
+      - EndGatheringEarly
+      - SafetyTerminateGathering
+      - WatchGatheringAvailability
+
+  - id: gatheringBoard
+    owner: chat
+    route_id: gatheringBoard
+    path_template: /chat/{id}/board
+    description: 从活动群聊进入的可重建 Gathering 看板
+    operation_ids:
+      - GetGatheringChatBoard
+      - GetGathering
 
   - id: settingsHome
     owner: settings
@@ -996,86 +1048,3 @@ surfaces:
     operation_ids:
       - InitiateCall
       - InviteToCall
-
-  - id: travelTrips
-    owner: travel
-    route_id: travelTrips
-    path_template: /travel/trips
-    description: 共同旅行计划、成员、现场内容、Placement 与角色任务工作台
-    operation_ids:
-      - CreateTripPlan
-      - ListTripPlans
-      - GetTripPlan
-      - ReviseTripPlan
-      - TransitionTripPlan
-      - PutTripMembership
-      - DepartTripMembership
-      - ListTripMemberships
-      - CreateTripMoment
-      - AssignTripMoment
-      - DeleteTripMoment
-      - PutTripGuideAssignment
-      - TransitionTripGuideAssignment
-      - ListTripMoments
-      - PutTripPlanContentLink
-      - RemoveTripPlanContentLink
-      - ListTripPlanContentLinks
-      - PutTripPlanPlacement
-      - RemoveTripPlanPlacement
-      - ListTripPlanPlacements
-      - ListSurfaceTripPlacements
-      - ListTripGuideAssignments
-
-  - id: travelTemplates
-    owner: travel
-    route_id: travelTemplates
-    path_template: /travel/templates
-    description: 旅行模板创建、修订、浏览与生成新 Trip
-    operation_ids:
-      - CreateTripPlanTemplate
-      - ReviseTripPlanTemplate
-      - GetTripPlanTemplate
-      - ListTripPlanTemplates
-      - CreateTripPlanFromTemplate
-
-  - id: travelTimeline
-    owner: travel
-    route_id: travelTimeline
-    path_template: /travel/trips/{id}/timeline
-    description: 当前 Trip 的安全时间线投影
-    operation_ids:
-      - GetTripPlan
-      - ReviseTripPlan
-      - TransitionTripPlan
-      - GetTripTimeline
-      - GetTripMap
-      - ListTripMemberships
-      - GetPersonaProfile
-      - ListTripMoments
-      - ListTripPlanContentLinks
-      - PutTripPlanContentLink
-      - RemoveTripPlanContentLink
-      - ListTripPlanPlacements
-      - ListTripGuideAssignments
-      - CreateTripMoment
-      - AssignTripMoment
-      - DeleteTripMoment
-      - PutTripGuideAssignment
-      - TransitionTripGuideAssignment
-
-  - id: travelMap
-    owner: travel
-    route_id: travelMap
-    path_template: /travel/trips/{id}/map
-    description: 当前 Trip 的粗粒度地点与路线投影
-    operation_ids:
-      - GetTripMap
-
-  - id: travelShare
-    owner: travel
-    route_id: travelShare
-    path_template: /travel/share-snapshots/{id}
-    description: 隐私裁剪后的不可变旅行分享快照
-    operation_ids:
-      - CreateTripShareSnapshot
-      - GetTripShareSnapshot

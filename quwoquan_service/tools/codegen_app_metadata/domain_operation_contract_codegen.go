@@ -41,10 +41,11 @@ func generateDomainOperationContracts(
 		if client.DartImport != ownerImport {
 			continue
 		}
+		responseBodyKind := strings.TrimSpace(operation.ResponseBodyKind)
 		emptyResponse := client.ResponseType == "void" &&
 			client.ResponseDecoder == "decodeEmptyResponse" &&
 			strings.TrimSpace(operation.ResponseEntity) == "" &&
-			strings.TrimSpace(operation.ResponseBodyKind) == "ack"
+			(responseBodyKind == "ack" || responseBodyKind == "upgrade")
 		if !emptyResponse && (client.ResponseType != operation.ResponseEntity ||
 			client.ResponseDecoder != "decode"+client.ResponseType) {
 			return nil, fmt.Errorf(
@@ -362,12 +363,19 @@ func generateDomainOperationPublicBarrels(
 	}
 	sort.Strings(names)
 	for _, domain := range names {
+		extraExports := ""
+		switch domain {
+		case "recommendation":
+			extraExports = "export '../src/generated/recommendation/intersection_contract_vocabulary.g.dart';\n"
+		case "search":
+			extraExports = "export '../src/generated/search/search_contract_vocabulary.g.dart';\n"
+		}
 		content := "// Code generated from the canonical " + domain +
 			" operation owner. DO NOT EDIT.\n" +
 			"// ContractGraph SHA256: " + activeContractSHA256 + "\n\n" +
 			"library;\n\n" +
 			"export '../src/" + domain + "/" + domain +
-			"_operation_contracts.g.dart';\n"
+			"_operation_contracts.g.dart';\n" + extraExports
 		writeFile(filepath.Join(
 			appDir,
 			"packages",
@@ -414,11 +422,12 @@ func loadDomainOperationContractSpec(
 				operation.Domain,
 			)
 		}
+		responseBodyKind := strings.TrimSpace(operation.ResponseBodyKind)
 		emptyResponse := operation.ClientContract != nil &&
 			operation.ClientContract.ResponseType == "void" &&
 			operation.ClientContract.ResponseDecoder == "decodeEmptyResponse" &&
 			strings.TrimSpace(operation.ResponseEntity) == "" &&
-			strings.TrimSpace(operation.ResponseBodyKind) == "ack"
+			(responseBodyKind == "ack" || responseBodyKind == "upgrade")
 		if emptyResponse {
 			spec.HasEmptyResponse = true
 		} else if externalImport := generatedExternalResponseImport(
@@ -545,6 +554,9 @@ func canonicalMetadataDomain(path string) string {
 func finalizeDomainOperationContractSpec(
 	spec *domainOperationContractSpec,
 ) error {
+	if spec.Domain == "search" {
+		spec.ExternalExports[searchContractVocabularyImport] = struct{}{}
+	}
 	enumValues, err := loadCanonicalRequestEnumValues()
 	if err != nil {
 		return err
@@ -555,6 +567,21 @@ func finalizeDomainOperationContractSpec(
 		}
 	}
 	for enumRef := range spec.EnumMembers {
+		if enumRef == "IntersectionDimension" {
+			if err := validateCanonicalIntersectionDimensionMembers(
+				spec.EnumMembers[enumRef],
+			); err != nil {
+				return fmt.Errorf(
+					"%s canonical IntersectionDimension owner: %w",
+					spec.Domain,
+					err,
+				)
+			}
+			spec.ExternalImports[intersectionContractVocabularyImport] = struct{}{}
+			spec.ExternalExports[intersectionContractVocabularyImport] = struct{}{}
+			delete(spec.EnumMembers, enumRef)
+			continue
+		}
 		if externalImport := generatedExternalEnumImport(spec.Domain, enumRef); externalImport != "" {
 			spec.ExternalImports[externalImport] = struct{}{}
 			spec.ExternalExports[externalImport] = struct{}{}
@@ -1323,11 +1350,13 @@ func responseFieldDecodeExpression(
 	}
 	metaType := strings.TrimSpace(field.Type)
 	switch metaType {
-	case "string", "tag_ref", "time", "ObjectId", "uuid", "identifier":
+	case "string", "tag_ref", "ObjectId", "uuid", "identifier":
 		if hasRequestConstraint(field, "NOT_BLANK") {
 			return "_requiredNonBlankString(" + access + ", " + path + ")", nil
 		}
 		return "_requiredString(" + access + ", " + path + ")", nil
+	case "time":
+		return "_requiredTimeOfDay(" + access + ", " + path + ")", nil
 	case "url":
 		return "_requiredUri(" + access + ", " + path + ")", nil
 	case "timestamp", "datetime", "date":
@@ -1529,11 +1558,14 @@ func renderDomainDecoderHelpers(
 			return
 		}
 		switch metaType {
-		case "string", "tag_ref", "time", "ObjectId", "uuid", "identifier":
+		case "string", "tag_ref", "ObjectId", "uuid", "identifier":
 			used["string"] = true
 			if hasRequestConstraint(field, "NOT_BLANK") {
 				used["nonBlankString"] = true
 			}
+		case "time":
+			used["string"] = true
+			used["timeOfDay"] = true
 		case "url":
 			used["string"] = true
 			used["nonBlankString"] = true
@@ -1613,6 +1645,18 @@ String _requiredNonBlankString(Object? value, String path) {
   final result = _requiredString(value, path);
   if (result.trim().isEmpty) {
     throw FormatException('$path must not be blank');
+  }
+  return result;
+}
+`)
+	}
+
+	if used["timeOfDay"] {
+		output.WriteString(`
+String _requiredTimeOfDay(Object? value, String path) {
+  final result = _requiredString(value, path);
+  if (!RegExp(r'^([01][0-9]|2[0-3]):[0-5][0-9]$').hasMatch(result)) {
+    throw FormatException('$path must be a HH:MM wall-clock time');
   }
   return result;
 }

@@ -51,11 +51,6 @@ func readService(path string) (*serviceFile, error) {
 	return &parsed, decodeMetadataDocument(path, &parsed)
 }
 
-func readIntegrationLocationService(path string) (*integrationLocationServiceFile, error) {
-	var parsed integrationLocationServiceFile
-	return &parsed, decodeMetadataDocument(path, &parsed)
-}
-
 func readProjection(path string) (*projectionFile, error) {
 	var parsed projectionFile
 	if err := decodeMetadataDocument(path, &parsed); err != nil {
@@ -265,31 +260,6 @@ func projectionWireTypeToDart(raw string) (string, error) {
 	return "", fmt.Errorf("unsupported projection wire type %q", raw)
 }
 
-// collectProjectionReadModelDartClass 建立 projection read_model -> client_projection.dart_class
-// 的全仓索引（跨域可见），供 operation response_body 解析其端侧 DTO 类名。
-// 同时把 dart_class 自身登记为键，兼容 response_body 直接写 dart_class 的情况。
-func collectProjectionReadModelDartClass(metadataDir string) (map[string]string, error) {
-	index := map[string]string{}
-	for _, path := range metadataDocumentPaths("", ".yaml") {
-		if filepath.Base(filepath.Dir(path)) != "projections" {
-			continue
-		}
-		p, readErr := readProjectionBinding(path)
-		if readErr != nil {
-			continue
-		}
-		dartClass := strings.TrimSpace(p.ClientProjection.DartClass)
-		if dartClass == "" {
-			continue
-		}
-		if rm := strings.TrimSpace(p.ReadModel); rm != "" {
-			index[rm] = dartClass
-		}
-		index[dartClass] = dartClass
-	}
-	return index, nil
-}
-
 // projectionPathByReadModel resolves a projection from the compiled
 // ContractGraph Source instead of reconstructing its owner directory. Moving a
 // projection between business objects therefore changes only canonical
@@ -412,16 +382,6 @@ func contentDomainErrorsPaths(metadataDir string) []string {
 		filepath.Join(metadataDir, "content", "trust_safety", "post_moderation_case", "errors.yaml"),
 		filepath.Join(metadataDir, "content", "trust_safety", "report", "errors.yaml"),
 	}
-}
-
-func readBehaviors(path string) (*behaviorsFile, error) {
-	var parsed behaviorsFile
-	return &parsed, decodeMetadataDocument(path, &parsed)
-}
-
-func readPrivacy(path string) (*privacyFile, error) {
-	var parsed privacyFile
-	return &parsed, decodeMetadataDocument(path, &parsed)
 }
 
 func readUIConfig(

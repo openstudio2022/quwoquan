@@ -335,3 +335,84 @@ api_routes:
     response_body_kind: object
     request_entity: UnbindCredentialCommand
     request_body_kind: none
+readiness_cases:
+  - case_id: list-credentials-local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: ListCredentials}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/account/credential_binding/credential_binding_facade__reliability__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: list-credentials-api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: ListCredentials}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/credential_binding/postgres_binding__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgres, digest_binding: candidate}
+  - case_id: unbind-credential-local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: UnbindCredential}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/account/credential_binding/credential_binding_facade__reliability__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: unbind-credential-api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: UnbindCredential}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/credential_binding/postgres_binding__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgres, digest_binding: candidate}
+  - case_id: bind-phone-credential-local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: BindPhoneCredential}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/account/credential_binding/credential_operations__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: bind-phone-credential-api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: BindPhoneCredential}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/credential_binding/postgres_binding__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgres, digest_binding: candidate}
+  - case_id: complete-federated-phone-binding-local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/two-state-one-tap-login-commercial-login-entry/spec.md#gwt-003
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: CompleteFederatedPhoneBinding}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/account/credential_binding/credential_operations__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: complete-federated-phone-binding-api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/two-state-one-tap-login-commercial-login-entry/spec.md#gwt-003
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: CompleteFederatedPhoneBinding}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/credential_binding/postgres_binding__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgres, digest_binding: candidate}
+  - case_id: bind-carrier-phone-credential-local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: BindCarrierPhoneCredential}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/account/credential_binding/credential_operations__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: bind-carrier-phone-credential-api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: BindCarrierPhoneCredential}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/credential_binding/postgres_binding__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgres, digest_binding: candidate}

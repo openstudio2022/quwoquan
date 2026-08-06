@@ -135,7 +135,7 @@ func (s *MessageService) SendMessage(ctx context.Context, req SendMessageRequest
 		Version:                   1,
 	}
 
-	events := []MessageOutboxEvent{{
+	events := []messageports.OutboxEvent{{
 		EventID:        msg.ID + ":" + messageevent.MessageSent,
 		EventType:      messageevent.MessageSent,
 		ConversationID: req.ConversationId,
@@ -157,7 +157,7 @@ func (s *MessageService) SendMessage(ctx context.Context, req SendMessageRequest
 	}}
 	if !isAssistantGeneratedMessage(req) {
 		if assistantMember, ok := s.mentionedAssistantMember(ctx, req.ConversationId, msg.Mentions); ok {
-			events = append(events, MessageOutboxEvent{
+			events = append(events, messageports.OutboxEvent{
 				EventID:        msg.ID + ":" + messageevent.AssistantMentioned,
 				EventType:      messageevent.AssistantMentioned,
 				ConversationID: req.ConversationId,
@@ -303,7 +303,7 @@ func (s *MessageService) SendAnnouncementSystemMessage(
 	committed, err := s.messages.CommitMessage(ctx, MessageCommit{
 		Message:       msg,
 		CommandDigest: commandDigest,
-		Events: []MessageOutboxEvent{{
+		Events: []messageports.OutboxEvent{{
 			EventID:        msg.ID + ":" + messageevent.MessageSent,
 			EventType:      messageevent.MessageSent,
 			ConversationID: conversationID,
@@ -390,7 +390,7 @@ func (s *MessageService) SendGreetingOpeningMessage(
 	committed, err := s.messages.CommitMessage(ctx, MessageCommit{
 		Message:       msg,
 		CommandDigest: commandDigest,
-		Events: []MessageOutboxEvent{{
+		Events: []messageports.OutboxEvent{{
 			EventID:        msg.ID + ":" + messageevent.MessageSent,
 			EventType:      messageevent.MessageSent,
 			ConversationID: conversationID,
@@ -639,6 +639,12 @@ func (s *MessageService) ensureMessageAllowed(ctx context.Context, req SendMessa
 	if conv.Status != "" && conv.Status != "active" {
 		return chatBlocked("conversation is not active")
 	}
+	if effectiveConversationAccessMode(conv) == ConversationAccessModeReadOnly {
+		return chatBlocked("conversation access mode is read_only")
+	}
+	if effectiveConversationPostingPolicy(conv) == ConversationPostingPolicyAnnouncementsOnly {
+		return chatBlocked("conversation posting policy is announcements_only")
+	}
 	if strings.TrimSpace(req.SenderId) == "assistant" {
 		return nil
 	}
@@ -776,7 +782,7 @@ func (s *MessageService) RecallMessage(ctx context.Context, conversationId, mess
 		}
 		return s.messages.AppendMessageOutboxEvent(
 			txCtx,
-			MessageOutboxEvent{
+			messageports.OutboxEvent{
 				EventID:        chatAggregateEventID("recall:"+messageId, string(messageevent.MessageRecalled)),
 				EventType:      string(messageevent.MessageRecalled),
 				ConversationID: conversationId,

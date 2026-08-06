@@ -55,7 +55,7 @@ if ! python3 "$ROOT/quwoquan_ops/cli/stackctl.py" \
 fi
 
 if [[ "$health_status" -eq 0 ]]; then
-  if ! python3 "$ROOT/quwoquan_app/scripts/gamma/run_local_gamma_t3.py" \
+  if ! python3 "$ROOT/quwoquan_app/scripts/gamma/run_local_gamma_release_consumer_api.py" \
     --release-readiness "$READINESS_RECEIPT" \
     --report "$RELEASE_REPORT"; then
     release_status=1
@@ -99,7 +99,8 @@ PY
   elif ! (
     cd "$ROOT/quwoquan_app"
     flutter test \
-      test/api_integration/cloud/content/onboarding_author_impact_gamma__api_integration_test.dart \
+      test/api_integration/service/content_service/content/content_behavior_fact/onboarding_interest_gamma__api_integration_test.dart \
+      test/api_integration/service/content_service/content/post/author_impact_gamma__api_integration_test.dart \
       "--dart-define-from-file=$SESSION_DEFINES" \
       "--dart-define=GAMMA_GATEWAY_URL=$FLUTTER_GATEWAY_URL" \
       --dart-define=API_CONTRACT_ALLOW_BAD_CERT=true

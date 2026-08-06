@@ -2,11 +2,17 @@ package application
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
 	"log/slog"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 
+	usergenerated "quwoquan_service/services/user-service/generated/account/user_account"
 	contactgenerated "quwoquan_service/services/user-service/generated/relationship/contact_discovery_record"
 	userevent "quwoquan_service/services/user-service/internal/relationship/contact_discovery_record/domain/event"
 	"quwoquan_service/services/user-service/internal/relationship/contact_discovery_record/domain/model"
@@ -66,18 +72,23 @@ func (s *ContactDiscoveryService) RunExpiredCleanup(ctx context.Context, interva
 
 // Initiate creates a discovery record and synchronously matches hashed phones.
 // Privacy: returns only the record ID and status; caller fetches matches separately.
-func (s *ContactDiscoveryService) Initiate(ctx context.Context, ownerID string, hashedPhones []string) (*model.ContactDiscoveryRecord, error) {
+func (s *ContactDiscoveryService) Initiate(
+	ctx context.Context,
+	ownerID string,
+	hashedPhones []string,
+	idempotencyKey string,
+) (*model.ContactDiscoveryRecord, error) {
+	ownerID = strings.TrimSpace(ownerID)
+	idempotencyKey = strings.TrimSpace(idempotencyKey)
+	if ownerID == "" || idempotencyKey == "" || len(idempotencyKey) > 256 {
+		return nil, usergenerated.AppErrorFromInvalidArgument(
+			"owner and stable Idempotency-Key are required",
+		)
+	}
 	if len(hashedPhones) > discoveryBatchLimit {
 		return nil, contactgenerated.AppErrorFromTooManyContacts("too many contacts, maximum 5000 per request")
 	}
-
-	count, err := s.discoveries.CountTodayByOwner(ctx, ownerID)
-	if err != nil {
-		return nil, err
-	}
-	if count >= discoveryRateLimit {
-		return nil, contactgenerated.AppErrorFromContactDiscoveryRateLimited("daily contact discovery limit reached")
-	}
+	hashedPhones = normalizeHashedPhones(hashedPhones)
 
 	record := &model.ContactDiscoveryRecord{
 		ID:             uuid.New().String(),
@@ -86,35 +97,65 @@ func (s *ContactDiscoveryService) Initiate(ctx context.Context, ownerID string, 
 		Status:         "pending",
 		ExpireAt:       time.Now().UTC().Add(discoveryTTLHours * time.Hour),
 	}
-	if err := s.discoveries.Create(ctx, record); err != nil {
-		return nil, err
+	command := userrepo.CommandIdentity{
+		Operation:      "InitiateContactDiscovery",
+		OwnerAccountID: ownerID,
+		IdempotencyKey: idempotencyKey,
+		CommandDigest: contactCommandDigest(
+			"InitiateContactDiscovery", ownerID, strings.Join(hashedPhones, ","),
+		),
 	}
-	_ = s.events.PublishUserEvent(ctx, userevent.ContactDiscoveryInitiated, ownerID, ownerID, map[string]any{
-		"id":             record.ID,
-		"ownerAccountId": ownerID,
-		"createdAt":      time.Now().UTC().Format(time.RFC3339),
-	})
+	stored, created, err := s.discoveries.CreateIdempotent(
+		ctx,
+		record,
+		discoveryRateLimit,
+		command,
+	)
+	if errors.Is(err, userrepo.ErrRateLimited) {
+		return nil, contactgenerated.AppErrorFromContactDiscoveryRateLimited(err.Error())
+	}
+	if errors.Is(err, userrepo.ErrIdempotencyConflict) {
+		return nil, usergenerated.AppErrorFromInvalidArgument(err.Error())
+	}
+	if err != nil {
+		return nil, usergenerated.AppErrorFromInternalError("persist contact discovery command")
+	}
+	record = stored
+	if !created && record.Status != "pending" {
+		return record, nil
+	}
+	if created {
+		_ = s.events.PublishUserEvent(ctx, userevent.ContactDiscoveryInitiated, ownerID, ownerID, map[string]any{
+			"id":             record.ID,
+			"ownerAccountId": ownerID,
+			"createdAt":      time.Now().UTC().Format(time.RFC3339),
+		})
+	}
 
 	// 同步匹配：批量哈希求交是一次索引查询（≤5000 哈希），P95 远低于
 	// InitiateContactDiscovery 的 800ms SLO，无需异步作业。
 	matches, err := s.discoveries.FindPhoneMatches(ctx, hashedPhones)
 	if err != nil {
-		// Best-effort: complete with empty result rather than fail
-		matches = []model.ContactPhoneMatch{}
+		return nil, usergenerated.AppErrorFromInternalError(
+			"contact discovery dependency unavailable",
+		)
 	}
 	matched := personaIDsFromMatches(matches)
-	if err := s.discoveries.Complete(ctx, record.ID, matched); err != nil {
+	completed, transitioned, err := s.discoveries.CompleteIdempotent(
+		ctx, record.ID, matched, command,
+	)
+	if err != nil {
 		return nil, err
 	}
-	record.Status = "completed"
-	record.MatchedPersonaIds = matched
-	record.MatchCount = int64(len(matched))
-	_ = s.events.PublishUserEvent(ctx, userevent.ContactDiscoveryCompleted, ownerID, ownerID, map[string]any{
-		"id":             record.ID,
-		"ownerAccountId": ownerID,
-		"matchCount":     record.MatchCount,
-		"completedAt":    time.Now().UTC().Format(time.RFC3339),
-	})
+	record = completed
+	if transitioned {
+		_ = s.events.PublishUserEvent(ctx, userevent.ContactDiscoveryCompleted, ownerID, ownerID, map[string]any{
+			"id":             record.ID,
+			"ownerAccountId": ownerID,
+			"matchCount":     record.MatchCount,
+			"completedAt":    time.Now().UTC().Format(time.RFC3339),
+		})
+	}
 
 	return record, nil
 }
@@ -157,16 +198,62 @@ func (s *ContactDiscoveryService) GetLatest(ctx context.Context, ownerID string)
 }
 
 // Dismiss marks a discovery record as dismissed (user action).
-func (s *ContactDiscoveryService) Dismiss(ctx context.Context, ownerID, id string) error {
-	r, err := s.discoveries.FindByID(ctx, id)
-	if err != nil {
-		return err
+func (s *ContactDiscoveryService) Dismiss(
+	ctx context.Context,
+	ownerID string,
+	id string,
+	idempotencyKey string,
+) error {
+	ownerID = strings.TrimSpace(ownerID)
+	id = strings.TrimSpace(id)
+	idempotencyKey = strings.TrimSpace(idempotencyKey)
+	if ownerID == "" || id == "" || idempotencyKey == "" || len(idempotencyKey) > 256 {
+		return usergenerated.AppErrorFromInvalidArgument(
+			"owner, discovery id and stable Idempotency-Key are required",
+		)
 	}
-	if r == nil {
-		return contactgenerated.AppErrorFromContactDiscoveryNotFound("discovery record not found")
+	err := s.discoveries.DismissIdempotent(
+		ctx,
+		id,
+		userrepo.CommandIdentity{
+			Operation:      "DismissContactDiscovery",
+			OwnerAccountID: ownerID,
+			IdempotencyKey: idempotencyKey,
+			CommandDigest: contactCommandDigest(
+				"DismissContactDiscovery", ownerID, id,
+			),
+		},
+	)
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, userrepo.ErrNotFound):
+		return contactgenerated.AppErrorFromContactDiscoveryNotFound(
+			"discovery record not found",
+		)
+	case errors.Is(err, userrepo.ErrIdempotencyConflict):
+		return usergenerated.AppErrorFromInvalidArgument(err.Error())
+	default:
+		return usergenerated.AppErrorFromInternalError("dismiss contact discovery")
 	}
-	if r.OwnerAccountID != ownerID {
-		return contactgenerated.AppErrorFromContactDiscoveryNotFound("discovery record not found") // security: same error for auth mismatch
+}
+
+func normalizeHashedPhones(values []string) []string {
+	unique := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		if value = strings.TrimSpace(value); value != "" {
+			unique[value] = struct{}{}
+		}
 	}
-	return s.discoveries.Dismiss(ctx, id)
+	result := make([]string, 0, len(unique))
+	for value := range unique {
+		result = append(result, value)
+	}
+	sort.Strings(result)
+	return result
+}
+
+func contactCommandDigest(parts ...string) string {
+	digest := sha256.Sum256([]byte(strings.Join(parts, "\x00")))
+	return hex.EncodeToString(digest[:])
 }

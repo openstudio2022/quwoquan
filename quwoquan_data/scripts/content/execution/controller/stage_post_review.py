@@ -26,6 +26,9 @@ def _approved_review_refs(ctx: ExecutionContext, *, refs: set[str] | None = None
 
 def _batch_reducer_payload(ctx: ExecutionContext, *, refs: set[str] | None = None) -> list[dict[str, str]]:
     from content.post import object_index as content_object
+    from content.post.article.article_media_contract import (
+        read_article_media_closure,
+    )
     from content.post.article.draft_io import read_draft_article, read_writing_pack
     payload: list[dict[str, str]] = []
     for ref in _approved_review_refs(ctx, refs=refs):
@@ -36,6 +39,16 @@ def _batch_reducer_payload(ctx: ExecutionContext, *, refs: set[str] | None = Non
         pack = read_writing_pack(ctx.execution_id, ref) or {}
         if not article:
             continue
+        media_mode = ""
+        media_issue = ""
+        try:
+            manifest = read_json(
+                content_object.content_object_dir(ctx.execution_id, ref)
+                / "manifest.json"
+            )
+            media_mode = str(read_article_media_closure(manifest)["mode"])
+        except (FileNotFoundError, OSError, TypeError, ValueError) as exc:
+            media_issue = str(exc)
         payload.append(
             {
                 "ref": ref,
@@ -43,6 +56,8 @@ def _batch_reducer_payload(ctx: ExecutionContext, *, refs: set[str] | None = Non
                 "writingIntent": str(pack.get("writingIntent") or ""),
                 "baseSourceRef": str(pack.get("baseSourceRef") or ""),
                 "baseSourceReusePolicy": str(pack.get("baseSourceReusePolicy") or ""),
+                "articleMediaMode": media_mode,
+                "articleMediaIssue": media_issue,
             }
         )
     return payload

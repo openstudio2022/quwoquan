@@ -25,16 +25,16 @@ PYTHONDONTWRITEBYTECODE=1 python3 \
   "${ROOT_DIR}/quwoquan_ops/cli/feature_tree.py" verify
 
 if [[ "${FULL_MODE}" == "--full" ]]; then
-  evidence_path="${RUNTIME_MEDIA_T4_EVIDENCE:-}"
+  evidence_path="${RUNTIME_MEDIA_PLAYBACK_EVIDENCE:-}"
   if [[ -z "${evidence_path}" ]]; then
-    echo "[runtime-media] FAIL: RUNTIME_MEDIA_T4_EVIDENCE is required for full gate"
+    echo "[runtime-media] FAIL: RUNTIME_MEDIA_PLAYBACK_EVIDENCE is required for full gate"
     exit 2
   fi
   if [[ ! -f "${ROOT_DIR}/${evidence_path}" && ! -f "${evidence_path}" ]]; then
-    echo "[runtime-media] FAIL: T4 evidence file not found: ${evidence_path}"
+    echo "[runtime-media] FAIL: runtime-media playback evidence file not found: ${evidence_path}"
     exit 2
   fi
-  python3 "${ROOT_DIR}/quwoquan_ops/gate/verify_runtime_media_t4_evidence.py" \
+  python3 "${ROOT_DIR}/quwoquan_ops/gate/verify_runtime_media_playback_evidence.py" \
     --evidence "${evidence_path}" \
     --require-matrix
 fi
@@ -54,26 +54,26 @@ echo "[runtime-media] go test user-service avatar sync contract"
 
 
 echo "[runtime-media] image delivery policy static gates"
-python3 "${ROOT_DIR}/quwoquan_app/scripts/media/verify_app_network_image_surface.py"
-python3 "${ROOT_DIR}/quwoquan_app/scripts/media/verify_app_avatar_rendering_policy.py"
-python3 "${ROOT_DIR}/quwoquan_app/scripts/media/verify_app_media_url_policy.py"
-python3 "${ROOT_DIR}/quwoquan_service/scripts/media/verify_media_variant_registry_metadata.py"
+python3 "${ROOT_DIR}/quwoquan_app/scripts/runtime/media/verify_app_network_image_surface.py"
+python3 "${ROOT_DIR}/quwoquan_app/scripts/runtime/media/verify_app_avatar_rendering_policy.py"
+python3 "${ROOT_DIR}/quwoquan_app/scripts/runtime/media/verify_app_media_url_policy.py"
+python3 "${ROOT_DIR}/quwoquan_service/scripts/content-service/verify_media_variant_registry_metadata.py"
 python3 "${ROOT_DIR}/quwoquan_ops/gate/verify_media_delivery_contract.py"
 
 echo "[runtime-media] video delivery and playback failure contracts"
 (
   cd "${ROOT_DIR}/quwoquan_app"
   python3 scripts/env/run_flutter_test_guarded.py \
-    test/local_contract/core/media/media_delivery_reference__local_contract_test.dart \
-    test/local_contract/core/media/media_load_failure_cache__local_contract_test.dart \
-    test/local_contract/core/media/media_playback_failure__local_contract_test.dart \
-    test/local_contract/ui/components/media/video/video_player_widget__delivery_binding__local_contract_test.dart \
-    test/local_contract/ui/components/media/video/video_player_widget__failure_experience__local_contract_test.dart \
-    test/local_contract/ui/components/media/video/video_playback_session_seek__local_contract_test.dart \
-    test/local_contract/ui/components/media/video/video_playback_timeline__local_contract_test.dart \
-    test/local_contract/ui/discovery/widgets/works_immersive_viewer_widget__local_contract_test.dart \
-    test/local_contract/cloud/content/video_preview_track_remote__local_contract_test.dart \
-    test/local_contract/cloud/content/content_behavior_tracker__local_contract_test.dart
+    test/local_contract/runtime/transport/media/media_delivery_reference__local_contract_test.dart \
+    test/local_contract/runtime/transport/media/media_load_failure_cache__local_contract_test.dart \
+    test/local_contract/service/content_service/media/media_asset/media_playback_failure__local_contract_test.dart \
+    test/local_contract/service/content_service/media/media_asset/video_player_widget__delivery_binding__local_contract_test.dart \
+    test/local_contract/service/content_service/media/media_asset/video_player_widget__failure_experience__local_contract_test.dart \
+    test/local_contract/service/content_service/media/media_asset/video_playback_session_seek__local_contract_test.dart \
+    test/local_contract/service/content_service/media/media_asset/video_playback_timeline__local_contract_test.dart \
+    test/local_contract/service/content_service/media/media_asset/works_immersive_viewer_widget__local_contract_test.dart \
+    test/local_contract/service/content_service/media/media_asset/video_preview_track_remote__local_contract_test.dart \
+    test/local_contract/service/content_service/content/content_behavior_fact/content_behavior_tracker__local_contract_test.dart
 )
 echo "[runtime-media] Android native first-frame / seek-settle / safe-dispose contracts"
 (
@@ -87,7 +87,7 @@ echo "[runtime-media] Android native first-frame / seek-settle / safe-dispose co
   cd "${ROOT_DIR}"
   python3 -m unittest \
     quwoquan_ops.tests.local_contract.test_environment_patrol_smoke__local_contract_test \
-    quwoquan_ops.tests.local_contract.test_runtime_media_t4_evidence__local_contract_test \
+    quwoquan_ops.tests.local_contract.test_runtime_media_playback_evidence__local_contract_test \
     quwoquan_ops.tests.local_contract.test_video_playback_canary__local_contract_test \
     quwoquan_ops.tests.local_contract.test_prod_rollout_stage__local_contract_test
 )
@@ -126,18 +126,18 @@ echo "[runtime-media] flutter test realtime/cache coverage"
 (
   cd "${ROOT_DIR}/quwoquan_app"
   python3 scripts/env/run_flutter_test_guarded.py \
-    test/local_contract/core/services/content_cache_services__local_contract_test.dart \
-    test/local_contract/core/services/conversation_avatar_sync_contract__local_contract_test.dart \
-    test/local_contract/ui/components/avatar/conversation_avatar__local_contract_test.dart \
-    test/local_contract/cloud/realtime/realtime_avatar_sync_handler__local_contract_test.dart \
-    test/local_contract/core/services/local_chat_search_sync_service__local_contract_test.dart \
-    test/local_contract/ui/chat/widgets/chat_page_widget__local_contract_test.dart
+    test/local_contract/service/content_service/content/post/content_cache_services__local_contract_test.dart \
+    test/local_contract/service/chat_service/chat/conversation/conversation_avatar_sync_contract__local_contract_test.dart \
+    test/local_contract/service/chat_service/chat/conversation/conversation_avatar__local_contract_test.dart \
+    test/local_contract/service/realtime_gateway/realtime/connection/realtime_avatar_sync_handler__local_contract_test.dart \
+    test/local_contract/service/search_service/search/search_index_view/local_chat_search_sync_service__local_contract_test.dart \
+    test/local_contract/service/chat_service/chat/chat_inbox_view/chat_page_widget__local_contract_test.dart
 )
 cleanup_alpha_content_runtime
 trap - EXIT
 
 if [[ "${FULL_MODE}" == "--full" ]]; then
-  echo "[runtime-media] full gate passed with external T4 evidence: ${RUNTIME_MEDIA_T4_EVIDENCE}"
+  echo "[runtime-media] full gate passed with external runtime-media playback evidence: ${RUNTIME_MEDIA_PLAYBACK_EVIDENCE}"
 else
-  echo "[runtime-media] local gate passed. Run gate-runtime-media-full with RUNTIME_MEDIA_T4_EVIDENCE for release-level closure."
+  echo "[runtime-media] local gate passed. Run gate-runtime-media-full with RUNTIME_MEDIA_PLAYBACK_EVIDENCE for release-level closure."
 fi

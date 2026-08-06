@@ -769,17 +769,110 @@ func TestWorkerQuarantinesMissingMediaAssetBeforeCheckpointAdvance(t *testing.T)
 	}
 }
 
-func TestWorkerQuarantinesUnexpectedOutboxTargetBeforeCheckpointAdvance(t *testing.T) {
+func TestWorkerSkipsEveryDeclaredNonProcessingFactWithoutQuarantine(t *testing.T) {
+	now := time.Now().UTC()
+	declaredNoops := []mediaports.OutboxEvent{
+		{
+			EventID:       "event-upload-initialized",
+			EventType:     "content.media_upload.initialized",
+			AggregateType: "MediaUploadSession",
+			AggregateID:   "mus-initialized",
+			OccurredAt:    now,
+			Checkpoint:    "cp-1",
+		},
+		{
+			EventID:       "event-upload-completed",
+			EventType:     "content.media_upload.completed",
+			AggregateType: "MediaUploadSession",
+			AggregateID:   "mus-completed",
+			OccurredAt:    now.Add(time.Nanosecond),
+			Checkpoint:    "cp-2",
+		},
+		{
+			EventID:       "event-upload-aborted",
+			EventType:     "content.media_upload.aborted",
+			AggregateType: "MediaUploadSession",
+			AggregateID:   "mus-aborted",
+			OccurredAt:    now.Add(2 * time.Nanosecond),
+			Checkpoint:    "cp-3",
+		},
+		{
+			EventID:       "event-processing-updated",
+			EventType:     "content.media_asset.processing_updated",
+			AggregateType: "MediaAsset",
+			AggregateID:   "asset-processing-updated",
+			OccurredAt:    now.Add(3 * time.Nanosecond),
+			Checkpoint:    "cp-4",
+		},
+		{
+			EventID:       "event-access-policy-updated",
+			EventType:     "content.media_asset.access_policy_updated",
+			AggregateType: "MediaAsset",
+			AggregateID:   "asset-policy-updated",
+			OccurredAt:    now.Add(4 * time.Nanosecond),
+			Checkpoint:    "cp-5",
+		},
+	}
+	poisons := &fakePoisonEvents{}
+	checkpoints := &fakeCheckpoints{}
+	source := &fakeOutboxSource{events: declaredNoops}
+	worker := NewWorker(
+		source,
+		&fakeAssetLoader{assets: map[string]*mediamodel.MediaAsset{}},
+		checkpoints,
+		&fakeProcessor{},
+		&fakeRecorder{},
+		poisons,
+		WithLeaseOwner("media-processing-first-process"),
+		WithClock(func() time.Time { return now }),
+	)
+
+	if handled, err := worker.Drain(context.Background(), 10); err != nil || handled != len(declaredNoops) {
+		t.Fatalf("declared no-op facts must advance only the processing cursor: handled=%d err=%v", handled, err)
+	}
+	if len(poisons.recorded) != 0 {
+		t.Fatalf("declared no-op facts must not be quarantined: %#v", poisons.recorded)
+	}
+	if len(checkpoints.saved) != len(declaredNoops) ||
+		checkpoints.saved[len(checkpoints.saved)-1] != "cp-5" {
+		t.Fatalf("processing cursor did not traverse declared no-op facts: %v", checkpoints.saved)
+	}
+
+	// A fresh worker process must resume from the same durable processing
+	// checkpoint and must not re-quarantine or re-handle the declared facts.
+	restarted := NewWorker(
+		source,
+		&fakeAssetLoader{assets: map[string]*mediamodel.MediaAsset{}},
+		checkpoints,
+		&fakeProcessor{},
+		&fakeRecorder{},
+		poisons,
+		WithLeaseOwner("media-processing-restarted-process"),
+		WithClock(func() time.Time { return now.Add(time.Minute) }),
+	)
+	if handled, err := restarted.Drain(context.Background(), 10); err != nil || handled != 0 {
+		t.Fatalf("restarted worker must resume after declared no-op facts: handled=%d err=%v", handled, err)
+	}
+	if len(poisons.recorded) != 0 || len(checkpoints.saved) != len(declaredNoops) {
+		t.Fatalf(
+			"restart changed no-op evidence: poisons=%#v checkpoints=%v",
+			poisons.recorded,
+			checkpoints.saved,
+		)
+	}
+}
+
+func TestWorkerQuarantinesUndeclaredOutboxTargetBeforeCheckpointAdvance(t *testing.T) {
 	poisons := &fakePoisonEvents{}
 	checkpoints := &fakeCheckpoints{}
 	worker := NewWorker(
 		&fakeOutboxSource{events: []mediaports.OutboxEvent{{
-			EventID:       "event-fake-target",
-			EventType:     "content.media_upload.completed",
+			EventID:       "event-undeclared-target",
+			EventType:     "content.media_upload.reopened",
 			AggregateType: "MediaUploadSession",
-			AggregateID:   "mus-fake-target",
+			AggregateID:   "mus-undeclared-target",
 			OccurredAt:    time.Now(),
-			Checkpoint:    "cp-fake-target",
+			Checkpoint:    "cp-undeclared-target",
 		}}},
 		&fakeAssetLoader{assets: map[string]*mediamodel.MediaAsset{}},
 		checkpoints,
@@ -789,15 +882,15 @@ func TestWorkerQuarantinesUnexpectedOutboxTargetBeforeCheckpointAdvance(t *testi
 	)
 
 	if handled, err := worker.Drain(context.Background(), 10); err != nil || handled != 1 {
-		t.Fatalf("unexpected target must be quarantined and consumed: handled=%d err=%v", handled, err)
+		t.Fatalf("undeclared target must be quarantined and consumed: handled=%d err=%v", handled, err)
 	}
 	if len(poisons.recorded) != 1 ||
 		poisons.recorded[0].Reason != "unexpected_event_target" {
-		t.Fatalf("unexpected target poison reason drift: %#v", poisons.recorded)
+		t.Fatalf("undeclared target poison reason drift: %#v", poisons.recorded)
 	}
 	if len(checkpoints.saved) != 1 ||
-		checkpoints.saved[0] != "cp-fake-target" {
-		t.Fatalf("checkpoint must follow unexpected target quarantine: %v", checkpoints.saved)
+		checkpoints.saved[0] != "cp-undeclared-target" {
+		t.Fatalf("checkpoint must follow undeclared target quarantine: %v", checkpoints.saved)
 	}
 }
 

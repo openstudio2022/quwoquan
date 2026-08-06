@@ -93,25 +93,6 @@ func extractPathParams(path string) []string {
 	return params
 }
 
-func collectRoutePrefixes(routes []routeDef) []string {
-	seen := map[string]bool{}
-	prefixes := []string{}
-	for _, route := range routes {
-		parts := strings.Split(strings.Trim(route.Path, "/"), "/")
-		if len(parts) < 2 {
-			continue
-		}
-		prefix := "/" + parts[0] + "/" + parts[1]
-		if seen[prefix] {
-			continue
-		}
-		seen[prefix] = true
-		prefixes = append(prefixes, prefix)
-	}
-	sort.Strings(prefixes)
-	return prefixes
-}
-
 func routeSegment(path string) string {
 	trimmed := strings.Trim(path, "/")
 	if trimmed == "" {

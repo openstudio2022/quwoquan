@@ -10,12 +10,12 @@ import (
 
 	"go.opentelemetry.io/otel/attribute"
 
+	"quwoquan_service/runtime/commandmeta"
 	rterr "quwoquan_service/runtime/errors"
 	rtobs "quwoquan_service/runtime/observability"
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	postevent "quwoquan_service/services/content-service/generated/content/post/contract/event"
 	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
-	"quwoquan_service/runtime/commandmeta"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 )
 

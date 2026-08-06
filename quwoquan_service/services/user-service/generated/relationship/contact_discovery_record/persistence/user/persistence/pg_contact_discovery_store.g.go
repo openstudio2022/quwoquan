@@ -76,23 +76,3 @@ func (s *PGContactDiscoveryStoreBase) Delete(ctx context.Context, id string) err
 	_, err := s.pool.Exec(ctx, `DELETE FROM contact_discovery_records WHERE id = $1`, id)
 	return err
 }
-
-// ListByOwnerAccountID returns all ContactDiscoveryRecord records for the given foreign key.
-func (s *PGContactDiscoveryStoreBase) ListByOwnerAccountID(ctx context.Context, fkID string) ([]model.ContactDiscoveryRecord, error) {
-	rows, err := s.pool.Query(ctx,
-		`SELECT `+ContactDiscoveryRecordCols+` FROM contact_discovery_records WHERE owner_account_id = $1 ORDER BY created_at DESC`, fkID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var result []model.ContactDiscoveryRecord
-	for rows.Next() {
-		var e model.ContactDiscoveryRecord
-		if err := rows.Scan(&e.ID, &e.OwnerAccountID, &e.HashedPhones, &e.MatchedPersonaIds, &e.Status, &e.MatchCount, &e.ExpireAt, &e.CreatedAt, &e.CompletedAt); err != nil {
-			return nil, err
-		}
-		result = append(result, e)
-	}
-	return result, rows.Err()
-}

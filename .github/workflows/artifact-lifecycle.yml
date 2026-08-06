@@ -11,6 +11,7 @@ on:
       - 03. Delivery Gate
       - 04. Pre-Release Gate
       - 05. App Env Device Matrix
+      - 06. Prod-Sim Manual Admission
       - 07. Deploy To Prod (Controlled)
       - ML Training Pipeline
       - Recommendation API Integration

@@ -251,7 +251,62 @@ types:
       log_policy: allow
       api_exposure: drop
       ops_exposure: read
+  AccountEnforcementDecision:
+    description: 两名不同 reviewer 批准后签发的不可变账号处置决定。decision 行与 account_enforcement_delivery_outbox 行在提交 case 版本的同一个 PostgreSQL 事务内写入；投递时 accountId 与 action 进入 user-service 内部端点路径，decisionId 同时作为 Idempotency-Key，其余字段构成请求体。
+    fields:
+    - name: decisionId
+      type: string
+      constraints: [NOT_NULL]
+      classification: INTERNAL
+      log_policy: metadata_only
+      api_exposure: drop
+      ops_exposure: read
+    - name: caseId
+      type: string
+      constraints: [NOT_NULL]
+      classification: INTERNAL
+      log_policy: metadata_only
+      api_exposure: drop
+      ops_exposure: read
+    - name: accountId
+      type: string
+      constraints: [NOT_NULL]
+      classification: PRIVATE
+      log_policy: hash
+      api_exposure: drop
+      ops_exposure: mask
+    - name: action
+      type: enum
+      enum_ref: AccountEnforcementAction
+      constraints: [NOT_NULL]
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: caseRef
+      type: string
+      constraints: [NOT_NULL]
+      classification: INTERNAL
+      log_policy: mask
+      api_exposure: drop
+      ops_exposure: read
+    - name: decisionDigest
+      type: string
+      constraints: [NOT_NULL]
+      classification: INTERNAL
+      log_policy: metadata_only
+      api_exposure: drop
+      ops_exposure: read
+    - name: approvedAt
+      type: timestamp
+      constraints: [NOT_NULL]
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
 enums:
+  AccountEnforcementAction:
+    values: [suspend, restore]
   AccountEnforcementCaseKind:
     values: [moderation, appeal]
   AccountEnforcementCaseStatus:

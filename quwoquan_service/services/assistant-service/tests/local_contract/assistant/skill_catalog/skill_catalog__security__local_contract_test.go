@@ -1,6 +1,8 @@
 // spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/skill-progressive-disclosure-routing/spec.md#gwt-003
 // spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/skill-progressive-disclosure-routing/spec.md#gwt-004
 // spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/skill-user-lifecycle/spec.md#gwt-001
+// readiness_case: get-skill-catalog-item-local
+// readiness_case: list-skills-local
 package local_contract
 
 import (
@@ -363,8 +365,7 @@ func TestBuildSourceContainsOnlyDeclaredManifests(t *testing.T) {
 				item.SetupTemplateRef == "" || item.ActivationMode != "hybrid" ||
 				item.RequiresConsent || len(item.RequiredConsentScopes) != 0 ||
 				!hasSemanticLabel(item.ConsentScopeLabels, "assistant.memory.preferences.read") ||
-				!hasSemanticLabel(item.ConsentScopeLabels, "assistant.learning.feedback_context.read") ||
-				!hasSemanticLabel(item.ConsentScopeLabels, "travel.trip.read")) {
+				!hasSemanticLabel(item.ConsentScopeLabels, "assistant.learning.feedback_context.read")) {
 			t.Fatalf("build source catalog metadata is incomplete: %+v", item)
 		}
 	}

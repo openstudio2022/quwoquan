@@ -110,10 +110,10 @@ class RelationshipObservabilityContractTest(unittest.TestCase):
 
         edit_source = (
             ROOT
-            / "quwoquan_app/lib/ui/user/pages/edit_profile_page_sections.dart"
+            / "quwoquan_app/lib/service/user_service/persona_management/persona/presentation/edit_profile_page_sections.dart"
         ).read_text(encoding="utf-8")
         qr_source = (
-            ROOT / "quwoquan_app/lib/ui/user/pages/my_qr_code_page.dart"
+            ROOT / "quwoquan_app/lib/service/user_service/account/user_account/presentation/my_qr_code_page.dart"
         ).read_text(encoding="utf-8")
         self.assertNotIn("action: 'enter'", edit_source)
         self.assertNotIn("action: 'exit'", edit_source)
@@ -124,10 +124,10 @@ class RelationshipObservabilityContractTest(unittest.TestCase):
     def test_contact_tab_records_filter_and_open_actions(self) -> None:
         recorder = (
             ROOT
-            / "quwoquan_app/lib/ui/chat/pages/chat_page_visit_recorder.dart"
+            / "quwoquan_app/lib/service/chat_service/chat/chat_inbox_view/presentation/chat_page_visit_recorder.dart"
         ).read_text(encoding="utf-8")
         page = (
-            ROOT / "quwoquan_app/lib/ui/chat/pages/chat_page_state.dart"
+            ROOT / "quwoquan_app/lib/service/chat_service/chat/chat_inbox_view/presentation/chat_page_state.dart"
         ).read_text(encoding="utf-8")
         self.assertIn("action: 'view_contact_filter'", recorder)
         self.assertIn("action: 'open_contact'", page)

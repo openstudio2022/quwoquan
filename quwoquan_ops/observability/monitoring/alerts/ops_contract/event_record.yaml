@@ -1,0 +1,345 @@
+# Code generated from quwoquan_service/generated/contract_graph.json.
+# Regenerate with verify_object_alert_coverage.py --write.
+groups:
+  - name: quwoquan_ops_contract_event_record
+    rules:
+      - record: quwoquan_ops_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="product-ops-service",method="GET",route="/ops/events/drilldown"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.event_record.GetEventDrilldown"
+          contract_metric: "ops_event_drilldown"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "3000"
+          slo_availability_percent: "99.5"
+      - record: quwoquan_ops_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="product-ops-service",method="GET",route="/ops/events/drilldown"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.event_record.GetEventDrilldown"
+          contract_metric: "ops_event_drilldown"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "3000"
+          slo_availability_percent: "99.5"
+      - record: quwoquan_ops_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="product-ops-service",method="GET",route="/ops/events/summary"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.event_record.GetEventSummary"
+          contract_metric: "ops_event_summary"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "3000"
+          slo_availability_percent: "99.5"
+      - record: quwoquan_ops_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="product-ops-service",method="GET",route="/ops/events/summary"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.event_record.GetEventSummary"
+          contract_metric: "ops_event_summary"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "3000"
+          slo_availability_percent: "99.5"
+      - record: quwoquan_ops_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="product-ops-service",method="GET",route="/control-plane/product/growth/overview"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.event_record.GetGrowthOverview"
+          contract_metric: "ops_product_growth_overview"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "3000"
+          slo_availability_percent: "99.5"
+      - record: quwoquan_ops_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="product-ops-service",method="GET",route="/control-plane/product/growth/overview"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.event_record.GetGrowthOverview"
+          contract_metric: "ops_product_growth_overview"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "3000"
+          slo_availability_percent: "99.5"
+      - record: quwoquan_ops_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="product-ops-service",method="GET",route="/control-plane/product/experience/pages"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.event_record.GetPageExperience"
+          contract_metric: "ops_product_page_experience"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "3000"
+          slo_availability_percent: "99.5"
+      - record: quwoquan_ops_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="product-ops-service",method="GET",route="/control-plane/product/experience/pages"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.event_record.GetPageExperience"
+          contract_metric: "ops_product_page_experience"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "3000"
+          slo_availability_percent: "99.5"
+      - record: quwoquan_ops_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="product-ops-service",method="GET",route="/control-plane/product/projections/summary"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.event_record.GetProductProjectionSummary"
+          contract_metric: "ops_product_projection_summary"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "3000"
+          slo_availability_percent: "99.5"
+      - record: quwoquan_ops_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="product-ops-service",method="GET",route="/control-plane/product/projections/summary"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.event_record.GetProductProjectionSummary"
+          contract_metric: "ops_product_projection_summary"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "3000"
+          slo_availability_percent: "99.5"
+      - record: quwoquan_ops_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="product-ops-service",method="GET",route="/control-plane/product/triage/summary"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.event_record.GetProductTriageSummary"
+          contract_metric: "ops_product_triage_summary"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "3000"
+          slo_availability_percent: "99.5"
+      - record: quwoquan_ops_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="product-ops-service",method="GET",route="/control-plane/product/triage/summary"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.event_record.GetProductTriageSummary"
+          contract_metric: "ops_product_triage_summary"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "3000"
+          slo_availability_percent: "99.5"
+      - record: quwoquan_ops_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="product-ops-service",method="GET",route="/ops/events/rtc-media-qoe/summary"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.event_record.GetRtcMediaQoeSummary"
+          contract_metric: "ops_rtc_media_qoe_summary"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "3000"
+          slo_availability_percent: "99.5"
+      - record: quwoquan_ops_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="product-ops-service",method="GET",route="/ops/events/rtc-media-qoe/summary"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.event_record.GetRtcMediaQoeSummary"
+          contract_metric: "ops_rtc_media_qoe_summary"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "3000"
+          slo_availability_percent: "99.5"
+      - record: quwoquan_ops_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="product-ops-service",method="GET",route="/ops/runtime-logs/drilldown"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.event_record.GetRuntimeLogDrilldown"
+          contract_metric: "ops_runtime_log_drilldown"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "3000"
+          slo_availability_percent: "99.5"
+      - record: quwoquan_ops_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="product-ops-service",method="GET",route="/ops/runtime-logs/drilldown"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.event_record.GetRuntimeLogDrilldown"
+          contract_metric: "ops_runtime_log_drilldown"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "3000"
+          slo_availability_percent: "99.5"
+      - record: quwoquan_ops_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="product-ops-service",method="GET",route="/ops/runtime-logs/summary"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.event_record.GetRuntimeLogSummary"
+          contract_metric: "ops_runtime_log_summary"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "3000"
+          slo_availability_percent: "99.5"
+      - record: quwoquan_ops_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="product-ops-service",method="GET",route="/ops/runtime-logs/summary"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.event_record.GetRuntimeLogSummary"
+          contract_metric: "ops_runtime_log_summary"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "3000"
+          slo_availability_percent: "99.5"
+      - record: quwoquan_ops_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="product-ops-service",method="GET",route="/control-plane/product/metrics/red-routes"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.event_record.GetServiceRouteRED"
+          contract_metric: "ops_product_service_route_red"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "3000"
+          slo_availability_percent: "99.5"
+      - record: quwoquan_ops_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="product-ops-service",method="GET",route="/control-plane/product/metrics/red-routes"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.event_record.GetServiceRouteRED"
+          contract_metric: "ops_product_service_route_red"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "3000"
+          slo_availability_percent: "99.5"
+      - record: quwoquan_ops_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="product-ops-service",method="GET",route="/control-plane/product/metrics/l1l4"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.event_record.ListL1L4MetricSnapshots"
+          contract_metric: "ops_product_l1l4_metrics"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "3000"
+          slo_availability_percent: "99.5"
+      - record: quwoquan_ops_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="product-ops-service",method="GET",route="/control-plane/product/metrics/l1l4"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.event_record.ListL1L4MetricSnapshots"
+          contract_metric: "ops_product_l1l4_metrics"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "3000"
+          slo_availability_percent: "99.5"
+      - record: quwoquan_ops_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="product-ops-service",method="GET",route="/control-plane/product/approvals"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.event_record.ListProductApprovals"
+          contract_metric: "ops_product_approvals"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.5"
+      - record: quwoquan_ops_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="product-ops-service",method="GET",route="/control-plane/product/approvals"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.event_record.ListProductApprovals"
+          contract_metric: "ops_product_approvals"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.5"
+      - record: quwoquan_ops_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="product-ops-service",method="GET",route="/control-plane/product/audits"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.event_record.ListProductAudits"
+          contract_metric: "ops_product_audits"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.5"
+      - record: quwoquan_ops_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="product-ops-service",method="GET",route="/control-plane/product/audits"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.event_record.ListProductAudits"
+          contract_metric: "ops_product_audits"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.5"
+      - record: quwoquan_ops_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="product-ops-service",method="GET",route="/control-plane/product/workflows"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.event_record.ListProductWorkflows"
+          contract_metric: "ops_product_workflows"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.5"
+      - record: quwoquan_ops_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="product-ops-service",method="GET",route="/control-plane/product/workflows"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.event_record.ListProductWorkflows"
+          contract_metric: "ops_product_workflows"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.5"
+      - record: quwoquan_ops_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="product-ops-service",method="POST",route="/ops/events"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.event_record.ReportEventBatch"
+          contract_metric: "ops_event_batch_report"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="product-ops-service",method="POST",route="/ops/events"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.event_record.ReportEventBatch"
+          contract_metric: "ops_event_batch_report"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="product-ops-service",method="POST",route="/ops/runtime-logs"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.event_record.ReportRuntimeLogBatch"
+          contract_metric: "ops_runtime_log_batch_report"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="product-ops-service",method="POST",route="/ops/runtime-logs"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.event_record.ReportRuntimeLogBatch"
+          contract_metric: "ops_runtime_log_batch_report"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="product-ops-service",method="POST",route="/ops/startup-events"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.event_record.ReportStartupEventBatch"
+          contract_metric: "ops_startup_event_batch_report"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="product-ops-service",method="POST",route="/ops/startup-events"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.event_record.ReportStartupEventBatch"
+          contract_metric: "ops_startup_event_batch_report"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"

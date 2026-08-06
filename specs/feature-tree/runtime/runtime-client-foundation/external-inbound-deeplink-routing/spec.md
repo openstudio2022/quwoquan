@@ -69,7 +69,7 @@
 - canonical：`quwoquan_service/contracts/metadata/_shared/app_routes.yaml`
 - canonical：`runtime/errors`
 - canonical：`specs/feature-tree/runtime/runtime-client-foundation/external-inbound-deeplink-routing/spec.md`
-- canonical：`quwoquan_app/lib/core/platform/platform_capabilities.dart`
+- canonical：`quwoquan_app/lib/runtime/platform/platform_capabilities.dart`
 - canonical：`specs/feature-tree/runtime/runtime-client-foundation/cross-platform-portability/spec.md`
 - canonical：`MODULE.KIND.REASON`
 

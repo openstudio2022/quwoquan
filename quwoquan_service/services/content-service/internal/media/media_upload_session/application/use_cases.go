@@ -11,13 +11,14 @@ import (
 	"strings"
 	"time"
 
+	"quwoquan_service/runtime/commandmeta"
 	rterr "quwoquan_service/runtime/errors"
 	contenterrors "quwoquan_service/services/content-service/generated/content/post"
+	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	asseterrors "quwoquan_service/services/content-service/generated/media/media_asset"
 	uploaderrors "quwoquan_service/services/content-service/generated/media/media_upload_session"
-	"quwoquan_service/runtime/commandmeta"
-	mediamodel "quwoquan_service/services/content-service/internal/media/media_asset/domain/model"
 	mediaassetapp "quwoquan_service/services/content-service/internal/media/media_asset/application"
+	mediamodel "quwoquan_service/services/content-service/internal/media/media_asset/domain/model"
 	"quwoquan_service/services/content-service/internal/media/media_upload_session/domain/model"
 	"quwoquan_service/services/content-service/internal/media/media_upload_session/domain/ports"
 )
@@ -504,7 +505,7 @@ func unavailable(err error) error {
 	if errors.As(err, &appError) {
 		return appError
 	}
-	return rterr.NewUnavailable(rterr.ModuleContent, "媒体服务暂时不可用", err.Error())
+	return contentgenerated.AppErrorFromRequiredDependencyUnavailable(err.Error())
 }
 
 func newIdentifier(prefix string) (string, error) {

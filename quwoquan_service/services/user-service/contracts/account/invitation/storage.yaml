@@ -2,6 +2,7 @@ backend: postgresql
 role: authoritative
 tables:
   invite_records:
+    publication_role: not_published
     entity: Invitation
     columns:
     - {name: id, type: VARCHAR(64), constraints: [PK, NOT_NULL]}
@@ -26,3 +27,31 @@ tables:
       columns: [inviter_persona_id, channel, invitee_phone_hash]
       condition: status = 'generated' AND invitee_phone_hash IS NOT NULL
       unique: true
+  invitation_command_receipts:
+    publication_role: not_published
+    entity: InvitationCommandReceipt
+    role: idempotency_receipt
+    description: Invitation 命令首次成功结果；同 owner/operation/key 只允许一个 command digest，重放返回同一 aggregate/result。
+    pk:
+    - receipt_id
+    foreign_keys:
+    - columns: [aggregate_id]
+      references: invite_records(id)
+      on_delete: CASCADE
+    columns:
+    - {name: receipt_id, type: VARCHAR(80), constraints: [PK, NOT_NULL]}
+    - {name: owner_account_id, type: VARCHAR(96), constraints: [NOT_NULL]}
+    - {name: operation, type: VARCHAR(64), constraints: [NOT_NULL]}
+    - {name: idempotency_key, type: VARCHAR(256), constraints: [NOT_NULL]}
+    - {name: command_digest, type: CHAR(64), constraints: [NOT_NULL]}
+    - {name: aggregate_id, type: VARCHAR(64), constraints: [NOT_NULL]}
+    - {name: result_status, type: VARCHAR(16), constraints: [NOT_NULL]}
+    - {name: result_json, type: JSONB, constraints: [NOT_NULL]}
+    - {name: result_error, type: VARCHAR(32), constraints: [NOT_NULL], default: "''"}
+    - {name: created_at, type: TIMESTAMPTZ, constraints: [NOT_NULL], default: NOW()}
+    unique_constraints:
+    - name: uq_invitation_command_receipt
+      columns: [owner_account_id, operation, idempotency_key]
+    indexes:
+    - name: idx_invitation_command_receipt_aggregate
+      columns: [aggregate_id]

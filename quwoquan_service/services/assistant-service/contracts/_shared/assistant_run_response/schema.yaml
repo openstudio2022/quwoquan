@@ -1,14 +1,8 @@
 dart_class: AssistantRunResponseWire
-library_path: assistant/generated/contracts/assistant_run_response.g.dart
-output_path: assistant/generated/contracts/assistant_run_response.g.dart
+library_path: test/support/generated/assistant/assistant_run_response.g.dart
+output_path: test/support/generated/assistant/assistant_run_response.g.dart
 contract: assistant_run_response
 kind: shared_wire_contract
-imports:
-  - package:quwoquan_app/assistant/generated/contracts/assistant_journey.g.dart
-  - package:quwoquan_app/assistant/generated/contracts/run_artifacts.g.dart
-  - package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart
-  - package:quwoquan_app/assistant/generated/contracts/assistant_presentation_document.g.dart
-  - package:quwoquan_app/assistant/generated/contracts/assistant_run_runtime.g.dart
 fields:
   - { name: sessionId, type: string, required: true }
   - { name: turnId, type: string, required: true }

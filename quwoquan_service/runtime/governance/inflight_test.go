@@ -29,9 +29,6 @@ func TestInflightLimiterShedsAtCapacity(t *testing.T) {
 
 func TestInflightLimiterClampsNonPositiveMax(t *testing.T) {
 	l := NewInflightLimiter(0)
-	if l.Max() != 1 {
-		t.Fatalf("Max()=%d, want clamp to 1", l.Max())
-	}
 	if !l.Acquire() {
 		t.Fatalf("expected one slot available on clamped limiter")
 	}

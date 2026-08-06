@@ -1,10 +1,10 @@
 dart_class: ContextAssemblyResult
-library_path: assistant/contracts/context_assembly_result.dart
-output_path: assistant/generated/contracts/context_assembly_result.g.dart
+library_path: service/assistant_service/assistant/assistant_run/domain/generated/context_assembly_result.g.dart
+output_path: service/assistant_service/assistant/assistant_run/domain/generated/context_assembly_result.g.dart
 contract: context_assembly_result
 kind: runtime_context_contract
 imports:
-  - package:quwoquan_app/assistant/contracts/context_fill_contract.dart
+  - package:quwoquan_app/service/assistant_service/assistant/assistant_run/domain/context_fill_contract.dart
 fields:
   - { name: contextEnvelope, type: map, default: {} }
   - { name: fillTasks, type: list<object>, ref: ContextFillTask, default: [] }

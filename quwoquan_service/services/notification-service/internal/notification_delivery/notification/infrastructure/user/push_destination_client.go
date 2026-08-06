@@ -13,7 +13,7 @@ import (
 
 	serviceclients "quwoquan_service/generated/serviceclients"
 	rtauth "quwoquan_service/runtime/auth"
-	notification "quwoquan_service/services/notification-service/internal/notification_delivery/notification/domain"
+	notification "quwoquan_service/services/notification-service/internal/notification_delivery/notification_delivery_job/application"
 )
 
 const pushDestinationResponseLimit = 1 << 20

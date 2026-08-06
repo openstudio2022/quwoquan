@@ -108,6 +108,7 @@ api_routes:
 - method: GET
   path: /content/intersections
   operation: ListMyIntersections
+  pagination: {default_items: 50, maximum_items: 100}
   actor: persona
   authorization:
     principal: persona
@@ -221,3 +222,68 @@ consumers:
   capabilities:
   - mark_intersections_visited
   - read_intersections
+readiness_cases:
+  - case_id: mark-intersections-visited-local
+    spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/intersection-algorithm-closure/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: MarkIntersectionsVisited}
+    runner_source_path: quwoquan_service/services/content-service/tests/local_contract/content/intersection_visit_state/internal/application/intersection/intersection_service_operations__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: mark-intersections-visited-api
+    spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/intersection-algorithm-closure/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: MarkIntersectionsVisited}
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/intersection_visit_state/http_mongo_monotonic__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: get-my-intersection-summary-local
+    spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/intersection-algorithm-closure/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: GetMyIntersectionSummary}
+    runner_source_path: quwoquan_service/services/content-service/tests/local_contract/content/intersection_visit_state/internal/application/intersection/intersection_service_operations__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: get-my-intersection-summary-api
+    spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/intersection-algorithm-closure/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: GetMyIntersectionSummary}
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/intersection_visit_state/intersection_visit_http_contract__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: list-my-intersections-local
+    spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/intersection-algorithm-closure/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: ListMyIntersections}
+    runner_source_path: quwoquan_service/services/content-service/tests/local_contract/content/intersection_visit_state/internal/application/intersection/intersection_service_operations__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: list-my-intersections-api
+    spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/intersection-algorithm-closure/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: ListMyIntersections}
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/intersection_visit_state/intersection_visit_http_contract__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: get-object-intersections-local
+    spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/intersection-algorithm-closure/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: GetObjectIntersections}
+    runner_source_path: quwoquan_service/services/content-service/tests/local_contract/content/intersection_visit_state/internal/application/intersection/intersection_service_operations__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: get-object-intersections-api
+    spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/intersection-algorithm-closure/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: GetObjectIntersections}
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/intersection_visit_state/intersection_visit_http_contract__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}

@@ -14,7 +14,7 @@ from quwoquan_ops.ci.provider_conformance.native_case_result import run_native_h
 
 RESULT_PATH_ENV = "QWQ_PROVIDER_CONFORMANCE_RESULT_PATH"
 TARGET = 'infra-redis-message_transport_fixture-user-acceptance'
-COMMAND = ('python3', 'quwoquan_ops/ci/provider_conformance/run_b10_fixture_patrol_uat.py')
+COMMAND = ('python3', 'quwoquan_ops/ci/provider_conformance/run_fixture_patrol_uat.py')
 
 if __name__ == "__main__":
     raise SystemExit(run_native_harness(command=COMMAND, target=TARGET))

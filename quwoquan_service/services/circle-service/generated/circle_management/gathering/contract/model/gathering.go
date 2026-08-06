@@ -3,103 +3,476 @@ package gathering
 
 import "time"
 
-// GeoPoint represents a geographic coordinate.
-type GeoPoint struct {
-	Latitude  float64 `json:"latitude" bson:"latitude"`
-	Longitude float64 `json:"longitude" bson:"longitude"`
-}
-
 var _ = time.Now
 
-// GatheringConversationBindingStatus enumerates allowed wire values for GatheringConversationBindingStatus.
-type GatheringConversationBindingStatus string
+// GatheringAdmissionControlStatus enumerates allowed wire values for GatheringAdmissionControlStatus.
+type GatheringAdmissionControlStatus string
 
 const (
-	GatheringConversationBindingStatusPending GatheringConversationBindingStatus = "pending"
+	GatheringAdmissionControlStatusOpen GatheringAdmissionControlStatus = "open"
 
-	GatheringConversationBindingStatusBound GatheringConversationBindingStatus = "bound"
-
-	GatheringConversationBindingStatusFailed GatheringConversationBindingStatus = "failed"
+	GatheringAdmissionControlStatusPaused GatheringAdmissionControlStatus = "paused"
 )
 
-// GatheringJoinPolicy enumerates allowed wire values for GatheringJoinPolicy.
-type GatheringJoinPolicy string
+// GatheringAdmissionPolicy enumerates allowed wire values for GatheringAdmissionPolicy.
+type GatheringAdmissionPolicy string
 
 const (
-	GatheringJoinPolicyOpen GatheringJoinPolicy = "open"
+	GatheringAdmissionPolicyOpen GatheringAdmissionPolicy = "open"
 
-	GatheringJoinPolicyApproval GatheringJoinPolicy = "approval"
+	GatheringAdmissionPolicyApproval GatheringAdmissionPolicy = "approval"
+
+	GatheringAdmissionPolicyInviteOnly GatheringAdmissionPolicy = "invite_only"
 )
 
-// GatheringParticipantRole enumerates allowed wire values for GatheringParticipantRole.
-type GatheringParticipantRole string
+// GatheringAdmissionSource enumerates allowed wire values for GatheringAdmissionSource.
+type GatheringAdmissionSource string
 
 const (
-	GatheringParticipantRoleOwner GatheringParticipantRole = "owner"
+	GatheringAdmissionSourceOpen GatheringAdmissionSource = "open"
 
-	GatheringParticipantRoleMember GatheringParticipantRole = "member"
+	GatheringAdmissionSourceApplication GatheringAdmissionSource = "application"
+
+	GatheringAdmissionSourceInvitation GatheringAdmissionSource = "invitation"
 )
 
-// GatheringParticipantState enumerates allowed wire values for GatheringParticipantState.
-type GatheringParticipantState string
+// GatheringApplicationQuestionKind enumerates allowed wire values for GatheringApplicationQuestionKind.
+type GatheringApplicationQuestionKind string
 
 const (
-	GatheringParticipantStatePending GatheringParticipantState = "pending"
+	GatheringApplicationQuestionKindText GatheringApplicationQuestionKind = "text"
 
-	GatheringParticipantStateJoined GatheringParticipantState = "joined"
+	GatheringApplicationQuestionKindSingleSelect GatheringApplicationQuestionKind = "single_select"
 
-	GatheringParticipantStateLeft GatheringParticipantState = "left"
-
-	GatheringParticipantStateRejected GatheringParticipantState = "rejected"
+	GatheringApplicationQuestionKindMultiSelect GatheringApplicationQuestionKind = "multi_select"
 )
 
-// GatheringStatus enumerates allowed wire values for GatheringStatus.
-type GatheringStatus string
+// GatheringAttendanceStatus enumerates allowed wire values for GatheringAttendanceStatus.
+type GatheringAttendanceStatus string
 
 const (
-	GatheringStatusDraft GatheringStatus = "draft"
+	GatheringAttendanceStatusNotDeclared GatheringAttendanceStatus = "not_declared"
 
-	GatheringStatusOpen GatheringStatus = "open"
+	GatheringAttendanceStatusArrived GatheringAttendanceStatus = "arrived"
 
-	GatheringStatusFull GatheringStatus = "full"
+	GatheringAttendanceStatusLeftEarly GatheringAttendanceStatus = "left_early"
 
-	GatheringStatusCancelled GatheringStatus = "cancelled"
+	GatheringAttendanceStatusCompleted GatheringAttendanceStatus = "completed"
 
-	GatheringStatusCompleted GatheringStatus = "completed"
+	GatheringAttendanceStatusNoShow GatheringAttendanceStatus = "no_show"
 )
+
+// GatheringAudiencePolicy enumerates allowed wire values for GatheringAudiencePolicy.
+type GatheringAudiencePolicy string
+
+const (
+	GatheringAudiencePolicyPublic GatheringAudiencePolicy = "public"
+
+	GatheringAudiencePolicyUnlisted GatheringAudiencePolicy = "unlisted"
+
+	GatheringAudiencePolicyCommunityMembers GatheringAudiencePolicy = "community_members"
+
+	GatheringAudiencePolicyInviteOnly GatheringAudiencePolicy = "invite_only"
+)
+
+// GatheringAvailabilityWatchStatus enumerates allowed wire values for GatheringAvailabilityWatchStatus.
+type GatheringAvailabilityWatchStatus string
+
+const (
+	GatheringAvailabilityWatchStatusActive GatheringAvailabilityWatchStatus = "active"
+
+	GatheringAvailabilityWatchStatusCancelled GatheringAvailabilityWatchStatus = "cancelled"
+
+	GatheringAvailabilityWatchStatusNotified GatheringAvailabilityWatchStatus = "notified"
+)
+
+// GatheringCostNotice enumerates allowed wire values for GatheringCostNotice.
+type GatheringCostNotice string
+
+const (
+	GatheringCostNoticeFree GatheringCostNotice = "free"
+
+	GatheringCostNoticeEstimated GatheringCostNotice = "estimated"
+
+	GatheringCostNoticeExternalPaymentRequired GatheringCostNotice = "external_payment_required"
+)
+
+// GatheringHostSubjectKind enumerates allowed wire values for GatheringHostSubjectKind.
+type GatheringHostSubjectKind string
+
+const (
+	GatheringHostSubjectKindPersona GatheringHostSubjectKind = "persona"
+
+	GatheringHostSubjectKindEntityHomepage GatheringHostSubjectKind = "entity_homepage"
+
+	GatheringHostSubjectKindCircle GatheringHostSubjectKind = "circle"
+)
+
+// GatheringLifecycleStatus enumerates allowed wire values for GatheringLifecycleStatus.
+type GatheringLifecycleStatus string
+
+const (
+	GatheringLifecycleStatusDraft GatheringLifecycleStatus = "draft"
+
+	GatheringLifecycleStatusPublished GatheringLifecycleStatus = "published"
+
+	GatheringLifecycleStatusCancelled GatheringLifecycleStatus = "cancelled"
+
+	GatheringLifecycleStatusCompleted GatheringLifecycleStatus = "completed"
+)
+
+// GatheringOrganizerRole enumerates allowed wire values for GatheringOrganizerRole.
+type GatheringOrganizerRole string
+
+const (
+	GatheringOrganizerRolePrimaryOrganizer GatheringOrganizerRole = "primary_organizer"
+
+	GatheringOrganizerRoleCoHost GatheringOrganizerRole = "co_host"
+)
+
+// GatheringOutcomeStatus enumerates allowed wire values for GatheringOutcomeStatus.
+type GatheringOutcomeStatus string
+
+const (
+	GatheringOutcomeStatusOccurred GatheringOutcomeStatus = "occurred"
+
+	GatheringOutcomeStatusDidNotHappen GatheringOutcomeStatus = "did_not_happen"
+
+	GatheringOutcomeStatusEndedEarly GatheringOutcomeStatus = "ended_early"
+
+	GatheringOutcomeStatusSafetyTerminated GatheringOutcomeStatus = "safety_terminated"
+
+	GatheringOutcomeStatusDisputed GatheringOutcomeStatus = "disputed"
+
+	GatheringOutcomeStatusUnverified GatheringOutcomeStatus = "unverified"
+)
+
+// GatheringParticipationClosedReason enumerates allowed wire values for GatheringParticipationClosedReason.
+type GatheringParticipationClosedReason string
+
+const (
+	GatheringParticipationClosedReasonDeclined GatheringParticipationClosedReason = "declined"
+
+	GatheringParticipationClosedReasonRevoked GatheringParticipationClosedReason = "revoked"
+
+	GatheringParticipationClosedReasonExpired GatheringParticipationClosedReason = "expired"
+
+	GatheringParticipationClosedReasonWithdrawn GatheringParticipationClosedReason = "withdrawn"
+
+	GatheringParticipationClosedReasonRejected GatheringParticipationClosedReason = "rejected"
+
+	GatheringParticipationClosedReasonLeft GatheringParticipationClosedReason = "left"
+
+	GatheringParticipationClosedReasonRemoved GatheringParticipationClosedReason = "removed"
+
+	GatheringParticipationClosedReasonSafetyRemoved GatheringParticipationClosedReason = "safety_removed"
+)
+
+// GatheringParticipationState enumerates allowed wire values for GatheringParticipationState.
+type GatheringParticipationState string
+
+const (
+	GatheringParticipationStateInvitedPending GatheringParticipationState = "invited_pending"
+
+	GatheringParticipationStateApplicationPending GatheringParticipationState = "application_pending"
+
+	GatheringParticipationStateActive GatheringParticipationState = "active"
+
+	GatheringParticipationStateClosed GatheringParticipationState = "closed"
+)
+
+// GatheringPlaceDisclosure enumerates allowed wire values for GatheringPlaceDisclosure.
+type GatheringPlaceDisclosure string
+
+const (
+	GatheringPlaceDisclosureExact GatheringPlaceDisclosure = "exact"
+
+	GatheringPlaceDisclosureCoarse GatheringPlaceDisclosure = "coarse"
+
+	GatheringPlaceDisclosureAfterJoin GatheringPlaceDisclosure = "after_join"
+)
+
+// GatheringPlaceMode enumerates allowed wire values for GatheringPlaceMode.
+type GatheringPlaceMode string
+
+const (
+	GatheringPlaceModePhysical GatheringPlaceMode = "physical"
+
+	GatheringPlaceModeOnline GatheringPlaceMode = "online"
+
+	GatheringPlaceModeHybrid GatheringPlaceMode = "hybrid"
+)
+
+// GatheringRevisionAcknowledgementStatus enumerates allowed wire values for GatheringRevisionAcknowledgementStatus.
+type GatheringRevisionAcknowledgementStatus string
+
+const (
+	GatheringRevisionAcknowledgementStatusNotRequired GatheringRevisionAcknowledgementStatus = "not_required"
+
+	GatheringRevisionAcknowledgementStatusPending GatheringRevisionAcknowledgementStatus = "pending"
+
+	GatheringRevisionAcknowledgementStatusAccepted GatheringRevisionAcknowledgementStatus = "accepted"
+
+	GatheringRevisionAcknowledgementStatusDeclined GatheringRevisionAcknowledgementStatus = "declined"
+
+	GatheringRevisionAcknowledgementStatusExpired GatheringRevisionAcknowledgementStatus = "expired"
+)
+
+// GatheringRoomBindingStatus enumerates allowed wire values for GatheringRoomBindingStatus.
+type GatheringRoomBindingStatus string
+
+const (
+	GatheringRoomBindingStatusPending GatheringRoomBindingStatus = "pending"
+
+	GatheringRoomBindingStatusReady GatheringRoomBindingStatus = "ready"
+
+	GatheringRoomBindingStatusFailed GatheringRoomBindingStatus = "failed"
+)
+
+// GatheringRosterDisclosure enumerates allowed wire values for GatheringRosterDisclosure.
+type GatheringRosterDisclosure string
+
+const (
+	GatheringRosterDisclosureCountOnly GatheringRosterDisclosure = "count_only"
+
+	GatheringRosterDisclosureJoinedMembers GatheringRosterDisclosure = "joined_members"
+
+	GatheringRosterDisclosurePublicOptIn GatheringRosterDisclosure = "public_opt_in"
+)
+
+// GatheringTimeDisclosure enumerates allowed wire values for GatheringTimeDisclosure.
+type GatheringTimeDisclosure string
+
+const (
+	GatheringTimeDisclosureExact GatheringTimeDisclosure = "exact"
+
+	GatheringTimeDisclosureDateOnly GatheringTimeDisclosure = "date_only"
+
+	GatheringTimeDisclosureAfterJoin GatheringTimeDisclosure = "after_join"
+)
+
+// CanonicalObjectRef domain model.
+type CanonicalObjectRef struct {
+	ObjectTypeRef string `json:"objectTypeRef" bson:"objectTypeRef"`
+	ObjectID      string `json:"objectId" bson:"objectId"`
+}
 
 // Gathering domain model.
 type Gathering struct {
-	ID                        string                             `json:"id" bson:"_id"`
-	Version                   int64                              `json:"version" bson:"version"`
-	CreatorPersonaID          string                             `json:"creatorPersonaId" bson:"creatorPersonaId"`
-	Title                     string                             `json:"title" bson:"title"`
-	Description               string                             `json:"description" bson:"description"`
-	TargetRef                 GatheringTargetRef                 `json:"targetRef" bson:"targetRef"`
-	StartAt                   time.Time                          `json:"startAt" bson:"startAt"`
-	EndAt                     time.Time                          `json:"endAt" bson:"endAt"`
-	Capacity                  int64                              `json:"capacity" bson:"capacity"`
-	JoinPolicy                GatheringJoinPolicy                `json:"joinPolicy" bson:"joinPolicy"`
-	Status                    GatheringStatus                    `json:"status" bson:"status"`
-	ConversationID            string                             `json:"conversationId" bson:"conversationId"`
-	ConversationBindingStatus GatheringConversationBindingStatus `json:"conversationBindingStatus" bson:"conversationBindingStatus"`
-	Participants              []GatheringParticipant             `json:"participants" bson:"participants"`
-	CreatedAt                 time.Time                          `json:"createdAt" bson:"createdAt"`
-	UpdatedAt                 time.Time                          `json:"updatedAt" bson:"updatedAt"`
+	ID                             string                       `json:"id" bson:"_id"`
+	Version                        int64                        `json:"version" bson:"version"`
+	CreatedByPersonaID             string                       `json:"createdByPersonaId" bson:"createdByPersonaId"`
+	HostBinding                    HostBinding                  `json:"hostBinding" bson:"hostBinding"`
+	OrganizerAssignments           []OrganizerAssignment        `json:"organizerAssignments" bson:"organizerAssignments"`
+	Purpose                        GatheringPurpose             `json:"purpose" bson:"purpose"`
+	Schedule                       GatheringSchedule            `json:"schedule" bson:"schedule"`
+	Place                          GatheringPlace               `json:"place" bson:"place"`
+	PolicySet                      GatheringPolicySet           `json:"policySet" bson:"policySet"`
+	AdmissionControl               GatheringAdmissionControl    `json:"admissionControl" bson:"admissionControl"`
+	LifecycleStatus                GatheringLifecycleStatus     `json:"lifecycleStatus" bson:"lifecycleStatus"`
+	Outcome                        GatheringOutcome             `json:"outcome" bson:"outcome"`
+	ConversationID                 string                       `json:"conversationId" bson:"conversationId"`
+	RoomBindingStatus              GatheringRoomBindingStatus   `json:"roomBindingStatus" bson:"roomBindingStatus"`
+	CurrentGatheringRevisionID     string                       `json:"currentGatheringRevisionId" bson:"currentGatheringRevisionId"`
+	CurrentGatheringRevisionNumber int64                        `json:"currentGatheringRevisionNumber" bson:"currentGatheringRevisionNumber"`
+	Participations                 []GatheringParticipation     `json:"participations" bson:"participations"`
+	Revisions                      []GatheringRevision          `json:"revisions" bson:"revisions"`
+	AvailabilityWatches            []GatheringAvailabilityWatch `json:"availabilityWatches" bson:"availabilityWatches"`
+	CreatedAt                      time.Time                    `json:"createdAt" bson:"createdAt"`
+	UpdatedAt                      time.Time                    `json:"updatedAt" bson:"updatedAt"`
+	CancelledAt                    time.Time                    `json:"cancelledAt" bson:"cancelledAt"`
+	CompletedAt                    time.Time                    `json:"completedAt" bson:"completedAt"`
 }
 
-// GatheringParticipant domain model.
-type GatheringParticipant struct {
-	PersonaID   string                    `json:"personaId" bson:"personaId"`
-	Role        GatheringParticipantRole  `json:"role" bson:"role"`
-	State       GatheringParticipantState `json:"state" bson:"state"`
-	RequestedAt time.Time                 `json:"requestedAt" bson:"requestedAt"`
-	DecidedAt   time.Time                 `json:"decidedAt" bson:"decidedAt"`
+// GatheringAdmissionControl domain model.
+type GatheringAdmissionControl struct {
+	Status            GatheringAdmissionControlStatus `json:"status" bson:"status"`
+	PausedByPersonaID string                          `json:"pausedByPersonaId" bson:"pausedByPersonaId"`
+	ReasonRef         string                          `json:"reasonRef" bson:"reasonRef"`
+	PausedAt          time.Time                       `json:"pausedAt" bson:"pausedAt"`
+	Version           int64                           `json:"version" bson:"version"`
 }
 
-// GatheringTargetRef domain model.
-type GatheringTargetRef struct {
-	ObjectTypeRef string `json:"objectTypeRef" bson:"objectTypeRef"`
-	ObjectID      string `json:"objectId" bson:"objectId"`
-	RouteID       string `json:"routeId" bson:"routeId"`
+// GatheringApplicationAnswer domain model.
+type GatheringApplicationAnswer struct {
+	QuestionID        string   `json:"questionId" bson:"questionId"`
+	AnswerText        string   `json:"answerText" bson:"answerText"`
+	SelectedOptionIds []string `json:"selectedOptionIds" bson:"selectedOptionIds"`
+}
+
+// GatheringApplicationQuestion domain model.
+type GatheringApplicationQuestion struct {
+	QuestionID string                               `json:"questionId" bson:"questionId"`
+	Prompt     string                               `json:"prompt" bson:"prompt"`
+	Kind       GatheringApplicationQuestionKind     `json:"kind" bson:"kind"`
+	Options    []GatheringApplicationQuestionOption `json:"options" bson:"options"`
+	Required   bool                                 `json:"required" bson:"required"`
+}
+
+// GatheringApplicationQuestionOption domain model.
+type GatheringApplicationQuestionOption struct {
+	OptionID string `json:"optionId" bson:"optionId"`
+	Label    string `json:"label" bson:"label"`
+}
+
+// GatheringAttendance domain model.
+type GatheringAttendance struct {
+	Status       GatheringAttendanceStatus `json:"status" bson:"status"`
+	DeclaredAt   time.Time                 `json:"declaredAt" bson:"declaredAt"`
+	EvidenceRefs []CanonicalObjectRef      `json:"evidenceRefs" bson:"evidenceRefs"`
+}
+
+// GatheringAvailabilityWatch domain model.
+type GatheringAvailabilityWatch struct {
+	GatheringID string                           `json:"gatheringId" bson:"gatheringId"`
+	PersonaID   string                           `json:"personaId" bson:"personaId"`
+	Status      GatheringAvailabilityWatchStatus `json:"status" bson:"status"`
+	Version     int64                            `json:"version" bson:"version"`
+	CreatedAt   time.Time                        `json:"createdAt" bson:"createdAt"`
+	UpdatedAt   time.Time                        `json:"updatedAt" bson:"updatedAt"`
+}
+
+// GatheringCapacityPolicy domain model.
+type GatheringCapacityPolicy struct {
+	MaxParticipants int64 `json:"maxParticipants" bson:"maxParticipants"`
+}
+
+// GatheringDisclosurePolicy domain model.
+type GatheringDisclosurePolicy struct {
+	TimeDisclosure   GatheringTimeDisclosure   `json:"timeDisclosure" bson:"timeDisclosure"`
+	PlaceDisclosure  GatheringPlaceDisclosure  `json:"placeDisclosure" bson:"placeDisclosure"`
+	RosterDisclosure GatheringRosterDisclosure `json:"rosterDisclosure" bson:"rosterDisclosure"`
+}
+
+// GatheringHostSnapshot domain model.
+type GatheringHostSnapshot struct {
+	HostSubjectKind      GatheringHostSubjectKind `json:"hostSubjectKind" bson:"hostSubjectKind"`
+	HostSubjectID        string                   `json:"hostSubjectId" bson:"hostSubjectId"`
+	AuthorityEvidenceRef string                   `json:"authorityEvidenceRef" bson:"authorityEvidenceRef"`
+	AuthorityVersion     int64                    `json:"authorityVersion" bson:"authorityVersion"`
+	HostDigest           string                   `json:"hostDigest" bson:"hostDigest"`
+}
+
+// GatheringOutcome domain model.
+type GatheringOutcome struct {
+	Status                   GatheringOutcomeStatus `json:"status" bson:"status"`
+	IndependentEvidenceCount int64                  `json:"independentEvidenceCount" bson:"independentEvidenceCount"`
+	EvidenceRefs             []CanonicalObjectRef   `json:"evidenceRefs" bson:"evidenceRefs"`
+	CalculatedAt             time.Time              `json:"calculatedAt" bson:"calculatedAt"`
+	CalculationDigest        string                 `json:"calculationDigest" bson:"calculationDigest"`
+}
+
+// GatheringParticipation domain model.
+type GatheringParticipation struct {
+	GatheringID                  string                             `json:"gatheringId" bson:"gatheringId"`
+	PersonaID                    string                             `json:"personaId" bson:"personaId"`
+	InvitedByPersonaID           string                             `json:"invitedByPersonaId" bson:"invitedByPersonaId"`
+	State                        GatheringParticipationState        `json:"state" bson:"state"`
+	AdmissionSource              GatheringAdmissionSource           `json:"admissionSource" bson:"admissionSource"`
+	ClosedReason                 GatheringParticipationClosedReason `json:"closedReason" bson:"closedReason"`
+	AttemptNo                    int64                              `json:"attemptNo" bson:"attemptNo"`
+	SeatHoldUntil                time.Time                          `json:"seatHoldUntil" bson:"seatHoldUntil"`
+	JoinedAt                     time.Time                          `json:"joinedAt" bson:"joinedAt"`
+	ClosedAt                     time.Time                          `json:"closedAt" bson:"closedAt"`
+	ClosedByPersonaID            string                             `json:"closedByPersonaId" bson:"closedByPersonaId"`
+	ReasonRef                    string                             `json:"reasonRef" bson:"reasonRef"`
+	ReviewExpectedBy             time.Time                          `json:"reviewExpectedBy" bson:"reviewExpectedBy"`
+	Version                      int64                              `json:"version" bson:"version"`
+	ApplicationAnswers           []GatheringApplicationAnswer       `json:"applicationAnswers" bson:"applicationAnswers"`
+	Attendance                   GatheringAttendance                `json:"attendance" bson:"attendance"`
+	CurrentChangeAcknowledgement GatheringRevisionAcknowledgement   `json:"currentChangeAcknowledgement" bson:"currentChangeAcknowledgement"`
+}
+
+// GatheringPlace domain model.
+type GatheringPlace struct {
+	Mode              GatheringPlaceMode `json:"mode" bson:"mode"`
+	CoarsePlaceRef    CanonicalObjectRef `json:"coarsePlaceRef" bson:"coarsePlaceRef"`
+	CoarsePlaceLabel  string             `json:"coarsePlaceLabel" bson:"coarsePlaceLabel"`
+	ExactMeetingPoint string             `json:"exactMeetingPoint" bson:"exactMeetingPoint"`
+	OnlineLocationRef string             `json:"onlineLocationRef" bson:"onlineLocationRef"`
+}
+
+// GatheringPolicySet domain model.
+type GatheringPolicySet struct {
+	AudiencePolicy       GatheringAudiencePolicy        `json:"audiencePolicy" bson:"audiencePolicy"`
+	AdmissionPolicy      GatheringAdmissionPolicy       `json:"admissionPolicy" bson:"admissionPolicy"`
+	CapacityPolicy       GatheringCapacityPolicy        `json:"capacityPolicy" bson:"capacityPolicy"`
+	DisclosurePolicy     GatheringDisclosurePolicy      `json:"disclosurePolicy" bson:"disclosurePolicy"`
+	ApplicationQuestions []GatheringApplicationQuestion `json:"applicationQuestions" bson:"applicationQuestions"`
+	RiskControlPolicyRef string                         `json:"riskControlPolicyRef" bson:"riskControlPolicyRef"`
+	PolicyDecisionRef    string                         `json:"policyDecisionRef" bson:"policyDecisionRef"`
+	PolicyDigest         string                         `json:"policyDigest" bson:"policyDigest"`
+	ObligationDigest     string                         `json:"obligationDigest" bson:"obligationDigest"`
+}
+
+// GatheringPurpose domain model.
+type GatheringPurpose struct {
+	Title            string               `json:"title" bson:"title"`
+	Summary          string               `json:"summary" bson:"summary"`
+	CoverRef         CanonicalObjectRef   `json:"coverRef" bson:"coverRef"`
+	TopicRefs        []string             `json:"topicRefs" bson:"topicRefs"`
+	RequirementRefs  []string             `json:"requirementRefs" bson:"requirementRefs"`
+	SourceObjectRefs []GatheringSourceRef `json:"sourceObjectRefs" bson:"sourceObjectRefs"`
+	CostNotice       GatheringCostNotice  `json:"costNotice" bson:"costNotice"`
+	CostDescription  string               `json:"costDescription" bson:"costDescription"`
+}
+
+// GatheringRevision domain model.
+type GatheringRevision struct {
+	RevisionID         string                `json:"revisionId" bson:"revisionId"`
+	RevisionNumber     int64                 `json:"revisionNumber" bson:"revisionNumber"`
+	Purpose            GatheringPurpose      `json:"purpose" bson:"purpose"`
+	Schedule           GatheringSchedule     `json:"schedule" bson:"schedule"`
+	Place              GatheringPlace        `json:"place" bson:"place"`
+	PolicySet          GatheringPolicySet    `json:"policySet" bson:"policySet"`
+	HostSnapshot       GatheringHostSnapshot `json:"hostSnapshot" bson:"hostSnapshot"`
+	Digest             string                `json:"digest" bson:"digest"`
+	MaterialChange     bool                  `json:"materialChange" bson:"materialChange"`
+	CreatedByPersonaID string                `json:"createdByPersonaId" bson:"createdByPersonaId"`
+	CreatedAt          time.Time             `json:"createdAt" bson:"createdAt"`
+}
+
+// GatheringRevisionAcknowledgement domain model.
+type GatheringRevisionAcknowledgement struct {
+	RevisionID     string                                 `json:"revisionId" bson:"revisionId"`
+	RevisionNumber int64                                  `json:"revisionNumber" bson:"revisionNumber"`
+	RevisionDigest string                                 `json:"revisionDigest" bson:"revisionDigest"`
+	Status         GatheringRevisionAcknowledgementStatus `json:"status" bson:"status"`
+	DeadlineAt     time.Time                              `json:"deadlineAt" bson:"deadlineAt"`
+	AcknowledgedAt time.Time                              `json:"acknowledgedAt" bson:"acknowledgedAt"`
+}
+
+// GatheringSchedule domain model.
+type GatheringSchedule struct {
+	Timezone          string    `json:"timezone" bson:"timezone"`
+	StartAt           time.Time `json:"startAt" bson:"startAt"`
+	EndAt             time.Time `json:"endAt" bson:"endAt"`
+	AdmissionClosesAt time.Time `json:"admissionClosesAt" bson:"admissionClosesAt"`
+}
+
+// GatheringSourceRef domain model.
+type GatheringSourceRef struct {
+	ObjectRef    CanonicalObjectRef `json:"objectRef" bson:"objectRef"`
+	RouteID      string             `json:"routeId" bson:"routeId"`
+	SourceDigest string             `json:"sourceDigest" bson:"sourceDigest"`
+}
+
+// HostBinding domain model.
+type HostBinding struct {
+	HostSubjectKind      GatheringHostSubjectKind `json:"hostSubjectKind" bson:"hostSubjectKind"`
+	HostSubjectID        string                   `json:"hostSubjectId" bson:"hostSubjectId"`
+	AuthorityEvidenceRef string                   `json:"authorityEvidenceRef" bson:"authorityEvidenceRef"`
+	AuthorityVersion     int64                    `json:"authorityVersion" bson:"authorityVersion"`
+	AuthorityExpiresAt   time.Time                `json:"authorityExpiresAt" bson:"authorityExpiresAt"`
+}
+
+// OrganizerAssignment domain model.
+type OrganizerAssignment struct {
+	PersonaID            string                 `json:"personaId" bson:"personaId"`
+	Role                 GatheringOrganizerRole `json:"role" bson:"role"`
+	AuthorityEvidenceRef string                 `json:"authorityEvidenceRef" bson:"authorityEvidenceRef"`
+	AuthorityVersion     int64                  `json:"authorityVersion" bson:"authorityVersion"`
+	AssignedAt           time.Time              `json:"assignedAt" bson:"assignedAt"`
+	RevokedAt            time.Time              `json:"revokedAt" bson:"revokedAt"`
+	Version              int64                  `json:"version" bson:"version"`
 }

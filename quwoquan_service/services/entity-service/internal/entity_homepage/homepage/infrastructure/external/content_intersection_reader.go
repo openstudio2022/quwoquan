@@ -11,8 +11,8 @@ import (
 	"time"
 
 	rtauth "quwoquan_service/runtime/auth"
-	"quwoquan_service/services/entity-service/internal/entity_homepage/homepage/application/homepage_orchestration"
 	"quwoquan_service/services/entity-service/generated/entity_homepage/homepage"
+	"quwoquan_service/services/entity-service/internal/entity_homepage/homepage/application/homepage_orchestration"
 )
 
 type ContentIntersectionConfig struct {

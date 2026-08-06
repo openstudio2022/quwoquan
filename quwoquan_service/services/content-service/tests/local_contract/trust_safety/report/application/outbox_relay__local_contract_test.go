@@ -192,7 +192,7 @@ func persistReportOutboxEvent(
 		ReceiptExpiresAt: time.Now().UTC().Add(time.Hour),
 		Events: []reportports.OutboxEvent{{
 			EventID:          eventID,
-			EventType:        "content.report.created",
+			EventType:        "content.report.ReportCreated",
 			AggregateID:      aggregate.ID(),
 			AggregateVersion: aggregate.Version(),
 			Payload:          []byte(`{"kind":"report"}`),

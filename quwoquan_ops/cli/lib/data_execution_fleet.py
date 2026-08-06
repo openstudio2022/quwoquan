@@ -5,6 +5,7 @@ import os
 import socket
 import subprocess
 import time
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -182,6 +183,69 @@ def _compose_running_services(
     return frozenset(line.strip() for line in completed.stdout.splitlines() if line.strip())
 
 
+def _compose_service_probe(
+    endpoint: DataExecutionFleetEndpoint,
+    service: str,
+    *command: str,
+    expected_stdout: str | None = None,
+) -> bool:
+    completed = subprocess.run(
+        _compose_command("exec", "-T", service, *command),
+        cwd=ROOT,
+        env=_compose_environment(endpoint),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        return False
+    if expected_stdout is None:
+        return True
+    return completed.stdout.strip() == expected_stdout and not completed.stderr.strip()
+
+
+def _mongo_writable(endpoint: DataExecutionFleetEndpoint) -> bool:
+    probe_id = f"stackctl-{uuid.uuid4().hex}"
+    script = (
+        'const d=db.getSiblingDB("admin");'
+        'const h=d.runCommand({hello:1});'
+        'if(h.ok!==1||h.setName!=="rs0"||h.isWritablePrimary!==true){quit(10)};'
+        'const c=d.getCollection("__qwq_data_execution_fleet_probe");'
+        f'const id="{probe_id}";'
+        'c.insertOne({_id:id,expiresAt:new Date(Date.now()+60000)});'
+        'if(c.findOne({_id:id})===null){quit(11)};'
+        'c.deleteOne({_id:id});'
+    )
+    return _compose_service_probe(
+        endpoint,
+        "mongodb",
+        "mongosh",
+        "--quiet",
+        "--eval",
+        script,
+    )
+
+
+def _redis_writable(endpoint: DataExecutionFleetEndpoint) -> bool:
+    key = f"__qwq_data_execution_fleet_probe:{uuid.uuid4().hex}"
+    script = (
+        "redis.call('SET',KEYS[1],'ok','EX',10);"
+        "local v=redis.call('GET',KEYS[1]);"
+        "redis.call('DEL',KEYS[1]);return v"
+    )
+    return _compose_service_probe(
+        endpoint,
+        "redis",
+        "redis-cli",
+        "--raw",
+        "EVAL",
+        script,
+        "1",
+        key,
+        expected_stdout="ok",
+    )
+
+
 def data_execution_fleet_status(
     endpoint: DataExecutionFleetEndpoint | None = None,
     *,
@@ -191,9 +255,17 @@ def data_execution_fleet_status(
 ) -> DataExecutionFleetRuntime:
     resolved = endpoint or resolve_data_execution_fleet_endpoint()
     mongo_port, redis_port = _endpoint_ports(resolved)
-    mongo_ready = _socket_ready(LOCAL_LOOPBACK_HOST, mongo_port)
-    redis_ready = _socket_ready(LOCAL_LOOPBACK_HOST, redis_port)
     owned = _RUNTIME_SERVICES.issubset(_compose_running_services(resolved))
+    mongo_ready = bool(
+        owned
+        and _socket_ready(LOCAL_LOOPBACK_HOST, mongo_port)
+        and _mongo_writable(resolved)
+    )
+    redis_ready = bool(
+        owned
+        and _socket_ready(LOCAL_LOOPBACK_HOST, redis_port)
+        and _redis_writable(resolved)
+    )
     return DataExecutionFleetRuntime(
         action=action,
         target=resolved.target,
@@ -268,7 +340,11 @@ def manage_data_execution_fleet(
             action=normalized,
             details=("dedicated fleet already ready",),
         )
-    if (before.mongo or before.redis) and not before.owned:
+    mongo_port, redis_port = _endpoint_ports(resolved)
+    ports_occupied = _socket_ready(
+        LOCAL_LOOPBACK_HOST, mongo_port
+    ) or _socket_ready(LOCAL_LOOPBACK_HOST, redis_port)
+    if ports_occupied and not before.owned:
         raise RuntimeError(
             "data execution fleet ports are occupied outside the dedicated compose project"
         )

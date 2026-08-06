@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/semantic_preflight_receipt.schema.json",
+  "type": "object",
+  "required": [
+    "schema",
+    "receiptId",
+    "recordedAt",
+    "validUntil",
+    "semanticSelectionId",
+    "selectionDigest",
+    "provider",
+    "model",
+    "modelParameters",
+    "semanticRuntime",
+    "runtimeProfileId",
+    "runtimeProfileDigest",
+    "requiresNewRetryOf",
+    "fallbackPolicy",
+    "startupRequested",
+    "soakRequested",
+    "workspaceSmokeRequested",
+    "preflightReady",
+    "capacitySoakReady",
+    "workspaceSmokeReady",
+    "ready",
+    "executionAdmissionReady",
+    "evidenceDigest",
+    "evidence"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "quwoquan_data.semantic_preflight_receipt" },
+    "receiptId": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "recordedAt": { "type": "string", "format": "date-time" },
+    "validUntil": { "type": "string", "format": "date-time" },
+    "semanticSelectionId": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+    "selectionDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "provider": { "enum": ["cursor_sdk", "codex_sdk"] },
+    "model": { "type": "string", "minLength": 1 },
+    "modelParameters": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "required": ["id", "value"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "value": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "semanticRuntime": { "enum": ["local", "cloud"] },
+    "runtimeProfileId": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+    "runtimeProfileDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "requiresNewRetryOf": { "type": "boolean" },
+    "fallbackPolicy": { "const": "forbidden" },
+    "startupRequested": { "type": "boolean" },
+    "soakRequested": { "type": "boolean" },
+    "workspaceSmokeRequested": { "type": "boolean" },
+    "preflightReady": { "type": "boolean" },
+    "capacitySoakReady": { "type": "boolean" },
+    "workspaceSmokeReady": { "type": "boolean" },
+    "ready": { "type": "boolean" },
+    "executionAdmissionReady": { "type": "boolean" },
+    "evidenceDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "evidence": { "type": "object" }
+  }
+}

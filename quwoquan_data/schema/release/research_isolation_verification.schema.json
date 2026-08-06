@@ -1,0 +1,282 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/release/research_isolation_verification.schema.json",
+  "title": "Release-bound research environment isolation verification",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "environment",
+    "releaseId",
+    "manifestDigest",
+    "releaseClass",
+    "productLifecycleState",
+    "verifyRunId",
+    "policyRef",
+    "policySha256",
+    "outcome",
+    "verifiedAt",
+    "verificationChecksum"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.research_isolation_verification"},
+    "environment": {"enum": ["alpha", "beta", "gamma", "prod"]},
+    "releaseId": {"type": "string", "minLength": 1},
+    "manifestDigest": {"$ref": "#/$defs/digest"},
+    "releaseClass": {"const": "research"},
+    "productLifecycleState": {"const": "research"},
+    "verifyRunId": {"type": "string", "minLength": 1},
+    "policyRef": {
+      "type": "string",
+      "pattern": "^quwoquan_ops/environments/(alpha|beta|gamma|prod)/runtime\\.yaml$"
+    },
+    "policySha256": {"$ref": "#/$defs/digest"},
+    "outcome": {"enum": ["PASS", "GATE_BLOCK"]},
+    "blocker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message", "evidenceRefs"],
+      "properties": {
+        "code": {
+          "enum": [
+            "DATA.RESEARCH.IDENTITY_ADAPTER_UNAVAILABLE",
+            "DATA.RESEARCH.SIGNED_MEDIA_ADAPTER_UNAVAILABLE",
+            "DATA.RESEARCH.RUNTIME_PROOF_INCOMPLETE",
+            "DATA.RESEARCH.ISOLATION_POLICY_INVALID"
+          ]
+        },
+        "message": {"type": "string", "minLength": 1},
+        "evidenceRefs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/repositoryRef"}
+        }
+      }
+    },
+    "subjectHash": {"$ref": "#/$defs/digest"},
+    "identityIssuance": {"$ref": "#/$defs/identityProof"},
+    "identityAttestation": {"$ref": "#/$defs/identityProof"},
+    "internalAppReadback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "releaseId",
+        "manifestDigest",
+        "subjectHash",
+        "attestationIdHash",
+        "signatureVerified",
+        "researchBadgeVisible",
+        "operation"
+      ],
+      "properties": {
+        "releaseId": {"type": "string", "minLength": 1},
+        "manifestDigest": {"$ref": "#/$defs/digest"},
+        "subjectHash": {"$ref": "#/$defs/digest"},
+        "attestationIdHash": {"$ref": "#/$defs/digest"},
+        "signatureVerified": {"const": true},
+        "researchBadgeVisible": {"const": true},
+        "operation": {"$ref": "#/$defs/successOperation"}
+      }
+    },
+    "anonymousContentProbe": {"$ref": "#/$defs/deniedProbe"},
+    "anonymousMediaProbe": {"$ref": "#/$defs/deniedProbe"},
+    "networkExposureReadback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "publicCdnDetected",
+        "anonymousMediaUrlDetected",
+        "operation"
+      ],
+      "properties": {
+        "publicCdnDetected": {"const": false},
+        "anonymousMediaUrlDetected": {"const": false},
+        "operation": {"$ref": "#/$defs/successOperation"}
+      }
+    },
+    "deniedCapabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["share", "export", "indexing"],
+      "properties": {
+        "share": {"$ref": "#/$defs/deniedCapability"},
+        "export": {"$ref": "#/$defs/deniedCapability"},
+        "indexing": {"$ref": "#/$defs/deniedCapability"}
+      }
+    },
+    "signedMedia": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "assetId",
+        "signedUrlHash",
+        "ttlSeconds",
+        "auditEventId",
+        "issuanceOperation",
+        "accessOperation",
+        "auditReadbackOperation"
+      ],
+      "properties": {
+        "assetId": {"type": "string", "minLength": 1},
+        "signedUrlHash": {"$ref": "#/$defs/digest"},
+        "ttlSeconds": {"type": "integer", "minimum": 1, "maximum": 900},
+        "auditEventId": {"type": "string", "minLength": 1},
+        "issuanceOperation": {"$ref": "#/$defs/successOperation"},
+        "accessOperation": {
+          "allOf": [
+            {"$ref": "#/$defs/operation"},
+            {"properties": {"status": {"enum": [200, 206]}}}
+          ]
+        },
+        "auditReadbackOperation": {"$ref": "#/$defs/successOperation"}
+      }
+    },
+    "positiveReadback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "releaseId",
+        "manifestDigest",
+        "subjectHash",
+        "entityRefs",
+        "postIds",
+        "mediaAssetIds",
+        "operation"
+      ],
+      "properties": {
+        "releaseId": {"type": "string", "minLength": 1},
+        "manifestDigest": {"$ref": "#/$defs/digest"},
+        "subjectHash": {"$ref": "#/$defs/digest"},
+        "entityRefs": {"$ref": "#/$defs/nonemptyStrings"},
+        "postIds": {"$ref": "#/$defs/nonemptyStrings"},
+        "mediaAssetIds": {"$ref": "#/$defs/nonemptyStrings"},
+        "operation": {"$ref": "#/$defs/successOperation"}
+      }
+    },
+    "verifiedAt": {"type": "string", "format": "date-time"},
+    "verificationChecksum": {"$ref": "#/$defs/digest"}
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"outcome": {"const": "PASS"}},
+        "required": ["outcome"]
+      },
+      "then": {
+        "required": [
+          "subjectHash",
+          "identityIssuance",
+          "identityAttestation",
+          "internalAppReadback",
+          "anonymousContentProbe",
+          "anonymousMediaProbe",
+          "networkExposureReadback",
+          "deniedCapabilities",
+          "signedMedia",
+          "positiveReadback"
+        ],
+        "not": {"required": ["blocker"]}
+      },
+      "else": {
+        "required": ["blocker"],
+        "not": {
+          "anyOf": [
+            {"required": ["subjectHash"]},
+            {"required": ["identityIssuance"]},
+            {"required": ["identityAttestation"]},
+            {"required": ["internalAppReadback"]},
+            {"required": ["signedMedia"]},
+            {"required": ["positiveReadback"]}
+          ]
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "repositoryRef": {
+      "type": "string",
+      "pattern": "^(quwoquan_data|quwoquan_ops|quwoquan_service)/[^/].+"
+    },
+    "nonemptyStrings": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "operation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "pageId",
+        "status",
+        "requestId",
+        "traceId",
+        "startedAt",
+        "endedAt",
+        "durationMs"
+      ],
+      "properties": {
+        "path": {"type": "string", "pattern": "^/"},
+        "pageId": {"type": "string", "minLength": 1},
+        "status": {"type": "integer", "minimum": 100, "maximum": 599},
+        "requestId": {"type": "string", "minLength": 1},
+        "traceId": {"type": "string", "minLength": 1},
+        "startedAt": {"type": "string", "format": "date-time"},
+        "endedAt": {"type": "string", "format": "date-time"},
+        "durationMs": {"type": "integer", "minimum": 0}
+      }
+    },
+    "successOperation": {
+      "allOf": [
+        {"$ref": "#/$defs/operation"},
+        {"properties": {"status": {"const": 200}}}
+      ]
+    },
+    "identityProof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["subjectHash", "attestationIdHash", "contractRef", "contractSha256", "operation"],
+      "properties": {
+        "subjectHash": {"$ref": "#/$defs/digest"},
+        "attestationIdHash": {"$ref": "#/$defs/digest"},
+        "contractRef": {"$ref": "#/$defs/repositoryRef"},
+        "contractSha256": {"$ref": "#/$defs/digest"},
+        "operation": {"$ref": "#/$defs/successOperation"}
+      }
+    },
+    "deniedProbe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["decision", "operation"],
+      "properties": {
+        "decision": {"const": "denied"},
+        "operation": {
+          "allOf": [
+            {"$ref": "#/$defs/operation"},
+            {"properties": {"status": {"enum": [401, 403]}}}
+          ]
+        }
+      }
+    },
+    "deniedCapability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["decision", "operation"],
+      "properties": {
+        "decision": {"const": "denied"},
+        "operation": {
+          "allOf": [
+            {"$ref": "#/$defs/operation"},
+            {"properties": {"status": {"enum": [200, 401, 403]}}}
+          ]
+        }
+      }
+    }
+  }
+}

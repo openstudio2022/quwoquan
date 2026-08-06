@@ -1,10 +1,10 @@
 dart_class: ToolUseWire
-library_path: assistant/generated/contracts/tool_use.g.dart
-output_path: assistant/generated/contracts/tool_use.g.dart
+library_path: package:quwoquan_cloud_contracts/src/generated/assistant/tool_use.g.dart
+output_path: packages/quwoquan_cloud_contracts/lib/src/generated/assistant/tool_use.g.dart
 contract: tool_use
 kind: shared_wire_contract
 imports:
-  - package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart
+  - assistant_runtime_failure.g.dart
 fields:
   - { name: toolUseId, type: string, required: true }
   - { name: turnId, type: string, required: true }

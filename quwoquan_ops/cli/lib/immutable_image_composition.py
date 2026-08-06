@@ -8,6 +8,8 @@ import re
 from collections.abc import Mapping, MutableMapping, Sequence
 from pathlib import Path
 
+import yaml
+
 from quwoquan_ops.cli.lib.output_paths import service_deployment_package_dir
 
 
@@ -24,7 +26,7 @@ IMMUTABLE_IMAGE_DIGEST_PATTERN = re.compile(r"sha256:[0-9a-f]{64}")
 
 
 def first_party_service_names(repo_root: Path = ROOT) -> tuple[str, ...]:
-    """Discover image owners from their autonomous config/deploy roots."""
+    """Discover active image owners from autonomous roots and runtime topology."""
 
     services_root = repo_root / "quwoquan_service" / "services"
     owners = {
@@ -32,6 +34,26 @@ def first_party_service_names(repo_root: Path = ROOT) -> tuple[str, ...]:
         for path in services_root.glob("*/config/schema.yaml")
         if (path.parents[1] / "deploy" / "compose.yaml").is_file()
     }
+    topology_path = (
+        repo_root
+        / "quwoquan_ops"
+        / "environments"
+        / "compose"
+        / "docker-compose.gamma-local.yaml"
+    )
+    try:
+        topology = yaml.safe_load(topology_path.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError) as exc:
+        raise ValueError(
+            f"canonical runtime topology is unavailable: {topology_path}"
+        ) from exc
+    topology_services = topology.get("services") if isinstance(topology, dict) else None
+    if not isinstance(topology_services, dict) or not topology_services:
+        raise ValueError(
+            f"canonical runtime topology has no workloads: {topology_path}"
+        )
+    active_workloads = set(topology_services)
+    owners.intersection_update(active_workloads)
     platform_ops = (
         repo_root
         / "quwoquan_service"
@@ -41,6 +63,7 @@ def first_party_service_names(repo_root: Path = ROOT) -> tuple[str, ...]:
     if (
         (platform_ops / "config" / "schema.yaml").is_file()
         and (platform_ops / "deploy" / "compose.yaml").is_file()
+        and "platform-ops-service" in active_workloads
     ):
         owners.add("platform-ops-service")
     return tuple(sorted(owners))

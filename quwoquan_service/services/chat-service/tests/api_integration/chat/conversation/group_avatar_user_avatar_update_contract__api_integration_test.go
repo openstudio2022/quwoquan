@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/runtime/runtime-media/group-avatar-server-precompose-and-unified-sync-contract/spec.md#gwt-001
+// readiness_case: consume-user-avatar-updated-api
 package api_integration
 
 import (

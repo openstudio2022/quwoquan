@@ -15,6 +15,7 @@ import (
 
 	"github.com/google/uuid"
 
+	operationsecurity "quwoquan_service/generated/operationsecurity"
 	rtauth "quwoquan_service/runtime/auth"
 	rterr "quwoquan_service/runtime/errors"
 	runtimemessaging "quwoquan_service/runtime/messaging"
@@ -23,11 +24,34 @@ import (
 )
 
 const (
-	longPollDefaultHold = 25 * time.Second
-	longPollMaxHold     = 30 * time.Second
-	longPollBatchLimit  = 32
-	longPollBatchWindow = 150 * time.Millisecond
+	// longPollResponseReserve 是从 operation 预算里留给收集与序列化响应的时间：
+	// hold 必须在 reliability.timeout_ms 触发前结束，否则客户端拿到的是被取消的
+	// 请求而不是可持久化的 cursor envelope。
+	longPollResponseReserve = 5 * time.Second
+	longPollBatchLimit      = 32
+	longPollBatchWindow     = 150 * time.Millisecond
+	longPollOperationID     = "realtime.connection.LongPoll"
 )
+
+// longPollHoldCeiling 由 ContractGraph 中 realtime.connection.LongPoll 的
+// reliability.timeout_ms 派生。手写第二个 30s 会让 hold 与 operation guard 施加
+// 的截止时间同时到期，谁先赢取决于调度。
+var longPollHoldCeiling = contractLongPollHoldCeiling()
+
+func contractLongPollHoldCeiling() time.Duration {
+	for _, descriptor := range operationsecurity.ForDomain("realtime") {
+		if descriptor.CanonicalOperationID != longPollOperationID {
+			continue
+		}
+		budget := time.Duration(descriptor.TimeoutMilliseconds) * time.Millisecond
+		hold := budget - longPollResponseReserve
+		if hold <= 0 {
+			panic(longPollOperationID + " budget cannot hold a poll")
+		}
+		return hold
+	}
+	panic(longPollOperationID + " missing from the generated descriptor table")
+}
 
 // RealtimeTransportConfig 是 GET /config/realtime 下发的传输参数，
 // 键名与 App RealtimeConfig.fromMap 同源。
@@ -46,7 +70,7 @@ func DefaultTransportConfig() RealtimeTransportConfig {
 		HeartbeatIntervalSec: 15,
 		AuthAckTimeoutSec:    5,
 		WsIdleTimeoutSec:     120,
-		LongPollHoldSec:      25,
+		LongPollHoldSec:      int(longPollHoldCeiling.Seconds()),
 		MaxReconnectAttempts: 10,
 		ReconnectBaseDelayMs: 1000,
 		ReconnectMaxDelayMs:  30000,
@@ -294,11 +318,11 @@ func drainEvents(
 func parseHold(raw string) time.Duration {
 	seconds, err := strconv.Atoi(strings.TrimSpace(raw))
 	if err != nil || seconds <= 0 {
-		return longPollDefaultHold
+		return longPollHoldCeiling
 	}
 	hold := time.Duration(seconds) * time.Second
-	if hold > longPollMaxHold {
-		return longPollMaxHold
+	if hold > longPollHoldCeiling {
+		return longPollHoldCeiling
 	}
 	return hold
 }

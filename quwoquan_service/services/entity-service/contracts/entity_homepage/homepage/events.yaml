@@ -1,10 +1,7 @@
 events:
 - name: HomepageCandidateIntaken
   description: 候选共享主页创建
-  producer: entity-service
-  consumers:
-  - platform-ops
-  channel: event_store
+  delivery_semantics: transactional_outbox
   payload_entity: Homepage
   payload_fields:
   - homepageId
@@ -15,12 +12,7 @@ events:
   - createdAt
 - name: HomepagePublished
   description: 候选共享主页发布
-  producer: entity-service
-  consumers:
-  - content-service
-  - circle-service
-  - recommendation-engine
-  channel: event_store
+  delivery_semantics: transactional_outbox
   payload_entity: Homepage
   payload_fields:
   - homepageId

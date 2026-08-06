@@ -17,17 +17,17 @@ var (
 // AppErrorFromEntryInvalidArgument returns *AppError for ASSISTANT.USER.entry_invalid_argument (user_message from errors.yaml).
 func AppErrorFromEntryInvalidArgument(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.entry_invalid_argument")
-	return rterr.NewAppError(code, "当前页面上下文无效", debugMessage).WithMetadata("entry_invalid_argument", 400).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "当前页面上下文无效", debugMessage).WithMetadata("entry_invalid_argument", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromEntryProjectionUnavailable returns *AppError for ASSISTANT.SYSTEM.entry_projection_unavailable (user_message from errors.yaml).
 func AppErrorFromEntryProjectionUnavailable(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.SYSTEM.entry_projection_unavailable")
-	return rterr.NewAppError(code, "助手入口暂不可用，请稍后重试", debugMessage).WithMetadata("entry_projection_unavailable", 503).WithRecovery("retry", 3)
+	return rterr.NewAppError(code, "助手入口暂不可用，请稍后重试", debugMessage).WithMetadata("entry_projection_unavailable", 503).WithRecoveryDirective("retry", "snackbar", 3)
 }
 
 // AppErrorFromEntryUnauthorized returns *AppError for ASSISTANT.USER.entry_unauthorized (user_message from errors.yaml).
 func AppErrorFromEntryUnauthorized(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.entry_unauthorized")
-	return rterr.NewAppError(code, "请先登录后使用助手入口", debugMessage).WithMetadata("entry_unauthorized", 401).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "请先登录后使用助手入口", debugMessage).WithMetadata("entry_unauthorized", 401).WithRecoveryDirective("surface", "inlineCard", 0)
 }

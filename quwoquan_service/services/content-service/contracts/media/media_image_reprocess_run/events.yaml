@@ -1,9 +1,6 @@
 events:
 - name: MediaImageReprocessRunStarted
-  producer: content-service
-  consumers: []
-  no_consumer_reason: run 事实即受控运维审计记录；worker 直接读取 aggregate，不经事件投递。
-  channel: fact_collection
+  delivery_semantics: not_published
   payload_entity: MediaImageReprocessRun
   payload_fields:
   - runId
@@ -11,11 +8,9 @@ events:
   - status
   - assetIds
   - startedAt
-- name: MediaImageReprocessRunPaused
-  producer: content-service
-  consumers: []
   no_consumer_reason: run 事实即受控运维审计记录；worker 直接读取 aggregate，不经事件投递。
-  channel: fact_collection
+- name: MediaImageReprocessRunPaused
+  delivery_semantics: not_published
   payload_entity: MediaImageReprocessRun
   payload_fields:
   - runId
@@ -24,11 +19,9 @@ events:
   - processedCount
   - failedCount
   - pausedAt
-- name: MediaImageReprocessRunResumed
-  producer: content-service
-  consumers: []
   no_consumer_reason: run 事实即受控运维审计记录；worker 直接读取 aggregate，不经事件投递。
-  channel: fact_collection
+- name: MediaImageReprocessRunResumed
+  delivery_semantics: not_published
   payload_entity: MediaImageReprocessRun
   payload_fields:
   - runId
@@ -37,11 +30,9 @@ events:
   - processedCount
   - failedCount
   - updatedAt
-- name: MediaImageReprocessRunCompleted
-  producer: content-service
-  consumers: []
   no_consumer_reason: run 事实即受控运维审计记录；worker 直接读取 aggregate，不经事件投递。
-  channel: fact_collection
+- name: MediaImageReprocessRunCompleted
+  delivery_semantics: not_published
   payload_entity: MediaImageReprocessRun
   payload_fields:
   - runId
@@ -49,11 +40,9 @@ events:
   - processedCount
   - failedCount
   - completedAt
-- name: MediaImageReprocessRunRolledBack
-  producer: content-service
-  consumers: []
   no_consumer_reason: run 事实即受控运维审计记录；worker 直接读取 aggregate，不经事件投递。
-  channel: fact_collection
+- name: MediaImageReprocessRunRolledBack
+  delivery_semantics: not_published
   payload_entity: MediaImageReprocessRun
   payload_fields:
   - runId
@@ -61,3 +50,4 @@ events:
   - processedCount
   - failedCount
   - rolledBackAt
+  no_consumer_reason: run 事实即受控运维审计记录；worker 直接读取 aggregate，不经事件投递。

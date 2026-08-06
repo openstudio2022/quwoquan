@@ -1,0 +1,163 @@
+{
+  "_governance": {
+    "owner": "runtime-control-plane-foundation",
+    "reason": "代码覆盖率棘轮基线。App 计量单元为 production source 的 canonical `domain/context/object`；已经物理归位的 `runtime` / `design_system` 各自作为独立 cross-cutting 单元。对象与横切名册由 quwoquan_service/generated/contract_graph.json 和 object_path_map 实时派生，不在此文件复制，任何无主、歧义、仅 domain/context 或尚未归位的横切源码立即 BLOCK。数值只能由 `python3 quwoquan_ops/gate/verify_coverage_ratchet.py --collect --write-baseline` 在测试全绿时实测写入。采集范围如实登记如下，并非全量：(1) 端侧 `app:*` 只跑 quwoquan_app 的 canonical L0 套件 `test/local_contract`，不含 api_integration / user_acceptance / patrol；每个对象/横切单元独立报告 `line`、`branch`、`file`，其中 `file` 分母来自磁盘 production source，防止未 import 文件从 lcov 分母消失。(2) 端侧分支只能从 lcov `BRDA` 明细数：Flutter 3.44 的 `--branch-coverage` 不写 `BRF`/`BRH` 汇总行，照汇总行解析会得到恒为 0 的分母。(3) 云侧 `cloud:*` 按 domain 合并该 domain 下全部 Go service（含 control-plane）的 coverprofile，`-coverpkg` 限定各 service 的 `internal/...` 与 `cmd/...`，排除 `tests/api_integration`（需要真实环境）；Go 只有语句覆盖，没有分支覆盖。(4) 生成代码（`*.g.dart`、generated client）不做排除，一律进分母——排除清单会退化成逃逸口。(5) 分母为 0 的维度登记为 `unmeasured` 并写明原因，禁止填 0%：0% 会被当成已达标的下限，此后任何退化都过得去。(6) 非 collect 复用必须由 v3 receipt 同时绑定 source tree、test tree、ruleId、artifact digest 与 testsGreen=true；旧 lcov、旧 receipt 和红测试暂定值一律不得通过。",
+    "expires_when": "每个 App 对象/cross-cutting 单元的 line / branch / file 与每个 Cloud domain 的 statement 都达到所属 spec 约定的准出水位，且端侧采集范围扩展到全量三层套件后，基线改由 CI Delivery Gate 的全量采集写入"
+  },
+  "schema": "coverage-ratchet-baseline/v1",
+  "ruleId": "coverage-ratchet/v3",
+  "policy": {
+    "tolerance_percentage_points": 0.3,
+    "tolerance_reason": "同一份代码重复采集会有小幅抖动：Flutter 侧的 timeout/animation/`addPostFrameCallback` 分支与 Go 侧的 `t.Parallel()`、map 迭代序、context 超时路径都可能在不同调度下走到不同分支。0.3pp 是覆盖住这种调度抖动的上限，量级远小于「删掉一个测试」或「新增一段无测试代码」造成的下降；容差只吸收噪声，不吸收真实回归，且 ratchet_slack 会强制把上涨后的水位写回基线，容差不会被逐次累积成向下的滑坡。",
+    "ratchet_slack_percentage_points": 3.0,
+    "ratchet_slack_reason": "基线只允许比现实低 3pp 以内。超出即阻断并要求 --write-baseline 收紧，避免基线长期停在远低于现实的水位、退化成永远绿的摆设；3pp 让日常小幅补测试不必每次重写基线，又不足以掩盖一次成规模的覆盖率倒退。",
+    "granularity_units": 2.0,
+    "granularity_units_reason": "对象/cross-cutting/Cloud domain 单元的分母跨三个数量级：大单元有两万多条语句，小对象可能只有几十个分支。固定 pp 阈值在小单元上是噪声放大器——动一个分支就是好几个百分点，会把门禁变成天天误报的摆设。因此实际阈值取「配置 pp」与「2 个可数单位（语句/分支/文件）折算出的 pp」的较大者：测不出比一个可数单位更细的差别，就不该拿比它更细的阈值去阻断。对大单元该项恒不生效（两万条语句的 2 个单位只有 0.01pp），只对小单元起粒度下限作用，因此不会削弱大单元的约束力。"
+  },
+  "units": {
+    "cloud:assistant": {
+      "kind": "go_coverprofile",
+      "scope": "quwoquan_service: go test -covermode=atomic ./services/assistant-service/internal/... ./services/assistant-service/cmd/... ./services/assistant-service/tests/... (excluding /tests/api_integration)",
+      "measuredFromGreenTests": true,
+      "metrics": {
+        "statement": {
+          "covered": 11772,
+          "total": 21616,
+          "percent": 54.46
+        }
+      }
+    },
+    "cloud:chat": {
+      "kind": "go_coverprofile",
+      "scope": "quwoquan_service: go test -covermode=atomic ./services/chat-service/internal/... ./services/chat-service/cmd/... ./services/chat-service/tests/... (excluding /tests/api_integration)",
+      "measuredFromGreenTests": true,
+      "metrics": {
+        "statement": {
+          "covered": 1340,
+          "total": 7013,
+          "percent": 19.11
+        }
+      }
+    },
+    "cloud:circle": {
+      "kind": "go_coverprofile",
+      "scope": "quwoquan_service: go test -covermode=atomic ./services/circle-service/internal/... ./services/circle-service/cmd/... ./services/circle-service/tests/... (excluding /tests/api_integration)",
+      "measuredFromGreenTests": true,
+      "metrics": {
+        "statement": {
+          "covered": 1411,
+          "total": 7546,
+          "percent": 18.7
+        }
+      }
+    },
+    "cloud:gateway": {
+      "kind": "go_coverprofile",
+      "scope": "quwoquan_service: go test -covermode=atomic ./services/api-edge/internal/... ./services/api-edge/cmd/... ./services/api-edge/tests/... (excluding /tests/api_integration)",
+      "measuredFromGreenTests": true,
+      "metrics": {
+        "statement": {
+          "covered": 103,
+          "total": 467,
+          "percent": 22.06
+        }
+      }
+    },
+    "cloud:integration": {
+      "kind": "go_coverprofile",
+      "scope": "quwoquan_service: go test -covermode=atomic ./services/integration-service/internal/... ./services/integration-service/cmd/... ./services/integration-service/tests/... (excluding /tests/api_integration)",
+      "measuredFromGreenTests": true,
+      "metrics": {
+        "statement": {
+          "covered": 1499,
+          "total": 4251,
+          "percent": 35.26
+        }
+      }
+    },
+    "cloud:notification": {
+      "kind": "go_coverprofile",
+      "scope": "quwoquan_service: go test -covermode=atomic ./services/notification-service/internal/... ./services/notification-service/cmd/... ./services/notification-service/tests/... (excluding /tests/api_integration)",
+      "measuredFromGreenTests": true,
+      "metrics": {
+        "statement": {
+          "covered": 914,
+          "total": 2908,
+          "percent": 31.43
+        }
+      }
+    },
+    "cloud:ops": {
+      "kind": "go_coverprofile",
+      "scope": "quwoquan_service: go test -covermode=atomic ./control-plane/platform-ops/internal/... ./control-plane/platform-ops/cmd/... ./control-plane/platform-ops/tests/... ./services/product-ops-service/internal/... ./services/product-ops-service/cmd/... ./services/product-ops-service/tests/... (excluding /tests/api_integration)",
+      "measuredFromGreenTests": true,
+      "metrics": {
+        "statement": {
+          "covered": 2465,
+          "total": 7153,
+          "percent": 34.46
+        }
+      }
+    },
+    "cloud:realtime": {
+      "kind": "go_coverprofile",
+      "scope": "quwoquan_service: go test -covermode=atomic ./services/realtime-gateway/internal/... ./services/realtime-gateway/cmd/... ./services/realtime-gateway/tests/... (excluding /tests/api_integration)",
+      "measuredFromGreenTests": true,
+      "metrics": {
+        "statement": {
+          "covered": 881,
+          "total": 1489,
+          "percent": 59.17
+        }
+      }
+    },
+    "cloud:rtc": {
+      "kind": "go_coverprofile",
+      "scope": "quwoquan_service: go test -covermode=atomic ./services/rtc-service/internal/... ./services/rtc-service/cmd/... ./services/rtc-service/tests/... (excluding /tests/api_integration)",
+      "measuredFromGreenTests": true,
+      "metrics": {
+        "statement": {
+          "covered": 572,
+          "total": 1966,
+          "percent": 29.09
+        }
+      }
+    },
+    "cloud:search": {
+      "kind": "go_coverprofile",
+      "scope": "quwoquan_service: go test -covermode=atomic ./services/search-service/internal/... ./services/search-service/cmd/... ./services/search-service/tests/... (excluding /tests/api_integration)",
+      "measuredFromGreenTests": true,
+      "metrics": {
+        "statement": {
+          "covered": 671,
+          "total": 2710,
+          "percent": 24.76
+        }
+      }
+    },
+    "cloud:tag": {
+      "kind": "go_coverprofile",
+      "scope": "quwoquan_service: go test -covermode=atomic ./services/tag-service/internal/... ./services/tag-service/cmd/... ./services/tag-service/tests/... (excluding /tests/api_integration)",
+      "measuredFromGreenTests": true,
+      "metrics": {
+        "statement": {
+          "covered": 271,
+          "total": 2051,
+          "percent": 13.21
+        }
+      }
+    },
+    "cloud:user": {
+      "kind": "go_coverprofile",
+      "scope": "quwoquan_service: go test -covermode=atomic ./services/user-service/internal/... ./services/user-service/cmd/... ./services/user-service/tests/... (excluding /tests/api_integration)",
+      "measuredFromGreenTests": true,
+      "metrics": {
+        "statement": {
+          "covered": 2842,
+          "total": 13049,
+          "percent": 21.78
+        }
+      }
+    }
+  }
+}

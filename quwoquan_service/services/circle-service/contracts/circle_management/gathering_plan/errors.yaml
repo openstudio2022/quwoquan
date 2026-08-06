@@ -1,0 +1,110 @@
+description: GatheringPlan 对象专属稳定错误；保留 RuntimeFailure 所需 reason、HTTP、恢复动作、打断等级与双语文案。
+errors:
+- code: CIRCLE.USER.gathering_plan_invalid
+  reason: gathering_plan_invalid
+  emitted_by: [{surface: http, operations: [CreateGatheringPlan, ProposeGatheringPlan, CommitGatheringPlanProposal]}]
+  http_status: 400
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: gatheringPlanInvalid
+  go_const: ErrGatheringPlanInvalid
+  user_message: {zh: 协作计划内容无效，请检查后重试, en: The Gathering plan is invalid}
+- code: CIRCLE.USER.gathering_plan_cursor_invalid
+  reason: gathering_plan_cursor_invalid
+  emitted_by: [{surface: http, operations: [ListGatheringPlanRevisions]}]
+  http_status: 400
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: gatheringPlanCursorInvalid
+  go_const: ErrGatheringPlanCursorInvalid
+  user_message: {zh: 计划历史游标无效，请重新加载, en: The Gathering plan revision cursor is invalid}
+- code: CIRCLE.USER.gathering_plan_not_found
+  reason: gathering_plan_not_found
+  emitted_by: [{surface: http, operations: [ProposeGatheringPlan, CommitGatheringPlanProposal, GetGatheringPlan, ListGatheringPlanRevisions]}]
+  http_status: 404
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: gatheringPlanNotFound
+  go_const: ErrGatheringPlanNotFound
+  user_message: {zh: 协作计划不存在或已不可访问, en: Gathering plan was not found or is no longer available}
+- code: CIRCLE.USER.gathering_plan_proposal_not_found
+  reason: gathering_plan_proposal_not_found
+  emitted_by: [{surface: http, operations: [CommitGatheringPlanProposal]}]
+  http_status: 404
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: gatheringPlanProposalNotFound
+  go_const: ErrGatheringPlanProposalNotFound
+  user_message: {zh: 计划提案不存在，请刷新后重试, en: The Gathering plan proposal was not found}
+- code: CIRCLE.USER.gathering_plan_already_exists
+  reason: gathering_plan_already_exists
+  emitted_by: [{surface: http, operations: [CreateGatheringPlan]}]
+  http_status: 409
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: gatheringPlanAlreadyExists
+  go_const: ErrGatheringPlanAlreadyExists
+  user_message: {zh: 该活动已有协作计划, en: This Gathering already has a plan}
+- code: CIRCLE.USER.gathering_plan_permission_denied
+  reason: gathering_plan_permission_denied
+  emitted_by: [{surface: http, operations: [CreateGatheringPlan, ProposeGatheringPlan, CommitGatheringPlanProposal, GetGatheringPlan, ListGatheringPlanRevisions]}]
+  http_status: 403
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: gatheringPlanPermissionDenied
+  go_const: ErrGatheringPlanPermissionDenied
+  user_message: {zh: 你无权执行此协作计划操作, en: You are not allowed to perform this Gathering plan action}
+- code: CIRCLE.USER.gathering_plan_gathering_unavailable
+  reason: gathering_plan_gathering_unavailable
+  emitted_by: [{surface: http, operations: [CreateGatheringPlan, ProposeGatheringPlan, CommitGatheringPlanProposal, GetGatheringPlan, ListGatheringPlanRevisions]}]
+  http_status: 409
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: gatheringPlanGatheringUnavailable
+  go_const: ErrGatheringPlanGatheringUnavailable
+  user_message: {zh: 活动当前不可协作，请刷新活动状态, en: The Gathering is unavailable for plan collaboration}
+- code: CIRCLE.USER.gathering_plan_version_conflict
+  reason: gathering_plan_version_conflict
+  emitted_by: [{surface: http, operations: [ProposeGatheringPlan, CommitGatheringPlanProposal]}]
+  http_status: 409
+  recovery_action: retry
+  disruption_level: inlineCard
+  dart_const: gatheringPlanVersionConflict
+  go_const: ErrGatheringPlanVersionConflict
+  user_message: {zh: 计划已被其他人更新，请刷新后重试, en: The Gathering plan changed; refresh before retrying}
+- code: CIRCLE.USER.gathering_plan_revision_conflict
+  reason: gathering_plan_revision_conflict
+  emitted_by: [{surface: http, operations: [ProposeGatheringPlan, CommitGatheringPlanProposal]}]
+  http_status: 409
+  recovery_action: retry
+  disruption_level: inlineCard
+  dart_const: gatheringPlanRevisionConflict
+  go_const: ErrGatheringPlanRevisionConflict
+  user_message: {zh: 提案基线已过期，请刷新后重新提案, en: The Gathering plan proposal base revision is stale}
+- code: CIRCLE.USER.gathering_plan_proposal_conflict
+  reason: gathering_plan_proposal_conflict
+  emitted_by: [{surface: http, operations: [CommitGatheringPlanProposal]}]
+  http_status: 409
+  recovery_action: retry
+  disruption_level: inlineCard
+  dart_const: gatheringPlanProposalConflict
+  go_const: ErrGatheringPlanProposalConflict
+  user_message: {zh: 提案内容或状态已变化，请刷新后重试, en: The Gathering plan proposal changed or was already committed}
+- code: CIRCLE.USER.gathering_plan_idempotency_conflict
+  reason: gathering_plan_idempotency_conflict
+  emitted_by: [{surface: http, operations: [CreateGatheringPlan, ProposeGatheringPlan, CommitGatheringPlanProposal]}]
+  http_status: 409
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: gatheringPlanIdempotencyConflict
+  go_const: ErrGatheringPlanIdempotencyConflict
+  user_message: {zh: 幂等键已用于其他计划请求，请重新提交, en: The idempotency key belongs to a different Gathering plan request}
+- code: CIRCLE.SYSTEM.gathering_plan_storage_failed
+  reason: gathering_plan_storage_failed
+  emitted_by: [{surface: http, operations: [CreateGatheringPlan, ProposeGatheringPlan, CommitGatheringPlanProposal, GetGatheringPlan, ListGatheringPlanRevisions]}]
+  http_status: 500
+  recovery_action: retry
+  disruption_level: inlineCard
+  dart_const: gatheringPlanStorageFailed
+  go_const: ErrGatheringPlanStorageFailed
+  user_message: {zh: 协作计划暂时不可用，请稍后重试, en: Gathering plan is temporarily unavailable}

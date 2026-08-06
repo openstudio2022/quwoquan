@@ -1,41 +1,30 @@
 events:
 - name: NotificationDeliveryJobCreated
-  producer: notification-service
-  consumers:
-  - projection-workers
-  channel: event_store
+  delivery_semantics: transactional_event_log
   payload_entity: NotificationDeliveryJob
   payload_fields:
   - id
+  no_consumer_reason: 任务创建已在 NotificationDeliveryJob 事务中持久化；事件只作为投递工作流审计日志保留，没有下游订阅方。
 - name: NotificationDeliveryJobDispatched
-  producer: notification-service
-  consumers:
-  - projection-workers
-  channel: event_store
+  delivery_semantics: transactional_event_log
   payload_entity: NotificationDeliveryJob
   payload_fields:
   - id
+  no_consumer_reason: 调度结果已在 NotificationDeliveryJob 事务中持久化；事件只作为投递工作流审计日志保留，没有下游订阅方。
 - name: NotificationDeliveryJobDeadLettered
-  producer: notification-service
-  consumers:
-  - projection-workers
-  channel: event_store
+  delivery_semantics: transactional_event_log
   payload_entity: NotificationDeliveryJob
   payload_fields:
   - id
+  no_consumer_reason: 死信终态已在 NotificationDeliveryJob 事务中持久化；事件只作为投递工作流审计日志保留，没有下游订阅方。
 - name: NotificationDeliveryJobRecovered
-  producer: notification-service
-  consumers:
-  - projection-workers
-  channel: event_store
+  delivery_semantics: transactional_event_log
   payload_entity: NotificationDeliveryJob
   payload_fields:
   - id
+  no_consumer_reason: 恢复结果已在 NotificationDeliveryJob 事务中持久化；事件只作为投递工作流审计日志保留，没有下游订阅方。
 - name: IncomingCallRealtimeDispatched
-  producer: notification-service
-  consumers:
-  - projection-workers
-  channel: event_store
+  delivery_semantics: transactional_event_log
   payload_entity: NotificationDeliveryJob
   payload_fields:
   - id
@@ -44,11 +33,9 @@ events:
   - deviceId
   - deliveryKey
   - ackDeadlineAt
+  no_consumer_reason: realtime 外送由 owning coordinator 直接完成；本事件只记录 NotificationDeliveryJob 的持久工作流审计。
 - name: IncomingCallRealtimePresented
-  producer: notification-service
-  consumers:
-  - projection-workers
-  channel: event_store
+  delivery_semantics: transactional_event_log
   payload_entity: NotificationDeliveryJob
   payload_fields:
   - id
@@ -56,11 +43,9 @@ events:
   - deviceId
   - deliveryKey
   - presentedAt
+  no_consumer_reason: 设备展示回执已写入 NotificationDeliveryJob；本事件只记录对象的持久工作流审计。
 - name: IncomingCallPushQueued
-  producer: notification-service
-  consumers:
-  - notification-service-worker
-  channel: event_store
+  delivery_semantics: transactional_event_log
   payload_entity: NotificationDeliveryJob
   payload_fields:
   - id
@@ -68,11 +53,9 @@ events:
   - deviceId
   - deliveryKey
   - expiresAt
+  no_consumer_reason: push 提交由 owning coordinator 直接完成；本事件只记录 NotificationDeliveryJob 的持久工作流审计。
 - name: IncomingCallExternalInteractionAccepted
-  producer: notification-service
-  consumers:
-  - projection-workers
-  channel: event_store
+  delivery_semantics: transactional_event_log
   payload_entity: NotificationDeliveryJob
   payload_fields:
   - id
@@ -81,11 +64,9 @@ events:
   - deliveryKey
   - externalInteractionId
   - externalInteractionAcceptedAt
+  no_consumer_reason: 外部交互受理由 owning coordinator 直接完成；本事件只记录 NotificationDeliveryJob 的持久工作流审计。
 - name: IncomingCallSentUnconfirmed
-  producer: notification-service
-  consumers:
-  - projection-workers
-  channel: event_store
+  delivery_semantics: transactional_event_log
   payload_entity: IncomingCallProviderResultRecordedEvent
   payload_fields:
   - jobId
@@ -102,12 +83,10 @@ events:
   - recoveryAction
   - occurredAt
   - jobStatus
+  no_consumer_reason: 未确认终态已写入 NotificationDeliveryJob；本事件只记录对象的持久工作流审计。
 - name: IncomingCallProviderResultRecorded
   description: ring provider 的失败或可重试 receipt 已按 attemptId 幂等记录；不表示设备展示。
-  producer: notification-service
-  consumers:
-  - projection-workers
-  channel: event_store
+  delivery_semantics: transactional_event_log
   payload_entity: IncomingCallProviderResultRecordedEvent
   payload_fields:
   - jobId
@@ -124,11 +103,9 @@ events:
   - recoveryAction
   - occurredAt
   - jobStatus
+  no_consumer_reason: Provider receipt 已写入 NotificationDeliveryJob；本事件只记录对象的持久工作流审计。
 - name: IncomingCallDeliveryCancelled
-  producer: notification-service
-  consumers:
-  - projection-workers
-  channel: event_store
+  delivery_semantics: transactional_event_log
   payload_entity: NotificationDeliveryJob
   payload_fields:
   - id
@@ -136,11 +113,9 @@ events:
   - deviceId
   - deliveryKey
   - status
+  no_consumer_reason: 取消终态已写入 NotificationDeliveryJob；本事件只记录对象的持久工作流审计。
 - name: IncomingCallCancellationPushSubmitted
-  producer: notification-service
-  consumers:
-  - projection-workers
-  channel: event_store
+  delivery_semantics: transactional_event_log
   payload_entity: NotificationDeliveryJob
   payload_fields:
   - id
@@ -149,11 +124,9 @@ events:
   - deliveryKey
   - cancellationExternalInteractionId
   - cancellationPushSubmittedAt
+  no_consumer_reason: 取消 push 由 owning coordinator 直接提交；本事件只记录 NotificationDeliveryJob 的持久工作流审计。
 - name: IncomingCallCancellationExternalInteractionAccepted
-  producer: notification-service
-  consumers:
-  - projection-workers
-  channel: event_store
+  delivery_semantics: transactional_event_log
   payload_entity: NotificationDeliveryJob
   payload_fields:
   - id
@@ -162,11 +135,9 @@ events:
   - deliveryKey
   - cancellationExternalInteractionId
   - cancellationExternalInteractionAcceptedAt
+  no_consumer_reason: 取消外部交互由 owning coordinator 直接受理；本事件只记录 NotificationDeliveryJob 的持久工作流审计。
 - name: IncomingCallCancellationProviderResultRecorded
-  producer: notification-service
-  consumers:
-  - projection-workers
-  channel: event_store
+  delivery_semantics: transactional_event_log
   payload_entity: IncomingCallProviderResultRecordedEvent
   payload_fields:
   - jobId
@@ -183,11 +154,9 @@ events:
   - recoveryAction
   - occurredAt
   - jobStatus
+  no_consumer_reason: 取消 Provider receipt 已写入 NotificationDeliveryJob；本事件只记录对象的持久工作流审计。
 - name: IncomingCallCancellationRealtimeDispatched
-  producer: notification-service
-  consumers:
-  - projection-workers
-  channel: event_store
+  delivery_semantics: transactional_event_log
   payload_entity: NotificationDeliveryJob
   payload_fields:
   - id
@@ -195,3 +164,4 @@ events:
   - targetPersonaId
   - cancellationEventId
   - cancellationRealtimeDispatchedAt
+  no_consumer_reason: 取消 realtime 外送由 owning coordinator 直接完成；本事件只记录 NotificationDeliveryJob 的持久工作流审计。

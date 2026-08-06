@@ -1,6 +1,0 @@
-domain: TRAVEL
-aggregate: TripTimelineView
-description: TripTimelineView Reader 错误码。
-errors:
-- {code: TRAVEL.DEPENDENCY.trip_timeline_projection_unavailable, kind: DEPENDENCY, reason: trip_timeline_projection_unavailable, emitted_by: [{surface: http, operations: [GetTripTimeline]}], http_status: 503, recovery_action: retry, recovery_after_seconds: 2, go_const: ErrTripTimelineProjectionUnavailable, user_message: {zh: 行程时间线正在更新，请稍后重试, en: Trip timeline is being updated}}
-- {code: TRAVEL.SYSTEM.trip_timeline_projection_failed, kind: SYSTEM, reason: trip_timeline_projection_failed, emitted_by: [{surface: http, operations: [GetTripTimeline]}], http_status: 500, recovery_action: retry, recovery_after_seconds: 5, go_const: ErrTripTimelineProjectionFailed, user_message: {zh: 行程时间线加载失败，请重试, en: Trip timeline failed to load}}
