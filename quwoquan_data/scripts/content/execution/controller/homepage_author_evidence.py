@@ -1,7 +1,13 @@
 """Execution service extracted from the retired monolithic runner."""
 from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from content.execution.coverage import coverage_entity_type
 from content.execution.support import Any, DataIssueCode, DataIssueStage, DataIssueLane, DataRecoveryAction, ExecutionContext, ExecutionStateTransition, Mapping, Path, _IMAGE_SOURCE_TEXT_NOISE_PATTERNS, _IMAGE_SOURCE_TEXT_NOISE_TOKENS, _active_spec, _is_homepage_only_execution, data_issue, execution_root, load_execution_state, os, re, read_json, require_domain_etype, save_execution_state, shutil, store, write_json
+
+if TYPE_CHECKING:
+    from content.execution.agent.outcome import AgentRunOutcome
 
 
 def _managed_finished_author_outcomes_by_ref(
@@ -146,6 +152,7 @@ def _finalize_existing_managed_author_outputs(ctx: ExecutionContext, state: Exec
                 run_id=outcome.run_id or str(meta.get("agentRunId") or ""),
                 agent_id=outcome.agent_id or meta.get("agentId"),
                 model=str(ctx.model or ""),
+                provider=outcome.provider.value,
             ):
                 finalized += 1
             continue
@@ -175,6 +182,7 @@ def _finalize_existing_managed_author_outputs(ctx: ExecutionContext, state: Exec
                     "ref": ref,
                     "generator": "image_evidence_pack",
                     "status": "completed",
+                    "provider": outcome.provider.value,
                     "model": ctx.model,
                     "agentRunId": outcome.run_id or meta.get("agentRunId"),
                     "agentId": outcome.agent_id or meta.get("agentId"),
@@ -212,6 +220,7 @@ def _finalize_existing_managed_author_outputs(ctx: ExecutionContext, state: Exec
                 "ref": ref,
                 "generator": "agent",
                 "status": "completed",
+                "provider": outcome.provider.value,
                 "model": ctx.model,
                 "agentRunId": outcome.run_id or meta.get("agentRunId"),
                 "agentId": outcome.agent_id or meta.get("agentId"),

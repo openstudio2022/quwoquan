@@ -6,14 +6,17 @@ repository input roots and hashes their files in a deterministic order, so delet
 """
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import json
+import os
+import tempfile
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping
 
-from core.paths import REPO_ROOT
-
+from core.paths import DATA_CACHE_ROOT, REPO_ROOT
 
 _INPUT_ROOTS = (
     "quwoquan_data/scripts",
@@ -30,6 +33,7 @@ _INPUT_ROOTS = (
 # topology and readiness policy apply only when an immutable release is shipped.
 _DIGEST_PREFIX = "sha256:"
 _EXCLUDED_PARTS = {"__pycache__", ".pytest_cache", ".DS_Store", ".gitkeep"}
+_CACHE_VERSION = 1
 
 
 class SourceDigestError(ValueError):
@@ -43,22 +47,74 @@ class SourceDigest:
     digest: str
 
     @classmethod
-    def build(cls, *, repo_root: Path = REPO_ROOT) -> "SourceDigest":
-        digest = hashlib.sha256()
-        for relative_root in _INPUT_ROOTS:
-            root = repo_root / relative_root
-            if not root.exists():
-                raise SourceDigestError(f"source digest input is missing: {relative_root}")
-            for path in _iter_files(root):
-                relative = path.relative_to(repo_root).as_posix()
-                digest.update(relative.encode("utf-8"))
-                digest.update(b"\0")
-                digest.update(_file_sha256(path).encode("ascii"))
-                digest.update(b"\n")
+    def build(
+        cls,
+        *,
+        repo_root: Path = REPO_ROOT,
+        cache_path: Path | None = None,
+    ) -> SourceDigest:
+        normalized_root = repo_root.expanduser().resolve()
+        selected_cache = (
+            cache_path
+            if cache_path is not None
+            else _default_cache_path(normalized_root)
+        )
+        cache_guard = (
+            _cache_lock(selected_cache)
+            if selected_cache is not None
+            else nullcontext()
+        )
+        with cache_guard:
+            cache = (
+                _load_cache(selected_cache)
+                if selected_cache is not None
+                else {"version": _CACHE_VERSION, "entries": {}}
+            )
+            previous_entries = cache.get("entries")
+            if not isinstance(previous_entries, Mapping):
+                previous_entries = {}
+            next_entries: dict[str, dict[str, object]] = {}
+            digest = hashlib.sha256()
+            for relative_root in _INPUT_ROOTS:
+                root = normalized_root / relative_root
+                if not root.exists():
+                    raise SourceDigestError(
+                        f"source digest input is missing: {relative_root}"
+                    )
+                for path in _iter_files(root):
+                    relative = path.relative_to(normalized_root).as_posix()
+                    stat = path.stat()
+                    identity = {
+                        "size": int(stat.st_size),
+                        "mtimeNs": int(stat.st_mtime_ns),
+                        "ctimeNs": int(stat.st_ctime_ns),
+                        "device": int(stat.st_dev),
+                        "inode": int(stat.st_ino),
+                    }
+                    cached = previous_entries.get(relative)
+                    file_digest = ""
+                    if isinstance(cached, Mapping) and all(
+                        cached.get(key) == value for key, value in identity.items()
+                    ):
+                        candidate = cached.get("sha256")
+                        if isinstance(candidate, str) and _is_raw_sha256(candidate):
+                            file_digest = candidate
+                    if not file_digest:
+                        file_digest = _file_sha256(path)
+                    next_entries[relative] = {**identity, "sha256": file_digest}
+                    digest.update(relative.encode("utf-8"))
+                    digest.update(b"\0")
+                    digest.update(file_digest.encode("ascii"))
+                    digest.update(b"\n")
+            if selected_cache is not None:
+                _write_cache(
+                    selected_cache,
+                    {"version": _CACHE_VERSION, "entries": next_entries},
+                )
         return cls(digest=_DIGEST_PREFIX + digest.hexdigest())
 
     @classmethod
-    def from_document(cls, value: object) -> "SourceDigest":
+    def from_document(cls, value: object) -> SourceDigest:
         if not isinstance(value, Mapping):
             raise SourceDigestError("sourceDigest must be an object")
         if set(value) != {"algorithm", "digest", "inputs"}:
@@ -86,6 +142,29 @@ def current_source_digest(*, repo_root: Path = REPO_ROOT) -> SourceDigest:
     return SourceDigest.build(repo_root=repo_root)
 
 
+def content_source_revision(
+    *,
+    source_digest: str,
+    entity_catalog_digest: str,
+) -> str:
+    """Derive the one content revision shared by campaign and release evidence."""
+    if not _is_sha256(source_digest):
+        raise SourceDigestError("sourceDigest must be a sha256 digest")
+    if not _is_sha256(entity_catalog_digest):
+        raise SourceDigestError("entityCatalogDigest must be a sha256 digest")
+    encoded = json.dumps(
+        {
+            "schema": "quwoquan_data.campaign_content_source_revision",
+            "sourceDigest": source_digest,
+            "entityCatalogDigest": entity_catalog_digest,
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return _DIGEST_PREFIX + hashlib.sha256(encoded).hexdigest()
+
+
 def _iter_files(root: Path) -> tuple[Path, ...]:
     if root.is_file():
         return (root,)
@@ -104,17 +183,89 @@ def _file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _default_cache_path(repo_root: Path) -> Path | None:
+    if repo_root == REPO_ROOT.resolve():
+        return DATA_CACHE_ROOT / "source-digest" / "file-hashes-v1.json"
+    # A source capsule/snapshot is deliberately not a Git worktree and may be
+    # read-only.  Persistent caching is an optimization for normal repositories,
+    # never part of the immutable source identity or capsule tree.
+    if not (repo_root / ".git").exists():
+        return None
+    return (
+        repo_root
+        / ".qwq_output"
+        / "data"
+        / "local"
+        / "cache"
+        / "source-digest"
+        / "file-hashes-v1.json"
+    )
+
+
+def _load_cache(path: Path) -> dict[str, object]:
+    if not path.is_file():
+        return {"version": _CACHE_VERSION, "entries": {}}
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return {"version": _CACHE_VERSION, "entries": {}}
+    if not isinstance(value, dict) or value.get("version") != _CACHE_VERSION:
+        return {"version": _CACHE_VERSION, "entries": {}}
+    return value
+
+
+def _write_cache(path: Path, payload: Mapping[str, object]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    encoded = json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8") + b"\n"
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+        dir=path.parent,
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(encoded)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+@contextmanager
+def _cache_lock(cache_path: Path) -> Iterator[None]:
+    lock_path = cache_path.with_suffix(cache_path.suffix + ".lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open("a+b") as handle:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
+def _is_raw_sha256(value: str) -> bool:
+    return len(value) == hashlib.sha256().digest_size * 2 and all(
+        character in "0123456789abcdef" for character in value
+    )
+
+
 def _is_sha256(value: str) -> bool:
     if not value.startswith(_DIGEST_PREFIX):
         return False
     raw = value.removeprefix(_DIGEST_PREFIX)
-    return len(raw) == hashlib.sha256().digest_size * 2 and all(
-        character in "0123456789abcdef" for character in raw
-    )
+    return _is_raw_sha256(raw)
 
 
 __all__ = [
     "SourceDigest",
     "SourceDigestError",
+    "content_source_revision",
     "current_source_digest",
 ]

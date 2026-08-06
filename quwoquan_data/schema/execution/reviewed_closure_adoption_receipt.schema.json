@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/reviewed_closure_adoption_receipt.schema.json",
+  "type": "object",
+  "required": [
+    "schema",
+    "adoptionId",
+    "adoptionRef",
+    "sourceReleaseIdentity",
+    "targetSourceIdentity",
+    "laneExecutions",
+    "sharedObjectRefs",
+    "closureDigests",
+    "upstreamProvenance",
+    "status",
+    "recordedAt",
+    "receiptDigest"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "quwoquan_data.reviewed_closure_adoption_receipt" },
+    "adoptionId": { "type": "string", "minLength": 1 },
+    "adoptionRef": {
+      "type": "object",
+      "required": ["ref", "fileSha256", "adoptionRefDigest"],
+      "additionalProperties": false,
+      "properties": {
+        "ref": { "type": "string", "minLength": 1 },
+        "fileSha256": { "$ref": "#/$defs/sha256" },
+        "adoptionRefDigest": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "sourceReleaseIdentity": { "$ref": "#/$defs/releaseIdentity" },
+    "targetSourceIdentity": {
+      "type": "object",
+      "required": ["sourceRevision", "sourceDigest", "entityCatalogDigest"],
+      "additionalProperties": false,
+      "properties": {
+        "sourceRevision": { "$ref": "#/$defs/sha256" },
+        "sourceDigest": { "$ref": "#/$defs/sourceDigest" },
+        "entityCatalogDigest": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "laneExecutions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["carrier", "executionId", "adoptedObjectRefs"],
+        "additionalProperties": false,
+        "properties": {
+          "carrier": { "enum": ["homepage", "article", "image", "video"] },
+          "executionId": { "type": "string", "minLength": 1 },
+          "adoptedObjectRefs": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+    "sharedObjectRefs": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "closureDigests": {
+      "type": "object",
+      "required": ["objects", "media", "review", "rights", "upstream"],
+      "additionalProperties": false,
+      "properties": {
+        "objects": { "$ref": "#/$defs/sha256" },
+        "media": { "$ref": "#/$defs/sha256" },
+        "review": { "$ref": "#/$defs/sha256" },
+        "rights": { "$ref": "#/$defs/sha256" },
+        "upstream": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "upstreamProvenance": {
+      "type": "object",
+      "required": ["executionIds", "sourceDigests"],
+      "additionalProperties": false,
+      "properties": {
+        "executionIds": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "sourceDigests": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/sourceDigest" }
+        }
+      }
+    },
+    "status": { "const": "passed" },
+    "recordedAt": { "type": "string", "minLength": 1 },
+    "receiptDigest": { "$ref": "#/$defs/sha256" }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "releaseIdentity": {
+      "type": "object",
+      "required": [
+        "releaseId",
+        "payloadSha256",
+        "canonicalMerkle",
+        "attestationFileSha256"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "releaseId": { "type": "string", "minLength": 1 },
+        "payloadSha256": { "$ref": "#/$defs/sha256" },
+        "canonicalMerkle": { "$ref": "#/$defs/sha256" },
+        "attestationFileSha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "sourceDigest": {
+      "type": "object",
+      "required": ["algorithm", "digest", "inputs"],
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": { "const": "sha256" },
+        "digest": { "$ref": "#/$defs/sha256" },
+        "inputs": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

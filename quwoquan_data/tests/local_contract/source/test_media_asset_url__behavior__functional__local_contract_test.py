@@ -336,6 +336,41 @@ def test_release_object_media_binding_removes_private_cas_and_environment_urls()
     assert "objectKey" not in rights_snapshot_path.read_text(encoding="utf-8")
 
 
+def test_release_object_media_binding_preserves_frozen_asset_review_bytes() -> None:
+    objects = Path(tempfile.mkdtemp(prefix="release_review_binding_")) / "objects"
+    receipt_path = (
+        objects
+        / "posts/video/example/asset_reviews/receipts/frozen-review.json"
+    )
+    write_json(
+        receipt_path,
+        {
+            "schema": "quwoquan_data.independent_asset_review_receipt",
+            "assetSnapshot": {
+                "assetId": "video-asset",
+                "contentSha256": "sha256:" + "a" * 64,
+            },
+            "receiptDigest": "sha256:" + "b" * 64,
+        },
+    )
+    frozen = receipt_path.read_bytes()
+
+    bind_release_object_media_assets(
+        objects_root=objects,
+        manifest={
+            "assets": [
+                {
+                    "assetId": "video-asset",
+                    "kind": "video",
+                    "sha256": "sha256:" + "a" * 64,
+                }
+            ]
+        },
+    )
+
+    assert receipt_path.read_bytes() == frozen
+
+
 def test_image_variant_profiles_are_loaded_from_canonical_metadata() -> None:
     assert IMAGE_VARIANT_POLICY_VERSION == 1
     assert IMAGE_VARIANT_PROFILES == {

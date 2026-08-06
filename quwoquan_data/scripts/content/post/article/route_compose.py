@@ -1,12 +1,24 @@
 """Writing-pack preparation and compose payload helpers for route production."""
 from __future__ import annotations
 
-from typing import Any, Mapping, Sequence
+from collections.abc import Mapping, Sequence
+from typing import Any
 
-from core.data_issue import DataIssueCode, DataIssueStage, DataRecoveryAction, data_issues
-from content.post.article.evidence_bundle import gate_route_evidence_bundle, public_byline_label
-from content.post.object_index import require_title_hint
+from core.content_tags import resolved_content_tag_refs
 from core.creative_brief import creative_brief_contract_issues
+from core.data_issue import (
+    DataIssueCode,
+    DataIssueStage,
+    DataRecoveryAction,
+    data_issues,
+)
+
+from content.execution.stage_reports import (
+    write_gate_report,
+    write_repair_report,
+    write_stage_result,
+)
+from content.post.article.article_media_contract import article_media_contract_issues
 from content.post.article.draft_io import (
     GENERATOR_AGENT,
     read_draft_meta,
@@ -15,11 +27,11 @@ from content.post.article.draft_io import (
     write_prompt,
     write_writing_pack,
 )
-from core.content_tags import resolved_content_tag_refs
-from content.review.annotation.entity_annotation import merge_entity_refs
-from content.execution.stage_reports import write_gate_report, write_repair_report, write_stage_result
+from content.post.article.evidence_bundle import (
+    gate_route_evidence_bundle,
+    public_byline_label,
+)
 from content.post.article.prompt_renderer import render_prompt_md
-from content.post.article.writing_pack import build_writing_pack
 from content.post.article.route_assets import _build_route_assets
 from content.post.article.route_core import (
     IMAGE_EVIDENCE_GENERATOR,
@@ -32,6 +44,10 @@ from content.post.article.route_core import (
     _unique_strings,
     resolve_carrier,
 )
+from content.post.article.writing_pack import build_writing_pack
+from content.post.object_index import require_title_hint
+from content.review.annotation.entity_annotation import merge_entity_refs
+
 
 def build_route_writing_pack(
     execution_id: str,
@@ -104,6 +120,12 @@ def build_route_writing_pack(
             write_placeholder_draft(execution_id, ref)
 
     issues = _writing_pack_readiness_issues(brief, evidence_bundle, assets)
+    issues.extend(
+        article_media_contract_issues(
+            pack,
+            str(pack.get("baseSourceRef") or brief.get("baseSourceRef") or ""),
+        )
+    )
     issues.extend(creative_brief_contract_issues(pack))
     write_stage_result(execution_id, "post", "compose_brief", ref, pack)
     write_gate_report(
@@ -195,6 +217,7 @@ def _compose_payload_from_pack(
         "template": template,
         "assets": assets,
         "publishMediaMode": pack.get("publishMediaMode") or brief.get("publishMediaMode"),
+        "baseSourceRef": pack.get("baseSourceRef") or brief.get("baseSourceRef"),
         "publishLayout": "image" if carrier == "image" else "travel",
         "publishAngle": _publish_angle(brief),
         "publishTitle": (
@@ -236,7 +259,7 @@ def _source_ref_from_asset_path(value: Any) -> str:
         return ""
     if "/assets/" in raw:
         return raw.split("/assets/", 1)[0].rstrip("/") + "/source.md"
-    if raw.endswith("/source.md") or raw.endswith("/source.clean.md"):
+    if raw.endswith(("/source.md", "/source.clean.md")):
         return raw.rsplit("/", 1)[0].rstrip("/") + "/source.md"
     return ""
 

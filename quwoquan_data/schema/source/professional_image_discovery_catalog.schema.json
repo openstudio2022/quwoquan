@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/source/professional_image_discovery_catalog.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "catalogRevision", "providerOrder", "supportedAxes", "providers"],
+  "properties": {
+    "schema": {"const": "quwoquan_data.professional_image_discovery_catalog"},
+    "catalogRevision": {"type": "string", "minLength": 1},
+    "providerOrder": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "supportedAxes": {
+      "type": "array",
+      "minItems": 6,
+      "items": {"enum": ["entity", "category", "season", "style", "viewpoint", "popularity"]}
+    },
+    "providers": {
+      "type": "array",
+      "minItems": 2,
+      "items": {"$ref": "#/$defs/provider"}
+    }
+  },
+  "$defs": {
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider", "displayName", "priority", "discoveryMode",
+        "publicDiscoveryUrls", "searchUrlTemplate", "queryTemplates",
+        "acquisitionPaths", "termsUrl", "accessPolicy"
+      ],
+      "properties": {
+        "provider": {"type": "string", "minLength": 1},
+        "displayName": {"type": "string", "minLength": 1},
+        "priority": {"type": "integer", "minimum": 0},
+        "discoveryMode": {"enum": ["public_search_url", "public_explore_manual_query"]},
+        "publicDiscoveryUrls": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string", "pattern": "^https://"}
+        },
+        "searchUrlTemplate": {"type": "string"},
+        "queryTemplates": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "acquisitionPaths": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"enum": ["public_direct", "supported_api", "manual_file"]}
+        },
+        "termsUrl": {"type": "string", "pattern": "^https://"},
+        "accessPolicy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["anonymousOnly", "respectRobots", "loginBypass", "captchaBypass", "paywallBypass"],
+          "properties": {
+            "anonymousOnly": {"const": true},
+            "respectRobots": {"const": true},
+            "loginBypass": {"const": false},
+            "captchaBypass": {"const": false},
+            "paywallBypass": {"const": false}
+          }
+        }
+      }
+    }
+  }
+}

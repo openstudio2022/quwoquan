@@ -255,6 +255,22 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
                 {"targetPlatform": "ios", "emulator": False},
             ],
         )
+        smoke._validate_runtime_recovery_device_matrix(
+            self._args(
+                target=smoke.RUNTIME_RECOVERY_TARGET,
+                persisted_device_session=True,
+                platform="android",
+            ),
+            [{"targetPlatform": "android-arm64", "emulator": False}],
+        )
+        smoke._validate_runtime_recovery_device_matrix(
+            self._args(
+                target=smoke.RUNTIME_RECOVERY_TARGET,
+                persisted_device_session=True,
+                platform="ios",
+            ),
+            [{"targetPlatform": "ios", "emulator": False}],
+        )
 
     def test_native_video_evidence_only_accepts_patrol_log_marker(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_dir:

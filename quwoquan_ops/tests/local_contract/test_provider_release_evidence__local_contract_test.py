@@ -36,17 +36,19 @@ class ProviderReleaseEvidenceTest(unittest.TestCase):
             payload["prod_remote_release_ready"] = ready
         return payload
 
-    def _readiness(self, prod: dict[str, dict]) -> dict[str, dict]:
+    def _readiness(self) -> dict[str, dict]:
+        capability_ids = [f"fixture.capability.{index:02d}" for index in range(14)]
         return {
             environment: {
-                "fixture.capability": self._capability(
+                capability_id: self._capability(
                     required=True,
                     ready=True,
-                    prod=False,
+                    prod=environment == "prod",
                 )
+                for capability_id in capability_ids
             }
-            for environment in ("alpha", "beta", "gamma")
-        } | {"prod": prod}
+            for environment in ("alpha", "beta", "gamma", "prod")
+        }
 
     def _manifest(self) -> dict:
         return {
@@ -62,23 +64,14 @@ class ProviderReleaseEvidenceTest(unittest.TestCase):
             },
         }
 
-    def test_optional_unready_capability_does_not_block_required_ready(self) -> None:
+    def test_exact_140_cell_four_environment_readiness_passes(self) -> None:
         conformance = {
             "schema": "provider-conformance-source",
-            "evidenceCount": 2,
-            "sourceEvidence": self._source_evidence(2),
+            "evidenceCount": 140,
+            "sourceEvidence": self._source_evidence(140),
             "issues": [],
             "sourceCoverageIssues": [],
-            "readiness": self._readiness(
-                {
-                    "required.capability": {
-                        **self._capability(required=True, ready=True, prod=True),
-                    },
-                    "optional.capability": {
-                        **self._capability(required=False, ready=False, prod=True),
-                    },
-                }
-            ),
+            "readiness": self._readiness(),
         }
         with patch(
             "quwoquan_ops.ci.render_provider_release_evidence.validate_manifest"
@@ -90,26 +83,23 @@ class ProviderReleaseEvidenceTest(unittest.TestCase):
                 generated_at="2026-07-28T00:00:00Z",
             )
         self.assertEqual(payload["status"], "passed")
-        self.assertEqual(payload["evidenceCount"], 2)
+        self.assertEqual(payload["evidenceCount"], 140)
 
     def test_required_unready_capability_blocks(self) -> None:
         conformance = {
             "schema": "provider-conformance-source",
-            "evidenceCount": 1,
-            "sourceEvidence": self._source_evidence(1),
+            "evidenceCount": 140,
+            "sourceEvidence": self._source_evidence(140),
             "issues": [],
             "sourceCoverageIssues": [],
-            "readiness": self._readiness(
-                {
-                    "required.capability": {
-                        **self._capability(required=True, ready=False, prod=True),
-                    }
-                }
-            ),
+            "readiness": self._readiness(),
         }
+        conformance["readiness"]["prod"]["fixture.capability.00"][
+            "capability_ready"
+        ] = False
         with patch(
             "quwoquan_ops.ci.render_provider_release_evidence.validate_manifest"
-        ), self.assertRaisesRegex(ValueError, "not ready"):
+        ), self.assertRaisesRegex(ValueError, "required ready"):
             render(
                 manifest=self._manifest(),
                 contract_graph_digest="sha256:" + "d" * 64,
@@ -121,7 +111,7 @@ class ProviderReleaseEvidenceTest(unittest.TestCase):
         conformance = {
             "schema": "provider-conformance-readiness",
             "version": 1,
-            "evidenceCount": 1,
+            "evidenceCount": 140,
             "issues": [],
             "sourceCoverageIssues": [],
             "readiness": {"prod": {}},
@@ -139,18 +129,10 @@ class ProviderReleaseEvidenceTest(unittest.TestCase):
     def test_source_projection_drops_repository_report_identity(self) -> None:
         report = {
             "schema": "provider-conformance-readiness",
-            "evidenceCount": 1,
+            "evidenceCount": 140,
             "executableSourceCount": 4,
             "sourceCoverageIssues": [],
-            "readiness": self._readiness(
-                {
-                    "required.capability": self._capability(
-                        required=True,
-                        ready=True,
-                        prod=True,
-                    )
-                }
-            ),
+            "readiness": self._readiness(),
             "issues": [],
         }
         with patch(
@@ -161,7 +143,7 @@ class ProviderReleaseEvidenceTest(unittest.TestCase):
                 report,
                 validation_issues=[],
                 environment="prod",
-                source_evidence=self._source_evidence(1),
+                source_evidence=self._source_evidence(140),
             )
         self.assertEqual(payload["schema"], "provider-conformance-source")
         self.assertNotIn("version", payload)
@@ -169,10 +151,11 @@ class ProviderReleaseEvidenceTest(unittest.TestCase):
 
 
 class ProviderReleaseEvidenceProducerTest(unittest.TestCase):
-    def _component_manifest(self, *, candidate_id: object = None) -> dict:
+    def _released_manifest(self, *, candidate_id: object = None) -> dict:
         return {
-            "candidateId": candidate_id,
-            "status": "component-ready",
+            "candidateId": candidate_id or "sha256:" + "d" * 64,
+            "artifactDigest": "sha256:" + "f" * 64,
+            "status": "released",
             "source": {
                 "gitSha": "a" * 40,
                 "treeDigest": "sha1:" + "b" * 40,
@@ -184,7 +167,29 @@ class ProviderReleaseEvidenceProducerTest(unittest.TestCase):
             },
         }
 
-    def test_identity_rejects_sealed_candidate_and_writes_binding_outputs(
+    def test_workflow_requires_clean_reviewed_ci_and_exact_140_cells(self) -> None:
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parents[3]
+        workflow = (
+            root / ".github/workflows/provider-release-evidence.yml"
+        ).read_text(encoding="utf-8")
+        producer = (
+            root / "quwoquan_ops/ci/provider_release_evidence.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("git status --porcelain --untracked-files=all", workflow)
+        self.assertIn("QWQ_PROVIDER_CONFORMANCE_REVIEWED_COMMIT", workflow)
+        self.assertIn("secrets.QWQ_PROVIDER_CONFORMANCE_ATTESTATION_KEY", workflow)
+        self.assertIn("consume_released_release_evidence.py", workflow)
+        self.assertIn("vars.RELEASED_RELEASE_EVIDENCE_REF", workflow)
+        self.assertIn("execute-nonprod", workflow)
+        self.assertIn("--environment-matrix", producer)
+        self.assertIn('!= "140"', workflow)
+        self.assertIn("${{ runner.temp }}", workflow)
+        self.assertNotIn("local-sha256", workflow)
+        self.assertNotIn("QWQ_PROVIDER_CONFORMANCE_ATTESTATION_AUTHORITY: local", workflow)
+
+    def test_identity_requires_released_candidate_and_writes_derived_outputs(
         self,
     ) -> None:
         import argparse
@@ -199,8 +204,9 @@ class ProviderReleaseEvidenceProducerTest(unittest.TestCase):
             root = Path(directory)
             manifest_path = root / "manifest.json"
             github_output = root / "github_output"
-            sealed = self._component_manifest(candidate_id="sha256:" + "d" * 64)
-            manifest_path.write_text(json.dumps(sealed), encoding="utf-8")
+            missing_candidate = self._released_manifest(candidate_id="")
+            missing_candidate["candidateId"] = None
+            manifest_path.write_text(json.dumps(missing_candidate), encoding="utf-8")
             with patch.object(
                 producer,
                 "validate_manifest",
@@ -213,18 +219,17 @@ class ProviderReleaseEvidenceProducerTest(unittest.TestCase):
                     (),
                     {"stdout": "a" * 40 + "\n"},
                 )(),
+            ), self.assertRaisesRegex(
+                ValueError,
+                "released candidateId",
             ):
-                with self.assertRaisesRegex(
-                    ValueError,
-                    "Provider qualification must precede candidate sealing",
-                ):
-                    producer._component_identity(
-                        manifest_path,
-                        "ghcr.io/owner/repo/component@sha256:" + "e" * 64,
-                    )
+                producer._release_identity(
+                    manifest_path,
+                    "ghcr.io/owner/repo/release-artifact@sha256:" + "e" * 64,
+                )
 
-            open_manifest = self._component_manifest()
-            manifest_path.write_text(json.dumps(open_manifest), encoding="utf-8")
+            released_manifest = self._released_manifest()
+            manifest_path.write_text(json.dumps(released_manifest), encoding="utf-8")
             github_output.write_text("", encoding="utf-8")
             with patch.object(
                 producer,
@@ -241,9 +246,9 @@ class ProviderReleaseEvidenceProducerTest(unittest.TestCase):
             ):
                 code = producer.command_identity(
                     argparse.Namespace(
-                        component_manifest=manifest_path,
-                        component_evidence_ref=(
-                            "ghcr.io/owner/repo/component@sha256:" + "e" * 64
+                        release_manifest=manifest_path,
+                        release_evidence_ref=(
+                            "ghcr.io/owner/repo/release-artifact@sha256:" + "e" * 64
                         ),
                         github_output=str(github_output),
                     )
@@ -252,9 +257,11 @@ class ProviderReleaseEvidenceProducerTest(unittest.TestCase):
             output = github_output.read_text(encoding="utf-8")
             self.assertIn("expectedImageDigest=sha256:", output)
             self.assertIn(
-                "componentEvidenceRef=ghcr.io/owner/repo/component@sha256:",
+                "releaseEvidenceRef=ghcr.io/owner/repo/release-artifact@sha256:",
                 output,
             )
+            self.assertIn("candidateId=sha256:", output)
+            self.assertIn("artifactDigest=sha256:", output)
 
     def test_execute_prod_invokes_stackctl_for_enabled_bindings_only(self) -> None:
         import argparse
@@ -270,7 +277,7 @@ class ProviderReleaseEvidenceProducerTest(unittest.TestCase):
             manifest_path = root / "manifest.json"
             report_dir = root / "reports"
             manifest_path.write_text(
-                json.dumps(self._component_manifest()),
+                json.dumps(self._released_manifest()),
                 encoding="utf-8",
             )
             commands: list[list[str]] = []
@@ -292,43 +299,114 @@ class ProviderReleaseEvidenceProducerTest(unittest.TestCase):
                     {
                         "selectedBindings": {
                             "prod": {
-                                "required.capability": {
-                                    "state": "enabled",
-                                    "adapter_id": "ext.provider.canonical",
+                                **{
+                                    f"required.capability.{index:02d}": {
+                                        "state": "enabled",
+                                        "adapter_id": f"ext.provider.canonical.{index:02d}",
+                                        "adapter_kind": "external",
+                                    }
+                                    for index in range(14)
                                 },
                                 "blocked.capability": {
                                     "state": "blocked",
                                     "adapter_id": "ext.provider.blocked",
                                 },
                             }
-                        }
+                        },
+                        "providerConformanceCapabilityIds": [
+                            f"required.capability.{index:02d}" for index in range(14)
+                        ],
                     },
                     [],
                 ),
+            ), patch.object(
+                producer.governance,
+                "requires_provider_conformance",
+                side_effect=lambda binding: binding.get("state") == "enabled",
             ), patch.object(producer.subprocess, "run", side_effect=_run):
                 code = producer.command_execute_prod(
                     argparse.Namespace(
-                        component_manifest=manifest_path,
-                        component_evidence_ref=(
-                            "ghcr.io/owner/repo/component@sha256:" + "e" * 64
+                        release_manifest=manifest_path,
+                        release_evidence_ref=(
+                            "ghcr.io/owner/repo/release-artifact@sha256:" + "e" * 64
                         ),
                         report_dir=report_dir,
                     )
                 )
             self.assertEqual(code, 0)
-            self.assertEqual(len(commands), 1)
+            self.assertEqual(len(commands), 14)
             command = commands[0]
             self.assertEqual(command[1:4], [
                 "quwoquan_ops/cli/stackctl.py",
                 "provider-conformance",
                 "--adapter-id",
             ])
-            self.assertIn("ext.provider.canonical", command)
+            self.assertIn("ext.provider.canonical.00", command)
             self.assertIn("--env", command)
             self.assertIn("prod", command)
             self.assertIn("--execute", command)
             self.assertIn("--layer", command)
             self.assertIn("user_acceptance", command)
+
+    def test_execute_nonprod_invokes_three_deterministic_environment_matrices(
+        self,
+    ) -> None:
+        import argparse
+        import json
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+
+        from quwoquan_ops.ci import provider_release_evidence as producer
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            manifest_path = root / "manifest.json"
+            manifest_path.write_text(
+                json.dumps(self._released_manifest()),
+                encoding="utf-8",
+            )
+            commands: list[list[str]] = []
+
+            def _run(command, cwd=None, env=None, check=None, **_kwargs):
+                if command[:2] == ["git", "rev-parse"]:
+                    return type("Completed", (), {"stdout": "a" * 40 + "\n"})()
+                commands.append(list(command))
+                return type("Completed", (), {"stdout": ""})()
+
+            capability_ids = [
+                f"required.capability.{index:02d}" for index in range(14)
+            ]
+            with patch.object(
+                producer,
+                "validate_manifest",
+                side_effect=lambda payload, allowed_statuses=None: None,
+            ), patch.object(
+                producer.governance,
+                "load_and_compile",
+                return_value=(
+                    {"providerConformanceCapabilityIds": capability_ids},
+                    [],
+                ),
+            ), patch.object(producer.subprocess, "run", side_effect=_run):
+                code = producer.command_execute_nonprod(
+                    argparse.Namespace(
+                        release_manifest=manifest_path,
+                        release_evidence_ref=(
+                            "ghcr.io/owner/repo/release-artifact@sha256:" + "e" * 64
+                        ),
+                        report_dir=root / "reports",
+                    )
+                )
+            self.assertEqual(code, 0)
+            self.assertEqual(len(commands), 3)
+            self.assertEqual(
+                [command[command.index("--env") + 1] for command in commands],
+                ["alpha", "beta", "gamma"],
+            )
+            self.assertTrue(
+                all("--environment-matrix" in command for command in commands)
+            )
 
     def test_package_gate_blocks_when_executed_evidence_is_empty(self) -> None:
         import argparse
@@ -344,7 +422,7 @@ class ProviderReleaseEvidenceProducerTest(unittest.TestCase):
             manifest_path = root / "manifest.json"
             output_dir = root / "oci"
             manifest_path.write_text(
-                json.dumps(self._component_manifest()),
+                json.dumps(self._released_manifest()),
                 encoding="utf-8",
             )
             with patch.object(
@@ -364,6 +442,10 @@ class ProviderReleaseEvidenceProducerTest(unittest.TestCase):
                 "output_root",
                 return_value=root,
             ), patch.object(
+                producer.governance,
+                "load_and_compile",
+                return_value=({}, []),
+            ), patch.object(
                 producer.provider_conformance,
                 "load_validate_and_derive",
                 return_value=({"schema": "provider-conformance-readiness"}, []),
@@ -373,23 +455,36 @@ class ProviderReleaseEvidenceProducerTest(unittest.TestCase):
                 return_value=[],
             ), patch.object(
                 producer.provider_conformance,
-                "evidence_files",
+                "load_evidence",
+                return_value=([], []),
+            ), patch.object(
+                producer.provider_conformance,
+                "exact_required_cell_issues",
                 return_value=[],
-            ):
-                with self.assertRaisesRegex(
-                    ValueError,
-                    "executed Provider evidence set is empty",
-                ):
-                    producer.command_package(
-                        argparse.Namespace(
-                            component_manifest=manifest_path,
-                            component_evidence_ref=(
-                                "ghcr.io/owner/repo/component@sha256:" + "e" * 64
-                            ),
-                            output_dir=output_dir,
-                            github_output="",
-                        )
+            ), self.assertRaisesRegex(ValueError, "exactly 140"):
+                producer.command_package(
+                    argparse.Namespace(
+                        release_manifest=manifest_path,
+                        release_evidence_ref=(
+                            "ghcr.io/owner/repo/release-artifact@sha256:" + "e" * 64
+                        ),
+                        release_root=root,
+                        output_dir=output_dir,
+                        github_output="",
                     )
+                )
+
+    def test_package_uses_only_manifest_bound_release_closure(self) -> None:
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parents[3]
+        producer = (
+            root / "quwoquan_ops/ci/provider_release_evidence.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("RELEASE_CLOSURE_PATHS", producer)
+        self.assertIn("released manifest closure digest mismatch", producer)
+        self.assertIn("sha256_file(source_path)", producer)
+        self.assertNotIn("_matrix_lifecycle_sources", producer)
 
 
 if __name__ == "__main__":

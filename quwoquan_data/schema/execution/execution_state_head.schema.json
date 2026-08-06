@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/execution_state_head.schema.json",
+  "title": "Execution state journal head",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "executionId",
+    "sequence",
+    "eventDigest",
+    "snapshotDigest",
+    "eventsDirectoryMtimeNs"
+  ],
+  "properties": {
+    "schema": {
+      "const": "quwoquan.content.execution_state_head"
+    },
+    "executionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "eventDigest": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "snapshotDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "eventsDirectoryMtimeNs": {
+      "type": "integer",
+      "minimum": 0
+    }
+  }
+}

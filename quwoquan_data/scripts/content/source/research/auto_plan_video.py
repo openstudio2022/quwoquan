@@ -1,14 +1,18 @@
 """Build the formal video lane from acquired, rights-audited source videos."""
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from datetime import UTC, datetime
 
 from core.data_issue import DataIssueCode, DataRecoveryAction
 from governance.coverage.distribution import (
     ProductLifecycleState,
     load_content_distribution_policy,
+)
+
+from content.source.professional_video_receipt import (
+    acquired_video_specs_for_entity,
 )
 from content.source.research import network_io
 from content.source.research.plan_state import (
@@ -226,24 +230,28 @@ def rank_video_candidates_by_popularity(
 ) -> list[dict[str, Any]]:
     """Rank only comparable candidates; missing metrics are never fabricated."""
 
-    def key(item: dict[str, Any]) -> tuple[int, float, int]:
+    def key(item: dict[str, Any]) -> tuple[int, float, float, str]:
         signals = item.get("popularitySignals")
         payload = signals if isinstance(signals, dict) else {}
-        raw_percentile = payload.get("samePlatformTopicTimeBucketPercentile")
+        raw_percentile = payload.get("popularityPercentile")
+        if raw_percentile is None:
+            raw_percentile = payload.get("samePlatformTopicTimeBucketPercentile")
+        if payload.get("rankingEligible") is not True:
+            return (1, 0.0, 0.0, str(item.get("professionalAssetId") or ""))
         try:
             percentile = float(raw_percentile)
         except (TypeError, ValueError):
-            return (1, 0.0, 0)
-        engagement = sum(
-            int(payload.get(field) or 0)
-            for field in (
-                "likeCount",
-                "commentCount",
-                "shareCount",
-                "favoriteCount",
-            )
+            return (1, 0.0, 0.0, str(item.get("professionalAssetId") or ""))
+        raw_score = payload.get("popularityScore")
+        score = (
+            float(raw_score)
+            if isinstance(raw_score, (int, float)) and not isinstance(raw_score, bool)
+            else float(sum(
+                int(payload.get(field) or 0)
+                for field in ("likeCount", "commentCount", "shareCount", "favoriteCount")
+            ))
         )
-        return (0, -percentile, -engagement)
+        return (0, -percentile, -score, str(item.get("professionalAssetId") or ""))
 
     return sorted(candidates, key=key)
 
@@ -256,11 +264,38 @@ def write_video_lane(
     report: dict[str, Any],
     updated: list[dict[str, Any]],
     sourced_video_pool: list[dict[str, Any]],
+    acquisition_receipt_refs: list[str] | None = None,
+    acquisition_root: Path | None = None,
 ) -> None:
-    sourced_videos = list(sourced_video_pool[:1])
+    professional_videos = acquired_video_specs_for_entity(
+        acquisition_receipt_refs or [],
+        entity_id=entity_id,
+        root=acquisition_root,
+    )
+    merged: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for candidate in [*professional_videos, *sourced_video_pool]:
+        identity = str(
+            candidate.get("professionalContentSha256")
+            or candidate.get("assetUrl")
+            or candidate.get("sourcePostUrl")
+            or ""
+        )
+        if not identity or identity in seen:
+            continue
+        seen.add(identity)
+        merged.append(candidate)
+    ranked = rank_video_candidates_by_popularity(merged)
+    sourced_videos = ranked[:1]
     report.setdefault("videoDiscovery", []).append(
         {
             "entityId": entity_id,
+            "professionalAcquisitionCandidates": len(professional_videos),
+            "rankingEligibleCandidates": sum(
+                isinstance(candidate.get("popularitySignals"), dict)
+                and candidate["popularitySignals"].get("rankingEligible") is True
+                for candidate in ranked
+            ),
             "directVideoCandidates": len(sourced_videos),
         }
     )
@@ -278,6 +313,7 @@ def write_video_lane(
         "video",
         {
             "renderStrategy": "sourced_video",
+            "acquisitionReceiptRefs": list(acquisition_receipt_refs or []),
             "videos": sourced_videos,
             "diagnostic": {
                 "directVideoCandidates": len(sourced_videos),

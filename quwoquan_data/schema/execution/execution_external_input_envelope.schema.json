@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/execution_external_input_envelope.schema.json",
+  "type": "object",
+  "required": [
+    "schema", "rootExecutionId", "executionId", "carrier", "sourceRevision",
+    "sourceDigest", "entityCatalogDigest", "submissionDigest", "planDigest",
+    "capsuleRef", "capsuleDigest", "externalInputRootRef",
+    "externalInputRefs", "externalInputsDigest", "envelopeDigest"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {"const": "quwoquan_data.execution_external_input_envelope"},
+    "rootExecutionId": {"type": "string", "minLength": 1},
+    "executionId": {"type": "string", "minLength": 1},
+    "carrier": {"enum": ["homepage", "article", "image", "video"]},
+    "sourceRevision": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "sourceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "entityCatalogDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "submissionDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "planDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "capsuleRef": {"type": "string", "minLength": 1},
+    "capsuleDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "externalInputRootRef": {"type": "string", "minLength": 1},
+    "externalInputRefs": {
+      "type": "array",
+      "items": {"$ref": "campaign_external_input_ref.schema.json"}
+    },
+    "externalInputsDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "envelopeDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

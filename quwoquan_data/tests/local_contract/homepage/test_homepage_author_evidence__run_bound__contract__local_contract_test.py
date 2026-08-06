@@ -16,6 +16,7 @@ from content.execution.agent.outcome import AgentRunOutcome  # noqa: E402
 from content.execution.queue.core import stable_job_id  # noqa: E402
 from content.execution.production_contracts import sha256_file, sha256_text, validate_agent_result_envelope  # noqa: E402
 from core.io import read_json, write_json  # noqa: E402
+from core.control_types import AgentProvider  # noqa: E402
 from core.schema import assert_valid  # noqa: E402
 from governance.coverage.entity_extract import entity_ref  # noqa: E402
 
@@ -51,7 +52,11 @@ def test_homepage_author_evidence_binds_real_cursor_run_and_page(tmp_path: Path)
         domain="地点",
         etype="景区",
         entity="测试景区",
-        outcome=AgentRunOutcome.finished(run_id="cursor-run-1", agent_id="agent-1"),
+        outcome=AgentRunOutcome.finished(
+            provider=AgentProvider.CURSOR_SDK,
+            run_id="cursor-run-1",
+            agent_id="agent-1",
+        ),
         draft_meta=draft_meta,
     )
 

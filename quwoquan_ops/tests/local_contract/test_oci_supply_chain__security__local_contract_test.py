@@ -10,14 +10,17 @@ from unittest import mock
 
 from quwoquan_ops.cli.prod import oci_supply_chain
 
-
 DIGEST = "sha256:" + ("a" * 64)
 REF = f"ghcr.io/owner/repo/content-service@{DIGEST}"
+RELEASE_REF = f"ghcr.io/owner/repo/release-artifact@{DIGEST}"
 REPOSITORY = "owner/repo"
 SIGNER = "owner/repo/.github/workflows/service_pipeline.yml"
+RELEASE_SIGNER = "owner/repo/.github/workflows/deploy-prod-auto.yml"
 
 
-def completed(payload: object, *, returncode: int = 0) -> subprocess.CompletedProcess[str]:
+def completed(
+    payload: object, *, returncode: int = 0
+) -> subprocess.CompletedProcess[str]:
     return subprocess.CompletedProcess(
         [],
         returncode,
@@ -78,7 +81,10 @@ class OciSupplyChainSecurityContractTest(unittest.TestCase):
 
     def test_signed_claims_enforce_repo_workflow_issuer_and_exact_subject(self) -> None:
         runner = mock.Mock(
-            side_effect=[completed(verification_payload()), completed(verification_payload())]
+            side_effect=[
+                completed(verification_payload()),
+                completed(verification_payload()),
+            ]
         )
         verified = oci_supply_chain.verify_signed_attestations(
             REF,
@@ -111,6 +117,29 @@ class OciSupplyChainSecurityContractTest(unittest.TestCase):
                 repository=REPOSITORY,
                 signer_workflow=SIGNER,
                 runner=runner,
+            )
+
+    def test_prod_workflow_can_sign_only_release_artifacts(self) -> None:
+        release_payload = verification_payload()
+        release_payload[0]["verificationResult"]["statement"]["subject"][0]["name"] = (
+            "ghcr.io/owner/repo/release-artifact"
+        )
+        runner = mock.Mock(
+            side_effect=[completed(release_payload), completed(release_payload)]
+        )
+        verified = oci_supply_chain.verify_signed_attestations(
+            RELEASE_REF,
+            repository=REPOSITORY,
+            signer_workflow=RELEASE_SIGNER,
+            source_digest="b" * 40,
+            runner=runner,
+        )
+        self.assertEqual(set(verified), set(oci_supply_chain.PREDICATES))
+        with self.assertRaisesRegex(ValueError, "not canonical"):
+            oci_supply_chain.verify_signed_attestations(
+                REF,
+                repository=REPOSITORY,
+                signer_workflow=RELEASE_SIGNER,
             )
 
     def test_cli_extracts_only_canonical_spdx_json(self) -> None:

@@ -111,14 +111,15 @@ def test_article_execution_journey_is_green():
     )
     write_json(execution_inputs_dir(EXECUTION_ID, "post", "compose") / f"{REF}.json", brief)
     image_root = Path(tempfile.mkdtemp(prefix="verify_pilot_sources_"))
+    base_source_ref = ""
     for idx, entity in enumerate(ENTITIES):
         obj = resolve_entity_object_dir(EXECUTION_ID, entity, etype_hint="景区")
         image_paths: list[Path] = []
         for k in range(2):
             image_path = image_root / f"{entity}_{k}.jpg"
-            _clean_image(image_path, seed=idx * 7 + k + 1)
+            _clean_image(image_path, seed=7 + idx * 2 + k)
             image_paths.append(image_path)
-        write_source_unit(
+        source_manifest = write_source_unit(
             obj,
             ordinal=1,
             source_id="curated_story",
@@ -139,6 +140,14 @@ def test_article_execution_journey_is_green():
             relevance=f"{entity} 路线证据",
             images=[{"sourcePath": str(path), "caption": f"{entity} 图{k}", "relevance": f"{entity} 图{k}"} for k, path in enumerate(image_paths)],
         )
+        if idx == 0:
+            base_source_ref = str(source_manifest["sourceRef"])
+
+    brief["baseSourceRef"] = base_source_ref
+    write_json(
+        execution_inputs_dir(EXECUTION_ID, "post", "compose") / f"{REF}.json",
+        brief,
+    )
 
     quality = analyze_route_ref(EXECUTION_ID, REF, brief)
     pack = build_route_writing_pack(EXECUTION_ID, REF, brief, quality)

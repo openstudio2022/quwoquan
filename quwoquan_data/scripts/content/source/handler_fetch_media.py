@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 from core.data_issue import (
     DataIssueCode,
@@ -14,6 +15,7 @@ from core.data_issue import (
     data_issues,
 )
 from core.paths import execution_source_unit_dir
+
 from content.execution.stage_reports import write_gate_report
 from content.source.handler_images import (
     _prune_stale_rejected_source_units,
@@ -55,6 +57,40 @@ def _source_collection_title(image: Mapping[str, Any]) -> str:
     """Keep only an explicit source title; collection identifiers are not copy."""
 
     return str(image.get("title") or "").strip()
+
+
+def _image_collection_source_use_mode(images: list[dict[str, Any]]) -> str:
+    professional = [
+        image
+        for image in images
+        if str(image.get("acquisitionReceiptRef") or "").strip()
+    ]
+    if not professional:
+        return "licensed_adaptation"
+    if len(professional) != len(images):
+        raise ValueError("image collection cannot mix professional and ordinary assets")
+    for image in professional:
+        identity = (
+            str(image.get("acquisitionReceiptRef") or "").strip(),
+            str(image.get("professionalAssetId") or "").strip(),
+            str(image.get("professionalContentSha256") or "").strip(),
+        )
+        if not all(identity):
+            raise ValueError(
+                "professional image collection lacks exact acquisition identity"
+            )
+        if image.get("distributionDecision") not in {
+            "research_allowed",
+            "commercial_allowed",
+        }:
+            raise ValueError("professional image collection is not distribution-admitted")
+        if image.get("rightsStatus") not in {"verified", "unverified", "unknown"}:
+            raise ValueError("professional image collection rights status is blocked")
+    return (
+        "licensed_adaptation"
+        if all(image.get("rightsStatus") == "verified" for image in professional)
+        else "rights_audit_only"
+    )
 
 
 def _materialize_image_collections(spec: EntityMediaClosureInput) -> set[Path]:
@@ -108,7 +144,7 @@ def _materialize_image_collections(spec: EntityMediaClosureInput) -> set[Path]:
             source_kind="image_collection",
             extractor="image_collection_download",
             policy_revision="image-collection-attribution",
-            source_use_mode="licensed_adaptation",
+            source_use_mode=_image_collection_source_use_mode(group),
             research_lane=unit_lane,
             license_value=str(first.get("license") or ""),
             url=collection_page,

@@ -42,6 +42,9 @@ def _reliabletask_accepted_throughput(root: Path) -> dict[str, Any] | None:
         "reliabletask_fleet_report",
         label="reliabletask_fleet_report",
     )
+    from content.execution.reliabletask_fleet import ReliableTaskFleetReport
+
+    ReliableTaskFleetReport.from_document(report)
     commercial_accepted = int(report.get("commercialAcceptedCount") or 0)
     finalized = int(report.get("finalizedObjectCount") or 0)
     # Dead publish jobs may still finalize via absorption; readiness must honor
@@ -88,6 +91,17 @@ def _reliabletask_accepted_throughput(root: Path) -> dict[str, Any] | None:
         ),
         "automaticRecoveryRate": float(
             report.get("automaticRecoveryRate") or 0.0
+        ),
+        "automaticRecoveryStatus": str(
+            report.get("automaticRecoveryStatus") or "NOT_EXERCISED"
+        ),
+        "recoveryEligibleCount": int(report.get("recoveryEligibleCount") or 0),
+        "automaticRecoveredCount": int(
+            report.get("automaticRecoveredCount") or 0
+        ),
+        "manualRecoveredCount": int(report.get("manualRecoveredCount") or 0),
+        "firstAttemptSuccessRate": float(
+            report.get("firstAttemptSuccessRate") or 0.0
         ),
         "reportRef": report_path.relative_to(root).as_posix(),
     }

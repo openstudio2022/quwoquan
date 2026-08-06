@@ -1,0 +1,245 @@
+# Code generated from quwoquan_service/generated/contract_graph.json.
+# Regenerate with verify_object_alert_coverage.py --write.
+groups:
+  - name: quwoquan_ops_contract_config_instance_report
+    rules:
+      - record: quwoquan_ops_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="product-ops-service",method="POST",route=~"^/control-plane/platform/alerts/[^/]+:ack$"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.config_instance_report.AcknowledgeAlert"
+          contract_metric: "ops_platform_alert_ack"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="product-ops-service",method="POST",route=~"^/control-plane/platform/alerts/[^/]+:ack$"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.config_instance_report.AcknowledgeAlert"
+          contract_metric: "ops_platform_alert_ack"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="product-ops-service",method="GET",route="/control-plane/platform/projections/summary"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.config_instance_report.GetPlatformProjectionSummary"
+          contract_metric: "ops_platform_projection_summary"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "1000"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="product-ops-service",method="GET",route="/control-plane/platform/projections/summary"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.config_instance_report.GetPlatformProjectionSummary"
+          contract_metric: "ops_platform_projection_summary"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "1000"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="product-ops-service",method="GET",route="/control-plane/platform/triage/summary"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.config_instance_report.GetPlatformTriageSummary"
+          contract_metric: "ops_platform_triage_summary"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="product-ops-service",method="GET",route="/control-plane/platform/triage/summary"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.config_instance_report.GetPlatformTriageSummary"
+          contract_metric: "ops_platform_triage_summary"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="product-ops-service",method="POST",route="/control-plane/platform/alerts/ingest"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.config_instance_report.IngestAlertmanagerWebhook"
+          contract_metric: "ops_platform_alert_ingest"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="product-ops-service",method="POST",route="/control-plane/platform/alerts/ingest"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.config_instance_report.IngestAlertmanagerWebhook"
+          contract_metric: "ops_platform_alert_ingest"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="product-ops-service",method="GET",route="/control-plane/platform/alerts/active"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.config_instance_report.ListActiveAlerts"
+          contract_metric: "ops_platform_active_alerts"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="product-ops-service",method="GET",route="/control-plane/platform/alerts/active"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.config_instance_report.ListActiveAlerts"
+          contract_metric: "ops_platform_active_alerts"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="product-ops-service",method="GET",route="/control-plane/platform/configs/instances"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.config_instance_report.ListConfigInstanceReports"
+          contract_metric: "ops_platform_config_instance_reports"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="product-ops-service",method="GET",route="/control-plane/platform/configs/instances"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.config_instance_report.ListConfigInstanceReports"
+          contract_metric: "ops_platform_config_instance_reports"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="product-ops-service",method="GET",route="/control-plane/platform/approvals"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.config_instance_report.ListPlatformApprovals"
+          contract_metric: "ops_platform_approvals"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="product-ops-service",method="GET",route="/control-plane/platform/approvals"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.config_instance_report.ListPlatformApprovals"
+          contract_metric: "ops_platform_approvals"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="product-ops-service",method="GET",route="/control-plane/platform/audits"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.config_instance_report.ListPlatformAudits"
+          contract_metric: "ops_platform_audits"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="product-ops-service",method="GET",route="/control-plane/platform/audits"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.config_instance_report.ListPlatformAudits"
+          contract_metric: "ops_platform_audits"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="product-ops-service",method="GET",route="/control-plane/platform/releases"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.config_instance_report.ListReleaseCandidateAcks"
+          contract_metric: "ops_platform_release_candidate_acks"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="product-ops-service",method="GET",route="/control-plane/platform/releases"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.config_instance_report.ListReleaseCandidateAcks"
+          contract_metric: "ops_platform_release_candidate_acks"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="product-ops-service",method="GET",route="/control-plane/platform/topology/instances"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.config_instance_report.ListRuntimeInstances"
+          contract_metric: "ops_platform_runtime_instances"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="product-ops-service",method="GET",route="/control-plane/platform/topology/instances"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.config_instance_report.ListRuntimeInstances"
+          contract_metric: "ops_platform_runtime_instances"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="product-ops-service",method="GET",route="/control-plane/platform/topology/services"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.config_instance_report.ListRuntimeServices"
+          contract_metric: "ops_platform_runtime_services"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="product-ops-service",method="GET",route="/control-plane/platform/topology/services"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.config_instance_report.ListRuntimeServices"
+          contract_metric: "ops_platform_runtime_services"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="product-ops-service",method="POST",route=~"^/control-plane/platform/configs/instances/[^/]+:report$"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.config_instance_report.ReportConfigInstance"
+          contract_metric: "ops_platform_config_instance_ack"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "700"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_ops_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="product-ops-service",method="POST",route=~"^/control-plane/platform/configs/instances/[^/]+:report$"})
+        labels:
+          service: "product-ops-service"
+          operation: "ops.config_instance_report.ReportConfigInstance"
+          contract_metric: "ops_platform_config_instance_ack"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "700"
+          slo_availability_percent: "99.9"

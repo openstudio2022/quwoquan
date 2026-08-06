@@ -1,0 +1,60 @@
+schema: quwoquan_data.professional_image_discovery_catalog
+catalogRevision: research-professional-image-v1
+providerOrder: [pinterest, tuchong, wikimedia_commons]
+supportedAxes: [entity, category, season, style, viewpoint, popularity]
+providers:
+  - provider: pinterest
+    displayName: Pinterest
+    priority: 0
+    discoveryMode: public_search_url
+    publicDiscoveryUrls:
+      - https://www.pinterest.com/search/pins/
+    searchUrlTemplate: "https://www.pinterest.com/search/pins/?q={query}"
+    queryTemplates:
+      - "{entity} {category} {season} {style} {viewpoint} photography {popularity}"
+      - "{entity} travel landscape {style} {viewpoint} {popularity}"
+    acquisitionPaths: [public_direct, supported_api, manual_file]
+    termsUrl: https://policy.pinterest.com/en/terms-of-service
+    accessPolicy:
+      anonymousOnly: true
+      respectRobots: true
+      loginBypass: false
+      captchaBypass: false
+      paywallBypass: false
+  - provider: tuchong
+    displayName: 图虫
+    priority: 1
+    discoveryMode: public_explore_manual_query
+    publicDiscoveryUrls:
+      - https://tuchong.com/explore/
+      - https://tuchong.com/feeds/recommend/
+    searchUrlTemplate: ""
+    queryTemplates:
+      - "{entity} {category} {season} {style} {viewpoint} {popularity}"
+      - "{entity} 风光 旅行 摄影 {style} {viewpoint}"
+    acquisitionPaths: [public_direct, supported_api, manual_file]
+    termsUrl: https://tuchong.com/info/terms/
+    accessPolicy:
+      anonymousOnly: true
+      respectRobots: true
+      loginBypass: false
+      captchaBypass: false
+      paywallBypass: false
+  - provider: wikimedia_commons
+    displayName: Wikimedia Commons
+    priority: 2
+    discoveryMode: public_search_url
+    publicDiscoveryUrls:
+      - https://commons.wikimedia.org/wiki/Special:MediaSearch
+    searchUrlTemplate: "https://commons.wikimedia.org/w/index.php?search={query}&title=Special:MediaSearch&type=image"
+    queryTemplates:
+      - "{entity} {category} {season} {style} {viewpoint} {popularity}"
+      - "{entity} travel landscape"
+    acquisitionPaths: [supported_api, manual_file]
+    termsUrl: https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use
+    accessPolicy:
+      anonymousOnly: true
+      respectRobots: true
+      loginBypass: false
+      captchaBypass: false
+      paywallBypass: false

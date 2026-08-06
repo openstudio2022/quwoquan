@@ -1,0 +1,105 @@
+# Code generated from quwoquan_service/generated/contract_graph.json.
+# Regenerate with verify_object_alert_coverage.py --write.
+groups:
+  - name: quwoquan_circle_contract_circle_file
+    rules:
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="POST",route=~"^/circles/[^/]+/files$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle_file.CreateCircleFile"
+          contract_metric: "circle_file_create"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "900"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="POST",route=~"^/circles/[^/]+/files$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle_file.CreateCircleFile"
+          contract_metric: "circle_file_create"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "900"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="DELETE",route=~"^/circles/[^/]+/files/[^/]+$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle_file.DeleteCircleFile"
+          contract_metric: "circle_file_delete"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "700"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="DELETE",route=~"^/circles/[^/]+/files/[^/]+$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle_file.DeleteCircleFile"
+          contract_metric: "circle_file_delete"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "700"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="GET",route=~"^/circles/[^/]+/files/[^/]+$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle_file.GetCircleFile"
+          contract_metric: "circle_file_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "350"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="GET",route=~"^/circles/[^/]+/files/[^/]+$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle_file.GetCircleFile"
+          contract_metric: "circle_file_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "350"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="GET",route=~"^/circles/[^/]+/files$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle_file.ListCircleFiles"
+          contract_metric: "circle_file_list"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "400"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="GET",route=~"^/circles/[^/]+/files$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle_file.ListCircleFiles"
+          contract_metric: "circle_file_list"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "400"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="PATCH",route=~"^/circles/[^/]+/files/[^/]+$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle_file.UpdateCircleFile"
+          contract_metric: "circle_file_update"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "700"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="PATCH",route=~"^/circles/[^/]+/files/[^/]+$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.circle_file.UpdateCircleFile"
+          contract_metric: "circle_file_update"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "700"
+          slo_availability_percent: "99.9"

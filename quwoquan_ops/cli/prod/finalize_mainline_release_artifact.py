@@ -40,6 +40,15 @@ APPLICATION_PACKAGES = {
 }
 REQUIRED_RELEASE_EVIDENCE = ("contractGraph", "providerEvidence", "testEvidence")
 TEST_LAYERS = ("local_contract", "api_integration", "user_acceptance")
+RELEASE_CLOSURE_PATHS = {
+    "pilot-release": "evidence/release/pilot-release-attestation.json",
+    "pilot-rollback": "evidence/release/pilot-rollback-attestation.json",
+    "content-lifecycle-alpha": "evidence/release/lifecycle-exit-alpha.json",
+    "content-lifecycle-beta": "evidence/release/lifecycle-exit-beta.json",
+    "content-lifecycle-gamma": "evidence/release/lifecycle-exit-gamma.json",
+    "green-matrix": "evidence/release/alpha-beta-gamma-green-matrix.json",
+}
+TEST_RELEASE_CLOSURE_LABELS = frozenset(RELEASE_CLOSURE_PATHS)
 ENVIRONMENT_RECEIPT_SCHEMA = "release-environment-receipt"
 ROLLOUT_RECEIPT_SCHEMA = "release-rollout-receipt"
 ROLLBACK_RECEIPT_SCHEMA = "release-rollback-receipt"
@@ -592,9 +601,11 @@ def _validate_candidate_evidence(manifest: dict[str, Any]) -> None:
     test = manifest.get("testEvidence")
     if (
         not isinstance(test, dict)
-        or set(test) != {"path", "digest", "status", "layers"}
+            or set(test) != {"path", "digest", "status", "layers", "evidence"}
         or test.get("status") != "passed"
         or DIGEST_PATTERN.fullmatch(str(test.get("digest") or "")) is None
+            or not isinstance(test.get("evidence"), dict)
+            or not test["evidence"]
     ):
         raise ValueError("testEvidence is not passed and immutable")
     _validate_relative_path(test.get("path"), "testEvidence")
@@ -610,6 +621,23 @@ def _validate_candidate_evidence(manifest: dict[str, Any]) -> None:
             or DIGEST_PATTERN.fullmatch(str(item.get("artifactDigest") or "")) is None
         ):
             raise ValueError(f"testEvidence layer is not immutable: {layer}")
+    evidence = test["evidence"]
+    files = evidence.get("files") if isinstance(evidence, dict) else None
+    if not isinstance(files, dict) or set(files) != set(
+        TEST_RELEASE_CLOSURE_LABELS
+    ):
+        raise ValueError("testEvidence release closure file set is incomplete")
+    for label, descriptor in files.items():
+        if (
+            not isinstance(descriptor, dict)
+            or set(descriptor) != {"path", "digest"}
+            or descriptor.get("path") != RELEASE_CLOSURE_PATHS[label]
+            or DIGEST_PATTERN.fullmatch(str(descriptor.get("digest") or ""))
+            is None
+        ):
+            raise ValueError(
+                f"testEvidence release closure descriptor is invalid: {label}"
+            )
 
 
 def _validate_receipt_descriptor(
@@ -1118,7 +1146,12 @@ def _verify_receipt_evidence_files(
             for index, child in enumerate(value):
                 visit(child, f"{breadcrumb}[{index}]")
 
-    visit(descriptor.get("evidence"), f"{label}.evidence")
+    evidence = descriptor.get("evidence")
+    if evidence is None and isinstance(descriptor.get("path"), str):
+        relative = _validate_relative_path(descriptor["path"], label)
+        payload = load_json(_bound_file(artifact_dir, relative, label))
+        evidence = payload.get("evidence")
+    visit(evidence, f"{label}.evidence")
     if found == 0:
         raise ValueError(f"{label} has no replayable raw evidence file binding")
 
@@ -1294,6 +1327,11 @@ def validate_manifest_files(artifact_dir: Path, manifest: dict[str, Any]) -> Non
         evidence_payloads["providerEvidence"],
         expected_count=manifest["providerEvidence"]["evidenceCount"],
     )
+    _verify_receipt_evidence_files(
+        artifact_dir,
+        manifest["testEvidence"],
+        "test evidence",
+    )
     for environment, descriptor in manifest["environmentReceipts"].items():
         _verify_receipt_file(
             artifact_dir, descriptor, f"environment receipt {environment}"
@@ -1321,6 +1359,8 @@ def _verify_provider_raw_evidence(
     *,
     expected_count: int,
 ) -> None:
+    if expected_count != 140:
+        raise ValueError("providerEvidence must bind exactly 140 raw cells")
     source = provider_payload.get("sourceEvidence")
     if not isinstance(source, dict) or set(source) != {"ref", "digest", "files"}:
         raise ValueError("providerEvidence sourceEvidence is not canonical")
@@ -1444,6 +1484,9 @@ def _apply_candidate_evidence(
         "evidenceCount": int(provider_payload.get("evidenceCount") or 0),
     }
     test = evidence["testEvidence"]
+    test_evidence_files = test["payload"].get("evidence")
+    if not isinstance(test_evidence_files, dict) or not test_evidence_files:
+        raise ValueError("testEvidence must bind replayable raw evidence files")
     manifest["testEvidence"] = {
         "path": test["path"],
         "digest": test["digest"],
@@ -1457,6 +1500,7 @@ def _apply_candidate_evidence(
             }
             for layer in TEST_LAYERS
         },
+        "evidence": test_evidence_files,
     }
 
 

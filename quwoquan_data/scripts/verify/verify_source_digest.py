@@ -6,6 +6,7 @@ import argparse
 import json
 from pathlib import Path
 
+from content.execution.execution_terminal import load_terminal_execution_evidence
 from core.paths import DATA_EXECUTIONS_ROOT, RELEASE_ROOT
 from core.release_layout import attestation_root, payload_file
 from core.source_digest import SourceDigest, SourceDigestError, current_source_digest
@@ -52,6 +53,15 @@ def source_digest_issues(
     current = current_source_digest()
     if executions_root.is_dir():
         for manifest_path in sorted(executions_root.glob("*/execution_manifest.json")):
+            try:
+                terminal = load_terminal_execution_evidence(manifest_path.parent)
+            except (OSError, TypeError, ValueError) as exc:
+                issues.append(
+                    f"{manifest_path.parent}: invalid terminal execution evidence: {exc}"
+                )
+                terminal = None
+            if terminal is not None:
+                continue
             manifest = _read_object(manifest_path, issues=issues)
             if manifest is None:
                 continue

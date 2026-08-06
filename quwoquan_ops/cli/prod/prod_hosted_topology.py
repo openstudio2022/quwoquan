@@ -341,6 +341,39 @@ def resolve_plan(
     return plan
 
 
+def require_release_redundancy(plan: list[DeploymentReplica]) -> None:
+    """Fail closed until formal rollout has real multi-host replica inventory."""
+
+    if not plan:
+        raise ProdHostedTopologyError("formal rollout deployment plan is empty")
+    instances = {item.instance for item in plan}
+    if len(instances) != 1 or next(iter(instances)) not in {"gray", "prod"}:
+        raise ProdHostedTopologyError(
+            "formal rollout redundancy applies only to gray/prod instances"
+        )
+    selected_planes = {item.plane for item in plan}
+    if selected_planes != set(EXECUTION_PLANES):
+        raise ProdHostedTopologyError(
+            "formal rollout redundancy requires the complete service+edge inventory; "
+            "filtered plane plans are not promotable"
+        )
+    host_ids = {item.host_id for item in plan}
+    issues: list[str] = []
+    if len(host_ids) < 2:
+        issues.append("at least two real inventory hosts are required")
+    for plane in sorted({item.plane for item in plan}):
+        placements = [item for item in plan if item.plane == plane]
+        plane_hosts = {item.host_id for item in placements}
+        if len(placements) < 2 or len(plane_hosts) < 2:
+            issues.append(
+                f"{plane} requires at least two replicas on distinct inventory hosts"
+            )
+    if issues:
+        raise ProdHostedTopologyError(
+            "formal rollout inventory is not redundant: " + "; ".join(issues)
+        )
+
+
 def instance_for_stage(stage: str) -> str:
     try:
         return STAGE_INSTANCE[stage]
@@ -447,6 +480,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--host-id", action="append", default=[])
     parser.add_argument("--ssh-host", default="")
     parser.add_argument("--service-filter", default="")
+    parser.add_argument(
+        "--require-release-redundancy",
+        action="store_true",
+        help=(
+            "GATE_BLOCK unless the complete gray/prod service+edge inventory "
+            "has two real hosts and replicas per plane"
+        ),
+    )
     parser.add_argument("--format", choices=("json", "tsv"), default="json")
     return parser.parse_args()
 
@@ -469,6 +510,8 @@ def main() -> int:
             ssh_host_override=args.ssh_host,
             service_filter=args.service_filter,
         )
+        if args.require_release_redundancy:
+            require_release_redundancy(plan)
     except ProdHostedTopologyError as error:
         print(f"GATE_BLOCK: {error}", file=sys.stderr)
         return 2

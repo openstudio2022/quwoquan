@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from content.release.canonical.release_header import validate_release_header
 from content.release.environment.topology import (
     EnvironmentReleaseMode,
     EnvironmentReleaseTarget,
@@ -32,12 +33,7 @@ def load_release(release_root: Path, release_id: str) -> tuple[Path, dict[str, A
             "release_desired_state",
             label=f"desired_state:{release_id}",
         )
-        assert_valid(
-            header,
-            "release",
-            "release_header",
-            label=f"release_header:{release_id}",
-        )
+        validate_release_header(header, label=f"release_header:{release_id}")
     except (FileNotFoundError, ValueError) as exc:
         raise SystemExit(f"[ship] immutable release contract invalid: {exc}") from exc
     if contract.get("releaseId") != release_id or header.get("releaseId") != release_id:

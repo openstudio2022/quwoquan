@@ -12,6 +12,15 @@ from content.release.environment.app_uat_envelope import (
     AppUatEnvelopeError,
     build_app_uat_envelope,
 )
+from content.release.environment.release_readiness_closure import (
+    ReleaseReadinessClosureError,
+    validate_readiness_closure,
+)
+from content.release.environment.research_isolation_verification import (
+    ResearchIsolationVerificationError,
+    load_research_isolation_verification,
+    research_isolation_file_digest,
+)
 from core.io import read_json
 from core.release_layout import payload_file
 
@@ -60,12 +69,71 @@ def environment_release_readiness_issues(
         issues.append(f"{path}: verifyRunId drift")
     if readiness.get("manifestDigest") != attestation.get("payloadSha256"):
         issues.append(f"{path}: manifestDigest drift from immutable payload")
+    release_header = _read_object(
+        payload_file(release, "release.json"),
+        label="release header",
+        issues=issues,
+    )
+    for field in ("releaseClass", "productLifecycleState"):
+        if readiness.get(field) != release_header.get(field):
+            issues.append(f"{path}: {field} drifts from immutable release closure")
     if readiness.get("guestActorHash") != post_verification.get("guestActorHash"):
         issues.append(f"{path}: guestActorHash drift from post verification")
     if readiness.get("guestLogin") != post_verification.get("guestLogin"):
         issues.append(f"{path}: guestLogin drift from post verification")
     if readiness.get("feedQueries") != post_verification.get("feedQueries"):
         issues.append(f"{path}: feedQueries drift from post verification")
+    readiness_phase = str(readiness.get("readinessPhase") or "")
+    expected_lifecycle = {
+        "research": "research",
+        "commercial": "commercial",
+    }.get(readiness_phase)
+    if expected_lifecycle is not None and any(
+        readiness.get(field) != expected_lifecycle
+        for field in ("releaseClass", "productLifecycleState")
+    ):
+        issues.append(
+            f"{path}: readinessPhase={readiness_phase} requires "
+            f"releaseClass=productLifecycleState={expected_lifecycle}"
+        )
+    isolation_fields = (
+        "internalSubjectHash",
+        "researchIsolationVerificationRef",
+        "researchIsolationVerificationDigest",
+    )
+    if readiness_phase == "research":
+        isolation_ref = str(
+            readiness.get("researchIsolationVerificationRef") or ""
+        )
+        isolation_path = output_root / isolation_ref
+        expected_isolation_path = verify_run / "research-isolation-verification.json"
+        if not isolation_ref or isolation_path.resolve() != expected_isolation_path.resolve():
+            issues.append(f"{path}: research isolation ref is not the canonical run proof")
+        else:
+            try:
+                isolation = load_research_isolation_verification(
+                    isolation_path,
+                    environment=environment,
+                    release_id=release_id,
+                    verify_run_id=verify_run_id,
+                    manifest_digest=str(readiness.get("manifestDigest") or ""),
+                    require_pass=True,
+                )
+                isolation_digest = research_isolation_file_digest(isolation_path)
+            except (OSError, ResearchIsolationVerificationError) as exc:
+                issues.append(f"{path}: research isolation proof is invalid: {exc}")
+            else:
+                if (
+                    readiness.get("internalSubjectHash")
+                    != isolation.get("subjectHash")
+                    or readiness.get("researchIsolationVerificationDigest")
+                    != isolation_digest
+                ):
+                    issues.append(
+                        f"{path}: research isolation identity/digest drift"
+                    )
+    elif any(field in readiness for field in isolation_fields):
+        issues.append(f"{path}: research isolation evidence is research-only")
 
     media_manifest_path = payload_file(release, "media_manifest.json")
     try:
@@ -108,6 +176,32 @@ def environment_release_readiness_issues(
         label="release media manifest",
         issues=issues,
     )
+    asset_admission = _read_object(
+        payload_file(release, "asset_admission.json"),
+        label="release asset admission",
+        issues=issues,
+    )
+    creator_import = _read_object(
+        import_run / "creator-import.json",
+        label="creator import report",
+        issues=issues,
+    )
+    closure: dict[str, set[str]] | None = None
+    try:
+        closure = validate_readiness_closure(
+            release_root=release,
+            header=release_header,
+            desired=desired_refs,
+            attestation=attestation,
+            asset_admission=asset_admission,
+            media_manifest=media_manifest,
+            import_report=content_import,
+            creator_report=creator_import,
+            homepage_report=homepage_verification,
+            post_report=post_verification,
+        )
+    except ReleaseReadinessClosureError as exc:
+        issues.append(f"{path}: immutable release/readback closure invalid: {exc}")
     media_asset_ids = sorted(
         str(row.get("assetId") or "")
         for row in media_manifest.get("assets") or []
@@ -132,6 +226,37 @@ def environment_release_readiness_issues(
         for row in bindings
         if row.get("contentType") == "video"
     }
+    verified_image_work_ids = {
+        str(row.get("postId") or "")
+        for row in post_verification.get("posts") or []
+        if isinstance(row, Mapping)
+        and row.get("contentType") == "image"
+        and row.get("detailStatus") == 200
+        and row.get("mediaReady") is True
+        and any(
+            isinstance(probe, Mapping)
+            and probe.get("kind") == "image"
+            and probe.get("status") == 200
+            and probe.get("hashVerified") is True
+            for probe in row.get("mediaProbes") or []
+        )
+    }
+    illustrated_article_ids = {
+        str(row.get("postId") or "")
+        for row in post_verification.get("posts") or []
+        if isinstance(row, Mapping)
+        and row.get("contentType") == "article"
+        and row.get("detailStatus") == 200
+        and row.get("mediaReady") is True
+        and sum(
+            isinstance(probe, Mapping)
+            and probe.get("kind") == "image"
+            and probe.get("status") == 200
+            and probe.get("hashVerified") is True
+            for probe in row.get("mediaProbes") or []
+        )
+        >= 2
+    }
     verified_playable_video_ids = {
         str(row.get("postId") or "")
         for row in post_verification.get("posts") or []
@@ -139,7 +264,20 @@ def environment_release_readiness_issues(
         and row.get("contentType") == "video"
         and row.get("detailStatus") == 200
         and row.get("mediaReady") is True
-        and int(row.get("mediaProbeCount") or 0) >= 2
+        and any(
+            isinstance(probe, Mapping)
+            and probe.get("kind") == "video"
+            and probe.get("status") == 206
+            and str(probe.get("mimeType") or "").startswith("video/")
+            for probe in row.get("mediaProbes") or []
+        )
+        and any(
+            isinstance(probe, Mapping)
+            and probe.get("kind") == "image"
+            and probe.get("status") == 200
+            and probe.get("hashVerified") is True
+            for probe in row.get("mediaProbes") or []
+        )
     }
     verified_avatar_asset_ids = {
         str(row.get("avatarAssetId") or "")
@@ -163,6 +301,12 @@ def environment_release_readiness_issues(
         and probe.get("sha256") == probe.get("expectedSha256")
         and probe.get("bytes") == probe.get("expectedBytes")
     }
+    if closure is not None:
+        verified_image_work_ids = set(closure["verifiedImageWorkIds"])
+        illustrated_article_ids = set(closure["illustratedArticleIds"])
+        verified_playable_video_ids = set(closure["playableVideoIds"])
+        verified_avatar_asset_ids = set(closure["avatarAssetIds"])
+        verified_image_asset_ids = set(closure["imageAssetIds"])
     expected_counts = {
         "entities": len(desired_refs["entities"]),
         "posts": len(expected_ids),
@@ -179,7 +323,7 @@ def environment_release_readiness_issues(
     if readiness.get("counts") != expected_counts:
         issues.append(f"{path}: counts drift from bound evidence")
 
-    if readiness.get("readinessPhase") == "commercial":
+    if readiness.get("readinessPhase") in {"research", "commercial"}:
         try:
             expected_app_uat_envelope = build_app_uat_envelope(
                 release_root=release,
@@ -192,6 +336,12 @@ def environment_release_readiness_issues(
                 homepage_report=homepage_verification,
                 queries_by_name=feed_queries,
                 verified_playable_video_ids=verified_playable_video_ids,
+                illustrated_article_ids=illustrated_article_ids,
+                verified_image_work_ids=verified_image_work_ids,
+                release_class=str(release_header.get("releaseClass") or ""),
+                product_lifecycle_state=str(
+                    release_header.get("productLifecycleState") or ""
+                ),
             )
         except AppUatEnvelopeError as exc:
             issues.append(f"{path}: cannot project appUatEnvelope: {exc}")

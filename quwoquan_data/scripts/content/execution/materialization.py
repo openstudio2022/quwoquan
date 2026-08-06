@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 from core.control_types import TargetSelector
 from core.data_issue import DataIssueCode
 from core.paths import REPO_ROOT
 from core.runtime_policy import active_runtime_policy
+
 from content.execution import store
 from content.execution.identity import SelectionPolicy
 from content.execution.selection import (
@@ -40,12 +42,14 @@ def _homepage_source_qualifier(
     execution_id: str,
     target: TargetSourceCandidate,
 ) -> TargetSourceQualification:
-    from content.source.research.baike_com import geo_context_terms_from_ref
-    from content.source.research.homepage_authority import qualify_homepage_authority_content
     from content.homepage.quality_policy import (
         homepage_body_char_minimum,
-        homepage_fact_count_minimum,
         homepage_fact_char_minimum,
+        homepage_fact_count_minimum,
+    )
+    from content.source.research.baike_com import geo_context_terms_from_ref
+    from content.source.research.homepage_authority import (
+        qualify_homepage_authority_content,
     )
 
     qualification = qualify_homepage_authority_content(
@@ -64,9 +68,59 @@ def _homepage_source_qualifier(
 
 
 def _video_source_qualifier(
+    execution_id: str,
     target: TargetSourceCandidate,
 ) -> TargetSourceQualification:
-    """Fast, bounded Commons precheck before the deeper frozen plan is built."""
+    """Qualify frozen professional video first, otherwise use bounded Commons."""
+
+    from content.execution.campaign_external_input_runtime import (
+        bound_runtime_external_input_context,
+    )
+    from content.execution.campaign_external_inputs import (
+        PROFESSIONAL_VIDEO_ACQUISITION_KIND,
+    )
+
+    context = bound_runtime_external_input_context(execution_id, "video")
+    if context is not None and context.has_kind(
+        PROFESSIONAL_VIDEO_ACQUISITION_KIND
+    ):
+        from content.source.professional_video_receipt import (
+            acquired_video_specs_for_entity,
+        )
+
+        receipt_refs = context.receipt_refs(
+            PROFESSIONAL_VIDEO_ACQUISITION_KIND
+        )
+        acquisition_root = context.acquisition_root(
+            PROFESSIONAL_VIDEO_ACQUISITION_KIND
+        )
+        try:
+            videos = acquired_video_specs_for_entity(
+                receipt_refs,
+                entity_id=target.name,
+                root=acquisition_root,
+            )
+        except (OSError, TypeError, ValueError):
+            return TargetSourceQualification(
+                accepted=False,
+                qualified_source=None,
+                rejection_code=DataIssueCode.MEDIA_PUBLISHABLE_SHORTFALL,
+            )
+        if videos:
+            candidate = videos[0]
+            return TargetSourceQualification(
+                accepted=True,
+                qualified_source=_QualifiedVideoSource(
+                    title=str(candidate.get("title") or target.name),
+                    url=str(candidate.get("assetUrl") or ""),
+                    mode="sourced_video",
+                ),
+            )
+        return TargetSourceQualification(
+            accepted=False,
+            qualified_source=None,
+            rejection_code=DataIssueCode.MEDIA_PUBLISHABLE_SHORTFALL,
+        )
 
     from content.source.research.auto_plan_video import (
         discover_commons_sourced_videos,
@@ -127,7 +181,10 @@ def ensure_execution_spec(
         if content_type == "homepage":
             source_qualifier = lambda target: _homepage_source_qualifier(execution_id, target)
         elif content_type == "video":
-            source_qualifier = _video_source_qualifier
+            source_qualifier = lambda target: _video_source_qualifier(
+                execution_id,
+                target,
+            )
             qualification_source_key = "qualifiedVideoSource"
             persist_qualified_source = False
         else:

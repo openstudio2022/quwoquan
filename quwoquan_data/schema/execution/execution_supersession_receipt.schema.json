@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/execution_supersession_receipt.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "executionId", "decision", "reason", "errorCode",
+    "recordedAt", "evidenceAnchors", "evidenceDigest",
+    "manifestSourceDigest", "observedSourceDigest", "previousStatus",
+    "processEvidence", "retryPolicy", "evidenceDisposition", "receiptDigest"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.execution_supersession_receipt"},
+    "executionId": {"type": "string", "minLength": 1},
+    "decision": {"const": "superseded"},
+    "reason": {"enum": ["source_drift", "legacy_contract"]},
+    "errorCode": {
+      "enum": [
+        "DATA.EXECUTION.SOURCE_DRIFT_SUPERSEDED",
+        "DATA.EXECUTION.LEGACY_CONTRACT_SUPERSEDED"
+      ]
+    },
+    "recordedAt": {"type": "string", "format": "date-time"},
+    "evidenceAnchors": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "executionManifest", "request", "targetSet", "executionState",
+        "controllerLease"
+      ],
+      "properties": {
+        "executionManifest": {"$ref": "#/$defs/fileBinding"},
+        "request": {"$ref": "#/$defs/fileBinding"},
+        "targetSet": {"$ref": "#/$defs/fileBinding"},
+        "executionState": {"$ref": "#/$defs/fileBinding"},
+        "controllerLease": {"$ref": "#/$defs/fileBinding"}
+      }
+    },
+    "evidenceDigest": {"$ref": "#/$defs/digest"},
+    "manifestSourceDigest": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "#/$defs/sourceDigest"}
+      ]
+    },
+    "observedSourceDigest": {"$ref": "#/$defs/sourceDigest"},
+    "previousStatus": {"type": "string", "minLength": 1},
+    "processEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "hostname", "pid", "pgid", "observedPidAlive",
+        "observedProcessGroupAlive", "identityMatched", "pidAlive",
+        "processGroupAlive"
+      ],
+      "properties": {
+        "hostname": {"type": "string", "minLength": 1},
+        "pid": {"type": ["integer", "null"], "minimum": 1},
+        "pgid": {"type": ["integer", "null"], "minimum": 1},
+        "observedPidAlive": {"type": "boolean"},
+        "observedProcessGroupAlive": {"type": "boolean"},
+        "identityMatched": {"const": false},
+        "pidAlive": {"const": false},
+        "processGroupAlive": {"const": false}
+      }
+    },
+    "retryPolicy": {"const": "new_execution_with_retryOf"},
+    "evidenceDisposition": {"const": "protected_read_only"},
+    "receiptDigest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "fileBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "exists", "sha256"],
+      "properties": {
+        "ref": {"type": "string", "minLength": 1},
+        "exists": {"type": "boolean"},
+        "sha256": {"type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$"}
+      }
+    },
+    "sourceDigest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "digest", "inputs"],
+      "properties": {
+        "algorithm": {"const": "sha256"},
+        "digest": {"$ref": "#/$defs/digest"},
+        "inputs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  }
+}

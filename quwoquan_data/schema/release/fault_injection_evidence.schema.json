@@ -1,0 +1,194 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/release/fault_injection_evidence.schema.json",
+  "title": "Derived automatic recovery fault-injection evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "evidenceId",
+    "rootExecutionId",
+    "runtimeSessionId",
+    "runtimeSessionRef",
+    "runtimeSessionDigest",
+    "runId",
+    "generation",
+    "fencingToken",
+    "status",
+    "sourceRevision",
+    "sourceDigest",
+    "entityCatalogDigest",
+    "rawCasesRef",
+    "rawCasesSha256",
+    "automaticRecoveryStatus",
+    "recoveryEligibleCount",
+    "automaticRecoveredCount",
+    "manualRecoveredCount",
+    "unrecoveredCount",
+    "automaticRecoveryRate",
+    "casesByLane",
+    "casesByFaultType",
+    "cases",
+    "recordedAt",
+    "evidenceDigest"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.fault_injection_evidence"},
+    "evidenceId": {"type": "string", "minLength": 1},
+    "rootExecutionId": {"type": "string", "minLength": 1},
+    "runtimeSessionId": {"type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]{2,127}$"},
+    "runtimeSessionRef": {"$ref": "#/$defs/safeRef"},
+    "runtimeSessionDigest": {"$ref": "#/$defs/digest"},
+    "runId": {"type": "string", "minLength": 1},
+    "generation": {"type": "integer", "minimum": 1},
+    "fencingToken": {"$ref": "#/$defs/digest"},
+    "status": {"enum": ["passed", "failed"]},
+    "sourceRevision": {"$ref": "#/$defs/digest"},
+    "sourceDigest": {"$ref": "#/$defs/digest"},
+    "entityCatalogDigest": {"$ref": "#/$defs/digest"},
+    "rawCasesRef": {"$ref": "#/$defs/safeRef"},
+    "rawCasesSha256": {"$ref": "#/$defs/digest"},
+    "automaticRecoveryStatus": {"enum": ["MEASURED", "NOT_EXERCISED"]},
+    "recoveryEligibleCount": {"type": "integer", "minimum": 0},
+    "automaticRecoveredCount": {"type": "integer", "minimum": 0},
+    "manualRecoveredCount": {"type": "integer", "minimum": 0},
+    "unrecoveredCount": {"type": "integer", "minimum": 0},
+    "automaticRecoveryRate": {"type": "number", "minimum": 0, "maximum": 1},
+    "casesByLane": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "prefixItems": [
+        {"$ref": "#/$defs/homepageCases"},
+        {"$ref": "#/$defs/articleCases"},
+        {"$ref": "#/$defs/imageCases"},
+        {"$ref": "#/$defs/videoCases"}
+      ],
+      "items": false
+    },
+    "casesByFaultType": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "prefixItems": [
+        {"$ref": "#/$defs/workerTerminationCases"},
+        {"$ref": "#/$defs/leaseExpiryCases"},
+        {"$ref": "#/$defs/redisRestartCases"},
+        {"$ref": "#/$defs/mongoReconnectCases"},
+        {"$ref": "#/$defs/providerTimeoutCases"},
+        {"$ref": "#/$defs/providerRateLimitCases"}
+      ],
+      "items": false
+    },
+    "cases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "caseId", "faultType", "carrier", "executionId", "jobId",
+          "faultEventAt", "injectionEvidenceRef", "injectionEvidenceSha256", "outcome"
+        ],
+        "properties": {
+          "caseId": {"type": "string", "minLength": 1},
+          "faultType": {"$ref": "#/$defs/faultType"},
+          "carrier": {"enum": ["homepage", "article", "image", "video"]},
+          "executionId": {"type": "string", "minLength": 1},
+          "jobId": {"type": "string", "minLength": 8},
+          "faultEventAt": {"type": "string", "format": "date-time"},
+          "injectionEvidenceRef": {"$ref": "#/$defs/safeRef"},
+          "injectionEvidenceSha256": {"$ref": "#/$defs/digest"},
+          "outcome": {"enum": ["automatic", "manual", "unrecovered"]}
+        }
+      }
+    },
+    "recordedAt": {"type": "string", "format": "date-time"},
+    "evidenceDigest": {"$ref": "#/$defs/digest"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"recoveryEligibleCount": {"const": 0}}, "required": ["recoveryEligibleCount"]},
+      "then": {
+        "properties": {
+          "automaticRecoveryStatus": {"const": "NOT_EXERCISED"},
+          "automaticRecoveredCount": {"const": 0},
+          "automaticRecoveryRate": {"const": 0},
+          "status": {"const": "failed"}
+        }
+      },
+      "else": {"properties": {"automaticRecoveryStatus": {"const": "MEASURED"}}}
+    },
+    {
+      "if": {"properties": {"status": {"const": "passed"}}, "required": ["status"]},
+      "then": {
+        "properties": {
+          "recoveryEligibleCount": {"minimum": 20},
+          "automaticRecoveredCount": {"minimum": 19},
+          "automaticRecoveryRate": {"minimum": 0.95},
+          "casesByLane": {
+            "prefixItems": [
+              {"allOf": [{"$ref": "#/$defs/homepageCases"}, {"$ref": "#/$defs/passingCaseCount"}]},
+              {"allOf": [{"$ref": "#/$defs/articleCases"}, {"$ref": "#/$defs/passingCaseCount"}]},
+              {"allOf": [{"$ref": "#/$defs/imageCases"}, {"$ref": "#/$defs/passingCaseCount"}]},
+              {"allOf": [{"$ref": "#/$defs/videoCases"}, {"$ref": "#/$defs/passingCaseCount"}]}
+            ]
+          },
+          "casesByFaultType": {
+            "prefixItems": [
+              {"allOf": [{"$ref": "#/$defs/workerTerminationCases"}, {"$ref": "#/$defs/passingFaultTypeCount"}]},
+              {"allOf": [{"$ref": "#/$defs/leaseExpiryCases"}, {"$ref": "#/$defs/passingFaultTypeCount"}]},
+              {"allOf": [{"$ref": "#/$defs/redisRestartCases"}, {"$ref": "#/$defs/passingFaultTypeCount"}]},
+              {"allOf": [{"$ref": "#/$defs/mongoReconnectCases"}, {"$ref": "#/$defs/passingFaultTypeCount"}]},
+              {"allOf": [{"$ref": "#/$defs/providerTimeoutCases"}, {"$ref": "#/$defs/passingFaultTypeCount"}]},
+              {"allOf": [{"$ref": "#/$defs/providerRateLimitCases"}, {"$ref": "#/$defs/passingFaultTypeCount"}]}
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "safeRef": {"type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"},
+    "faultType": {
+      "enum": [
+        "worker_termination",
+        "lease_expiry",
+        "redis_restart",
+        "mongo_reconnect",
+        "provider_timeout",
+        "provider_rate_limit"
+      ]
+    },
+    "caseRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["carrier", "recoveryEligibleCount"],
+      "properties": {
+        "carrier": {"enum": ["homepage", "article", "image", "video"]},
+        "recoveryEligibleCount": {"type": "integer", "minimum": 0}
+      }
+    },
+    "passingCaseCount": {"properties": {"recoveryEligibleCount": {"minimum": 5}}},
+    "homepageCases": {"allOf": [{"$ref": "#/$defs/caseRow"}, {"properties": {"carrier": {"const": "homepage"}}}]},
+    "articleCases": {"allOf": [{"$ref": "#/$defs/caseRow"}, {"properties": {"carrier": {"const": "article"}}}]},
+    "imageCases": {"allOf": [{"$ref": "#/$defs/caseRow"}, {"properties": {"carrier": {"const": "image"}}}]},
+    "videoCases": {"allOf": [{"$ref": "#/$defs/caseRow"}, {"properties": {"carrier": {"const": "video"}}}]},
+    "faultTypeRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["faultType", "recoveryEligibleCount"],
+      "properties": {
+        "faultType": {"$ref": "#/$defs/faultType"},
+        "recoveryEligibleCount": {"type": "integer", "minimum": 0}
+      }
+    },
+    "passingFaultTypeCount": {"properties": {"recoveryEligibleCount": {"minimum": 1}}},
+    "workerTerminationCases": {"allOf": [{"$ref": "#/$defs/faultTypeRow"}, {"properties": {"faultType": {"const": "worker_termination"}}}]},
+    "leaseExpiryCases": {"allOf": [{"$ref": "#/$defs/faultTypeRow"}, {"properties": {"faultType": {"const": "lease_expiry"}}}]},
+    "redisRestartCases": {"allOf": [{"$ref": "#/$defs/faultTypeRow"}, {"properties": {"faultType": {"const": "redis_restart"}}}]},
+    "mongoReconnectCases": {"allOf": [{"$ref": "#/$defs/faultTypeRow"}, {"properties": {"faultType": {"const": "mongo_reconnect"}}}]},
+    "providerTimeoutCases": {"allOf": [{"$ref": "#/$defs/faultTypeRow"}, {"properties": {"faultType": {"const": "provider_timeout"}}}]},
+    "providerRateLimitCases": {"allOf": [{"$ref": "#/$defs/faultTypeRow"}, {"properties": {"faultType": {"const": "provider_rate_limit"}}}]}
+  }
+}

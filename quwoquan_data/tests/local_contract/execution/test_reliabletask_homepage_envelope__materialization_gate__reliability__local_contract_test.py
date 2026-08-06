@@ -99,15 +99,15 @@ def test_post_repair_newer_than_author_envelope_requires_fresh_agent_run(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
-    task_root = tmp_path / "task"
+    execution_root_path = tmp_path / "execution"
     job = _article_job()
-    envelope_path = task_root / job.content_object_dir / "4.draft" / "agent_result_envelope.json"
+    envelope_path = execution_root_path / job.content_object_dir / "4.draft" / "agent_result_envelope.json"
     envelope_path.parent.mkdir(parents=True)
     envelope_path.write_text("{}", encoding="utf-8")
-    repair_path = task_root / job.content_object_dir / "5.review" / "repair_report.json"
+    repair_path = execution_root_path / job.content_object_dir / "5.review" / "repair_report.json"
     repair_path.parent.mkdir(parents=True)
     repair_path.write_text("{}", encoding="utf-8")
-    monkeypatch.setattr(reliabletask_worker, "execution_root", lambda _execution_id: task_root)
+    monkeypatch.setattr(reliabletask_worker, "execution_root", lambda _execution_id: execution_root_path)
     monkeypatch.setattr(
         reliabletask_worker,
         "_validate_author_envelope",
@@ -126,8 +126,8 @@ def test_homepage_repair_uses_frozen_job_prompt_not_pending_prompt_scan(
     tmp_path: Path,
 ) -> None:
     job = _homepage_job()
-    task_root = tmp_path / "task"
-    draft_dir = task_root / job.content_object_dir / "4.draft"
+    execution_root_path = tmp_path / "execution"
+    draft_dir = execution_root_path / job.content_object_dir / "4.draft"
     draft_dir.mkdir(parents=True)
     (draft_dir / "prompt.md").write_text("只依据冻结来源重写正文。", encoding="utf-8")
     (draft_dir / "author_job_packet.json").write_text(
@@ -136,7 +136,7 @@ def test_homepage_repair_uses_frozen_job_prompt_not_pending_prompt_scan(
         '"promptRef":"4.draft/prompt.md"}',
         encoding="utf-8",
     )
-    monkeypatch.setattr(reliabletask_worker, "execution_root", lambda _execution_id: task_root)
+    monkeypatch.setattr(reliabletask_worker, "execution_root", lambda _execution_id: execution_root_path)
 
     checkpoint, prompt = reliabletask_worker._author_prompt(SimpleNamespace(), job)
 
@@ -158,8 +158,8 @@ def test_homepage_repair_feedback_is_appended_only_after_typed_contract_validati
     from content.execution.stage_reports import build_repair_report
 
     job = _homepage_job()
-    task_root = tmp_path / "task"
-    object_dir = task_root / job.content_object_dir
+    execution_root_path = tmp_path / "execution"
+    object_dir = execution_root_path / job.content_object_dir
     draft_dir = object_dir / "4.draft"
     draft_dir.mkdir(parents=True)
     (draft_dir / "prompt.md").write_text("保留冻结正文。", encoding="utf-8")
@@ -196,7 +196,7 @@ def test_homepage_repair_feedback_is_appended_only_after_typed_contract_validati
         ),
         encoding="utf-8",
     )
-    monkeypatch.setattr(reliabletask_worker, "execution_root", lambda _execution_id: task_root)
+    monkeypatch.setattr(reliabletask_worker, "execution_root", lambda _execution_id: execution_root_path)
 
     checkpoint, prompt = reliabletask_worker._author_prompt(SimpleNamespace(), job)
 
@@ -211,8 +211,8 @@ def test_homepage_repair_feedback_rejects_untyped_recovery_contract(
     tmp_path: Path,
 ) -> None:
     job = _homepage_job()
-    task_root = tmp_path / "task"
-    object_dir = task_root / job.content_object_dir
+    execution_root_path = tmp_path / "execution"
+    object_dir = execution_root_path / job.content_object_dir
     draft_dir = object_dir / "4.draft"
     draft_dir.mkdir(parents=True)
     (draft_dir / "prompt.md").write_text("冻结正文。", encoding="utf-8")
@@ -251,7 +251,7 @@ def test_homepage_repair_feedback_rejects_untyped_recovery_contract(
         ),
         encoding="utf-8",
     )
-    monkeypatch.setattr(reliabletask_worker, "execution_root", lambda _execution_id: task_root)
+    monkeypatch.setattr(reliabletask_worker, "execution_root", lambda _execution_id: execution_root_path)
 
     with pytest.raises(ValueError, match="issue contract invalid"):
         reliabletask_worker._author_prompt(SimpleNamespace(), job)

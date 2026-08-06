@@ -95,6 +95,12 @@ SERVICE_BUILD_DEFINITIONS: tuple[dict[str, str], ...] = (
         "dockerfile": "quwoquan_service/services/notification-service/build/Dockerfile",
     },
     {
+        "service": "travel-service",
+        "image_name": "travel-service",
+        "context": "quwoquan_service",
+        "dockerfile": "quwoquan_service/services/travel-service/build/Dockerfile",
+    },
+    {
         "service": "circle-service",
         "image_name": "circle-service",
         "context": "quwoquan_service",
@@ -142,6 +148,7 @@ FEATURE_OWNERS: dict[str, frozenset[str]] = {
     "platform-ops-governance": frozenset({"platform-ops-service"}),
     "product-ops-growth": frozenset({"product-ops-service"}),
     "recommendation-platform": frozenset({"recommendation-service"}),
+    "travel-journey": frozenset({"travel-service"}),
     "runtime": frozenset({"integration-service", "platform-ops-service"}),
     "shared-homepage-network": frozenset(
         {"circle-service", "content-service", "entity-service", "user-service"}

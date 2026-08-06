@@ -1,4 +1,4 @@
-"""Managed Cursor outcomes are typed after the SDK/subprocess boundary."""
+"""Managed semantic-agent outcomes are typed after the provider boundary."""
 from __future__ import annotations
 
 import pytest
@@ -20,6 +20,7 @@ from core.data_issue import DataIssueCode, DataRecoveryAction
 def test_agent_run_outcome__failure__reliability__local_contract_test() -> None:
     outcome = AgentRunOutcome.failed(
         AgentFailureKind.SUBPROCESS_TIMEOUT,
+        provider=AgentProvider.CURSOR_SDK,
         message="agent subprocess exceeded its deadline",
         retryable=True,
     )
@@ -34,6 +35,7 @@ def test_agent_run_outcome__failure__reliability__local_contract_test() -> None:
 def test_agent_run_outcome__provider_rejection__reliability__local_contract_test() -> None:
     outcome = AgentRunOutcome.failed(
         AgentFailureKind.PROVIDER_REJECTED,
+        provider=AgentProvider.CURSOR_SDK,
         message="provider account is not ready",
         started=True,
         error_code=AgentFailureKind.PROVIDER_REJECTED.value,
@@ -99,6 +101,7 @@ def test_cursor_prompt__preserves_terminal_status_message__contract__local_contr
 
 def test_agent_run_outcome__wire_decode__contract__local_contract_test() -> None:
     encoded = AgentRunOutcome.finished(
+        provider=AgentProvider.CODEX_SDK,
         run_id="run-1",
         result_text="completed",
         attempts=1,
@@ -110,18 +113,46 @@ def test_agent_run_outcome__wire_decode__contract__local_contract_test() -> None
     assert decoded.run_id == "run-1"
 
 
+def test_agent_run_outcome__capacity_receipt_and_retry_after__contract__local_contract_test() -> None:
+    outcome = AgentRunOutcome.failed(
+        AgentFailureKind.PROVIDER_REJECTED,
+        provider=AgentProvider.CODEX_SDK,
+        message="rate limited",
+        started=True,
+        retryable=True,
+        error_code="semantic_provider_rate_limited",
+        retry_after_seconds=45,
+    ).with_capacity_receipt(
+        receipt_ref="data/local/workspace/runtime/semantic-agent-capacity/receipts/run/receipt.json",
+        receipt_digest="sha256:" + "a" * 64,
+    )
+
+    decoded = AgentRunOutcome.from_document(outcome.to_document())
+
+    assert decoded.retry_after_seconds == 45
+    assert decoded.capacity_receipt_ref.endswith("receipt.json")
+    assert decoded.capacity_receipt_digest == "sha256:" + "a" * 64
+    issue = decoded.issue()
+    assert issue is not None
+    assert dict(issue.attributes)["retryAfterSeconds"] == "45"
+
+
 def test_agent_run_outcome__invalid_error__contract__local_contract_test() -> None:
     with pytest.raises(ValueError, match="failureKind"):
         AgentRunOutcome.from_document(
             {
                 "started": False,
                 "status": "error",
+                "agentProvider": AgentProvider.CODEX_SDK.value,
             },
         )
 
 
 def test_agent_run_outcome__rejects_weak_boolean__contract__local_contract_test() -> None:
-    wire = AgentRunOutcome.finished(run_id="run-1").to_document()
+    wire = AgentRunOutcome.finished(
+        provider=AgentProvider.CODEX_SDK,
+        run_id="run-1",
+    ).to_document()
     wire["retryable"] = "false"
 
     with pytest.raises(ValueError, match="retryable must be a boolean"):
@@ -130,7 +161,10 @@ def test_agent_run_outcome__rejects_weak_boolean__contract__local_contract_test(
 
 def test_managed_agent_job_outcome__gate__reliability__local_contract_test() -> None:
     completed = ManagedAgentJobOutcome(
-        outcome=AgentRunOutcome.finished(run_id="run-1"),
+        outcome=AgentRunOutcome.finished(
+            provider=AgentProvider.CODEX_SDK,
+            run_id="run-1",
+        ),
         job_index=0,
         lane="homepage",
         ref="entities/地点/景区/测试实体甲",
@@ -167,7 +201,10 @@ def test_managed_agent_run_record__wire_boundary__contract__local_contract_test(
         infrastructure_failures=0,
         outcomes=(
             ManagedAgentJobOutcome(
-                outcome=AgentRunOutcome.finished(run_id="run-1"),
+                outcome=AgentRunOutcome.finished(
+                    provider=AgentProvider.CURSOR_SDK,
+                    run_id="run-1",
+                ),
                 job_index=0,
                 lane="article",
                 ref="posts/article/example",

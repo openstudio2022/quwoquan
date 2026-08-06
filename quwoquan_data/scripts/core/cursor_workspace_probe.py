@@ -7,15 +7,15 @@ import subprocess
 import sys
 import threading
 import time
+from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Sequence
 
 from core.cursor_model import CursorModelSelection
 from core.cursor_startup_probe import cursor_startup_probe
 from core.python_environment import (
-    DEFAULT_CURSOR_STARTUP_MODEL,
-    DEFAULT_CURSOR_STARTUP_RUNTIME,
+    DEFAULT_SEMANTIC_AGENT_MODEL,
+    DEFAULT_SEMANTIC_AGENT_RUNTIME,
     REPO_ROOT,
     _redact_secret_text,
     _redact_secret_value,
@@ -27,9 +27,17 @@ from core.runtime_policy import active_runtime_policy
 def cursor_model_catalog() -> dict:
     """Read the account-visible model catalog through the public Cursor facade."""
     try:
-        from core.cursor_credentials import resolve_cursor_api_key
+        from core.cursor_credentials import (
+            cursor_credential_subprocess_env,
+            protected_cursor_api_key_fd,
+            resolve_cursor_api_key,
+        )
     except Exception:  # noqa: BLE001
-        from cursor_credentials import resolve_cursor_api_key  # type: ignore
+        from cursor_credentials import (  # type: ignore
+            cursor_credential_subprocess_env,
+            protected_cursor_api_key_fd,
+            resolve_cursor_api_key,
+        )
     key = resolve_cursor_api_key()
     if not key:
         return {
@@ -43,6 +51,7 @@ def cursor_model_catalog() -> dict:
     code = r'''
 import importlib.metadata
 import json
+import os
 import sys
 
 try:
@@ -55,7 +64,9 @@ except Exception as exc:
     }, ensure_ascii=False))
     raise SystemExit(0)
 
-api_key = sys.stdin.readline().strip()
+credential_fd = int(os.environ.pop("QWQ_CURSOR_API_KEY_FD"))
+with os.fdopen(credential_fd, "r", encoding="utf-8", closefd=True) as credential_stream:
+    api_key = credential_stream.readline().strip()
 try:
     models = Cursor().models.list(api_key=api_key)
     model_ids = sorted({
@@ -76,26 +87,26 @@ except Exception as exc:
     }, ensure_ascii=False))
 '''
     try:
-        proc = subprocess.run(
-            [str(catalog_python), "-c", code],
-            capture_output=True,
-            text=True,
-            check=False,
-            timeout=max(
-                30,
-                active_runtime_policy().preflight_network_timeout_seconds * 3,
-            ),
-            env={
-                name: value
-                for name, value in os.environ.items()
-                if name != "CURSOR_API_KEY"
-            },
-            input=f"{key}\n",
-            cwd=REPO_ROOT,
-        )
+        with protected_cursor_api_key_fd(key) as credential_fd:
+            proc = subprocess.run(
+                [str(catalog_python), "-c", code],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=max(
+                    30,
+                    active_runtime_policy().preflight_network_timeout_seconds * 3,
+                ),
+                env=cursor_credential_subprocess_env(
+                    os.environ, credential_fd=credential_fd
+                ),
+                stdin=subprocess.DEVNULL,
+                pass_fds=(credential_fd,),
+                cwd=REPO_ROOT,
+            )
         payload = json.loads((proc.stdout or "{}").strip() or "{}")
         if not isinstance(payload, dict):
-            raise ValueError("Cursor model catalog returned a non-object payload")
+            raise TypeError("Cursor model catalog returned a non-object payload")
         model_ids = [
             str(model_id)
             for model_id in payload.get("modelIds") or []
@@ -143,8 +154,8 @@ except Exception as exc:
 def cursor_workspace_probe_suite(
     *,
     workspaces: Sequence[Path],
-    model: str | CursorModelSelection = DEFAULT_CURSOR_STARTUP_MODEL,
-    runtime: str = DEFAULT_CURSOR_STARTUP_RUNTIME,
+    model: str | CursorModelSelection = DEFAULT_SEMANTIC_AGENT_MODEL,
+    runtime: str = DEFAULT_SEMANTIC_AGENT_RUNTIME,
     timeout_seconds: float | None = None,
 ) -> dict:
     """Prove that isolated campaign workspaces can start Cursor runs together."""

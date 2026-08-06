@@ -57,6 +57,33 @@ def _tcp_port_is_open(host: str, port: int) -> bool:
         return False
 
 
+def local_runtime_peer_targets(
+    topology: Mapping[str, Any],
+    requested_target: str,
+) -> tuple[str, ...]:
+    """返回与目标共享同一本机资源组的其他 local target。"""
+    targets = topology.get("targets")
+    if not isinstance(targets, Mapping):
+        raise RuntimeError("environment topology targets must be a mapping")
+    requested = targets.get(requested_target)
+    if not isinstance(requested, Mapping):
+        raise RuntimeError(f"unknown local runtime target: {requested_target}")
+    resource_group = str(requested.get("localResourceGroup") or "").strip()
+    if not resource_group:
+        return ()
+    return tuple(
+        sorted(
+            str(candidate_name)
+            for candidate_name, candidate in targets.items()
+            if candidate_name != requested_target
+            and isinstance(candidate, Mapping)
+            and str(candidate.get("backend") or "").strip() == "local"
+            and str(candidate.get("localResourceGroup") or "").strip()
+            == resource_group
+        )
+    )
+
+
 def active_conflicting_local_targets(
     topology: Mapping[str, Any],
     requested_target: str,
@@ -67,21 +94,10 @@ def active_conflicting_local_targets(
     targets = topology.get("targets")
     if not isinstance(targets, Mapping):
         raise RuntimeError("environment topology targets must be a mapping")
-    requested = targets.get(requested_target)
-    if not isinstance(requested, Mapping):
-        raise RuntimeError(f"unknown local runtime target: {requested_target}")
-    resource_group = str(requested.get("localResourceGroup") or "").strip()
-    if not resource_group:
-        return ()
 
     active: list[str] = []
-    for candidate_name, candidate in targets.items():
-        if candidate_name == requested_target or not isinstance(candidate, Mapping):
-            continue
-        if str(candidate.get("backend") or "").strip() != "local":
-            continue
-        if str(candidate.get("localResourceGroup") or "").strip() != resource_group:
-            continue
+    for candidate_name in local_runtime_peer_targets(topology, requested_target):
+        candidate = targets[candidate_name]
         origins = candidate.get("origins")
         if not isinstance(origins, Mapping):
             continue

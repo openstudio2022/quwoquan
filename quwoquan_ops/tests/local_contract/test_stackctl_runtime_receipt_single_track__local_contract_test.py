@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import inspect
 import json
 import sys
@@ -34,6 +35,77 @@ def _canonical_running_attempt(
 
 
 class StackctlRuntimeReceiptSingleTrackContractTest(unittest.TestCase):
+    def test_package_image_composition_carries_active_candidate_id(self) -> None:
+        configuration_digest = "sha256:" + "1" * 64
+        build_input_digest = "sha256:" + "2" * 64
+        baseline_id = "sha256:" + "3" * 64
+        images: dict[str, dict[str, str]] = {}
+        for index, (service, _) in enumerate(
+            stackctl.GAMMA_PACKAGED_SERVICE_IMAGE_ENVIRONMENTS,
+            start=1,
+        ):
+            image_digest = "sha256:" + f"{index:064x}"
+            images[service] = {
+                "ref": stackctl._packaged_service_source_image_ref("alpha", service),
+                "imageDigest": image_digest,
+            }
+        image_set_digest = "sha256:" + hashlib.sha256(
+            json.dumps(
+                images,
+                ensure_ascii=True,
+                separators=(",", ":"),
+                sort_keys=True,
+            ).encode("utf-8")
+        ).hexdigest()
+        manifest = {
+            "schema": stackctl.PACKAGE_OCI_IMAGES_SCHEMA,
+            "environment": "alpha",
+            "target": "alpha-local",
+            "configurationDigest": configuration_digest,
+            "buildInputDigest": build_input_digest,
+            "imageDigest": image_set_digest,
+            "images": images,
+        }
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            package_root = Path(temporary_dir)
+            (package_root / "oci-images.json").write_text(
+                json.dumps(manifest),
+                encoding="utf-8",
+            )
+            with (
+                mock.patch.object(
+                    stackctl,
+                    "runtime_shared_deployment_package_dir",
+                    return_value=package_root,
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "packaged_configuration_digest",
+                    return_value=configuration_digest,
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "active_deployment_candidate",
+                    return_value={"baselineId": baseline_id},
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "load_candidate_manifest",
+                    return_value={
+                        "baselineId": baseline_id,
+                        "imageDigest": image_set_digest,
+                        "buildInputDigest": build_input_digest,
+                        "runtimeConfigDigest": configuration_digest,
+                    },
+                ),
+            ):
+                composition = stackctl._load_package_bound_local_image_composition(
+                    "alpha",
+                    "alpha-local",
+                )
+
+        self.assertEqual(composition["candidateId"], baseline_id)
+
     def test_health_scope_uses_canonical_current_startup_attempt(self) -> None:
         cases = (
             ("alpha-local", "content-release", "content-consumer"),

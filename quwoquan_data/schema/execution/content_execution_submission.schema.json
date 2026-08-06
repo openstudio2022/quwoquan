@@ -15,11 +15,15 @@
     "count",
     "targetNames",
     "sourceProviders",
+    "semanticSelectionId",
     "retryOf",
     "gitBranch",
     "gitCommitSha",
+    "sourceRevision",
     "sourceDigest",
     "entityCatalogDigest",
+    "externalInputRefs",
+    "externalInputsDigest",
     "requestDigest",
     "submittedAt"
   ],
@@ -29,7 +33,16 @@
     "rootExecutionId": { "type": "string", "minLength": 1 },
     "executionId": { "type": "string", "minLength": 1 },
     "operation": {
-      "enum": ["homepage.generate", "article.generate", "image.generate", "video.generate"]
+      "enum": [
+        "homepage.generate",
+        "article.generate",
+        "image.generate",
+        "video.generate",
+        "homepage.adoptReviewedClosure",
+        "article.adoptReviewedClosure",
+        "image.adoptReviewedClosure",
+        "video.adoptReviewedClosure"
+      ]
     },
     "carrier": { "enum": ["homepage", "article", "image", "video"] },
     "familyRef": { "type": "string", "minLength": 1 },
@@ -48,9 +61,16 @@
       "uniqueItems": true,
       "items": { "type": "string", "minLength": 1 }
     },
+    "semanticSelectionId": {
+      "enum": ["default", "cursor_auto", "not_applicable"]
+    },
+    "semanticPreflightReceipt": {
+      "$ref": "semantic_preflight_receipt_ref.schema.json"
+    },
     "retryOf": { "type": ["string", "null"] },
     "gitBranch": { "type": "string", "minLength": 1 },
     "gitCommitSha": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+    "sourceRevision": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
     "sourceDigest": {
       "type": "object",
       "required": ["algorithm", "digest", "inputs"],
@@ -69,7 +89,68 @@
       "type": "string",
       "pattern": "^sha256:[a-f0-9]{64}$"
     },
+    "externalInputRefs": {
+      "type": "array",
+      "items": { "$ref": "campaign_external_input_ref.schema.json" }
+    },
+    "externalInputsDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "predecessorReconciliation": {
+      "$ref": "campaign_submission_reconciliation_ref.schema.json"
+    },
+    "reviewedClosureAdoption": {
+      "$ref": "reviewed_closure_adoption_campaign_binding.schema.json"
+    },
     "requestDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
     "submittedAt": { "type": "string", "format": "date-time" }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "enum": [
+              "homepage.generate",
+              "article.generate",
+              "image.generate",
+              "video.generate"
+            ]
+          }
+        },
+        "required": ["operation"]
+      },
+      "then": {
+        "properties": {
+          "semanticSelectionId": { "enum": ["default", "cursor_auto"] }
+        }
+      },
+      "else": {
+        "properties": {
+          "semanticSelectionId": { "const": "not_applicable" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "semanticSelectionId": { "enum": ["default", "cursor_auto"] }
+        },
+        "required": ["semanticSelectionId"]
+      },
+      "then": {
+        "required": ["semanticPreflightReceipt"]
+      }
+    },
+    {
+      "if": {
+        "properties": { "semanticSelectionId": { "const": "cursor_auto" } },
+        "required": ["semanticSelectionId"]
+      },
+      "then": {
+        "properties": { "retryOf": { "type": "string", "minLength": 1 } }
+      }
+    }
+  ]
 }

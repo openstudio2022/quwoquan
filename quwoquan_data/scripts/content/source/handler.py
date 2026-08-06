@@ -149,6 +149,16 @@ def handle_download(
     entity_ids = [str(entity_id).strip() for entity_id in entity_ids if str(entity_id).strip()]
     max_workers = max_workers or active_runtime_policy().download_concurrency
     selected_lanes = selected_download_lanes(lane)
+    from content.execution.campaign_external_input_runtime import (
+        bound_runtime_external_input_context,
+    )
+    from content.execution.identity import parse_execution_id
+
+    carrier = parse_execution_id(execution_id).content_type.value
+    external_input_context = bound_runtime_external_input_context(
+        execution_id,
+        carrier,
+    )
 
     ensure_execution_command_layout(execution_id, "source")
     dl_root = execution_root(execution_id) / "entities"
@@ -346,6 +356,7 @@ def handle_download(
                     entity_index=entity_index,
                     entity_count=len(entity_ids),
                     selected_lanes=selected_lanes,
+                    external_input_context=external_input_context,
                 )
             except DataIssueError as exc:
                 _record_typed_fetch_failure(entity_id, entity_index, exc)
@@ -372,6 +383,7 @@ def handle_download(
                     entity_index=entity_index,
                     entity_count=len(entity_ids),
                     selected_lanes=selected_lanes,
+                    external_input_context=external_input_context,
                 ): (entity_index, entity_id)
                 for entity_index, entity_id in enumerate(entity_ids, start=1)
             }

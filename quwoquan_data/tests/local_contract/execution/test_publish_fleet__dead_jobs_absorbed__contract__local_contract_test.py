@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import shutil
+from pathlib import Path
 from types import SimpleNamespace
 
 from content.execution.controller import publish as publish_module
@@ -20,6 +21,89 @@ from support.execution_manifest_fixture import ExecutionFixtureBuilder
 
 EXECUTION_ID = "20260731--travel-homepage-publish--test-region-a--pilot-911"
 _NAMES = ("测试实体甲", "测试实体乙", "测试实体丙")
+
+
+def test_homepage_object_publish_reads_incremental_inventory_before_apply(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    from content.execution import workspace as workspace_module
+    from content.release.canonical import (
+        application,
+        canonical_inventory,
+        object_transaction,
+        object_transaction_audit,
+        object_transaction_contract,
+    )
+    from core import paths as paths_module
+    from core import tree_integrity
+
+    output_root = tmp_path / "output"
+    publish_root = tmp_path / "publish"
+    execution_dir = output_root / "data/tasks" / EXECUTION_ID
+    inventory_calls: list[Path] = []
+    tree_scans: list[Path] = []
+    before_merkle = "sha256:" + "1" * 64
+    object_merkle = "sha256:" + "2" * 64
+
+    monkeypatch.setattr(paths_module, "OUTPUT_ROOT", output_root)
+    monkeypatch.setattr(paths_module, "PUBLISH_ROOT", publish_root)
+    monkeypatch.setattr(
+        workspace_module,
+        "execution_root",
+        lambda _execution_id: execution_dir,
+    )
+    monkeypatch.setattr(
+        canonical_inventory,
+        "load_or_bootstrap_inventory",
+        lambda root: (
+            inventory_calls.append(root)
+            or {"stats": {"merkleRoot": before_merkle}}
+        ),
+    )
+
+    def tree_stats(path: Path) -> dict[str, str]:
+        tree_scans.append(path)
+        if path == publish_root:
+            raise AssertionError("object publish hot path scanned the whole tree")
+        return {"merkleRoot": object_merkle}
+
+    monkeypatch.setattr(tree_integrity, "tree_integrity_stats", tree_stats)
+    monkeypatch.setattr(
+        object_transaction,
+        "build_entity_object_transaction_package",
+        lambda **_kwargs: None,
+    )
+
+    def audit(**kwargs):
+        assert kwargs["expected_canonical_merkle"] == before_merkle
+        return {"dryRunAttestationSha256": "sha256:" + "3" * 64}
+
+    monkeypatch.setattr(object_transaction_audit, "audit_object_transaction", audit)
+    monkeypatch.setattr(
+        object_transaction_audit,
+        "validate_publish_invariants",
+        lambda _root: {"status": "passed", "issues": []},
+    )
+    monkeypatch.setattr(
+        application,
+        "apply_object_transaction",
+        lambda **_kwargs: {"objectClosureDigest": "sha256:" + "4" * 64},
+    )
+    monkeypatch.setattr(
+        object_transaction_contract,
+        "refresh_canonical_tag_snapshots",
+        lambda _root: None,
+    )
+
+    result = publish_module.publish_homepage_object(
+        EXECUTION_ID,
+        "/entity/地点/景区/测试实体甲",
+    )
+
+    assert inventory_calls == [publish_root]
+    assert publish_root not in tree_scans
+    assert result["canonicalObjectSha256"] == object_merkle
 
 
 def test_publish_absorbs_dead_jobs_when_fleet_passed_quota(monkeypatch) -> None:
@@ -54,7 +138,12 @@ def test_publish_absorbs_dead_jobs_when_fleet_passed_quota(monkeypatch) -> None:
             "fleetAcceptedThroughputPerHour": 1.0,
             "endToEndAcceptedThroughputPerHour": 1.0,
             "acceptedContentThroughputStatus": "MEASURED",
-            "automaticRecoveryRate": 1.0,
+            "recoveryEligibleCount": 0,
+            "automaticRecoveredCount": 0,
+            "manualRecoveredCount": 0,
+            "automaticRecoveryStatus": "NOT_EXERCISED",
+            "automaticRecoveryRate": 0.0,
+            "firstAttemptSuccessRate": 2 / 3,
             "finalizedWithinStageBudgetRate": 1.0,
             "duplicatePublishCount": 0,
             "missingObjectCount": 0,

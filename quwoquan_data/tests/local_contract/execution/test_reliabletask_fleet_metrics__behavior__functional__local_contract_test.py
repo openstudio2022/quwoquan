@@ -19,6 +19,7 @@ from content.execution.controller.metrics import (  # noqa: E402
 )
 from content.execution import reliabletask_fleet  # noqa: E402
 from content.execution.reliabletask_fleet import (  # noqa: E402
+    ReliableTaskFleetReport,
     ReliableTaskFleetTransport,
 )
 from core.control_types import QueueJobStage  # noqa: E402
@@ -53,7 +54,12 @@ def _report(
             if passed
             else "GATE_BLOCK_INCOMPLETE_COMMERCIAL_BATCH"
         ),
-        "automaticRecoveryRate": 1.0,
+        "recoveryEligibleCount": 0,
+        "automaticRecoveredCount": 0,
+        "manualRecoveredCount": 0,
+        "automaticRecoveryStatus": "NOT_EXERCISED",
+        "automaticRecoveryRate": 0.0,
+        "firstAttemptSuccessRate": 1.0,
         "finalizedWithinStageBudgetRate": 1.0,
         "duplicatePublishCount": 0,
         "missingObjectCount": 0,
@@ -139,6 +145,73 @@ def test_metrics_reject_accepted_below_quota(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="已达标 5 / 配额 9"):
         _reliabletask_accepted_throughput(tmp_path)
+
+
+def test_recovery_rate_is_derived_only_from_recovery_eligible_failures() -> None:
+    report = _report()
+    report.update(
+        {
+            "recoveryEligibleCount": 20,
+            "automaticRecoveredCount": 19,
+            "manualRecoveredCount": 1,
+            "automaticRecoveryStatus": "MEASURED",
+            "automaticRecoveryRate": 0.95,
+        }
+    )
+
+    decoded = ReliableTaskFleetReport.from_document(report)
+
+    assert decoded.recovery_eligible_count == 20
+    assert decoded.automatic_recovered_count == 19
+    assert decoded.manual_recovered_count == 1
+    assert decoded.automatic_recovery_status == "MEASURED"
+    assert decoded.automatic_recovery_rate == 0.95
+
+
+@pytest.mark.parametrize(
+    ("updates", "message"),
+    (
+        (
+            {
+                "recoveryEligibleCount": 20,
+                "automaticRecoveredCount": 19,
+                "manualRecoveredCount": 1,
+                "automaticRecoveryStatus": "MEASURED",
+                "automaticRecoveryRate": 1.0,
+            },
+            "automatic recovery metric drift",
+        ),
+        (
+            {
+                "recoveryEligibleCount": 0,
+                "automaticRecoveredCount": 0,
+                "manualRecoveredCount": 0,
+                "automaticRecoveryStatus": "MEASURED",
+                "automaticRecoveryRate": 0.0,
+            },
+            "automatic recovery metric drift",
+        ),
+        (
+            {
+                "recoveryEligibleCount": 1,
+                "automaticRecoveredCount": 1,
+                "manualRecoveredCount": 1,
+                "automaticRecoveryStatus": "MEASURED",
+                "automaticRecoveryRate": 1.0,
+            },
+            "recovery counts are invalid",
+        ),
+    ),
+)
+def test_recovery_metric_drift_is_rejected(
+    updates: dict[str, object],
+    message: str,
+) -> None:
+    report = _report()
+    report.update(updates)
+
+    with pytest.raises(ValueError, match=message):
+        ReliableTaskFleetReport.from_document(report)
 
 
 def test_failed_publish_fleet_report_remains_projectable(

@@ -3,20 +3,23 @@ from __future__ import annotations
 
 import math
 import re
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
-from core.source_catalog import known_category_ids, platform_category
+from core.image_rules import image_caption_quality_issue
+from core.media_processing_policy import MEDIA_PROCESSING_POLICY
 from core.qunar_template import QUNAR_PAGE_SEARCH_RESULT, qunar_page_type
+from core.source_catalog import known_category_ids, platform_category
 from governance.coverage.license import (
     audit_image_rights,
     rights_proof_required,
     validate_image_rights,
 )
 
-from core.image_rules import image_caption_quality_issue
-from core.media_processing_policy import MEDIA_PROCESSING_POLICY
+from content.source.research.homepage_source_policy import (
+    _homepage_candidate_has_fetch_evidence,
+)
 from content.source.research.text_match import _text_mentions_entity
-from content.source.research.homepage_source_policy import _homepage_candidate_has_fetch_evidence
 
 _ARTICLE_BASE_CATEGORIES = {
     "travelogue",
@@ -170,18 +173,22 @@ def _candidate_gate(
                 "article lane must not use same_authorized_collection image evidence "
                 "(article images must be same-source from the article's own base draft)"
             )
-    if lane == "homepage" and category in {
-        "encyclopedia",
-        "overview_baike",
-        "official",
-        "official_site",
-        "government",
-    }:
-        if not _homepage_candidate_has_fetch_evidence(source, url):
-            issues.append(
-                "homepage source must be registry-fetchable, verified retained source, "
-                "or carry a text snapshot before entering source plan"
-            )
+    if (
+        lane == "homepage"
+        and category
+        in {
+            "encyclopedia",
+            "overview_baike",
+            "official",
+            "official_site",
+            "government",
+        }
+        and not _homepage_candidate_has_fetch_evidence(source, url)
+    ):
+        issues.append(
+            "homepage source must be registry-fetchable, verified retained source, "
+            "or carry a text snapshot before entering source plan"
+        )
     image_warnings: list[str] = []
     valid_images: list[dict[str, Any]] = []
     enforce_rights = rights_proof_required(vertical)
@@ -258,10 +265,21 @@ def _collection_image_spec(collection: Mapping[str, Any], image: Mapping[str, An
         "watermarkScan",
         "ocrScan",
         "collectedAt",
+        "capturedAt",
+        "contentSha256",
+        "sourceId",
+        "acquisitionReceiptRef",
+        "professionalAssetId",
+        "professionalContentSha256",
     ):
         value = image.get(field) or collection.get(field)
         if value not in ("", None):
             spec[field] = value
+    rights_issues = image.get("rightsIssues") or collection.get("rightsIssues") or []
+    if isinstance(rights_issues, list):
+        spec["rightsIssues"] = [
+            str(issue).strip() for issue in rights_issues if str(issue).strip()
+        ]
     for field in (
         "url",
         "caption",

@@ -1,0 +1,85 @@
+# Code generated from quwoquan_service/generated/contract_graph.json.
+# Regenerate with verify_object_alert_coverage.py --write.
+groups:
+  - name: quwoquan_travel_contract_trip_plan_template
+    rules:
+      - record: quwoquan_travel_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="travel-service",method="POST",route="/travel/templates"})
+        labels:
+          service: "travel-service"
+          operation: "travel.trip_plan_template.CreateTripPlanTemplate"
+          contract_metric: "travel_trip_template_create"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "900"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_travel_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="travel-service",method="POST",route="/travel/templates"})
+        labels:
+          service: "travel-service"
+          operation: "travel.trip_plan_template.CreateTripPlanTemplate"
+          contract_metric: "travel_trip_template_create"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "900"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_travel_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="travel-service",method="GET",route=~"^/travel/templates/[^/]+$"})
+        labels:
+          service: "travel-service"
+          operation: "travel.trip_plan_template.GetTripPlanTemplate"
+          contract_metric: "travel_trip_template_get"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "400"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_travel_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="travel-service",method="GET",route=~"^/travel/templates/[^/]+$"})
+        labels:
+          service: "travel-service"
+          operation: "travel.trip_plan_template.GetTripPlanTemplate"
+          contract_metric: "travel_trip_template_get"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "400"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_travel_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="travel-service",method="GET",route="/travel/templates"})
+        labels:
+          service: "travel-service"
+          operation: "travel.trip_plan_template.ListTripPlanTemplates"
+          contract_metric: "travel_trip_template_list"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "450"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_travel_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="travel-service",method="GET",route="/travel/templates"})
+        labels:
+          service: "travel-service"
+          operation: "travel.trip_plan_template.ListTripPlanTemplates"
+          contract_metric: "travel_trip_template_list"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "450"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_travel_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="travel-service",method="POST",route=~"^/travel/templates/[^/]+/revisions$"})
+        labels:
+          service: "travel-service"
+          operation: "travel.trip_plan_template.ReviseTripPlanTemplate"
+          contract_metric: "travel_trip_template_revise"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "900"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_travel_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="travel-service",method="POST",route=~"^/travel/templates/[^/]+/revisions$"})
+        labels:
+          service: "travel-service"
+          operation: "travel.trip_plan_template.ReviseTripPlanTemplate"
+          contract_metric: "travel_trip_template_revise"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "900"
+          slo_availability_percent: "99.9"

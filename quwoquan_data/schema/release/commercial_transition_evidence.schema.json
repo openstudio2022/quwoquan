@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/release/commercial_transition_evidence.schema.json",
+  "title": "Digest-bound four-environment commercial transition evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "evidenceId",
+    "researchReleaseId",
+    "researchManifestDigest",
+    "commercialReleaseId",
+    "commercialManifestDigest",
+    "environments",
+    "recordedAt",
+    "evidenceDigest"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.commercial_transition_evidence"},
+    "evidenceId": {"type": "string", "minLength": 1},
+    "researchReleaseId": {"type": "string", "minLength": 1},
+    "researchManifestDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "commercialReleaseId": {"type": "string", "minLength": 1},
+    "commercialManifestDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "environments": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "environment",
+          "cleanupReceiptRef",
+          "cleanupReceiptDigest",
+          "readbackReceiptRef",
+          "readbackReceiptDigest"
+        ],
+        "properties": {
+          "environment": {"enum": ["alpha", "beta", "gamma", "prod"]},
+          "cleanupReceiptRef": {"type": "string", "pattern": "^env/(alpha|beta|gamma|prod)/runs/commercial-transition/.+/cleanup-receipt\\.json$"},
+          "cleanupReceiptDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+          "readbackReceiptRef": {"type": "string", "pattern": "^env/(alpha|beta|gamma|prod)/runs/commercial-transition/.+/readback-receipt\\.json$"},
+          "readbackReceiptDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+        }
+      }
+    },
+    "recordedAt": {"type": "string", "minLength": 1},
+    "evidenceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

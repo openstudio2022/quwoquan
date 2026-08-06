@@ -125,9 +125,8 @@ python3 quwoquan_ops/gate/verify_domain_governance.py
   python3 quwoquan_service/scripts/verify/verify_login_dependency_config.py
   python3 quwoquan_service/scripts/verify/verify_relationship_error_code_gate.py
   python3 quwoquan_service/scripts/verify/verify_error_recovery_alignment.py
-  python3 quwoquan_ops/tests/local_contract/test_content_object_alert_coverage__contract_graph_mapping__observability__local_contract_test.py
-  python3 quwoquan_service/scripts/verify/verify_content_object_alert_coverage.py
-  python3 quwoquan_service/scripts/verify/verify_entity_object_alert_coverage.py
+  python3 quwoquan_ops/tests/local_contract/test_object_alert_coverage__contract_graph_mapping__observability__local_contract_test.py
+  python3 quwoquan_service/scripts/verify/verify_object_alert_coverage.py
   python3 quwoquan_service/scripts/verify/verify_entity_homepage_object_mainline.py
   python3 quwoquan_app/scripts/env/verify_public_vs_upstream_url_contract.py
   bash quwoquan_ops/environments/verify/verify_service_config_digest_mapping.sh

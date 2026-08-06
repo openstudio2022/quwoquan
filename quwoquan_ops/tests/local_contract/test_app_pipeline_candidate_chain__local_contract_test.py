@@ -4,7 +4,6 @@ from pathlib import Path
 
 import yaml
 
-
 ROOT = Path(__file__).resolve().parents[3]
 WORKFLOW = ROOT / ".github/workflows/app_pipeline.yml"
 DEVICE_WORKFLOW = ROOT / ".github/workflows/app-env-device-matrix-self-hosted.yml"
@@ -106,8 +105,9 @@ def test_device_matrix_nightly_schedule_selects_full_profile() -> None:
 
     assert payload["on"]["schedule"] == [{"cron": "0 18 * * *"}]
     assert 'if [ "$EVENT_NAME" = "schedule" ]; then PROFILE="nightly_full"; fi' in text
-    assert "NIGHTLY_COMMERCIAL_RELEASE_ATTESTATION" in text
-    assert "NIGHTLY_ROLLBACK_RELEASE_ATTESTATION" in text
+    assert "vars.RELEASED_RELEASE_EVIDENCE_REF" in text
+    assert "consume_released_release_evidence.py" in text
+    assert "NIGHTLY_" not in text
     assert "stackctl.py dev-session" in text
     assert "--env gamma" in text
     assert "managed_runtime_started" in text
@@ -182,7 +182,7 @@ def test_beta_android_and_ios_run_in_parallel_before_one_receipt_aggregation() -
     assert "--ios-ref \"$IOS_REF\"" in text
     assert "materialize_evidence_oci.py" in text
     assert "@${{ steps.receipt_bundle.outputs.digest }}" in text
-    combined = "\n".join((text, platform_text, lease_text, runner_text))
+    combined = f"{text}\n{platform_text}\n{lease_text}\n{runner_text}"
     assert "actions/upload-artifact@" not in combined
     assert "actions/download-artifact@" not in combined
     assert "rm -rf" not in combined
@@ -215,7 +215,7 @@ def test_beta_android_and_ios_run_in_parallel_before_one_receipt_aggregation() -
     assert "source-built or destructive Beta formal runtime" not in text
     assert "steps.formal_runtime.outputs.started" in text
     assert "destructiveActions" in DEVICE_EVIDENCE.read_text(encoding="utf-8")
-    assert combined.count("persist-credentials: false") == 5
+    assert combined.count("persist-credentials: false") == 9
     assert "config --local http.https://github.com/.extraheader" not in combined
     checkout_steps = [
         step
@@ -229,9 +229,11 @@ def test_beta_android_and_ios_run_in_parallel_before_one_receipt_aggregation() -
         for step in job.get("steps", [])
         if str(step.get("uses") or "").startswith("actions/checkout@")
     ]
-    assert len(checkout_steps) == 4
+    assert len(checkout_steps) == 8
     assert len(called_checkout_steps) == 1
-    assert all(step["with"]["clean"] == "false" for step in checkout_steps)
+    assert sum(
+        step["with"].get("clean") == "false" for step in checkout_steps
+    ) == 7
     assert all(step["with"]["clean"] == "false" for step in called_checkout_steps)
     assert all(
         step["with"]["persist-credentials"] == "false"

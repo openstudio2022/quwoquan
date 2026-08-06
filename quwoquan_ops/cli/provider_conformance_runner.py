@@ -67,6 +67,21 @@ def _current_commit() -> str:
     return result.stdout.strip()
 
 
+def _require_formal_promotability(identity: Mapping[str, object]) -> None:
+    if (
+        os.environ.get(
+            "QWQ_PROVIDER_CONFORMANCE_REQUIRE_PROMOTABLE",
+            "",
+        ).strip().lower()
+        == "true"
+        and identity.get("nonPromotable") is not False
+    ):
+        raise ValueError(
+            "formal Provider producer requires clean reviewed CI authority "
+            "and a canonical active candidate receipt"
+        )
+
+
 def _contract_graph_digest() -> str:
     contract_graph = ROOT / "quwoquan_service" / "generated" / "contract_graph.json"
     if not contract_graph.is_file():
@@ -203,11 +218,20 @@ def preflight_environment_matrix(
     except ValueError as exc:
         image_digest = ""
         issues.append(str(exc))
-    if not os.environ.get(
-        "QWQ_PROVIDER_CONFORMANCE_ATTESTATION_KEY",
-        "",
-    ).strip():
-        issues.append("QWQ_PROVIDER_CONFORMANCE_ATTESTATION_KEY is required")
+    commit = _current_commit()
+    contract_graph_digest = _contract_graph_digest()
+    active_candidate = provider_conformance.resolve_nonprod_active_candidate(
+        environment=environment,
+        registry=registry,
+        commit=commit,
+        image_digest=image_digest,
+        contract_graph_digest=contract_graph_digest,
+    )
+    if active_candidate.get("active") is not True:
+        issues.append(
+            "canonical active Provider candidate is unavailable: "
+            + str(active_candidate.get("reason") or "unknown receipt failure")
+        )
     selected = (compiled.get("selectedBindings") or {}).get(environment)
     if not isinstance(selected, Mapping):
         issues.append(f"compiled provider binding receipt has no {environment} environment")
@@ -446,6 +470,33 @@ def _execute_cell(
         raise ValueError("; ".join(case_result_issues))
     executed_at = datetime.now(timezone.utc).isoformat()
     case_result_bytes = case_result_path.read_bytes()
+    commit = _current_commit()
+    if args.environment in provider_conformance.ENVIRONMENTS:
+        active_candidate = provider_conformance.resolve_nonprod_active_candidate(
+            environment=args.environment,
+            registry=registry,
+            commit=commit,
+            image_digest=image_digest,
+            contract_graph_digest=contract_graph_digest,
+        )
+    else:
+        active_candidate = provider_conformance.resolve_prod_active_candidate(
+            case_result_path=case_result_path,
+            case_result=case_result,
+            capability_id=capability_id,
+            adapter_id=args.adapter_id,
+            image_digest=image_digest,
+            config_digest=config_digest,
+            contract_graph_digest=contract_graph_digest,
+            adapter_digest=adapter_digest,
+        )
+    identity = provider_conformance.evidence_identity(
+        commit=commit,
+        candidate_receipt_bound=active_candidate.get("active") is True,
+        candidate_receipt_ref=str(active_candidate.get("receiptRef") or ""),
+        candidate_receipt_digest=str(active_candidate.get("receiptDigest") or ""),
+    )
+    _require_formal_promotability(identity)
     report: dict[str, Any] = {
         "schema": provider_conformance.EXECUTION_REPORT_SCHEMA,
         "adapterId": args.adapter_id,
@@ -456,7 +507,8 @@ def _execute_cell(
         "executionProfile": execution_profile,
         "status": "passed",
         "executedAt": executed_at,
-        "commit": _current_commit(),
+        "commit": commit,
+        **identity,
         "imageDigest": image_digest,
         "configDigest": config_digest,
         "contractGraphDigest": contract_graph_digest,
@@ -488,7 +540,11 @@ def _execute_cell(
         "executedAt": executed_at,
         "artifactRef": _evidence_ref(report_path),
         "artifactDigest": _digest_bytes(report_bytes),
-        "artifactAttestation": provider_conformance.sign_execution_report(report_bytes),
+        "artifactAttestation": provider_conformance.attest_execution_report(
+            report_bytes,
+            identity=identity,
+        ),
+        **identity,
         "testArtifactRef": report["testArtifactRef"],
         "testArtifactDigest": report["testArtifactDigest"],
         "testSource": report["testSource"],

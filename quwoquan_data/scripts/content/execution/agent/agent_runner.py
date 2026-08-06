@@ -1,51 +1,52 @@
-"""Cursor SDK boundary for one managed execution checkpoint.
+"""Explicit provider dispatch for one managed semantic-agent checkpoint.
 
-The SDK event stream must be drained for completion, but data execution does not
-persist provider billing telemetry.  Evidence is limited to the typed run
-outcome: provider, run ID, result, timing and stable failure semantics.
+Provider event streams must be drained for completion, but data execution does
+not persist billing telemetry. Evidence is limited to provider, run ID, result,
+timing and stable failure semantics. Provider fallback is forbidden.
 """
+
 from __future__ import annotations
 
+import hashlib
 import sys
 import time
 from pathlib import Path
 from typing import Any
 
 from core.control_types import AgentFailureKind, AgentProvider, AgentRunStatus
+from core.cursor_bridge_transport import protected_cursor_client
 from core.cursor_credentials import is_cursor_auth_error, resolve_cursor_api_key
+from core.paths import OUTPUT_ROOT
 from core.runtime_policy import active_runtime_policy
+
 from content.execution.agent.managed_workspace import (
-    managed_local_workspace_guard as _managed_local_workspace_guard,
     redact_managed_secret as _redact_managed_secret,
+)
+from content.execution.agent.managed_workspace import (
     terminate_workspace_cursor_bridges as _terminate_workspace_cursor_bridges,
 )
-from content.execution.context import ExecutionContext, _managed_uses_serial_local_cursor
-
+from content.execution.agent.provider_failure import classify_provider_failure
+from content.execution.context import (
+    ExecutionContext,
+    _managed_uses_serial_local_cursor,
+)
 
 _CURSOR_BRIDGE_MAX_RETRIES = active_runtime_policy().cursor_bridge_max_retries
-_PROCESS_TERMINATION_TIMEOUT_SECONDS = active_runtime_policy().process_termination_timeout_seconds
-_CURSOR_BRIDGE_LAUNCH_COOLDOWN_SECONDS = active_runtime_policy().bridge_launch_cooldown_seconds
+_PROCESS_TERMINATION_TIMEOUT_SECONDS = (
+    active_runtime_policy().process_termination_timeout_seconds
+)
+_CURSOR_BRIDGE_LAUNCH_COOLDOWN_SECONDS = (
+    active_runtime_policy().bridge_launch_cooldown_seconds
+)
 _CURSOR_BRIDGE_READY_DELAY_SECONDS = active_runtime_policy().bridge_ready_delay_seconds
 
 
 def _cursor_provider_rejection(message: str, *, code: str = "") -> bool:
     """Identify non-retryable account/quota rejection from the public SDK."""
-    lowered = str(message or "").casefold()
-    code_lower = str(code or "").casefold()
-    return code_lower in {
-        "billing_limit_reached",
-        "insufficient_credits",
-        "quota_exceeded",
-        "usage_limit",
-    } or any(
-        marker in lowered
-        for marker in (
-            "you've hit your usage limit",
-            "usage limit",
-            "spend limit",
-            "monthly cycle ends",
-            "insufficient credits",
-        )
+    classified = classify_provider_failure(message, code=code)
+    return (
+        classified.kind is AgentFailureKind.PROVIDER_REJECTED
+        and not classified.retryable
     )
 
 
@@ -74,14 +75,14 @@ def _prompt_cursor_agent(
 
 
 def _close_cursor_client(
-    client: Any,
+    client_context: Any,
     *,
     workspace: Path,
     terminate_bridges: bool,
 ) -> None:
     """Close the public client and reap any managed-local bridge it leaves behind."""
     try:
-        client.close()
+        client_context.__exit__(None, None, None)
     except Exception as exc:  # noqa: BLE001
         print(
             f"[cursor-agent] client close failed: {type(exc).__name__}",
@@ -110,6 +111,7 @@ def _default_managed_agent_runner(ctx: ExecutionContext, prompt: str):
         started: bool = False,
         retryable: bool = False,
         error_code: str = "",
+        retry_after_seconds: int = 0,
         request_id: str = "",
         attempts: int = 0,
         warm_attempts: int = 0,
@@ -122,10 +124,19 @@ def _default_managed_agent_runner(ctx: ExecutionContext, prompt: str):
             started=started,
             retryable=retryable,
             error_code=error_code,
+            retry_after_seconds=retry_after_seconds,
             request_id=request_id,
             attempts=attempts,
             warm_attempts=warm_attempts,
             duration_ms=duration_ms,
+        )
+
+    cursor_auto = active_runtime_policy().explicit_semantic_selection("cursor_auto")
+    if ctx.model_selection != cursor_auto.binding.selection:
+        return failure(
+            AgentFailureKind.SDK_EXECUTION_FAILED,
+            "cursor_sdk requires the governed explicit cursor_auto selection",
+            error_code="semantic_provider_selection_not_governed",
         )
 
     try:
@@ -133,7 +144,6 @@ def _default_managed_agent_runner(ctx: ExecutionContext, prompt: str):
             Agent,
             AgentOptions,
             CloudAgentOptions,
-            Client,
             CursorAgentError,
             LocalAgentOptions,
             ModelParameterValue,
@@ -169,16 +179,18 @@ def _default_managed_agent_runner(ctx: ExecutionContext, prompt: str):
 
     for attempt in range(_CURSOR_BRIDGE_MAX_RETRIES):
         client: Any | None = None
+        client_context: Any | None = None
         request_bridge_retry = False
         try:
             if attempt and _managed_uses_serial_local_cursor(ctx):
                 _terminate_workspace_cursor_bridges(workspace)
             with _cursor_bridge_launch_guard():
-                client = Client.launch_bridge(
+                launch_context = protected_cursor_client(
                     workspace=str(workspace),
                     max_retries=_CURSOR_BRIDGE_MAX_RETRIES,
-                    allow_api_key_env_fallback=False,
                 )
+                client = launch_context.__enter__()
+                client_context = launch_context
             if _CURSOR_BRIDGE_READY_DELAY_SECONDS:
                 time.sleep(_CURSOR_BRIDGE_READY_DELAY_SECONDS)
             if str(ctx.runtime) == "cloud":
@@ -228,14 +240,20 @@ def _default_managed_agent_runner(ctx: ExecutionContext, prompt: str):
                             attempts=attempt + 1,
                             warm_attempts=warm_attempt + 1,
                         )
-                    if _cursor_provider_rejection(message, code=error_code):
+                    classified = classify_provider_failure(
+                        message,
+                        code=error_code,
+                        status=getattr(exc, "status", None),
+                        explicit_retryable=bool(getattr(exc, "is_retryable", False)),
+                    )
+                    if classified.error_code != "semantic_provider_execution_failed":
                         return failure(
-                            AgentFailureKind.PROVIDER_REJECTED,
+                            classified.kind,
                             message,
                             started=True,
-                            error_code=(
-                                error_code or AgentFailureKind.PROVIDER_REJECTED.value
-                            ),
+                            retryable=classified.retryable,
+                            error_code=classified.error_code,
+                            retry_after_seconds=classified.retry_after_seconds,
                             request_id=request_id,
                             attempts=attempt + 1,
                             warm_attempts=warm_attempt + 1,
@@ -254,7 +272,11 @@ def _default_managed_agent_runner(ctx: ExecutionContext, prompt: str):
                         attempts=attempt + 1,
                         warm_attempts=warm_attempt + 1,
                     )
-                    if retryable and warm_attempt + 1 < active_runtime_policy().cursor_warm_attempts:
+                    if (
+                        retryable
+                        and warm_attempt + 1
+                        < active_runtime_policy().cursor_warm_attempts
+                    ):
                         time.sleep(2)
                         continue
                     request_bridge_retry = retryable
@@ -269,7 +291,11 @@ def _default_managed_agent_runner(ctx: ExecutionContext, prompt: str):
                         attempts=attempt + 1,
                         warm_attempts=warm_attempt + 1,
                     )
-                    if retryable and warm_attempt + 1 < active_runtime_policy().cursor_warm_attempts:
+                    if (
+                        retryable
+                        and warm_attempt + 1
+                        < active_runtime_policy().cursor_warm_attempts
+                    ):
                         time.sleep(2)
                         continue
                     request_bridge_retry = retryable
@@ -304,13 +330,19 @@ def _default_managed_agent_runner(ctx: ExecutionContext, prompt: str):
                         attempts=attempt + 1,
                     )
             else:
-                if _cursor_provider_rejection(message, code=error_code):
+                classified = classify_provider_failure(
+                    message,
+                    code=error_code,
+                    status=getattr(exc, "status", None),
+                    explicit_retryable=bool(getattr(exc, "is_retryable", False)),
+                )
+                if classified.error_code != "semantic_provider_execution_failed":
                     return failure(
-                        AgentFailureKind.PROVIDER_REJECTED,
+                        classified.kind,
                         message,
-                        error_code=(
-                            error_code or AgentFailureKind.PROVIDER_REJECTED.value
-                        ),
+                        retryable=classified.retryable,
+                        error_code=classified.error_code,
+                        retry_after_seconds=classified.retry_after_seconds,
                         request_id=request_id,
                         attempts=attempt + 1,
                     )
@@ -339,9 +371,9 @@ def _default_managed_agent_runner(ctx: ExecutionContext, prompt: str):
             )
             request_bridge_retry = retryable
         finally:
-            if client is not None:
+            if client_context is not None:
                 _close_cursor_client(
-                    client,
+                    client_context,
                     workspace=workspace,
                     terminate_bridges=_managed_uses_serial_local_cursor(ctx),
                 )
@@ -357,7 +389,9 @@ def _default_managed_agent_runner(ctx: ExecutionContext, prompt: str):
             )
         if _managed_uses_serial_local_cursor(ctx):
             _terminate_workspace_cursor_bridges(workspace)
-        time.sleep(max(_CURSOR_BRIDGE_LAUNCH_COOLDOWN_SECONDS, 2.0) + 0.5 * (attempt + 1))
+        time.sleep(
+            max(_CURSOR_BRIDGE_LAUNCH_COOLDOWN_SECONDS, 2.0) + 0.5 * (attempt + 1)
+        )
 
     if result is None:
         return last_error or failure(
@@ -369,24 +403,19 @@ def _default_managed_agent_runner(ctx: ExecutionContext, prompt: str):
     result_text = str(getattr(result, "result", "") or "").strip()
     duration_ms = int(getattr(result, "duration_ms", 0) or 0)
     if raw_status != AgentRunStatus.FINISHED.value:
+        message = terminal_status_message or (
+            f"agent status={raw_status}: {result_text[:1600]}"
+            if result_text
+            else f"agent status={raw_status}"
+        )
+        classified = classify_provider_failure(message)
         return failure(
-            (
-                AgentFailureKind.PROVIDER_REJECTED
-                if terminal_status_message
-                else AgentFailureKind.SDK_EXECUTION_FAILED
-            ),
-            terminal_status_message
-            or (
-                f"agent status={raw_status}: {result_text[:1600]}"
-                if result_text
-                else f"agent status={raw_status}"
-            ),
+            classified.kind,
+            message,
             started=True,
-            error_code=(
-                AgentFailureKind.PROVIDER_REJECTED.value
-                if terminal_status_message
-                else AgentFailureKind.SDK_EXECUTION_FAILED.value
-            ),
+            retryable=classified.retryable,
+            error_code=classified.error_code,
+            retry_after_seconds=classified.retry_after_seconds,
             duration_ms=duration_ms,
             attempts=completed_attempt,
             warm_attempts=completed_warm_attempt,
@@ -403,4 +432,164 @@ def _default_managed_agent_runner(ctx: ExecutionContext, prompt: str):
 
 
 def _managed_agent_runner_for_provider(ctx: ExecutionContext, prompt: str):
-    return _default_managed_agent_runner(ctx, prompt)
+    from content.execution.agent.capacity_broker import (
+        SemanticCapacityBroker,
+        SemanticCapacityTimeout,
+        SemanticProviderCircuitOpen,
+        semantic_provider_capacity,
+        semantic_provider_lane,
+    )
+    from content.execution.agent.outcome import AgentRunOutcome
+
+    provider = ctx.agent_provider
+    if not isinstance(provider, AgentProvider):
+        provider = AgentProvider(str(provider))
+    policy = active_runtime_policy()
+    role = str(ctx.semantic_role or "").strip()
+    role_bindings = {
+        "author": policy.semantic_author,
+        "reviewer": policy.semantic_reviewer,
+        "calibration": policy.semantic_calibration.binding,
+    }
+    binding = role_bindings.get(role)
+    cursor_auto = policy.explicit_semantic_selection("cursor_auto")
+    if provider is AgentProvider.CODEX_SDK:
+        role_binding_valid = (
+            binding is not None
+            and binding.provider is provider
+            and binding.selection == ctx.model_selection
+        )
+    else:
+        role_binding_valid = (
+            provider is AgentProvider.CURSOR_SDK
+            and role in {"author", "reviewer"}
+            and cursor_auto.binding.provider is provider
+            and cursor_auto.binding.selection == ctx.model_selection
+        )
+    if not role_binding_valid:
+        return AgentRunOutcome.failed(
+            AgentFailureKind.SDK_EXECUTION_FAILED,
+            provider=provider,
+            message=(
+                "semantic provider/model is not governed for role: "
+                f"{role or '<missing>'}"
+            ),
+            error_code="semantic_provider_role_binding_mismatch",
+        )
+    broker = SemanticCapacityBroker(
+        account_scope_id=policy.semantic_capacity.account_scope_id,
+        host_scope_id=policy.semantic_capacity.host_scope_id,
+    )
+    circuit = broker.check_circuit(provider)
+    if circuit is not None:
+        try:
+            failure_kind = AgentFailureKind(str(circuit.get("failureKind") or ""))
+        except ValueError:
+            failure_kind = AgentFailureKind.PROVIDER_REJECTED
+        return AgentRunOutcome.failed(
+            failure_kind,
+            provider=provider,
+            message=(
+                "semantic provider circuit is open: "
+                + str(circuit.get("message") or failure_kind.value)
+            ),
+            retryable=bool(circuit.get("retryable")),
+            retry_after_seconds=int(circuit.get("retryAfterSeconds") or 0),
+            error_code="provider_circuit_open",
+        )
+    try:
+        lease = broker.acquire(
+            provider,
+            lane=semantic_provider_lane(ctx),
+            capacity=semantic_provider_capacity(policy),
+            lane_capacity=policy.semantic_capacity.lane_concurrency_limit,
+            requests_per_minute=policy.semantic_capacity.requests_per_minute,
+            burst_limit=policy.semantic_capacity.burst_limit,
+            wait_timeout_seconds=float(policy.assignment_deadline_seconds),
+            lease_ttl_seconds=float(
+                policy.agent_timeout_seconds
+                + policy.managed_future_grace_seconds
+                + policy.process_termination_timeout_seconds
+            ),
+        )
+    except SemanticProviderCircuitOpen as exc:
+        raw_kind = str(exc.circuit.get("failureKind") or "")
+        try:
+            kind = AgentFailureKind(raw_kind)
+        except ValueError:
+            kind = AgentFailureKind.PROVIDER_REJECTED
+        return AgentRunOutcome.failed(
+            kind,
+            provider=provider,
+            message=f"semantic provider circuit is open: {exc}",
+            retryable=bool(exc.circuit.get("retryable")),
+            retry_after_seconds=int(exc.circuit.get("retryAfterSeconds") or 0),
+            error_code="provider_circuit_open",
+        )
+    except SemanticCapacityTimeout as exc:
+        return AgentRunOutcome.failed(
+            AgentFailureKind.CAPACITY_UNPROVEN,
+            provider=provider,
+            message=str(exc),
+            retryable=True,
+            error_code="semantic_provider_capacity_wait_timeout",
+        )
+    with lease:
+        if provider is AgentProvider.CURSOR_SDK:
+            outcome = _default_managed_agent_runner(ctx, prompt)
+        elif provider is AgentProvider.CODEX_SDK:
+            from content.execution.agent.codex_adapter import run_codex_agent
+
+            outcome = run_codex_agent(ctx, prompt)
+        else:  # pragma: no cover - AgentProvider is a closed enum
+            return AgentRunOutcome.failed(
+                AgentFailureKind.SDK_UNAVAILABLE,
+                provider=provider,
+                message=f"unsupported semantic agent provider: {provider.value}",
+            )
+        try:
+            _receipt, receipt_path = broker.write_capacity_receipt(
+                lease,
+                execution_id=ctx.execution_id,
+                model=ctx.model,
+                role=role,
+                prompt=prompt,
+                outcome=outcome,
+                runtime_profile_id=policy.profile_id,
+            )
+            receipt_ref = (
+                receipt_path.resolve().relative_to(OUTPUT_ROOT.resolve()).as_posix()
+            )
+            receipt_digest = (
+                "sha256:" + hashlib.sha256(receipt_path.read_bytes()).hexdigest()
+            )
+            outcome = outcome.with_capacity_receipt(
+                receipt_ref=receipt_ref,
+                receipt_digest=receipt_digest,
+            )
+        except (OSError, RuntimeError, ValueError) as exc:
+            return AgentRunOutcome.failed(
+                AgentFailureKind.CAPACITY_UNPROVEN,
+                provider=provider,
+                message=f"semantic capacity receipt failed: {type(exc).__name__}",
+                started=outcome.started,
+                retryable=False,
+                error_code="semantic_capacity_receipt_failed",
+            )
+    if outcome.failure_kind in {
+        AgentFailureKind.CREDENTIAL_INVALID,
+        AgentFailureKind.AUTHENTICATION_REJECTED,
+        AgentFailureKind.PROVIDER_REJECTED,
+    } and (not outcome.retryable or outcome.retry_after_seconds > 0):
+        broker.open_circuit(
+            provider,
+            model=ctx.model,
+            failure_kind=outcome.failure_kind,
+            message=_redact_managed_secret(outcome.message),
+            cooldown_seconds=float(
+                outcome.retry_after_seconds or min(policy.agent_timeout_seconds, 300)
+            ),
+            retryable=outcome.retryable,
+            retry_after_seconds=outcome.retry_after_seconds,
+        )
+    return outcome

@@ -57,34 +57,12 @@ def render(
     validate_source(conformance)
     evidence_count = conformance.get("evidenceCount")
     readiness = conformance.get("readiness")
-    prod = readiness.get("prod") if isinstance(readiness, dict) else None
-    if not isinstance(prod, dict) or not prod:
-        raise ValueError("Prod Provider readiness is missing")
-    malformed = sorted(
-        capability
-        for capability, item in prod.items()
-        if not isinstance(capability, str)
-        or not capability
-        or not isinstance(item, dict)
-        or not isinstance(item.get("required"), bool)
-        or not isinstance(item.get("capability_ready"), bool)
-    )
-    if malformed:
-        raise ValueError("Prod Provider readiness is malformed: " + ", ".join(malformed))
-    required = {
-        capability: item
-        for capability, item in prod.items()
-        if item.get("required") is True
-    }
-    if not required:
-        raise ValueError("Prod Provider readiness has no required capability")
-    blocked = sorted(
-        capability
-        for capability, item in required.items()
-        if item.get("capability_ready") is not True
-    )
-    if blocked:
-        raise ValueError("Prod Provider capabilities are not ready: " + ", ".join(blocked))
+    if (
+        not isinstance(readiness, dict)
+        or set(readiness) != {"alpha", "beta", "gamma", "prod"}
+        or evidence_count != 140
+    ):
+        raise ValueError("Provider readiness must bind all four environments and 140 cells")
 
     images = manifest.get("images")
     if not isinstance(images, dict) or not images:
@@ -116,7 +94,9 @@ def render(
         },
         "sourceEvidence": conformance["sourceEvidence"],
         "evidenceCount": evidence_count,
-        "readiness": {"prod": prod},
+        "sourceCoverageIssues": [],
+        "readiness": dict(readiness),
+        "issues": [],
     }
 
 

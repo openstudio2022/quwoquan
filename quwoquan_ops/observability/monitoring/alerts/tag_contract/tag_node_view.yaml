@@ -1,0 +1,245 @@
+# Code generated from quwoquan_service/generated/contract_graph.json.
+# Regenerate with verify_object_alert_coverage.py --write.
+groups:
+  - name: quwoquan_tag_contract_tag_node_view
+    rules:
+      - record: quwoquan_tag_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="tag-service",method="GET",route="/internal/tag/inverted"})
+        labels:
+          service: "tag-service"
+          operation: "tag.tag_node_view.InvertedObjects"
+          contract_metric: "tag_inverted_objects"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_tag_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="tag-service",method="GET",route="/internal/tag/inverted"})
+        labels:
+          service: "tag-service"
+          operation: "tag.tag_node_view.InvertedObjects"
+          contract_metric: "tag_inverted_objects"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_tag_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="tag-service",method="GET",route="/tag/dimensions"})
+        labels:
+          service: "tag-service"
+          operation: "tag.tag_node_view.ListDimensions"
+          contract_metric: "tag_dimensions_list"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "300"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_tag_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="tag-service",method="GET",route="/tag/dimensions"})
+        labels:
+          service: "tag-service"
+          operation: "tag.tag_node_view.ListDimensions"
+          contract_metric: "tag_dimensions_list"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "300"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_tag_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="tag-service",method="GET",route="/tag/children"})
+        labels:
+          service: "tag-service"
+          operation: "tag.tag_node_view.ListTagChildren"
+          contract_metric: "tag_children_list"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "300"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_tag_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="tag-service",method="GET",route="/tag/children"})
+        labels:
+          service: "tag-service"
+          operation: "tag.tag_node_view.ListTagChildren"
+          contract_metric: "tag_children_list"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "300"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_tag_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="tag-service",method="GET",route="/internal/tag/related-objects"})
+        labels:
+          service: "tag-service"
+          operation: "tag.tag_node_view.RelatedObjects"
+          contract_metric: "tag_related_objects"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_tag_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="tag-service",method="GET",route="/internal/tag/related-objects"})
+        labels:
+          service: "tag-service"
+          operation: "tag.tag_node_view.RelatedObjects"
+          contract_metric: "tag_related_objects"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_tag_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="tag-service",method="GET",route="/internal/tag/related"})
+        labels:
+          service: "tag-service"
+          operation: "tag.tag_node_view.RelatedTags"
+          contract_metric: "tag_related"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_tag_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="tag-service",method="GET",route="/internal/tag/related"})
+        labels:
+          service: "tag-service"
+          operation: "tag.tag_node_view.RelatedTags"
+          contract_metric: "tag_related"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_tag_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="tag-service",method="GET",route="/tag/resolve"})
+        labels:
+          service: "tag-service"
+          operation: "tag.tag_node_view.ResolveTag"
+          contract_metric: "tag_resolve"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "300"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_tag_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="tag-service",method="GET",route="/tag/resolve"})
+        labels:
+          service: "tag-service"
+          operation: "tag.tag_node_view.ResolveTag"
+          contract_metric: "tag_resolve"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "300"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_tag_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="tag-service",method="POST",route="/internal/tag/search-by-tags"})
+        labels:
+          service: "tag-service"
+          operation: "tag.tag_node_view.SearchByTags"
+          contract_metric: "tag_search_by_tags"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_tag_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="tag-service",method="POST",route="/internal/tag/search-by-tags"})
+        labels:
+          service: "tag-service"
+          operation: "tag.tag_node_view.SearchByTags"
+          contract_metric: "tag_search_by_tags"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_tag_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="tag-service",method="GET",route="/tag/search"})
+        labels:
+          service: "tag-service"
+          operation: "tag.tag_node_view.SearchTags"
+          contract_metric: "tag_search"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_tag_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="tag-service",method="GET",route="/tag/search"})
+        labels:
+          service: "tag-service"
+          operation: "tag.tag_node_view.SearchTags"
+          contract_metric: "tag_search"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_tag_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="tag-service",method="GET",route="/internal/tag/shared-tags"})
+        labels:
+          service: "tag-service"
+          operation: "tag.tag_node_view.SharedTags"
+          contract_metric: "tag_shared_tags"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_tag_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="tag-service",method="GET",route="/internal/tag/shared-tags"})
+        labels:
+          service: "tag-service"
+          operation: "tag.tag_node_view.SharedTags"
+          contract_metric: "tag_shared_tags"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_tag_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="tag-service",method="GET",route="/tag/suggest"})
+        labels:
+          service: "tag-service"
+          operation: "tag.tag_node_view.SuggestTags"
+          contract_metric: "tag_suggest"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "300"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_tag_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="tag-service",method="GET",route="/tag/suggest"})
+        labels:
+          service: "tag-service"
+          operation: "tag.tag_node_view.SuggestTags"
+          contract_metric: "tag_suggest"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "300"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_tag_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="tag-service",method="GET",route="/internal/tag/graph/cooccurrence"})
+        labels:
+          service: "tag-service"
+          operation: "tag.tag_node_view.TagCooccurrence"
+          contract_metric: "tag_cooccurrence"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_tag_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="tag-service",method="GET",route="/internal/tag/graph/cooccurrence"})
+        labels:
+          service: "tag-service"
+          operation: "tag.tag_node_view.TagCooccurrence"
+          contract_metric: "tag_cooccurrence"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_tag_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="tag-service",method="POST",route="/tag/validate"})
+        labels:
+          service: "tag-service"
+          operation: "tag.tag_node_view.ValidateTagRefs"
+          contract_metric: "tag_validate_refs"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_tag_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="tag-service",method="POST",route="/tag/validate"})
+        labels:
+          service: "tag-service"
+          operation: "tag.tag_node_view.ValidateTagRefs"
+          contract_metric: "tag_validate_refs"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"

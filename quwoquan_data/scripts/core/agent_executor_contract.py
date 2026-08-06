@@ -1,7 +1,8 @@
 """会话 agent = 唯一模型执行者 契约（防回归静态门）。
 
-固化用户硬约束：内容生产的"模型处理"全部在编程助手（Cursor）会话内完成，
-禁止引入外部 LLM 客户端/SDK 或降级生成路径冒充交付内容。
+固化用户硬约束：内容生产的"模型处理"全部在受治理编程助手 provider 内完成，
+当前只允许 Cursor SDK 或官方 Codex Python SDK adapter，禁止其他 LLM 客户端/SDK、
+静默 provider fallback 或降级生成路径冒充交付内容。
 
 校验三条：
 A. scripts/ 内禁止 import 外部 LLM SDK、或出现 LLM 服务 HTTP 端点字面量
@@ -18,7 +19,7 @@ from pathlib import Path
 
 SCRIPTS_ROOT = Path(__file__).resolve().parents[1]
 
-# 外部 LLM SDK / 本地大模型服务（会话 agent 之外的"模型执行者"），一律禁止进入生产脚本。
+# 外部 LLM SDK / 本地大模型服务（受治理 adapter 之外），一律禁止进入生产脚本。
 _FORBIDDEN_IMPORT_PREFIXES = (
     "openai",
     "anthropic",
@@ -99,6 +100,30 @@ def scan_agent_executor_contract(scripts_root: Path | None = None) -> list[str]:
     issues: list[str] = []
     # A. 禁外部 LLM 执行者。
     issues.extend(_scan_forbidden_executors(root))
+    issues.extend(
+        _require_substring(
+            root,
+            "content/execution/agent/agent_runner.py",
+            (
+                "provider is AgentProvider.CURSOR_SDK",
+                "provider is AgentProvider.CODEX_SDK",
+                "unsupported semantic agent provider",
+            ),
+            "provider dispatch 必须闭集、显式且禁止静默 fallback",
+        )
+    )
+    issues.extend(
+        _require_substring(
+            root,
+            "content/execution/agent/codex_adapter.py",
+            (
+                "from openai_codex import ApprovalMode, Codex, Sandbox, is_retryable_error",
+                "output_schema=_FINAL_RESPONSE_SCHEMA",
+                "prompt=prompt",
+            ),
+            "Codex 必须使用官方 Python SDK、受治理 sandbox 和结构化最终输出",
+        )
+    )
     # B. 交付正文 agent-only 防线仍在。
     issues.extend(
         _require_substring(
@@ -134,4 +159,4 @@ def scan_agent_executor_contract(scripts_root: Path | None = None) -> list[str]:
     return issues
 
 
-__all__ = ["scan_agent_executor_contract", "SCRIPTS_ROOT"]
+__all__ = ["SCRIPTS_ROOT", "scan_agent_executor_contract"]

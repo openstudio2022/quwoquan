@@ -6,6 +6,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from quwoquan_ops.cli.lib import external_provider_governance
+from quwoquan_ops.cli.lib import provider_conformance
 from quwoquan_ops.cli.prod import collect_release_artifact_descriptors as collector
 from quwoquan_ops.cli.prod import finalize_mainline_release_artifact as finalizer
 from quwoquan_ops.cli import stackctl
@@ -133,10 +135,49 @@ class ReleaseArtifactCollectionContractTest(unittest.TestCase):
                 "projections": [],
             },
         )
-        provider_raw = self._write_json(
-            root / "provider-raw/env/prod/runs/fixture/provider.json",
-            {"schema": "provider-conformance-evidence", "status": "passed"},
+        compiled, governance_issues = external_provider_governance.load_and_compile()
+        self.assertEqual(governance_issues, [])
+        cells = sorted(provider_conformance.expected_required_cell_keys(compiled))
+        provider_files: dict[str, str] = {}
+        for index, (capability_id, environment, layer) in enumerate(cells):
+            payload = {
+                field: "fixture"
+                for field in provider_conformance.REQUIRED_FIELDS
+            }
+            payload.update(
+                {
+                    "schema": "provider-conformance-evidence",
+                    "status": "passed",
+                    "capabilityId": capability_id,
+                    "environment": environment,
+                    "testLayer": layer,
+                }
+            )
+            relative = Path(
+                f"env/{environment}/runs/fixture-{index:03d}/provider.evidence.json"
+            )
+            provider_raw = self._write_json(
+                root / "provider-raw" / relative,
+                payload,
+            )
+            provider_files[
+                "evidence/raw/provider/" + relative.as_posix()
+            ] = finalizer.sha256_file(provider_raw)
+        capability_ids = sorted(
+            provider_conformance.provider_conformance_capability_ids(compiled)
         )
+        release_closure_files: dict[str, dict[str, str]] = {}
+        for index, (label, relative) in enumerate(
+            sorted(collector.RELEASE_CLOSURE_PATHS.items())
+        ):
+            closure_path = self._write_json(
+                root / "sources" / relative,
+                {"label": label, "sequence": index},
+            )
+            release_closure_files[label] = {
+                "path": relative,
+                "digest": finalizer.sha256_file(closure_path),
+            }
         sources = {
             "publicWeb": self._write_json(
                 root / "sources/web.json",
@@ -206,21 +247,21 @@ class ReleaseArtifactCollectionContractTest(unittest.TestCase):
                     "sourceEvidence": {
                         "ref": "oci://ghcr.io/owner/repo/provider-evidence@" + DIGEST,
                         "digest": DIGEST,
-                        "files": {
-                            "evidence/raw/provider/env/prod/runs/fixture/provider.json": finalizer.sha256_file(
-                                provider_raw
-                            )
-                        },
+                        "files": provider_files,
                     },
-                    "evidenceCount": 1,
+                    "evidenceCount": 140,
+                    "sourceCoverageIssues": [],
                     "readiness": {
-                        "prod": {
-                            "search": {
+                        environment: {
+                            capability_id: {
                                 "required": True,
                                 "capability_ready": True,
                             }
+                            for capability_id in capability_ids
                         }
+                        for environment in ("alpha", "beta", "gamma", "prod")
                     },
+                    "issues": [],
                 },
             ),
             "testEvidence": self._write_json(
@@ -236,6 +277,7 @@ class ReleaseArtifactCollectionContractTest(unittest.TestCase):
                             "user_acceptance",
                         )
                     },
+                    "evidence": {"files": release_closure_files},
                 },
             ),
         }
@@ -383,6 +425,15 @@ class ReleaseArtifactCollectionContractTest(unittest.TestCase):
                 set(finalized["applicationPackages"]),
                 set(finalizer.ENVIRONMENTS),
             )
+            green_matrix = (
+                artifact / collector.RELEASE_CLOSURE_PATHS["green-matrix"]
+            )
+            green_matrix.write_bytes(green_matrix.read_bytes() + b"tampered")
+            with self.assertRaisesRegex(
+                ValueError,
+                "test evidence.*raw evidence digest mismatch",
+            ):
+                finalizer.validate_manifest_files(artifact, finalized)
 
     def test_rejects_mutable_application_evidence_locator(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

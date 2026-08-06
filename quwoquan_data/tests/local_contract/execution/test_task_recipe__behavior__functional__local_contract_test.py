@@ -12,7 +12,6 @@ from types import SimpleNamespace
 
 import pytest
 
-
 DATA_ROOT = next(
     parent
     for parent in Path(__file__).resolve().parents
@@ -23,17 +22,17 @@ for path in (DATA_ROOT, SCRIPTS_ROOT):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
-from content.execution import recipe, recipe_checkpoint  # noqa: E402
-from content.execution.model_contract import execution_model_pair  # noqa: E402
-from content.execution.identity import (  # noqa: E402
+from content.execution import recipe, recipe_checkpoint
+from content.execution.identity import (
     build_execution_id,
     parse_execution_id,
     validate_execution_id,
 )
-from core.paths import FAMILIES_ROOT, iter_family_files  # noqa: E402
-from core.runtime_policy import load_runtime_policy  # noqa: E402
-from core.control_types import ExecutionStateStatus  # noqa: E402
-
+from content.execution.model_contract import execution_model_pair
+from core.control_types import ExecutionStateStatus
+from core.paths import FAMILIES_ROOT, iter_family_files
+from core.runtime_policy import load_runtime_policy
+from core.schema import assert_valid
 
 EXECUTION_ID = "20260722--travel-homepage-coverage--test-region-a--pilot-001"
 
@@ -82,37 +81,63 @@ def test_all_family_recipes_lint_clean() -> None:
         assert recipe.load_recipe(ref)["recipeId"] == ref
 
 
+def test_travel_recipes_explicitly_select_research_lifecycle() -> None:
+    refs = (
+        "content/travel/homepage/homepage",
+        "content/travel/article/article",
+        "content/travel/image/image",
+        "content/travel/video/video",
+    )
+
+    assert {
+        recipe.load_recipe(ref)["readiness"]["mode"] for ref in refs
+    } == {"research"}
+
+
+def test_recipe_schema_rejects_missing_or_unknown_lifecycle() -> None:
+    payload = json.loads(
+        json.dumps(recipe.load_recipe("content/travel/article/article"))
+    )
+    payload["readiness"]["mode"] = "environment_default"
+    with pytest.raises(ValueError, match="不在枚举"):
+        assert_valid(payload, "execution", "content_recipe")
+
+    payload.pop("readiness")
+    with pytest.raises(ValueError, match="缺 required 字段 'readiness'"):
+        assert_valid(payload, "execution", "content_recipe")
+
+
 def test_article_recipe_does_not_narrow_selection_to_scenic_subtype() -> None:
     article = recipe.load_recipe("content/travel/article/article")
 
     assert article["selection"]["category"] == "地点"
 
 
-def test_travel_video_recipe_uses_the_verified_auto_binding() -> None:
+def test_travel_video_recipe_uses_the_governed_codex_terra_binding() -> None:
     video = recipe.load_recipe("content/travel/video/video")
     author = execution_model_pair(video).author
     runtime = load_runtime_policy(str(video["runtimeProfile"]))
     expected_parameters: list[dict[str, str]] = []
 
-    assert author.model_id == "auto"
-    assert author.family.value == "auto"
+    assert author.model_id == "gpt-5.6-terra"
+    assert author.family.value == "gpt"
     assert author.selection.parameters_document() == expected_parameters
-    assert runtime.cursor_model_selection.to_sdk_document() == {
+    assert runtime.semantic_agent_model_selection.to_sdk_document() == {
         "id": author.model_id,
         "params": expected_parameters,
     }
 
 
-def test_travel_image_recipe_uses_the_verified_auto_binding() -> None:
+def test_travel_image_recipe_uses_the_governed_codex_terra_binding() -> None:
     image = recipe.load_recipe("content/travel/image/image")
     author = execution_model_pair(image).author
     runtime = load_runtime_policy(str(image["runtimeProfile"]))
     expected_parameters: list[dict[str, str]] = []
 
-    assert author.model_id == "auto"
-    assert author.family.value == "auto"
+    assert author.model_id == "gpt-5.6-terra"
+    assert author.family.value == "gpt"
     assert author.selection.parameters_document() == expected_parameters
-    assert runtime.cursor_model_selection.to_sdk_document() == {
+    assert runtime.semantic_agent_model_selection.to_sdk_document() == {
         "id": author.model_id,
         "params": expected_parameters,
     }
@@ -172,7 +197,7 @@ def test_execution_facade_invokes_the_canonical_data_cli() -> None:
 def test_readiness_calls_only_single_execution_gate() -> None:
     calls: list[list[str]] = []
     recipe._readiness(
-        {"readiness": {"requireReviewed": True, "minPassRate": 0.9, "mode": "commercial", "failOnNoGo": True}},
+        {"readiness": {"requireReviewed": True, "mode": "research"}},
         EXECUTION_ID,
         lambda argv: calls.append(list(argv)) or 0,
     )
@@ -180,9 +205,30 @@ def test_readiness_calls_only_single_execution_gate() -> None:
     assert calls == [[
         "verify", "execution-readiness", "--execution-id", EXECUTION_ID,
         "--require-reviewed",
-        "--min-pass-rate", "0.9",
-        "--mode", "commercial",
-        "--fail-on-no-go",
+        "--mode", "research",
+    ]]
+
+
+def test_readiness_has_no_rate_or_veto_knob() -> None:
+    """比率与 veto 开关不再是准出输入，recipe 不得再传任何速率旗标。"""
+    calls: list[list[str]] = []
+    recipe._readiness(
+        {
+            "readiness": {
+                "requireReviewed": True,
+                "mode": "research",
+                "minPassRate": 0.5,
+                "failOnNoGo": False,
+            }
+        },
+        EXECUTION_ID,
+        lambda argv: calls.append(list(argv)) or 0,
+    )
+
+    assert calls == [[
+        "verify", "execution-readiness", "--execution-id", EXECUTION_ID,
+        "--require-reviewed",
+        "--mode", "research",
     ]]
 
 
@@ -201,19 +247,39 @@ def test_execution_readiness_cli_registers_recipe_contract_options() -> None:
             "--execution-id",
             EXECUTION_ID,
             "--require-reviewed",
-            "--min-pass-rate",
-            "0.9",
             "--mode",
             "commercial",
-            "--fail-on-no-go",
         ]
     )
 
     assert args.execution_id == EXECUTION_ID
     assert args.require_reviewed is True
-    assert args.min_pass_rate == 0.9
     assert args.mode == "commercial"
-    assert args.fail_on_no_go is True
+
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            [
+                "verify",
+                "execution-readiness",
+                "--execution-id",
+                EXECUTION_ID,
+            ]
+        )
+    for removed in ("--min-pass-rate", "--fail-on-no-go"):
+        with pytest.raises(SystemExit):
+            parser.parse_args(
+                [
+                    "verify",
+                    "execution-readiness",
+                    "--execution-id",
+                    EXECUTION_ID,
+                    "--require-reviewed",
+                    "--mode",
+                    "commercial",
+                    removed,
+                    "0.9" if removed == "--min-pass-rate" else "",
+                ]
+            )
 
 
 def test_preflight_evidence_belongs_to_execution_work_package() -> None:
@@ -424,14 +490,17 @@ def test_plan_only_checks_workspace_before_creating_a_work_package(monkeypatch) 
         recover_stage=None,
         recovery_reason=None,
     )
-    monkeypatch.setattr(recipe, "load_recipe", lambda _ref: {"recipeId": args.family})
-
+    from content.execution import semantic_selection
     from content.execution.agent import agent_conflicts
 
     def _blocked(*_args, **_kwargs) -> None:
         raise agent_conflicts.ManagedWorkspaceConflictError("execution_output_cleanup pid=42")
 
-    monkeypatch.setattr(agent_conflicts, "assert_managed_workspace_available", _blocked)
+    monkeypatch.setattr(
+        semantic_selection,
+        "assert_managed_workspace_available",
+        _blocked,
+    )
     try:
         recipe._run_execution(args)
     except SystemExit as exc:
@@ -585,7 +654,21 @@ def test_task_facade_exposes_only_durable_commands() -> None:
     assert result.returncode == 0, result.stderr
     choices = re.search(r"^  \{([^}]+)\}$", result.stdout, flags=re.MULTILINE)
     assert choices is not None
-    assert choices.group(1).split(",") == ["preflight", "execute", "discard"]
+    assert choices.group(1).split(",") == [
+        "preflight",
+        "prepare-campaign",
+        "execute",
+        "discard",
+        "supersede-execution",
+        "plan-images",
+        "probe-images",
+        "acquire-images",
+        "acquire-videos",
+        "review-asset",
+        "reconcile-stale",
+        "reconcile-submissions",
+        "runtime-evidence",
+    ]
 
 
 def test_execute_cli_accepts_only_explicit_generic_request_parameters() -> None:

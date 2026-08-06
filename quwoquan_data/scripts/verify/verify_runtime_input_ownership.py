@@ -8,6 +8,7 @@ from pathlib import Path
 
 from core.io import read_json
 from core.paths import DATA_EXECUTIONS_ROOT, REPO_ROOT
+from content.execution.execution_terminal import load_terminal_execution_evidence
 from content.execution.recipe import RuntimeExecutionRequest
 from content.execution.workspace import orphaned_transaction_workspaces
 
@@ -62,6 +63,15 @@ def _request_issues() -> list[str]:
     if not DATA_EXECUTIONS_ROOT.is_dir():
         return issues
     for execution_root in sorted(path for path in DATA_EXECUTIONS_ROOT.iterdir() if path.is_dir()):
+        try:
+            terminal = load_terminal_execution_evidence(execution_root)
+        except (OSError, TypeError, ValueError) as exc:
+            issues.append(
+                f"{execution_root.relative_to(REPO_ROOT)}: invalid terminal execution evidence: {exc}"
+            )
+            terminal = None
+        if terminal is not None:
+            continue
         request_path = execution_root / _REQUEST_REF
         target_set_path = execution_root / _TARGET_SET_REF
         if not request_path.is_file():

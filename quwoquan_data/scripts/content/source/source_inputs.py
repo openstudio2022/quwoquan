@@ -10,15 +10,27 @@
 """
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Any, Iterable
 import re
+from collections.abc import Iterable
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
-from core.io import read_json
 from core.carrier_contract import research_plan_files
 from core.control_types import ContentType
+from core.io import read_json
 from core.paths import STAGE_DOWNLOAD
+
+from content.source.external_acquisition_inputs import (
+    external_input_error,
+    professional_image_specs_from_plan,
+    professional_video_plan_binding,
+)
 from content.source.source_unit import resolve_entity_object_dir
+
+if TYPE_CHECKING:
+    from content.execution.campaign_external_input_runtime import (
+        ExternalInputRuntimeContext,
+    )
 
 SOURCE_USE_LICENSED_ADAPTATION = "licensed_adaptation"
 SOURCE_USE_FACTUAL_REFERENCE = "factual_reference_only"
@@ -112,6 +124,8 @@ def curated_sourced_videos_for_entity(
     execution_id: str,
     entity_id: str,
     entity_type: str = "",
+    *,
+    external_input_context: ExternalInputRuntimeContext | None = None,
 ) -> list[dict[str, Any]]:
     """Read typed real-video candidates from the video lane plan."""
     files = _source_plan_files(
@@ -123,14 +137,33 @@ def curated_sourced_videos_for_entity(
     candidates: list[dict[str, Any]] = []
     seen: set[str] = set()
     for _lane, path in files:
-        for raw in _extract_collections(read_json(path), "videos"):
+        data = read_json(path)
+        normalized_refs, professional_root = professional_video_plan_binding(
+            data,
+            execution_id=execution_id,
+            external_input_context=external_input_context,
+        )
+        for raw in _extract_collections(data, "videos"):
+            professional_ref = str(
+                raw.get("professionalAcquisitionReceiptRef") or ""
+            ).strip()
+            if professional_ref:
+                if professional_ref not in normalized_refs or professional_root is None:
+                    raise external_input_error(
+                        "UNDECLARED",
+                        f"video candidate receipt is undeclared: {professional_ref}",
+                    )
+                from content.source.professional_video_receipt import (
+                    resolve_professional_video_candidate,
+                )
+
+                resolve_professional_video_candidate(raw, root=professional_root)
             asset_url = str(raw.get("assetUrl") or "").strip()
             if not asset_url or asset_url in seen:
                 continue
             seen.add(asset_url)
             candidates.append(raw)
     return candidates
-
 
 def curated_sources_for_entity(
     execution_id: str,
@@ -236,6 +269,7 @@ def _normalize_image_specs(raw: Any) -> list[dict[str, Any]]:
                 "width": item.get("width", ""),
                 "height": item.get("height", ""),
                 "sourceCollectionId": item.get("sourceCollectionId", ""),
+                "sourceId": item.get("sourceId", ""),
                 "creator": item.get("creator") or item.get("author") or "",
                 "collectionPageUrl": item.get("collectionPageUrl") or item.get("sourceUrl") or "",
                 "placeholderId": item.get("placeholderId", ""),
@@ -252,6 +286,20 @@ def _normalize_image_specs(raw: Any) -> list[dict[str, Any]]:
                 "pageRevisionId": item.get("pageRevisionId", 0),
                 "pageContentSha256": item.get("pageContentSha256", ""),
                 "renderedImageCount": item.get("renderedImageCount", 0),
+                "originalAssetUrl": item.get("originalAssetUrl", ""),
+                "capturedAt": item.get("capturedAt", ""),
+                "contentSha256": item.get("contentSha256", ""),
+                "acquisitionStatus": item.get("acquisitionStatus", ""),
+                "rightsStatus": item.get("rightsStatus", ""),
+                "authorizationRequired": item.get("authorizationRequired"),
+                "distributionDecision": item.get("distributionDecision", ""),
+                "rightsAuditStatus": item.get("rightsAuditStatus") or item.get("rightsStatus") or "",
+                "rightsIssues": list(item.get("rightsIssues") or []),
+                "acquisitionReceiptRef": item.get("acquisitionReceiptRef", ""),
+                "professionalAssetId": item.get("professionalAssetId", ""),
+                "professionalContentSha256": item.get(
+                    "professionalContentSha256", ""
+                ),
             }
         else:
             continue
@@ -269,6 +317,7 @@ def curated_images_for_entity(
     entity_type: str = "",
     *,
     research_lane: str | None = None,
+    external_input_context: ExternalInputRuntimeContext | None = None,
 ) -> list[dict[str, Any]]:
     """读 source_plan 中实体级 imageUrls（顶层/payload）+ 各 source 的 imageUrls，去重合并。
 
@@ -291,6 +340,31 @@ def curated_images_for_entity(
         if not isinstance(data, dict):
             continue
         payload = data.get("payload") if isinstance(data.get("payload"), dict) else {}
+        # ``acquisitionReceiptRefs`` is lane-scoped, not a media-neutral key.
+        # A video plan binds professional-video receipts under that same wire
+        # field, so it must never be projected through the image input
+        # contract.  Explicit image assets embedded in a video plan are still
+        # normalized below; only the professional-image receipt projection is
+        # carrier-restricted here.
+        if lane_name in {"homepage", "image"}:
+            acquired_specs = professional_image_specs_from_plan(
+                data,
+                execution_id=execution_id,
+                entity_id=entity_id,
+                carrier=selected_lane or lane_name,
+                external_input_context=external_input_context,
+            )
+            for acquired in acquired_specs:
+                lane_key = "image"
+                key = (lane_key, str(acquired["url"]))
+                if key not in seen:
+                    seen.add(key)
+                    specs.append(acquired)
+            if acquired_specs:
+                # A capsule-bound professional receipt is the complete image
+                # truth for this lane. Agent-authored plan additions cannot
+                # replace or augment its asset identity.
+                continue
         raw_specs = data.get("imageUrls") or payload.get("imageUrls") or []
         for extra in _normalize_image_specs(raw_specs):
             lane_key = str(extra.get("researchLane") or lane_name or "image")

@@ -1,0 +1,239 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/release/campaign_scale_evidence.schema.json",
+  "title": "Canonical four-lane campaign scale evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "evidenceId",
+    "rootExecutionId",
+    "runtimeSessionId",
+    "runtimeSessionRef",
+    "runtimeSessionDigest",
+    "runId",
+    "generation",
+    "fencingToken",
+    "status",
+    "releaseId",
+    "manifestDigest",
+    "sourceRevision",
+    "sourceDigest",
+    "entityCatalogDigest",
+    "campaignPlanRef",
+    "campaignPlanDigest",
+    "calibrationPreflightReceipt",
+    "releaseAssetAdmissionRef",
+    "releaseAssetAdmissionSha256",
+    "lanes",
+    "duplicateAssetCount",
+    "crossLaneWriteCount",
+    "articleIllustratedRate",
+    "fourLaneOverlapDurationSeconds",
+    "fourLaneLongestContinuousOverlapSeconds",
+    "allSemanticJobsTerminalAt",
+    "terminalResidualSampleAt",
+    "resourceSoakEvidenceRef",
+    "resourceSoakEvidenceDigest",
+    "faultInjectionEvidenceRef",
+    "faultInjectionEvidenceDigest",
+    "recordedAt",
+    "evidenceDigest"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.campaign_scale_evidence"},
+    "evidenceId": {"type": "string", "minLength": 1},
+    "rootExecutionId": {"type": "string", "minLength": 1},
+    "runtimeSessionId": {"type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]{2,127}$"},
+    "runtimeSessionRef": {"$ref": "#/$defs/safeRef"},
+    "runtimeSessionDigest": {"$ref": "#/$defs/digest"},
+    "runId": {"type": "string", "minLength": 1},
+    "generation": {"type": "integer", "minimum": 1},
+    "fencingToken": {"$ref": "#/$defs/digest"},
+    "status": {"enum": ["passed", "failed"]},
+    "releaseId": {"type": "string", "minLength": 1},
+    "manifestDigest": {"$ref": "#/$defs/digest"},
+    "sourceRevision": {"$ref": "#/$defs/digest"},
+    "sourceDigest": {"$ref": "#/$defs/digest"},
+    "entityCatalogDigest": {"$ref": "#/$defs/digest"},
+    "campaignPlanRef": {"$ref": "#/$defs/safeRef"},
+    "campaignPlanDigest": {"$ref": "#/$defs/digest"},
+    "calibrationPreflightReceipt": {
+      "$ref": "../execution/semantic_preflight_receipt_ref.schema.json"
+    },
+    "releaseAssetAdmissionRef": {"$ref": "#/$defs/safeRef"},
+    "releaseAssetAdmissionSha256": {"$ref": "#/$defs/digest"},
+    "lanes": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "prefixItems": [
+        {"$ref": "#/$defs/homepageLane"},
+        {"$ref": "#/$defs/articleLane"},
+        {"$ref": "#/$defs/imageLane"},
+        {"$ref": "#/$defs/videoLane"}
+      ],
+      "items": false
+    },
+    "duplicateAssetCount": {"type": "integer", "minimum": 0},
+    "crossLaneWriteCount": {"type": "integer", "minimum": 0},
+    "articleIllustratedRate": {"type": "number", "minimum": 0, "maximum": 1},
+    "fourLaneOverlapDurationSeconds": {"type": "integer", "minimum": 0},
+    "fourLaneLongestContinuousOverlapSeconds": {"type": "integer", "minimum": 0},
+    "allSemanticJobsTerminalAt": {
+      "type": ["string", "null"],
+      "format": "date-time"
+    },
+    "terminalResidualSampleAt": {"type": "string", "format": "date-time"},
+    "resourceSoakEvidenceRef": {"$ref": "#/$defs/safeRef"},
+    "resourceSoakEvidenceDigest": {"$ref": "#/$defs/digest"},
+    "faultInjectionEvidenceRef": {"$ref": "#/$defs/safeRef"},
+    "faultInjectionEvidenceDigest": {"$ref": "#/$defs/digest"},
+    "recordedAt": {"type": "string", "format": "date-time"},
+    "evidenceDigest": {"$ref": "#/$defs/digest"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "passed"}}, "required": ["status"]},
+      "then": {
+        "properties": {
+          "duplicateAssetCount": {"const": 0},
+          "crossLaneWriteCount": {"const": 0},
+          "fourLaneOverlapDurationSeconds": {"minimum": 3600},
+          "fourLaneLongestContinuousOverlapSeconds": {"minimum": 3600},
+          "allSemanticJobsTerminalAt": {"type": "string", "format": "date-time"}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "safeRef": {"type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"},
+    "lane": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "carrier",
+        "executionId",
+        "retryChain",
+        "publishReceiptRef",
+        "publishReceiptSha256",
+        "executionPublishRef",
+        "executionPublishSha256",
+        "finalizedCount",
+        "researchAcceptedCount",
+        "semanticCalibration"
+      ],
+      "properties": {
+        "carrier": {"enum": ["homepage", "article", "image", "video"]},
+        "executionId": {"type": "string", "minLength": 1},
+        "retryChain": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "publishReceiptRef": {"$ref": "#/$defs/safeRef"},
+        "publishReceiptSha256": {"$ref": "#/$defs/digest"},
+        "executionPublishRef": {"$ref": "#/$defs/safeRef"},
+        "executionPublishSha256": {"$ref": "#/$defs/digest"},
+        "finalizedCount": {"type": "integer", "minimum": 1},
+        "researchAcceptedCount": {"type": "integer", "minimum": 0},
+        "semanticCalibration": {"$ref": "#/$defs/semanticCalibration"}
+      }
+    },
+    "semanticCalibration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "carrier",
+        "provider",
+        "authorModel",
+        "authorModelFamily",
+        "reviewerModel",
+        "reviewerModelFamily",
+        "calibrationProvider",
+        "calibrationModel",
+        "calibrationModelFamily",
+        "executionManifestRef",
+        "executionManifestSha256",
+        "authorRun",
+        "reviewerRun",
+        "selectionPolicy",
+        "calibrationRuns"
+      ],
+      "properties": {
+        "carrier": {"enum": ["homepage", "article", "image", "video"]},
+        "provider": {"const": "codex_sdk"},
+        "authorModel": {"const": "gpt-5.6-terra"},
+        "authorModelFamily": {"const": "gpt"},
+        "reviewerModel": {"const": "gpt-5.6-terra"},
+        "reviewerModelFamily": {"const": "gpt"},
+        "calibrationProvider": {"const": "codex_sdk"},
+        "calibrationModel": {"const": "gpt-5.6-sol"},
+        "calibrationModelFamily": {"const": "gpt"},
+        "executionManifestRef": {"$ref": "#/$defs/safeRef"},
+        "executionManifestSha256": {"$ref": "#/$defs/digest"},
+        "authorRun": {"$ref": "#/$defs/semanticRunEvidence"},
+        "reviewerRun": {"$ref": "#/$defs/semanticRunEvidence"},
+        "selectionPolicy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sampleRate",
+            "minimumSampleCount",
+            "smallBatchPolicy",
+            "acceptedObjectCount",
+            "requiredSampleCount",
+            "selectedObjectRefs",
+            "selectionDigest"
+          ],
+          "properties": {
+            "sampleRate": {"const": 0.1},
+            "minimumSampleCount": {"const": 10},
+            "smallBatchPolicy": {"const": "all"},
+            "acceptedObjectCount": {"type": "integer", "minimum": 1},
+            "requiredSampleCount": {"type": "integer", "minimum": 1},
+            "selectedObjectRefs": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {"type": "string", "minLength": 1}
+            },
+            "selectionDigest": {"$ref": "#/$defs/digest"}
+          }
+        },
+        "calibrationRuns": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/semanticRunEvidence"}
+        }
+      }
+    },
+    "semanticRunEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "objectRef",
+        "runId",
+        "evidenceRef",
+        "evidenceSha256"
+      ],
+      "properties": {
+        "objectRef": {"type": "string", "minLength": 1},
+        "runId": {
+          "type": "string",
+          "minLength": 1,
+          "not": {"pattern": "^contract-output:"}
+        },
+        "evidenceRef": {"$ref": "#/$defs/safeRef"},
+        "evidenceSha256": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "homepageLane": {"allOf": [{"$ref": "#/$defs/lane"}, {"properties": {"carrier": {"const": "homepage"}}}]},
+    "articleLane": {"allOf": [{"$ref": "#/$defs/lane"}, {"properties": {"carrier": {"const": "article"}}}]},
+    "imageLane": {"allOf": [{"$ref": "#/$defs/lane"}, {"properties": {"carrier": {"const": "image"}}}]},
+    "videoLane": {"allOf": [{"$ref": "#/$defs/lane"}, {"properties": {"carrier": {"const": "video"}}}]}
+  }
+}

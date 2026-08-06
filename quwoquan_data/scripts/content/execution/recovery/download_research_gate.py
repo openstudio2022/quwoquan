@@ -7,6 +7,23 @@ from core.data_issue import issue_messages
 _MAX_IMAGES_PER_SOURCE_COLLECTION = 20
 
 
+def _commercial_video_candidate_issues(candidate: Mapping[str, Any]) -> list[str]:
+    """Return commercial admission gaps from one immutable video plan row."""
+    issues: list[str] = []
+    if str(candidate.get("publicationAdmission") or "") != "commercial_release":
+        issues.append("publicationAdmission must be commercial_release")
+    if str(candidate.get("commercialAuthorizationStatus") or "") != "verified":
+        issues.append("commercialAuthorizationStatus must be verified")
+    if str(candidate.get("rightsStatus") or "") != "verified":
+        issues.append("rightsStatus must be verified")
+    if list(candidate.get("rightsIssues") or []):
+        issues.append("rightsIssues must be empty")
+    for field in ("authorizationProofUrl", "termsUrl"):
+        if not str(candidate.get(field) or "").startswith("https://"):
+            issues.append(f"{field} must use HTTPS")
+    return issues
+
+
 def _article_source_identity_issues(
     source: dict[str, Any],
     category: str | None,
@@ -358,6 +375,11 @@ def _download_research_lane_issues(
                 )
         return issues
     if lane == "video":
+        from governance.coverage.distribution import (
+            ProductLifecycleState,
+            load_content_distribution_policy,
+        )
+
         videos = curated_sourced_videos_for_entity(
             ctx.execution_id,
             eid,
@@ -370,5 +392,19 @@ def _download_research_lane_issues(
                 stage=DataIssueStage.IMAGE_RIGHTS,
                 recovery=DataRecoveryAction.REPLACE_MEDIA,
             )
+        elif (
+            load_content_distribution_policy().product_lifecycle_state
+            is ProductLifecycleState.COMMERCIAL
+        ):
+            for index, candidate in enumerate(videos, start=1):
+                gaps = _commercial_video_candidate_issues(candidate)
+                if gaps:
+                    add(
+                        DataIssueCode.MEDIA_RIGHTS_UNAVAILABLE,
+                        f"video[{index}] is not commercially admitted: "
+                        + "; ".join(gaps),
+                        stage=DataIssueStage.IMAGE_RIGHTS,
+                        recovery=DataRecoveryAction.REPLACE_MEDIA,
+                    )
         return issues
     return []

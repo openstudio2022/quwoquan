@@ -1158,10 +1158,18 @@ def _validate_runtime_recovery_device_matrix(
         and not bool(device.get("emulator"))
         for device in devices
     )
-    if not physical_android or not physical_ios:
+    platform = str(args.platform or "").strip().lower()
+    missing_android = platform in {"all", "android"} and not physical_android
+    missing_ios = platform in {"all", "ios"} and not physical_ios
+    if missing_android or missing_ios:
+        required = (
+            "one physical Android device and one physical iPhone"
+            if platform == "all"
+            else f"one physical {platform} device"
+        )
         raise RuntimeError(
-            "GATE_BLOCK: runtime recovery UAT requires one physical Android "
-            "device and one physical iPhone in the same CaseResult matrix"
+            f"GATE_BLOCK: runtime recovery UAT requires {required} "
+            "in the selected CaseResult"
         )
 
 

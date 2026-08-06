@@ -48,7 +48,10 @@ from content.source.gate import (  # noqa: E402
 )
 from content.execution.recovery.download_gate import _download_repair_active_issues  # noqa: E402
 from content.execution.recovery.download_repair import _record_download_repair  # noqa: E402
-from content.execution.recovery.download_research_gate import _download_research_lane_issues  # noqa: E402
+from content.execution.recovery.download_research_gate import (  # noqa: E402
+    _commercial_video_candidate_issues,
+    _download_research_lane_issues,
+)
 from content.execution.recovery.download_unresolved import absorb_download_shortfall_if_quota_met  # noqa: E402
 from content.execution.controller.content_plan_prep import _content_capacity_gate_for_entity  # noqa: E402
 from content.execution.context import ExecutionContext  # noqa: E402
@@ -142,6 +145,34 @@ def test_video_download_does_not_accept_image_quota_as_video_supply(monkeypatch)
     assert not hasattr(requirements, "min_video_frames")
 
 
+def test_commercial_video_candidate_requires_exact_rights_closure():
+    admitted = {
+        "publicationAdmission": "commercial_release",
+        "commercialAuthorizationStatus": "verified",
+        "rightsStatus": "verified",
+        "rightsIssues": [],
+        "authorizationProofUrl": "https://media.example/proof",
+        "termsUrl": "https://media.example/terms",
+    }
+    assert _commercial_video_candidate_issues(admitted) == []
+
+    stale_research = {
+        **admitted,
+        "publicationAdmission": "research_release",
+        "commercialAuthorizationStatus": "unverified",
+        "rightsStatus": "unverified",
+        "rightsIssues": ["authorization pending"],
+        "authorizationProofUrl": "",
+    }
+    assert _commercial_video_candidate_issues(stale_research) == [
+        "publicationAdmission must be commercial_release",
+        "commercialAuthorizationStatus must be verified",
+        "rightsStatus must be verified",
+        "rightsIssues must be empty",
+        "authorizationProofUrl must use HTTPS",
+    ]
+
+
 def test_download_repair_active_issues_only_decodes_typed_records():
     issue = data_issue(
         DataIssueCode.SOURCE_RETAINED_SHORTFALL,
@@ -230,10 +261,20 @@ def _attach_image(unit_dir: Path, name: str) -> None:
                     "fileName": image.name,
                     "sourceAssetId": name,
                     "sha256": f"sha256:{name}",
+                    "contentSha256": f"sha256:{name}",
+                    "acquisitionStatus": "acquired",
+                    "rightsStatus": "verified",
+                    "authorizationRequired": False,
+                    "distributionDecision": "commercial_allowed",
                     "license": "CC-BY-4.0",
                     "credit": "fixture",
+                    "creator": "fixture",
+                    "platform": "fixture-professional-library",
+                    "capturedAt": "2026-08-05T00:00:00Z",
                     "sourceUrl": "https://example.com/image.jpg",
                     "termsUrl": "https://example.com/terms",
+                    "authorizationProof": "https://example.com/authorization",
+                    "rightsIssues": [],
                     "usageScope": "commercial_editorial",
                     "rightsAuditStatus": "verified",
                 }

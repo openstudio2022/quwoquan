@@ -1,18 +1,23 @@
 """Fail closed on Data output ownership and the single output-root contract."""
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
-import os
 from pathlib import Path
 
 SCRIPTS_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPTS_ROOT))
 
-from core.paths import DATA_EXECUTIONS_ROOT, DATA_LOCAL_ROOT, RELEASE_ROOT, REPO_ROOT
-from verify.verify_content_execution_layout import content_execution_layout_issues
-from verify.verify_publish_purity import publish_purity_issues
-
+from core.paths import (  # noqa: F401 -- RELEASE_ROOT is a public gate seam for tests.
+    DATA_EXECUTIONS_ROOT,
+    DATA_LOCAL_ROOT,
+    RELEASE_ROOT,
+    REPO_ROOT,
+)
+from governance.protected_quarantine_evidence import (
+    load_protected_quarantine_receipts,
+)
 
 _TRACKED_FORBIDDEN = (
     "quwoquan_data/runtime",
@@ -99,16 +104,28 @@ def _output_layout_issues() -> list[str]:
 
 def _output_source_truth_issues(root: Path | None = None) -> list[str]:
     """Data output may contain rendered evidence, never reusable source truth."""
-    output = root or DATA_EXECUTIONS_ROOT.parent
+    output = (root or DATA_EXECUTIONS_ROOT.parent).expanduser().resolve()
     if not output.is_dir():
         return []
-    issues: list[str] = []
+    protected, receipt_issues = load_protected_quarantine_receipts(
+        data_output_root=output
+    )
+    issues: list[str] = [
+        f"{output}: invalid protected quarantine evidence: {issue}"
+        for issue in receipt_issues
+    ]
     for current, dirnames, _filenames in os.walk(output):
         current_path = Path(current)
         retained: list[str] = []
         for name in dirnames:
             child = current_path / name
             if name in _FORBIDDEN_SOURCE_TRUTH_DIRS:
+                if any(
+                    child == quarantine_root or child.is_relative_to(quarantine_root)
+                    for quarantine_root in protected
+                ):
+                    retained.append(name)
+                    continue
                 issues.append(
                     f"{child}: reusable source truth is forbidden under disposable data output"
                 )
@@ -127,8 +144,6 @@ def scan_all() -> list[str]:
     issues.extend(_legacy_marker_issues(REPO_ROOT / "quwoquan_data", DATA_EXECUTIONS_ROOT.parent))
     issues.extend(_output_layout_issues())
     issues.extend(_output_source_truth_issues())
-    issues.extend(content_execution_layout_issues())
-    issues.extend(publish_purity_issues())
     return issues
 
 

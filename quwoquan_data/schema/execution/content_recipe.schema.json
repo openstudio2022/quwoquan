@@ -108,22 +108,23 @@
       "type": "object",
       "description": "运行后放量验收（execution audit + sdk monitoring + scale readiness）",
       "properties": {
-        "minPassRate": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 1
-        },
         "mode": {
-          "type": "string"
-        },
-        "failOnNoGo": {
-          "type": "boolean"
+          "type": "string",
+          "enum": [
+            "calibration",
+            "research",
+            "commercial"
+          ]
         },
         "requireReviewed": {
           "type": "boolean",
           "description": "要求 execution-readiness 只接受独立审阅闭包的对象"
         }
       },
+      "required": [
+        "mode",
+        "requireReviewed"
+      ],
       "additionalProperties": false
     },
     "env": false,
@@ -137,7 +138,8 @@
     "title",
     "presetRef",
     "selection",
-    "execution"
+    "execution",
+    "readiness"
   ],
   "additionalProperties": false,
   "$defs": {

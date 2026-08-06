@@ -6,57 +6,52 @@
 
 - executionId 由 CLI 显式注入；子步骤统一经 `_invoke_cli` 执行，终态只写当前工作包。
 """
+
 from __future__ import annotations
 
 import argparse
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
-from core.paths import CONTROL_PLANE_SHARED_ROOT, REPO_ROOT, recipe_path
-from core.runtime_policy import apply_runtime_policy, load_runtime_policy
-from core.control_types import TargetSelector
+from core.control_types import TargetSelector  # noqa: F401
 from core.io import read_json, write_json
+from core.paths import OUTPUT_ROOT, REPO_ROOT, recipe_path
 from core.source_digest import current_source_digest
-from content.execution import store
-from content.execution.request import RuntimeExecutionRequest, resolve_candidate_pool
 from governance.provider_policy import load_provider_policy
+
+from content.execution import queue_backend, recipe_request, recipe_support, store
+from content.execution.recipe_contract import lint_recipe
+from content.execution.request import (  # noqa: F401
+    RuntimeExecutionRequest,
+    resolve_candidate_pool,
+)
 from content.execution.workspace import (
+    entity_catalog_digest,
     execution_manifest_path,
     execution_request_path,
     execution_root,
-    load_frozen_target_set,
     load_execution_manifest,
-    entity_catalog_digest,
-)
-from content.execution.recipe_request import (
-    handle_execute as _handle_execute_request,
-    retry_target_names as _resolve_retry_target_names,
-)
-from content.execution.recipe_support import (
-    current_git_branch as _read_current_git_branch,
-    current_git_commit as _read_current_git_commit,
-    runtime_preflight_argv as _build_runtime_preflight_argv,
+    load_frozen_target_set,
 )
 
 _CLI_PATH = Path(__file__).resolve().parents[2] / "cli.py"
 InvokeCli = Callable[[list[str]], int]
-SELECTION_QUOTA_FIELDS = (
-    "entityArticlesPerTarget", "entityHomepagesPerTarget",
-    "imageWorksPerTarget", "videoWorksPerTarget",
-)
+
+
 def _default_invoke_cli(argv: list[str]) -> int:
     proc = subprocess.run([sys.executable, str(_CLI_PATH), *argv], check=False)
     return int(proc.returncode)
 
 
 def _current_git_commit() -> str:
-    return _read_current_git_commit(REPO_ROOT)
+    return recipe_support.current_git_commit(REPO_ROOT)
 
 
 def _current_git_branch() -> str:
-    return _read_current_git_branch(REPO_ROOT)
+    return recipe_support.current_git_branch(REPO_ROOT)
 
 
 def load_recipe(recipe_ref: str) -> dict[str, Any]:
@@ -72,87 +67,19 @@ def load_recipe(recipe_ref: str) -> dict[str, Any]:
     return doc
 
 
-def lint_recipe(doc: dict[str, Any], recipe_ref: str) -> list[str]:
-    """recipe 校验：真实执行 task_recipe.schema.json（未知字段 fail-closed）+ 语义门。"""
-    from core.schema import load_schema, validate_strict
-
-    # 真实 Schema 校验（P4：执行器消费字段必须在 Schema 声明；未知字段必须失败）。
-    schema = load_schema("execution", "content_recipe")
-    errors: list[str] = list(validate_strict(doc, schema))
-    if str(doc.get("recipeId") or "") != recipe_ref:
-        errors.append(f"recipeId '{doc.get('recipeId')}' 必须等于引用路径 '{recipe_ref}'")
-    preset_ref = str(doc.get("presetRef") or "")
-    if preset_ref:
-        try:
-            store.load_preset(preset_ref)
-        except Exception as exc:  # noqa: BLE001
-            errors.append(f"presetRef 解析失败: {exc}")
-    if not doc.get("selection"):
-        errors.append("selection is required for an execution work package")
-    else:
-        selection = doc["selection"]
-        missing_quotas = [key for key in SELECTION_QUOTA_FIELDS if key not in selection]
-        if missing_quotas:
-            errors.append(f"selection quota fields are required: {missing_quotas}")
-    profile = str(doc.get("runtimeProfile") or "")
-    if profile and not (CONTROL_PLANE_SHARED_ROOT / f"{profile}.runtime.yaml").is_file():
-        errors.append(f"runtimeProfile '{profile}' 不存在于 control_plane/_shared/")
-    try:
-        from content.execution.model_contract import execution_model_pair
-
-        execution_model_pair(doc)
-    except (TypeError, ValueError) as exc:
-        errors.append(str(exc))
-    return errors
-
-
-def _apply_runtime_env(recipe: dict[str, Any]) -> None:
-    """Load one typed runtime policy and project it at the process boundary."""
-    profile = str(recipe.get("runtimeProfile") or "")
-    if not profile:
-        raise ValueError("recipe.runtimeProfile is required")
-    apply_runtime_policy(load_runtime_policy(profile))
-
-
-def _resolve_selection(
-    recipe: dict[str, Any],
-    request: RuntimeExecutionRequest,
-    *,
-    vertical: str,
-    content_type: str,
-    intent: str,
-) -> dict[str, Any]:
-    """Derive the frozen selection from the single runtime request.
-
-    The selection object is written only to the execution work package.  A
-    reusable family never carries a region, discovery path, title, count, or
-    mandatory target list.
-    """
-    selection = dict(recipe.get("selection") or {})
-    discovery = REPO_ROOT / "quwoquan_data/reference" / vertical / "entities" / request.region_ref
-    name = request.topic or f"{request.region_ref.rsplit('/', 1)[-1]}-{content_type}"
-    selection.update(
-        {
-            "region": request.region_ref,
-            "discovery": discovery.relative_to(REPO_ROOT).as_posix(),
-            "name": name,
-            "title": name,
-            "intentLabel": intent,
-            "limit": request.count,
-            "approvedQuota": request.quota,
-        }
-    )
-    return selection
-
-
 def _contract_gate(recipe: dict[str, Any], execution_id: str) -> None:
     contract = recipe.get("contract") or {}
     spec = store.load_spec(execution_id)
     errors: list[str] = []
     declared_preset = store.spec_preset_ref(spec)
     if declared_preset != str(recipe.get("presetRef") or ""):
-        errors.append(f"content.presetRef={declared_preset!r} 与配方 presetRef={recipe.get('presetRef')!r} 不一致")
-    if bool(contract.get("requireActiveStatus", True)) and str(spec.get("status") or "") != "active":
+        errors.append(
+            f"content.presetRef={declared_preset!r} 与配方 presetRef={recipe.get('presetRef')!r} 不一致"
+        )
+    if (
+        bool(contract.get("requireActiveStatus", True))
+        and str(spec.get("status") or "") != "active"
+    ):
         errors.append(f"task status 必须 active，实得 {spec.get('status')!r}")
     # 分支治理（P4）：recipe 禁止声明 executionBranch（临时 feature 分支绑定已废止）；
     # 商业执行只校验 branch policy（quwoquan_ops/policies/branch_policy.yaml）。
@@ -187,7 +114,9 @@ def _execute(
             recovery_reason=recovery_reason,
         )
     except (RuntimeError, ValueError) as exc:
-        raise SystemExit(f"[task execute] GATE_BLOCK execution={execution_id}: {exc}") from exc
+        raise SystemExit(
+            f"[task execute] GATE_BLOCK execution={execution_id}: {exc}"
+        ) from exc
 
 
 def _readiness(
@@ -205,23 +134,14 @@ def _readiness(
     ]
     if bool(readiness.get("requireReviewed", False)):
         argv.append("--require-reviewed")
-    argv.extend(
-        [
-            "--min-pass-rate",
-            str(float(readiness.get("minPassRate", 1.0))),
-            "--mode",
-            str(readiness.get("mode") or "commercial"),
-        ]
-    )
-    if bool(readiness.get("failOnNoGo", True)):
-        argv.append("--fail-on-no-go")
+    argv.extend(["--mode", str(readiness.get("mode") or "commercial")])
     rc = invoke(argv)
     if rc != 0:
         raise SystemExit(f"[task execute] execution-readiness rc={rc}")
-    return
+
 
 def _runtime_preflight_argv(execution_id: str) -> list[str]:
-    return _build_runtime_preflight_argv(execution_root(execution_id))
+    return recipe_support.runtime_preflight_argv(execution_root(execution_id))
 
 
 def _retry_target_names(
@@ -231,7 +151,7 @@ def _retry_target_names(
     quota: int,
     requested_target_names: tuple[str, ...],
 ) -> tuple[str, ...]:
-    return _resolve_retry_target_names(
+    return recipe_request.retry_target_names(
         retry_of,
         count=count,
         quota=quota,
@@ -332,26 +252,32 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
             raise SystemExit(
                 f"[task execute] GATE_BLOCK {scale_promotion_carrier} scale promotion: {exc}"
             ) from exc
-    root_execution_id = str(
-        getattr(args, "campaign_root_execution_id", "") or ""
-    ).strip() or identity.execution_id
+    root_execution_id = (
+        str(getattr(args, "campaign_root_execution_id", "") or "").strip()
+        or identity.execution_id
+    )
     campaign_bound = bool(
         str(getattr(args, "campaign_root_execution_id", "") or "").strip()
     )
     if stage == "submit-only":
-        from content.execution.campaign_submission import write_submission
+        from content.execution.campaign_recipe_binding import submit_campaign_lane
 
-        try:
-            path = write_submission(
-                root_execution_id=root_execution_id,
-                execution_id=identity.execution_id,
-                request=runtime_request,
-                retry_of=str(getattr(args, "retry_of", "") or "").strip() or None,
-            )
-        except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as exc:
-            raise SystemExit(f"[task execute] GATE_BLOCK campaign submission: {exc}") from exc
-        print(f"[task execute] SUBMITTED executionId={identity.execution_id} path={path}")
+        path = submit_campaign_lane(
+            args,
+            identity=identity,
+            runtime_request=runtime_request,
+            root_execution_id=root_execution_id,
+        )
+        print(
+            f"[task execute] SUBMITTED executionId={identity.execution_id} path={path}"
+        )
         return
+    if campaign_bound:
+        from content.execution.campaign_recipe_binding import (
+            require_campaign_external_inputs,
+        )
+
+        require_campaign_external_inputs(identity)
     if campaign_bound and stage == "run":
         from content.execution.campaign_receipt import (
             require_lane_review_receipt,
@@ -367,22 +293,7 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
                 f"[task execute] GATE_BLOCK campaign lane review: {exc}"
             ) from exc
     # A task-output purge between plan-only and run destroys its frozen input,
-    from content.execution.agent.agent_conflicts import (
-        ManagedWorkspaceConflictError,
-        assert_managed_workspace_available,
-    )
-    from core.runtime_policy import active_runtime_policy
-
-    try:
-        assert_managed_workspace_available(
-            Path.cwd(),
-            provider=active_runtime_policy().cursor_provider.value,
-            execution_id=identity.execution_id,
-        )
-    except ManagedWorkspaceConflictError as exc:
-        raise SystemExit(f"[task execute] GATE_BLOCK {exc}") from exc
     execution_id = str(getattr(args, "execution_id", "") or "").strip()
-    _apply_runtime_env(recipe)
     manifest_path = execution_manifest_path(execution_id)
     if stage == "promote-scale" and not manifest_path.is_file():
         raise SystemExit(
@@ -390,6 +301,13 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
             "promote-scale requires an existing frozen M100 execution"
         )
     manifest_retry_of = str(getattr(args, "retry_of", "") or "") or None
+    requested_semantic_selection_id = (
+        str(getattr(args, "semantic_selection_id", "") or "").strip() or None
+    )
+    requested_semantic_preflight = str(
+        getattr(args, "semantic_preflight_receipt", "") or ""
+    ).strip()
+    existing_manifest: dict[str, Any] | None = None
     if manifest_path.is_file():
         existing_manifest = load_execution_manifest(execution_id)
         existing_recipe = existing_manifest.get("familyRef")
@@ -418,9 +336,10 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
                 f"[task execute] GATE_BLOCK execution={execution_id}: "
                 "resume may not change the frozen runtime request"
             )
-        resolved_selection = _resolve_selection(
+        resolved_selection = recipe_request.resolve_frozen_selection(
             recipe,
             frozen_request,
+            repo_root=REPO_ROOT,
             vertical=identity.vertical,
             content_type=identity.content_type.value,
             intent=identity.intent,
@@ -430,13 +349,50 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
         from content.execution.workspace import require_clean_transaction_workspace
 
         require_clean_transaction_workspace(execution_id)
-        resolved_selection = _resolve_selection(
+        resolved_selection = recipe_request.resolve_frozen_selection(
             recipe,
             runtime_request,
+            repo_root=REPO_ROOT,
             vertical=identity.vertical,
             content_type=identity.content_type.value,
             intent=identity.intent,
         )
+    from content.execution.semantic_selection import (
+        activate_frozen_semantic_selection,
+        resolve_frozen_semantic_selection,
+    )
+
+    try:
+        semantic_binding = resolve_frozen_semantic_selection(
+            recipe,
+            existing_manifest=(
+                existing_manifest if manifest_path.is_file() else None
+            ),
+            requested_selection_id=requested_semantic_selection_id,
+            retry_of=manifest_retry_of,
+        )
+        activate_frozen_semantic_selection(
+            recipe,
+            semantic_binding,
+            workspace=Path.cwd(),
+            execution_id=identity.execution_id,
+        )
+    except (RuntimeError, ValueError) as exc:
+        raise SystemExit(f"[task execute] GATE_BLOCK {exc}") from exc
+    semantic_selection_id = semantic_binding.selection_id
+    from content.execution.semantic_preflight_admission import (
+        resolve_cli_preflight_binding,
+    )
+
+    try:
+        semantic_preflight_binding = resolve_cli_preflight_binding(
+            existing_manifest=existing_manifest,
+            requested_receipt_ref=requested_semantic_preflight,
+            semantic_selection_id=semantic_selection_id,
+            output_root=OUTPUT_ROOT,
+        )
+    except (OSError, TypeError, ValueError) as exc:
+        raise SystemExit(f"[task execute] GATE_BLOCK {exc}") from exc
     if stage == "promote-scale":
         if (
             identity.vertical != "travel"
@@ -481,24 +437,29 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
         return
     from content.execution import create_execution_manifest
     from content.execution.identity import SelectionPolicy
-    from content.execution.workspace import TARGET_SET_REF, frozen_target_set_digest
     from content.execution.runner import (
         preflight_execution_models,
         write_execution_model_readiness,
     )
+    from content.execution.workspace import TARGET_SET_REF, frozen_target_set_digest
 
     # plan-only 只验证可复用输入和工作包形状；它不得冒充 Agent/来源/发布成功，
     # 因此不读取凭证也不探测模型。其余阶段必须先通过真实双模型启动证明。
     if stage != "plan-only":
         try:
-            model_readiness = preflight_execution_models(recipe)
+            model_readiness = preflight_execution_models(
+                recipe,
+                semantic_selection_id,
+            )
         except (RuntimeError, ValueError) as exc:
             raise SystemExit(
                 f"[task execute] GATE_BLOCK execution={execution_id}: {exc}"
             ) from exc
 
-    from content.execution.materialization import ensure_execution_spec
     from core.data_issue import DataIssueError
+
+    from content.execution.materialization import ensure_execution_spec
+
     try:
         execution_spec_id = ensure_execution_spec(
             recipe,
@@ -507,14 +468,19 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
             target_selector=runtime_request.selector,
             content_type=identity.content_type.value,
             target_names=runtime_request.target_names,
-            inherit_frozen_targets=bool(manifest_retry_of),
+            inherit_frozen_targets=(
+                bool(manifest_retry_of)
+                and not bool(
+                    getattr(args, "retry_submission_only_predecessor", False)
+                )
+            ),
             inherited_targets=tuple(getattr(args, "inherited_targets", ()) or ()),
         )
     except DataIssueError as exc:
         raise SystemExit(
             f"[task execute] GATE_BLOCK execution={execution_id}: {exc}"
         ) from exc
-    create_execution_manifest(
+    frozen_manifest = create_execution_manifest(
         execution_id=execution_id,
         recipe_ref=recipe_ref,
         request=runtime_request.to_document(),
@@ -522,11 +488,13 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
         target_set_ref=TARGET_SET_REF,
         target_set_digest=frozen_target_set_digest(execution_id),
         retry_of=manifest_retry_of,
+        semantic_selection_id=semantic_selection_id,
+        semantic_preflight_binding=semantic_preflight_binding,
     )
-    if (
-        scale_promotion_receipt is not None
-        and scale_promotion_carrier is not None
-    ):
+    queue_backend.freeze_execution_queue_backend(
+        execution_id, spec=store.load_spec(execution_id), manifest=frozen_manifest
+    )
+    if scale_promotion_receipt is not None and scale_promotion_carrier is not None:
         frozen_promotion_path = (
             execution_root(execution_id)
             / "0.plan"
@@ -556,9 +524,14 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
     if rc != 0:
         raise SystemExit(f"[task execute] task preflight rc={rc}")
     from content.execution.recipe_checkpoint import execute_recipe_stage
+
     execute_recipe_stage(
-        recipe, execution_id, stage=stage, execute=_execute,
-        recover_stage=recover_stage, recovery_reason=recovery_reason,
+        recipe,
+        execution_id,
+        stage=stage,
+        execute=_execute,
+        recover_stage=recover_stage,
+        recovery_reason=recovery_reason,
     )
     if stage == "review-only":
         if campaign_bound:
@@ -573,16 +546,18 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
     _readiness(recipe, execution_id, invoke)
     if campaign_bound:
         from content.execution.campaign_receipt import write_publish_receipt
+        from content.execution.campaign_workspace import CampaignRuntimePaths
 
         write_publish_receipt(
             root_execution_id=root_execution_id,
             execution_id=execution_id,
+            runtime_paths=CampaignRuntimePaths.defaults(),
         )
     print(f"[task execute] DONE executionId={execution_id}")
 
 
 def handle_execute(args: argparse.Namespace, invoke: InvokeCli | None = None) -> None:
-    _handle_execute_request(args, invoke, owner=sys.modules[__name__])
+    recipe_request.handle_execute(args, invoke, owner=sys.modules[__name__])
 
 
 def register_recipe_parser(sub: argparse._SubParsersAction) -> None:

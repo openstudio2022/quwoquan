@@ -1,14 +1,19 @@
 """Entity image preparation for the source download stage."""
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
-from core.image_rules import pixel_size_issue, relevance_issue
-from core.media_processing_policy import MEDIA_PROCESSING_POLICY
-from core.image_safety import dedupe_image_payloads
 from core.image_decode import probe_image_bytes
+from core.image_rules import pixel_size_issue, relevance_issue
+from core.image_safety import dedupe_image_payloads
+from core.media_processing_policy import MEDIA_PROCESSING_POLICY
+from governance.coverage.license import normalize_rights_payload, validate_image_rights
+
+from content.source.contracts import MediaProvenance
+from content.source.fetch_images import fetch_image_payload
 from content.source.gate import download_requirements
 from content.source.handler_images import (
     _assess_source_image,
@@ -17,9 +22,6 @@ from content.source.handler_images import (
     _write_image_check_temp_file,
 )
 from content.source.handler_plan import _write_download_progress
-from content.source.fetch_images import fetch_image_payload
-from content.source.contracts import MediaProvenance
-from governance.coverage.license import normalize_rights_payload, validate_image_rights
 
 
 @dataclass(frozen=True)
@@ -241,6 +243,31 @@ def prepare_entity_images(
             image_quality_issues.append(rel_issue)
             rejected_by_category["other"] += 1
             continue
+        acquisition_receipt_ref = str(
+            spec.get("acquisitionReceiptRef") or ""
+        ).strip()
+        professional_asset_id = str(spec.get("professionalAssetId") or "").strip()
+        professional_content_sha256 = str(
+            spec.get("professionalContentSha256") or ""
+        ).strip()
+        professional_identity = (
+            acquisition_receipt_ref,
+            professional_asset_id,
+            professional_content_sha256,
+        )
+        if any(professional_identity) and not all(professional_identity):
+            raise ValueError(
+                "professional image materialization requires receipt, assetId, "
+                "and contentSha256"
+            )
+        payload_sha256 = str(payload.get("sha256") or "")
+        if payload_sha256 and not payload_sha256.startswith("sha256:"):
+            payload_sha256 = f"sha256:{payload_sha256}"
+        if acquisition_receipt_ref and (
+            str(spec.get("contentSha256") or "") != professional_content_sha256
+            or payload_sha256 != professional_content_sha256
+        ):
+            raise ValueError("professional image materialization digest binding drift")
         rights = normalize_rights_payload(spec)
         provenance = MediaProvenance.from_mapping(spec, vertical=vertical)
         pending_images.append(
@@ -272,6 +299,15 @@ def prepare_entity_images(
                 "platform": provider,
                 "title": spec.get("title") or "",
                 "capturedAt": spec.get("capturedAt") or spec.get("collectedAt") or "",
+                "contentSha256": spec.get("contentSha256") or "",
+                "acquisitionReceiptRef": acquisition_receipt_ref,
+                "professionalAssetId": professional_asset_id,
+                "professionalContentSha256": professional_content_sha256,
+                "acquisitionStatus": spec.get("acquisitionStatus") or "",
+                "rightsStatus": spec.get("rightsStatus") or spec.get("rightsAuditStatus") or "",
+                "authorizationRequired": spec.get("authorizationRequired"),
+                "distributionDecision": spec.get("distributionDecision") or "",
+                "rightsIssues": list(spec.get("rightsIssues") or []),
                 "caption": str(spec.get("caption") or relevance),
                 "relevance": relevance,
                 "slug": f"{entity_id}_{idx_img}",

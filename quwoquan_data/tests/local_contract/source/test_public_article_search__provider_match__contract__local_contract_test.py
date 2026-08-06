@@ -1,17 +1,18 @@
 from __future__ import annotations
 
 import copy
-from dataclasses import FrozenInstanceError
 import json
+from dataclasses import FrozenInstanceError
 
 import pytest
-
 from content.source.fetch_text import extract_page_text
 from content.source.handler_fetch_contract import require_source_candidate_admission
-from content.source.research import network_io
-from content.source.research import auto_plan_article
-from content.source.research import article_frontier_profile
-from content.source.research import article_frontier_robots
+from content.source.research import (
+    article_frontier_profile,
+    article_frontier_robots,
+    auto_plan_article,
+    network_io,
+)
 from content.source.research.public_search import (
     FileDailyPageBudget,
     InMemoryDailyPageBudget,
@@ -20,7 +21,6 @@ from content.source.research.public_search import (
 )
 from content.source.research.source_registry import _travel_registry_url_fetchable
 from governance.coverage.source_registry import resolve_travel_source_runtime
-
 
 SPEC_REF = (
     "specs/feature-tree/runtime/runtime-data-engineering/"
@@ -34,7 +34,7 @@ def test_file_daily_budget_resolves_current_disposable_root(
 ):
     from core import paths
 
-    monkeypatch.setattr(paths, "DATA_LOCAL_ROOT", tmp_path)
+    monkeypatch.setattr(paths, "DATA_WORKSPACE_ROOT", tmp_path)
     budget = FileDailyPageBudget()
 
     assert budget.reserve(
@@ -43,6 +43,8 @@ def test_file_daily_budget_resolves_current_disposable_root(
         max_pages_per_day=1,
     ).allowed
     assert (tmp_path / "article-source-frontier" / "2026-08-03.json").is_file()
+
+
 TERMS_URL = "https://terms.example.test/article"
 
 
@@ -117,6 +119,23 @@ def _install_registry(monkeypatch: pytest.MonkeyPatch, site: dict) -> None:
     )
 
 
+def _mediawiki_site() -> dict:
+    site = _site(
+        allowed_paths=["https://guide.example.test/wiki/*"],
+        strategy={
+            "mode": "entity_seeded_scan",
+            "seedAxes": ["entity"],
+            "precheckGates": ["light_fetch", "entity_anchor"],
+        },
+    )
+    site["urlPatterns"] = ["https://guide.example.test/wiki/*"]
+    site["extractor"] = "wikipedia_api"
+    profile = site["siteCrawlProfile"]
+    profile["fetchMode"] = "mediawiki_api"
+    profile["extractor"] = "wikipedia_api"
+    return site
+
+
 def _default_fetch(
     url: str,
     *,
@@ -146,7 +165,7 @@ def test_frontier_canonical_dedupe_and_entity_alias_relevance(monkeypatch):
     """
     pages = {
         relevant: (
-            '<html><head><title>测试山别名游玩攻略</title>'
+            "<html><head><title>测试山别名游玩攻略</title>"
             f'<link rel="canonical" href="{relevant}"></head>'
             "<body>测试山景区提供公开步道信息。</body></html>"
         ),
@@ -177,11 +196,14 @@ def test_frontier_canonical_dedupe_and_entity_alias_relevance(monkeypatch):
     assert outcome.candidates[0].relevance_score == 0.99
     assert outcome.source_documents()[0]["sourceUseMode"] == "factual_reference_only"
     assert outcome.source_documents()[0]["articleSiteId"] == "frontier_test"
-    assert article_frontier_profile.resolve_article_source_binding(
-        relevant,
-        site_id="frontier_test",
-        profile_digest=outcome.candidates[0].profile_digest,
-    )["siteId"] == "frontier_test"
+    assert (
+        article_frontier_profile.resolve_article_source_binding(
+            relevant,
+            site_id="frontier_test",
+            profile_digest=outcome.candidates[0].profile_digest,
+        )["siteId"]
+        == "frontier_test"
+    )
     require_source_candidate_admission(
         outcome.source_documents()[0],
         require_commercial_article_binding=True,
@@ -200,9 +222,7 @@ def test_commercial_article_fetch_binding_rejects_registry_profile_drift(monkeyp
     site = _site()
     _install_registry(monkeypatch, site)
     digest = article_frontier_profile.article_profile_digest(site)
-    site["siteCrawlProfile"]["allowedPaths"] = [
-        "https://guide.example.test/renamed/*"
-    ]
+    site["siteCrawlProfile"]["allowedPaths"] = ["https://guide.example.test/renamed/*"]
 
     with pytest.raises(ValueError, match="profile drift"):
         article_frontier_profile.resolve_article_source_binding(
@@ -366,6 +386,127 @@ def test_frontier_rate_limit_and_backoff_are_enforced(monkeypatch):
     assert any(seconds >= 1.0 for seconds in sleeps)
 
 
+def test_mediawiki_api_search_discovers_canonical_seed_before_admission(
+    monkeypatch,
+):
+    _install_registry(monkeypatch, _mediawiki_site())
+    exact = (
+        "https://guide.example.test/wiki/%E6%B5%8B%E8%AF%95%E5%B1%B1%E6%99%AF%E5%8C%BA"
+    )
+    compound_false_hit = "https://guide.example.test/wiki/%E5%85%B6%E4%BB%96%E5%9C%B0%E7%82%B9"
+    related = "https://guide.example.test/wiki/%E6%B5%8B%E8%AF%95%E5%8E%BF"
+    fetched: list[str] = []
+
+    def fake_fetch(url: str, *, timeout: int) -> network_io.HttpFetchResult:
+        fetched.append(url)
+        if url == TERMS_URL:
+            return _response(url, body="terms")
+        if url.startswith("https://guide.example.test/w/api.php?"):
+            return _response(
+                url,
+                body=json.dumps(
+                    {
+                        "query": {
+                            "search": [
+                                {"ns": 0, "title": "其他地点"},
+                                {"ns": 0, "title": "测试县"},
+                                {"ns": 1, "title": "讨论:测试山景区"},
+                            ]
+                        }
+                    },
+                    ensure_ascii=False,
+                ),
+            )
+        if url == "https://guide.example.test/robots.txt":
+            return _response(url, body="User-agent: *\nAllow: /\n")
+        if url == exact:
+            return _response(url, status=404)
+        if url == compound_false_hit:
+            return _response(
+                url,
+                body=(
+                    "<html><title>其他地点旅行指南</title><body>"
+                    "良测试山景区附近有餐厅，但页面没有实体链接。"
+                    "</body></html>"
+                ),
+            )
+        if url == related:
+            return _response(
+                url,
+                body=(
+                    "<html><title>测试县旅行指南</title><body>"
+                    '<a href="/wiki/%E6%B5%8B%E8%AF%95%E5%B1%B1%E6%99%AF%E5%8C%BA">'
+                    "测试山景区</a>位于测试县，页面介绍步道与交通。"
+                    "</body></html>"
+                ),
+            )
+        raise AssertionError(url)
+
+    monkeypatch.setattr(network_io, "fetch_http", fake_fetch)
+    outcome = discover_article_source_frontier(
+        "测试山景区",
+        topics=("步道",),
+        limit=1,
+        daily_budget=InMemoryDailyPageBudget(),
+    )
+
+    assert [candidate.canonical_url for candidate in outcome.candidates] == [related]
+    assert outcome.candidates[0].discovery_method == "mediawiki_api_search"
+    assert any("/w/api.php?" in url for url in fetched)
+    assert any(
+        row.discovery_method == "mediawiki_api_search"
+        and row.reason == "mediawiki_search_results:2"
+        and row.decision.value == "expanded"
+        for row in outcome.sites[0].frontier
+    )
+    assert any(
+        row.canonical_url == exact and row.reason == "page_unreadable"
+        for row in outcome.sites[0].frontier
+    )
+    assert any(
+        row.canonical_url == compound_false_hit
+        and row.reason == "entity_alias_topic_relevance_failed"
+        for row in outcome.sites[0].frontier
+    )
+
+
+def test_mediawiki_api_search_network_failure_is_typed_availability_blocker(
+    monkeypatch,
+):
+    _install_registry(monkeypatch, _mediawiki_site())
+
+    def fake_fetch(url: str, *, timeout: int) -> network_io.HttpFetchResult:
+        if url == TERMS_URL:
+            return _response(url, body="terms")
+        if url.startswith("https://guide.example.test/w/api.php?"):
+            return _response(url, status=0, returncode=6)
+        if url == "https://guide.example.test/robots.txt":
+            return _response(url, body="User-agent: *\nAllow: /\n")
+        if url.startswith("https://guide.example.test/wiki/"):
+            return _response(url, status=404)
+        raise AssertionError(url)
+
+    monkeypatch.setattr(network_io, "fetch_http", fake_fetch)
+    outcome = discover_article_source_frontier(
+        "测试山景区",
+        limit=1,
+        daily_budget=InMemoryDailyPageBudget(),
+    )
+
+    assert outcome.candidates == ()
+    assert any(
+        issue.code.value == "DATA.INFRA.NETWORK_UNREACHABLE"
+        and issue.recovery.value == "retry_source_discovery"
+        for issue in outcome.issues
+    )
+    assert any(
+        row.discovery_method == "mediawiki_api_search"
+        and row.decision.value == "blocked"
+        and row.reason == "DATA.INFRA.NETWORK_UNREACHABLE"
+        for row in outcome.sites[0].frontier
+    )
+
+
 def test_declared_sitemap_and_pagination_expand_but_undeclared_do_not(
     monkeypatch,
 ):
@@ -432,9 +573,7 @@ def test_declared_sitemap_and_pagination_expand_but_undeclared_do_not(
         daily_budget=InMemoryDailyPageBudget(),
     )
     assert second.candidates == ()
-    assert any(
-        issue.code.value == "DATA.CONTRACT.INVALID" for issue in second.issues
-    )
+    assert any(issue.code.value == "DATA.CONTRACT.INVALID" for issue in second.issues)
 
 
 def test_declared_frontier_does_not_expand_past_max_depth(monkeypatch):
@@ -470,9 +609,7 @@ def test_declared_frontier_does_not_expand_past_max_depth(monkeypatch):
     )
 
     assert detail not in fetched
-    assert any(
-        row.reason == "max_depth_exceeded" for row in outcome.sites[0].frontier
-    )
+    assert any(row.reason == "max_depth_exceeded" for row in outcome.sites[0].frontier)
 
 
 def test_frontier_enforces_daily_pages_and_immutability(monkeypatch):
@@ -548,12 +685,9 @@ def test_network_unavailable_is_typed_blocked_not_synthetic_success(monkeypatch)
 
     assert outcome.candidates == ()
     assert any(
-        issue.code.value == "DATA.INFRA.NETWORK_UNREACHABLE"
-        for issue in outcome.issues
+        issue.code.value == "DATA.INFRA.NETWORK_UNREACHABLE" for issue in outcome.issues
     )
-    assert any(
-        row.decision.value == "blocked" for row in outcome.sites[0].frontier
-    )
+    assert any(row.decision.value == "blocked" for row in outcome.sites[0].frontier)
 
 
 def test_article_plan_mainline_retains_frontier_evidence(
@@ -645,13 +779,9 @@ def test_article_plan_mainline_retains_frontier_evidence(
     )
 
     plan = json.loads((tmp_path / "article_source_plan.json").read_text())
-    assert report["articleSourceDiscovery"][0]["frontierDigest"].startswith(
-        "sha256:"
-    )
+    assert report["articleSourceDiscovery"][0]["frontierDigest"].startswith("sha256:")
     assert plan["payload"]["sources"][0]["url"] == candidate
-    assert plan["payload"]["sources"][0]["sourceUseMode"] == (
-        "factual_reference_only"
-    )
+    assert plan["payload"]["sources"][0]["sourceUseMode"] == ("factual_reference_only")
     assert frontier_call == {
         "entityId": "测试山景区",
         "topics": ("步道",),

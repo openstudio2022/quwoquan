@@ -16,14 +16,15 @@
     "authorizationRequiredAssetIds",
     "researchAcceptedCount",
     "commercialAcceptedCount",
+    "sourceRevision",
+    "sourceDigest",
+    "entityCatalogDigest",
     "sourceOwner",
     "readinessPhase",
     "manifestDigest",
     "mediaManifestDigest",
     "importRunId",
     "verifyRunId",
-    "guestActorHash",
-    "guestLogin",
     "counts",
     "entityRefs",
     "postIds",
@@ -54,11 +55,23 @@
     "authorizationRequiredAssetIds": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
     "researchAcceptedCount": {"type": "integer", "minimum": 0},
     "commercialAcceptedCount": {"type": "integer", "minimum": 0},
+    "sourceRevision": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "sourceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "entityCatalogDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "readinessPhase": {"enum": ["research", "consumer", "commercial"]},
     "manifestDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "mediaManifestDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "importRunId": {"type": "string", "minLength": 1},
     "verifyRunId": {"type": "string", "minLength": 1},
+    "internalSubjectHash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "researchIsolationVerificationRef": {
+      "type": "string",
+      "pattern": "^env/(alpha|beta|gamma|prod)/runs/data-release/.+/research-isolation-verification\\.json$"
+    },
+    "researchIsolationVerificationDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
     "guestActorHash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "guestLogin": {
       "allOf": [
@@ -120,6 +133,7 @@
         "imageWorkId",
         "imageTitle",
         "videoWorkId",
+        "videoTitle",
         "creatorName",
         "tagLabel",
         "videoAttribution"
@@ -135,6 +149,7 @@
         "imageWorkId": {"type": "string", "minLength": 1},
         "imageTitle": {"type": "string", "minLength": 1},
         "videoWorkId": {"type": "string", "minLength": 1},
+        "videoTitle": {"type": "string", "minLength": 1},
         "creatorName": {"type": "string", "minLength": 1},
         "tagLabel": {"type": "string", "minLength": 1},
         "videoAttribution": {"type": "string", "minLength": 1}
@@ -189,6 +204,73 @@
     "passed": {"const": true}
   },
   "allOf": [
+    {
+      "if": {
+        "properties": {"readinessPhase": {"const": "research"}},
+        "required": ["readinessPhase"]
+      },
+      "then": {
+        "properties": {
+          "releaseClass": {"const": "research"},
+          "productLifecycleState": {"const": "research"}
+        },
+        "required": ["releaseClass", "productLifecycleState"]
+      }
+    },
+    {
+      "if": {
+        "properties": {"readinessPhase": {"const": "commercial"}},
+        "required": ["readinessPhase"]
+      },
+      "then": {
+        "properties": {
+          "releaseClass": {"const": "commercial"},
+          "productLifecycleState": {"const": "commercial"}
+        },
+        "required": ["releaseClass", "productLifecycleState"]
+      }
+    },
+    {
+      "if": {
+        "properties": {"releaseClass": {"const": "research"}},
+        "required": ["releaseClass"]
+      },
+      "then": {
+        "properties": {"productLifecycleState": {"const": "research"}}
+      },
+      "else": {
+        "properties": {"productLifecycleState": {"const": "commercial"}}
+      }
+    },
+    {
+      "if": {
+        "properties": {"readinessPhase": {"const": "research"}},
+        "required": ["readinessPhase"]
+      },
+      "then": {
+        "required": [
+          "internalSubjectHash",
+          "researchIsolationVerificationRef",
+          "researchIsolationVerificationDigest"
+        ],
+        "not": {
+          "anyOf": [
+            {"required": ["guestActorHash"]},
+            {"required": ["guestLogin"]}
+          ]
+        }
+      },
+      "else": {
+        "required": ["guestActorHash", "guestLogin"],
+        "not": {
+          "anyOf": [
+            {"required": ["internalSubjectHash"]},
+            {"required": ["researchIsolationVerificationRef"]},
+            {"required": ["researchIsolationVerificationDigest"]}
+          ]
+        }
+      }
+    },
     {
       "if": {
         "properties": {"readinessPhase": {"enum": ["research", "commercial"]}},

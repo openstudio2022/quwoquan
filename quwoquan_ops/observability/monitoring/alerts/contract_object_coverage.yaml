@@ -1,0 +1,1178 @@
+# Code generated from quwoquan_service/generated/contract_graph.json.
+# Regenerate with verify_object_alert_coverage.py --write.
+# 阈值来自 ContractGraph 的 slo.availabilityPercent / slo.latencyP95Milliseconds，
+# 每个域按 SLO 档位分组，selector 只消费 recording rule 的 operation/contract_metric label。
+groups:
+  - name: quwoquan_assistant_contract_object_coverage
+    rules:
+      - alert: AssistantContractOperationAvailabilityBelow99p5Percent
+        expr: |
+          sum(rate(quwoquan_assistant_contract_operation_requests_total{service="assistant-service",operation=~"assistant\\..+",contract_metric=~"assistant_.+",commercial_status="ready",slo_availability_percent="99.5",status=~"5.."}[10m])) by (operation, contract_metric)
+          / clamp_min(sum(rate(quwoquan_assistant_contract_operation_requests_total{service="assistant-service",operation=~"assistant\\..+",contract_metric=~"assistant_.+",commercial_status="ready",slo_availability_percent="99.5"}[10m])) by (operation, contract_metric), 0.001) > 0.005
+        for: 10m
+        labels:
+          severity: critical
+          layer: l2
+          domain: assistant
+        annotations:
+          summary: "assistant ready operation 5xx 比率超出可用性 SLO（99.5%）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）5xx 比率 {{ $value | humanizePercentage }} 超出 ContractGraph 声明的可用性 SLO；按对象 owner 检查依赖、鉴权与存储链路。"
+      - alert: AssistantContractOperationAvailabilityBelow99p9Percent
+        expr: |
+          sum(rate(quwoquan_assistant_contract_operation_requests_total{service="assistant-service",operation=~"assistant\\..+",contract_metric=~"assistant_.+",commercial_status="ready",slo_availability_percent="99.9",status=~"5.."}[10m])) by (operation, contract_metric)
+          / clamp_min(sum(rate(quwoquan_assistant_contract_operation_requests_total{service="assistant-service",operation=~"assistant\\..+",contract_metric=~"assistant_.+",commercial_status="ready",slo_availability_percent="99.9"}[10m])) by (operation, contract_metric), 0.001) > 0.001
+        for: 10m
+        labels:
+          severity: critical
+          layer: l2
+          domain: assistant
+        annotations:
+          summary: "assistant ready operation 5xx 比率超出可用性 SLO（99.9%）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）5xx 比率 {{ $value | humanizePercentage }} 超出 ContractGraph 声明的可用性 SLO；按对象 owner 检查依赖、鉴权与存储链路。"
+      - alert: AssistantContractOperationLatencyP95Above100Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_assistant_contract_operation_duration_seconds_bucket{service="assistant-service",operation=~"assistant\\..+",contract_metric=~"assistant_.+",commercial_status="ready",slo_latency_p95_ms="100"}[5m])) by (le, operation, contract_metric)
+          ) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: assistant
+        annotations:
+          summary: "assistant ready operation P95 超出 SLO（100ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=100。"
+      - alert: AssistantContractOperationLatencyP95Above300Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_assistant_contract_operation_duration_seconds_bucket{service="assistant-service",operation=~"assistant\\..+",contract_metric=~"assistant_.+",commercial_status="ready",slo_latency_p95_ms="300"}[5m])) by (le, operation, contract_metric)
+          ) > 0.3
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: assistant
+        annotations:
+          summary: "assistant ready operation P95 超出 SLO（300ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=300。"
+      - alert: AssistantContractOperationLatencyP95Above500Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_assistant_contract_operation_duration_seconds_bucket{service="assistant-service",operation=~"assistant\\..+",contract_metric=~"assistant_.+",commercial_status="ready",slo_latency_p95_ms="500"}[5m])) by (le, operation, contract_metric)
+          ) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: assistant
+        annotations:
+          summary: "assistant ready operation P95 超出 SLO（500ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=500。"
+      - alert: AssistantContractOperationLatencyP95Above600Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_assistant_contract_operation_duration_seconds_bucket{service="assistant-service",operation=~"assistant\\..+",contract_metric=~"assistant_.+",commercial_status="ready",slo_latency_p95_ms="600"}[5m])) by (le, operation, contract_metric)
+          ) > 0.6
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: assistant
+        annotations:
+          summary: "assistant ready operation P95 超出 SLO（600ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=600。"
+      - alert: AssistantContractOperationLatencyP95Above800Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_assistant_contract_operation_duration_seconds_bucket{service="assistant-service",operation=~"assistant\\..+",contract_metric=~"assistant_.+",commercial_status="ready",slo_latency_p95_ms="800"}[5m])) by (le, operation, contract_metric)
+          ) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: assistant
+        annotations:
+          summary: "assistant ready operation P95 超出 SLO（800ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=800。"
+      - alert: AssistantContractOperationLatencyP95Above1000Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_assistant_contract_operation_duration_seconds_bucket{service="assistant-service",operation=~"assistant\\..+",contract_metric=~"assistant_.+",commercial_status="ready",slo_latency_p95_ms="1000"}[5m])) by (le, operation, contract_metric)
+          ) > 1
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: assistant
+        annotations:
+          summary: "assistant ready operation P95 超出 SLO（1000ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=1000。"
+      - alert: AssistantContractOperationLatencyP95Above1500Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_assistant_contract_operation_duration_seconds_bucket{service="assistant-service",operation=~"assistant\\..+",contract_metric=~"assistant_.+",commercial_status="ready",slo_latency_p95_ms="1500"}[5m])) by (le, operation, contract_metric)
+          ) > 1.5
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: assistant
+        annotations:
+          summary: "assistant ready operation P95 超出 SLO（1500ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=1500。"
+      - alert: AssistantContractOperationLatencyP95Above5000Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_assistant_contract_operation_duration_seconds_bucket{service="assistant-service",operation=~"assistant\\..+",contract_metric=~"assistant_.+",commercial_status="ready",slo_latency_p95_ms="5000"}[5m])) by (le, operation, contract_metric)
+          ) > 5
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: assistant
+        annotations:
+          summary: "assistant ready operation P95 超出 SLO（5000ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=5000。"
+  - name: quwoquan_chat_contract_object_coverage
+    rules:
+      - alert: ChatContractOperationAvailabilityBelow99p9Percent
+        expr: |
+          sum(rate(quwoquan_chat_contract_operation_requests_total{service="chat-service",operation=~"chat\\..+",contract_metric=~"chat_.+",commercial_status="ready",slo_availability_percent="99.9",status=~"5.."}[10m])) by (operation, contract_metric)
+          / clamp_min(sum(rate(quwoquan_chat_contract_operation_requests_total{service="chat-service",operation=~"chat\\..+",contract_metric=~"chat_.+",commercial_status="ready",slo_availability_percent="99.9"}[10m])) by (operation, contract_metric), 0.001) > 0.001
+        for: 10m
+        labels:
+          severity: critical
+          layer: l2
+          domain: chat
+        annotations:
+          summary: "chat ready operation 5xx 比率超出可用性 SLO（99.9%）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）5xx 比率 {{ $value | humanizePercentage }} 超出 ContractGraph 声明的可用性 SLO；按对象 owner 检查依赖、鉴权与存储链路。"
+      - alert: ChatContractOperationAvailabilityBelow99p95Percent
+        expr: |
+          sum(rate(quwoquan_chat_contract_operation_requests_total{service="chat-service",operation=~"chat\\..+",contract_metric=~"chat_.+",commercial_status="ready",slo_availability_percent="99.95",status=~"5.."}[10m])) by (operation, contract_metric)
+          / clamp_min(sum(rate(quwoquan_chat_contract_operation_requests_total{service="chat-service",operation=~"chat\\..+",contract_metric=~"chat_.+",commercial_status="ready",slo_availability_percent="99.95"}[10m])) by (operation, contract_metric), 0.001) > 0.0005
+        for: 10m
+        labels:
+          severity: critical
+          layer: l2
+          domain: chat
+        annotations:
+          summary: "chat ready operation 5xx 比率超出可用性 SLO（99.95%）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）5xx 比率 {{ $value | humanizePercentage }} 超出 ContractGraph 声明的可用性 SLO；按对象 owner 检查依赖、鉴权与存储链路。"
+      - alert: ChatContractOperationLatencyP95Above400Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_chat_contract_operation_duration_seconds_bucket{service="chat-service",operation=~"chat\\..+",contract_metric=~"chat_.+",commercial_status="ready",slo_latency_p95_ms="400"}[5m])) by (le, operation, contract_metric)
+          ) > 0.4
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: chat
+        annotations:
+          summary: "chat ready operation P95 超出 SLO（400ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=400。"
+      - alert: ChatContractOperationLatencyP95Above500Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_chat_contract_operation_duration_seconds_bucket{service="chat-service",operation=~"chat\\..+",contract_metric=~"chat_.+",commercial_status="ready",slo_latency_p95_ms="500"}[5m])) by (le, operation, contract_metric)
+          ) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: chat
+        annotations:
+          summary: "chat ready operation P95 超出 SLO（500ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=500。"
+      - alert: ChatContractOperationLatencyP95Above800Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_chat_contract_operation_duration_seconds_bucket{service="chat-service",operation=~"chat\\..+",contract_metric=~"chat_.+",commercial_status="ready",slo_latency_p95_ms="800"}[5m])) by (le, operation, contract_metric)
+          ) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: chat
+        annotations:
+          summary: "chat ready operation P95 超出 SLO（800ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=800。"
+  - name: quwoquan_circle_contract_object_coverage
+    rules:
+      - alert: CircleContractOperationAvailabilityBelow99p9Percent
+        expr: |
+          sum(rate(quwoquan_circle_contract_operation_requests_total{service="circle-service",operation=~"circle\\..+",contract_metric=~"circle_.+",commercial_status="ready",slo_availability_percent="99.9",status=~"5.."}[10m])) by (operation, contract_metric)
+          / clamp_min(sum(rate(quwoquan_circle_contract_operation_requests_total{service="circle-service",operation=~"circle\\..+",contract_metric=~"circle_.+",commercial_status="ready",slo_availability_percent="99.9"}[10m])) by (operation, contract_metric), 0.001) > 0.001
+        for: 10m
+        labels:
+          severity: critical
+          layer: l2
+          domain: circle
+        annotations:
+          summary: "circle ready operation 5xx 比率超出可用性 SLO（99.9%）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）5xx 比率 {{ $value | humanizePercentage }} 超出 ContractGraph 声明的可用性 SLO；按对象 owner 检查依赖、鉴权与存储链路。"
+      - alert: CircleContractOperationLatencyP95Above300Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_circle_contract_operation_duration_seconds_bucket{service="circle-service",operation=~"circle\\..+",contract_metric=~"circle_.+",commercial_status="ready",slo_latency_p95_ms="300"}[5m])) by (le, operation, contract_metric)
+          ) > 0.3
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: circle
+        annotations:
+          summary: "circle ready operation P95 超出 SLO（300ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=300。"
+      - alert: CircleContractOperationLatencyP95Above350Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_circle_contract_operation_duration_seconds_bucket{service="circle-service",operation=~"circle\\..+",contract_metric=~"circle_.+",commercial_status="ready",slo_latency_p95_ms="350"}[5m])) by (le, operation, contract_metric)
+          ) > 0.35
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: circle
+        annotations:
+          summary: "circle ready operation P95 超出 SLO（350ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=350。"
+      - alert: CircleContractOperationLatencyP95Above400Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_circle_contract_operation_duration_seconds_bucket{service="circle-service",operation=~"circle\\..+",contract_metric=~"circle_.+",commercial_status="ready",slo_latency_p95_ms="400"}[5m])) by (le, operation, contract_metric)
+          ) > 0.4
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: circle
+        annotations:
+          summary: "circle ready operation P95 超出 SLO（400ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=400。"
+      - alert: CircleContractOperationLatencyP95Above500Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_circle_contract_operation_duration_seconds_bucket{service="circle-service",operation=~"circle\\..+",contract_metric=~"circle_.+",commercial_status="ready",slo_latency_p95_ms="500"}[5m])) by (le, operation, contract_metric)
+          ) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: circle
+        annotations:
+          summary: "circle ready operation P95 超出 SLO（500ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=500。"
+      - alert: CircleContractOperationLatencyP95Above600Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_circle_contract_operation_duration_seconds_bucket{service="circle-service",operation=~"circle\\..+",contract_metric=~"circle_.+",commercial_status="ready",slo_latency_p95_ms="600"}[5m])) by (le, operation, contract_metric)
+          ) > 0.6
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: circle
+        annotations:
+          summary: "circle ready operation P95 超出 SLO（600ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=600。"
+      - alert: CircleContractOperationLatencyP95Above650Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_circle_contract_operation_duration_seconds_bucket{service="circle-service",operation=~"circle\\..+",contract_metric=~"circle_.+",commercial_status="ready",slo_latency_p95_ms="650"}[5m])) by (le, operation, contract_metric)
+          ) > 0.65
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: circle
+        annotations:
+          summary: "circle ready operation P95 超出 SLO（650ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=650。"
+      - alert: CircleContractOperationLatencyP95Above700Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_circle_contract_operation_duration_seconds_bucket{service="circle-service",operation=~"circle\\..+",contract_metric=~"circle_.+",commercial_status="ready",slo_latency_p95_ms="700"}[5m])) by (le, operation, contract_metric)
+          ) > 0.7
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: circle
+        annotations:
+          summary: "circle ready operation P95 超出 SLO（700ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=700。"
+      - alert: CircleContractOperationLatencyP95Above800Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_circle_contract_operation_duration_seconds_bucket{service="circle-service",operation=~"circle\\..+",contract_metric=~"circle_.+",commercial_status="ready",slo_latency_p95_ms="800"}[5m])) by (le, operation, contract_metric)
+          ) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: circle
+        annotations:
+          summary: "circle ready operation P95 超出 SLO（800ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=800。"
+      - alert: CircleContractOperationLatencyP95Above900Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_circle_contract_operation_duration_seconds_bucket{service="circle-service",operation=~"circle\\..+",contract_metric=~"circle_.+",commercial_status="ready",slo_latency_p95_ms="900"}[5m])) by (le, operation, contract_metric)
+          ) > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: circle
+        annotations:
+          summary: "circle ready operation P95 超出 SLO（900ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=900。"
+  - name: quwoquan_content_contract_object_coverage
+    rules:
+      - alert: ContentContractOperationAvailabilityBelow99p9Percent
+        expr: |
+          sum(rate(quwoquan_content_contract_operation_requests_total{service="content-service",operation=~"content\\..+",contract_metric=~"content_.+",commercial_status="ready",slo_availability_percent="99.9",status=~"5.."}[10m])) by (operation, contract_metric)
+          / clamp_min(sum(rate(quwoquan_content_contract_operation_requests_total{service="content-service",operation=~"content\\..+",contract_metric=~"content_.+",commercial_status="ready",slo_availability_percent="99.9"}[10m])) by (operation, contract_metric), 0.001) > 0.001
+        for: 10m
+        labels:
+          severity: critical
+          layer: l2
+          domain: content
+        annotations:
+          summary: "content ready operation 5xx 比率超出可用性 SLO（99.9%）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）5xx 比率 {{ $value | humanizePercentage }} 超出 ContractGraph 声明的可用性 SLO；按对象 owner 检查依赖、鉴权与存储链路。"
+      - alert: ContentContractOperationLatencyP95Above300Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_content_contract_operation_duration_seconds_bucket{service="content-service",operation=~"content\\..+",contract_metric=~"content_.+",commercial_status="ready",slo_latency_p95_ms="300"}[5m])) by (le, operation, contract_metric)
+          ) > 0.3
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: content
+        annotations:
+          summary: "content ready operation P95 超出 SLO（300ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=300。"
+      - alert: ContentContractOperationLatencyP95Above400Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_content_contract_operation_duration_seconds_bucket{service="content-service",operation=~"content\\..+",contract_metric=~"content_.+",commercial_status="ready",slo_latency_p95_ms="400"}[5m])) by (le, operation, contract_metric)
+          ) > 0.4
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: content
+        annotations:
+          summary: "content ready operation P95 超出 SLO（400ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=400。"
+      - alert: ContentContractOperationLatencyP95Above500Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_content_contract_operation_duration_seconds_bucket{service="content-service",operation=~"content\\..+",contract_metric=~"content_.+",commercial_status="ready",slo_latency_p95_ms="500"}[5m])) by (le, operation, contract_metric)
+          ) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: content
+        annotations:
+          summary: "content ready operation P95 超出 SLO（500ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=500。"
+      - alert: ContentContractOperationLatencyP95Above800Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_content_contract_operation_duration_seconds_bucket{service="content-service",operation=~"content\\..+",contract_metric=~"content_.+",commercial_status="ready",slo_latency_p95_ms="800"}[5m])) by (le, operation, contract_metric)
+          ) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: content
+        annotations:
+          summary: "content ready operation P95 超出 SLO（800ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=800。"
+      - alert: ContentContractOperationLatencyP95Above1000Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_content_contract_operation_duration_seconds_bucket{service="content-service",operation=~"content\\..+",contract_metric=~"content_.+",commercial_status="ready",slo_latency_p95_ms="1000"}[5m])) by (le, operation, contract_metric)
+          ) > 1
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: content
+        annotations:
+          summary: "content ready operation P95 超出 SLO（1000ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=1000。"
+      - alert: ContentContractOperationLatencyP95Above1200Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_content_contract_operation_duration_seconds_bucket{service="content-service",operation=~"content\\..+",contract_metric=~"content_.+",commercial_status="ready",slo_latency_p95_ms="1200"}[5m])) by (le, operation, contract_metric)
+          ) > 1.2
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: content
+        annotations:
+          summary: "content ready operation P95 超出 SLO（1200ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=1200。"
+      - alert: ContentContractOperationLatencyP95Above1500Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_content_contract_operation_duration_seconds_bucket{service="content-service",operation=~"content\\..+",contract_metric=~"content_.+",commercial_status="ready",slo_latency_p95_ms="1500"}[5m])) by (le, operation, contract_metric)
+          ) > 1.5
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: content
+        annotations:
+          summary: "content ready operation P95 超出 SLO（1500ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=1500。"
+      - alert: ContentContractOperationLatencyP95Above5000Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_content_contract_operation_duration_seconds_bucket{service="content-service",operation=~"content\\..+",contract_metric=~"content_.+",commercial_status="ready",slo_latency_p95_ms="5000"}[5m])) by (le, operation, contract_metric)
+          ) > 5
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: content
+        annotations:
+          summary: "content ready operation P95 超出 SLO（5000ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=5000。"
+  - name: quwoquan_entity_contract_object_coverage
+    rules:
+      - alert: EntityContractOperationAvailabilityBelow99p5Percent
+        expr: |
+          sum(rate(quwoquan_entity_contract_operation_requests_total{service="entity-service",operation=~"entity\\..+",contract_metric=~"entity_.+",commercial_status="ready",slo_availability_percent="99.5",status=~"5.."}[10m])) by (operation, contract_metric)
+          / clamp_min(sum(rate(quwoquan_entity_contract_operation_requests_total{service="entity-service",operation=~"entity\\..+",contract_metric=~"entity_.+",commercial_status="ready",slo_availability_percent="99.5"}[10m])) by (operation, contract_metric), 0.001) > 0.005
+        for: 10m
+        labels:
+          severity: critical
+          layer: l2
+          domain: entity
+        annotations:
+          summary: "entity ready operation 5xx 比率超出可用性 SLO（99.5%）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）5xx 比率 {{ $value | humanizePercentage }} 超出 ContractGraph 声明的可用性 SLO；按对象 owner 检查依赖、鉴权与存储链路。"
+      - alert: EntityContractOperationAvailabilityBelow99p9Percent
+        expr: |
+          sum(rate(quwoquan_entity_contract_operation_requests_total{service="entity-service",operation=~"entity\\..+",contract_metric=~"entity_.+",commercial_status="ready",slo_availability_percent="99.9",status=~"5.."}[10m])) by (operation, contract_metric)
+          / clamp_min(sum(rate(quwoquan_entity_contract_operation_requests_total{service="entity-service",operation=~"entity\\..+",contract_metric=~"entity_.+",commercial_status="ready",slo_availability_percent="99.9"}[10m])) by (operation, contract_metric), 0.001) > 0.001
+        for: 10m
+        labels:
+          severity: critical
+          layer: l2
+          domain: entity
+        annotations:
+          summary: "entity ready operation 5xx 比率超出可用性 SLO（99.9%）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）5xx 比率 {{ $value | humanizePercentage }} 超出 ContractGraph 声明的可用性 SLO；按对象 owner 检查依赖、鉴权与存储链路。"
+      - alert: EntityContractOperationLatencyP95Above300Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_entity_contract_operation_duration_seconds_bucket{service="entity-service",operation=~"entity\\..+",contract_metric=~"entity_.+",commercial_status="ready",slo_latency_p95_ms="300"}[5m])) by (le, operation, contract_metric)
+          ) > 0.3
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: entity
+        annotations:
+          summary: "entity ready operation P95 超出 SLO（300ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=300。"
+      - alert: EntityContractOperationLatencyP95Above500Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_entity_contract_operation_duration_seconds_bucket{service="entity-service",operation=~"entity\\..+",contract_metric=~"entity_.+",commercial_status="ready",slo_latency_p95_ms="500"}[5m])) by (le, operation, contract_metric)
+          ) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: entity
+        annotations:
+          summary: "entity ready operation P95 超出 SLO（500ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=500。"
+      - alert: EntityContractOperationLatencyP95Above800Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_entity_contract_operation_duration_seconds_bucket{service="entity-service",operation=~"entity\\..+",contract_metric=~"entity_.+",commercial_status="ready",slo_latency_p95_ms="800"}[5m])) by (le, operation, contract_metric)
+          ) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: entity
+        annotations:
+          summary: "entity ready operation P95 超出 SLO（800ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=800。"
+  - name: quwoquan_integration_contract_object_coverage
+    rules:
+      - alert: IntegrationContractOperationAvailabilityBelow99p5Percent
+        expr: |
+          sum(rate(quwoquan_integration_contract_operation_requests_total{service="integration-service",operation=~"integration\\..+",contract_metric=~"integration_.+",commercial_status="ready",slo_availability_percent="99.5",status=~"5.."}[10m])) by (operation, contract_metric)
+          / clamp_min(sum(rate(quwoquan_integration_contract_operation_requests_total{service="integration-service",operation=~"integration\\..+",contract_metric=~"integration_.+",commercial_status="ready",slo_availability_percent="99.5"}[10m])) by (operation, contract_metric), 0.001) > 0.005
+        for: 10m
+        labels:
+          severity: critical
+          layer: l2
+          domain: integration
+        annotations:
+          summary: "integration ready operation 5xx 比率超出可用性 SLO（99.5%）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）5xx 比率 {{ $value | humanizePercentage }} 超出 ContractGraph 声明的可用性 SLO；按对象 owner 检查依赖、鉴权与存储链路。"
+      - alert: IntegrationContractOperationAvailabilityBelow99p9Percent
+        expr: |
+          sum(rate(quwoquan_integration_contract_operation_requests_total{service="integration-service",operation=~"integration\\..+",contract_metric=~"integration_.+",commercial_status="ready",slo_availability_percent="99.9",status=~"5.."}[10m])) by (operation, contract_metric)
+          / clamp_min(sum(rate(quwoquan_integration_contract_operation_requests_total{service="integration-service",operation=~"integration\\..+",contract_metric=~"integration_.+",commercial_status="ready",slo_availability_percent="99.9"}[10m])) by (operation, contract_metric), 0.001) > 0.001
+        for: 10m
+        labels:
+          severity: critical
+          layer: l2
+          domain: integration
+        annotations:
+          summary: "integration ready operation 5xx 比率超出可用性 SLO（99.9%）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）5xx 比率 {{ $value | humanizePercentage }} 超出 ContractGraph 声明的可用性 SLO；按对象 owner 检查依赖、鉴权与存储链路。"
+      - alert: IntegrationContractOperationLatencyP95Above500Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_integration_contract_operation_duration_seconds_bucket{service="integration-service",operation=~"integration\\..+",contract_metric=~"integration_.+",commercial_status="ready",slo_latency_p95_ms="500"}[5m])) by (le, operation, contract_metric)
+          ) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: integration
+        annotations:
+          summary: "integration ready operation P95 超出 SLO（500ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=500。"
+      - alert: IntegrationContractOperationLatencyP95Above1200Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_integration_contract_operation_duration_seconds_bucket{service="integration-service",operation=~"integration\\..+",contract_metric=~"integration_.+",commercial_status="ready",slo_latency_p95_ms="1200"}[5m])) by (le, operation, contract_metric)
+          ) > 1.2
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: integration
+        annotations:
+          summary: "integration ready operation P95 超出 SLO（1200ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=1200。"
+  - name: quwoquan_notification_contract_object_coverage
+    rules:
+      - alert: NotificationContractOperationAvailabilityBelow99p9Percent
+        expr: |
+          sum(rate(quwoquan_notification_contract_operation_requests_total{service="notification-service",operation=~"notification\\..+",contract_metric=~"notification_.+",commercial_status="ready",slo_availability_percent="99.9",status=~"5.."}[10m])) by (operation, contract_metric)
+          / clamp_min(sum(rate(quwoquan_notification_contract_operation_requests_total{service="notification-service",operation=~"notification\\..+",contract_metric=~"notification_.+",commercial_status="ready",slo_availability_percent="99.9"}[10m])) by (operation, contract_metric), 0.001) > 0.001
+        for: 10m
+        labels:
+          severity: critical
+          layer: l2
+          domain: notification
+        annotations:
+          summary: "notification ready operation 5xx 比率超出可用性 SLO（99.9%）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）5xx 比率 {{ $value | humanizePercentage }} 超出 ContractGraph 声明的可用性 SLO；按对象 owner 检查依赖、鉴权与存储链路。"
+      - alert: NotificationContractOperationAvailabilityBelow99p95Percent
+        expr: |
+          sum(rate(quwoquan_notification_contract_operation_requests_total{service="notification-service",operation=~"notification\\..+",contract_metric=~"notification_.+",commercial_status="ready",slo_availability_percent="99.95",status=~"5.."}[10m])) by (operation, contract_metric)
+          / clamp_min(sum(rate(quwoquan_notification_contract_operation_requests_total{service="notification-service",operation=~"notification\\..+",contract_metric=~"notification_.+",commercial_status="ready",slo_availability_percent="99.95"}[10m])) by (operation, contract_metric), 0.001) > 0.0005
+        for: 10m
+        labels:
+          severity: critical
+          layer: l2
+          domain: notification
+        annotations:
+          summary: "notification ready operation 5xx 比率超出可用性 SLO（99.95%）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）5xx 比率 {{ $value | humanizePercentage }} 超出 ContractGraph 声明的可用性 SLO；按对象 owner 检查依赖、鉴权与存储链路。"
+      - alert: NotificationContractOperationLatencyP95Above100Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_notification_contract_operation_duration_seconds_bucket{service="notification-service",operation=~"notification\\..+",contract_metric=~"notification_.+",commercial_status="ready",slo_latency_p95_ms="100"}[5m])) by (le, operation, contract_metric)
+          ) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: notification
+        annotations:
+          summary: "notification ready operation P95 超出 SLO（100ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=100。"
+      - alert: NotificationContractOperationLatencyP95Above300Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_notification_contract_operation_duration_seconds_bucket{service="notification-service",operation=~"notification\\..+",contract_metric=~"notification_.+",commercial_status="ready",slo_latency_p95_ms="300"}[5m])) by (le, operation, contract_metric)
+          ) > 0.3
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: notification
+        annotations:
+          summary: "notification ready operation P95 超出 SLO（300ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=300。"
+      - alert: NotificationContractOperationLatencyP95Above500Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_notification_contract_operation_duration_seconds_bucket{service="notification-service",operation=~"notification\\..+",contract_metric=~"notification_.+",commercial_status="ready",slo_latency_p95_ms="500"}[5m])) by (le, operation, contract_metric)
+          ) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: notification
+        annotations:
+          summary: "notification ready operation P95 超出 SLO（500ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=500。"
+  - name: quwoquan_ops_contract_object_coverage
+    rules:
+      - alert: OpsContractOperationAvailabilityBelow99p5Percent
+        expr: |
+          sum(rate(quwoquan_ops_contract_operation_requests_total{service="product-ops-service",operation=~"ops\\..+",contract_metric=~"ops_.+",commercial_status="ready",slo_availability_percent="99.5",status=~"5.."}[10m])) by (operation, contract_metric)
+          / clamp_min(sum(rate(quwoquan_ops_contract_operation_requests_total{service="product-ops-service",operation=~"ops\\..+",contract_metric=~"ops_.+",commercial_status="ready",slo_availability_percent="99.5"}[10m])) by (operation, contract_metric), 0.001) > 0.005
+        for: 10m
+        labels:
+          severity: critical
+          layer: l2
+          domain: ops
+        annotations:
+          summary: "ops ready operation 5xx 比率超出可用性 SLO（99.5%）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）5xx 比率 {{ $value | humanizePercentage }} 超出 ContractGraph 声明的可用性 SLO；按对象 owner 检查依赖、鉴权与存储链路。"
+      - alert: OpsContractOperationAvailabilityBelow99p9Percent
+        expr: |
+          sum(rate(quwoquan_ops_contract_operation_requests_total{service="product-ops-service",operation=~"ops\\..+",contract_metric=~"ops_.+",commercial_status="ready",slo_availability_percent="99.9",status=~"5.."}[10m])) by (operation, contract_metric)
+          / clamp_min(sum(rate(quwoquan_ops_contract_operation_requests_total{service="product-ops-service",operation=~"ops\\..+",contract_metric=~"ops_.+",commercial_status="ready",slo_availability_percent="99.9"}[10m])) by (operation, contract_metric), 0.001) > 0.001
+        for: 10m
+        labels:
+          severity: critical
+          layer: l2
+          domain: ops
+        annotations:
+          summary: "ops ready operation 5xx 比率超出可用性 SLO（99.9%）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）5xx 比率 {{ $value | humanizePercentage }} 超出 ContractGraph 声明的可用性 SLO；按对象 owner 检查依赖、鉴权与存储链路。"
+      - alert: OpsContractOperationLatencyP95Above500Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_ops_contract_operation_duration_seconds_bucket{service="product-ops-service",operation=~"ops\\..+",contract_metric=~"ops_.+",commercial_status="ready",slo_latency_p95_ms="500"}[5m])) by (le, operation, contract_metric)
+          ) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: ops
+        annotations:
+          summary: "ops ready operation P95 超出 SLO（500ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=500。"
+      - alert: OpsContractOperationLatencyP95Above700Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_ops_contract_operation_duration_seconds_bucket{service="product-ops-service",operation=~"ops\\..+",contract_metric=~"ops_.+",commercial_status="ready",slo_latency_p95_ms="700"}[5m])) by (le, operation, contract_metric)
+          ) > 0.7
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: ops
+        annotations:
+          summary: "ops ready operation P95 超出 SLO（700ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=700。"
+      - alert: OpsContractOperationLatencyP95Above800Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_ops_contract_operation_duration_seconds_bucket{service="product-ops-service",operation=~"ops\\..+",contract_metric=~"ops_.+",commercial_status="ready",slo_latency_p95_ms="800"}[5m])) by (le, operation, contract_metric)
+          ) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: ops
+        annotations:
+          summary: "ops ready operation P95 超出 SLO（800ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=800。"
+      - alert: OpsContractOperationLatencyP95Above1000Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_ops_contract_operation_duration_seconds_bucket{service="product-ops-service",operation=~"ops\\..+",contract_metric=~"ops_.+",commercial_status="ready",slo_latency_p95_ms="1000"}[5m])) by (le, operation, contract_metric)
+          ) > 1
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: ops
+        annotations:
+          summary: "ops ready operation P95 超出 SLO（1000ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=1000。"
+      - alert: OpsContractOperationLatencyP95Above1500Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_ops_contract_operation_duration_seconds_bucket{service="product-ops-service",operation=~"ops\\..+",contract_metric=~"ops_.+",commercial_status="ready",slo_latency_p95_ms="1500"}[5m])) by (le, operation, contract_metric)
+          ) > 1.5
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: ops
+        annotations:
+          summary: "ops ready operation P95 超出 SLO（1500ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=1500。"
+      - alert: OpsContractOperationLatencyP95Above3000Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_ops_contract_operation_duration_seconds_bucket{service="product-ops-service",operation=~"ops\\..+",contract_metric=~"ops_.+",commercial_status="ready",slo_latency_p95_ms="3000"}[5m])) by (le, operation, contract_metric)
+          ) > 3
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: ops
+        annotations:
+          summary: "ops ready operation P95 超出 SLO（3000ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=3000。"
+  - name: quwoquan_realtime_contract_object_coverage
+    rules:
+      - alert: RealtimeContractOperationAvailabilityBelow99p9Percent
+        expr: |
+          sum(rate(quwoquan_realtime_contract_operation_requests_total{service="realtime-gateway",operation=~"realtime\\..+",contract_metric=~"realtime_.+",commercial_status="ready",slo_availability_percent="99.9",status=~"5.."}[10m])) by (operation, contract_metric)
+          / clamp_min(sum(rate(quwoquan_realtime_contract_operation_requests_total{service="realtime-gateway",operation=~"realtime\\..+",contract_metric=~"realtime_.+",commercial_status="ready",slo_availability_percent="99.9"}[10m])) by (operation, contract_metric), 0.001) > 0.001
+        for: 10m
+        labels:
+          severity: critical
+          layer: l2
+          domain: realtime
+        annotations:
+          summary: "realtime ready operation 5xx 比率超出可用性 SLO（99.9%）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）5xx 比率 {{ $value | humanizePercentage }} 超出 ContractGraph 声明的可用性 SLO；按对象 owner 检查依赖、鉴权与存储链路。"
+      - alert: RealtimeContractOperationAvailabilityBelow99p95Percent
+        expr: |
+          sum(rate(quwoquan_realtime_contract_operation_requests_total{service="realtime-gateway",operation=~"realtime\\..+",contract_metric=~"realtime_.+",commercial_status="ready",slo_availability_percent="99.95",status=~"5.."}[10m])) by (operation, contract_metric)
+          / clamp_min(sum(rate(quwoquan_realtime_contract_operation_requests_total{service="realtime-gateway",operation=~"realtime\\..+",contract_metric=~"realtime_.+",commercial_status="ready",slo_availability_percent="99.95"}[10m])) by (operation, contract_metric), 0.001) > 0.0005
+        for: 10m
+        labels:
+          severity: critical
+          layer: l2
+          domain: realtime
+        annotations:
+          summary: "realtime ready operation 5xx 比率超出可用性 SLO（99.95%）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）5xx 比率 {{ $value | humanizePercentage }} 超出 ContractGraph 声明的可用性 SLO；按对象 owner 检查依赖、鉴权与存储链路。"
+      - alert: RealtimeContractOperationAvailabilityBelow99p99Percent
+        expr: |
+          sum(rate(quwoquan_realtime_contract_operation_requests_total{service="realtime-gateway",operation=~"realtime\\..+",contract_metric=~"realtime_.+",commercial_status="ready",slo_availability_percent="99.99",status=~"5.."}[10m])) by (operation, contract_metric)
+          / clamp_min(sum(rate(quwoquan_realtime_contract_operation_requests_total{service="realtime-gateway",operation=~"realtime\\..+",contract_metric=~"realtime_.+",commercial_status="ready",slo_availability_percent="99.99"}[10m])) by (operation, contract_metric), 0.001) > 0.0001
+        for: 10m
+        labels:
+          severity: critical
+          layer: l2
+          domain: realtime
+        annotations:
+          summary: "realtime ready operation 5xx 比率超出可用性 SLO（99.99%）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）5xx 比率 {{ $value | humanizePercentage }} 超出 ContractGraph 声明的可用性 SLO；按对象 owner 检查依赖、鉴权与存储链路。"
+      - alert: RealtimeContractOperationLatencyP95Above100Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_realtime_contract_operation_duration_seconds_bucket{service="realtime-gateway",operation=~"realtime\\..+",contract_metric=~"realtime_.+",commercial_status="ready",slo_latency_p95_ms="100"}[5m])) by (le, operation, contract_metric)
+          ) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: realtime
+        annotations:
+          summary: "realtime ready operation P95 超出 SLO（100ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=100。"
+      - alert: RealtimeContractOperationLatencyP95Above500Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_realtime_contract_operation_duration_seconds_bucket{service="realtime-gateway",operation=~"realtime\\..+",contract_metric=~"realtime_.+",commercial_status="ready",slo_latency_p95_ms="500"}[5m])) by (le, operation, contract_metric)
+          ) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: realtime
+        annotations:
+          summary: "realtime ready operation P95 超出 SLO（500ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=500。"
+  - name: quwoquan_recommendation_contract_object_coverage
+    rules:
+      - alert: RecommendationContractOperationAvailabilityBelow99p9Percent
+        expr: |
+          sum(rate(quwoquan_recommendation_contract_operation_requests_total{service="recommendation-service",operation=~"recommendation\\..+",contract_metric=~"recommendation_.+",commercial_status="ready",slo_availability_percent="99.9",status=~"5.."}[10m])) by (operation, contract_metric)
+          / clamp_min(sum(rate(quwoquan_recommendation_contract_operation_requests_total{service="recommendation-service",operation=~"recommendation\\..+",contract_metric=~"recommendation_.+",commercial_status="ready",slo_availability_percent="99.9"}[10m])) by (operation, contract_metric), 0.001) > 0.001
+        for: 10m
+        labels:
+          severity: critical
+          layer: l2
+          domain: recommendation
+        annotations:
+          summary: "recommendation ready operation 5xx 比率超出可用性 SLO（99.9%）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）5xx 比率 {{ $value | humanizePercentage }} 超出 ContractGraph 声明的可用性 SLO；按对象 owner 检查依赖、鉴权与存储链路。"
+      - alert: RecommendationContractOperationLatencyP95Above200Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_recommendation_contract_operation_duration_seconds_bucket{service="recommendation-service",operation=~"recommendation\\..+",contract_metric=~"recommendation_.+",commercial_status="ready",slo_latency_p95_ms="200"}[5m])) by (le, operation, contract_metric)
+          ) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: recommendation
+        annotations:
+          summary: "recommendation ready operation P95 超出 SLO（200ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=200。"
+      - alert: RecommendationContractOperationLatencyP95Above300Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_recommendation_contract_operation_duration_seconds_bucket{service="recommendation-service",operation=~"recommendation\\..+",contract_metric=~"recommendation_.+",commercial_status="ready",slo_latency_p95_ms="300"}[5m])) by (le, operation, contract_metric)
+          ) > 0.3
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: recommendation
+        annotations:
+          summary: "recommendation ready operation P95 超出 SLO（300ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=300。"
+      - alert: RecommendationContractOperationLatencyP95Above500Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_recommendation_contract_operation_duration_seconds_bucket{service="recommendation-service",operation=~"recommendation\\..+",contract_metric=~"recommendation_.+",commercial_status="ready",slo_latency_p95_ms="500"}[5m])) by (le, operation, contract_metric)
+          ) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: recommendation
+        annotations:
+          summary: "recommendation ready operation P95 超出 SLO（500ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=500。"
+      - alert: RecommendationContractOperationLatencyP95Above1000Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_recommendation_contract_operation_duration_seconds_bucket{service="recommendation-service",operation=~"recommendation\\..+",contract_metric=~"recommendation_.+",commercial_status="ready",slo_latency_p95_ms="1000"}[5m])) by (le, operation, contract_metric)
+          ) > 1
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: recommendation
+        annotations:
+          summary: "recommendation ready operation P95 超出 SLO（1000ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=1000。"
+  - name: quwoquan_rtc_contract_object_coverage
+    rules:
+      - alert: RtcContractOperationAvailabilityBelow99p9Percent
+        expr: |
+          sum(rate(quwoquan_rtc_contract_operation_requests_total{service="rtc-service",operation=~"rtc\\..+",contract_metric=~"rtc_.+",commercial_status="ready",slo_availability_percent="99.9",status=~"5.."}[10m])) by (operation, contract_metric)
+          / clamp_min(sum(rate(quwoquan_rtc_contract_operation_requests_total{service="rtc-service",operation=~"rtc\\..+",contract_metric=~"rtc_.+",commercial_status="ready",slo_availability_percent="99.9"}[10m])) by (operation, contract_metric), 0.001) > 0.001
+        for: 10m
+        labels:
+          severity: critical
+          layer: l2
+          domain: rtc
+        annotations:
+          summary: "rtc ready operation 5xx 比率超出可用性 SLO（99.9%）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）5xx 比率 {{ $value | humanizePercentage }} 超出 ContractGraph 声明的可用性 SLO；按对象 owner 检查依赖、鉴权与存储链路。"
+      - alert: RtcContractOperationLatencyP95Above300Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_rtc_contract_operation_duration_seconds_bucket{service="rtc-service",operation=~"rtc\\..+",contract_metric=~"rtc_.+",commercial_status="ready",slo_latency_p95_ms="300"}[5m])) by (le, operation, contract_metric)
+          ) > 0.3
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: rtc
+        annotations:
+          summary: "rtc ready operation P95 超出 SLO（300ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=300。"
+      - alert: RtcContractOperationLatencyP95Above500Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_rtc_contract_operation_duration_seconds_bucket{service="rtc-service",operation=~"rtc\\..+",contract_metric=~"rtc_.+",commercial_status="ready",slo_latency_p95_ms="500"}[5m])) by (le, operation, contract_metric)
+          ) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: rtc
+        annotations:
+          summary: "rtc ready operation P95 超出 SLO（500ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=500。"
+  - name: quwoquan_search_contract_object_coverage
+    rules:
+      - alert: SearchContractOperationAvailabilityBelow99p5Percent
+        expr: |
+          sum(rate(quwoquan_search_contract_operation_requests_total{service="search-service",operation=~"search\\..+",contract_metric=~"search_.+",commercial_status="ready",slo_availability_percent="99.5",status=~"5.."}[10m])) by (operation, contract_metric)
+          / clamp_min(sum(rate(quwoquan_search_contract_operation_requests_total{service="search-service",operation=~"search\\..+",contract_metric=~"search_.+",commercial_status="ready",slo_availability_percent="99.5"}[10m])) by (operation, contract_metric), 0.001) > 0.005
+        for: 10m
+        labels:
+          severity: critical
+          layer: l2
+          domain: search
+        annotations:
+          summary: "search ready operation 5xx 比率超出可用性 SLO（99.5%）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）5xx 比率 {{ $value | humanizePercentage }} 超出 ContractGraph 声明的可用性 SLO；按对象 owner 检查依赖、鉴权与存储链路。"
+      - alert: SearchContractOperationAvailabilityBelow99p9Percent
+        expr: |
+          sum(rate(quwoquan_search_contract_operation_requests_total{service="search-service",operation=~"search\\..+",contract_metric=~"search_.+",commercial_status="ready",slo_availability_percent="99.9",status=~"5.."}[10m])) by (operation, contract_metric)
+          / clamp_min(sum(rate(quwoquan_search_contract_operation_requests_total{service="search-service",operation=~"search\\..+",contract_metric=~"search_.+",commercial_status="ready",slo_availability_percent="99.9"}[10m])) by (operation, contract_metric), 0.001) > 0.001
+        for: 10m
+        labels:
+          severity: critical
+          layer: l2
+          domain: search
+        annotations:
+          summary: "search ready operation 5xx 比率超出可用性 SLO（99.9%）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）5xx 比率 {{ $value | humanizePercentage }} 超出 ContractGraph 声明的可用性 SLO；按对象 owner 检查依赖、鉴权与存储链路。"
+      - alert: SearchContractOperationLatencyP95Above500Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_search_contract_operation_duration_seconds_bucket{service="search-service",operation=~"search\\..+",contract_metric=~"search_.+",commercial_status="ready",slo_latency_p95_ms="500"}[5m])) by (le, operation, contract_metric)
+          ) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: search
+        annotations:
+          summary: "search ready operation P95 超出 SLO（500ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=500。"
+      - alert: SearchContractOperationLatencyP95Above1500Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_search_contract_operation_duration_seconds_bucket{service="search-service",operation=~"search\\..+",contract_metric=~"search_.+",commercial_status="ready",slo_latency_p95_ms="1500"}[5m])) by (le, operation, contract_metric)
+          ) > 1.5
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: search
+        annotations:
+          summary: "search ready operation P95 超出 SLO（1500ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=1500。"
+  - name: quwoquan_tag_contract_object_coverage
+    rules:
+      - alert: TagContractOperationAvailabilityBelow99p9Percent
+        expr: |
+          sum(rate(quwoquan_tag_contract_operation_requests_total{service="tag-service",operation=~"tag\\..+",contract_metric=~"tag_.+",commercial_status="ready",slo_availability_percent="99.9",status=~"5.."}[10m])) by (operation, contract_metric)
+          / clamp_min(sum(rate(quwoquan_tag_contract_operation_requests_total{service="tag-service",operation=~"tag\\..+",contract_metric=~"tag_.+",commercial_status="ready",slo_availability_percent="99.9"}[10m])) by (operation, contract_metric), 0.001) > 0.001
+        for: 10m
+        labels:
+          severity: critical
+          layer: l2
+          domain: tag
+        annotations:
+          summary: "tag ready operation 5xx 比率超出可用性 SLO（99.9%）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）5xx 比率 {{ $value | humanizePercentage }} 超出 ContractGraph 声明的可用性 SLO；按对象 owner 检查依赖、鉴权与存储链路。"
+      - alert: TagContractOperationLatencyP95Above300Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_tag_contract_operation_duration_seconds_bucket{service="tag-service",operation=~"tag\\..+",contract_metric=~"tag_.+",commercial_status="ready",slo_latency_p95_ms="300"}[5m])) by (le, operation, contract_metric)
+          ) > 0.3
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: tag
+        annotations:
+          summary: "tag ready operation P95 超出 SLO（300ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=300。"
+      - alert: TagContractOperationLatencyP95Above500Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_tag_contract_operation_duration_seconds_bucket{service="tag-service",operation=~"tag\\..+",contract_metric=~"tag_.+",commercial_status="ready",slo_latency_p95_ms="500"}[5m])) by (le, operation, contract_metric)
+          ) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: tag
+        annotations:
+          summary: "tag ready operation P95 超出 SLO（500ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=500。"
+      - alert: TagContractOperationLatencyP95Above1000Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_tag_contract_operation_duration_seconds_bucket{service="tag-service",operation=~"tag\\..+",contract_metric=~"tag_.+",commercial_status="ready",slo_latency_p95_ms="1000"}[5m])) by (le, operation, contract_metric)
+          ) > 1
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: tag
+        annotations:
+          summary: "tag ready operation P95 超出 SLO（1000ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=1000。"
+  - name: quwoquan_user_contract_object_coverage
+    rules:
+      - alert: UserContractOperationAvailabilityBelow99p9Percent
+        expr: |
+          sum(rate(quwoquan_user_contract_operation_requests_total{service="user-service",operation=~"user\\..+",contract_metric=~"user_.+",commercial_status="ready",slo_availability_percent="99.9",status=~"5.."}[10m])) by (operation, contract_metric)
+          / clamp_min(sum(rate(quwoquan_user_contract_operation_requests_total{service="user-service",operation=~"user\\..+",contract_metric=~"user_.+",commercial_status="ready",slo_availability_percent="99.9"}[10m])) by (operation, contract_metric), 0.001) > 0.001
+        for: 10m
+        labels:
+          severity: critical
+          layer: l2
+          domain: user
+        annotations:
+          summary: "user ready operation 5xx 比率超出可用性 SLO（99.9%）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）5xx 比率 {{ $value | humanizePercentage }} 超出 ContractGraph 声明的可用性 SLO；按对象 owner 检查依赖、鉴权与存储链路。"
+      - alert: UserContractOperationAvailabilityBelow99p95Percent
+        expr: |
+          sum(rate(quwoquan_user_contract_operation_requests_total{service="user-service",operation=~"user\\..+",contract_metric=~"user_.+",commercial_status="ready",slo_availability_percent="99.95",status=~"5.."}[10m])) by (operation, contract_metric)
+          / clamp_min(sum(rate(quwoquan_user_contract_operation_requests_total{service="user-service",operation=~"user\\..+",contract_metric=~"user_.+",commercial_status="ready",slo_availability_percent="99.95"}[10m])) by (operation, contract_metric), 0.001) > 0.0005
+        for: 10m
+        labels:
+          severity: critical
+          layer: l2
+          domain: user
+        annotations:
+          summary: "user ready operation 5xx 比率超出可用性 SLO（99.95%）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）5xx 比率 {{ $value | humanizePercentage }} 超出 ContractGraph 声明的可用性 SLO；按对象 owner 检查依赖、鉴权与存储链路。"
+      - alert: UserContractOperationAvailabilityBelow99p99Percent
+        expr: |
+          sum(rate(quwoquan_user_contract_operation_requests_total{service="user-service",operation=~"user\\..+",contract_metric=~"user_.+",commercial_status="ready",slo_availability_percent="99.99",status=~"5.."}[10m])) by (operation, contract_metric)
+          / clamp_min(sum(rate(quwoquan_user_contract_operation_requests_total{service="user-service",operation=~"user\\..+",contract_metric=~"user_.+",commercial_status="ready",slo_availability_percent="99.99"}[10m])) by (operation, contract_metric), 0.001) > 0.0001
+        for: 10m
+        labels:
+          severity: critical
+          layer: l2
+          domain: user
+        annotations:
+          summary: "user ready operation 5xx 比率超出可用性 SLO（99.99%）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）5xx 比率 {{ $value | humanizePercentage }} 超出 ContractGraph 声明的可用性 SLO；按对象 owner 检查依赖、鉴权与存储链路。"
+      - alert: UserContractOperationLatencyP95Above80Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_user_contract_operation_duration_seconds_bucket{service="user-service",operation=~"user\\..+",contract_metric=~"user_.+",commercial_status="ready",slo_latency_p95_ms="80"}[5m])) by (le, operation, contract_metric)
+          ) > 0.08
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: user
+        annotations:
+          summary: "user ready operation P95 超出 SLO（80ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=80。"
+      - alert: UserContractOperationLatencyP95Above200Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_user_contract_operation_duration_seconds_bucket{service="user-service",operation=~"user\\..+",contract_metric=~"user_.+",commercial_status="ready",slo_latency_p95_ms="200"}[5m])) by (le, operation, contract_metric)
+          ) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: user
+        annotations:
+          summary: "user ready operation P95 超出 SLO（200ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=200。"
+      - alert: UserContractOperationLatencyP95Above300Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_user_contract_operation_duration_seconds_bucket{service="user-service",operation=~"user\\..+",contract_metric=~"user_.+",commercial_status="ready",slo_latency_p95_ms="300"}[5m])) by (le, operation, contract_metric)
+          ) > 0.3
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: user
+        annotations:
+          summary: "user ready operation P95 超出 SLO（300ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=300。"
+      - alert: UserContractOperationLatencyP95Above400Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_user_contract_operation_duration_seconds_bucket{service="user-service",operation=~"user\\..+",contract_metric=~"user_.+",commercial_status="ready",slo_latency_p95_ms="400"}[5m])) by (le, operation, contract_metric)
+          ) > 0.4
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: user
+        annotations:
+          summary: "user ready operation P95 超出 SLO（400ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=400。"
+      - alert: UserContractOperationLatencyP95Above500Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_user_contract_operation_duration_seconds_bucket{service="user-service",operation=~"user\\..+",contract_metric=~"user_.+",commercial_status="ready",slo_latency_p95_ms="500"}[5m])) by (le, operation, contract_metric)
+          ) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: user
+        annotations:
+          summary: "user ready operation P95 超出 SLO（500ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=500。"
+      - alert: UserContractOperationLatencyP95Above600Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_user_contract_operation_duration_seconds_bucket{service="user-service",operation=~"user\\..+",contract_metric=~"user_.+",commercial_status="ready",slo_latency_p95_ms="600"}[5m])) by (le, operation, contract_metric)
+          ) > 0.6
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: user
+        annotations:
+          summary: "user ready operation P95 超出 SLO（600ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=600。"
+      - alert: UserContractOperationLatencyP95Above800Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_user_contract_operation_duration_seconds_bucket{service="user-service",operation=~"user\\..+",contract_metric=~"user_.+",commercial_status="ready",slo_latency_p95_ms="800"}[5m])) by (le, operation, contract_metric)
+          ) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: user
+        annotations:
+          summary: "user ready operation P95 超出 SLO（800ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=800。"
+      - alert: UserContractOperationLatencyP95Above1200Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_user_contract_operation_duration_seconds_bucket{service="user-service",operation=~"user\\..+",contract_metric=~"user_.+",commercial_status="ready",slo_latency_p95_ms="1200"}[5m])) by (le, operation, contract_metric)
+          ) > 1.2
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: user
+        annotations:
+          summary: "user ready operation P95 超出 SLO（1200ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=1200。"
+      - alert: UserContractOperationLatencyP95Above1500Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_user_contract_operation_duration_seconds_bucket{service="user-service",operation=~"user\\..+",contract_metric=~"user_.+",commercial_status="ready",slo_latency_p95_ms="1500"}[5m])) by (le, operation, contract_metric)
+          ) > 1.5
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: user
+        annotations:
+          summary: "user ready operation P95 超出 SLO（1500ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=1500。"
+      - alert: UserContractOperationLatencyP95Above2000Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_user_contract_operation_duration_seconds_bucket{service="user-service",operation=~"user\\..+",contract_metric=~"user_.+",commercial_status="ready",slo_latency_p95_ms="2000"}[5m])) by (le, operation, contract_metric)
+          ) > 2
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: user
+        annotations:
+          summary: "user ready operation P95 超出 SLO（2000ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=2000。"

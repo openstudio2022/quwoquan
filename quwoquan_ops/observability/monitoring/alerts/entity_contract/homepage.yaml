@@ -1,0 +1,245 @@
+# Code generated from quwoquan_service/generated/contract_graph.json.
+# Regenerate with verify_object_alert_coverage.py --write.
+groups:
+  - name: quwoquan_entity_contract_homepage
+    rules:
+      - record: quwoquan_entity_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="entity-service",method="GET",route=~"^/homepages/[^/]+/impact$"})
+        labels:
+          service: "entity-service"
+          operation: "entity.homepage.GetEntityImpact"
+          contract_metric: "entity_homepage_impact_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "300"
+          slo_availability_percent: "99.5"
+      - record: quwoquan_entity_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="entity-service",method="GET",route=~"^/homepages/[^/]+/impact$"})
+        labels:
+          service: "entity-service"
+          operation: "entity.homepage.GetEntityImpact"
+          contract_metric: "entity_homepage_impact_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "300"
+          slo_availability_percent: "99.5"
+      - record: quwoquan_entity_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="entity-service",method="GET",route=~"^/homepages/[^/]+$"})
+        labels:
+          service: "entity-service"
+          operation: "entity.homepage.GetHomepageDetail"
+          contract_metric: "entity_homepage_detail_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "300"
+          slo_availability_percent: "99.5"
+      - record: quwoquan_entity_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="entity-service",method="GET",route=~"^/homepages/[^/]+$"})
+        labels:
+          service: "entity-service"
+          operation: "entity.homepage.GetHomepageDetail"
+          contract_metric: "entity_homepage_detail_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "300"
+          slo_availability_percent: "99.5"
+      - record: quwoquan_entity_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="entity-service",method="GET",route=~"^/homepages/[^/]+/introduction$"})
+        labels:
+          service: "entity-service"
+          operation: "entity.homepage.GetHomepageIntroduction"
+          contract_metric: "entity_homepage_introduction_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "300"
+          slo_availability_percent: "99.5"
+      - record: quwoquan_entity_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="entity-service",method="GET",route=~"^/homepages/[^/]+/introduction$"})
+        labels:
+          service: "entity-service"
+          operation: "entity.homepage.GetHomepageIntroduction"
+          contract_metric: "entity_homepage_introduction_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "300"
+          slo_availability_percent: "99.5"
+      - record: quwoquan_entity_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="entity-service",method="GET",route=~"^/homepages/[^/]+/related-groups$"})
+        labels:
+          service: "entity-service"
+          operation: "entity.homepage.GetHomepageRelatedGroups"
+          contract_metric: "entity_homepage_related_groups_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "300"
+          slo_availability_percent: "99.5"
+      - record: quwoquan_entity_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="entity-service",method="GET",route=~"^/homepages/[^/]+/related-groups$"})
+        labels:
+          service: "entity-service"
+          operation: "entity.homepage.GetHomepageRelatedGroups"
+          contract_metric: "entity_homepage_related_groups_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "300"
+          slo_availability_percent: "99.5"
+      - record: quwoquan_entity_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="entity-service",method="GET",route=~"^/homepages/[^/]+/review-summary$"})
+        labels:
+          service: "entity-service"
+          operation: "entity.homepage.GetHomepageReviewSummary"
+          contract_metric: "entity_homepage_review_summary_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "300"
+          slo_availability_percent: "99.5"
+      - record: quwoquan_entity_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="entity-service",method="GET",route=~"^/homepages/[^/]+/review-summary$"})
+        labels:
+          service: "entity-service"
+          operation: "entity.homepage.GetHomepageReviewSummary"
+          contract_metric: "entity_homepage_review_summary_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "300"
+          slo_availability_percent: "99.5"
+      - record: quwoquan_entity_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="entity-service",method="GET",route=~"^/homepages/[^/]+/shell$"})
+        labels:
+          service: "entity-service"
+          operation: "entity.homepage.GetHomepageShell"
+          contract_metric: "entity_homepage_shell_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "300"
+          slo_availability_percent: "99.5"
+      - record: quwoquan_entity_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="entity-service",method="GET",route=~"^/homepages/[^/]+/shell$"})
+        labels:
+          service: "entity-service"
+          operation: "entity.homepage.GetHomepageShell"
+          contract_metric: "entity_homepage_shell_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "300"
+          slo_availability_percent: "99.5"
+      - record: quwoquan_entity_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="entity-service",method="GET",route=~"^/homepages/[^/]+/object-page-bundle$"})
+        labels:
+          service: "entity-service"
+          operation: "entity.homepage.GetObjectPageBundle"
+          contract_metric: "entity_homepage_object_bundle_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "300"
+          slo_availability_percent: "99.5"
+      - record: quwoquan_entity_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="entity-service",method="GET",route=~"^/homepages/[^/]+/object-page-bundle$"})
+        labels:
+          service: "entity-service"
+          operation: "entity.homepage.GetObjectPageBundle"
+          contract_metric: "entity_homepage_object_bundle_get"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "300"
+          slo_availability_percent: "99.5"
+      - record: quwoquan_entity_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="entity-service",method="POST",route="/homepages/candidates"})
+        labels:
+          service: "entity-service"
+          operation: "entity.homepage.IntakeHomepageCandidate"
+          contract_metric: "entity_homepage_candidate_intake"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_entity_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="entity-service",method="POST",route="/homepages/candidates"})
+        labels:
+          service: "entity-service"
+          operation: "entity.homepage.IntakeHomepageCandidate"
+          contract_metric: "entity_homepage_candidate_intake"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_entity_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="entity-service",method="GET",route="/homepages/candidates"})
+        labels:
+          service: "entity-service"
+          operation: "entity.homepage.ListHomepageCandidates"
+          contract_metric: "entity_homepage_candidate_queue"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_entity_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="entity-service",method="GET",route="/homepages/candidates"})
+        labels:
+          service: "entity-service"
+          operation: "entity.homepage.ListHomepageCandidates"
+          contract_metric: "entity_homepage_candidate_queue"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_entity_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="entity-service",method="POST",route=~"^/homepages/candidates/[^/]+:publish$"})
+        labels:
+          service: "entity-service"
+          operation: "entity.homepage.PublishHomepageCandidate"
+          contract_metric: "entity_homepage_candidate_publish"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_entity_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="entity-service",method="POST",route=~"^/homepages/candidates/[^/]+:publish$"})
+        labels:
+          service: "entity-service"
+          operation: "entity.homepage.PublishHomepageCandidate"
+          contract_metric: "entity_homepage_candidate_publish"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_entity_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="entity-service",method="POST",route="/homepages/candidates/suggest"})
+        labels:
+          service: "entity-service"
+          operation: "entity.homepage.SuggestHomepageCandidate"
+          contract_metric: "entity_homepage_candidate_suggest"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_entity_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="entity-service",method="POST",route="/homepages/candidates/suggest"})
+        labels:
+          service: "entity-service"
+          operation: "entity.homepage.SuggestHomepageCandidate"
+          contract_metric: "entity_homepage_candidate_suggest"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_entity_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="entity-service",method="PATCH",route=~"^/homepages/[^/]+/claimed-basics$"})
+        labels:
+          service: "entity-service"
+          operation: "entity.homepage.UpdateClaimedHomepageBasics"
+          contract_metric: "entity_homepage_claimed_basics_update"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_entity_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="entity-service",method="PATCH",route=~"^/homepages/[^/]+/claimed-basics$"})
+        labels:
+          service: "entity-service"
+          operation: "entity.homepage.UpdateClaimedHomepageBasics"
+          contract_metric: "entity_homepage_claimed_basics_update"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"

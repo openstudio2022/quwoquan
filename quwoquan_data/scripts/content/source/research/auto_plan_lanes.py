@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from core.data_issue import DataIssueCode, DataRecoveryAction
+
 from content.source.research.plan_state import (
     _image_at,
     _record_unavailable,
@@ -13,10 +14,122 @@ from content.source.research.plan_state import (
     _write_lane,
 )
 from content.source.research.source_quality import (
-    _collection_gate,
     _collection_admissible_image_urls,
+    _collection_gate,
     _evidence_reason,
 )
+
+
+def _single_image_collection(
+    raw_item: dict[str, Any],
+    *,
+    entity_id: str,
+    lane: str,
+    ordinal: int,
+) -> dict[str, Any]:
+    """Build one auditable collection without inventing authorization proof."""
+    item = dict(raw_item)
+    professional = bool(str(item.get("acquisitionReceiptRef") or "").strip())
+    if professional:
+        required = (
+            "licenseSnapshot",
+            "usageScope",
+            "modelReleaseStatus",
+            "capturedAt",
+            "acquisitionStatus",
+            "professionalAssetId",
+            "professionalContentSha256",
+        )
+        missing = [field for field in required if not str(item.get(field) or "").strip()]
+        if missing:
+            raise ValueError(
+                "professional image projection is incomplete: " + ",".join(missing)
+            )
+    raw_collection_id = str(item.get("sourceCollectionId") or "").strip()
+    collection_id = (
+        raw_collection_id
+        if professional and raw_collection_id
+        else _safe_collection_id(
+            f"{lane}_media" if lane == "homepage" else "open_license_file",
+            entity_id,
+            str(
+                raw_collection_id
+                or item.get("sourceUrl")
+                or item.get("url")
+                or ""
+            ),
+        )
+    )
+    creator = str(
+        item.get("creator")
+        or item.get("credit")
+        or "Wikimedia Commons contributor"
+    ).strip()
+    collection_page = str(
+        item.get("collectionPageUrl")
+        or item.get("sourceUrl")
+        or item.get("url")
+        or ""
+    ).strip()
+    authorization_proof = str(item.get("authorizationProof") or "").strip()
+    item.update(
+        {
+            "sourceCollectionId": collection_id,
+            "creator": creator,
+            "credit": item.get("credit") or creator,
+            "collectionPageUrl": collection_page,
+            "modelReleaseStatus": (
+                item["modelReleaseStatus"]
+                if professional
+                else item.get("modelReleaseStatus") or "not_required"
+            ),
+            "researchLane": lane,
+            "sourceId": item.get("sourceId") or f"{lane}_media_{ordinal}",
+        }
+    )
+    return {
+        "sourceCollectionId": collection_id,
+        "creator": creator,
+        "credit": item.get("credit") or creator,
+        "collectionPageUrl": collection_page,
+        "platform": item.get("platform") or "Wikimedia Commons",
+        "license": item.get("license") or "",
+        "termsUrl": item.get("termsUrl") or "",
+        "licenseSnapshot": (
+            item["licenseSnapshot"] if professional else item.get("licenseSnapshot") or ""
+        ),
+        # A source/discovery page is attribution evidence, not authorization.
+        "authorizationProof": authorization_proof,
+        "usageScope": item["usageScope"] if professional else item.get("usageScope") or "app_publish",
+        "modelReleaseStatus": item["modelReleaseStatus"],
+        "mediaEvidenceMode": (
+            "independent_research_acquisition"
+            if professional
+            else "independent_rights_cleared"
+        ),
+        "entityMatch": "strong",
+        "discoveryProvider": (
+            "frozen_professional_image_acquisition"
+            if professional
+            else "open_license_image_search"
+        ),
+        "evidenceReason": _evidence_reason(
+            entity_id,
+            lane,
+            (
+                "Frozen professional image acquisition receipt"
+                if professional
+                else "Open license image search"
+            ),
+            "research_acquisition" if professional else "open_license",
+        ),
+        "rightsStatus": item.get("rightsStatus") or "",
+        "authorizationRequired": item.get("authorizationRequired"),
+        "distributionDecision": item.get("distributionDecision") or "",
+        "rightsIssues": list(item.get("rightsIssues") or []),
+        "images": [item],
+    }
+
 
 def _independent_homepage_media_collections(
     candidates: list[dict[str, Any]],
@@ -33,67 +146,16 @@ def _independent_homepage_media_collections(
     for ordinal, raw_item in enumerate(candidates, start=1):
         if not isinstance(raw_item, dict):
             continue
-        item = dict(raw_item)
-        collection_id = _safe_collection_id(
-            "homepage_media",
-            entity_id,
-            str(
-                item.get("sourceCollectionId")
-                or item.get("authorizationProof")
-                or item.get("sourceUrl")
-                or item.get("url")
-                or ""
-            ),
+        collection = _single_image_collection(
+            raw_item,
+            entity_id=entity_id,
+            lane="homepage",
+            ordinal=ordinal,
         )
+        collection_id = str(collection["sourceCollectionId"])
         if collection_id in used_collection_ids:
             continue
         used_collection_ids.add(collection_id)
-        creator = str(
-            item.get("creator")
-            or item.get("credit")
-            or "Wikimedia Commons contributor"
-        ).strip()
-        collection_page = str(
-            item.get("collectionPageUrl")
-            or item.get("sourceUrl")
-            or item.get("authorizationProof")
-            or item.get("url")
-            or ""
-        ).strip()
-        item.update(
-            {
-                "sourceCollectionId": collection_id,
-                "creator": creator,
-                "credit": item.get("credit") or creator,
-                "collectionPageUrl": collection_page,
-                "modelReleaseStatus": item.get("modelReleaseStatus") or "not_required",
-                "researchLane": "homepage",
-                "sourceId": f"homepage_media_{ordinal}",
-            }
-        )
-        collection = {
-            "sourceCollectionId": collection_id,
-            "creator": creator,
-            "credit": item.get("credit") or creator,
-            "collectionPageUrl": collection_page,
-            "platform": item.get("platform") or "Wikimedia Commons",
-            "license": item.get("license") or "",
-            "termsUrl": item.get("termsUrl") or "",
-            "licenseSnapshot": item.get("licenseSnapshot") or "",
-            "authorizationProof": item.get("authorizationProof") or collection_page,
-            "usageScope": item.get("usageScope") or "app_publish",
-            "modelReleaseStatus": item["modelReleaseStatus"],
-            "mediaEvidenceMode": "independent_rights_cleared",
-            "entityMatch": "strong",
-            "discoveryProvider": "open_license_homepage_media_search",
-            "evidenceReason": _evidence_reason(
-                entity_id,
-                "homepage",
-                "Independent rights-cleared homepage media search",
-                "open_license",
-            ),
-            "images": [item],
-        }
         verdict = _collection_gate(
             collection,
             entity_id=entity_id,
@@ -146,14 +208,18 @@ def write_image_lane(
     qid: str,
     wiki_title: str,
     voyage_title: str,
+    professional_image_specs: list[dict[str, Any]] | None = None,
+    acquisition_receipt_refs: list[str] | None = None,
 ) -> None:
         collections: list[dict[str, Any]] = []
+        professional_specs = list(professional_image_specs or [])
+        professional_bound = bool(acquisition_receipt_refs)
         desired_image_collections = max(
             required_publishable_images + 3,
             min(12, required_publishable_images + required_article_bases + 3),
         )
         used_collection_ids: set[str] = set()
-        for collection in prior_image_collections:
+        for collection in ([] if professional_bound else prior_image_collections):
             collection_id = str(collection.get("sourceCollectionId") or "").strip()
             if not collection_id or collection_id in used_collection_ids:
                 continue
@@ -180,7 +246,7 @@ def write_image_lane(
             collections.append(collection)
             if len(collections) >= desired_image_collections:
                 break
-        first_image = (
+        first_image = _image_at(professional_specs, 0) if professional_bound else (
             _image_at(prior_image_pool, 0)
             or _image_at(openverse, 0)
             or _image_at(commons, 0)
@@ -190,50 +256,33 @@ def write_image_lane(
         )
         if first_image and len(collections) < desired_image_collections:
             collection_candidates = (
-                openverse
-                + commons
-                + hint_commons
-                + wikidata_commons
-                + wiki_page_images
-                + voyage_page_images
-            )
-            collection_candidates = sorted(
-                collection_candidates,
-                key=lambda item: str(item.get("url") or "") in homepage_image_urls,
-            )
-            for raw_item in collection_candidates:
-                item = dict(raw_item)
-                collection_id = _safe_collection_id(
-                    "open_license_file",
-                    entity_id,
-                    str(item.get("sourceCollectionId") or item.get("sourceUrl") or item.get("url") or ""),
+                professional_specs
+                if professional_bound
+                else (
+                    openverse
+                    + commons
+                    + hint_commons
+                    + wikidata_commons
+                    + wiki_page_images
+                    + voyage_page_images
                 )
+            )
+            if not professional_bound:
+                collection_candidates = sorted(
+                    collection_candidates,
+                    key=lambda item: str(item.get("url") or "") in homepage_image_urls,
+                )
+            for ordinal, raw_item in enumerate(collection_candidates, start=1):
+                collection = _single_image_collection(
+                    raw_item,
+                    entity_id=entity_id,
+                    lane="image",
+                    ordinal=ordinal,
+                )
+                collection_id = str(collection["sourceCollectionId"])
                 if collection_id in used_collection_ids:
                     continue
                 used_collection_ids.add(collection_id)
-                item["sourceCollectionId"] = collection_id
-                item["creator"] = item.get("creator") or item.get("credit") or "Wikimedia Commons contributor"
-                item["collectionPageUrl"] = item.get("collectionPageUrl") or item.get("sourceUrl") or item.get("url") or ""
-                item["modelReleaseStatus"] = item.get("modelReleaseStatus") or "not_required"
-                item["researchLane"] = "image"
-                collection = {
-                    "sourceCollectionId": collection_id,
-                    "creator": item["creator"],
-                    "credit": item.get("credit") or item["creator"],
-                    "collectionPageUrl": item["collectionPageUrl"],
-                    "platform": item.get("platform") or "Openverse",
-                    "license": item.get("license") or "",
-                    "termsUrl": item.get("termsUrl") or "",
-                    "licenseSnapshot": item.get("licenseSnapshot") or "",
-                    "authorizationProof": item.get("authorizationProof") or item["collectionPageUrl"],
-                    "usageScope": "app_publish",
-                    "modelReleaseStatus": item["modelReleaseStatus"],
-                    "discoveryProvider": "open_license_image_search",
-                    "evidenceReason": _evidence_reason(
-                        entity_id, "image", "Open license image search", "open_license"
-                    ),
-                    "images": [item],
-                }
                 collection_verdict = _collection_gate(
                     collection,
                     entity_id=entity_id,
@@ -310,6 +359,7 @@ def write_image_lane(
         plan_dir / "image_source_plan.json",
             "image",
             {
+                "acquisitionReceiptRefs": list(acquisition_receipt_refs or []),
                 "collections": collections,
                 "imageDiscoveryDiagnostics": {
                     "imageAssetStrategy": image_strategy,

@@ -123,6 +123,7 @@ def _seed_post(post_root: Path, ref: str, title: str) -> None:
             "sourcePaths": [rel_a],
             "sourceUrls": ["https://example.com/a"],
             "assets": [],
+            "publishMediaMode": "text_only",
         },
     )
     write_prompt(TASK, ref, f"# {title}\n\n提示。")
@@ -156,6 +157,7 @@ def _seed_post(post_root: Path, ref: str, title: str) -> None:
             "entityRefs": [],
             "tagRefs": ["Topic/旅行", "Format/内容角度/攻略"],
             "assets": [],
+            "publishMediaMode": "text_only",
             "sourcePaths": [rel_a],
             "sourceUrls": ["https://example.com/a"],
             "citedSourceRefs": [rel_a],
@@ -326,6 +328,7 @@ def test_materialize_relativizes_repo_absolute_runtime_paths():
             "sourcePaths": [],
             "sourceUrls": ["https://example.com/a"],
             "assets": [],
+            "publishMediaMode": "text_only",
         },
     )
     write_prompt(task, "repo_ref", "# repo 路径攻略\n\n提示。")
@@ -351,6 +354,7 @@ def test_materialize_relativizes_repo_absolute_runtime_paths():
             "entityRefs": [],
             "tagRefs": ["主题/山水风光", "Format/内容角度/攻略"],
             "assets": [],
+            "publishMediaMode": "text_only",
             "sourcePaths": [repo_relative],
             "sourceUrls": ["https://example.com/a"],
             "citedSourceRefs": [repo_relative],

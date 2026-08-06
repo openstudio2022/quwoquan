@@ -4,25 +4,30 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[5]
 SCRIPTS = ROOT / "quwoquan_data" / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
-from core.source_digest import current_source_digest  # noqa: E402
-from content.release.canonical.release_attestation import (  # noqa: E402
+from content.release.canonical.release_attestation import (
     ReleaseAttestation,
     ReleaseAttestationError,
 )
-from content.release.model import DataSourceOwner, ReleaseKind  # noqa: E402
-from governance.coverage.distribution import (  # noqa: E402
+from core.source_digest import (
+    content_source_revision,
+    current_source_digest,
+)
+
+ENTITY_CATALOG_DIGEST = "sha256:" + "e" * 64
+from content.release.model import DataSourceOwner, ReleaseKind
+from governance.coverage.distribution import (
     ProductLifecycleState,
     ReleaseClass,
 )
 
 
 def _receipt() -> ReleaseAttestation:
+    source_digest = current_source_digest()
     return ReleaseAttestation(
         release_id="20260718--travel-homepage-coverage--test-release-a--001",
         source_owner=DataSourceOwner.QWQ_DATA,
@@ -48,7 +53,13 @@ def _receipt() -> ReleaseAttestation:
         creator_count=3,
         tag_count=0,
         canonical_merkle="sha256:" + "a" * 64,
-        source_digests=(current_source_digest(),),
+        source_revision=content_source_revision(
+            source_digest=source_digest.digest,
+            entity_catalog_digest=ENTITY_CATALOG_DIGEST,
+        ),
+        source_digest=source_digest.digest,
+        entity_catalog_digest=ENTITY_CATALOG_DIGEST,
+        source_digests=(source_digest,),
         payload_sha256="sha256:" + "b" * 64,
         recorded_at="2026-07-18T00:00:00Z",
     )
@@ -79,7 +90,7 @@ def test_release_attestation__allows_post_only_lane_release__contract__local_con
     assert receipt.post_count == 100
 
 
-def test_release_attestation__retains_all_frozen_execution_source_digests__contract() -> None:
+def test_release_attestation__rejects_mixed_execution_source_digests__contract() -> None:
     document = _receipt().to_document()
     second_digest = dict(document["sourceDigests"][0])
     second_digest["digest"] = "sha256:" + "c" * 64
@@ -88,11 +99,12 @@ def test_release_attestation__retains_all_frozen_execution_source_digests__contr
         key=lambda item: item["digest"],
     )
 
-    receipt = ReleaseAttestation.from_document(document)
-
-    assert [item.digest for item in receipt.source_digests] == [
-        item["digest"] for item in document["sourceDigests"]
-    ]
+    try:
+        ReleaseAttestation.from_document(document)
+    except ReleaseAttestationError as exc:
+        assert "exactly one sourceDigest" in str(exc)
+    else:
+        raise AssertionError("mixed sourceDigest content release must block")
 
 
 def test_release_attestation__rejects_content_without_objects__contract__local_contract() -> None:

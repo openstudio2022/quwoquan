@@ -5,6 +5,7 @@ from governance.coverage.distribution import (
     DistributionDecision,
     RightsStatus,
     distribution_decision,
+    image_distribution_decision,
     load_content_distribution_policy,
     project_asset_admission,
 )
@@ -28,17 +29,27 @@ def _asset(*, rights_status: str, proof: str = "") -> dict[str, object]:
     }
 
 
-def test_research_policy_is_explicit_and_disables_media_generation() -> None:
+def test_commercial_policy_is_explicit_and_disables_media_generation() -> None:
     policy = load_content_distribution_policy()
 
-    assert policy.product_lifecycle_state.value == "research"
-    assert policy.release_class.value == "research"
+    assert policy.product_lifecycle_state.value == "commercial"
+    assert policy.release_class.value == "commercial"
     assert policy.image_generation_allowed is False
     assert policy.video_generation_allowed is False
     assert policy.image_provider_priority[:2] == ("pinterest", "tuchong")
     assert policy.minimum_illustrated_rate == 0.9
-    assert policy.m100_per_carrier == 100
-    assert policy.m1000_per_carrier == 1000
+    assert dict(policy.m100_targets) == {
+        "homepage": 100,
+        "article": 100,
+        "image": 100,
+        "video": 50,
+    }
+    assert dict(policy.m1000_targets) == {
+        "homepage": 1000,
+        "article": 1000,
+        "image": 1000,
+        "video": 300,
+    }
 
 
 def test_acquisition_and_distribution_rights_are_independent() -> None:
@@ -57,6 +68,29 @@ def test_acquisition_and_distribution_rights_are_independent() -> None:
         rights_status=RightsStatus.RESTRICTED,
         authorization_proof="",
     ) is DistributionDecision.BLOCKED
+
+
+def test_image_commercial_admission_cannot_exceed_frozen_usage_or_model_release_scope() -> None:
+    common = {
+        "acquisition_status": AcquisitionStatus.ACQUIRED,
+        "rights_status": RightsStatus.VERIFIED,
+        "authorization_proof": "https://rights.example/proof",
+    }
+    assert image_distribution_decision(
+        **common,
+        usage_scope="internal_reference",
+        model_release_status="not_required",
+    ) is DistributionDecision.RESEARCH_ALLOWED
+    assert image_distribution_decision(
+        **common,
+        usage_scope="app_publish",
+        model_release_status="editorial_only",
+    ) is DistributionDecision.RESEARCH_ALLOWED
+    assert image_distribution_decision(
+        **common,
+        usage_scope="app_publish",
+        model_release_status="obtained",
+    ) is DistributionDecision.COMMERCIAL_ALLOWED
     assert distribution_decision(
         acquisition_status=AcquisitionStatus.BLOCKED,
         rights_status=RightsStatus.VERIFIED,
@@ -72,4 +106,3 @@ def test_projected_unverified_asset_keeps_exact_rights_gap() -> None:
     assert projected["authorizationRequired"] is True
     assert projected["distributionDecision"] == "research_allowed"
     assert projected["rightsIssues"] == ["commercial authorization missing"]
-

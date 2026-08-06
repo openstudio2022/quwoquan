@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/runtime_fault_case_receipt.schema.json",
+  "title": "Create-once governed fault action receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "caseId", "requestRef", "requestDigest", "sessionRef",
+    "sessionDigest", "rootExecutionId", "runId", "generation", "fencingToken",
+    "faultType", "carrier", "executionId", "jobId", "actionStatus",
+    "actionResultCode", "actionTriggeredAt", "faultEventAt", "eventRef",
+    "eventSha256", "queueEventEvidenceDigest", "providerEvidenceRef", "providerEvidenceSha256",
+    "recordedAt", "receiptDigest"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.runtime_fault_case_receipt"},
+    "caseId": {"type": "string", "minLength": 1},
+    "requestRef": {"$ref": "#/$defs/safeRef"},
+    "requestDigest": {"$ref": "#/$defs/digest"},
+    "sessionRef": {"$ref": "#/$defs/safeRef"},
+    "sessionDigest": {"$ref": "#/$defs/digest"},
+    "rootExecutionId": {"type": "string", "minLength": 1},
+    "runId": {"type": "string", "minLength": 1},
+    "generation": {"type": "integer", "minimum": 1},
+    "fencingToken": {"$ref": "#/$defs/digest"},
+    "faultType": {"type": "string", "minLength": 1},
+    "carrier": {"enum": ["homepage", "article", "image", "video"]},
+    "executionId": {"type": "string", "minLength": 1},
+    "jobId": {"type": "string", "minLength": 8},
+    "actionStatus": {"enum": ["triggered", "failed"]},
+    "actionResultCode": {"type": "string", "minLength": 1},
+    "actionTriggeredAt": {"type": "string", "minLength": 1},
+    "faultEventAt": {"type": ["string", "null"]},
+    "eventRef": {"type": ["string", "null"], "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"},
+    "eventSha256": {"type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$"},
+    "queueEventEvidenceDigest": {"type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$"},
+    "providerEvidenceRef": {"type": ["string", "null"], "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"},
+    "providerEvidenceSha256": {"type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$"},
+    "recordedAt": {"type": "string", "minLength": 1},
+    "receiptDigest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "safeRef": {"type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"}
+  }
+}

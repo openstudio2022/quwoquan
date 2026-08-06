@@ -5,15 +5,14 @@ file never proves that commercial redistribution is authorized.
 """
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 import yaml
-
 from core.schema import assert_valid
-
 
 POLICY_PATH = (
     Path(__file__).resolve().parents[3]
@@ -59,8 +58,8 @@ class ContentDistributionPolicy:
     video_generation_allowed: bool
     minimum_illustrated_rate: float
     maximum_text_only_rate: float
-    m100_per_carrier: int
-    m1000_per_carrier: int
+    m100_targets: tuple[tuple[str, int], ...]
+    m1000_targets: tuple[tuple[str, int], ...]
     minimum_automatic_recovery_rate: float
     image_provider_priority: tuple[str, ...]
     video_popularity_signals: tuple[str, ...]
@@ -71,6 +70,18 @@ class ContentDistributionPolicy:
         if not self.image_provider_priority or self.image_provider_priority[0] != "pinterest":
             raise ValueError("research image provider priority must start with pinterest")
 
+    def scale_target(self, scale: str, carrier: str) -> int:
+        if scale == "M100":
+            rows = self.m100_targets
+        elif scale == "M1000":
+            rows = self.m1000_targets
+        else:
+            raise ValueError(f"unsupported governed scale: {scale}")
+        targets = dict(rows)
+        if carrier not in targets:
+            raise ValueError(f"unsupported scale carrier: {carrier}")
+        return targets[carrier]
+
 
 def load_content_distribution_policy(
     *, policy_path: Path = POLICY_PATH
@@ -80,7 +91,7 @@ def load_content_distribution_policy(
     except (OSError, yaml.YAMLError) as exc:
         raise ValueError(f"content distribution policy is unreadable: {policy_path}") from exc
     if not isinstance(raw, dict):
-        raise ValueError("content distribution policy must be an object")
+        raise TypeError("content distribution policy must be an object")
     assert_valid(
         raw,
         "governance",
@@ -104,8 +115,14 @@ def load_content_distribution_policy(
         video_generation_allowed=bool(media_generation["videoAllowed"]),
         minimum_illustrated_rate=float(article_media["minimumIllustratedRate"]),
         maximum_text_only_rate=float(article_media["maximumTextOnlyRate"]),
-        m100_per_carrier=int(scale_gates["m100PerCarrier"]),
-        m1000_per_carrier=int(scale_gates["m1000PerCarrier"]),
+        m100_targets=tuple(
+            (carrier, int(scale_gates["m100Targets"][carrier]))
+            for carrier in ("homepage", "article", "image", "video")
+        ),
+        m1000_targets=tuple(
+            (carrier, int(scale_gates["m1000Targets"][carrier]))
+            for carrier in ("homepage", "article", "image", "video")
+        ),
         minimum_automatic_recovery_rate=float(
             scale_gates["minimumAutomaticRecoveryRate"]
         ),
@@ -127,6 +144,82 @@ def distribution_decision(
     if rights_status is RightsStatus.VERIFIED and authorization_proof.strip():
         return DistributionDecision.COMMERCIAL_ALLOWED
     return DistributionDecision.RESEARCH_ALLOWED
+
+
+def image_distribution_decision(
+    *,
+    acquisition_status: AcquisitionStatus,
+    rights_status: RightsStatus,
+    authorization_proof: str,
+    usage_scope: str,
+    model_release_status: str,
+) -> DistributionDecision:
+    """Cap image distribution at the exact frozen usage and model-release scope."""
+
+    base = distribution_decision(
+        acquisition_status=acquisition_status,
+        rights_status=rights_status,
+        authorization_proof=authorization_proof,
+    )
+    if base is DistributionDecision.BLOCKED:
+        return base
+    normalized_scope = usage_scope.strip()
+    normalized_release = model_release_status.strip()
+    if normalized_scope not in {"internal_reference", "app_publish", "editorial"}:
+        return DistributionDecision.BLOCKED
+    if normalized_release not in {"not_required", "obtained", "editorial_only"}:
+        return DistributionDecision.BLOCKED
+    if normalized_scope != "app_publish" or normalized_release == "editorial_only":
+        return DistributionDecision.RESEARCH_ALLOWED
+    return base
+
+
+def asset_contract_missing_fields(asset: Mapping[str, Any]) -> list[str]:
+    """Return missing/invalid fields from the lifecycle-neutral asset contract."""
+    missing: list[str] = []
+    acquisition_status = str(asset.get("acquisitionStatus") or "").strip()
+    rights_status = str(
+        asset.get("rightsStatus") or asset.get("rightsAuditStatus") or ""
+    ).strip()
+    decision = str(asset.get("distributionDecision") or "").strip()
+    content_sha256 = str(
+        asset.get("contentSha256") or asset.get("sha256") or ""
+    ).strip()
+    rights_issues = asset.get("rightsIssues")
+    if rights_issues is None:
+        rights_issues = asset.get("rightsAuditIssues")
+    if acquisition_status != AcquisitionStatus.ACQUIRED.value:
+        missing.append("acquisitionStatus")
+    if rights_status not in {status.value for status in RightsStatus}:
+        missing.append("rightsStatus")
+    if decision not in {
+        DistributionDecision.RESEARCH_ALLOWED.value,
+        DistributionDecision.COMMERCIAL_ALLOWED.value,
+    }:
+        missing.append("distributionDecision")
+    if not str(asset.get("sourceUrl") or "").startswith("https://"):
+        missing.append("sourceUrl")
+    for field, value in (
+        ("platform", asset.get("platform")),
+        ("creator", asset.get("creator") or asset.get("credit")),
+        ("capturedAt", asset.get("capturedAt")),
+        ("contentSha256", content_sha256 if content_sha256.startswith("sha256:") else ""),
+        ("license", asset.get("license")),
+    ):
+        if not str(value or "").strip():
+            missing.append(field)
+    if "termsUrl" not in asset:
+        missing.append("termsUrl")
+    if "authorizationProof" not in asset:
+        missing.append("authorizationProof")
+    if not isinstance(asset.get("authorizationRequired"), bool):
+        missing.append("authorizationRequired")
+    if not isinstance(rights_issues, list) or (
+        rights_status != RightsStatus.VERIFIED.value
+        and not [str(issue).strip() for issue in rights_issues if str(issue).strip()]
+    ):
+        missing.append("rightsIssues")
+    return sorted(set(missing))
 
 
 def project_asset_admission(
@@ -153,10 +246,23 @@ def project_asset_admission(
         AcquisitionStatus.ACQUIRED if acquired else AcquisitionStatus.FAILED
     )
     authorization_proof = str(asset.get("authorizationProof") or "").strip()
-    decision = distribution_decision(
-        acquisition_status=acquisition_status,
-        rights_status=rights_status,
-        authorization_proof=authorization_proof,
+    physical_mime = str(
+        physical.get("mimeType") if isinstance(physical, Mapping) else ""
+    ).strip()
+    decision = (
+        image_distribution_decision(
+            acquisition_status=acquisition_status,
+            rights_status=rights_status,
+            authorization_proof=authorization_proof,
+            usage_scope=str(asset.get("usageScope") or ""),
+            model_release_status=str(asset.get("modelReleaseStatus") or ""),
+        )
+        if physical_mime.startswith("image/")
+        else distribution_decision(
+            acquisition_status=acquisition_status,
+            rights_status=rights_status,
+            authorization_proof=authorization_proof,
+        )
     )
     source_url = str(
         asset.get("sourceUrl")
@@ -209,14 +315,16 @@ def project_asset_admission(
 
 
 __all__ = [
+    "POLICY_PATH",
     "AcquisitionStatus",
     "ContentDistributionPolicy",
     "DistributionDecision",
-    "POLICY_PATH",
     "ProductLifecycleState",
     "ReleaseClass",
     "RightsStatus",
+    "asset_contract_missing_fields",
     "distribution_decision",
+    "image_distribution_decision",
     "load_content_distribution_policy",
     "project_asset_admission",
 ]

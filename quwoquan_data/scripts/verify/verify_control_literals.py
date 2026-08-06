@@ -100,7 +100,7 @@ def source_control_literal_issues(source: str, *, label: str) -> list[str]:
 def control_literal_issues() -> list[str]:
     issues: list[str] = []
     try:
-        load_runtime_policy("cursor_local_calibrated")
+        load_runtime_policy("semantic_agent_local_calibrated")
     except (OSError, TypeError, ValueError) as exc:
         issues.append(f"runtime policy is invalid: {exc}")
         return issues

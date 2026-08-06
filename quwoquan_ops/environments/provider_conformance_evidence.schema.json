@@ -16,6 +16,13 @@
     "artifactRef",
     "artifactDigest",
     "artifactAttestation",
+    "nonPromotable",
+    "sourceTreeState",
+    "commitReview",
+    "candidateStatus",
+    "candidateReceiptRef",
+    "candidateReceiptDigest",
+    "attestationAuthority",
     "testArtifactRef",
     "testArtifactDigest",
     "testSource",
@@ -84,7 +91,29 @@
     },
     "artifactAttestation": {
       "type": "string",
-      "pattern": "^hmac-sha256:[a-f0-9]{64}$"
+      "pattern": "^(?:hmac-sha256|local-sha256):[a-f0-9]{64}$"
+    },
+    "nonPromotable": {
+      "type": "boolean"
+    },
+    "sourceTreeState": {
+      "enum": ["clean", "dirty"]
+    },
+    "commitReview": {
+      "enum": ["reviewed", "unreviewed"]
+    },
+    "candidateStatus": {
+      "enum": ["active_immutable", "unverified"]
+    },
+    "candidateReceiptRef": {
+      "type": "string"
+    },
+    "candidateReceiptDigest": {
+      "type": "string",
+      "pattern": "^(?:|sha256:[a-f0-9]{64})$"
+    },
+    "attestationAuthority": {
+      "enum": ["ci", "local"]
     },
     "testArtifactRef": {
       "type": "string",
@@ -249,6 +278,69 @@
     }
   },
   "allOf": [
+    {
+      "if": {
+        "properties": {
+          "candidateStatus": {
+            "const": "active_immutable"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "candidateReceiptRef": {
+            "pattern": "^\\.qwq_output/env/(?:alpha|beta|gamma|prod)/"
+          },
+          "candidateReceiptDigest": {
+            "pattern": "^sha256:[a-f0-9]{64}$"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "candidateReceiptRef": {
+            "const": ""
+          },
+          "candidateReceiptDigest": {
+            "const": ""
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "nonPromotable": {
+            "const": false
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "sourceTreeState": {
+            "const": "clean"
+          },
+          "commitReview": {
+            "const": "reviewed"
+          },
+          "candidateStatus": {
+            "const": "active_immutable"
+          },
+          "candidateReceiptRef": {
+            "pattern": "^\\.qwq_output/env/(?:alpha|beta|gamma|prod)/"
+          },
+          "candidateReceiptDigest": {
+            "pattern": "^sha256:[a-f0-9]{64}$"
+          },
+          "attestationAuthority": {
+            "const": "ci"
+          },
+          "artifactAttestation": {
+            "pattern": "^hmac-sha256:[a-f0-9]{64}$"
+          }
+        }
+      }
+    },
     {
       "if": {
         "properties": {

@@ -4,7 +4,9 @@
 """
 from __future__ import annotations
 
+import os
 import sys
+import tempfile
 from pathlib import Path
 
 DATA_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data")
@@ -14,27 +16,33 @@ for _path in (DATA_ROOT, TESTS_ROOT, SCRIPTS_ROOT):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
-import os
-import sys
-import tempfile
-from pathlib import Path
-
-sys.path.insert(0, str(SCRIPTS_ROOT))
-
-
-import numpy as np  # noqa: E402
-import cv2  # noqa: E402
-
-from content.execution.runtime_state import write_execution_runtime_state  # noqa: E402
-from core.paths import ensure_execution_command_layout, ensure_execution_layout  # noqa: E402
-from content.source.source_unit import resolve_entity_object_dir, write_source_unit  # noqa: E402
-from content.post.article import route_assets as RW  # noqa: E402
-from content.post.article.route_assets import _build_route_assets  # noqa: E402
-from support.execution_manifest_fixture import build_execution_fixture  # noqa: E402
-
+import core.paths as _paths_mod
+import cv2
+import numpy as np
+import pytest
+from content.execution.runtime_state import write_execution_runtime_state
+from content.post.article import route_assets as RW
+from content.post.article.route_assets import _build_route_assets
+from content.source.source_unit import (
+    resolve_entity_object_dir,
+    write_source_unit,
+)
+from core.paths import (
+    ensure_execution_command_layout,
+    ensure_execution_layout,
+)
+from support.execution_manifest_fixture import build_execution_fixture
 
 EXECUTION_ID = "20260711--travel-article-route-assets--test-region-b--pilot-001"
 ENTITIES = ["九寨沟", "稻城亚丁", "色达", "新都桥"]
+_RUNTIME_ROOT = Path(tempfile.mkdtemp(prefix="route_assets_layout_rt_"))
+_SEEDED = False
+
+
+def _retarget_runtime() -> None:
+    os.environ["QWQ_OUTPUT_ROOT"] = str(_RUNTIME_ROOT)
+    _paths_mod.RUNTIME_ROOT = _RUNTIME_ROOT
+    _paths_mod.DATA_EXECUTIONS_ROOT = _RUNTIME_ROOT / "tasks"
 
 
 def _distinct_image(seed: int) -> np.ndarray:
@@ -47,6 +55,10 @@ def _distinct_image(seed: int) -> np.ndarray:
 
 
 def _seed_images() -> None:
+    global _SEEDED
+    _retarget_runtime()
+    if _SEEDED:
+        return
     build_execution_fixture(EXECUTION_ID)
     ensure_execution_layout(EXECUTION_ID)
     ensure_execution_command_layout(EXECUTION_ID, "source")
@@ -83,6 +95,7 @@ def _seed_images() -> None:
             images=images,
             execution_id=EXECUTION_ID,
         )
+    _SEEDED = True
 
 
 def _build():
@@ -166,6 +179,24 @@ def test_article_auto_selects_from_base_source_ignoring_asset_refs():
     assert selected, "article 应从底稿来源选出图片"
     source_unit_ref = Path(declared["sourceRef"]).parent.as_posix()
     assert all(ref.startswith(f"{source_unit_ref}/assets/") for ref in selected), selected
+
+
+def test_article_without_base_source_cannot_fan_in_route_node_sources():
+    _seed_images()
+    brief = {"carrier": "article", "imagePlan": []}
+    evidence_bundle = {
+        "routeNodes": [
+            {
+                "entityName": entity,
+                "entityRef": f"/entity/地点/景区/{entity}",
+            }
+            for entity in ENTITIES[:2]
+        ]
+    }
+
+    with pytest.raises(RuntimeError, match="requires exactly one baseSourceRef"):
+        _build_route_assets(EXECUTION_ID, "禁止跨底稿拼图", brief, evidence_bundle)
+    assert not hasattr(RW, "_build_multi_destination_route_assets")
 
 
 def _run_all() -> None:

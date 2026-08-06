@@ -388,7 +388,7 @@ def test_openverse_filters_nc_nd_and_keeps_publishable_license():
     assert [image["url"] for image in images] == ["https://img.example/good.jpg"]
     assert images[0]["sourceCollectionId"].startswith("openverse:wikimedia:")
 
-def test_article_candidate_warns_on_bad_optional_image_but_image_lane_blocks_it():
+def test_research_travel_lanes_record_bad_image_license_without_blocking():
     assert _license_allows_app_publish(
         "CC0",
         "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
@@ -416,7 +416,7 @@ def test_article_candidate_warns_on_bad_optional_image_but_image_lane_blocks_it(
             source_role="base",
             images=[image],
             # RC4：文章配图必须同源；此处模拟「底稿自身」含一张许可不达标的图——
-            # 文章 lane 仅告警（可降级 text_only/跳过该图），image lane 则硬阻断。
+            # Research lane 记录权利缺口；commercial/photography enforcement 仍硬阻断。
             image_evidence_mode="same_source",
         ),
         entity_id="九寨沟",
@@ -441,10 +441,10 @@ def test_article_candidate_warns_on_bad_optional_image_but_image_lane_blocks_it(
         lane="image",
         vertical="travel",
     )
-    assert not travel_image_verdict["passed"], travel_image_verdict
+    assert travel_image_verdict["passed"], travel_image_verdict
     assert any(
-        "unsupported license" in issue
-        for issue in travel_image_verdict["issues"]
+        "unsupported license" in warning
+        for warning in travel_image_verdict["warnings"]
     ), travel_image_verdict
     verdict = _candidate_gate(
         _source(
@@ -462,8 +462,10 @@ def test_article_candidate_warns_on_bad_optional_image_but_image_lane_blocks_it(
         lane="image",
         vertical="photography",
     )
-    assert not verdict["passed"]
-    assert any("unsupported license" in issue for issue in verdict["issues"]), verdict
+    assert verdict["passed"]
+    assert any(
+        "unsupported license" in warning for warning in verdict["warnings"]
+    ), verdict
 
 def test_qunar_travelogue_sources_require_entity_route_and_stay_text_only():
     import content.source.research.network_io as research_mod

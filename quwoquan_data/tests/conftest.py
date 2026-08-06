@@ -60,7 +60,7 @@ if os.environ.get("QWQ_PYTEST_ALLOW_ENV_ROOTS") != "1":
     os.environ["QWQ_OUTPUT_ROOT"] = str(Path(_ISOLATED_ROOT) / "output")
     os.environ["QWQ_PUBLISH_ROOT"] = str(Path(_ISOLATED_ROOT) / "publish")
     # startup probe cache 是运行期降本缓存；pytest 默认关闭，避免环境预检类测试
-    # 误把 cache 写入真实 .qwq_output/data/local/runtime/env。
+    # 误把 cache 写入真实 .qwq_output/data/local/workspace/runtime/env。
     os.environ.setdefault("QWQ_CURSOR_STARTUP_PROBE_CACHE_TTL_SECONDS", "0")
 
 _ROOT_ENV_KEYS = (

@@ -1,7 +1,20 @@
 """Execution service extracted from the retired monolithic runner."""
 from __future__ import annotations
+
 from core.control_types import ExecutionStage, QueueJobState, StageStatus
-from content.execution.support import AUTO, DataIssueCode, DataRecoveryAction, ExecutionContext, Path, StageResult, _is_homepage_only_execution, load_execution_state, save_execution_state, stage_issues
+
+from content.execution.support import (
+    AUTO,
+    DataIssueCode,
+    DataRecoveryAction,
+    ExecutionContext,
+    Path,
+    StageResult,
+    _is_homepage_only_execution,
+    load_execution_state,
+    save_execution_state,
+    stage_issues,
+)
 from content.release.canonical.object_transaction_lock import (
     canonical_publish_serialized,
 )
@@ -15,14 +28,17 @@ def publish_homepage_object(execution_id: str, object_ref: str) -> dict[str, str
     from core.io import read_json
     from core.paths import OUTPUT_ROOT, PUBLISH_ROOT
     from core.tree_integrity import tree_integrity_stats
+
     from content.execution.workspace import execution_root
     from content.release.canonical.application import apply_object_transaction
+    from content.release.canonical.canonical_inventory import (
+        load_or_bootstrap_inventory,
+    )
     from content.release.canonical.object_transaction import (
         build_entity_object_transaction_package,
     )
     from content.release.canonical.object_transaction_audit import (
         audit_object_transaction,
-        validate_canonical_publish,
     )
 
     canonical_ref = str(object_ref or "").removeprefix("/entity/").strip("/")
@@ -57,7 +73,7 @@ def publish_homepage_object(execution_id: str, object_ref: str) -> dict[str, str
             )
         applied = read_json(apply_report)
     else:
-        before = tree_integrity_stats(PUBLISH_ROOT)["merkleRoot"]
+        before = load_or_bootstrap_inventory(PUBLISH_ROOT)["stats"]["merkleRoot"]
         audit = audit_object_transaction(
             publish_root=PUBLISH_ROOT,
             output_root=OUTPUT_ROOT,
@@ -72,14 +88,6 @@ def publish_homepage_object(execution_id: str, object_ref: str) -> dict[str, str
             transaction_id=transaction_id,
             dry_run_attestation_sha256=str(audit["dryRunAttestationSha256"]),
         )
-    from content.release.canonical.object_transaction_contract import (
-        refresh_canonical_tag_snapshots,
-    )
-
-    refresh_canonical_tag_snapshots(PUBLISH_ROOT)
-    closure = validate_canonical_publish(PUBLISH_ROOT)
-    if closure["status"] != "passed":
-        raise RuntimeError(f"canonical publish closure failed: {closure['issues'][:5]}")
     return {
         "transactionId": transaction_id,
         "applyReportRef": apply_report.relative_to(OUTPUT_ROOT).as_posix(),
@@ -94,8 +102,7 @@ def _entity_ref_from_entity_rel(raw: object) -> str:
     text = str(raw or "").strip().strip("/")
     if not text:
         return ""
-    if text.startswith("entities/"):
-        text = text[len("entities/"):]
+    text = text.removeprefix("entities/")
     parts = text.split("/")
     if len(parts) < 3:
         return ""
@@ -134,10 +141,11 @@ def _publishable_homepage_names(ctx: ExecutionContext) -> set[str]:
     return names
 
 def _run_publish(ctx: ExecutionContext) -> StageResult:
+    from core.publish_materialization import materialize_task_publish_inputs
+
+    from content.execution.queue.runtime import reconcile_completed_refs
     from content.execution.recovery.post_recovery import _purge_stale_author_queue
     from content.post import object_index as content_object
-    from core.publish_materialization import materialize_task_publish_inputs
-    from content.execution.queue.runtime import reconcile_completed_refs
     if _is_homepage_only_execution(ctx):
         from content.execution.qualification import finalize_execution_qualification
 
@@ -186,6 +194,7 @@ def _run_publish(ctx: ExecutionContext) -> StageResult:
             post_closure = load_post_review_closure(
                 ctx.execution_id,
                 expected_object_targets=indexed_post_targets(ctx.execution_id),
+                require_quota_milestone=False,
             )
         except (OSError, TypeError, ValueError) as exc:
             return StageResult(
@@ -235,10 +244,11 @@ def _run_publish(ctx: ExecutionContext) -> StageResult:
             "publish 前未物化出可发布 post 输入",
             fallback_stage=ExecutionStage.POST_REVIEW,
         )
+    from core.io import read_json
+
     from content.execution.reliabletask_jobs import prepare_reliable_publish_jobs
     from content.execution.spec_contract import approved_quota
     from content.execution.workspace import execution_root as _execution_root
-    from core.io import read_json
 
     reliable_jobs = prepare_reliable_publish_jobs(
         ctx,
@@ -349,7 +359,7 @@ def _run_publish(ctx: ExecutionContext) -> StageResult:
             )
     if not homepage_only and not reliable_jobs:
         # 新发布模型：posts 经 object transaction 原子进入 canonical publish，
-        # release 统一由 `release aggregate` 从 publish 闭包构建；
+        # release 统一由 `release campaign-aggregate` 从 frozen campaign 闭包构建；
         # 旧的 per-execution assemble/gate 路径已退役。
         try:
             from content.release.canonical.post_promotion import promote_execution_posts
@@ -371,36 +381,10 @@ def _run_publish(ctx: ExecutionContext) -> StageResult:
                 ),
             )
     if ctx.managed or ctx.release_only:
-        from content.release.canonical.object_transaction_audit import (
-            validate_canonical_publish,
-        )
-        from content.release.canonical.object_transaction_contract import (
-            refresh_canonical_tag_snapshots,
-        )
-        from core.paths import PUBLISH_ROOT
-
-        # Homepage / managed promote can land objects before a later closure check.
-        # Refresh consumer tag snapshots so validate does not see dangling_tag_ref
-        # against an otherwise complete publish tree.
-        refresh_canonical_tag_snapshots(PUBLISH_ROOT)
-        closure = validate_canonical_publish(PUBLISH_ROOT)
-        if closure["status"] != "passed":
-            issues = [str(issue) for issue in closure["issues"]]
-            return StageResult(
-                ExecutionStage.PUBLISH,
-                AUTO,
-                StageStatus.FAILED,
-                "canonical publish closure failed:\n  - " + "\n  - ".join(issues[:10]),
-                fallback_stage=(
-                    ExecutionStage.BUILD_VALIDATE if homepage_only else ExecutionStage.POST_REVIEW
-                ),
-                issue_records=stage_issues(
-                    ExecutionStage.PUBLISH,
-                    issues,
-                    code=DataIssueCode.CONTRACT_INVALID,
-                    recovery=DataRecoveryAction.REWIND_COMPOSE,
-                ),
-            )
+        # Each object transaction already validates its immutable package and
+        # applies only its fenced delta.  A global canonical closure is O(N) and
+        # belongs to the single campaign->release aggregation boundary, not the
+        # per-object hot path.
         state = load_execution_state(ctx.execution_id)
         save_execution_state(state)
     authored_refs = content_object.iter_content_refs(ctx.execution_id)

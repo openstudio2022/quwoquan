@@ -12,16 +12,19 @@ SCRIPTS_ROOT = Path(__file__).resolve().parents[3] / "scripts"
 if str(SCRIPTS_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_ROOT))
 
-from content.release.canonical.lifecycle_exit import (  # noqa: E402
+from content.release.canonical.lifecycle_exit import (
     ReleaseLifecycleExitError,
     write_lifecycle_exit_receipt,
 )
-from verify import release_lifecycle_exit as exit_verify  # noqa: E402
+from core.source_digest import content_source_revision
+from verify import release_lifecycle_exit as exit_verify
 
 ORIGINAL = "20260728--android-homepage--pilot-002"
 ROLLBACK = "20260728--android-homepage--empty-baseline-001"
 DIGEST = "sha256:" + "a" * 64
 ROLLBACK_DIGEST = "sha256:" + "b" * 64
+SOURCE_DIGEST = "sha256:" + "d" * 64
+ENTITY_CATALOG_DIGEST = "sha256:" + "e" * 64
 
 
 def _write_json(path: Path, document: dict) -> None:
@@ -30,6 +33,32 @@ def _write_json(path: Path, document: dict) -> None:
 
 
 def _attestation(path: Path, release_id: str, digest: str, *, baseline: bool) -> None:
+    lifecycle = {
+        "releaseClass": "research",
+        "productLifecycleState": "research",
+        "containsUnverifiedAssets": False,
+        "rightsStatusCounts": {
+            "verified": 0 if baseline else 1,
+            "unverified": 0,
+            "restricted": 0,
+            "unknown": 0,
+        },
+        "authorizationRequiredAssetIds": [],
+        "researchAcceptedCount": 0 if baseline else 1,
+        "commercialAcceptedCount": 0,
+    }
+    source_identity = (
+        {}
+        if baseline
+        else {
+            "sourceRevision": content_source_revision(
+                source_digest=SOURCE_DIGEST,
+                entity_catalog_digest=ENTITY_CATALOG_DIGEST,
+            ),
+            "sourceDigest": SOURCE_DIGEST,
+            "entityCatalogDigest": ENTITY_CATALOG_DIGEST,
+        }
+    )
     _write_json(
         path / release_id / "attestations/release.json",
         {
@@ -37,6 +66,8 @@ def _attestation(path: Path, release_id: str, digest: str, *, baseline: bool) ->
             "releaseId": release_id,
             "sourceOwner": "qwq_data",
             "releaseKind": "empty_baseline" if baseline else "content",
+            **lifecycle,
+            **source_identity,
             "executionIds": [] if baseline else ["execution-001"],
             "entityCount": 0 if baseline else 1,
             "postCount": 0,
@@ -46,7 +77,7 @@ def _attestation(path: Path, release_id: str, digest: str, *, baseline: bool) ->
             "sourceDigests": [
                 {
                     "algorithm": "sha256",
-                    "digest": "sha256:" + "d" * 64,
+                    "digest": SOURCE_DIGEST,
                     "inputs": ["control_plane/test"],
                 }
             ],

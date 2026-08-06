@@ -1,5 +1,5 @@
-cursor-sdk==1.0.26
 PyYAML==6.0.3
+openai-codex==0.144.4
 Pillow==12.2.0
 numpy==2.4.6
 opencv-python-headless==4.13.0.92

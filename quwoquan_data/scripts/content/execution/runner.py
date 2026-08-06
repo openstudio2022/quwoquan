@@ -5,8 +5,7 @@ import argparse
 from typing import Any, Mapping
 
 from core.io import read_json, write_json
-from core.python_environment import resolve_cursor_startup_timeout_seconds
-from core.python_runtime import environment_preflight
+from core.python_environment import resolve_semantic_agent_startup_timeout_seconds
 from core.schema import assert_valid
 from core.control_types import ExecutionStage
 from core.runtime_policy import active_runtime_policy
@@ -18,9 +17,12 @@ from content.execution.baseline import handle_baseline
 from content.source.discovery.handler import handle_explore
 
 from .model_contract import (
+    DEFAULT_SEMANTIC_SELECTION_ID,
     ExecutionModel,
-    execution_model_pair,
+    semantic_execution_binding,
+    semantic_execution_binding_for_execution,
 )
+from .preflight.semantic_provider import semantic_agent_startup_probe
 from .workspace import execution_root
 
 
@@ -56,43 +58,47 @@ def _prepare_execution(execution_id: str) -> None:
 
 
 def _startup_projection(report: Mapping[str, Any], model: ExecutionModel) -> dict[str, object]:
-    startup = report.get("cursorStartup") if isinstance(report.get("cursorStartup"), Mapping) else {}
     return {
-        "ready": bool(startup.get("ready")),
-        "status": str(startup.get("status") or "unknown"),
-        "errorClass": str(startup.get("errorClass") or ""),
-        "errorCode": str(startup.get("errorCode") or ""),
-        "httpStatus": startup.get("httpStatus"),
-        "runtime": str(startup.get("runtime") or ""),
+        "ready": bool(report.get("ready")),
+        "status": str(report.get("status") or "unknown"),
+        "errorClass": str(report.get("errorClass") or ""),
+        "errorCode": str(report.get("errorCode") or ""),
+        "httpStatus": report.get("httpStatus"),
+        "runtime": str(report.get("runtime") or ""),
         "model": model.model_id,
         "modelParameters": model.selection.parameters_document(),
-        "cacheHit": bool(startup.get("cacheHit")),
+        "cacheHit": bool(report.get("cacheHit")),
     }
 
 
-def preflight_execution_models(recipe: Mapping[str, Any]) -> dict[str, object]:
+def preflight_execution_models(
+    recipe: Mapping[str, Any],
+    semantic_selection_id: str = DEFAULT_SEMANTIC_SELECTION_ID,
+) -> dict[str, object]:
     """Prove author and independent-review models can really start before work begins.
 
-    Listing a Cursor model is not a capability guarantee.  The only acceptable
-    preflight is a minimal real SDK startup for both contract-declared models.
+    Listing a model is not a capability guarantee. The only acceptable
+    preflight is a minimal real provider startup for both contract-declared models.
     The returned projection contains no credential material or raw model output.
     """
-    pair = execution_model_pair(recipe)
+    binding = semantic_execution_binding(recipe, semantic_selection_id)
+    pair = binding.pair
     execution = recipe.get("execution")
     assert isinstance(execution, Mapping)
-    runtime = active_runtime_policy().cursor_runtime.value
-    timeout_seconds = resolve_cursor_startup_timeout_seconds(
+    if pair.author.provider is not pair.reviewer.provider:
+        raise ValueError("execution readiness requires one provider for both roles")
+    provider = pair.author.provider
+    runtime = binding.runtime.value
+    timeout_seconds = resolve_semantic_agent_startup_timeout_seconds(
         active_runtime_policy().startup_timeout_seconds
     )
 
     def _probe(model: ExecutionModel) -> tuple[dict[str, object], list[str]]:
-        report = environment_preflight(
-            require_cursor_key=True,
-            check_network=True,
-            check_cursor_startup=True,
-            cursor_startup_model=model.selection,
-            cursor_startup_runtime=runtime,
-            cursor_startup_timeout_seconds=timeout_seconds,
+        report = semantic_agent_startup_probe(
+            provider=provider,
+            model=model.selection,
+            runtime=runtime,
+            timeout_seconds=timeout_seconds,
         )
         startup = _startup_projection(report, model)
         issues = [str(item) for item in (report.get("issues") or []) if str(item).strip()]
@@ -117,6 +123,8 @@ def preflight_execution_models(recipe: Mapping[str, Any]) -> dict[str, object]:
         raise RuntimeError("; ".join(blockers))
     return {
         "ready": True,
+        "semanticSelectionId": binding.selection_id,
+        "provider": provider.value,
         "runtime": runtime,
         "author": {
             "model": pair.author.model_id,
@@ -156,7 +164,7 @@ def require_execution_model_readiness(
 ) -> None:
     """Require the public facade's model proof before entering the controller.
 
-    ``task execute`` owns the real Cursor startup probe and records the result
+    ``task execute`` owns the real provider startup probe and records the result
     in the immutable execution work package.  Re-probing in the controller
     turns a transient provider result into an inconsistent resume decision:
     the same execution may have already completed author work with the exact
@@ -180,14 +188,24 @@ def require_execution_model_readiness(
         raise RuntimeError("execution model readiness evidence belongs to another execution")
     if not bool(payload.get("ready")):
         raise RuntimeError("execution model readiness evidence is not ready")
-    pair = execution_model_pair(recipe)
-    runtime = active_runtime_policy().cursor_runtime.value
+    binding = semantic_execution_binding_for_execution(normalized)
+    pair = binding.pair
+    if pair.author.provider is not pair.reviewer.provider:
+        raise RuntimeError("execution model readiness requires one frozen provider")
+    provider = pair.author.provider
+    runtime = binding.runtime.value
     expected = (
         ("author", pair.author),
         ("reviewer", pair.reviewer),
     )
-    if str(payload.get("runtime") or "") != runtime:
-        raise RuntimeError("execution model readiness runtime does not match active runtime policy")
+    if (
+        str(payload.get("semanticSelectionId") or "") != binding.selection_id
+        or str(payload.get("provider") or "") != provider.value
+        or str(payload.get("runtime") or "") != runtime
+    ):
+        raise RuntimeError(
+            "execution model readiness provider/runtime does not match active runtime policy"
+        )
     for role, model in expected:
         proof = payload.get(role)
         if not isinstance(proof, Mapping):
@@ -200,6 +218,7 @@ def require_execution_model_readiness(
             != model.selection.parameters_document()
             or not isinstance(startup, Mapping)
             or not bool(startup.get("ready"))
+            or str(startup.get("provider") or provider.value) != provider.value
             or str(startup.get("runtime") or "") != runtime
             or str(startup.get("model") or "") != model.model_id
             or startup.get("modelParameters")

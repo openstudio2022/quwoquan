@@ -105,7 +105,7 @@
 
 ## 7. 工程归属
 
-- App：`quwoquan_app/lib/ui/search`、`quwoquan_app/lib/core/providers/app_providers.dart`
+- App：`quwoquan_app/lib/search`、`quwoquan_app/lib/core/providers/app_providers.dart`
 - Contracts：`quwoquan_service/services/search-service/contracts`
 - Contracts（协作引用，不用于代码归属）：`quwoquan_service/services/user-service/contracts`、`quwoquan_service/services/content-service/contracts`
 - Service：`quwoquan_service/services/search-service`

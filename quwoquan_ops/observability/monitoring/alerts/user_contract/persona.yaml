@@ -1,0 +1,125 @@
+# Code generated from quwoquan_service/generated/contract_graph.json.
+# Regenerate with verify_object_alert_coverage.py --write.
+groups:
+  - name: quwoquan_user_contract_persona
+    rules:
+      - record: quwoquan_user_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="user-service",method="POST",route=~"^/user/personas/[^/]+/activate$"})
+        labels:
+          service: "user-service"
+          operation: "user.persona.ActivatePersona"
+          contract_metric: "user_persona_activate"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="user-service",method="POST",route=~"^/user/personas/[^/]+/activate$"})
+        labels:
+          service: "user-service"
+          operation: "user.persona.ActivatePersona"
+          contract_metric: "user_persona_activate"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="user-service",method="POST",route=~"^/user/personas/[^/]+/profile-sync$"})
+        labels:
+          service: "user-service"
+          operation: "user.persona.ApplyPersonaProfileSync"
+          contract_metric: "user_persona_profile_sync"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="user-service",method="POST",route=~"^/user/personas/[^/]+/profile-sync$"})
+        labels:
+          service: "user-service"
+          operation: "user.persona.ApplyPersonaProfileSync"
+          contract_metric: "user_persona_profile_sync"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="user-service",method="POST",route="/user/personas"})
+        labels:
+          service: "user-service"
+          operation: "user.persona.CreatePersona"
+          contract_metric: "user_persona_create"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="user-service",method="POST",route="/user/personas"})
+        labels:
+          service: "user-service"
+          operation: "user.persona.CreatePersona"
+          contract_metric: "user_persona_create"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="user-service",method="POST",route=~"^/user/personas/[^/]+/retire$"})
+        labels:
+          service: "user-service"
+          operation: "user.persona.RetirePersona"
+          contract_metric: "user_persona_retire"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="user-service",method="POST",route=~"^/user/personas/[^/]+/retire$"})
+        labels:
+          service: "user-service"
+          operation: "user.persona.RetirePersona"
+          contract_metric: "user_persona_retire"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="user-service",method="PATCH",route=~"^/user/personas/[^/]+$"})
+        labels:
+          service: "user-service"
+          operation: "user.persona.UpdatePersona"
+          contract_metric: "user_persona_update"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="user-service",method="PATCH",route=~"^/user/personas/[^/]+$"})
+        labels:
+          service: "user-service"
+          operation: "user.persona.UpdatePersona"
+          contract_metric: "user_persona_update"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="user-service",method="PATCH",route="/user/profile"})
+        labels:
+          service: "user-service"
+          operation: "user.persona.UpdateUserProfile"
+          contract_metric: "user_profile_update"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="user-service",method="PATCH",route="/user/profile"})
+        labels:
+          service: "user-service"
+          operation: "user.persona.UpdateUserProfile"
+          contract_metric: "user_profile_update"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"

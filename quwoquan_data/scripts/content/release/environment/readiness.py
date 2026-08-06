@@ -129,17 +129,17 @@ def require_environment_readiness(
         raise SystemExit(
             f"[ship] GATE_BLOCK {environment.value}/{phase.value}: Ops ship readiness receipt is invalid"
         ) from exc
-    write_json(
-        run / "environment-readiness.json",
-        {
-            "schema": "quwoquan_data.environment_readiness_ref",
-            "phase": receipt.phase.value,
-            "environment": receipt.environment.value,
-            "target": receipt.target,
-            "outcome": receipt.outcome,
-            "opsReportDir": receipt.report_dir,
-        },
-    )
+    evidence: dict[str, object] = {
+        "schema": "quwoquan_data.environment_readiness_ref",
+        "phase": receipt.phase.value,
+        "environment": receipt.environment.value,
+        "target": receipt.target,
+        "outcome": receipt.outcome,
+        "opsReportDir": receipt.report_dir,
+    }
+    if lifecycle_exit_ref:
+        evidence["lifecycleExitRef"] = lifecycle_exit_ref
+    write_json(run / "environment-readiness.json", evidence)
     if completed.returncode != 0 or not receipt.passed:
         raise SystemExit(
             f"[ship] GATE_BLOCK {environment.value}/{phase.value}: required environment capability is unavailable"

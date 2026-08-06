@@ -1,6 +1,8 @@
 # spec_ref: specs/feature-tree/runtime/runtime-external-integration/provider-adapter-conformance-suite/spec.md#gwt-003
 from __future__ import annotations
 
+from copy import deepcopy
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -45,6 +47,13 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
             "artifactRef",
             "artifactDigest",
             "artifactAttestation",
+            "nonPromotable",
+            "sourceTreeState",
+            "commitReview",
+            "candidateStatus",
+            "candidateReceiptRef",
+            "candidateReceiptDigest",
+            "attestationAuthority",
             "testArtifactRef",
             "testArtifactDigest",
             "testSource",
@@ -78,6 +87,280 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
         self.assertIsNotNone(initial)
         self.assertNotEqual(initial, content_changed)
         self.assertNotEqual(content_changed, path_changed)
+
+    def test_message_transport_p95_refs_bind_recording_rules(self) -> None:
+        refs = provider_conformance.required_metric_refs(
+            provider_conformance.MESSAGE_TRANSPORT_CAPABILITY_ID
+        )
+        self.assertIn("promql://qwq_message_transport_publish_p95", refs)
+        self.assertIn("promql://qwq_message_transport_consume_p95", refs)
+        self.assertNotIn(
+            "provider-conformance://runtime.message.transport/metrics/publish_p95",
+            refs,
+        )
+
+    def test_nonprod_active_candidate_requires_current_startup_identity(self) -> None:
+        baseline = "sha256:" + "1" * 64
+        runtime_image = "sha256:" + "2" * 64
+        runtime_config = "sha256:" + "3" * 64
+        package_image = "sha256:" + "4" * 64
+        build_input = "sha256:" + "5" * 64
+        provider_image = "sha256:" + "6" * 64
+        contract_graph = "sha256:" + "7" * 64
+        commit = "a" * 40
+        startup = {
+            "target": "alpha-local",
+            "env": "alpha",
+            "status": "running",
+            "workload": "full",
+            "candidateDigest": baseline,
+            "configurationDigest": runtime_config,
+            "imageTransportTag": provider_conformance.immutable_image_digest(
+                {"assistant-service": runtime_image}
+            ),
+            "imageComposition": {
+                "images": {"assistant-service": {"ref": runtime_image}}
+            },
+        }
+        active = {"baselineId": baseline}
+        manifest = {
+            "baselineId": baseline,
+            "sourceRevision": commit,
+            "runtimeConfigDigest": runtime_config,
+            "imageDigest": package_image,
+            "buildInputDigest": build_input,
+        }
+        oci = {
+            "schema": "stackctl-package-oci-images",
+            "environment": "alpha",
+            "target": "alpha-local",
+            "configurationDigest": runtime_config,
+            "imageDigest": package_image,
+            "buildInputDigest": build_input,
+            "images": {
+                "assistant-service": {
+                    "ref": "qwq/assistant-service:build",
+                    "imageDigest": runtime_image,
+                }
+            },
+        }
+
+        def issues(receipt: dict[str, object]) -> list[str]:
+            return provider_conformance._nonprod_active_candidate_issues(
+                environment="alpha",
+                target="alpha-local",
+                startup=receipt,
+                active=active,
+                manifest=manifest,
+                oci=oci,
+                commit=commit,
+                image_digest=provider_image,
+                contract_graph_digest=contract_graph,
+                expected_image_digest=provider_image,
+                expected_contract_graph_digest=contract_graph,
+            )
+
+        self.assertEqual(issues(startup), [])
+        stopped = {**startup, "status": "stopped"}
+        self.assertTrue(any("not running" in issue for issue in issues(stopped)))
+        missing_candidate = {**startup, "candidateDigest": None}
+        self.assertTrue(
+            any("candidateDigest" in issue for issue in issues(missing_candidate))
+        )
+        stale_config = {
+            **startup,
+            "configurationDigest": "sha256:" + "8" * 64,
+        }
+        self.assertTrue(
+            any("configuration digest is stale" in issue for issue in issues(stale_config))
+        )
+        stale_image = deepcopy(startup)
+        stale_image["imageComposition"]["images"]["assistant-service"]["ref"] = (
+            "sha256:" + "9" * 64
+        )
+        self.assertTrue(
+            any("runtime image is stale" in issue for issue in issues(stale_image))
+        )
+
+        with mock.patch.object(
+            provider_conformance,
+            "load_startup_attempt",
+            return_value=None,
+        ):
+            resolved = provider_conformance.resolve_nonprod_active_candidate(
+                environment="alpha",
+                registry={},
+                commit=commit,
+                image_digest=provider_image,
+                contract_graph_digest=contract_graph,
+            )
+        self.assertFalse(resolved["active"])
+        self.assertIn("missing", str(resolved["reason"]))
+        with (
+            mock.patch.object(
+                provider_conformance,
+                "load_startup_attempt",
+                return_value=startup,
+            ),
+            mock.patch.object(
+                provider_conformance,
+                "can_reuse_package",
+                return_value=(False, "package content digest mismatch"),
+            ),
+        ):
+            stale_package = provider_conformance.resolve_nonprod_active_candidate(
+                environment="alpha",
+                registry={},
+                commit=commit,
+                image_digest=provider_image,
+                contract_graph_digest=contract_graph,
+            )
+        self.assertFalse(stale_package["active"])
+        self.assertIn("package content digest mismatch", str(stale_package["reason"]))
+        claimed_active = {
+            "candidateStatus": "active_immutable",
+            "candidateReceiptRef": ".qwq_output/env/alpha/process/startup_attempt.json",
+            "candidateReceiptDigest": "sha256:" + "9" * 64,
+            "environment": "alpha",
+            "commit": commit,
+            "imageDigest": provider_image,
+            "contractGraphDigest": contract_graph,
+        }
+        with mock.patch.object(
+            provider_conformance,
+            "resolve_nonprod_active_candidate",
+            return_value={
+                "active": False,
+                "receiptRef": "",
+                "receiptDigest": "",
+                "reason": "startup receipt status is not running",
+            },
+        ):
+            receipt_issues = provider_conformance.active_candidate_receipt_issues(
+                claimed_active,
+                registry={},
+                root=Path("/tmp"),
+            )
+        self.assertTrue(
+            any("not backed by the current canonical startup receipt" in issue for issue in receipt_issues)
+        )
+
+    def test_prod_active_candidate_requires_matching_native_readback(self) -> None:
+        digest = "sha256:" + "a" * 64
+        readiness = {"bindingPreflightReceiptRef": "receipt:preflight"}
+        case_result = {"releaseReadiness": readiness}
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / ".qwq_output"
+            run_root = root / "env/prod/runs/provider"
+            run_root.mkdir(parents=True)
+            case_path = run_root / "case-results.json"
+            readback_path = run_root / "provider.native-device-readback.json"
+            payload = {
+                "schema": provider_conformance.B10_REMOTE_READBACK_SCHEMA,
+                "status": "passed",
+                "capabilityId": "rtc.room.transport",
+                "adapterId": "infra.livekit_sfu",
+                "imageDigest": digest,
+                "configDigest": digest,
+                "contractGraphDigest": digest,
+                "adapterDigest": digest,
+                "releaseReadiness": readiness,
+            }
+            raw = json.dumps(payload, sort_keys=True).encode("utf-8")
+            readback_path.write_bytes(raw)
+            case_result["nativeReadback"] = {
+                "artifactName": readback_path.name,
+                "artifactDigest": "sha256:" + hashlib.sha256(raw).hexdigest(),
+            }
+            with mock.patch.dict(
+                os.environ,
+                {"QWQ_OUTPUT_ROOT": str(root)},
+                clear=False,
+            ):
+                valid = provider_conformance.resolve_prod_active_candidate(
+                    case_result_path=case_path,
+                    case_result=case_result,
+                    capability_id="rtc.room.transport",
+                    adapter_id="infra.livekit_sfu",
+                    image_digest=digest,
+                    config_digest=digest,
+                    contract_graph_digest=digest,
+                    adapter_digest=digest,
+                )
+                missing = provider_conformance.resolve_prod_active_candidate(
+                    case_result_path=case_path,
+                    case_result={"releaseReadiness": readiness},
+                    capability_id="rtc.room.transport",
+                    adapter_id="infra.livekit_sfu",
+                    image_digest=digest,
+                    config_digest=digest,
+                    contract_graph_digest=digest,
+                    adapter_digest=digest,
+                )
+                stale = provider_conformance.resolve_prod_active_candidate(
+                    case_result_path=case_path,
+                    case_result=case_result,
+                    capability_id="rtc.room.transport",
+                    adapter_id="infra.livekit_sfu",
+                    image_digest="sha256:" + "b" * 64,
+                    config_digest=digest,
+                    contract_graph_digest=digest,
+                    adapter_digest=digest,
+                )
+        self.assertTrue(valid["active"])
+        self.assertRegex(str(valid["receiptDigest"]), r"^sha256:[a-f0-9]{64}$")
+        self.assertFalse(missing["active"])
+        self.assertFalse(stale["active"])
+
+    def test_release_cell_set_is_exactly_140_and_rejects_legacy_duplicates(
+        self,
+    ) -> None:
+        compiled = {
+            "providerConformanceCapabilityIds": [
+                f"provider.capability.{index:02d}" for index in range(14)
+            ]
+        }
+        expected = provider_conformance.expected_required_cell_keys(compiled)
+        self.assertEqual(len(expected), 140)
+        evidence = []
+        for capability_id, environment, layer in sorted(expected):
+            item = {
+                field: "value"
+                for field in provider_conformance.REQUIRED_FIELDS
+            }
+            item.update(
+                {
+                    "schema": "provider-conformance-evidence",
+                    "capabilityId": capability_id,
+                    "environment": environment,
+                    "testLayer": layer,
+                }
+            )
+            evidence.append(item)
+        self.assertEqual(
+            provider_conformance.exact_required_cell_issues(
+                evidence,
+                compiled=compiled,
+            ),
+            [],
+        )
+        missing = provider_conformance.exact_required_cell_issues(
+            evidence[:-1],
+            compiled=compiled,
+        )
+        self.assertTrue(any("exactly 140" in issue for issue in missing))
+        duplicate = provider_conformance.exact_required_cell_issues(
+            [*evidence, evidence[0]],
+            compiled=compiled,
+        )
+        self.assertTrue(any("duplicate" in issue for issue in duplicate))
+        legacy = dict(evidence[0])
+        legacy.pop("candidateReceiptDigest")
+        legacy_issues = provider_conformance.exact_required_cell_issues(
+            [legacy, *evidence[1:]],
+            compiled=compiled,
+        )
+        self.assertTrue(any("legacy" in issue for issue in legacy_issues))
 
     def test_empty_evidence_cannot_satisfy_release_readiness(self) -> None:
         report = {
@@ -613,6 +896,23 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
             )
             self.assertEqual(case_issues, [])
             self.assertIsNotNone(loaded)
+            case_result.pop("nativeReadback")
+            result_path.write_text(json.dumps(case_result), encoding="utf-8")
+            loaded_without_readback, case_issues = provider_conformance.load_case_results(
+                result_path,
+                source=sources[
+                    (
+                        "rtc.room.transport",
+                        "infra.livekit_sfu",
+                        "user_acceptance",
+                    )
+                ],
+                environment="prod",
+                config_digest="sha256:" + "b" * 64,
+            )
+            self.assertEqual(case_issues, [])
+            self.assertIsNotNone(loaded_without_readback)
+            case_result["nativeReadback"] = native_readback
             case_result["version"] = 1
             result_path.write_text(json.dumps(case_result), encoding="utf-8")
             _, case_issues = provider_conformance.load_case_results(
@@ -716,6 +1016,244 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
                 raw + b" ", key="local-contract-attestation-key"
             ),
         )
+
+    def test_ci_attestation_cannot_be_silently_accepted_without_authority(self) -> None:
+        report = {
+            field: "value"
+            for field in provider_conformance.EXECUTION_REPORT_REQUIRED_FIELDS
+        }
+        report.update(
+            {
+                "schema": provider_conformance.EXECUTION_REPORT_SCHEMA,
+                "exitCode": 0,
+                "testSource": None,
+                "testCommand": "python3 provider-test.py",
+                "commit": "a" * 40,
+                "attestationAuthority": "ci",
+                "nonPromotable": False,
+                "sourceTreeState": "clean",
+                "commitReview": "reviewed",
+                "candidateStatus": "active_immutable",
+                "candidateReceiptRef": ".qwq_output/env/prod/runs/readback.json",
+                "candidateReceiptDigest": "sha256:" + "1" * 64,
+            }
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "report.json"
+            raw = json.dumps(report, sort_keys=True).encode("utf-8")
+            path.write_bytes(raw)
+            evidence = {
+                **report,
+                "artifactDigest": "sha256:" + hashlib.sha256(raw).hexdigest(),
+                "artifactAttestation": "hmac-sha256:" + "2" * 64,
+            }
+            with mock.patch.dict(os.environ, {}, clear=True):
+                issues = provider_conformance._validate_execution_report(
+                    artifact_path=path,
+                    evidence=evidence,
+                    expected_source=None,
+                )
+        self.assertTrue(
+            any("CI attestation authority is unavailable" in issue for issue in issues)
+        )
+
+    def test_dirty_worktree_and_local_key_cannot_be_promoted(self) -> None:
+        commit = "a" * 40
+        with (
+            mock.patch.dict(
+                os.environ,
+                {"QWQ_PROVIDER_CONFORMANCE_ATTESTATION_KEY": "developer-key"},
+                clear=True,
+            ),
+            mock.patch.object(
+                provider_conformance,
+                "current_source_tree_state",
+                return_value="dirty",
+            ),
+        ):
+            identity = provider_conformance.evidence_identity(
+                commit=commit,
+                candidate_receipt_bound=True,
+                candidate_receipt_ref=".qwq_output/env/alpha/runs/startup.json",
+                candidate_receipt_digest="sha256:" + "9" * 64,
+            )
+            attestation = provider_conformance.attest_execution_report(
+                b"local execution report",
+                identity=identity,
+            )
+
+        self.assertEqual(
+            identity,
+            {
+                "nonPromotable": True,
+                "sourceTreeState": "dirty",
+                "commitReview": "unreviewed",
+                "candidateStatus": "active_immutable",
+                "candidateReceiptRef": ".qwq_output/env/alpha/runs/startup.json",
+                "candidateReceiptDigest": "sha256:" + "9" * 64,
+                "attestationAuthority": "local",
+            },
+        )
+        self.assertRegex(attestation, r"^local-sha256:[a-f0-9]{64}$")
+        self.assertFalse(
+            provider_conformance.evidence_is_promotable(
+                {**identity, "commit": commit},
+                require_runtime_authority=False,
+            )
+        )
+        non_promotable_cell = {
+            **identity,
+            "status": "passed",
+            "commit": commit,
+            "imageDigest": "sha256:" + "1" * 64,
+            "contractGraphDigest": "sha256:" + "2" * 64,
+            "adapterDigest": "sha256:" + "3" * 64,
+            "configDigest": "sha256:" + "4" * 64,
+            "assertionIds": sorted(provider_conformance.PUBLIC_ASSERTION_IDS),
+            "typedPort": "ExamplePort",
+            "contractRef": "example/operations.yaml",
+            "environment": "alpha",
+        }
+        with mock.patch.object(
+            provider_conformance,
+            "ci_attestation_authority_available",
+            return_value=True,
+        ):
+            self.assertFalse(
+                provider_conformance._cells_share_release(
+                    [non_promotable_cell],
+                    expected_environments=["alpha"],
+                    require_adapter_digest=True,
+                )
+            )
+        with (
+            mock.patch.dict(os.environ, {}, clear=True),
+            mock.patch.object(
+                provider_conformance,
+                "current_source_tree_state",
+                return_value="dirty",
+            ),
+        ):
+            no_key_identity = provider_conformance.evidence_identity(
+                commit=commit,
+                candidate_receipt_bound=False,
+            )
+            self.assertRegex(
+                provider_conformance.attest_execution_report(
+                    b"no CI key local report",
+                    identity=no_key_identity,
+                ),
+                r"^local-sha256:[a-f0-9]{64}$",
+            )
+
+        forged_local_key_identity = {
+            "nonPromotable": False,
+            "sourceTreeState": "clean",
+            "commitReview": "reviewed",
+            "candidateStatus": "active_immutable",
+            "candidateReceiptRef": "",
+            "candidateReceiptDigest": "",
+            "attestationAuthority": "ci",
+            "commit": commit,
+        }
+        with (
+            mock.patch.dict(
+                os.environ,
+                {"QWQ_PROVIDER_CONFORMANCE_ATTESTATION_KEY": "developer-key"},
+                clear=True,
+            ),
+            mock.patch.object(
+                provider_conformance,
+                "current_source_tree_state",
+                return_value="clean",
+            ),
+        ):
+            self.assertFalse(
+                provider_conformance.evidence_is_promotable(
+                    forged_local_key_identity,
+                )
+            )
+        with (
+            mock.patch.dict(
+                os.environ,
+                {
+                    "GITHUB_ACTIONS": "true",
+                    "QWQ_PROVIDER_CONFORMANCE_ATTESTATION_AUTHORITY": "ci",
+                    "QWQ_PROVIDER_CONFORMANCE_ATTESTATION_KEY": "forged-local-key",
+                    "QWQ_PROVIDER_CONFORMANCE_REVIEWED_COMMIT": commit,
+                },
+                clear=True,
+            ),
+            mock.patch.object(
+                provider_conformance,
+                "current_source_tree_state",
+                return_value="clean",
+            ),
+        ):
+            spoofed_context = provider_conformance.evidence_identity(
+                commit=commit,
+                candidate_receipt_bound=False,
+            )
+            self.assertTrue(spoofed_context["nonPromotable"])
+            self.assertEqual(spoofed_context["candidateStatus"], "unverified")
+            self.assertFalse(
+                provider_conformance.evidence_is_promotable(
+                    {**spoofed_context, "commit": commit},
+                )
+            )
+
+    def test_reviewed_clean_ci_identity_is_promotable(self) -> None:
+        commit = "b" * 40
+        with (
+            mock.patch.dict(
+                os.environ,
+                {
+                    "GITHUB_ACTIONS": "true",
+                    "QWQ_PROVIDER_CONFORMANCE_ATTESTATION_AUTHORITY": "ci",
+                    "QWQ_PROVIDER_CONFORMANCE_ATTESTATION_KEY": "ci-owned-key",
+                    "QWQ_PROVIDER_CONFORMANCE_REVIEWED_COMMIT": commit,
+                },
+                clear=True,
+            ),
+            mock.patch.object(
+                provider_conformance,
+                "current_source_tree_state",
+                return_value="clean",
+            ),
+        ):
+            identity = provider_conformance.evidence_identity(
+                commit=commit,
+                candidate_receipt_bound=True,
+                candidate_receipt_ref=".qwq_output/env/alpha/runs/startup.json",
+                candidate_receipt_digest="sha256:" + "9" * 64,
+            )
+            self.assertFalse(identity["nonPromotable"])
+            self.assertEqual(identity["attestationAuthority"], "ci")
+            self.assertTrue(
+                provider_conformance.evidence_is_promotable(
+                    {**identity, "commit": commit},
+                )
+            )
+            promotable_cell = {
+                **identity,
+                "status": "passed",
+                "commit": commit,
+                "imageDigest": "sha256:" + "1" * 64,
+                "contractGraphDigest": "sha256:" + "2" * 64,
+                "adapterDigest": "sha256:" + "3" * 64,
+                "configDigest": "sha256:" + "4" * 64,
+                "assertionIds": sorted(provider_conformance.PUBLIC_ASSERTION_IDS),
+                "typedPort": "ExamplePort",
+                "contractRef": "example/operations.yaml",
+                "environment": "alpha",
+            }
+            self.assertTrue(
+                provider_conformance._cells_share_release(
+                    [promotable_cell],
+                    expected_environments=["alpha"],
+                    require_adapter_digest=True,
+                )
+            )
 
     def test_evidence_loader_reads_only_disposable_output(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

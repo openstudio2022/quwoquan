@@ -1,19 +1,15 @@
-"""Run and bind one read-only independent Cursor reviewer per post object."""
+"""Run and bind one read-only independent managed-SDK reviewer per post object."""
 from __future__ import annotations
 
 import hashlib
 import json
 import re
+from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
-from content.execution import store
-from content.execution.context import ExecutionContext
-from content.execution.workspace import execution_root
-from content.post import object_index as content_object
-from content.review.independent import apply_independent_post_review
-from core.io import read_json, write_json
+from core.control_types import AgentProvider
 from core.data_issue import (
     DataIssue,
     DataIssueCode,
@@ -21,10 +17,22 @@ from core.data_issue import (
     DataRecoveryAction,
     data_issue,
 )
+from core.io import read_json, write_json
 from core.prompt_render import render as render_prompt
 from core.runtime_policy import active_runtime_policy
 from core.schema import assert_valid
 from governance.coverage.license import rights_enforcement_mode
+
+from content.execution import store
+from content.execution.context import ExecutionContext
+from content.execution.workspace import execution_root
+from content.post import object_index as content_object
+from content.review.independent import apply_independent_post_review
+
+
+def _agent_provider_value(provider: AgentProvider | str) -> str:
+    """Return the canonical value while keeping the provider enum fail-closed."""
+    return AgentProvider(provider).value
 
 
 def _existing_independent_review_issues(
@@ -34,6 +42,7 @@ def _existing_independent_review_issues(
     object_ref: str,
     model: str,
     model_family: str,
+    provider: str,
 ) -> list[str]:
     result_path = review_dir / "reviewer_result.json"
     attestation_path = review_dir / "attestation.json"
@@ -61,7 +70,7 @@ def _existing_independent_review_issues(
     expected = {
         "executionId": execution_id,
         "objectRef": object_ref,
-        "provider": "cursor_sdk",
+        "provider": provider,
         "model": model,
         "modelFamily": model_family,
         "verdict": "passed",
@@ -140,7 +149,7 @@ def _result_from_text(
     object_ref: str,
 ) -> dict[str, Any] | None:
     candidates = [text.strip()]
-    fenced = re.search(r"```(?:json)?\s*(\{.*\})\s*```", text, re.S)
+    fenced = re.search(r"```(?:json)?\s*(\{.*\})\s*```", text, re.DOTALL)
     if fenced:
         candidates.insert(0, fenced.group(1))
     first, last = text.find("{"), text.rfind("}")
@@ -172,7 +181,9 @@ def _run_post_independent_reviews_serial(
 ) -> list[DataIssue]:
     """Review current deterministic-approved posts and bind real SDK evidence."""
     from content.execution.agent.agent_runner import _redact_managed_secret
-    from content.execution.agent.agent_worker import _default_managed_agent_runner_isolated
+    from content.execution.agent.agent_worker import (
+        _default_managed_agent_runner_isolated,
+    )
     from content.execution.model_contract import execution_model_pair_for_execution
 
     pair = execution_model_pair_for_execution(ctx.execution_id)
@@ -189,6 +200,7 @@ def _run_post_independent_reviews_serial(
             object_ref=ref,
             model=model,
             model_family=model_family,
+            provider=_agent_provider_value(ctx.agent_provider),
         )
         if not recorded:
             continue
@@ -240,6 +252,7 @@ def _run_post_independent_reviews_serial(
             model=model,
             model_parameters=pair.reviewer.parameters,
             agent_provider=ctx.agent_provider,
+            semantic_role="reviewer",
             release_only=ctx.release_only,
         )
         outcome = _default_managed_agent_runner_isolated(review_ctx, prompt)
@@ -304,7 +317,7 @@ def _run_post_independent_reviews_serial(
             continue
         bound = apply_independent_post_review(
             review_dir=review_dir,
-            provider="cursor_sdk",
+            provider=outcome.provider.value,
             model=model,
             model_family=model_family,
             run_id=outcome.run_id,

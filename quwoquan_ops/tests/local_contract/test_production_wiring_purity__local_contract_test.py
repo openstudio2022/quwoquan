@@ -60,7 +60,12 @@ class ProductionWiringPurityContractTest(unittest.TestCase):
             application.mkdir(parents=True)
             adapters.mkdir(parents=True)
             (worker / "main.go").write_text(
-                "package main\nfunc main() { NewMemoryStore() }\n",
+                "package main\n\n"
+                "import (\n"
+                '\t"quwoquan_service/services/sample-service/internal/sample/'
+                'sample_object/infrastructure/testsupport"\n'
+                ")\n\n"
+                "func main() { _ = testsupport.Store{} }\n",
                 encoding="utf-8",
             )
             api = service_root / "services" / "sample-service" / "cmd" / "api"
@@ -70,13 +75,13 @@ class ProductionWiringPurityContractTest(unittest.TestCase):
                 encoding="utf-8",
             )
             (application / "service.go").write_text(
-                'package application\nvar fallback = NoopGateway{}\n'
-                "var publisher = NoopPublisher()\n"
+                "package application\n\n"
+                'import "github.com/stretchr/testify/require"\n\n'
                 'var endpoint = "https://service.invalid"\n',
                 encoding="utf-8",
             )
             (adapters / "handler.go").write_text(
-                "package http\nfunc newHandler() { NewFakeGateway() }\n",
+                "//go:build test\n\npackage http\nfunc newHandler() {}\n",
                 encoding="utf-8",
             )
             gate.SERVICE_ROOT = service_root
@@ -84,12 +89,15 @@ class ProductionWiringPurityContractTest(unittest.TestCase):
             issues = gate.collect_issues()
 
         self.assertTrue(
-            any("cmd/worker/main.go" in issue for issue in issues),
+            any(
+                "cmd/worker/main.go" in issue and "测试专用包" in issue
+                for issue in issues
+            ),
             issues,
         )
         self.assertTrue(
             any(
-                "internal/sample/sample_object/application/service.go" in issue
+                "application/service.go" in issue and "测试框架" in issue
                 for issue in issues
             ),
             issues,
@@ -98,9 +106,101 @@ class ProductionWiringPurityContractTest(unittest.TestCase):
         self.assertTrue(any("生产默认值" in issue for issue in issues), issues)
         self.assertTrue(
             any(
-                "internal/sample/sample_object/adapters/http/handler.go" in issue
+                "adapters/http/handler.go" in issue and "测试构建约束" in issue
                 for issue in issues
             ),
+            issues,
+        )
+
+    def test_business_concept_named_memory_is_not_flagged(self) -> None:
+        """`MemoryProfile` 是 assistant 长期记忆的业务概念，撞词不得判为内存替身。"""
+        gate = _load_gate()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            service_root = Path(temp_dir)
+            application = (
+                service_root
+                / "services"
+                / "assistant-service"
+                / "internal"
+                / "assistant"
+                / "skill_package_release"
+                / "application"
+                / "packageasset"
+            )
+            application.mkdir(parents=True)
+            (application / "profile_assets.go").write_text(
+                "package packageasset\n\n"
+                "type MemoryProfile struct {\n"
+                "\tProfileID string `json:\"profileId\"`\n"
+                "\tDigest    string `json:\"digest\"`\n"
+                "}\n\n"
+                "type AssetCatalog struct {\n"
+                "\tMemoryProfiles []MemoryProfile `json:\"memoryProfiles\"`\n"
+                "}\n\n"
+                "func memoryDigest(value MemoryProfile) (string, string, error) {\n"
+                "\treturn value.ProfileID, value.Digest, nil\n"
+                "}\n\n"
+                "func newCatalog() AssetCatalog { return AssetCatalog{} }\n",
+                encoding="utf-8",
+            )
+            gate.SERVICE_ROOT = service_root
+
+            issues = gate.collect_issues()
+
+        self.assertEqual([], issues, issues)
+
+    def test_real_in_memory_double_wired_into_production_is_flagged(self) -> None:
+        """真替身即使不叫 Memory/Mock/Fake，只要被生产装配引用就必须命中。"""
+        gate = _load_gate()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            service_root = Path(temp_dir)
+            api = service_root / "services" / "sample-service" / "cmd" / "api"
+            double = (
+                service_root
+                / "services"
+                / "sample-service"
+                / "internal"
+                / "sample"
+                / "sample_object"
+                / "infrastructure"
+                / "testsupport"
+            )
+            api.mkdir(parents=True)
+            double.mkdir(parents=True)
+            # 替身自己完全不带 double 词汇，只叫 Store。
+            (double / "post_store.go").write_text(
+                "package testsupport\n\n"
+                "import (\n\t\"context\"\n\t\"sync\"\n)\n\n"
+                "type Store struct {\n"
+                "\tmu    sync.RWMutex\n"
+                "\titems map[string]string\n"
+                "}\n\n"
+                "func (s *Store) Save(ctx context.Context, id string) error "
+                "{ return nil }\n",
+                encoding="utf-8",
+            )
+            (api / "main.go").write_text(
+                "package main\n\n"
+                "import (\n"
+                '\t"quwoquan_service/services/sample-service/internal/sample/'
+                'sample_object/infrastructure/testsupport"\n'
+                ")\n\n"
+                "func main() { _ = &testsupport.Store{} }\n",
+                encoding="utf-8",
+            )
+            gate.SERVICE_ROOT = service_root
+
+            issues = gate.collect_issues()
+
+        self.assertTrue(
+            any(
+                "cmd/api/main.go" in issue and "测试专用包" in issue
+                for issue in issues
+            ),
+            issues,
+        )
+        self.assertFalse(
+            any("infrastructure/testsupport/post_store.go" in issue for issue in issues),
             issues,
         )
 
@@ -168,7 +268,7 @@ class ProductionWiringPurityContractTest(unittest.TestCase):
                 encoding="utf-8",
             )
             (application / "service.py").write_text(
-                "gateway = MockGateway()\n",
+                "from unittest.mock import MagicMock\n\ngateway = MagicMock()\n",
                 encoding="utf-8",
             )
             (infrastructure / "memory_store.py").write_text(

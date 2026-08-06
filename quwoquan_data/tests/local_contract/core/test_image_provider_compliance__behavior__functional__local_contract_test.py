@@ -1,8 +1,8 @@
-"""P4 图库合规契约：来源分类、垂类权利策略与非中文译简体门。
+"""P4 图库 acquisition/rights 分轨与非中文译简体门。
 
-- P4a 图库分级：registry rightsPolicy 为唯一真相源；图虫=逐图创作者授权、Pinterest=归因无水印发布，
-  受限来源如实标注 restricted + bypassAttempted=false；Pinterest 必须逐图归因与扫描证据完整；Commons/Openverse 可发布。
-- P4b 垂类权利策略：travel 冷启动记录审计状态但不按许可过滤；enforce 垂类保持授权硬门。
+- P4a：Pinterest/图虫均可通过受治理公开直链、支持 API 或人工文件取得研究素材；
+  取得不等于授权，provider 分类不得伪造逐资产 rightsStatus。
+- P4b：research 记录权利缺口但不因未验证而阻断；commercial/enforce 保持硬门。
 - P4c 非中文图片元数据门：英文/拉丁主导 caption / 标题须先译简体中文，否则阻断发布。
 
 可直接运行：python3 quwoquan_data/tests/local_contract/core/test_image_provider_compliance__behavior__functional__local_contract_test.py
@@ -36,25 +36,23 @@ from core.localization import simplified_chinese_publish_issues  # noqa: E402
 
 # ---------------------------------------------------------------- P4a 分级 + 受限如实标注
 
-def test_p4a_tuchong_restricted_pinterest_attribution_publishable():
-    # 图虫：逐图创作者授权后才可发布；如实标注受限，不抓取绕过。
+def test_p4a_tuchong_and_pinterest_have_governed_research_acquisition_paths():
     tuchong = classify_image_provider(source_id="tuchong")
-    assert tuchong["accessMode"] == "restricted_creator_authorization"
-    assert tuchong["restricted"] is True
-    assert tuchong["publishable"] is False
+    assert tuchong["accessMode"] == "creator_authorization_conditional"
+    assert tuchong["researchEligible"] is True
+    assert tuchong["commercialEvidenceRequired"] is True
+    assert set(tuchong["acquisitionPaths"]) == {
+        "public_direct", "supported_api", "manual_file"
+    }
+    assert image_provider_restriction(source_id="tuchong") is None
 
-    tuchong_rec = image_provider_restriction(source_id="tuchong")
-    assert tuchong_rec is not None
-    assert tuchong_rec["bypassAttempted"] is False
-    assert tuchong_rec["restrictionKind"] == "creator_authorization_required"
-    assert "authorizationProof" in tuchong_rec["requiresProof"]
-    assert tuchong_rec["alternativePath"]["strategy"] == "open_license_pools"
-
-    # Pinterest：走 attribution_no_watermark 正式权利模型后，可在逐图证据完整时进入发布候选。
     pinterest = classify_image_provider(platform="Pinterest")
-    assert pinterest["accessMode"] == "attribution_publishable"
-    assert pinterest["restricted"] is False
-    assert pinterest["publishable"] is True
+    assert pinterest["accessMode"] == "attribution_conditional"
+    assert pinterest["researchEligible"] is True
+    assert pinterest["commercialEvidenceRequired"] is True
+    assert set(pinterest["acquisitionPaths"]) == {
+        "public_direct", "supported_api", "manual_file"
+    }
     assert image_provider_restriction(source_id="pinterest") is None
 
 
@@ -65,24 +63,20 @@ def test_p4a_open_license_providers_publishable():
     assert "openverse" in alt_providers
     for sid in ("wikimedia_commons", "openverse"):
         info = classify_image_provider(source_id=sid)
-        assert info["accessMode"] == "open_license_publishable"
-        assert info["publishable"] is True
+        assert info["accessMode"] == "open_license_conditional"
+        assert info["researchEligible"] is True
         assert info["restricted"] is False
         assert image_provider_restriction(source_id=sid) is None
 
 
 def test_p4a_compliance_summary_is_auditable_and_honest():
     summary = professional_library_compliance_summary()
-    assert summary["policy"] == "registry_rights_policy_single_source"
+    assert summary["policy"] == "acquisition_separate_from_distribution_rights"
     assert summary["bypassAttempted"] is False
-    restricted_ids = {rec["sourceId"] for rec in summary["restrictedProviders"]}
-    assert "tuchong" in restricted_ids
-    assert "pinterest" not in restricted_ids
-    assert "pinterest" in set(summary["publishableProviders"])
-    # 商业图库（如 Getty）同样受限。
-    assert "getty_images" in restricted_ids
-    # 替代路径稳定指向开放许可图池。
-    assert "wikimedia_commons" in summary["alternativePath"]["providers"]
+    eligible_ids = {rec["sourceId"] for rec in summary["researchEligibleProviders"]}
+    blocked_ids = {rec["sourceId"] for rec in summary["acquisitionBlockedProviders"]}
+    assert {"pinterest", "tuchong", "wikimedia_commons", "openverse"} <= eligible_ids
+    assert "xiaohongshu_travel_reference" in blocked_ids
 
 
 # ---------------------------------------------------------------- P4b 授权审计与垂类执行策略
@@ -116,31 +110,32 @@ def test_p4b_full_per_image_authorization_passes_gate():
     assert verdict["passed"], verdict["issues"]
 
 
-def test_p4b_travel_missing_authorization_is_blocked():
+def test_p4b_research_missing_authorization_is_audited_not_blocked():
     bad = copy.deepcopy(_tuchong_collection())
     bad["images"][0].pop("authorizationProof")
     verdict = _collection_gate(bad, entity_id="九寨沟", vertical="travel")
-    assert verdict["passed"] is False
+    assert verdict["passed"] is True
     assert verdict["rightsAuditStatus"] == "unverified"
     assert any("authorizationProof" in issue for issue in verdict["rightsAuditIssues"])
 
 
-def test_p4b_travel_unsupported_license_is_blocked():
+def test_p4b_research_unsupported_license_is_audited_not_blocked():
     bad = copy.deepcopy(_tuchong_collection())
     bad["images"][0]["license"] = "CC BY-NC 4.0"
     bad["images"][0]["termsUrl"] = "https://creativecommons.org/licenses/by-nc/4.0/"
     verdict = _collection_gate(bad, entity_id="九寨沟", vertical="travel")
-    assert verdict["passed"] is False
+    assert verdict["passed"] is True
     assert verdict["rightsAuditStatus"] == "unverified"
     assert verdict["rightsAuditIssues"]
 
 
-def test_p4b_enforced_vertical_still_blocks_incomplete_rights():
+def test_p4b_research_lifecycle_is_not_inferred_from_vertical_name():
     bad = copy.deepcopy(_tuchong_collection())
     bad["images"][0].pop("authorizationProof")
     verdict = _collection_gate(bad, entity_id="九寨沟", vertical="photography")
-    assert verdict["passed"] is False
-    assert any("authorizationProof" in issue for issue in verdict["issues"])
+    assert verdict["passed"] is True
+    assert verdict["rightsAuditStatus"] == "unverified"
+    assert any("authorizationProof" in issue for issue in verdict["rightsAuditIssues"])
 
 
 # ---------------------------------------------------------------- P4c 非中文译简体门

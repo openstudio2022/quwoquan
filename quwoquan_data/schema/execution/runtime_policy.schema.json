@@ -6,27 +6,70 @@
     "policy": {
       "type": "object",
       "properties": {
-        "cursor": {
+        "semanticAgent": {
           "type": "object",
           "properties": {
-            "provider": { "const": "cursor_sdk" },
-            "model": { "type": "string", "minLength": 1 },
-            "modelParameters": {
+            "runtime": { "enum": ["local", "cloud"] },
+            "fallbackPolicy": { "const": "forbidden" },
+            "author": { "$ref": "#/$defs/semanticBinding" },
+            "reviewer": { "$ref": "#/$defs/semanticBinding" },
+            "calibration": {
+              "type": "object",
+              "properties": {
+                "provider": { "enum": ["cursor_sdk", "codex_sdk"] },
+                "model": { "type": "string", "minLength": 1 },
+                "modelParameters": { "$ref": "#/$defs/modelParameters" },
+                "sampleRate": { "const": 0.1 },
+                "minimumSampleCount": { "const": 10 },
+                "smallBatchPolicy": { "const": "all" }
+              },
+              "required": [
+                "provider", "model", "modelParameters", "sampleRate",
+                "minimumSampleCount", "smallBatchPolicy"
+              ],
+              "additionalProperties": false
+            },
+            "explicitSelections": {
               "type": "array",
-              "uniqueItems": true,
-              "items": {
+              "minItems": 1,
+              "items": { "$ref": "#/$defs/explicitSemanticSelection" },
+              "contains": {
                 "type": "object",
-                "required": ["id", "value"],
-                "additionalProperties": false,
                 "properties": {
-                  "id": { "type": "string", "minLength": 1 },
-                  "value": { "type": "string", "minLength": 1 }
-                }
+                  "selectionId": { "const": "cursor_auto" },
+                  "provider": { "const": "cursor_sdk" },
+                  "model": { "const": "auto" },
+                  "modelParameters": { "const": [] },
+                  "runtime": { "const": "local" },
+                  "requiresNewRetryOf": { "const": true }
+                },
+                "required": [
+                  "selectionId", "provider", "model", "modelParameters",
+                  "runtime", "requiresNewRetryOf"
+                ]
               }
             },
-            "runtime": { "enum": ["local", "cloud"] }
+            "capacity": {
+              "type": "object",
+              "properties": {
+                "accountScopeId": {"type": "string", "pattern": "^[a-z][a-z0-9-]*$"},
+                "hostScopeId": {"type": "string", "pattern": "^[a-z][a-z0-9-]*$"},
+                "requestsPerMinute": {"type": "integer", "minimum": 1},
+                "burstLimit": {"type": "integer", "minimum": 1},
+                "laneConcurrencyLimit": {"type": "integer", "minimum": 1},
+                "receiptTtlSeconds": {"type": "integer", "minimum": 1}
+              },
+              "required": [
+                "accountScopeId", "hostScopeId", "requestsPerMinute",
+                "burstLimit", "laneConcurrencyLimit", "receiptTtlSeconds"
+              ],
+              "additionalProperties": false
+            }
           },
-          "required": ["provider", "model", "modelParameters", "runtime"],
+          "required": [
+            "runtime", "fallbackPolicy", "author", "reviewer",
+            "calibration", "explicitSelections", "capacity"
+          ],
           "additionalProperties": false
         },
         "workers": {
@@ -48,6 +91,24 @@
             "oversampleFactor": { "type": "number", "minimum": 1 }
           },
           "required": ["oversampleFactor"],
+          "additionalProperties": false
+        },
+        "runtimeEvidence": {
+          "type": "object",
+          "properties": {
+            "processInspectionTimeoutSeconds": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "queueFaultEventTimeoutSeconds": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          },
+          "required": [
+            "processInspectionTimeoutSeconds",
+            "queueFaultEventTimeoutSeconds"
+          ],
           "additionalProperties": false
         },
         "budgets": {
@@ -220,10 +281,54 @@
           "additionalProperties": false
         }
       },
-      "required": ["cursor", "workers", "selection", "budgets", "coverageDiscovery", "network"],
+      "required": ["semanticAgent", "workers", "selection", "runtimeEvidence", "budgets", "coverageDiscovery", "network"],
       "additionalProperties": false
     }
   },
   "required": ["profileId", "policy"],
-  "additionalProperties": false
+  "additionalProperties": false,
+  "$defs": {
+    "modelParameters": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "required": ["id", "value"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "value": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "semanticBinding": {
+      "type": "object",
+      "properties": {
+        "provider": { "enum": ["cursor_sdk", "codex_sdk"] },
+        "model": { "type": "string", "minLength": 1 },
+        "modelParameters": { "$ref": "#/$defs/modelParameters" }
+      },
+      "required": ["provider", "model", "modelParameters"],
+      "additionalProperties": false
+    },
+    "explicitSemanticSelection": {
+      "type": "object",
+      "properties": {
+        "selectionId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "provider": { "enum": ["cursor_sdk", "codex_sdk"] },
+        "model": { "type": "string", "minLength": 1 },
+        "modelParameters": { "$ref": "#/$defs/modelParameters" },
+        "runtime": { "enum": ["local", "cloud"] },
+        "requiresNewRetryOf": { "const": true }
+      },
+      "required": [
+        "selectionId", "provider", "model", "modelParameters",
+        "runtime", "requiresNewRetryOf"
+      ],
+      "additionalProperties": false
+    }
+  }
 }

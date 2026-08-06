@@ -18,6 +18,10 @@ allowedValues:
     - licensed_api
     - platform_reference
     - attribution_manifest
+  researchAcquisitionPaths:
+    - public_direct
+    - supported_api
+    - manual_file
   rightsPolicies:
     - factual_reference_only
     - official_terms_required
@@ -246,9 +250,9 @@ lanePolicies:
       audioRightsEvidenceRequired: true
     commercialAdmissionMatrix:
       - { sourceId: wikimedia_commons_video, sourceKind: tourism_video_site, publicationAdmissions: [research_release, commercial_release] }
-      - { sourceId: youtube, sourceKind: tourism_video_site, publicationAdmissions: [research_release, commercial_release] }
-      - { sourceId: vimeo, sourceKind: tourism_video_site, publicationAdmissions: [research_release, commercial_release] }
-      - { sourceId: bilibili, sourceKind: tourism_video_site, publicationAdmissions: [research_release, commercial_release] }
+      - { sourceId: youtube, sourceKind: tourism_video_site, publicationAdmissions: [] }
+      - { sourceId: vimeo, sourceKind: tourism_video_site, publicationAdmissions: [] }
+      - { sourceId: bilibili, sourceKind: tourism_video_site, publicationAdmissions: [] }
       - { sourceId: douyin, sourceKind: douyin, publicationAdmissions: [research_release, risk_accepted_attribution_only, commercial_release] }
       - { sourceId: tiktok, sourceKind: tiktok, publicationAdmissions: [research_release, risk_accepted_attribution_only, commercial_release] }
       - { sourceId: weibo, sourceKind: weibo, publicationAdmissions: [research_release, risk_accepted_attribution_only, commercial_release] }
@@ -444,8 +448,9 @@ common:
       defaultRole: publish_candidate
       fetchMode: api
       rightsPolicy: open_license_required
+      researchAcquisitionPaths: [supported_api, manual_file]
       rateLimit: conservative
-      promptFacts: [自由媒体库, 逐图记录许可、署名和文件页]
+      promptFacts: [自由媒体库, 逐图记录许可、署名和文件页, 受控网络无法直连官方 CDN 时仅允许基于同一官方文件页和 exact-byte 证据人工导入]
     - sourceId: openverse
       platform: Openverse
       sourceClass: open_license_media
@@ -471,6 +476,7 @@ common:
       defaultRole: publish_candidate
       fetchMode: attribution_manifest
       rightsPolicy: attribution_no_watermark
+      researchAcquisitionPaths: [public_direct, supported_api, manual_file]
       rateLimit: conservative
       promptFacts: [视觉发现和单源图片作品候选, research 可通过公开直链、平台支持接口或人工文件取得并记录 unverified 权利缺口, commercial 必须补齐逐图授权, 逐图记录 pinUrl/originalAssetUrl/sourceAuthor/repostAttribution/watermarkScan/ocrScan/modelReleaseStatus/collectedAt]
     - sourceId: five_hundred_px
@@ -606,6 +612,7 @@ common:
       defaultRole: licensed_candidate
       fetchMode: search
       rightsPolicy: creator_authorization_required
+      researchAcquisitionPaths: [public_direct, supported_api, manual_file]
       rateLimit: conservative
       promptFacts: [图虫社区作为 research 补充发现源, 可通过公开直链、平台支持接口或人工文件取得并记录 unverified 权利缺口, commercial 必须取得作者或图虫创意授权]
     - sourceId: tuchong_stock_authorized

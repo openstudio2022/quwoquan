@@ -12,12 +12,13 @@ from __future__ import annotations
 from core import paths as paths_mod
 from verify.verify_directory_evidence_chain import _execution_shared_issues
 
-
 PLAN_FROZEN_EVIDENCE = {
     "content_plan_packet.json",
     "content_object_index.json",
     "env_ready_report.json",
     "execution_state.json",
+    "execution_state_events",
+    "execution_state_head.json",
     "managed_execution_audit.json",
     "scale_readiness.json",
     "ship_report.json",
@@ -29,6 +30,17 @@ def test_plan_frozen_evidence_all_authoritative():
     """计划冻结的 execution 权威证据必须全部登记为 authoritative。"""
     missing = PLAN_FROZEN_EVIDENCE - paths_mod.EXECUTION_SHARED_AUTHORITATIVE_ENTRIES
     assert missing == set(), missing
+
+
+def test_reconciliation_receipts_are_authoritative_not_reclaimable():
+    assert paths_mod.execution_shared_entry_role("reconciliation") == "authoritative"
+    assert "reconciliation" not in paths_mod.EXECUTION_SHARED_RECLAIMABLE_ENTRIES
+
+
+def test_execution_state_journal_has_single_track_evidence_roles():
+    for name in ("execution_state.json", "execution_state_head.json", "execution_state_events"):
+        assert paths_mod.execution_shared_entry_role(name) == "authoritative"
+    assert paths_mod.execution_shared_entry_role("execution_state.lock") == "reclaimable"
 
 
 def test_debug_layers_are_reclaimable_not_authoritative():
@@ -54,6 +66,9 @@ def test_gate_blocks_unknown_shared_entry(tmp_path):
     shared.mkdir(parents=True)
     (shared / "env_ready_report.json").write_text("{}", encoding="utf-8")
     (shared / "assistant_tasks").mkdir()
+    (shared / "execution_state_events").mkdir()
+    (shared / "execution_state_head.json").write_text("{}", encoding="utf-8")
+    (shared / "execution_state.lock").write_text("", encoding="utf-8")
     (shared / "tmp_probe").mkdir()
     assert _execution_shared_issues(execution) == []
     (shared / "rogue_summary.json").write_text("{}", encoding="utf-8")

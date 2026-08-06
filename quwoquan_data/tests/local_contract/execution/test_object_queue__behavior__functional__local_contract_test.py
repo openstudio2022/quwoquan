@@ -4,12 +4,14 @@
 """
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import os
 import sys
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+
+import pytest
 
 DATA_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data")
 SCRIPTS_ROOT = DATA_ROOT / "scripts"
@@ -21,20 +23,24 @@ for _path in (DATA_ROOT, SCRIPTS_ROOT):
 _TMP = tempfile.mkdtemp(prefix="qwq_object_queue_test_")
 os.environ["QWQ_OUTPUT_ROOT"] = _TMP
 
-from content.execution.queue import runtime as oq  # noqa: E402
-from content.execution.queue import management as oqm  # noqa: E402
-from content.execution.queue.model import QueueJob  # noqa: E402
-from core.control_types import QueueFailureKind  # noqa: E402
-from core.data_issue import DataRecoveryAction  # noqa: E402
-from content.execution import store  # noqa: E402
-from content.execution.queue.core import list_notifications  # noqa: E402
-from content.execution.queue.jobs import enqueue_ref_jobs  # noqa: E402
-from content.execution.queue.packets import build_lease_packet  # noqa: E402
-from content.execution import production_contracts as pc  # noqa: E402
-from core import ops_governance as og  # noqa: E402
-from core.io import read_json, write_json  # noqa: E402
-from content.templates.registry import TemplateRegistry  # noqa: E402
-from governance.creators.assignment import creator_profile_digest  # noqa: E402
+from content.execution import production_contracts as pc
+from content.execution import store
+from content.execution.queue import jobs as queue_jobs
+from content.execution.queue import management as oqm
+from content.execution.queue import runtime as oq
+from content.execution.queue.core import list_notifications
+from content.execution.queue.jobs import enqueue_ref_jobs
+from content.execution.queue.model import QueueJob
+from content.execution.queue.packets import build_lease_packet
+from content.templates.registry import TemplateRegistry
+from core import ops_governance as og
+from core.control_types import (
+    QueueBackend,
+    QueueFailureKind,
+)
+from core.data_issue import DataRecoveryAction
+from core.io import read_json, write_json
+from governance.creators.assignment import creator_profile_digest
 
 
 def _execution_id(label: str) -> str:
@@ -47,6 +53,27 @@ FIXTURE_SOURCE_REVISION = "sha256:" + ("1" * 64)
 HIGHLAND_CREATOR_PROFILE_DIGEST = creator_profile_digest(
     TemplateRegistry.load().creators["qwq_creator_highland_travel_blogger_001"]
 )
+
+
+@pytest.fixture(autouse=True)
+def _bind_queue_mechanics_backend(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep queue-mechanics tests below the immutable execution boundary."""
+
+    def resolve(
+        _execution_id: str,
+        *,
+        requested: str | QueueBackend | None,
+        metadata_backend: object = None,
+    ) -> QueueBackend:
+        requested_value = str(
+            requested.value if isinstance(requested, QueueBackend) else requested or ""
+        ).strip()
+        metadata_value = str(metadata_backend or "").strip()
+        if requested_value and metadata_value and requested_value != metadata_value:
+            raise ValueError("queue mechanics backend fixture received conflicting inputs")
+        return QueueBackend(requested_value or metadata_value or QueueBackend.LOCAL_FILE.value)
+
+    monkeypatch.setattr(queue_jobs, "resolve_execution_queue_backend", resolve)
 
 
 def _reliable_identity(ref: str) -> dict:

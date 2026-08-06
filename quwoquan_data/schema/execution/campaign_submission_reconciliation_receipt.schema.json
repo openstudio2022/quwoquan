@@ -1,0 +1,254 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/campaign_submission_reconciliation_receipt.schema.json",
+  "type": "object",
+  "required": [
+    "schema",
+    "rootExecutionId",
+    "decision",
+    "reason",
+    "errorCode",
+    "originalSourceIdentity",
+    "observedSourceIdentity",
+    "submissions",
+    "executionEvidence",
+    "blockerEvidence",
+    "retryPolicy",
+    "recordedAt",
+    "receiptDigest"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "quwoquan_data.campaign_submission_reconciliation_receipt"
+    },
+    "rootExecutionId": { "type": "string", "minLength": 1 },
+    "decision": { "const": "abandoned" },
+    "reason": {
+      "enum": [
+        "provider_rejected",
+        "semantic_preflight_expired",
+        "source_drift"
+      ]
+    },
+    "errorCode": {
+      "enum": [
+        "DATA.CAMPAIGN.SUBMISSION_ONLY_PROVIDER_REJECTED",
+        "DATA.CAMPAIGN.SUBMISSION_ONLY_SEMANTIC_PREFLIGHT_EXPIRED",
+        "DATA.CAMPAIGN.SUBMISSION_ONLY_SOURCE_DRIFT"
+      ]
+    },
+    "originalSourceIdentity": { "$ref": "#/$defs/sourceIdentity" },
+    "observedSourceIdentity": { "$ref": "#/$defs/sourceIdentity" },
+    "submissions": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "homepage": { "$ref": "#/$defs/submissionEvidence" },
+        "article": { "$ref": "#/$defs/submissionEvidence" },
+        "image": { "$ref": "#/$defs/submissionEvidence" },
+        "video": { "$ref": "#/$defs/submissionEvidence" }
+      }
+    },
+    "missingSubmissions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": { "enum": ["homepage", "article", "image", "video"] }
+    },
+    "executionEvidence": {
+      "type": "object",
+      "required": [
+        "campaignPlanExists",
+        "campaignReportExists",
+        "runtimeDirectoryExists",
+        "receiptDirectoryExists",
+        "lanes"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "campaignPlanExists": { "const": false },
+        "campaignReportExists": { "const": false },
+        "runtimeDirectoryExists": { "const": false },
+        "receiptDirectoryExists": { "const": false },
+        "lanes": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": { "$ref": "#/$defs/laneExecutionAbsence" }
+        }
+      }
+    },
+    "blockerEvidence": {
+      "type": "object",
+      "required": ["ref", "sha256"],
+      "additionalProperties": false,
+      "properties": {
+        "ref": { "type": "string", "minLength": 1 },
+        "sha256": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        }
+      }
+    },
+    "retryPolicy": { "const": "new_four_lane_execution_with_retryOf" },
+    "recordedAt": { "type": "string", "format": "date-time" },
+    "receiptDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    }
+  },
+  "$defs": {
+    "sourceIdentity": {
+      "type": "object",
+      "required": ["sourceRevision", "sourceDigest", "entityCatalogDigest"],
+      "additionalProperties": false,
+      "properties": {
+        "sourceRevision": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "sourceDigest": {
+          "type": "object",
+          "required": ["algorithm", "digest", "inputs"],
+          "additionalProperties": false,
+          "properties": {
+            "algorithm": { "const": "sha256" },
+            "digest": {
+              "type": "string",
+              "pattern": "^sha256:[a-f0-9]{64}$"
+            },
+            "inputs": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        "entityCatalogDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        }
+      }
+    },
+    "submissionEvidence": {
+      "type": "object",
+      "required": [
+        "carrier",
+        "executionId",
+        "submissionRef",
+        "submissionSha256",
+        "requestDigest",
+        "familyRef",
+        "regionRef",
+        "selector",
+        "quota",
+        "count",
+        "topic",
+        "targetNames",
+        "sourceProviders",
+        "retryOf"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "carrier": { "enum": ["homepage", "article", "image", "video"] },
+        "executionId": { "type": "string", "minLength": 1 },
+        "submissionRef": { "type": "string", "minLength": 1 },
+        "submissionSha256": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "requestDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "familyRef": { "type": "string", "minLength": 1 },
+        "regionRef": { "type": "string", "minLength": 1 },
+        "selector": { "type": "string", "minLength": 1 },
+        "quota": { "type": "integer", "minimum": 1 },
+        "count": { "type": "integer", "minimum": 1 },
+        "topic": { "type": ["string", "null"] },
+        "targetNames": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "sourceProviders": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "retryOf": { "type": ["string", "null"] }
+      }
+    },
+    "laneExecutionAbsence": {
+      "type": "object",
+      "required": [
+        "carrier",
+        "executionId",
+        "executionRootRef",
+        "executionRootExists",
+        "executionManifestExists",
+        "targetSetExists",
+        "publishRefExists"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "carrier": { "enum": ["homepage", "article", "image", "video"] },
+        "executionId": { "type": "string", "minLength": 1 },
+        "executionRootRef": {
+          "type": "string",
+          "pattern": "^data/tasks/[^/]+$"
+        },
+        "executionRootExists": { "const": false },
+        "executionManifestExists": { "const": false },
+        "targetSetExists": { "const": false },
+        "publishRefExists": { "const": false }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "reason": { "const": "provider_rejected" } },
+        "required": ["reason"]
+      },
+      "then": {
+        "properties": {
+          "errorCode": {
+            "const": "DATA.CAMPAIGN.SUBMISSION_ONLY_PROVIDER_REJECTED"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "reason": { "const": "semantic_preflight_expired" } },
+        "required": ["reason"]
+      },
+      "then": {
+        "properties": {
+          "errorCode": {
+            "const": "DATA.CAMPAIGN.SUBMISSION_ONLY_SEMANTIC_PREFLIGHT_EXPIRED"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "reason": { "const": "source_drift" } },
+        "required": ["reason"]
+      },
+      "then": {
+        "properties": {
+          "errorCode": {
+            "const": "DATA.CAMPAIGN.SUBMISSION_ONLY_SOURCE_DRIFT"
+          }
+        }
+      }
+    }
+  ]
+}

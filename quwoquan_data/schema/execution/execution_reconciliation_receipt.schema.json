@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/execution_reconciliation_receipt.schema.json",
+  "type": "object",
+  "required": [
+    "schema",
+    "executionId",
+    "decision",
+    "errorCode",
+    "observedAt",
+    "previousStateDigest",
+    "previousState",
+    "controllerLeaseDigest",
+    "controllerLease",
+    "processEvidence",
+    "retryPolicy",
+    "receiptDigest"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {"const": "quwoquan_data.execution_reconciliation_receipt"},
+    "executionId": {"type": "string", "minLength": 1},
+    "decision": {"const": "interrupted"},
+    "errorCode": {"const": "DATA.CAMPAIGN.STALE_EXECUTION_RECONCILED"},
+    "observedAt": {"type": "string", "format": "date-time"},
+    "previousStateDigest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "previousState": {"type": "object"},
+    "controllerLeaseDigest": {"type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$"},
+    "controllerLease": {"type": ["object", "null"]},
+    "processEvidence": {
+      "type": "object",
+      "required": ["hostname", "pid", "pgid", "pidAlive", "processGroupAlive"],
+      "additionalProperties": false,
+      "properties": {
+        "hostname": {"type": "string", "minLength": 1},
+        "pid": {"type": ["integer", "null"], "minimum": 1},
+        "pgid": {"type": ["integer", "null"], "minimum": 1},
+        "pidAlive": {"const": false},
+        "processGroupAlive": {"const": false}
+      }
+    },
+    "retryPolicy": {"const": "new_execution_with_retryOf"},
+    "receiptDigest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}
+  }
+}

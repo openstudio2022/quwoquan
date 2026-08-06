@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/release/release_identity_incident.schema.json",
+  "type": "object",
+  "required": [
+    "schema",
+    "incidentId",
+    "releaseId",
+    "status",
+    "storageClass",
+    "observedIdentities",
+    "protectedExecutionIds",
+    "recordedAt",
+    "receiptDigest"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "quwoquan_data.release_identity_incident" },
+    "incidentId": { "type": "string", "minLength": 1 },
+    "releaseId": { "type": "string", "minLength": 1 },
+    "status": { "const": "identity_collided" },
+    "storageClass": { "const": "append_only_create_once" },
+    "observedIdentities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "releaseId",
+          "payloadSha256",
+          "canonicalMerkle",
+          "attestationFileSha256",
+          "attestationRef",
+          "acquisitionMode",
+          "executionIds",
+          "observedAt"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "releaseId": { "type": "string", "minLength": 1 },
+          "payloadSha256": { "$ref": "#/$defs/sha256" },
+          "canonicalMerkle": { "$ref": "#/$defs/sha256" },
+          "attestationFileSha256": { "$ref": "#/$defs/sha256" },
+          "attestationRef": { "type": "string", "minLength": 1 },
+          "acquisitionMode": {
+            "enum": [
+              "original_file",
+              "deterministic_byte_reconstruction"
+            ]
+          },
+          "recoveryProvenanceRef": { "type": "string", "minLength": 1 },
+          "recoveryProvenanceFileSha256": { "$ref": "#/$defs/sha256" },
+          "executionIds": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "observedAt": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "protectedExecutionIds": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "recordedAt": { "type": "string", "minLength": 1 },
+    "receiptDigest": { "$ref": "#/$defs/sha256" }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

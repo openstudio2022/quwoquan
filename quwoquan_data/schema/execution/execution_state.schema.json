@@ -31,6 +31,7 @@
         "waiting_agent",
         "repairing",
         "manual_required",
+        "interrupted",
         "succeeded"
       ]
     },
@@ -228,12 +229,15 @@
         "retryable",
         "authFailure",
         "errorCode",
+        "retryAfterSeconds",
         "requestId",
         "attempts",
         "warmAttempts",
         "result",
         "agentId",
         "runId",
+        "capacityReceiptRef",
+        "capacityReceiptDigest",
         "durationMs",
         "completionMode",
         "stdoutTail",
@@ -248,18 +252,24 @@
       "properties": {
         "started": { "type": "boolean" },
         "status": { "enum": ["finished", "error"] },
-        "agentProvider": { "const": "cursor_sdk" },
+        "agentProvider": { "enum": ["cursor_sdk", "codex_sdk"] },
         "failureKind": { "type": ["string", "null"] },
         "error": { "type": ["string", "null"] },
         "retryable": { "type": "boolean" },
         "authFailure": { "type": "boolean" },
         "errorCode": { "type": ["string", "null"] },
+        "retryAfterSeconds": { "type": "integer", "minimum": 0 },
         "requestId": { "type": ["string", "null"] },
         "attempts": { "type": "integer", "minimum": 0 },
         "warmAttempts": { "type": "integer", "minimum": 0 },
         "result": { "type": "string" },
         "agentId": { "type": ["string", "null"] },
         "runId": { "type": ["string", "null"] },
+        "capacityReceiptRef": { "type": ["string", "null"] },
+        "capacityReceiptDigest": {
+          "type": ["string", "null"],
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
         "durationMs": { "type": "integer", "minimum": 0 },
         "completionMode": { "type": ["string", "null"] },
         "stdoutTail": { "type": ["string", "null"] },
@@ -299,7 +309,7 @@
           "type": "object",
           "additionalProperties": { "type": "integer", "minimum": 1 }
         },
-        "agentProvider": { "const": "cursor_sdk" },
+        "agentProvider": { "enum": ["cursor_sdk", "codex_sdk"] },
         "startedAt": { "type": "string", "minLength": 1 },
         "finishedAt": { "type": "string", "minLength": 1 },
         "elapsedSeconds": { "type": "number", "minimum": 0 }

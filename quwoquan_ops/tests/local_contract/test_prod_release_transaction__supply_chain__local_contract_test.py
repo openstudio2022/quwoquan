@@ -211,22 +211,24 @@ def _evidence_sources(
             "projections": [],
         },
     )
-    provider_raw = (
-        _provider_raw_dir(root)
-        / "env/prod/runs/provider-check/provider-conformance.evidence.json"
-    )
-    generator.write_json(
-        provider_raw,
-        {
-            "provider": "search",
-            "environment": "prod",
-            "status": "passed",
-        },
-    )
-    provider_archive_path = (
-        "evidence/raw/provider/"
-        "env/prod/runs/provider-check/provider-conformance.evidence.json"
-    )
+    provider_files: dict[str, str] = {}
+    for index in range(140):
+        relative = (
+            f"env/prod/runs/provider-check-{index:03d}/"
+            "provider-conformance.evidence.json"
+        )
+        provider_raw = _provider_raw_dir(root) / relative
+        generator.write_json(
+            provider_raw,
+            {
+                "provider": f"provider-{index:03d}",
+                "environment": "prod",
+                "status": "passed",
+            },
+        )
+        provider_files[f"evidence/raw/provider/{relative}"] = (
+            finalizer.sha256_file(provider_raw)
+        )
     payloads: dict[str, dict[str, object]] = {
         "publicWeb": {
             "schema": "qwq.public-web.release",
@@ -287,16 +289,27 @@ def _evidence_sources(
             "sourceEvidence": {
                 "ref": PROVIDER_EVIDENCE_REF,
                 "digest": PROVIDER_EVIDENCE_DIGEST,
-                "files": {
-                    provider_archive_path: finalizer.sha256_file(provider_raw),
-                },
+                "files": provider_files,
             },
-            "evidenceCount": 1,
+            "evidenceCount": 140,
+            "sourceCoverageIssues": [],
             "readiness": {
-                "prod": {
-                    "search": {"required": True, "capability_ready": True}
+                environment: {
+                    capability: {
+                        "required": True,
+                        "capability_ready": True,
+                    }
+                    for capability in (
+                        "search",
+                        *(
+                            f"provider-capability-{index:02d}"
+                            for index in range(13)
+                        ),
+                    )
                 }
+                for environment in ("alpha", "beta", "gamma", "prod")
             },
+            "issues": [],
         },
     }
     application_material: dict[str, dict[str, str]] = {
@@ -327,6 +340,19 @@ def _evidence_sources(
                 surface=surface,
             )
         )
+    release_closure_files: dict[str, dict[str, str]] = {}
+    for index, (label, relative) in enumerate(
+        sorted(evidence_collector.RELEASE_CLOSURE_PATHS.items())
+    ):
+        closure_path = sources / relative
+        generator.write_json(
+            closure_path,
+            {"label": label, "sequence": index},
+        )
+        release_closure_files[label] = {
+            "path": relative,
+            "digest": finalizer.sha256_file(closure_path),
+        }
     payloads["testEvidence"] = {
         "schema": "qwq.three-layer-case-results",
         "status": "passed",
@@ -362,6 +388,7 @@ def _evidence_sources(
             }
             for layer in finalizer.TEST_LAYERS
         },
+        "evidence": {"files": release_closure_files},
     }
     result: dict[str, Path] = {}
     for key, payload in payloads.items():
@@ -656,6 +683,113 @@ class ProdReleaseTransactionContractTest(unittest.TestCase):
             receipt_path.write_text("{}\n", encoding="utf-8")
             with self.assertRaisesRegex(RuntimeError, "digest or ledger binding"):
                 hosted_release_ledger.fetch(state_dir, "prod-stack")
+
+    def test_release_ledger_serializes_advance_and_rollback_contention(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            state_dir = Path(temporary).resolve()
+            source = "sha256:" + ("a" * 64)
+            candidate = "sha256:" + ("b" * 64)
+            check = {
+                "name": "health",
+                "status": "passed",
+                "receiptDigest": candidate,
+            }
+            initial = {
+                "schema": hosted_release_ledger.REQUEST_SCHEMA,
+                "service": "prod-stack",
+                "fromCandidateDigest": source,
+                "toCandidateDigest": candidate,
+                "step": "5",
+                "stage": "gray-initial",
+                "triggerStage": "gray-initial",
+                "fromReleaseEvidenceRef": f"ghcr.io/owner/release@{source}",
+                "toReleaseEvidenceRef": f"ghcr.io/owner/release@{candidate}",
+                "fromImageTransportTag": "sha-source",
+                "toImageTransportTag": "sha-candidate",
+                "decision": "continue",
+                "rollbackOutcome": "not_triggered",
+                "rollbackEvidence": {"triggered": False},
+                "artifactDigest": candidate,
+                "imageDigest": candidate,
+                "configDigest": candidate,
+                "contractGraphDigest": candidate,
+                "adapterDigest": candidate,
+                "expectedGeneration": 0,
+                "sloReadback": {"source": "prometheus"},
+                "postChecks": [check],
+                "lastGoodCandidateDigest": source,
+                "verifiedAt": "2026-07-26T00:00:00+00:00",
+            }
+            hosted_release_ledger.commit(state_dir, initial)
+
+            advance = dict(initial)
+            advance.update(
+                {
+                    "step": "25",
+                    "stage": "carry-on",
+                    "triggerStage": "carry-on",
+                    "expectedGeneration": 1,
+                    "verifiedAt": "2026-07-26T00:00:01+00:00",
+                }
+            )
+            rollback = dict(initial)
+            rollback.update(
+                {
+                    "fromCandidateDigest": candidate,
+                    "toCandidateDigest": source,
+                    "step": "100",
+                    "stage": "full",
+                    "triggerStage": "gray-initial",
+                    "fromReleaseEvidenceRef": f"ghcr.io/owner/release@{candidate}",
+                    "toReleaseEvidenceRef": f"ghcr.io/owner/release@{source}",
+                    "fromImageTransportTag": "sha-candidate",
+                    "toImageTransportTag": "sha-source",
+                    "decision": "rolled_back",
+                    "rollbackOutcome": "rolled_back",
+                    "rollbackEvidence": {
+                        "triggered": True,
+                        "startedAt": "2026-07-26T00:00:00+00:00",
+                        "endedAt": "2026-07-26T00:00:01+00:00",
+                        "durationMs": 1000,
+                        "postChecks": [check],
+                    },
+                    "expectedGeneration": 1,
+                    "lastGoodCandidateDigest": source,
+                    "verifiedAt": "2026-07-26T00:00:01+00:00",
+                }
+            )
+
+            barrier = threading.Barrier(2)
+            successes: list[dict[str, object]] = []
+            failures: list[Exception] = []
+
+            def contend(request: dict[str, object]) -> None:
+                barrier.wait()
+                try:
+                    successes.append(hosted_release_ledger.commit(state_dir, request))
+                except Exception as error:  # asserted as the losing CAS below
+                    failures.append(error)
+
+            threads = [
+                threading.Thread(target=contend, args=(advance,)),
+                threading.Thread(target=contend, args=(rollback,)),
+            ]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join(timeout=5)
+
+            self.assertTrue(all(not thread.is_alive() for thread in threads))
+            self.assertEqual(len(successes), 1)
+            self.assertEqual(len(failures), 1)
+            self.assertRegex(str(failures[0]), "CAS conflict")
+            readback = hosted_release_ledger.fetch(state_dir, "prod-stack")
+            self.assertEqual(readback["state"]["generation"], "2")
+            self.assertIn(
+                readback["state"]["decision"],
+                {"continue", "rolled_back"},
+            )
+            self.assertEqual(len(list((state_dir / "receipts").glob("*.json"))), 2)
 
     def test_warning_slo_pauses_gray_but_rolls_back_full(self) -> None:
         self.assertEqual(

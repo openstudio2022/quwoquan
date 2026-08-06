@@ -1,0 +1,365 @@
+# Code generated from quwoquan_service/generated/contract_graph.json.
+# Regenerate with verify_object_alert_coverage.py --write.
+groups:
+  - name: quwoquan_chat_contract_conversation
+    rules:
+      - record: quwoquan_chat_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="chat-service",method="POST",route="/chat/conversations/batch"})
+        labels:
+          service: "chat-service"
+          operation: "chat.conversation.BatchGetConversations"
+          contract_metric: "chat_conversation_query"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_chat_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="chat-service",method="POST",route="/chat/conversations/batch"})
+        labels:
+          service: "chat-service"
+          operation: "chat.conversation.BatchGetConversations"
+          contract_metric: "chat_conversation_query"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_chat_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="chat-service",method="POST",route="/chat/conversations"})
+        labels:
+          service: "chat-service"
+          operation: "chat.conversation.CreateConversation"
+          contract_metric: "chat_conversation_command"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_chat_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="chat-service",method="POST",route="/chat/conversations"})
+        labels:
+          service: "chat-service"
+          operation: "chat.conversation.CreateConversation"
+          contract_metric: "chat_conversation_command"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_chat_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="chat-service",method="DELETE",route=~"^/chat/conversations/[^/]+$"})
+        labels:
+          service: "chat-service"
+          operation: "chat.conversation.DissolveConversation"
+          contract_metric: "chat_conversation_command"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_chat_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="chat-service",method="DELETE",route=~"^/chat/conversations/[^/]+$"})
+        labels:
+          service: "chat-service"
+          operation: "chat.conversation.DissolveConversation"
+          contract_metric: "chat_conversation_command"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_chat_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="chat-service",method="GET",route=~"^/chat/conversations/[^/]+$"})
+        labels:
+          service: "chat-service"
+          operation: "chat.conversation.GetConversation"
+          contract_metric: "chat_conversation_query"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_chat_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="chat-service",method="GET",route=~"^/chat/conversations/[^/]+$"})
+        labels:
+          service: "chat-service"
+          operation: "chat.conversation.GetConversation"
+          contract_metric: "chat_conversation_query"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_chat_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="chat-service",method="GET",route=~"^/chat/groups/[^/]+/home$"})
+        labels:
+          service: "chat-service"
+          operation: "chat.conversation.GetGroupHome"
+          contract_metric: "chat_conversation_query"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_chat_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="chat-service",method="GET",route=~"^/chat/groups/[^/]+/home$"})
+        labels:
+          service: "chat-service"
+          operation: "chat.conversation.GetGroupHome"
+          contract_metric: "chat_conversation_query"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_chat_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="chat-service",method="GET",route="/chat/contact-home"})
+        labels:
+          service: "chat-service"
+          operation: "chat.conversation.ListContactHome"
+          contract_metric: "chat_conversation_query"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_chat_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="chat-service",method="GET",route="/chat/contact-home"})
+        labels:
+          service: "chat-service"
+          operation: "chat.conversation.ListContactHome"
+          contract_metric: "chat_conversation_query"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_chat_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="chat-service",method="GET",route="/chat/contacts"})
+        labels:
+          service: "chat-service"
+          operation: "chat.conversation.ListContacts"
+          contract_metric: "chat_conversation_query"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_chat_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="chat-service",method="GET",route="/chat/contacts"})
+        labels:
+          service: "chat-service"
+          operation: "chat.conversation.ListContacts"
+          contract_metric: "chat_conversation_query"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_chat_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="chat-service",method="GET",route="/chat/conversations/timestamps"})
+        labels:
+          service: "chat-service"
+          operation: "chat.conversation.ListConversationTimestamps"
+          contract_metric: "chat_conversation_query"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_chat_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="chat-service",method="GET",route="/chat/conversations/timestamps"})
+        labels:
+          service: "chat-service"
+          operation: "chat.conversation.ListConversationTimestamps"
+          contract_metric: "chat_conversation_query"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_chat_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="chat-service",method="GET",route="/chat/conversations"})
+        labels:
+          service: "chat-service"
+          operation: "chat.conversation.ListConversations"
+          contract_metric: "chat_conversation_query"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_chat_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="chat-service",method="GET",route="/chat/conversations"})
+        labels:
+          service: "chat-service"
+          operation: "chat.conversation.ListConversations"
+          contract_metric: "chat_conversation_query"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_chat_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="chat-service",method="GET",route="/chat/group-candidates"})
+        labels:
+          service: "chat-service"
+          operation: "chat.conversation.ListGroupCandidates"
+          contract_metric: "chat_conversation_query"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_chat_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="chat-service",method="GET",route="/chat/group-candidates"})
+        labels:
+          service: "chat-service"
+          operation: "chat.conversation.ListGroupCandidates"
+          contract_metric: "chat_conversation_query"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_chat_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="chat-service",method="GET",route="/chat/message-home"})
+        labels:
+          service: "chat-service"
+          operation: "chat.conversation.ListMessageHome"
+          contract_metric: "chat_conversation_query"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_chat_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="chat-service",method="GET",route="/chat/message-home"})
+        labels:
+          service: "chat-service"
+          operation: "chat.conversation.ListMessageHome"
+          contract_metric: "chat_conversation_query"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_chat_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="chat-service",method="GET",route=~"^/chat/selectable-group-conversations/[^/]+/contact-members$"})
+        labels:
+          service: "chat-service"
+          operation: "chat.conversation.ListSelectableGroupContactMembers"
+          contract_metric: "chat_conversation_query"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_chat_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="chat-service",method="GET",route=~"^/chat/selectable-group-conversations/[^/]+/contact-members$"})
+        labels:
+          service: "chat-service"
+          operation: "chat.conversation.ListSelectableGroupContactMembers"
+          contract_metric: "chat_conversation_query"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_chat_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="chat-service",method="GET",route="/chat/selectable-group-conversations"})
+        labels:
+          service: "chat-service"
+          operation: "chat.conversation.ListSelectableGroupConversations"
+          contract_metric: "chat_conversation_query"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_chat_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="chat-service",method="GET",route="/chat/selectable-group-conversations"})
+        labels:
+          service: "chat-service"
+          operation: "chat.conversation.ListSelectableGroupConversations"
+          contract_metric: "chat_conversation_query"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_chat_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="chat-service",method="PUT",route=~"^/internal/chat/gathering-conversations/[^/]+$"})
+        labels:
+          service: "chat-service"
+          operation: "chat.conversation.ProjectGatheringConversation"
+          contract_metric: "chat_gathering_conversation_project"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_chat_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="chat-service",method="PUT",route=~"^/internal/chat/gathering-conversations/[^/]+$"})
+        labels:
+          service: "chat-service"
+          operation: "chat.conversation.ProjectGatheringConversation"
+          contract_metric: "chat_gathering_conversation_project"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_chat_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="chat-service",method="POST",route="/internal/chat/account-closure/dead-letters:recover"})
+        labels:
+          service: "chat-service"
+          operation: "chat.conversation.RecoverChatAccountClosureDeadLetter"
+          contract_metric: "chat_account_closure_dead_letter_recover"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_chat_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="chat-service",method="POST",route="/internal/chat/account-closure/dead-letters:recover"})
+        labels:
+          service: "chat-service"
+          operation: "chat.conversation.RecoverChatAccountClosureDeadLetter"
+          contract_metric: "chat_account_closure_dead_letter_recover"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_chat_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="chat-service",method="PATCH",route=~"^/chat/conversations/[^/]+/announcement$"})
+        labels:
+          service: "chat-service"
+          operation: "chat.conversation.UpdateAnnouncement"
+          contract_metric: "chat_conversation_command"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_chat_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="chat-service",method="PATCH",route=~"^/chat/conversations/[^/]+/announcement$"})
+        labels:
+          service: "chat-service"
+          operation: "chat.conversation.UpdateAnnouncement"
+          contract_metric: "chat_conversation_command"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_chat_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="chat-service",method="PATCH",route=~"^/chat/conversations/[^/]+$"})
+        labels:
+          service: "chat-service"
+          operation: "chat.conversation.UpdateConversationTitle"
+          contract_metric: "chat_conversation_command"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_chat_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="chat-service",method="PATCH",route=~"^/chat/conversations/[^/]+$"})
+        labels:
+          service: "chat-service"
+          operation: "chat.conversation.UpdateConversationTitle"
+          contract_metric: "chat_conversation_command"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_chat_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="chat-service",method="PATCH",route=~"^/chat/conversations/[^/]+/governance$"})
+        labels:
+          service: "chat-service"
+          operation: "chat.conversation.UpdateGroupGovernanceSettings"
+          contract_metric: "chat_conversation_command"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_chat_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="chat-service",method="PATCH",route=~"^/chat/conversations/[^/]+/governance$"})
+        labels:
+          service: "chat-service"
+          operation: "chat.conversation.UpdateGroupGovernanceSettings"
+          contract_metric: "chat_conversation_command"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"

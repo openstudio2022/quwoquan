@@ -19,7 +19,7 @@ def _receipt(
 ) -> dict[str, object]:
     # Zero-discard scale proof: every selected candidate is qualified.
     status = "qualified" if phase == "review" else "finalized"
-    return {
+    receipt = {
         "schema": "quwoquan_data.content_campaign_lane_receipt",
         "rootExecutionId": root_id,
         "executionId": execution_id,
@@ -34,6 +34,17 @@ def _receipt(
         "shortfallCount": 0,
         "discards": [],
     }
+    if phase == "publish":
+        receipt.update(
+            {
+                "executionPublishRef": (f"data/tasks/{execution_id}/publish_ref.json"),
+                "executionPublishSha256": "sha256:" + "e" * 64,
+                "campaignRunId": "copy-ready-test-run",
+                "campaignGeneration": 1,
+                "campaignFencingToken": "sha256:" + "f" * 64,
+            }
+        )
+    return receipt
 
 
 def test_copy_ready_allows_zero_typed_discards(tmp_path: Path) -> None:

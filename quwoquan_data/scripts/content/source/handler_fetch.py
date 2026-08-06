@@ -45,6 +45,7 @@ def _fetch_download_entity(
     entity_index: int,
     entity_count: int,
     selected_lanes: set[str] | None = None,
+    external_input_context: Any | None = None,
 ) -> dict[str, Any]:
     """Fetch and gate one entity in isolation for download_fetch concurrency."""
     fetched_sources: list[dict[str, Any]] = []
@@ -66,6 +67,7 @@ def _fetch_download_entity(
         domain=domain,
         etype=etype,
         selected_lanes=selected_lanes,
+        external_input_context=external_input_context,
     )
     object_dir, target_ref, sources = plan.object_dir, plan.target_ref, plan.sources
     commercial_article_closure = article_commercial_closure_enabled(
@@ -125,7 +127,6 @@ def _fetch_download_entity(
         image_lane_selected=image_lane_selected,
         homepage_media_selected=homepage_media_selected,
     )
-    image_manifest = image_result.image_manifest
     image_rights_issues = image_result.rights_issues
     image_quality_issues = image_result.quality_issues
     rejected_by_category = dict(image_result.rejected_by_category)

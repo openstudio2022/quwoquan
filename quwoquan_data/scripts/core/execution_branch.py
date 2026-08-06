@@ -10,8 +10,9 @@ from __future__ import annotations
 
 import os
 import subprocess
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 _BRANCH_POLICY_RELPATH = Path("quwoquan_ops") / "policies" / "branch_policy.yaml"
 
@@ -84,9 +85,14 @@ def current_git_commit(*, cwd: str | Path | None = None) -> str:
         )
     except Exception:  # noqa: BLE001
         return ""
-    if result.returncode != 0:
-        return ""
-    return str(result.stdout or "").strip()
+    if result.returncode == 0 and str(result.stdout or "").strip():
+        return str(result.stdout or "").strip()
+    # Content-addressed campaign capsules intentionally contain no mutable Git
+    # metadata.  The controller binds the exported commit to the root execution
+    # and passes it together with the existing named-branch proof.
+    if str(os.environ.get("QWQ_CAMPAIGN_ROOT_EXECUTION_ID") or "").strip():
+        return str(os.environ.get("QWQ_FROZEN_MAIN_COMMIT") or "").strip()
+    return ""
 
 
 def branch_policy_allowed_branches(*, repo_root: str | Path | None = None) -> list[str]:
@@ -123,7 +129,7 @@ def stamp_execution_branch(
     """把当前正式分支与 commit 冻结进 spec（生成期证据；可重放审计）。"""
     workflow = spec.setdefault("executionPolicy", {})
     if not isinstance(workflow, dict):
-        raise ValueError("executionPolicy must be a mapping")
+        raise TypeError("executionPolicy must be a mapping")
     branch = current_git_branch(cwd=cwd or _repo_root())
     if branch:
         workflow["executionBranch"] = branch

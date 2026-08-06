@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/campaign_submission_reconciliation_ref.schema.json",
+  "type": "object",
+  "required": [
+    "predecessorRootExecutionId",
+    "receiptRef",
+    "receiptDigest"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "predecessorRootExecutionId": { "type": "string", "minLength": 1 },
+    "receiptRef": { "type": "string", "minLength": 1 },
+    "receiptDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    }
+  }
+}

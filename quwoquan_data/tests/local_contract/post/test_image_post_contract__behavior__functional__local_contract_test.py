@@ -269,7 +269,7 @@ def test_image_source_contract_rejects_retired_alias_keys():
     except RuntimeError as exc:
         assert "sourceCollectionId" in str(exc)
         assert "collectionPageUrl" in str(exc)
-        assert "license proof" in str(exc)
+        assert "rightsAuditStatus" in str(exc)
     else:
         raise AssertionError("retired image source aliases must be rejected")
 

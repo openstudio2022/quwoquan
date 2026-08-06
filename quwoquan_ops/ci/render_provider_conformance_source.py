@@ -18,10 +18,12 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.cli.lib.provider_conformance import (
-    evidence_files,
+    exact_required_cell_issues,
+    load_evidence,
     load_validate_and_derive,
     readiness_issues,
 )
+from quwoquan_ops.cli.lib import external_provider_governance
 from quwoquan_ops.cli.lib.output_paths import output_root
 
 
@@ -81,6 +83,7 @@ def _validate_readiness(value: object) -> dict[str, dict[str, dict[str, Any]]]:
     if not isinstance(value, Mapping) or set(value) != READINESS_ENVIRONMENTS:
         raise ValueError("Provider readiness must contain exactly alpha, beta, gamma and prod")
     canonical: dict[str, dict[str, dict[str, Any]]] = {}
+    capability_sets: list[frozenset[str]] = []
     for environment in sorted(READINESS_ENVIRONMENTS):
         capabilities = value.get(environment)
         if not isinstance(capabilities, Mapping) or not capabilities:
@@ -114,7 +117,18 @@ def _validate_readiness(value: object) -> dict[str, dict[str, dict[str, Any]]]:
                     f"Provider readiness.{environment}.{capability_id} is malformed"
                 )
             environment_result[capability_id] = dict(item)
+        capability_sets.append(frozenset(environment_result))
+        if len(environment_result) != 14 or any(
+            item.get("required") is not True
+            or item.get("capability_ready") is not True
+            for item in environment_result.values()
+        ):
+            raise ValueError(
+                f"Provider readiness.{environment} must contain 14 required ready capabilities"
+            )
         canonical[environment] = environment_result
+    if len(set(capability_sets)) != 1:
+        raise ValueError("Provider readiness capability set differs across environments")
     return canonical
 
 
@@ -122,8 +136,8 @@ def validate_source(payload: Mapping[str, Any]) -> None:
     """Reject every non-canonical or historical Provider source shape."""
     if set(payload) != FIELDS or payload.get("schema") != SCHEMA:
         raise ValueError("Provider conformance source fields are not canonical")
-    if not isinstance(payload.get("evidenceCount"), int) or payload["evidenceCount"] <= 0:
-        raise ValueError("real Provider conformance evidenceCount must be positive")
+    if payload.get("evidenceCount") != 140:
+        raise ValueError("real Provider conformance evidenceCount must be exactly 140")
     source = payload.get("sourceEvidence")
     if not isinstance(source, Mapping) or set(source) != {"ref", "digest", "files"}:
         raise ValueError("Provider sourceEvidence shape is not canonical")
@@ -136,7 +150,7 @@ def validate_source(payload: Mapping[str, Any]) -> None:
         or not ref.endswith("@" + digest)
         or not isinstance(files, Mapping)
         or len(files) != payload["evidenceCount"]
-        or not files
+        or len(files) != 140
         or any(
             not isinstance(path, str)
             or not path.startswith("evidence/raw/provider/")
@@ -171,7 +185,11 @@ def render(
     issues = [
         *validation_issues,
         *(str(issue) for issue in report_issues),
-        *readiness_issues(report, environment=environment),
+        *(
+            issue
+            for target in sorted(READINESS_ENVIRONMENTS)
+            for issue in readiness_issues(report, environment=target)
+        ),
     ]
     if not isinstance(evidence_count, int) or evidence_count <= 0:
         raise ValueError("real Provider conformance evidenceCount must be positive")
@@ -238,9 +256,15 @@ def main() -> int:
     try:
         evidence_root = output_root()
         report, issues = load_validate_and_derive(root=evidence_root)
+        compiled, governance_issues = external_provider_governance.load_and_compile()
+        evidence, load_issues = load_evidence(evidence_root)
+        exact_issues = exact_required_cell_issues(
+            evidence,
+            compiled=compiled,
+        )
         raw_files = _archive_raw_evidence(
             source_root=evidence_root,
-            paths=evidence_files(evidence_root),
+            paths=sorted(Path(str(item["_source"])) for item in evidence),
             archive_dir=args.archive_dir,
         )
         source_ref = str(args.source_evidence_ref).strip()
@@ -248,7 +272,12 @@ def main() -> int:
             source_ref = "oci://" + source_ref
         payload = render(
             report,
-            validation_issues=list(issues),
+            validation_issues=[
+                *issues,
+                *(issue.render() for issue in governance_issues),
+                *load_issues,
+                *exact_issues,
+            ],
             environment=args.require_environment,
             source_evidence={
                 "ref": source_ref,

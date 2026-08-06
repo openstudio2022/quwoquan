@@ -9,6 +9,7 @@ from unittest import mock
 import yaml
 
 from quwoquan_ops.cli.lib import external_provider_governance as governance
+from quwoquan_ops.gate import verify_external_provider_governance as provider_gate
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -218,7 +219,91 @@ class ExternalProviderGovernanceContractTest(unittest.TestCase):
             )
         )
 
+    def test_message_transport_owner_declares_fixed_observability_metrics(self) -> None:
+        governance.load_registry.cache_clear()
+        registry = governance.load_registry()
+        runtime_transport = next(
+            capability
+            for capability in registry["capabilities"]
+            if capability["capability_id"] == "runtime.message.transport"
+        )
+        self.assertEqual(
+            tuple(runtime_transport.get("observability_metrics") or ()),
+            governance.MESSAGE_TRANSPORT_REQUIRED_METRICS,
+        )
+        issues = governance.registry_issues(registry)
+        self.assertFalse(
+            any(
+                "pending_lag/dead_letter/publish_p95/consume_p95" in issue.message
+                for issue in issues
+            )
+        )
+
+    def test_message_transport_p95_is_derived_from_histogram_samples(self) -> None:
+        runtime_source = (
+            ROOT
+            / "quwoquan_service/runtime/messaging/redis_message_transport_binding.go"
+        ).read_text(encoding="utf-8")
+        rules_document = yaml.safe_load(
+            (
+                ROOT
+                / "quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml"
+            ).read_text(encoding="utf-8")
+        )
+        dashboard_source = yaml.safe_load(
+            (
+                ROOT
+                / "quwoquan_ops/observability/monitoring/dashboards/l2_business_journey.json"
+            ).read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            provider_gate.message_transport_observability_issues(
+                runtime_source,
+                rules_document=rules_document,
+                dashboard_source=dashboard_source,
+            ),
+            [],
+        )
+
+        gauge_source = runtime_source.replace(
+            "messageTransportPublishLatency = promauto.NewHistogramVec",
+            "messageTransportPublishLatency = promauto.NewGaugeVec",
+            1,
+        )
+        self.assertTrue(
+            any(
+                "publish_duration_seconds must use HistogramVec" in issue
+                for issue in provider_gate.message_transport_observability_issues(
+                    gauge_source,
+                    rules_document=rules_document,
+                    dashboard_source=dashboard_source,
+                )
+            )
+        )
+
+        invalid_rules = deepcopy(rules_document)
+        publish_rule = next(
+            rule
+            for group in invalid_rules["groups"]
+            for rule in group["rules"]
+            if rule.get("record") == "qwq_message_transport_publish_p95"
+        )
+        publish_rule["expr"] = (
+            "qwq_message_transport_publish_duration_seconds_bucket"
+        )
+        self.assertTrue(
+            any(
+                "must calculate histogram_quantile(0.95" in issue
+                for issue in provider_gate.message_transport_observability_issues(
+                    runtime_source,
+                    rules_document=invalid_rules,
+                    dashboard_source=dashboard_source,
+                )
+            )
+        )
+
     def test_shared_capability_use_is_local_and_cannot_shadow_owner_selection(self) -> None:
+        governance.load_registry.cache_clear()
         registry = governance.load_registry()
         runtime_transport = next(
             capability

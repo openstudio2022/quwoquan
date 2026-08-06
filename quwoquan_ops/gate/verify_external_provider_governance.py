@@ -2,9 +2,12 @@
 """Block drift between external Capability, Adapter, Binding and conformance truth."""
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
+
+import yaml
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -19,6 +22,32 @@ from quwoquan_ops.cli.lib.external_provider_governance import (
 
 
 MESSAGE_TRANSPORT_CAPABILITY = "runtime.message.transport"
+MESSAGE_TRANSPORT_REQUIRED_METRICS = (
+    "pending_lag",
+    "dead_letter",
+    "publish_p95",
+    "consume_p95",
+)
+MESSAGE_TRANSPORT_RUNTIME_METRICS = {
+    "pending_lag": "Gauge",
+    "dead_letter": "Counter",
+    "publish_duration_seconds": "Histogram",
+    "consume_duration_seconds": "Histogram",
+}
+MESSAGE_TRANSPORT_P95_RECORDINGS = {
+    "qwq_message_transport_publish_p95": (
+        "qwq_message_transport_publish_duration_seconds_bucket"
+    ),
+    "qwq_message_transport_consume_p95": (
+        "qwq_message_transport_consume_duration_seconds_bucket"
+    ),
+}
+PROMETHEUS_VEC_RE = re.compile(
+    r"promauto\.New(?P<constructor>Gauge|Counter|Histogram)Vec\(\s*"
+    r"prometheus\.(?P<opts>Gauge|Counter|Histogram)Opts\{"
+    r"(?P<body>.*?)\}\s*,",
+    re.DOTALL,
+)
 REDIS_CONSTRUCTOR_RE = re.compile(
     r"\b(?:redis|rtredis)\.New(?:Client|ClusterClient|MemoryClient)\("
 )
@@ -34,6 +63,96 @@ def _function_body(source: str, function_name: str) -> str:
         return ""
     next_function = source.find("\nfunc ", start + len(marker))
     return source[start:] if next_function < 0 else source[start:next_function]
+
+
+def message_transport_observability_issues(
+    runtime_source: str,
+    *,
+    rules_document: dict[object, object] | None = None,
+    dashboard_source: dict[object, object] | None = None,
+) -> list[str]:
+    """Require honest histogram samples and canonical PromQL p95 recordings."""
+    issues: list[str] = []
+    declared_types: dict[str, str] = {}
+    for match in PROMETHEUS_VEC_RE.finditer(runtime_source):
+        name_match = re.search(r'Name:\s*"([^"]+)"', match.group("body"))
+        if name_match is not None:
+            declared_types[name_match.group(1)] = match.group("constructor")
+    for metric_name, expected_type in MESSAGE_TRANSPORT_RUNTIME_METRICS.items():
+        actual_type = declared_types.get(metric_name)
+        if actual_type != expected_type:
+            issues.append(
+                "quwoquan_service/runtime/messaging/redis_message_transport_binding.go: "
+                f"{metric_name} must use {expected_type}Vec, got {actual_type or 'missing'}"
+            )
+    for dishonest_name in ("publish_p95", "consume_p95"):
+        if dishonest_name in declared_types:
+            issues.append(
+                "quwoquan_service/runtime/messaging/redis_message_transport_binding.go: "
+                f"{dishonest_name} must be a PromQL recording, not a raw runtime metric"
+            )
+
+    rules_path = (
+        ROOT
+        / "quwoquan_ops"
+        / "observability"
+        / "monitoring"
+        / "alerts"
+        / "quwoquan_alerts.yaml"
+    )
+    if rules_document is None:
+        rules_document = yaml.safe_load(rules_path.read_text(encoding="utf-8"))
+    recording_rules = {
+        rule.get("record"): str(rule.get("expr") or "")
+        for group in rules_document.get("groups", [])
+        if isinstance(group, dict)
+        for rule in group.get("rules", [])
+        if isinstance(rule, dict) and rule.get("record")
+    }
+    for recording, source_bucket in MESSAGE_TRANSPORT_P95_RECORDINGS.items():
+        expression = recording_rules.get(recording, "")
+        normalized = " ".join(expression.split())
+        if not re.search(r"histogram_quantile\s*\(\s*0\.95\s*,", expression):
+            issues.append(
+                f"{rules_path.relative_to(ROOT)}: {recording} must calculate "
+                "histogram_quantile(0.95, ...)"
+            )
+        if source_bucket not in expression:
+            issues.append(
+                f"{rules_path.relative_to(ROOT)}: {recording} must consume {source_bucket}"
+            )
+        if "sum by (le, root, adapter)" not in normalized:
+            issues.append(
+                f"{rules_path.relative_to(ROOT)}: {recording} must preserve "
+                "le/root/adapter while aggregating operation series"
+            )
+
+    dashboard_path = (
+        ROOT
+        / "quwoquan_ops"
+        / "observability"
+        / "monitoring"
+        / "dashboards"
+        / "l2_business_journey.json"
+    )
+    if dashboard_source is None:
+        dashboard_source = json.loads(dashboard_path.read_text(encoding="utf-8"))
+    dashboard_expressions = {
+        target.get("expr")
+        for row in dashboard_source.get("dashboard", {}).get("panels", [])
+        if isinstance(row, dict)
+        for target in row.get("targets", [])
+        if isinstance(target, dict)
+    }
+    for recording in MESSAGE_TRANSPORT_P95_RECORDINGS:
+        if not any(
+            isinstance(expression, str) and recording in expression
+            for expression in dashboard_expressions
+        ):
+            issues.append(
+                f"{dashboard_path.relative_to(ROOT)}: dashboard must consume {recording}"
+            )
+    return issues
 
 
 def message_transport_static_issues(registry: dict[object, object]) -> list[str]:
@@ -127,6 +246,13 @@ def message_transport_static_issues(registry: dict[object, object]) -> list[str]
             issues.append(
                 f"{runtime_binding.relative_to(ROOT)}: {function_name} must not use Pub/Sub for durable delivery"
             )
+    issues.extend(message_transport_observability_issues(runtime_source))
+    declared_metrics = capability.get("observability_metrics") or []
+    if tuple(declared_metrics) != MESSAGE_TRANSPORT_REQUIRED_METRICS:
+        issues.append(
+            "metadata: runtime.message.transport owner must declare fixed "
+            "pending_lag/dead_letter/publish_p95/consume_p95 observability metrics"
+        )
 
     for source_path in services_root.glob("**/*.go"):
         if source_path.name.endswith("_test.go"):

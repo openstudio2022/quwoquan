@@ -1126,8 +1126,7 @@ def test_data_lifecycle_exit__allows_commercial_readiness_on_replay_import(
         / "env/gamma/runs/data-release/pilot-002/commercial-verify-001/result.json"
     )
     commercial_result.parent.mkdir(parents=True, exist_ok=True)
-    commercial_result.write_text("{}
-", encoding="utf-8")
+    commercial_result.write_text("{}\n", encoding="utf-8")
 
     receipt, path = stackctl._load_data_release_lifecycle_exit(
         environment="gamma",

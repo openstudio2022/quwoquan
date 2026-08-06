@@ -1,20 +1,33 @@
 """Resolve and probe the Ops-owned ReliableTask fleet transport."""
 from __future__ import annotations
 
-from contextlib import contextmanager
+import hashlib
 import json
-import socket
+import os
 import subprocess
 import sys
 import time
+from collections.abc import Mapping
+from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Mapping
 from urllib.parse import urlparse
 
 from core.paths import DATA_LOCAL_ROOT, REPO_ROOT
 
-
 _STACKCTL_PATH = REPO_ROOT / "quwoquan_ops" / "cli" / "stackctl.py"
+FLEET_TARGET_ENV = "QWQ_RELIABLETASK_FLEET_TARGET"
+FLEET_MONGO_URI_ENV = "QWQ_RELIABLETASK_FLEET_MONGO_URI"
+FLEET_REDIS_ADDR_ENV = "QWQ_RELIABLETASK_FLEET_REDIS_ADDR"
+FLEET_PLAN_DIGEST_ENV = "QWQ_RELIABLETASK_FLEET_PLAN_DIGEST"
+FLEET_BINDING_DIGEST_ENV = "QWQ_RELIABLETASK_FLEET_BINDING_DIGEST"
+CAMPAIGN_ROOT_ENV = "QWQ_CAMPAIGN_ROOT_EXECUTION_ID"
+_FLEET_ENV_NAMES = (
+    FLEET_TARGET_ENV,
+    FLEET_MONGO_URI_ENV,
+    FLEET_REDIS_ADDR_ENV,
+    FLEET_PLAN_DIGEST_ENV,
+    FLEET_BINDING_DIGEST_ENV,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,9 +37,9 @@ class ReliableTaskFleetTransport:
     redis_addr: str
 
     @classmethod
-    def from_document(cls, value: object) -> "ReliableTaskFleetTransport":
+    def from_document(cls, value: object) -> ReliableTaskFleetTransport:
         if not isinstance(value, Mapping):
-            raise ValueError("ReliableTask fleet transport must be an object")
+            raise TypeError("ReliableTask fleet transport must be an object")
         expected_fields = {"target", "mongoUri", "redisAddr"}
         if set(value) != expected_fields:
             raise ValueError("ReliableTask fleet transport fields are invalid")
@@ -46,6 +59,127 @@ class ReliableTaskFleetTransport:
         ):
             raise ValueError("ReliableTask fleet transport values are invalid")
         return cls(target=target, mongo_uri=mongo_uri, redis_addr=redis_addr)
+
+
+@dataclass(frozen=True, slots=True)
+class FrozenReliableTaskFleetBinding:
+    root_execution_id: str
+    plan_digest: str
+    transport: ReliableTaskFleetTransport
+    binding_digest: str
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        root_execution_id: str,
+        plan_digest: str,
+        transport: ReliableTaskFleetTransport,
+    ) -> FrozenReliableTaskFleetBinding:
+        stable = {
+            "rootExecutionId": root_execution_id,
+            "planDigest": plan_digest,
+            **transport_document(transport),
+        }
+        return cls(
+            root_execution_id=root_execution_id,
+            plan_digest=plan_digest,
+            transport=transport,
+            binding_digest=_binding_digest(stable),
+        )
+
+    @classmethod
+    def from_document(cls, value: object) -> FrozenReliableTaskFleetBinding:
+        if not isinstance(value, Mapping):
+            raise TypeError("ReliableTask frozen fleet binding must be an object")
+        expected = {
+            "rootExecutionId",
+            "planDigest",
+            "target",
+            "mongoUri",
+            "redisAddr",
+            "bindingDigest",
+        }
+        if set(value) != expected:
+            raise ValueError("ReliableTask frozen fleet binding fields are invalid")
+        root_execution_id = str(value.get("rootExecutionId") or "").strip()
+        plan_digest = str(value.get("planDigest") or "").strip()
+        binding_digest = str(value.get("bindingDigest") or "").strip()
+        if not root_execution_id or not _is_sha256(plan_digest):
+            raise ValueError("ReliableTask frozen fleet campaign identity is invalid")
+        transport = ReliableTaskFleetTransport.from_document(
+            {
+                "target": value.get("target"),
+                "mongoUri": value.get("mongoUri"),
+                "redisAddr": value.get("redisAddr"),
+            }
+        )
+        binding = cls.create(
+            root_execution_id=root_execution_id,
+            plan_digest=plan_digest,
+            transport=transport,
+        )
+        if binding_digest != binding.binding_digest:
+            raise ValueError("ReliableTask frozen fleet binding digest drift")
+        return binding
+
+    def document(self) -> dict[str, str]:
+        return {
+            "rootExecutionId": self.root_execution_id,
+            "planDigest": self.plan_digest,
+            **transport_document(self.transport),
+            "bindingDigest": self.binding_digest,
+        }
+
+    def environment(self) -> dict[str, str]:
+        return {
+            FLEET_TARGET_ENV: self.transport.target,
+            FLEET_MONGO_URI_ENV: self.transport.mongo_uri,
+            FLEET_REDIS_ADDR_ENV: self.transport.redis_addr,
+            FLEET_PLAN_DIGEST_ENV: self.plan_digest,
+            FLEET_BINDING_DIGEST_ENV: self.binding_digest,
+        }
+
+
+def _is_sha256(value: str) -> bool:
+    return len(value) == 71 and value.startswith("sha256:") and all(
+        char in "0123456789abcdef" for char in value[7:]
+    )
+
+
+def _binding_digest(value: Mapping[str, object]) -> str:
+    encoded = json.dumps(
+        dict(value),
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return "sha256:" + hashlib.sha256(encoded).hexdigest()
+
+
+def transport_document(transport: ReliableTaskFleetTransport) -> dict[str, str]:
+    return {
+        "target": transport.target,
+        "mongoUri": transport.mongo_uri,
+        "redisAddr": transport.redis_addr,
+    }
+
+
+def _campaign_fleet_binding_from_environment() -> FrozenReliableTaskFleetBinding:
+    root_execution_id = str(os.environ.get(CAMPAIGN_ROOT_ENV) or "").strip()
+    values = {name: str(os.environ.get(name) or "").strip() for name in _FLEET_ENV_NAMES}
+    if not root_execution_id or any(not value for value in values.values()):
+        raise RuntimeError("campaign ReliableTask fleet binding is incomplete")
+    return FrozenReliableTaskFleetBinding.from_document(
+        {
+            "rootExecutionId": root_execution_id,
+            "planDigest": values[FLEET_PLAN_DIGEST_ENV],
+            "target": values[FLEET_TARGET_ENV],
+            "mongoUri": values[FLEET_MONGO_URI_ENV],
+            "redisAddr": values[FLEET_REDIS_ADDR_ENV],
+            "bindingDigest": values[FLEET_BINDING_DIGEST_ENV],
+        }
+    )
 
 
 def _stackctl_fleet_document(*arguments: str) -> Mapping[str, object]:
@@ -71,43 +205,29 @@ def _stackctl_fleet_document(*arguments: str) -> Mapping[str, object]:
     except ValueError as exc:
         raise RuntimeError("ReliableTask fleet topology returned invalid JSON") from exc
     if not isinstance(document, Mapping):
-        raise RuntimeError("ReliableTask fleet topology result must be an object")
+        raise TypeError("ReliableTask fleet topology result must be an object")
     exit_code = document.get("exitCode")
     if isinstance(exit_code, bool) or not isinstance(exit_code, int) or exit_code != 0:
         raise RuntimeError("ReliableTask fleet topology reported failure")
     return document
 
 
-def resolve_reliabletask_fleet_transport() -> ReliableTaskFleetTransport:
+def _resolve_stackctl_fleet_transport() -> ReliableTaskFleetTransport:
     """Resolve runtime endpoints only through the Ops-owned topology facade."""
     document = _stackctl_fleet_document()
     return ReliableTaskFleetTransport.from_document(document.get("fleet"))
 
 
-def _ensure_reliabletask_fleet_transport(
-    expected: ReliableTaskFleetTransport,
-) -> None:
-    """Reconcile a missing dedicated fleet only through stackctl."""
-    document = _stackctl_fleet_document("--action", "up")
-    actual = ReliableTaskFleetTransport.from_document(document.get("fleet"))
-    evidence = document.get("evidence")
-    if actual != expected or not isinstance(evidence, Mapping) or evidence.get("ready") is not True:
-        raise RuntimeError("ReliableTask fleet reconcile did not restore frozen transport")
-
-
-def _transport_socket_parts(
-    transport: ReliableTaskFleetTransport,
-) -> tuple[tuple[str, int], tuple[str, int]]:
-    mongo = urlparse(transport.mongo_uri)
-    redis_host, _, redis_port = transport.redis_addr.rpartition(":")
-    if mongo.hostname is None or mongo.port is None:
-        raise ValueError("ReliableTask fleet Mongo endpoint is invalid")
-    return (mongo.hostname, mongo.port), (redis_host, int(redis_port))
+def resolve_reliabletask_fleet_transport() -> ReliableTaskFleetTransport:
+    """Resolve controller topology or consume one plan-bound campaign binding."""
+    if str(os.environ.get(CAMPAIGN_ROOT_ENV) or "").strip():
+        return _campaign_fleet_binding_from_environment().transport
+    return _resolve_stackctl_fleet_transport()
 
 
 @contextmanager
-def _fleet_reconciliation_guard():
-    """Serialize readiness checks with side-effecting stackctl reconciliation."""
+def _fleet_status_guard():
+    """Serialize protocol-level status probes without mutating the fleet."""
     lock_path = DATA_LOCAL_ROOT / "cache" / "reliabletask-fleet-preflight.lock"
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     try:
@@ -124,32 +244,49 @@ def _fleet_reconciliation_guard():
 
 
 def reliabletask_fleet_preflight() -> dict[str, object]:
-    """Probe the resolved fleet control plane before expensive source work starts."""
-    with _fleet_reconciliation_guard():
-        transport = resolve_reliabletask_fleet_transport()
-        from core.runtime_policy import active_runtime_policy
-
-        timeout = float(active_runtime_policy().preflight_network_timeout_seconds)
-        if not _fleet_transport_ready(transport, socket_timeout_seconds=timeout):
-            _ensure_reliabletask_fleet_transport(transport)
-        mongo, redis = _transport_socket_parts(transport)
-        checks: list[tuple[str, tuple[str, int]]] = [("mongo", mongo), ("redis", redis)]
-        outcomes: dict[str, bool] = {}
-        issues: list[str] = []
-        for name, address in checks:
-            try:
-                with socket.create_connection(address, timeout=timeout):
-                    outcomes[name] = True
-            except OSError as exc:
-                outcomes[name] = False
-                issues.append(f"{name} endpoint unavailable: {type(exc).__name__}")
+    """Read the Ops-owned, protocol-level fleet status without reconciling it."""
+    with _fleet_status_guard():
+        document = _stackctl_fleet_document("--action", "status")
+        transport = ReliableTaskFleetTransport.from_document(document.get("fleet"))
+        evidence = document.get("evidence")
+        if not isinstance(evidence, Mapping):
+            raise RuntimeError("ReliableTask fleet status omitted typed evidence")
+        mongo_ready = evidence.get("mongo") is True
+        redis_ready = evidence.get("redis") is True
+        owned = evidence.get("owned") is True
+        ready = evidence.get("ready") is True and mongo_ready and redis_ready and owned
+        issues = [] if ready else ["dedicated ReliableTask fleet is not writable"]
         return {
-            "ready": not issues,
+            "ready": ready,
             "target": transport.target,
-            "mongo": outcomes["mongo"],
-            "redis": outcomes["redis"],
+            "mongo": mongo_ready,
+            "redis": redis_ready,
+            "owned": owned,
             "issues": issues,
         }
+
+
+def prepare_controller_reliabletask_fleet_transport() -> ReliableTaskFleetTransport:
+    """Require an explicitly started fleet before freezing it into campaign lanes."""
+    if str(os.environ.get(CAMPAIGN_ROOT_ENV) or "").strip() or any(
+        str(os.environ.get(name) or "").strip() for name in _FLEET_ENV_NAMES
+    ):
+        raise RuntimeError("campaign controller cannot inherit a lane fleet binding")
+    document = _stackctl_fleet_document("--action", "status")
+    transport = ReliableTaskFleetTransport.from_document(document.get("fleet"))
+    evidence = document.get("evidence")
+    if not (
+        isinstance(evidence, Mapping)
+        and evidence.get("ready") is True
+        and evidence.get("mongo") is True
+        and evidence.get("redis") is True
+        and evidence.get("owned") is True
+    ):
+        raise RuntimeError(
+            "ReliableTask fleet is unavailable; run the explicit stackctl "
+            "data-execution-fleet up operation first"
+        )
+    return transport
 
 
 def _fleet_transport_ready(
@@ -157,13 +294,21 @@ def _fleet_transport_ready(
     *,
     socket_timeout_seconds: float,
 ) -> bool:
-    for address in _transport_socket_parts(transport):
-        try:
-            with socket.create_connection(address, timeout=socket_timeout_seconds):
-                pass
-        except OSError:
-            return False
-    return True
+    del socket_timeout_seconds
+    try:
+        document = _stackctl_fleet_document("--action", "status")
+        actual = ReliableTaskFleetTransport.from_document(document.get("fleet"))
+    except (RuntimeError, TypeError, ValueError):
+        return False
+    evidence = document.get("evidence")
+    return bool(
+        actual == transport
+        and isinstance(evidence, Mapping)
+        and evidence.get("ready") is True
+        and evidence.get("mongo") is True
+        and evidence.get("redis") is True
+        and evidence.get("owned") is True
+    )
 
 
 def _wait_for_fleet_transport(
@@ -178,7 +323,6 @@ def _wait_for_fleet_transport(
     if required_ready_probes < 1:
         raise ValueError("ReliableTask fleet ready probe count must be positive")
     ready_streak = 0
-    reconciled = False
     deadline = time.monotonic() + timeout_seconds
     while True:
         if _fleet_transport_ready(
@@ -190,14 +334,6 @@ def _wait_for_fleet_transport(
                 return True
         else:
             ready_streak = 0
-            if not reconciled:
-                try:
-                    _ensure_reliabletask_fleet_transport(transport)
-                except RuntimeError:
-                    # Docker may itself still be restarting.  Preserve the
-                    # bounded socket wait and keep probing the frozen endpoint.
-                    pass
-                reconciled = True
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             return False

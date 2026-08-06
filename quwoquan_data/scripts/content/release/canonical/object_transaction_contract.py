@@ -5,34 +5,24 @@ import hashlib
 import json
 import os
 import shutil
-import tempfile
+from collections.abc import Iterable, Mapping
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any
 
-from core.paths import CONTROL_PLANE_TAXONOMY_ROOT
 from core.control_types import SourcePolicyRevision
+from core.paths import CONTROL_PLANE_TAXONOMY_ROOT
 from core.schema import assert_valid
-from core.tree_integrity import tree_integrity_stats
 
 PACKAGE_SCHEMA = "quwoquan_data.object_transaction_package"
-
 DRY_RUN_SCHEMA = "quwoquan_data.object_transaction_dry_run"
-
 APPLY_SCHEMA = "quwoquan_data.object_transaction_apply"
-
 ROLLBACK_SCHEMA = "quwoquan_data.object_transaction_rollback"
-
 LAYOUT_SCHEMA = "quwoquan_data.canonical_publish"
-
 RELEASE_SCHEMA = "quwoquan_data.release"
-
 REQUIRED_SOURCE_POLICY = SourcePolicyRevision.ENCYCLOPEDIA_PRIMARY.value
-
 ALLOWED_OBJECT_KINDS = {"creators", "entities", "posts"}
-
 ALLOWED_CANONICAL_ROOTS = {"creators", "entities", "posts", "tags", "media"}
-
 EXPECTED_OBJECT_SCHEMAS = {
     "creators": "quwoquan_data.creator_object",
     "entities": "quwoquan_data.entity_object",
@@ -201,25 +191,48 @@ def refresh_canonical_tag_snapshots(canonical_root: Path) -> list[str]:
     """
     refs = collect_canonical_tag_refs(canonical_root)
     taxonomy_root = Path(os.environ.get("QWQ_TAGS_ROOT") or CONTROL_PLANE_TAXONOMY_ROOT)
-    staging = Path(tempfile.mkdtemp(prefix=".tags.", dir=canonical_root))
-    try:
-        for ref in refs:
-            rel = _safe_rel(ref, label="tagRef")
-            source = taxonomy_root / rel / "_definition.json"
-            if not source.is_file():
-                raise ObjectTransactionError(f"tag closure 不可解析：{ref}")
-            definition = _read_json(source)
+    target = canonical_root / "tags"
+    target.mkdir(parents=True, exist_ok=True)
+    expected: set[Path] = set()
+    for ref in refs:
+        rel = _safe_rel(ref, label="tagRef")
+        source = taxonomy_root / rel / "_definition.json"
+        if not source.is_file():
+            raise ObjectTransactionError(f"tag closure 不可解析：{ref}")
+        definition = _read_json(source)
+        try:
+            assert_valid(
+                definition,
+                "governance",
+                "_definition",
+                label=f"taxonomy tag {ref}",
+            )
+        except (ValueError, FileNotFoundError) as exc:
+            raise ObjectTransactionError(str(exc)) from exc
+        destination = target / rel / "_definition.json"
+        expected.add(destination)
+        if destination.is_file() and _digest_file(destination) == _digest_file(source):
+            continue
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        temporary = destination.with_name(
+            f".{destination.name}.{os.getpid()}.tag-snapshot.tmp"
+        )
+        shutil.copy2(source, temporary)
+        try:
+            os.replace(temporary, destination)
+        finally:
+            temporary.unlink(missing_ok=True)
+    for snapshot in list(_files(target)):
+        if snapshot in expected:
+            continue
+        snapshot.unlink()
+        current = snapshot.parent
+        while current != target:
             try:
-                assert_valid(definition, "governance", "_definition", label=f"taxonomy tag {ref}")
-            except (ValueError, FileNotFoundError) as exc:
-                raise ObjectTransactionError(str(exc)) from exc
-            _write_json(staging / rel / "_definition.json", definition)
-        target = canonical_root / "tags"
-        shutil.rmtree(target, ignore_errors=True)
-        staging.replace(target)
-    except Exception:
-        shutil.rmtree(staging, ignore_errors=True)
-        raise
+                current.rmdir()
+            except OSError:
+                break
+            current = current.parent
     return refs
 
 def _collect_object_keys(value: Any) -> set[str]:

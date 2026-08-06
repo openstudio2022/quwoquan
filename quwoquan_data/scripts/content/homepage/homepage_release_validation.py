@@ -23,6 +23,7 @@ from content.homepage.quality_policy import (
     homepage_source_fidelity_limit,
 )
 from content.homepage.homepage_review import _entity_review_paths
+from content.homepage.homepage_media_contract import homepage_manifest_media_issues
 from content.homepage.homepage_validation import (
     _asset_closure_issues,
     _condition_profile_issues,
@@ -215,6 +216,7 @@ def validate_entity_page(
     issues.extend(_condition_profile_issues(payload, label, catalogs_root=_CONDITION_CATALOGS_ROOT))
     issues.extend(_homepage_base_source_issues(execution_id, domain, etype, name))
     issues.extend(_asset_closure_issues(obj, manifest_payload, label))
+    issues.extend(homepage_manifest_media_issues(obj, manifest_payload, payload, label))
     from content.homepage.homepage_validation import homepage_structure_issues
     issues.extend(homepage_structure_issues(obj, manifest_payload, label))
     declared_image_refs = {

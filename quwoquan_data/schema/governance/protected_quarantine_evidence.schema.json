@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data.protected_quarantine_evidence",
+  "title": "Protected historical Data quarantine evidence receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "status",
+    "quarantineRef",
+    "reason",
+    "reusableSourceTruthAllowed",
+    "migrationApplyReceiptRef",
+    "migrationApplyReceiptSha256",
+    "migrationPlanDigest",
+    "migrationSourceRef",
+    "migrationDestinationRef",
+    "migrationEntryFileCount",
+    "migrationEntryByteCount",
+    "migrationEntryDigest",
+    "directories",
+    "files",
+    "symlinks",
+    "directoryCount",
+    "fileCount",
+    "symlinkCount",
+    "byteCount",
+    "treeDigest",
+    "manifestDigest",
+    "recordedAt"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.protected_quarantine_evidence"},
+    "status": {"const": "protected_read_only"},
+    "quarantineRef": {
+      "type": "string",
+      "pattern": "^local/workspace/quarantine/[A-Za-z0-9][A-Za-z0-9._-]*$"
+    },
+    "reason": {"type": "string", "minLength": 1},
+    "reusableSourceTruthAllowed": {"const": false},
+    "migrationApplyReceiptRef": {
+      "type": "string",
+      "pattern": "^local/cache/output-layout-migrations/[0-9a-f]{64}/apply\\.json$"
+    },
+    "migrationApplyReceiptSha256": {"$ref": "#/$defs/digest"},
+    "migrationPlanDigest": {"$ref": "#/$defs/digest"},
+    "migrationSourceRef": {"const": "quarantine"},
+    "migrationDestinationRef": {"const": "local/workspace/quarantine"},
+    "migrationEntryFileCount": {"type": "integer", "minimum": 1},
+    "migrationEntryByteCount": {"type": "integer", "minimum": 0},
+    "migrationEntryDigest": {"$ref": "#/$defs/digest"},
+    "directories": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    },
+    "files": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/file"}
+    },
+    "symlinks": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/symlink"}
+    },
+    "directoryCount": {"type": "integer", "minimum": 0},
+    "fileCount": {"type": "integer", "minimum": 1},
+    "symlinkCount": {"type": "integer", "minimum": 0},
+    "byteCount": {"type": "integer", "minimum": 0},
+    "treeDigest": {"$ref": "#/$defs/digest"},
+    "manifestDigest": {"$ref": "#/$defs/digest"},
+    "recordedAt": {"type": "string", "minLength": 1}
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "byteCount", "sha256"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "byteCount": {"type": "integer", "minimum": 0},
+        "sha256": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "symlink": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "target", "targetSha256"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "target": {"type": "string", "minLength": 1},
+        "targetSha256": {"$ref": "#/$defs/digest"}
+      }
+    }
+  }
+}

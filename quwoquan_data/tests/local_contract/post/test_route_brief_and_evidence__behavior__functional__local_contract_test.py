@@ -214,14 +214,17 @@ retained: true
 很多人喜欢九寨沟的清晨光线，但也会抱怨暑期排队、高反和连续坐车太累。
 """
     image_root = Path(tempfile.mkdtemp(prefix="route_brief_sources_"))
-    for entity in ("九寨沟", "稻城亚丁", "色达", "新都桥"):
+    base_source_ref = ""
+    for entity_index, entity in enumerate(
+        ("九寨沟", "稻城亚丁", "色达", "新都桥")
+    ):
         obj = resolve_entity_object_dir(execution_id, entity, etype_hint="景区")
         image_paths: list[Path] = []
         for k in range(2):
             image_path = image_root / f"{entity}_{k}.jpg"
-            _write_clean_image(image_path, seed=hash(entity) % 50 + k + 1)
+            _write_clean_image(image_path, seed=7 + entity_index * 2 + k)
             image_paths.append(image_path)
-        write_source_unit(
+        source_manifest = write_source_unit(
             obj,
             ordinal=1,
             source_id="curated_story",
@@ -242,6 +245,15 @@ retained: true
             relevance=f"{entity} 路线证据",
             images=[{"sourcePath": str(path), "caption": f"{entity} 图{k}", "relevance": f"{entity} 图{k}"} for k, path in enumerate(image_paths)],
         )
+        if entity == "九寨沟":
+            base_source_ref = str(source_manifest["sourceRef"])
+
+    brief["baseSourceRef"] = base_source_ref
+    write_json(
+        execution_inputs_dir(execution_id, "post", "compose")
+        / "川西大环线慢游_跟团_夏.json",
+        brief,
+    )
 
     ref = "川西大环线慢游_跟团_夏"
     quality_payload = analyze_route_ref(execution_id, ref, brief)
@@ -329,9 +341,11 @@ retained: true
 ---
 
 九寨沟的清晨让人愿意慢下来。"""
-    image_path = Path(tempfile.mkdtemp(prefix="route_time_facts_")) / "九寨沟_0.jpg"
-    _write_clean_image(image_path, seed=7)
-    write_source_unit(
+    image_root = Path(tempfile.mkdtemp(prefix="route_time_facts_"))
+    image_paths = [image_root / "九寨沟_0.jpg", image_root / "九寨沟_1.jpg"]
+    for seed, image_path in enumerate(image_paths, start=7):
+        _write_clean_image(image_path, seed=seed)
+    source_manifest = write_source_unit(
         obj,
         ordinal=1,
         source_id="curated_story",
@@ -350,7 +364,19 @@ retained: true
         title="sample",
         target_ref="/entity/地点/景区/九寨沟",
         relevance="九寨沟路线证据",
-        images=[{"sourcePath": str(image_path), "caption": "九寨沟", "relevance": "九寨沟"}],
+        images=[
+            {
+                "sourcePath": str(image_path),
+                "caption": f"九寨沟图{index}",
+                "relevance": f"九寨沟图{index}",
+            }
+            for index, image_path in enumerate(image_paths)
+        ],
+    )
+    brief["baseSourceRef"] = source_manifest["sourceRef"]
+    write_json(
+        execution_inputs_dir(execution_id, "post", "compose") / f"{ref}.json",
+        brief,
     )
     quality_payload = analyze_route_ref(execution_id, ref, brief)
     pack = build_route_writing_pack(execution_id, ref, brief, quality_payload)
@@ -503,11 +529,17 @@ retained: true
 很多人喜欢九寨沟的清晨光线，但也会抱怨暑期排队、高反和连续坐车太累。
 """
     image_root = Path(tempfile.mkdtemp(prefix="route_brief_repeat_sources_"))
-    for entity in ("九寨沟", "稻城亚丁", "色达", "新都桥"):
+    base_source_ref = ""
+    for entity_index, entity in enumerate(
+        ("九寨沟", "稻城亚丁", "色达", "新都桥")
+    ):
         obj = resolve_entity_object_dir(execution_id, entity, etype_hint="景区")
-        image_path = image_root / f"{entity}.jpg"
-        _write_clean_image(image_path, seed=hash(entity) % 50 + 1)
-        write_source_unit(
+        image_paths = [image_root / f"{entity}_0.jpg"]
+        if entity == "九寨沟":
+            image_paths.append(image_root / f"{entity}_1.jpg")
+        for index, image_path in enumerate(image_paths):
+            _write_clean_image(image_path, seed=7 + entity_index * 2 + index)
+        source_manifest = write_source_unit(
             obj,
             ordinal=1,
             source_id="curated_story",
@@ -526,8 +558,24 @@ retained: true
             title="sample",
             target_ref=f"/entity/地点/景区/{entity}",
             relevance=f"{entity} 路线证据",
-            images=[{"sourcePath": str(image_path), "caption": f"{entity} 图", "relevance": f"{entity} 图"}],
+            images=[
+                {
+                    "sourcePath": str(image_path),
+                    "caption": f"{entity} 图{index}",
+                    "relevance": f"{entity} 图{index}",
+                }
+                for index, image_path in enumerate(image_paths)
+            ],
         )
+        if entity == "九寨沟":
+            base_source_ref = str(source_manifest["sourceRef"])
+
+    brief["baseSourceRef"] = base_source_ref
+    write_json(
+        execution_inputs_dir(execution_id, "post", "compose")
+        / "川西大环线慢游_跟团_夏.json",
+        brief,
+    )
 
     ref = "川西大环线慢游_跟团_夏"
     quality_payload = analyze_route_ref(execution_id, ref, brief)

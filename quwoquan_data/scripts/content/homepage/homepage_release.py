@@ -24,6 +24,7 @@ from core.paths import (
     STAGE_DRAFT,
     STAGE_QUALITY,
     STAGE_REVIEW,
+    ensure_object_stages,
     execution_entity_object_dir,
     execution_entity_stage_dir,
     execution_assistant_task,
@@ -74,6 +75,9 @@ from content.homepage.homepage_assets import (
     copy_homepage_asset,
     select_homepage_assets,
     write_homepage_media_dispositions,
+)
+from content.homepage.homepage_media_contract import (
+    write_homepage_source_asset_receipt,
 )
 from content.homepage.quality_policy import (
     homepage_body_char_minimum,
@@ -258,9 +262,13 @@ def materialize_entity_page(execution_id: str, domain: str, etype: str, name: st
         ).strip(),
     )
     images = [dict(image) for image in selection.publishable]
+    if not images:
+        return [
+            f"{label}: DATA.MEDIA.HOMEPAGE_ASSET_SHORTFALL: "
+            "accepted homepage requires at least one safe source image"
+        ]
     obj = execution_entity_object_dir(execution_id, domain, etype, name)
     obj.mkdir(parents=True, exist_ok=True)
-    from core.paths import STAGE_REVIEW, ensure_object_stages
     ensure_object_stages(obj, through_stage=STAGE_REVIEW)
     assets: list[dict[str, Any]] = []
     for index, image in enumerate(images):
@@ -279,7 +287,7 @@ def materialize_entity_page(execution_id: str, domain: str, etype: str, name: st
         if asset:
             asset["role"] = manifest_role
             assets.append(asset)
-    if images and not assets:
+    if not assets:
         return [f"{label}: homepage asset copy failed"]
     # 配图确定性注入（主页三段契约）：封面只进 frontmatter；有原图注的图按章节锚点
     # 注入正文块级 fullWidth figure（每章节最多 1 张）；其余进文末『## 相关图片』gallery。
@@ -378,6 +386,24 @@ def materialize_entity_page(execution_id: str, domain: str, etype: str, name: st
         [str(asset.get("sourceRef") or "").strip() for asset in assets]
     )
     source_refs = _dedupe_nonempty([*text_source_refs, *image_source_refs])
+    try:
+        source_asset_receipt, source_asset_receipt_ref = (
+            write_homepage_source_asset_receipt(
+                execution_id,
+                entity_dir=obj,
+                object_ref=entity_ref(domain, etype, name),
+                source_ref=single_source,
+                assets=assets,
+            )
+        )
+    except (OSError, ValueError, TypeError) as exc:
+        return [f"{label}: homepage source asset receipt failed: {exc}"]
+    hero_asset_id = str(source_asset_receipt.get("heroAssetId") or "")
+    media_asset_ids = [
+        str(value)
+        for value in source_asset_receipt.get("mediaAssetIds") or []
+        if str(value).strip()
+    ]
     tag_refs = _homepage_tag_refs(domain, etype, name, payload)
     # 地理归属写入通路（裁决 7 / schema/publish/entity.schema.json）：
     # geoTagRef 单值主归属为物化必填（缺失由 validate_entity_page 阻断），
@@ -421,6 +447,8 @@ def materialize_entity_page(execution_id: str, domain: str, etype: str, name: st
         "primarySource": primary_source,
         "textSourceRefs": text_source_refs,
         "imageSourceRefs": image_source_refs,
+        "heroAssetId": hero_asset_id,
+        "mediaAssetIds": media_asset_ids,
         "tagRefs": tag_refs,
         **geo_fields,
         **creator_fields,
@@ -441,6 +469,11 @@ def materialize_entity_page(execution_id: str, domain: str, etype: str, name: st
             "sourceRefs": source_refs,
             "textSourceRefs": text_source_refs,
             "imageSourceRefs": image_source_refs,
+            "heroAssetId": hero_asset_id,
+            "mediaAssetIds": media_asset_ids,
+            "sourceAssetReceiptRef": source_asset_receipt_ref,
+            "sourceAssetReceiptDigest": source_asset_receipt["receiptDigest"],
+            "sourceAssetCounts": source_asset_receipt["sourceAssetCounts"],
             "tagRefs": tag_refs,
             "assets": assets,
             "generator": "agent",

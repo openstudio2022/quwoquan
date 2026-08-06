@@ -1,5 +1,5 @@
 # Code generated from quwoquan_service/generated/contract_graph.json.
-# Regenerate with verify_content_object_alert_coverage.py --write-recording-rules.
+# Regenerate with verify_object_alert_coverage.py --write.
 groups:
   - name: quwoquan_content_contract_post
     rules:
@@ -30,7 +30,7 @@ groups:
           service: "content-service"
           operation: "content.post.GenerateArticleSummary"
           contract_metric: "content_article_summary_generate"
-          commercial_status: "blocked"
+          commercial_status: "ready"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
       - record: quwoquan_content_contract_operation_duration_seconds_bucket
@@ -40,7 +40,7 @@ groups:
           service: "content-service"
           operation: "content.post.GenerateArticleSummary"
           contract_metric: "content_article_summary_generate"
-          commercial_status: "blocked"
+          commercial_status: "ready"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
       - record: quwoquan_content_contract_operation_requests_total
@@ -150,7 +150,7 @@ groups:
           service: "content-service"
           operation: "content.post.GetHelperRead"
           contract_metric: "content_helper_read_get"
-          commercial_status: "blocked"
+          commercial_status: "ready"
           slo_latency_p95_ms: "500"
           slo_availability_percent: "99.9"
       - record: quwoquan_content_contract_operation_duration_seconds_bucket
@@ -160,7 +160,7 @@ groups:
           service: "content-service"
           operation: "content.post.GetHelperRead"
           contract_metric: "content_helper_read_get"
-          commercial_status: "blocked"
+          commercial_status: "ready"
           slo_latency_p95_ms: "500"
           slo_availability_percent: "99.9"
       - record: quwoquan_content_contract_operation_requests_total
@@ -180,46 +180,6 @@ groups:
           service: "content-service"
           operation: "content.post.GetMyFootprint"
           contract_metric: "content_footprint_get"
-          commercial_status: "ready"
-          slo_latency_p95_ms: "500"
-          slo_availability_percent: "99.9"
-      - record: quwoquan_content_contract_operation_requests_total
-        expr: |
-          sum by (status) (http_server_requests_total{service="content-service",method="GET",route="/content/intersections/summary"})
-        labels:
-          service: "content-service"
-          operation: "content.post.GetMyIntersectionSummary"
-          contract_metric: "content_intersection_summary_get"
-          commercial_status: "ready"
-          slo_latency_p95_ms: "500"
-          slo_availability_percent: "99.9"
-      - record: quwoquan_content_contract_operation_duration_seconds_bucket
-        expr: |
-          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="GET",route="/content/intersections/summary"})
-        labels:
-          service: "content-service"
-          operation: "content.post.GetMyIntersectionSummary"
-          contract_metric: "content_intersection_summary_get"
-          commercial_status: "ready"
-          slo_latency_p95_ms: "500"
-          slo_availability_percent: "99.9"
-      - record: quwoquan_content_contract_operation_requests_total
-        expr: |
-          sum by (status) (http_server_requests_total{service="content-service",method="GET",route="/content/intersections/object"})
-        labels:
-          service: "content-service"
-          operation: "content.post.GetObjectIntersections"
-          contract_metric: "content_object_intersection_get"
-          commercial_status: "ready"
-          slo_latency_p95_ms: "500"
-          slo_availability_percent: "99.9"
-      - record: quwoquan_content_contract_operation_duration_seconds_bucket
-        expr: |
-          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="GET",route="/content/intersections/object"})
-        labels:
-          service: "content-service"
-          operation: "content.post.GetObjectIntersections"
-          contract_metric: "content_object_intersection_get"
           commercial_status: "ready"
           slo_latency_p95_ms: "500"
           slo_availability_percent: "99.9"
@@ -265,26 +225,6 @@ groups:
           slo_availability_percent: "99.9"
       - record: quwoquan_content_contract_operation_requests_total
         expr: |
-          sum by (status) (http_server_requests_total{service="content-service",method="GET",route="/content/intersections"})
-        labels:
-          service: "content-service"
-          operation: "content.post.ListMyIntersections"
-          contract_metric: "content_intersection_list"
-          commercial_status: "ready"
-          slo_latency_p95_ms: "500"
-          slo_availability_percent: "99.9"
-      - record: quwoquan_content_contract_operation_duration_seconds_bucket
-        expr: |
-          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="GET",route="/content/intersections"})
-        labels:
-          service: "content-service"
-          operation: "content.post.ListMyIntersections"
-          contract_metric: "content_intersection_list"
-          commercial_status: "ready"
-          slo_latency_p95_ms: "500"
-          slo_availability_percent: "99.9"
-      - record: quwoquan_content_contract_operation_requests_total
-        expr: |
           sum by (status) (http_server_requests_total{service="content-service",method="GET",route=~"^/content/personas/[^/]+/posts$"})
         labels:
           service: "content-service"
@@ -320,46 +260,6 @@ groups:
           service: "content-service"
           operation: "content.post.PromotePostToWork"
           contract_metric: "content_post_promote_to_work"
-          commercial_status: "ready"
-          slo_latency_p95_ms: "800"
-          slo_availability_percent: "99.9"
-      - record: quwoquan_content_contract_operation_requests_total
-        expr: |
-          sum by (status) (http_server_requests_total{service="content-service",method="POST",route="/internal/content/account-closure/dead-letters:recover"})
-        labels:
-          service: "content-service"
-          operation: "content.post.RecoverContentAccountClosureDeadLetter"
-          contract_metric: "content_account_closure_dead_letter_recover"
-          commercial_status: "ready"
-          slo_latency_p95_ms: "500"
-          slo_availability_percent: "99.9"
-      - record: quwoquan_content_contract_operation_duration_seconds_bucket
-        expr: |
-          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="POST",route="/internal/content/account-closure/dead-letters:recover"})
-        labels:
-          service: "content-service"
-          operation: "content.post.RecoverContentAccountClosureDeadLetter"
-          contract_metric: "content_account_closure_dead_letter_recover"
-          commercial_status: "ready"
-          slo_latency_p95_ms: "500"
-          slo_availability_percent: "99.9"
-      - record: quwoquan_content_contract_operation_requests_total
-        expr: |
-          sum by (status) (http_server_requests_total{service="content-service",method="POST",route="/content/behaviors"})
-        labels:
-          service: "content-service"
-          operation: "content.post.ReportBehaviors"
-          contract_metric: "content_behavior_batch_report"
-          commercial_status: "ready"
-          slo_latency_p95_ms: "800"
-          slo_availability_percent: "99.9"
-      - record: quwoquan_content_contract_operation_duration_seconds_bucket
-        expr: |
-          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="POST",route="/content/behaviors"})
-        labels:
-          service: "content-service"
-          operation: "content.post.ReportBehaviors"
-          contract_metric: "content_behavior_batch_report"
           commercial_status: "ready"
           slo_latency_p95_ms: "800"
           slo_availability_percent: "99.9"

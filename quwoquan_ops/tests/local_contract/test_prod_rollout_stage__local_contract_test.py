@@ -4,14 +4,22 @@ import unittest
 import time
 from unittest.mock import patch
 
+from quwoquan_ops.cli.lib.environment_topology import ENVIRONMENTS
 from quwoquan_ops.cli.stackctl import (
-    _prod_gray_canary_contract,
+    _prod_rollout_canary_contract,
     _read_prometheus_slo,
     _resolve_prod_rollout_stage,
 )
 
 
 class ProdRolloutStageContractTest(unittest.TestCase):
+    def test_gray_is_only_a_prod_rollout_stage(self) -> None:
+        self.assertNotIn("prod-gray", ENVIRONMENTS)
+        self.assertEqual(
+            _prod_rollout_canary_contract.__name__,
+            "_prod_rollout_canary_contract",
+        )
+
     def test_three_rollout_stages_are_reachable(self) -> None:
         self.assertEqual(_resolve_prod_rollout_stage("5"), "gray-initial")
         self.assertEqual(_resolve_prod_rollout_stage("25"), "carry-on")
@@ -68,7 +76,7 @@ class ProdRolloutStageContractTest(unittest.TestCase):
                 )
 
     def test_gray_initial_and_carry_on_canaries_match_stage_dimensions(self) -> None:
-        canary = _prod_gray_canary_contract("gray-initial")
+        canary = _prod_rollout_canary_contract("gray-initial")
         self.assertGreaterEqual(canary["requests"], 100)
         self.assertEqual(canary["path"], "/healthz")
         self.assertEqual(canary["rolloutStage"], "gray-initial")
@@ -77,7 +85,7 @@ class ProdRolloutStageContractTest(unittest.TestCase):
             canary["headers"]["X-Client-User-Id"],
             "ops-release-canary",
         )
-        carry_on = _prod_gray_canary_contract("carry-on")
+        carry_on = _prod_rollout_canary_contract("carry-on")
         self.assertEqual(carry_on["rolloutStage"], "carry-on")
         self.assertEqual(carry_on["expectedRoute"], "gray")
         self.assertEqual(
@@ -86,7 +94,7 @@ class ProdRolloutStageContractTest(unittest.TestCase):
         )
 
     def test_full_canary_does_not_replay_a_gray_routing_header(self) -> None:
-        canary = _prod_gray_canary_contract("full")
+        canary = _prod_rollout_canary_contract("full")
         self.assertEqual(canary["rolloutStage"], "full")
         self.assertEqual(canary["expectedRoute"], "stable")
         self.assertNotIn("X-Client-User-Id", canary["headers"])
@@ -114,7 +122,7 @@ class ProdRolloutStageContractTest(unittest.TestCase):
             },
         ):
             with self.assertRaisesRegex(RuntimeError, "do not match"):
-                _prod_gray_canary_contract("gray-initial")
+                _prod_rollout_canary_contract("gray-initial")
 
 
 if __name__ == "__main__":

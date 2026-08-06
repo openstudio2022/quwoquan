@@ -7,7 +7,11 @@ global:
 
 rule_files:
   - /etc/prometheus/rules/quwoquan_alerts.yaml
-  - /etc/prometheus/rules/content_contract/*.yaml
+  # 对象级契约 recording rules 与 ready operation 覆盖告警由
+  # quwoquan_service/scripts/verify/verify_object_alert_coverage.py --write 从
+  # ContractGraph 生成，按域落在 <domain>_contract/ 下。
+  - /etc/prometheus/rules/*_contract/*.yaml
+  - /etc/prometheus/rules/contract_object_coverage.yaml
   - /etc/prometheus/rules/content_report_lifecycle.yaml
 
 alerting:

@@ -704,3 +704,24 @@ def test_public_api_client__fresh_guest_rejects_empty_persona_id(
         public_api_subject.PublicApiClient(
             base_url="https://api.example.test"
         ).login_fresh_guest()
+
+
+def test_research_verification__fails_with_typed_identity_adapter_blocker(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(
+        subject.PostApiVerificationError,
+        match="DATA.RESEARCH.IDENTITY_ADAPTER_UNAVAILABLE",
+    ):
+        subject.write_post_api_verification(
+            environment=DeploymentEnvironment.ALPHA,
+            release_id="research-001",
+            run_id="verify-001",
+            release_root=tmp_path / "release",
+            importer_report_path=tmp_path / "import.json",
+            creator_importer_report_path=tmp_path / "creator-import.json",
+            output_path=tmp_path / "post-api-verification.json",
+            api_base_url="https://api.alpha.example.test",
+            media_delivery_base_url="https://media.alpha.example.test",
+            readiness_phase="research",
+        )

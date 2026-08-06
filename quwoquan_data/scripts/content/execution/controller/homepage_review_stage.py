@@ -146,6 +146,7 @@ def _review_homepage_target(
         model=review_model,
         model_parameters=review_parameters,
         agent_provider=ctx.agent_provider,
+        semantic_role="reviewer",
         release_only=ctx.release_only,
     )
 
@@ -227,7 +228,7 @@ def _review_homepage_target(
     output_path.unlink(missing_ok=True)
     bound = apply_independent_homepage_review(
         review_dir=review_dir,
-        provider="cursor_sdk",
+        provider=outcome.provider.value,
         model=review_model,
         model_family=review_model_family,
         run_id=outcome.run_id,

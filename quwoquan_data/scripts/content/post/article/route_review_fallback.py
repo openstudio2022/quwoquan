@@ -1,12 +1,16 @@
 """Fallback-stage resolution for route review failures."""
 from __future__ import annotations
 
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
+
 
 def _review_fallback_stage(checks: Mapping[str, Mapping[str, Any]]) -> str:
     if not checks.get("generatorProvenance", {"passed": True})["passed"]:
         return "agent_compose"
     if not checks.get("evidenceQuality", {"passed": True})["passed"]:
+        return "download"
+    if not checks.get("articleMediaClosure", {"passed": True})["passed"]:
         return "download"
     if not checks.get("factTraceability", {"passed": True})["passed"]:
         return "agent_compose"
@@ -34,4 +38,3 @@ def _review_fallback_stage(checks: Mapping[str, Mapping[str, Any]]) -> str:
     if not checks.get("carrierConsistency", {"passed": True})["passed"]:
         return "agent_compose"
     return "review"
-

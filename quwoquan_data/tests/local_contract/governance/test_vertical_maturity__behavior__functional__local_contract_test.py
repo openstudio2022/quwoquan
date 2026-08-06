@@ -54,14 +54,14 @@ def test_vertical_script_governance_passes_with_campus_wrappers():
 
 
 def test_photography_image_rights_are_asset_level_not_platform_name_level():
-    issues = validate_image_rights(
+    issues = audit_image_rights(
         {"url": "https://example.com/a.jpg", "platform": "Pinterest"},
         vertical="photography",
     )
     assert any("missing required field license" in issue for issue in issues)
     assert not any("Pinterest" in issue for issue in issues)
 
-    authorized = validate_image_rights(
+    authorized = audit_image_rights(
         {
             "url": "https://example.com/a.jpg",
             "platform": "Pinterest",
@@ -178,7 +178,7 @@ def test_travel_image_rights_requires_generated_asset_provenance():
     assert allowed == [], allowed
 
 
-def test_travel_rights_audit_records_gaps_and_blocks_collection():
+def test_travel_rights_audit_records_gaps_without_blocking_research_collection():
     payload = {
         "url": "https://images.example.com/place.jpg",
         "platform": "test-gallery",
@@ -186,7 +186,7 @@ def test_travel_rights_audit_records_gaps_and_blocks_collection():
         "credit": "test-creator",
     }
     assert audit_image_rights(payload, vertical="travel")
-    assert validate_image_rights(payload, vertical="travel")
+    assert validate_image_rights(payload, vertical="travel") == []
 
 
 def test_vertical_quality_gate_has_golden_samples():

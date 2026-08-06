@@ -34,7 +34,7 @@
       "enum": [
         "submission",
         "freeze",
-        "clone",
+        "capsule",
         "review",
         "publish",
         "cleanup",
@@ -79,10 +79,12 @@
         "phase",
         "reviewReturnCode",
         "publishReturnCode",
-        "cloneRef",
-        "cloneCommitSha",
-        "cloneSourceDigest",
-        "cloneDetached",
+        "sourceCapsuleRef",
+        "sourceCapsuleDigest",
+        "sourceCapsuleCommitSha",
+        "sourceCapsuleSourceDigest",
+        "sourceCapsuleReadOnly",
+        "executionRootRef",
         "cleanupStatus",
         "approvedQuota",
         "qualifiedCount",
@@ -98,7 +100,7 @@
         "status": {
           "enum": [
             "pending",
-            "clone_ready",
+            "capsule_ready",
             "reviewed",
             "review_qualified",
             "partial",
@@ -108,20 +110,29 @@
           ]
         },
         "phase": {
-          "enum": ["submission", "clone", "review", "publish"]
+          "enum": ["submission", "capsule", "review", "publish"]
         },
         "reviewReturnCode": { "type": ["integer", "null"] },
         "publishReturnCode": { "type": ["integer", "null"] },
-        "cloneRef": { "type": ["string", "null"], "minLength": 1 },
-        "cloneCommitSha": {
-          "type": ["string", "null"],
-          "pattern": "^[a-f0-9]{40,64}$"
-        },
-        "cloneSourceDigest": {
+        "sourceCapsuleRef": { "type": ["string", "null"], "minLength": 1 },
+        "sourceCapsuleDigest": {
           "type": ["string", "null"],
           "pattern": "^sha256:[a-f0-9]{64}$"
         },
-        "cloneDetached": { "type": ["boolean", "null"] },
+        "sourceCapsuleCommitSha": {
+          "type": ["string", "null"],
+          "pattern": "^[a-f0-9]{40,64}$"
+        },
+        "sourceCapsuleSourceDigest": {
+          "type": ["string", "null"],
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "sourceCapsuleReadOnly": { "type": ["boolean", "null"] },
+        "executionRootRef": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "pattern": "^data/tasks/[^/]+$"
+        },
         "cleanupStatus": {
           "enum": ["not_created", "pending", "cleaned", "failed"]
         },

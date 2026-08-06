@@ -68,6 +68,7 @@ RUNTIME_LOG_EXPORT_SERVICES = {
     "rtc-service",
     "search-service",
     "tag-service",
+    "travel-service",
     "user-service",
 }
 
@@ -716,6 +717,11 @@ def _rewrite_service(
             environment["NOTIFICATION_REALTIME_BASE_URL"] = (
                 f"http://{EXTERNAL_DATA_HOST}:"
                 "${LOCAL_GAMMA_REALTIME_PORT:?realtime port is required}"
+            )
+        if name == "travel-service":
+            environment["TRAVEL_MONGO_URI"] = mongo_uri
+            environment["TRAVEL_REDIS_GENERAL_ADDR"] = (
+                f"{redis_host}:{redis_port}"
             )
         if name == "realtime-gateway":
             environment["REALTIME_REDIS_ADDR"] = (
@@ -1417,6 +1423,7 @@ def _write_env_file(
                 "LOCAL_GAMMA_ENTITY_PORT=39290",
                 "LOCAL_GAMMA_INTEGRATION_PORT=39310",
                 "LOCAL_GAMMA_NOTIFICATION_PORT=39320",
+                "QWQ_COMPOSE_TRAVEL_PORT=39330",
                 "LOCAL_GAMMA_REALTIME_PORT=39340",
                 "LOCAL_GAMMA_RTC_PORT=39350",
                 "LOCAL_GAMMA_POSTGRES_PORT=39400",
@@ -1485,6 +1492,7 @@ def _write_env_file(
                 "LOCAL_GAMMA_ENTITY_PORT=29290",
                 "LOCAL_GAMMA_INTEGRATION_PORT=29310",
                 "LOCAL_GAMMA_NOTIFICATION_PORT=29320",
+                "QWQ_COMPOSE_TRAVEL_PORT=29330",
                 "LOCAL_GAMMA_REALTIME_PORT=29340",
                 "LOCAL_GAMMA_RTC_PORT=29350",
                 "LOCAL_GAMMA_POSTGRES_PORT=29400",

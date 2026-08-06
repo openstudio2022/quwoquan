@@ -4,22 +4,24 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from core.control_types import ContentType
 from core.data_issue import (
     DataIssue,
-    DataIssueCode, DataIssueStage,
+    DataIssueCode,
     DataIssueLane,
+    DataIssueStage,
     DataRecoveryAction,
     data_issue,
 )
-from core.io import read_json
 from core.image_asset_strategy import (
     image_count_is_hard_quota,
     image_strategy_requires_publishable_images,
 )
-from content.execution.workspace import execution_command_root, execution_root
-from core.control_types import ContentType
-from content.execution.identity import parse_execution_id
+from core.io import read_json
 from governance.coverage.license import rights_proof_required
+
+from content.execution.identity import parse_execution_id
+from content.execution.workspace import execution_command_root, execution_root
 
 PRIMARY_SOURCE_MINIMUM = 1
 
@@ -156,8 +158,8 @@ def _homepage_base_ready(
         from content.homepage.homepage_text import homepage_base_draft_readiness
         from content.homepage.quality_policy import (
             homepage_body_char_minimum,
-            homepage_fact_count_minimum,
             homepage_fact_char_minimum,
+            homepage_fact_count_minimum,
         )
 
         # source_dir 即 source unit 目录：传 unit_dir 让 homepage_source_judge
@@ -201,7 +203,7 @@ def _stage_gate_report_issues(
         for path in sorted(step_dir.glob("*.json")):
             try:
                 data = read_json(path)
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001, S112
                 continue
             payload = data.get("payload") if isinstance(data.get("payload"), dict) else data
             if not isinstance(payload, dict) or payload.get("passed") is not False:
@@ -213,7 +215,7 @@ def _stage_gate_report_issues(
             if raw_issues:
                 for raw_issue in raw_issues:
                     if not isinstance(raw_issue, dict):
-                        raise ValueError(
+                        raise TypeError(
                             f"retired untyped download gate report: {path}; rerun download to regenerate"
                         )
                     issue = DataIssue.from_dict(raw_issue)
@@ -345,7 +347,7 @@ def gate_download(execution_id: str, *, target_entities: set[str] | None = None)
                 continue
             try:
                 payload = read_json(quality_path)
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001, S112
                 continue
             if str(payload.get("quality") or "") != "Reject" and not is_image_unit:
                 retained_count += 1
@@ -371,8 +373,13 @@ def gate_download(execution_id: str, *, target_entities: set[str] | None = None)
                     digest = str(asset.get("sha256") or asset.get("sourceAssetId") or "")
                     if digest:
                         image_hashes.add(digest)
-                    missing = (
-                        [
+                    from governance.coverage.distribution import (
+                        asset_contract_missing_fields,
+                    )
+
+                    missing = asset_contract_missing_fields(asset)
+                    if require_rights_proof:
+                        missing.extend(
                             field
                             for field in (
                                 "license",
@@ -382,15 +389,8 @@ def gate_download(execution_id: str, *, target_entities: set[str] | None = None)
                                 "usageScope",
                             )
                             if not str(asset.get(field) or "").strip()
-                        ]
-                        if require_rights_proof
-                        else (
-                            []
-                            if str(asset.get("rightsAuditStatus") or "").strip()
-                            in {"verified", "unverified", "restricted", "unknown"}
-                            else ["rightsAuditStatus"]
                         )
-                    )
+                    missing = sorted(set(missing))
                     if missing:
                         image_rights_issues.append(
                             f"{sd.name}/{asset.get('fileName') or '?'} missing image rights {missing}"

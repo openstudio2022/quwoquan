@@ -6,9 +6,10 @@ only and must never be parsed to select a control-flow branch.
 """
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any
 
 
 class DataIssueCode(StrEnum):
@@ -34,6 +35,7 @@ class DataIssueCode(StrEnum):
     AGENT_EXECUTION_FAILED = "DATA.AGENT.EXECUTION_FAILED"
     AGENT_CREDENTIAL_INVALID = "DATA.AGENT.CREDENTIAL_INVALID"
     AGENT_PROVIDER_REJECTED = "DATA.AGENT.PROVIDER_REJECTED"
+    AGENT_SCALE_CALIBRATION_REQUIRED = "DATA.AGENT.SCALE_CALIBRATION_REQUIRED"
     AGENT_TIMEOUT = "DATA.AGENT.TIMEOUT"
     AGENT_RESULT_INVALID = "DATA.AGENT.RESULT_INVALID"
     CONTENT_CLASSIFICATION_REJECTED = "DATA.CONTENT.CLASSIFICATION_REJECTED"
@@ -154,7 +156,7 @@ class DataIssue:
         return payload
 
     @classmethod
-    def from_dict(cls, payload: Mapping[str, Any]) -> "DataIssue":
+    def from_dict(cls, payload: Mapping[str, Any]) -> DataIssue:
         if not isinstance(payload, Mapping):
             raise TypeError("DataIssue payload must be an object")
         # Validate the original wire payload before reconstructing the value
@@ -258,8 +260,8 @@ def issues_for_ref(issues: Sequence[DataIssue], ref: str) -> list[DataIssue]:
 
 __all__ = [
     "DataIssue",
-    "DataIssueError",
     "DataIssueCode",
+    "DataIssueError",
     "DataIssueLane",
     "DataIssueStage",
     "DataRecoveryAction",

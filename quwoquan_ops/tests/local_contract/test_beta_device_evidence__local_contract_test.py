@@ -14,6 +14,7 @@ from quwoquan_ops.ci.render_beta_device_evidence import (
     render_stack_bundle,
 )
 from quwoquan_ops.ci.render_environment_release_receipt import (
+    _canonical_digest,
     render as render_environment_receipt,
 )
 
@@ -306,6 +307,39 @@ def test_merged_matrix_seals_one_canonical_beta_environment_receipt() -> None:
                 "devices": (devices_path, devices),
             }
         )
+        candidate_attestation = {
+            "schema": "quwoquan_data.release_attestation",
+            "releaseId": "pilot-003",
+            "payloadSha256": "sha256:" + "6" * 64,
+            "recordedAt": "2026-07-28T00:00:15Z",
+        }
+        rollback_attestation = {
+            "schema": "quwoquan_data.release_attestation",
+            "releaseId": "pilot-002",
+            "payloadSha256": "sha256:" + "7" * 64,
+            "recordedAt": "2026-07-28T00:00:14Z",
+        }
+        lifecycle_exit = {
+            "schema": "quwoquan_data.environment_release_lifecycle_exit",
+            "environment": "beta",
+            "passed": True,
+            "sourceOwner": "qwq_data",
+            "originalReleaseId": candidate_attestation["releaseId"],
+            "originalManifestDigest": candidate_attestation["payloadSha256"],
+            "replayManifestDigest": candidate_attestation["payloadSha256"],
+            "rollbackToReleaseId": rollback_attestation["releaseId"],
+            "rollbackToManifestDigest": rollback_attestation["payloadSha256"],
+            "recordedAt": "2026-07-28T00:00:16Z",
+        }
+        lifecycle_exit["verificationChecksum"] = _canonical_digest(lifecycle_exit)
+        for label, payload in {
+            "pilot-release": candidate_attestation,
+            "pilot-rollback": rollback_attestation,
+            "content-lifecycle": lifecycle_exit,
+        }.items():
+            path = root / f"{label}.json"
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            evidence[label] = (path, payload)
         with patch(
             "quwoquan_ops.ci.render_environment_release_receipt.validate_manifest"
         ):

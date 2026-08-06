@@ -10,12 +10,11 @@
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import hashlib
-import json
 import os
 import re
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 
 # 代码仓库 data 根：schema 是受版本控制、不可手改的契约真相源，必须跟代码走，
@@ -47,6 +46,13 @@ OUTPUT_ROOT = Path(os.environ.get("QWQ_OUTPUT_ROOT") or _DEFAULT_OUTPUT_ROOT)
 DATA_OUTPUT_ROOT = OUTPUT_ROOT / "data"
 DATA_EXECUTIONS_ROOT = DATA_OUTPUT_ROOT / "tasks"
 DATA_LOCAL_ROOT = DATA_OUTPUT_ROOT / "local"
+DATA_CACHE_ROOT = DATA_LOCAL_ROOT / "cache"
+DATA_WORKSPACE_ROOT = DATA_LOCAL_ROOT / "workspace"
+SOURCE_ACQUISITION_ROOT = DATA_WORKSPACE_ROOT / "source-acquisition"
+DATA_RUNTIME_WORKSPACE_ROOT = DATA_WORKSPACE_ROOT / "runtime"
+RELEASE_IDENTITY_INCIDENTS_ROOT = DATA_WORKSPACE_ROOT / "release-identity-incidents"
+DATA_GC_WORKSPACE_ROOT = DATA_WORKSPACE_ROOT / "gc"
+DATA_QUARANTINE_ROOT = DATA_WORKSPACE_ROOT / "quarantine"
 RELEASE_ROOT = DATA_OUTPUT_ROOT / "releases"
 
 # Internal implementation alias.  It deliberately resolves to the single
@@ -161,10 +167,16 @@ EXECUTION_SHARED_AUTHORITATIVE_ENTRIES = frozenset({
     "content_object_index.json",
     "env_ready_report.json",
     "execution_state.json",
+    "execution_state_events",
+    "execution_state_head.json",
     "managed_execution_audit.json",
     "scale_readiness.json",
     "ship_report.json",
     "failure_ledger.jsonl",
+    # create-once stale/supersession receipts protect historical execution
+    # bytes and are the only authority that permits global gates to ignore a
+    # non-resumable work package.
+    "reconciliation",
     # 执行级真相源（人工决策记录 / 放弃归因 / 账本，均不可重算）
     "source_catalog.json",
     "asset_id_registry.json",
@@ -206,6 +218,7 @@ EXECUTION_SHARED_RECLAIMABLE_ENTRIES = frozenset({
     "envelopes",
     "controller_lease.json",
     "controller_lease.lock",
+    "execution_state.lock",
 })
 
 
@@ -279,7 +292,7 @@ def execution_lock_path(execution_id: str) -> Path:
     return execution_root(execution_id) / ".lock"
 
 
-def publish_lock_path() -> Path:
+def publish_lock_path(publish_root: Path | None = None) -> Path:
     """Return one process lock shared by every clone of the same publish root.
 
     The lock cannot live in an execution output root because detached campaign
@@ -289,7 +302,8 @@ def publish_lock_path() -> Path:
     fence without adding a second publish artifact.
     """
 
-    digest = hashlib.sha256(str(PUBLISH_ROOT.resolve()).encode("utf-8")).hexdigest()
+    resolved_root = (publish_root or PUBLISH_ROOT).resolve()
+    digest = hashlib.sha256(str(resolved_root).encode("utf-8")).hexdigest()
     return Path(tempfile.gettempdir()) / f"qwq-canonical-publish-{digest[:20]}.lock"
 
 
@@ -508,7 +522,7 @@ OBJECT_STAGES = (
 
 
 # ─── layout helpers ───────────────────────────────────────────────
-from core.execution_paths import (
+from core.execution_paths import (  # noqa: F401
     dedup_ledger,
     ensure_execution_command_layout,
     ensure_execution_layout,

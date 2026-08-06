@@ -6,7 +6,14 @@ from pathlib import Path
 from typing import Any
 
 from core.data_issue import DataIssueCode, DataRecoveryAction
-from content.source.research.auto_plan_lanes import _independent_homepage_media_collections
+
+from content.source.contracts import (
+    HomepageAuthorityProvider,
+    QualifiedHomepageSource,
+)
+from content.source.research.auto_plan_lanes import (
+    _independent_homepage_media_collections,
+)
 from content.source.research.homepage_source_policy import (
     _homepage_can_seed_base_draft,
     _homepage_core_sources,
@@ -19,10 +26,6 @@ from content.source.research.plan_state import (
     _write_lane,
 )
 from content.source.research.source_quality import _evidence_reason
-from content.source.contracts import (
-    HomepageAuthorityProvider,
-    QualifiedHomepageSource,
-)
 
 
 @dataclass(frozen=True)
@@ -44,6 +47,8 @@ class HomepageResearchInput:
     openverse: tuple[dict[str, Any], ...]
     rejected_source_urls: frozenset[str]
     force: bool
+    professional_image_specs: tuple[dict[str, Any], ...] = ()
+    acquisition_receipt_refs: tuple[str, ...] = ()
 
 
 def _candidate_sources(spec: HomepageResearchInput) -> list[dict[str, Any]]:
@@ -110,7 +115,17 @@ def write_homepage_lane(spec: HomepageResearchInput) -> list[dict[str, Any]]:
         )
     ]
     media_collections: list[dict[str, Any]] = []
-    if seed_sources and not same_source_seeds:
+    professional_bound = bool(spec.acquisition_receipt_refs)
+    if seed_sources and professional_bound:
+        media_collections = _independent_homepage_media_collections(
+            list(spec.professional_image_specs),
+            entity_id=spec.entity_id,
+            entity_aliases=list(spec.entity_aliases),
+            vertical=spec.vertical,
+            report=spec.report,
+            limit=1,
+        )
+    elif seed_sources and not same_source_seeds:
         media_collections = _independent_homepage_media_collections(
             [
                 *spec.prior_image_pool,
@@ -133,6 +148,7 @@ def write_homepage_lane(spec: HomepageResearchInput) -> list[dict[str, Any]]:
         {
             "policyRevision": "encyclopedia-primary",
             "primaryEvidenceRef": core_sources[0]["source_id"] if core_sources else "",
+            "acquisitionReceiptRefs": list(spec.acquisition_receipt_refs),
             "sources": core_sources,
             "homepageMediaCollections": media_collections,
         },
@@ -153,6 +169,15 @@ def write_homepage_lane(spec: HomepageResearchInput) -> list[dict[str, Any]]:
                 "Wikipedia/Baidu/Toutiao source for baseDraft"
             ),
             code=DataIssueCode.SOURCE_PRIMARY_AUTHORITY_MISSING,
+            recovery=DataRecoveryAction.STOP,
+        )
+    elif professional_bound and not media_collections:
+        _record_unavailable(
+            spec.report,
+            entity_id=spec.entity_id,
+            lane="homepage",
+            reason="frozen professional image assets accepted for entity=0 need>=1",
+            code=DataIssueCode.MEDIA_PUBLISHABLE_SHORTFALL,
             recovery=DataRecoveryAction.STOP,
         )
     elif not same_source_seeds and not media_collections:

@@ -92,6 +92,106 @@ def handle_governance(args: argparse.Namespace) -> None:
             print("[governance media-probe] OK")
             return
         raise SystemExit("[governance media-probe] subcommand required")
+    if cmd == "workstream-baseline":
+        from governance.workstream_baseline import (
+            WorkstreamBaselineError,
+            create_data_workstream_baseline,
+        )
+
+        try:
+            payload, destination = create_data_workstream_baseline(
+                entity_catalog_ref=args.entity_catalog_ref,
+                cursor_plan_path=Path(args.cursor_plan),
+                protected_paths=tuple(Path(value) for value in args.protect),
+                owner_rules=tuple(args.owner_rule),
+                scopes=tuple(args.scope),
+                output_root=(Path(args.output_root).expanduser().resolve() if args.output_root else None),
+                freeze_reason=args.freeze_reason,
+            )
+        except WorkstreamBaselineError as exc:
+            raise SystemExit(f"[governance workstream-baseline] GATE_BLOCK: {exc}") from exc
+        print(
+            json.dumps(
+                {
+                    "baselineDigest": payload["baselineDigest"],
+                    "protectedEvidenceManifestDigest": payload[
+                        "protectedEvidenceManifestDigest"
+                    ],
+                    "fileOwnershipManifestDigest": payload[
+                        "fileOwnershipManifestDigest"
+                    ],
+                    "path": destination.as_posix(),
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return
+    if cmd == "output-layout-migration":
+        from governance.output_layout_migration import (
+            OutputLayoutMigrationError,
+            apply_output_layout_migration,
+            plan_output_layout_migration,
+        )
+
+        try:
+            if args.output_layout_command == "plan":
+                payload, destination = plan_output_layout_migration(
+                    data_output_root=Path(args.data_output_root).expanduser().resolve(),
+                )
+            else:
+                payload, destination = apply_output_layout_migration(
+                    plan_path=Path(args.plan),
+                    plan_digest=args.plan_digest,
+                )
+        except OutputLayoutMigrationError as exc:
+            raise SystemExit(
+                f"[governance output-layout-migration] GATE_BLOCK: {exc}"
+            ) from exc
+        print(
+            json.dumps(
+                {
+                    "documentKind": payload["documentKind"],
+                    "planDigest": payload["planDigest"],
+                    "status": payload["status"],
+                    "path": destination.as_posix(),
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return
+    if cmd == "protect-quarantine":
+        from governance.protected_quarantine_evidence import (
+            ProtectedQuarantineEvidenceError,
+            protect_historical_quarantine,
+        )
+
+        try:
+            payload, destination = protect_historical_quarantine(
+                quarantine_root=Path(args.quarantine),
+                migration_apply_receipt=Path(args.migration_apply_receipt),
+                data_output_root=Path(args.data_output_root).expanduser().resolve(),
+                reason=args.reason,
+            )
+        except ProtectedQuarantineEvidenceError as exc:
+            raise SystemExit(
+                f"[governance protect-quarantine] GATE_BLOCK: {exc}"
+            ) from exc
+        print(
+            json.dumps(
+                {
+                    "manifestDigest": payload["manifestDigest"],
+                    "treeDigest": payload["treeDigest"],
+                    "quarantineRef": payload["quarantineRef"],
+                    "status": payload["status"],
+                    "path": destination.as_posix(),
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return
     if cmd == "review-candidates":
         argv: list[str] = []
         if getattr(args, "root", None):
@@ -153,6 +253,71 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
             "--asset-ids",
             help="逗号分隔 assetId；缺省处理 profile 全集",
         )
+
+    baseline = sub.add_parser(
+        "workstream-baseline",
+        help="冻结共享 Data WIP、文件所有权和受保护证据摘要",
+    )
+    baseline.add_argument("--entity-catalog-ref", required=True)
+    baseline.add_argument("--cursor-plan", required=True)
+    baseline.add_argument(
+        "--protect",
+        action="append",
+        required=True,
+        help="仓内必须保留的 evidence 文件或目录；可重复",
+    )
+    baseline.add_argument(
+        "--owner-rule",
+        action="append",
+        required=True,
+        help="最长前缀匹配的 <repo-prefix>=<owner>；可重复",
+    )
+    baseline.add_argument(
+        "--scope",
+        action="append",
+        default=[
+            "quwoquan_data",
+            "specs/feature-tree/discovery-content/object-homepage-coverage-scaling",
+        ],
+        help="纳入 git worktree 快照的仓库相对路径；可重复",
+    )
+    baseline.add_argument("--output-root")
+    baseline.add_argument(
+        "--freeze-reason",
+        default="WAIT_CONTENT/GATE_BLOCK",
+    )
+
+    output_layout = sub.add_parser(
+        "output-layout-migration",
+        help="规划或应用旧 Data output namespace 的一次性无损迁移",
+    )
+    output_layout_sub = output_layout.add_subparsers(
+        dest="output_layout_command",
+        required=True,
+    )
+    output_layout_plan = output_layout_sub.add_parser("plan")
+    output_layout_plan.add_argument(
+        "--data-output-root",
+        default=str(Path(".qwq_output/data")),
+    )
+    output_layout_apply = output_layout_sub.add_parser("apply")
+    output_layout_apply.add_argument("--plan", required=True)
+    output_layout_apply.add_argument("--plan-digest", required=True)
+
+    protect_quarantine = sub.add_parser(
+        "protect-quarantine",
+        help="将一次迁移后的历史 quarantine 冻结为不可复用的只读证据",
+    )
+    protect_quarantine.add_argument("--quarantine", required=True)
+    protect_quarantine.add_argument("--migration-apply-receipt", required=True)
+    protect_quarantine.add_argument(
+        "--data-output-root",
+        default=str(Path(".qwq_output/data")),
+    )
+    protect_quarantine.add_argument(
+        "--reason",
+        default="historical release evidence preserved after output layout migration",
+    )
 
     review = sub.add_parser(
         "review-candidates", help="Apply or list isolated governance candidate reviews"

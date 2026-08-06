@@ -407,9 +407,16 @@ class ExecutionStateTransition:
         """Replace this transaction with a freshly loaded validated state."""
         if not isinstance(replacement, ExecutionStateTransition):
             raise TypeError("replacement must be an ExecutionStateTransition")
+        if replacement.execution_id != self.execution_id:
+            raise ValueError("replacement executionId must match current transition")
+        if replacement.schema != self.schema:
+            raise ValueError("replacement schema must match current transition")
+        journal_identity = getattr(replacement, "_journal_identity", None)
         refreshed = replacement.freeze().open_transition()
         self.__dict__.clear()
         self.__dict__.update(refreshed.__dict__)
+        if journal_identity is not None:
+            self._journal_identity = journal_identity
 
     def to_dict(self) -> dict[str, object]:
         return {

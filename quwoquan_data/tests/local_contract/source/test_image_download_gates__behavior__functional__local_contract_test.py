@@ -15,18 +15,22 @@ for _path in (DATA_ROOT, TESTS_ROOT, SCRIPTS_ROOT):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
+import hashlib
 import io
-import os
+import json
 import sys
 import tempfile
 from pathlib import Path
 
-
 sys.path.insert(0, str(SCRIPTS_ROOT))
 
 import numpy as np  # noqa: E402
-from PIL import Image  # noqa: E402
-
+from content.source.contracts import (  # noqa: E402
+    MediaProvenance,
+    ModelReleaseStatus,
+    RightsAuditStatus,
+)
+from content.source.source_unit import write_source_unit  # noqa: E402
 from core.image_rules import (  # noqa: E402
     MIN_ENTITY_IMAGES,
     image_caption_quality_issue,
@@ -37,9 +41,8 @@ from core.image_rules import (  # noqa: E402
 )
 from core.image_safety import dedupe_image_payloads  # noqa: E402
 from core.image_variants import build_local_variants, image_dimensions  # noqa: E402
-from content.source.contracts import MediaProvenance, ModelReleaseStatus, RightsAuditStatus  # noqa: E402
-from content.source.source_unit import write_source_unit  # noqa: E402
 from core.paths import execution_source_unit_dir  # noqa: E402
+from PIL import Image  # noqa: E402
 from support.execution_manifest_fixture import build_execution_fixture  # noqa: E402
 
 
@@ -185,8 +188,6 @@ def test_source_unit_persists_meta_and_variants():
         ],
     )
     assert manifest["assetCount"] == 1
-    import json
-
     unit = execution_source_unit_dir(execution_id, manifest["sourceUnitId"])
     idx = json.loads((unit / "assets" / "index.json").read_text("utf-8"))
     asset = idx["assets"][0]
@@ -200,6 +201,55 @@ def test_source_unit_persists_meta_and_variants():
     assert asset["variants"], "assets/index.json 应记录多变体"
     for v in asset["variants"]:
         assert (unit / "assets" / v["fileName"]).is_file(), v
+
+
+def test_source_unit_preserves_professional_acquisition_identity():
+    obj = Path(tempfile.mkdtemp(prefix="professional_img_obj_")) / "九寨沟"
+    body = _jpeg(23, size=(1280, 960))
+    content_sha256 = "sha256:" + hashlib.sha256(body).hexdigest()
+    execution_id = "20260805--travel-image-m100--china--scale-911"
+    build_execution_fixture(execution_id)
+    manifest = write_source_unit(
+        obj,
+        execution_id=execution_id,
+        ordinal=1,
+        source_id="pinterest",
+        source_md="# 九寨沟专业摄影来源",
+        platform="Pinterest",
+        source_category="image_collection",
+        source_kind="image_collection",
+        source_use_mode="rights_audit_only",
+        research_lane="image",
+        url="https://www.pinterest.com/pin/example/",
+        title="九寨沟五花海",
+        target_ref="/entity/地点/景区/九寨沟",
+        build_variants=False,
+        images=[
+            {
+                "bytes": body,
+                "ext": ".jpg",
+                "url": "https://cdn.example.test/jiuzhaigou.jpg",
+                "sourceUrl": "https://www.pinterest.com/pin/example/",
+                "contentType": "image/jpeg",
+                "license": "unknown",
+                "credit": "摄影师甲",
+                "rightsStatus": "unverified",
+                "rightsIssues": ["commercial authorization is unverified"],
+                "acquisitionReceiptRef": f"receipts/{'a' * 64}.json",
+                "professionalAssetId": "pin-example",
+                "professionalContentSha256": content_sha256,
+                "caption": "九寨沟五花海清晨",
+                "relevance": "画面主体为九寨沟五花海",
+            }
+        ],
+    )
+    unit = execution_source_unit_dir(execution_id, manifest["sourceUnitId"])
+    asset = json.loads(
+        (unit / "assets/index.json").read_text(encoding="utf-8")
+    )["assets"][0]
+    assert asset["acquisitionReceiptRef"] == f"receipts/{'a' * 64}.json"
+    assert asset["professionalAssetId"] == "pin-example"
+    assert asset["professionalContentSha256"] == content_sha256
 
 
 def _run_all() -> None:

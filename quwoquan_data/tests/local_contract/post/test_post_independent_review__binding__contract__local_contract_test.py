@@ -5,10 +5,11 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
 from content.execution.controller import post_independent_review
 from content.review.independent import apply_independent_post_review
+from core.control_types import AgentProvider
 from core.data_issue import DataIssueCode, DataRecoveryAction
-
 
 EXECUTION_ID = "20260722--travel-article-supply--test-region-a--pilot-903"
 OBJECT_REF = "test-entity-a__article_source_a"
@@ -17,6 +18,13 @@ OBJECT_REF = "test-entity-a__article_source_a"
 def _write(path: Path, payload: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+
+def test_agent_provider_value_accepts_only_governed_provider_values() -> None:
+    assert post_independent_review._agent_provider_value(AgentProvider.CODEX_SDK) == "codex_sdk"
+    assert post_independent_review._agent_provider_value("cursor_sdk") == "cursor_sdk"
+    with pytest.raises(ValueError, match="unregistered_sdk"):
+        post_independent_review._agent_provider_value("unregistered_sdk")
 
 
 def test_independent_post_review_replaces_deterministic_reviewer_binding(
@@ -126,6 +134,7 @@ def test_independent_post_review_returns_typed_object_issue(
     }
     outcome = SimpleNamespace(
         succeeded=True,
+        provider=AgentProvider.CURSOR_SDK,
         result_text=json.dumps(response),
         status=SimpleNamespace(value="finished"),
         run_id="review-run-904",
@@ -168,7 +177,7 @@ def test_independent_post_review_returns_typed_object_issue(
     ctx = SimpleNamespace(
         execution_id=EXECUTION_ID,
         entity_ids=["test-entity-a"],
-        spec=SimpleNamespace(to_dict=lambda: {}),
+        spec=SimpleNamespace(to_dict=dict),
         managed=True,
         runtime="local",
         agent_provider="cursor_sdk",

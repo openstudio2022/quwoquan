@@ -1,12 +1,14 @@
 """Typed object-queue job creation and definition refresh boundaries."""
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 from dataclasses import replace
-from typing import Any, Iterable, Mapping
+from typing import Any
 
 from core import ops_governance as og
 from core.control_types import ContentType, QueueBackend, QueueJobStage
 from governance.creators.assignment import creator_assignment_issues
+
 from content.execution import store
 from content.execution.queue.core import (
     DEFAULT_MAX_ATTEMPTS,
@@ -15,7 +17,6 @@ from content.execution.queue.core import (
     DEFAULT_STUCK_THRESHOLD,
     DEFAULT_TOOL_PERMISSIONS,
     QUEUE_BACKEND_RELIABLETASK,
-    _backend_name,
     _job_path,
     _read_job,
     _reliabletask_ref,
@@ -23,6 +24,7 @@ from content.execution.queue.core import (
     stable_job_id,
 )
 from content.execution.queue.model import QueueJob
+from content.execution.queue_backend import resolve_execution_queue_backend
 
 
 def _queue_stage(value: QueueJobStage | str) -> QueueJobStage:
@@ -46,7 +48,7 @@ def _string_tuple(value: object, *, field_name: str) -> tuple[str, ...]:
     if value is None:
         return ()
     if not isinstance(value, list):
-        raise ValueError(f"object job {field_name} must be an array")
+        raise TypeError(f"object job {field_name} must be an array")
     return tuple(str(item).strip() for item in value if str(item).strip())
 
 
@@ -56,13 +58,15 @@ def _assignment_document(metadata: Mapping[str, object]) -> Mapping[str, object]
 
 
 def _backend_from_metadata(
+    execution_id: str,
     metadata: Mapping[str, object],
     queue_backend: str | QueueBackend | None,
 ) -> QueueBackend:
-    if queue_backend is not None:
-        return _backend_name(queue_backend)
-    raw_backend = metadata.get("queueBackend")
-    return _backend_name(raw_backend if raw_backend is not None else None)
+    return resolve_execution_queue_backend(
+        execution_id,
+        requested=queue_backend,
+        metadata_backend=metadata.get("queueBackend"),
+    )
 
 
 def _definition(
@@ -101,7 +105,7 @@ def _definition(
         )
         if creator_issues:
             raise ValueError("; ".join(creator_issues))
-    backend = _backend_from_metadata(metadata, queue_backend)
+    backend = _backend_from_metadata(execution_id, metadata, queue_backend)
     partition_key = str(metadata.get("partitionKey") or mutex_key or ref).strip()
     if not partition_key:
         raise ValueError("object job partitionKey is required")

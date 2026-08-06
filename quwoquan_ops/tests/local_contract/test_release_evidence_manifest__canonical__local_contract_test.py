@@ -148,19 +148,35 @@ class ReleaseEvidenceManifestCanonicalContractTest(unittest.TestCase):
                 "projections": [],
             },
         )
-        provider_raw = self._write_json(
-            self._provider_raw_dir(root)
-            / "env/prod/runs/provider-check/provider-conformance.evidence.json",
-            {
-                "provider": "search",
-                "environment": "prod",
-                "status": "passed",
-            },
-        )
-        provider_archive_path = (
-            "evidence/raw/provider/"
-            "env/prod/runs/provider-check/provider-conformance.evidence.json"
-        )
+        provider_files: dict[str, str] = {}
+        for index in range(140):
+            relative = (
+                f"env/prod/runs/provider-check-{index:03d}/"
+                "provider-conformance.evidence.json"
+            )
+            provider_raw = self._write_json(
+                self._provider_raw_dir(root) / relative,
+                {
+                    "provider": f"provider-{index:03d}",
+                    "environment": "prod",
+                    "status": "passed",
+                },
+            )
+            provider_files[f"evidence/raw/provider/{relative}"] = (
+                finalizer.sha256_file(provider_raw)
+            )
+        release_closure_files: dict[str, dict[str, str]] = {}
+        for index, (label, relative) in enumerate(
+            sorted(evidence_collector.RELEASE_CLOSURE_PATHS.items())
+        ):
+            closure_path = self._write_json(
+                root / "sources" / relative,
+                {"label": label, "sequence": index},
+            )
+            release_closure_files[label] = {
+                "path": relative,
+                "digest": finalizer.sha256_file(closure_path),
+            }
         sources = {
             "publicWeb": self._write_json(
                 root / "sources/public-web.json",
@@ -230,19 +246,27 @@ class ReleaseEvidenceManifestCanonicalContractTest(unittest.TestCase):
                     "sourceEvidence": {
                         "ref": PROVIDER_EVIDENCE_REF,
                         "digest": PROVIDER_EVIDENCE_DIGEST,
-                        "files": {
-                            provider_archive_path: finalizer.sha256_file(provider_raw),
-                        },
+                        "files": provider_files,
                     },
-                    "evidenceCount": 1,
+                    "evidenceCount": 140,
+                    "sourceCoverageIssues": [],
                     "readiness": {
-                        "prod": {
-                            "search": {
+                        environment: {
+                            capability: {
                                 "required": True,
                                 "capability_ready": True,
                             }
+                            for capability in (
+                                "search",
+                                *(
+                                    f"provider-capability-{index:02d}"
+                                    for index in range(13)
+                                ),
+                            )
                         }
+                        for environment in ("alpha", "beta", "gamma", "prod")
                     },
+                    "issues": [],
                 },
             ),
             "testEvidence": self._write_json(
@@ -254,6 +278,7 @@ class ReleaseEvidenceManifestCanonicalContractTest(unittest.TestCase):
                         layer: {"status": "passed", "artifactDigest": DIGEST}
                         for layer in finalizer.TEST_LAYERS
                     },
+                    "evidence": {"files": release_closure_files},
                 },
             ),
         }
@@ -797,7 +822,9 @@ class ReleaseEvidenceManifestCanonicalContractTest(unittest.TestCase):
             )
             provider["readiness"]["prod"]["search"]["capability_ready"] = False
             self._write_json(sources["providerEvidence"], provider)
-            with self.assertRaisesRegex(ValueError, "prod readiness is blocked"):
+            with self.assertRaisesRegex(
+                ValueError, "readiness.prod is not 14 required ready capabilities"
+            ):
                 evidence_collector.collect(
                     artifact_dir=artifact,
                     descriptors_dir=root / "evidence-descriptors",

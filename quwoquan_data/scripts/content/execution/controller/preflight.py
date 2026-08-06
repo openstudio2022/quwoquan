@@ -1,7 +1,7 @@
 """Execution service extracted from the retired monolithic runner."""
 from __future__ import annotations
 from core.runtime_policy import active_runtime_policy
-from content.execution.support import Any, DEFAULT_CURSOR_AGENT_MODEL, ExecutionContext, Mapping, Path, REFERENCE_ONLY_NO_IMAGE_RELEASE, Sequence, _CURSOR_BRIDGE_LAUNCH_COOLDOWN_SECONDS, _normalize_managed_agent_provider, _resolve_managed_model, argparse, contextmanager, cursor_api_key_file, execution_baseline_freeze_packet_path, execution_branch_issues, execution_branch_payload, execution_root, hashlib, image_asset_strategy, image_asset_strategy_scale_issues, os, read_json, resolve_cursor_startup_timeout_seconds, store, subprocess, tempfile, time, validate_image_asset_strategy, write_json
+from content.execution.support import Any, ExecutionContext, Mapping, Path, REFERENCE_ONLY_NO_IMAGE_RELEASE, Sequence, _CURSOR_BRIDGE_LAUNCH_COOLDOWN_SECONDS, _normalize_managed_agent_provider, _resolve_managed_model, argparse, contextmanager, execution_baseline_freeze_packet_path, execution_branch_issues, execution_branch_payload, execution_root, hashlib, image_asset_strategy, image_asset_strategy_scale_issues, os, read_json, resolve_semantic_agent_startup_timeout_seconds, store, subprocess, tempfile, time, validate_image_asset_strategy, write_json
 
 _LOCAL_PROCESS_PROBE_TIMEOUT_SECONDS = active_runtime_policy().local_process_probe_timeout_seconds
 
@@ -181,7 +181,9 @@ def _managed_preflight(execution_id: str, spec: dict, args: argparse.Namespace) 
         elif cleanup_report is not None:
             setattr(args, "_managed_workspace_cleanup_report", cleanup_report)
     try:
-        from core.python_runtime import environment_preflight
+        from content.execution.preflight.semantic_provider import (
+            semantic_agent_environment_preflight,
+        )
         managed_runtime = str(getattr(args, "runtime", "local") or "local")
         managed_model = _resolve_managed_model(
             agent_provider,
@@ -194,23 +196,25 @@ def _managed_preflight(execution_id: str, spec: dict, args: argparse.Namespace) 
             getattr(args, "model_parameters", None),
             label="managed_preflight",
         )
-        requires_cursor_startup = (
-            agent_provider == "cursor_sdk"
-            and bool(managed_model)
-        )
+        requires_semantic_agent_startup = bool(managed_model)
         def _run_env_preflight() -> dict:
-            return environment_preflight(
-                require_cursor_key=agent_provider == "cursor_sdk",
+            return semantic_agent_environment_preflight(
+                provider=agent_provider,
+                require_credential=True,
                 check_network=True,
-                check_cursor_startup=requires_cursor_startup,
-                cursor_startup_model=managed_model_selection,
-                cursor_startup_runtime=managed_runtime,
-                cursor_startup_timeout_seconds=resolve_cursor_startup_timeout_seconds(
+                check_startup=requires_semantic_agent_startup,
+                startup_model=managed_model_selection,
+                startup_runtime=managed_runtime,
+                startup_timeout_seconds=resolve_semantic_agent_startup_timeout_seconds(
                     getattr(args, "startup_timeout_seconds", None)
                 ),
             )
         runtime_policy = active_runtime_policy()
-        max_attempts = runtime_policy.preflight_startup_attempts if requires_cursor_startup else 1
+        max_attempts = (
+            runtime_policy.preflight_startup_attempts
+            if requires_semantic_agent_startup
+            else 1
+        )
         delay_seconds = runtime_policy.preflight_retry_delay_seconds
         env_attempts: list[dict[str, Any]] = []
         env_report = _run_env_preflight()
@@ -243,19 +247,19 @@ def _managed_preflight(execution_id: str, spec: dict, args: argparse.Namespace) 
     return issues
 
 def _managed_env_preflight_attempt_summary(report: Mapping[str, Any]) -> dict[str, Any]:
-    startup = report.get("cursorStartup") if isinstance(report, Mapping) else {}
+    startup = report.get("semanticAgentStartup") if isinstance(report, Mapping) else {}
     startup = startup if isinstance(startup, Mapping) else {}
     return {
         "ready": bool(report.get("ready")) if isinstance(report, Mapping) else False,
-        "cursorStartupReady": bool(startup.get("ready")),
-        "cursorStartupStatus": startup.get("status"),
-        "cursorStartupErrorClass": startup.get("errorClass"),
-        "cursorStartupErrorCode": startup.get("errorCode"),
-        "cursorStartupHttpStatus": startup.get("httpStatus"),
+        "semanticAgentStartupReady": bool(startup.get("ready")),
+        "semanticAgentStartupStatus": startup.get("status"),
+        "semanticAgentStartupErrorClass": startup.get("errorClass"),
+        "semanticAgentStartupErrorCode": startup.get("errorCode"),
+        "semanticAgentStartupHttpStatus": startup.get("httpStatus"),
     }
 
 def _managed_preflight_startup_retryable(report: Mapping[str, Any]) -> bool:
-    startup = report.get("cursorStartup") if isinstance(report, Mapping) else {}
+    startup = report.get("semanticAgentStartup") if isinstance(report, Mapping) else {}
     if not isinstance(startup, Mapping) or startup.get("ready"):
         return False
     parts = [
@@ -295,19 +299,24 @@ def _write_managed_env_ready_report(ctx: ExecutionContext, args: argparse.Namesp
     report = getattr(args, "_env_preflight_report", None)
     if not isinstance(report, Mapping):
         report = {"ready": False, "issues": ["managed preflight report missing"]}
-    startup_timeout_seconds = resolve_cursor_startup_timeout_seconds(
+    startup_timeout_seconds = resolve_semantic_agent_startup_timeout_seconds(
         getattr(args, "startup_timeout_seconds", None)
     )
-    cursor_startup = (
-        dict(report.get("cursorStartup") or {})
-        if isinstance(report.get("cursorStartup"), Mapping)
+    semantic_agent_startup = (
+        dict(report.get("semanticAgentStartup") or {})
+        if isinstance(report.get("semanticAgentStartup"), Mapping)
         else {}
     )
-    if cursor_startup and "timeoutSeconds" not in cursor_startup:
-        cursor_startup["timeoutSeconds"] = startup_timeout_seconds
+    if semantic_agent_startup and "timeoutSeconds" not in semantic_agent_startup:
+        semantic_agent_startup["timeoutSeconds"] = startup_timeout_seconds
     preflight_report = dict(report)
-    if cursor_startup:
-        preflight_report["cursorStartup"] = cursor_startup
+    if semantic_agent_startup:
+        preflight_report["semanticAgentStartup"] = semantic_agent_startup
+    credential = (
+        report.get("semanticAgentCredential")
+        if isinstance(report.get("semanticAgentCredential"), Mapping)
+        else {}
+    )
     payload = {
         "schema": "quwoquan_data.env_ready_report",
         "executionId": ctx.execution_id,
@@ -317,11 +326,11 @@ def _write_managed_env_ready_report(ctx: ExecutionContext, args: argparse.Namesp
         "recordedAt": store.now_iso(),
         "ready": bool(report.get("ready")),
         "preflight": preflight_report,
-        "cursorStartup": cursor_startup,
+        "semanticAgentStartup": semantic_agent_startup,
         "startupTimeoutSeconds": startup_timeout_seconds,
         "executionBranch": execution_branch_payload(ctx.spec.to_dict(), cwd=Path.cwd()),
         "credentialIngress": {
-            "source": "key_file" if cursor_api_key_file() is not None else "missing",
+            "source": str(credential.get("source") or "missing"),
         },
         "runtimeRoots": {
             "workspace": str(Path.cwd()),

@@ -7,9 +7,10 @@ so stage orchestration can depend on a narrow, explicit contract.
 from __future__ import annotations
 
 import threading
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, Iterable, Mapping
+from typing import TYPE_CHECKING
 
 from core.control_types import (
     AgentProvider,
@@ -28,16 +29,24 @@ from core.data_issue import (
     data_issues,
     issue_messages,
 )
-
-from core.io import read_json, write_json
 from core.runtime_policy import active_runtime_policy
+
 from content.execution import store
 from content.execution.contracts import (
     ExecutionState,
     ExecutionStateTransition,
 )
+from content.execution.execution_state_journal import (
+    ExecutionStateIdentity,
+    load_execution_state_document,
+    save_execution_state_document,
+)
 from content.execution.spec_contract import ExecutionSpec
-from content.execution.workspace import ExecutionWorkspace, execution_command_packet_path, execution_state_path
+from content.execution.workspace import (
+    ExecutionWorkspace,
+    execution_command_packet_path,
+    execution_state_path,
+)
 
 if TYPE_CHECKING:
     from content.execution.agent.outcome import AgentRunOutcome
@@ -118,9 +127,12 @@ def stage_issues(
 _RUNTIME_POLICY = active_runtime_policy()
 MAX_REACT_REWINDS = _RUNTIME_POLICY.react_rewind_limit
 MAX_MANAGED_INFRA_RETRIES = _RUNTIME_POLICY.preflight_startup_attempts
-DEFAULT_CURSOR_AGENT_MODEL = _RUNTIME_POLICY.cursor_model
-DEFAULT_MANAGED_AGENT_PROVIDER = _RUNTIME_POLICY.cursor_provider
+DEFAULT_SEMANTIC_AGENT_MODEL = _RUNTIME_POLICY.semantic_agent_model
+DEFAULT_MANAGED_AGENT_PROVIDER = _RUNTIME_POLICY.semantic_agent_provider
 MANAGED_AGENT_PROVIDERS = {item.value for item in AgentProvider}
+SEMANTIC_AGENT_ROLES = frozenset({"author", "reviewer", "calibration"})
+
+
 def _normalize_managed_agent_provider(raw: str | None) -> str:
     provider = str(raw or DEFAULT_MANAGED_AGENT_PROVIDER.value).strip()
     if provider not in MANAGED_AGENT_PROVIDERS:
@@ -128,10 +140,17 @@ def _normalize_managed_agent_provider(raw: str | None) -> str:
     return provider
 
 
+def _normalize_semantic_agent_role(raw: str | None) -> str:
+    role = str(raw or "").strip()
+    if role not in SEMANTIC_AGENT_ROLES:
+        raise ValueError(f"unsupported semantic agent role: {role or '<missing>'}")
+    return role
+
+
 def _resolve_managed_model(provider: str, raw_model: str | None) -> str:
     _normalize_managed_agent_provider(provider)
     model = str(raw_model or "").strip()
-    return model or DEFAULT_CURSOR_AGENT_MODEL
+    return model or DEFAULT_SEMANTIC_AGENT_MODEL
 
 
 MANAGED_LANE_LIMITS = {
@@ -166,13 +185,14 @@ class ExecutionContext:
     managed: bool = False
     runtime: RuntimeEnvironment = RuntimeEnvironment.LOCAL
     max_workers: int = _RUNTIME_POLICY.author_workers
-    model: str = DEFAULT_CURSOR_AGENT_MODEL
+    model: str = DEFAULT_SEMANTIC_AGENT_MODEL
     model_parameters: tuple[CursorModelParameter, ...] = (
-        _RUNTIME_POLICY.cursor_model_parameters
+        _RUNTIME_POLICY.semantic_agent_model_parameters
     )
-    agent_provider: AgentProvider = AgentProvider.CURSOR_SDK
+    agent_provider: AgentProvider = _RUNTIME_POLICY.semantic_agent_provider
+    semantic_role: str = "author"
     release_only: bool = False
-    agent_runner: Callable[[str], "AgentRunOutcome"] | None = None
+    agent_runner: Callable[[str], AgentRunOutcome] | None = None
     force_clean_workspace_agent_state: bool = False
     controller_run_id: str | None = None
 
@@ -205,6 +225,11 @@ class ExecutionContext:
                 "agent_provider",
                 AgentProvider(str(self.agent_provider)),
             )
+        object.__setattr__(
+            self,
+            "semantic_role",
+            _normalize_semantic_agent_role(self.semantic_role),
+        )
         if self.until is not None and not isinstance(self.until, ExecutionStage):
             object.__setattr__(self, "until", ExecutionStage(str(self.until)))
     @property
@@ -304,9 +329,7 @@ def _state_path(execution_id: str) -> Path:
 
 def load_execution_state(execution_id: str) -> ExecutionStateTransition:
     p = _state_path(execution_id)
-    if p.exists():
-        return ExecutionState.from_mapping(read_json(p)).open_transition()
-    return ExecutionState.from_mapping({
+    default_payload = {
         "schema": EXECUTION_STATE_CONTRACT,
         "executionId": execution_id,
         "completed": [],
@@ -319,7 +342,11 @@ def load_execution_state(execution_id: str) -> ExecutionStateTransition:
         "failedObjects": [],
         "nextAction": None,
         "updatedAt": store.now_iso(),
-    }).open_transition()
+    }
+    loaded = load_execution_state_document(p, default_payload=default_payload)
+    transition = ExecutionState.from_mapping(loaded.payload).open_transition()
+    transition._journal_identity = loaded.identity
+    return transition
 
 
 def execution_state_status(state: ExecutionStateTransition) -> ExecutionStateStatus:
@@ -327,19 +354,17 @@ def execution_state_status(state: ExecutionStateTransition) -> ExecutionStateSta
 
 
 def save_execution_state(state: ExecutionStateTransition) -> Path:
-    from core.schema import assert_valid
-
     state.updated_at = store.now_iso()
     payload = state.freeze().to_dict()
-    # execution state 的字段唯一定义在 schema/execution/execution_state.schema.json；
-    # 新增字段必须先补 Schema，未知字段 fail-closed 拒绝落盘。
-    assert_valid(
+    loaded = save_execution_state_document(
+        _state_path(state.execution_id),
         payload,
-        "execution",
-        "execution_state",
-        label=f"execution_state:{state.execution_id}",
+        expected=getattr(state, "_journal_identity", None),
     )
-    p = _state_path(state.execution_id)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    write_json(p, payload)
-    return p
+    state.replace_with(ExecutionState.from_mapping(loaded.payload).open_transition())
+    state._journal_identity = ExecutionStateIdentity(
+        loaded.identity.sequence,
+        loaded.identity.event_digest,
+        loaded.identity.snapshot_digest,
+    )
+    return _state_path(state.execution_id)

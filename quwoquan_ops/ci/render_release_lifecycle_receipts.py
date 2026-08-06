@@ -12,22 +12,26 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from quwoquan_ops.cli.prod import hosted_release_ledger
 from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
     DIGEST_PATTERN,
     validate_manifest,
 )
-from quwoquan_ops.cli.prod import hosted_release_ledger
-
 
 HOSTED_AUTHORITY = hosted_release_ledger.AUTHORITY
 HOSTED_READBACK_SCHEMA = hosted_release_ledger.READBACK_SCHEMA
 HOSTED_RECEIPT_READBACK_SCHEMA = hosted_release_ledger.RECEIPT_READBACK_SCHEMA
 HOSTED_RECEIPT_SCHEMA = hosted_release_ledger.RECEIPT_SCHEMA
 HOSTED_STATE_SCHEMA = hosted_release_ledger.STATE_SCHEMA
+HOSTED_SOAK_REQUEST_SCHEMA = hosted_release_ledger.SOAK_REQUEST_SCHEMA
+HOSTED_SOAK_RECEIPT_SCHEMA = hosted_release_ledger.SOAK_RECEIPT_SCHEMA
+HOSTED_SOAK_READBACK_SCHEMA = hosted_release_ledger.SOAK_RECEIPT_READBACK_SCHEMA
 STAGES = ("gray-initial", "carry-on", "full")
 RECEIPT_ID_PATTERN = re.compile(r"[0-9a-f]{64}")
 HOSTED_RECEIPT_FIELDS = hosted_release_ledger.RECEIPT_FIELDS
@@ -163,6 +167,62 @@ def _validate_receipt_readback(
     receipt = _validate_hosted_receipt(payload.get("receipt"), service=service)
     if payload.get("receiptRef") != f"receipt:hosted:{receipt['receiptId']}":
         raise ValueError("hosted receipt readback reference is invalid")
+    return receipt
+
+
+def _validate_soak_readback(
+    payload: dict[str, Any], *, service: str
+) -> dict[str, Any]:
+    if (
+        set(payload) != {"schema", "authority", "receipt", "receiptRef"}
+        or payload.get("schema") != HOSTED_SOAK_READBACK_SCHEMA
+        or payload.get("authority") != HOSTED_AUTHORITY
+    ):
+        raise ValueError("hosted prod soak readback shape is invalid")
+    receipt = payload.get("receipt")
+    if (
+        not isinstance(receipt, dict)
+        or set(receipt) != hosted_release_ledger.SOAK_RECEIPT_FIELDS
+        or receipt.get("schema") != HOSTED_SOAK_RECEIPT_SCHEMA
+        or receipt.get("authority") != HOSTED_AUTHORITY
+        or receipt.get("service") != service
+        or RECEIPT_ID_PATTERN.fullmatch(str(receipt.get("receiptId") or "")) is None
+        or _receipt_id(receipt) != receipt.get("receiptId")
+        or payload.get("receiptRef")
+        != f"receipt:hosted-soak:{receipt.get('receiptId')}"
+    ):
+        raise ValueError("hosted prod soak receipt identity is invalid")
+    request = {
+        field: receipt[field]
+        for field in hosted_release_ledger.SOAK_REQUEST_FIELDS
+        if field != "schema"
+    }
+    request["schema"] = hosted_release_ledger.SOAK_REQUEST_SCHEMA
+    hosted_release_ledger._validate_soak_request(request)
+    started_at = dt.datetime.fromisoformat(
+        _validate_timestamp(receipt.get("soakStartedAt"), "prod soak start").replace(
+            "Z", "+00:00"
+        )
+    )
+    ended_at = dt.datetime.fromisoformat(
+        _validate_timestamp(receipt.get("soakEndedAt"), "prod soak end").replace(
+            "Z", "+00:00"
+        )
+    )
+    verified_at = dt.datetime.fromisoformat(
+        _validate_timestamp(receipt.get("verifiedAt"), "prod soak receipt").replace(
+            "Z", "+00:00"
+        )
+    )
+    duration = receipt.get("soakDurationSeconds")
+    if (
+        not isinstance(duration, int)
+        or isinstance(duration, bool)
+        or duration != int((ended_at - started_at).total_seconds())
+        or duration < receipt["requiredSoakSeconds"]
+        or ended_at > verified_at
+    ):
+        raise ValueError("hosted prod soak receipt duration is invalid")
     return receipt
 
 
@@ -571,6 +631,278 @@ def render_prod_outcome(
     }
 
 
+def _window_seconds(value: object) -> int:
+    match = re.fullmatch(r"([1-9][0-9]*)([smh])", str(value or "").strip())
+    if match is None:
+        raise ValueError("SLO soak window is invalid")
+    multiplier = {"s": 1, "m": 60, "h": 3600}[match.group(2)]
+    return int(match.group(1)) * multiplier
+
+
+def render_prod_soak_request(
+    *,
+    manifest: dict[str, Any],
+    service: str,
+    full_readback: dict[str, Any],
+    slo: dict[str, Any],
+    slo_path: Path,
+    alerts: dict[str, Any],
+    alerts_path: Path,
+    health: dict[str, Any],
+    health_path: Path,
+    credential_evidence: dict[str, Any],
+    credential_policy: dict[str, Any],
+    credential_policy_path: Path,
+    governance: dict[str, Any],
+    governance_path: Path,
+    soak_policy: dict[str, Any],
+    soak_policy_path: Path,
+) -> dict[str, Any]:
+    validate_manifest(manifest, allowed_statuses={"released"})
+    full = _validate_receipt_readback(full_readback, service=service)
+    candidate = str(manifest["candidateId"])
+    source = manifest["source"]
+    if not (
+        full.get("triggerStage") == "full"
+        and full.get("stage") == "full"
+        and full.get("decision") == "continue"
+        and full.get("rollbackOutcome") == "not_triggered"
+        and full.get("toCandidateDigest") == candidate
+        and full.get("lastGoodCandidateDigest") == candidate
+        and full.get("contractGraphDigest") == manifest["contractGraphDigest"]
+    ):
+        raise ValueError("full hosted rollout receipt is not a released candidate")
+
+    readback = soak_policy.get("readback")
+    thresholds = soak_policy.get("thresholds")
+    if not isinstance(readback, dict) or not isinstance(thresholds, dict):
+        raise ValueError("soak policy is invalid")
+    required_soak_seconds = _window_seconds(readback.get("window"))
+    minimum_samples = int(readback.get("minimum_samples") or 0)
+    if minimum_samples < 1:
+        raise ValueError("soak policy requirements are invalid")
+
+    slo_values = slo.get("values")
+    if not (
+        set(slo)
+        >= {
+            "source",
+            "queriedAt",
+            "window",
+            "minimumSamples",
+            "values",
+        }
+        and slo.get("source") == "prometheus"
+        and _window_seconds(slo.get("window")) == required_soak_seconds
+        and slo.get("minimumSamples") == minimum_samples
+        and isinstance(slo_values, dict)
+        and set(slo_values)
+        >= {"errorRate", "p95Ms", "redisErrorRate", "sampleCount"}
+    ):
+        raise ValueError("Prometheus soak evidence shape or policy binding is invalid")
+    sample_count = int(float(slo_values["sampleCount"]))
+    if sample_count < minimum_samples:
+        raise ValueError("Prometheus soak evidence has insufficient samples")
+    threshold_bindings = {
+        "errorRate": "error_rate",
+        "p95Ms": "p95_ms",
+        "redisErrorRate": "redis_error_rate",
+    }
+    for evidence_field, policy_field in threshold_bindings.items():
+        raw = slo_values[evidence_field]
+        policy_threshold = thresholds.get(policy_field)
+        limit = (
+            policy_threshold.get("warn")
+            if isinstance(policy_threshold, dict)
+            else None
+        )
+        if (
+            not isinstance(raw, (int, float))
+            or isinstance(raw, bool)
+            or not isinstance(limit, (int, float))
+            or isinstance(limit, bool)
+            or float(raw) >= float(limit)
+        ):
+            raise ValueError(f"Prometheus soak evidence breached {policy_field}")
+    slo_observed_at = _validate_timestamp(slo.get("queriedAt"), "Prometheus soak")
+
+    if (
+        set(alerts)
+        != {"schema", "source", "queriedAt", "status", "activeFiring"}
+        or alerts.get("schema") != "prod-alertmanager-soak-observation"
+        or alerts.get("source") != "alertmanager"
+        or alerts.get("status") != "passed"
+        or alerts.get("activeFiring") != 0
+    ):
+        raise ValueError("Alertmanager soak evidence is not clear")
+    alert_observed_at = _validate_timestamp(
+        alerts.get("queriedAt"), "Alertmanager soak"
+    )
+
+    checks = health.get("checks")
+    if not (
+        health.get("command") == "health"
+        and health.get("target") == "prod-hosted"
+        and health.get("scope") == "full"
+        and health.get("readOnly") is False
+        and health.get("findings") == []
+        and isinstance(checks, list)
+        and bool(checks)
+        and all(isinstance(check, dict) and check.get("ok") is True for check in checks)
+    ):
+        raise ValueError("full prod-hosted health evidence did not pass")
+    health_observed_at = _validate_timestamp(health.get("timestamp"), "prod health")
+
+    planes = credential_policy.get("planes")
+    if not isinstance(planes, list) or not planes:
+        raise ValueError("prod credential policy has no planes")
+    expected_credentials: set[tuple[str, str]] = set()
+    for plane in planes:
+        if (
+            not isinstance(plane, dict)
+            or plane.get("access") != "read-write"
+            or "full" not in (plane.get("appliesToStages") or [])
+        ):
+            continue
+        governed = plane.get("rootlessGovernedComposeServices") or []
+        support = plane.get("rootlessSupportComposeServices") or []
+        if (
+            "rootlessGovernedComposeServices" in plane
+            or "rootlessSupportComposeServices" in plane
+        ) and not (governed or support):
+            continue
+        expected_credentials.add(
+            (str(plane.get("plane") or ""), str(plane.get("account") or ""))
+        )
+    credentials = credential_evidence.get("credentials")
+    if not (
+        set(credential_evidence)
+        == {"schema", "stage", "verifiedAt", "credentials"}
+        and credential_evidence.get("schema") == "prod-plane-credential-evidence"
+        and credential_evidence.get("stage") == "full"
+        and isinstance(credentials, list)
+        and bool(credentials)
+    ):
+        raise ValueError("prod credential evidence is invalid")
+    _validate_timestamp(
+        credential_evidence.get("verifiedAt"), "prod credential evidence"
+    )
+    actual_credentials = {
+        (str(item.get("plane") or ""), str(item.get("account") or ""))
+        for item in credentials
+        if isinstance(item, dict)
+    }
+    if actual_credentials != expected_credentials:
+        raise ValueError("prod credential evidence does not cover canonical remote planes")
+    credential_projection: list[dict[str, Any]] = []
+    for item in credentials:
+        if set(item) != {
+            "plane",
+            "account",
+            "reference",
+            "publicDigest",
+            "issuer",
+            "expiresAt",
+            "verifiedAt",
+        }:
+            raise ValueError("prod credential evidence contains a non-canonical item")
+        if "PRIVATE KEY" in str(item["reference"]) or "\n" in str(item["reference"]):
+            raise ValueError("prod credential evidence contains secret material")
+        if DIGEST_PATTERN.fullmatch(str(item["publicDigest"])) is None:
+            raise ValueError("prod credential public digest is invalid")
+        _validate_timestamp(item["expiresAt"], "prod credential expiry")
+        _validate_timestamp(item["verifiedAt"], "prod credential verification")
+        credential_projection.append(dict(item))
+
+    expected_governance_fields = {
+        "schema",
+        "repository",
+        "gitSha",
+        "artifactDigest",
+        "pullRequest",
+        "author",
+        "mergedBy",
+        "approvers",
+        "distinctPrincipals",
+        "verifiedAt",
+    }
+    if not (
+        set(governance) == expected_governance_fields
+        and governance.get("schema") == "prod-release-governance-receipt"
+        and governance.get("artifactDigest") == manifest["artifactDigest"]
+        and governance.get("gitSha") == source["gitSha"]
+        and isinstance(governance.get("approvers"), list)
+        and bool(governance["approvers"])
+        and isinstance(governance.get("distinctPrincipals"), list)
+        and len(governance["distinctPrincipals"]) >= 2
+    ):
+        raise ValueError("canonical reviewed-mainline approval is invalid")
+    approval_verified_at = _validate_timestamp(
+        governance.get("verifiedAt"), "release governance"
+    )
+
+    return {
+        "schema": HOSTED_SOAK_REQUEST_SCHEMA,
+        "service": service,
+        "environment": "prod",
+        "target": "prod-hosted",
+        "fullRolloutReceiptId": full["receiptId"],
+        "candidateId": candidate,
+        "rolloutArtifactDigest": full["artifactDigest"],
+        "artifactDigest": manifest["artifactDigest"],
+        "sourceGitSha": source["gitSha"],
+        "sourceTreeDigest": source["treeDigest"],
+        "rolloutConfigDigest": full["configDigest"],
+        "configGraphDigest": _digest_bytes(
+            _canonical_bytes(manifest["configurationPackages"])
+        ),
+        "contractGraphDigest": manifest["contractGraphDigest"],
+        "requiredSoakSeconds": required_soak_seconds,
+        "soakPolicyDigest": _digest_file(soak_policy_path),
+        "credentialPolicyDigest": _digest_file(credential_policy_path),
+        "slo": {
+            "source": "prometheus",
+            "observedAt": slo_observed_at,
+            "windowSeconds": required_soak_seconds,
+            "minimumSamples": minimum_samples,
+            "sampleCount": sample_count,
+            "status": "passed",
+            "decision": "continue",
+            "values": {
+                field: float(slo_values[field]) for field in threshold_bindings
+            },
+            "receiptDigest": _digest_file(slo_path),
+        },
+        "alerts": {
+            "source": "alertmanager",
+            "observedAt": alert_observed_at,
+            "status": "passed",
+            "activeFiring": 0,
+            "receiptDigest": _digest_file(alerts_path),
+        },
+        "health": {
+            "source": "stackctl",
+            "observedAt": health_observed_at,
+            "target": "prod-hosted",
+            "scope": "full",
+            "status": "passed",
+            "receiptDigest": _digest_file(health_path),
+        },
+        "credentials": credential_projection,
+        "approval": {
+            "kind": "github-reviewed-mainline",
+            "repository": governance["repository"],
+            "sourceGitSha": source["gitSha"],
+            "artifactDigest": manifest["artifactDigest"],
+            "pullRequest": governance["pullRequest"],
+            "approvers": list(governance["approvers"]),
+            "distinctPrincipals": len(governance["distinctPrincipals"]),
+            "receiptDigest": _digest_file(governance_path),
+            "verifiedAt": approval_verified_at,
+        },
+    }
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -598,6 +930,19 @@ def _parser() -> argparse.ArgumentParser:
     outcome.add_argument("--hard-deadline-epoch", required=True, type=int)
     outcome.add_argument("--rollback-budget-seconds", required=True, type=int)
     outcome.add_argument("--output-dir", required=True, type=Path)
+
+    soak = subparsers.add_parser("prod-soak-request")
+    soak.add_argument("--manifest", required=True, type=Path)
+    soak.add_argument("--service", required=True)
+    soak.add_argument("--full-readback", required=True, type=Path)
+    soak.add_argument("--slo-observation", required=True, type=Path)
+    soak.add_argument("--alerts-observation", required=True, type=Path)
+    soak.add_argument("--health-report", required=True, type=Path)
+    soak.add_argument("--credential-evidence", required=True, type=Path)
+    soak.add_argument("--credential-policy", required=True, type=Path)
+    soak.add_argument("--governance-receipt", required=True, type=Path)
+    soak.add_argument("--soak-policy", required=True, type=Path)
+    soak.add_argument("--output", required=True, type=Path)
     return parser
 
 
@@ -631,7 +976,7 @@ def main() -> int:
                 + "\n",
                 encoding="utf-8",
             )
-        else:
+        elif args.command == "prod-outcome":
             report_paths = _parse_binding(args.stage_report, "stage report")
             readback_paths = _parse_binding(args.stage_readback, "stage readback")
             result = render_prod_outcome(
@@ -663,6 +1008,41 @@ def main() -> int:
                     + "\n",
                     encoding="utf-8",
                 )
+        else:
+            result = render_prod_soak_request(
+                manifest=manifest,
+                service=args.service,
+                full_readback=_load_json(args.full_readback, "full hosted readback"),
+                slo=_load_json(args.slo_observation, "Prometheus soak observation"),
+                slo_path=args.slo_observation,
+                alerts=_load_json(
+                    args.alerts_observation, "Alertmanager soak observation"
+                ),
+                alerts_path=args.alerts_observation,
+                health=_load_json(args.health_report, "prod health report"),
+                health_path=args.health_report,
+                credential_evidence=_load_json(
+                    args.credential_evidence, "prod credential evidence"
+                ),
+                credential_policy=yaml.safe_load(
+                    args.credential_policy.read_text(encoding="utf-8")
+                ),
+                credential_policy_path=args.credential_policy,
+                governance=_load_json(
+                    args.governance_receipt, "release governance receipt"
+                ),
+                governance_path=args.governance_receipt,
+                soak_policy=yaml.safe_load(
+                    args.soak_policy.read_text(encoding="utf-8")
+                ),
+                soak_policy_path=args.soak_policy,
+            )
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            args.output.write_text(
+                json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True)
+                + "\n",
+                encoding="utf-8",
+            )
         print(json.dumps(result, ensure_ascii=False, sort_keys=True))
         return 0
     except (OSError, ValueError, json.JSONDecodeError) as error:

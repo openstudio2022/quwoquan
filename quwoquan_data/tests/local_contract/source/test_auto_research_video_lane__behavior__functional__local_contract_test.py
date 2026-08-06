@@ -146,7 +146,7 @@ def test_direct_video_failure_does_not_collect_frame_fallback(
     monkeypatch.setattr(
         handler_fetch_setup,
         "curated_sourced_videos_for_entity",
-        lambda *_args: [_video()],
+        lambda *_args, **_kwargs: [_video()],
     )
     monkeypatch.setattr(
         handler_fetch_setup,

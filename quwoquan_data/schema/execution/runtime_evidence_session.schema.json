@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/runtime_evidence_session.schema.json",
+  "title": "Fenced campaign runtime evidence session",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "sessionId",
+    "rootExecutionId",
+    "runId",
+    "generation",
+    "fencingToken",
+    "campaignPlanRef",
+    "campaignPlanSha256",
+    "sourceRevision",
+    "sourceDigest",
+    "entityCatalogDigest",
+    "runtimeSnapshotRef",
+    "runtimeSnapshotSha256",
+    "leaseHeartbeatAt",
+    "leaseSeconds",
+    "controller",
+    "workers",
+    "queueEvidenceProvider",
+    "faultProviders",
+    "providerFaultTestHooksEnabled",
+    "providerFaultTestHookAttestationRef",
+    "providerFaultTestHookAttestationSha256",
+    "createdAt",
+    "receiptDigest"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.runtime_evidence_session"},
+    "sessionId": {"type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]{2,127}$"},
+    "rootExecutionId": {"type": "string", "minLength": 1},
+    "runId": {"type": "string", "minLength": 1},
+    "generation": {"type": "integer", "minimum": 1},
+    "fencingToken": {"$ref": "#/$defs/digest"},
+    "campaignPlanRef": {"$ref": "#/$defs/safeRef"},
+    "campaignPlanSha256": {"$ref": "#/$defs/digest"},
+    "sourceRevision": {"$ref": "#/$defs/digest"},
+    "sourceDigest": {"$ref": "#/$defs/digest"},
+    "entityCatalogDigest": {"$ref": "#/$defs/digest"},
+    "runtimeSnapshotRef": {"$ref": "#/$defs/safeRef"},
+    "runtimeSnapshotSha256": {"$ref": "#/$defs/digest"},
+    "leaseHeartbeatAt": {"type": "string", "minLength": 1},
+    "leaseSeconds": {"type": "integer", "minimum": 1},
+    "controller": {"$ref": "#/$defs/process"},
+    "workers": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {"$ref": "#/$defs/process"}
+    },
+    "queueEvidenceProvider": {"$ref": "#/$defs/provider"},
+    "faultProviders": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/faultProvider"}
+    },
+    "providerFaultTestHooksEnabled": {"type": "boolean"},
+    "providerFaultTestHookAttestationRef": {
+      "type": ["string", "null"],
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+    },
+    "providerFaultTestHookAttestationSha256": {
+      "type": ["string", "null"],
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "createdAt": {"type": "string", "minLength": 1},
+    "receiptDigest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "safeRef": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+    },
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["providerId", "configurationDigest"],
+      "properties": {
+        "providerId": {"type": "string", "minLength": 1},
+        "configurationDigest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "faultProvider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["faultType", "providerId", "configurationDigest"],
+      "properties": {
+        "faultType": {"$ref": "#/$defs/faultType"},
+        "providerId": {"type": "string", "minLength": 1},
+        "configurationDigest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "process": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "carrier",
+        "executionId",
+        "pid",
+        "pgid",
+        "processIdentityDigest",
+        "checkpointRef",
+        "checkpointSha256",
+        "workspaceRef"
+      ],
+      "properties": {
+        "role": {"enum": ["controller", "worker"]},
+        "carrier": {"type": ["string", "null"]},
+        "executionId": {"type": "string", "minLength": 1},
+        "pid": {"type": "integer", "minimum": 2},
+        "pgid": {"type": "integer", "minimum": 2},
+        "processIdentityDigest": {"$ref": "#/$defs/digest"},
+        "checkpointRef": {"$ref": "#/$defs/safeRef"},
+        "checkpointSha256": {"$ref": "#/$defs/digest"},
+        "workspaceRef": {"$ref": "#/$defs/safeRef"}
+      }
+    },
+    "faultType": {
+      "enum": [
+        "worker_termination",
+        "lease_expiry",
+        "redis_restart",
+        "mongo_reconnect",
+        "provider_timeout",
+        "provider_rate_limit"
+      ]
+    }
+  }
+}

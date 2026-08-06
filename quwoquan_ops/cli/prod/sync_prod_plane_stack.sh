@@ -110,9 +110,25 @@ case "$operation" in
       exit 2
     fi
     ;;
+  release-ledger-soak-commit)
+    if [[ -z "$service" || -z "$request_path" || -z "$output_path" ]]; then
+      echo "FAIL: release-ledger-soak-commit requires --service, --request-path and --output-path" >&2
+      exit 2
+    fi
+    if [[ ! -s "$request_path" ]]; then
+      echo "FAIL: prod soak request does not exist or is empty: $request_path" >&2
+      exit 2
+    fi
+    ;;
   release-ledger-receipt)
     if [[ -z "$service" || -z "$receipt_id" || -z "$output_path" ]]; then
       echo "FAIL: release-ledger-receipt requires --service, --receipt-id and --output-path" >&2
+      exit 2
+    fi
+    ;;
+  release-ledger-soak-receipt)
+    if [[ -z "$service" || -z "$receipt_id" || -z "$output_path" ]]; then
+      echo "FAIL: release-ledger-soak-receipt requires --service, --receipt-id and --output-path" >&2
       exit 2
     fi
     ;;
@@ -220,10 +236,10 @@ if [[ "$operation" == release-ledger-* ]]; then
     --action "${operation#release-ledger-}"
     --service "$service"
   )
-  if [[ "$operation" == "release-ledger-commit" ]]; then
+  if [[ "$operation" == "release-ledger-commit" || "$operation" == "release-ledger-soak-commit" ]]; then
     request_base64="$(base64 < "$request_path" | tr -d '\r\n')"
     remote_args+=(--request-base64 "$request_base64")
-  elif [[ "$operation" == "release-ledger-receipt" ]]; then
+  elif [[ "$operation" == "release-ledger-receipt" || "$operation" == "release-ledger-soak-receipt" ]]; then
     remote_args+=(--receipt-id "$receipt_id")
   fi
   remote_command="python3 -"

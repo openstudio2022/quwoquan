@@ -98,6 +98,7 @@
           "app-core-readback",
           "media-publication",
           "user-profile",
+          "runtime-recovery",
           "account-closure"
         ]
       }
@@ -145,6 +146,7 @@
           "app-core-readback",
           "media-publication",
           "user-profile",
+          "runtime-recovery",
           "account-closure"
         ]
       }
@@ -430,6 +432,17 @@
       "currentRole": "用户主页核心旅程：真实 bundle、AuthorImpact 摘要/evidence 下钻、资料保存回读与关注往返",
       "currentPain": "涉及真实 bundle、影响力 evidence 分页、资料写入刷新、关注往返和导航栈恢复。",
       "optimizationPlan": "保留到 nightly/release；AuthorImpact 必须命中 Gamma Remote query 与服务端 evidence，禁止样本兜底计作通过。"
+    },
+    "runtime_recovery_journey_patrol": {
+      "path": "quwoquan_app/test/user_acceptance/patrol/environment/runtime_recovery_journey__user_acceptance_test.dart",
+      "target": "test/user_acceptance/patrol/environment/runtime_recovery_journey__user_acceptance_test.dart",
+      "runner": "patrol",
+      "tier": "release",
+      "budgetSeconds": 300,
+      "longTailType": "stateful_flow",
+      "currentRole": "Android/iOS 持久化登录态下一次性根容器恢复与防循环真机旅程",
+      "currentPain": "必须复用真机已有 production Remote 会话，且第二次根故障不可再进入恢复循环。",
+      "optimizationPlan": "nightly/release 在独立平台 lease 内执行；只接受全真布尔恢复证据，禁止注入 token 或本地身份。"
     },
     "account_closure_patrol": {
       "path": "quwoquan_app/test/user_acceptance/patrol/settings/account_closure_journey__user_acceptance_test.dart",

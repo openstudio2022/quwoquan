@@ -24,6 +24,7 @@ from content.release.environment.topology import (
 from content.release.model import DeploymentEnvironment, ReleaseKind
 from core.io import read_json, write_json
 from core.release_layout import payload_digest
+from core.source_digest import SourceDigest, content_source_revision
 
 
 def _stub_tag_consumer_verification(**kwargs: object) -> Path:
@@ -38,29 +39,51 @@ def _release(
     release_kind: ReleaseKind = ReleaseKind.CONTENT,
 ) -> Path:
     release = root / "data" / "releases" / release_id
+    source_digest = "sha256:" + "b" * 64
+    entity_catalog_digest = "sha256:" + "c" * 64
+    is_empty = release_kind is ReleaseKind.EMPTY_BASELINE
     desired = build_release_contract(
         release_id=release_id,
         post_refs=[],
         entity_refs=[],
     )
-    write_json(
-        release / "payload" / "release.json",
-        {
-            "schema": "quwoquan_data.release",
-            "releaseId": release_id,
-            "sourceOwner": "qwq_data",
-            "releaseKind": release_kind,
-            "canonicalMerkle": "sha256:" + "a" * 64,
-            "executionIds": ["20260715--travel-homepage-coverage--test-region-a--scale-001"],
-            "sourceDigests": [
-                {
-                    "algorithm": "sha256",
-                    "digest": "sha256:" + "b" * 64,
-                    "inputs": ["canonical/test-input"],
-                }
-            ],
+    header = {
+        "schema": "quwoquan_data.release",
+        "releaseId": release_id,
+        "sourceOwner": "qwq_data",
+        "releaseKind": release_kind,
+        "releaseClass": "commercial",
+        "productLifecycleState": "commercial",
+        "containsUnverifiedAssets": False,
+        "rightsStatusCounts": {
+            "verified": 0,
+            "unverified": 0,
+            "restricted": 0,
+            "unknown": 0,
         },
-    )
+        "authorizationRequiredAssetIds": [],
+        "researchAcceptedCount": 0,
+        "commercialAcceptedCount": 0,
+        "canonicalMerkle": "sha256:" + "a" * 64,
+        "executionIds": (
+            []
+            if is_empty
+            else ["20260715--travel-homepage-coverage--test-region-a--scale-001"]
+        ),
+        "sourceDigests": [SourceDigest(digest=source_digest).to_document()],
+    }
+    if not is_empty:
+        header.update(
+            {
+                "sourceRevision": content_source_revision(
+                    source_digest=source_digest,
+                    entity_catalog_digest=entity_catalog_digest,
+                ),
+                "sourceDigest": source_digest,
+                "entityCatalogDigest": entity_catalog_digest,
+            }
+        )
+    write_json(release / "payload" / "release.json", header)
     write_json(release / "payload" / "desired_state.json", desired)
     write_json(
         release / "payload" / "sample_bundle.json",
@@ -490,6 +513,8 @@ def test_ship_verify_uses_environment_topology_without_manual_network_arguments(
             env=environment.value,
             import_run_id=import_run_id,
             run_id="verify-001",
+            readiness_phase="consumer",
+            lifecycle_exit_ref="",
         )
     )
 
@@ -542,17 +567,24 @@ def test_ship_verify_binds_consumer_readiness_to_verified_release(
         lambda **kwargs: observed.update(kwargs),
     )
 
+    lifecycle_exit_ref = (
+        "env/gamma/runs/release-lifecycle-exit/"
+        f"{release.name}/exit-001/lifecycle-exit.json"
+    )
     handler._verify_release_consumers(
         argparse.Namespace(
             release_id=release.name,
             env="gamma",
             import_run_id=import_run_id,
             run_id="verify-ready",
+            readiness_phase="commercial",
+            lifecycle_exit_ref=lifecycle_exit_ref,
         )
     )
 
     assert observed["environment"] is DeploymentEnvironment.GAMMA
-    assert observed["consumer"] is True
+    assert observed["phase"].value == "commercial"
+    assert observed["lifecycle_exit_ref"] == lifecycle_exit_ref
     assert observed["release_id"] == release.name
     assert observed["verify_run_id"] == "verify-ready"
     assert observed["manifest_digest"] == payload_digest(release)
@@ -561,6 +593,7 @@ def test_ship_verify_binds_consumer_readiness_to_verified_release(
     )
     result = read_json(Path(str(observed["run"])) / "result.json")
     assert result["releaseReadinessRef"].endswith("/verify-ready/release-readiness.json")
+    assert result["lifecycleExitRef"] == lifecycle_exit_ref
 
 
 def test_ship_verify_preserves_failed_consumer_receipt(
@@ -600,6 +633,8 @@ def test_ship_verify_preserves_failed_consumer_receipt(
                 env="alpha",
                 import_run_id=import_run_id,
                 run_id="verify-failed",
+                readiness_phase="consumer",
+                lifecycle_exit_ref="",
             )
         )
 

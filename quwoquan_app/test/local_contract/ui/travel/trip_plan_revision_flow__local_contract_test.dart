@@ -2,8 +2,8 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/travel/travel/trip_plan_revision/application/trip_plan_revision_coordinator.dart';
-import 'package:quwoquan_app/travel/travel/trip_plan_revision/application/trip_plan_revision_facet.dart';
+import 'package:quwoquan_app/application/travel/trip_plan_revision_coordinator.dart';
+import 'package:quwoquan_app/application/travel/trip_plan_revision_facet.dart';
 import 'package:quwoquan_app/ui/travel/widgets/trip_plan_revision_flow.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 

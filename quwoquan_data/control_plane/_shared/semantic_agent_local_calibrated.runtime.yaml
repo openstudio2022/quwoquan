@@ -1,0 +1,165 @@
+# 本地语义 Agent 唯一运行策略。任务范围和目标数由 execution request 冻结，不进入本文件。
+profileId: semantic_agent_local_calibrated
+policy:
+  semanticAgent:
+    runtime: local
+    fallbackPolicy: forbidden
+    # Terra 是日常 author 与独立 reviewer 的唯一默认绑定。两个角色
+    # 必须保留不同 runId，同模型不等于同一次运行。
+    author:
+      provider: codex_sdk
+      model: gpt-5.6-terra
+      modelParameters: []
+    reviewer:
+      provider: codex_sdk
+      model: gpt-5.6-terra
+      modelParameters: []
+    # Sol 仅执行晋级校准抽样：max(10, ceil(accepted*10%))，
+    # accepted 少于 10 时全量。校准 run 不得冒充 Terra reviewer。
+    calibration:
+      provider: codex_sdk
+      model: gpt-5.6-sol
+      modelParameters: []
+      sampleRate: 0.1
+      minimumSampleCount: 10
+      smallBatchPolicy: all
+    # Cursor Auto 不是 fallback，只能由新 execution 显式选择，并在独立
+    # preflight/soak 通过后使用；与当前 Codex 绑定之间的切换必须 retryOf。
+    explicitSelections:
+      - selectionId: cursor_auto
+        provider: cursor_sdk
+        model: auto
+        modelParameters: []
+        runtime: local
+        requiresNewRetryOf: true
+    # Opaque scope IDs never contain credentials. The provider/account/host
+    # tuple owns one shared token bucket and per-lane concurrency ceiling.
+    capacity:
+      accountScopeId: primary-semantic-account
+      hostScopeId: local-data-host
+      requestsPerMinute: 60
+      burstLimit: 4
+      laneConcurrencyLimit: 2
+      receiptTtlSeconds: 600
+  workers:
+    # 每个 detached carrier 只保留一个语义工作槽，四载体并发由 campaign
+    # lane 提供；跨进程 capacity broker 负责 provider 公平配额与快速熔断。
+    author: 1
+    reviewer: 1
+    research: 1
+    download: 4
+    campaignLaneWorkers: 4
+    # 主机级并发 bridge 上限，按 campaignLaneWorkers 对齐：每条 lane 在自己的
+    # execution root 里独占一个 bridge。lane 内语义工作槽仍由 author 限为 1。
+    cursorBridgeInstances: 4
+  selection:
+    # 候选池 = ceil(准出配额 * oversampleFactor)。1.8 来自实测首过率，
+    # 质量不达标的对象直接丢弃、不重试，靠过采补足配额。
+    oversampleFactor: 1.8
+  runtimeEvidence:
+    # 固定 OS process inspection 和 queue fault-event observation 都由本 profile
+    # 统一治理；CLI 不接受调用者覆盖，runner 也不保留数字默认。
+    processInspectionTimeoutSeconds: 5.0
+    queueFaultEventTimeoutSeconds: 120.0
+  budgets:
+    startupTimeoutSeconds: 600
+    campaignSubmissionTimeoutSeconds: 3600
+    # 单 lane 保持一个语义槽。按 M100 实测，M1000 的 1800
+    # 候选采集约 32 小时、1000 对象创作约 17 小时；72 小时给 review、
+    # publish 与有界恢复留出余量，同时仍由 controller 超时硬终止。
+    campaignLaneTimeoutSeconds: 259200
+    preflightNetworkTimeoutSeconds: 5
+    agentTimeoutSeconds: 2400
+    authRetryLimit: 3
+    authRetryDelaySeconds: 30
+    noProgressRoundLimit: 6
+    researchWaveSize: 1
+    researchMaxWavesPerRun: 0
+    sourcePlanRecoveryPasses: 1
+    sourcePlanRecoveryWorkers: 1
+    coldStartMaxWorkers: 1
+    workerStaggerSeconds: 15.0
+    managedFutureGraceSeconds: 15
+    schedulerStaleSeconds: 900
+    controllerLeaseStaleSeconds: 900
+    assignmentDeadlineSeconds: 2400
+    downloadFetchRetryLimit: 1
+    bridgeLaunchCooldownSeconds: 2.0
+    bridgeReadyDelaySeconds: 1.5
+    reactRewindLimit: 2
+    preflightStartupAttempts: 3
+    preflightRetryDelaySeconds: 3.0
+    cursorWarmAttempts: 3
+    cursorBridgeMaxRetries: 3
+    managedCheckpointRefLimit: 0
+    cursorBridgeHandshakeTimeoutSeconds: 60
+    pageImageFetchMaxAttempts: 5
+    pageImageFetchRetryBackoffSeconds: 1.0
+    pageImageDownloadTimeoutSeconds: 45
+    downloadTextTimeoutSeconds: 20
+    downloadBytesTimeoutSeconds: 8
+    stageNoProgressTimeoutSeconds: 1800
+    researchWaveBudgetSeconds: 1800
+    networkBreakerThreshold: 6
+    localProcessProbeTimeoutSeconds: 2
+    processTerminationTimeoutSeconds: 5
+    agentFuturePollTimeoutSeconds: 10
+    apiRequestTimeoutSeconds: 30
+    directFetchTimeoutSeconds: 15
+    sourceFetchTimeoutSeconds: 20
+    sourceVideoReadTimeoutSeconds: 180
+    sourceFetchMaxRetries: 4
+    ocrTimeoutSeconds: 8
+    videoProbeTimeoutSeconds: 60
+    videoTranscodeTimeoutSeconds: 300
+    mediawikiFallbackRetries: 2
+    mediawikiWikitextMaxRetries: 2
+    queueLeaseTtlSeconds: 1800
+    queueHeartbeatSeconds: 60
+    queueMaxAttempts: 2
+    queueMaxStartupFailures: 3
+    queueMaxWallClockSeconds: 2400
+    queueBackoffBaseSeconds: 30
+    queueBackoffCapSeconds: 600
+    queueStuckThreshold: 3
+    startupProbeSuiteAttempts: 8
+    cursorStartupProbeCacheTtlSeconds: 600
+    # 八次探针下任一失败率均为 12.5%，因此 1% 阈值等价于零失败准入。
+    cursorTrue5xxRateLimit: 0.01
+    cursorStartupTimeoutRateLimit: 0.01
+    coverageWikiRetryLimit: 3
+    coverageWikiRetryBackoffSeconds: 5.0
+    coverageWikiInterRequestDelaySeconds: 0.3
+    coverageOverpassRetryLimit: 3
+    coverageOverpassRetryBackoffSeconds: 5.0
+    coverageOverpassInterRequestDelaySeconds: 2.0
+    coverageOverpassQueryTimeoutSeconds: 60
+  coverageDiscovery:
+    saturationThreshold: 0.05
+    saturationRounds: 2
+    maxPagesPerCell: 20
+    maxCandidatesPerCitySource: 1000
+    maxNewPerCell: 200
+    requestBudget: 20000
+    maxTotalCandidates: 0
+    requiredEmptyPages: 2
+    requestTimeoutSeconds: 90
+    rateLimitPerSecond: 0.5
+    wikiCategoryDepth: 4
+    retryBackoffMultiplier: 2.0
+    wikidataSparqlEndpoint: https://query.wikidata.org/sparql
+    wikidataResultLimit: 500
+    overpassConcurrency: 4
+    overpassResultLimit: 500
+    overpassEndpoints:
+      - https://maps.mail.ru/osm/tools/overpass/api/interpreter
+      - https://overpass-api.de/api/interpreter
+  network:
+    curlRetries: 1
+    curlRetryDelaySeconds: 1
+    providerTimeoutSeconds:
+      encyclopedia: 20
+      mediawiki: 20
+      qunar: 20
+      openverse: 25
+      overpass: 75

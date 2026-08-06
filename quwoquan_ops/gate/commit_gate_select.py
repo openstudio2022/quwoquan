@@ -230,7 +230,9 @@ def select_pytest_paths(paths: list[str]) -> list[str]:
     for path in paths:
         for root in ("quwoquan_data/tests/local_contract", "quwoquan_ops/tests/local_contract"):
             if path.startswith(root + "/") and path.endswith(".py"):
-                if path not in seen:
+                # A staged deletion still shows up as a changed path; handing it to
+                # pytest aborts the whole run with "file or directory not found".
+                if path not in seen and (ROOT / path).exists():
                     seen.add(path)
                     selected.append(path)
             elif path.startswith(root.split("/tests/")[0] + "/"):

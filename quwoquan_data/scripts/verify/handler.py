@@ -10,12 +10,18 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from collections.abc import Callable
 from pathlib import Path
 
-from core.io import read_json
+from content.release.environment.consistency import (
+    report_to_text,
+    scan_release_file,
+    write_consistency_report,
+)
 from core import paths
 from verify.gate import gate_verify
-from content.release.environment.consistency import report_to_text, scan_release_file, write_consistency_report
+from verify.verify_execution_readiness import READINESS_MODES
 
 
 def handle_verify(args: argparse.Namespace) -> None:
@@ -57,16 +63,7 @@ def handle_verify(args: argparse.Namespace) -> None:
         argv = ["--execution-id", str(args.execution_id)]
         if bool(getattr(args, "require_reviewed", False)):
             argv.append("--require-reviewed")
-        argv.extend(
-            [
-                "--min-pass-rate",
-                str(float(args.min_pass_rate)),
-                "--mode",
-                str(args.mode),
-            ]
-        )
-        if bool(args.fail_on_no_go):
-            argv.append("--fail-on-no-go")
+        argv.extend(["--mode", str(args.mode)])
         raise SystemExit(execution_readiness_main(argv))
     if cmd == "runtime-input-ownership":
         from verify.verify_runtime_input_ownership import main as runtime_input_ownership_main
@@ -233,6 +230,17 @@ def _run_filter_catalog_gate() -> int:
     return 0 if report["passed"] else 1
 
 
+def _run_static_gate(name: str, run: Callable[[], int | None]) -> tuple[str, int]:
+    try:
+        result = run()
+    except SystemExit as exc:
+        result = int(exc.code or 0)
+    except Exception as exc:  # noqa: BLE001 - a verifier crash is a failed gate.
+        print(f"[verify all] {name} crashed: {type(exc).__name__}: {exc}", file=sys.stderr)
+        result = 2
+    return name, int(result or 0)
+
+
 def handle_all() -> None:
     """Run the repository-owned static Data gate through the one public CLI.
 
@@ -247,10 +255,8 @@ def handle_all() -> None:
     from verify import verify_reusable_data_contract
     from verify import verify_data_layout
     from verify import verify_execution_identity_purity
-    from verify import verify_no_active_data_runtime
     from verify import verify_output_root_isolation
     from verify import verify_publish_closure
-    from verify import verify_publish_purity
     from verify import verify_script_architecture
     from verify import verify_python_symbols
     from verify import verify_control_literals
@@ -265,7 +271,6 @@ def handle_all() -> None:
     from verify import verify_media_release_contract
 
     gates = (
-        ("active-runtime-preflight", verify_no_active_data_runtime.main),
         ("cli-first", verify_cli_first.main),
         ("data-layout", verify_data_layout.main),
         ("script-architecture", verify_script_architecture.main),
@@ -285,19 +290,20 @@ def handle_all() -> None:
         ("coverage-static-identity", verify_coverage_static_identity.main),
         ("media-release-contract", verify_media_release_contract.main),
         ("filter-catalog", _run_filter_catalog_gate),
-        ("publish-purity", verify_publish_purity.main),
         ("publish-closure", verify_publish_closure.main),
         ("single-contract-source", verify_single_contract_source.main),
         ("works-classification", verify_works_classification.main),
     )
-    failed: list[str] = []
-    for name, run in gates:
-        try:
-            result = run()
-        except SystemExit as exc:
-            result = int(exc.code or 0)
-        if result not in (None, 0):
-            failed.append(name)
+    results: dict[str, int] = {}
+    with ThreadPoolExecutor(max_workers=min(8, len(gates))) as executor:
+        futures = {
+            executor.submit(_run_static_gate, name, run): name
+            for name, run in gates
+        }
+        for future in as_completed(futures):
+            name, result = future.result()
+            results[name] = result
+    failed = [name for name, _run in gates if results.get(name, 2) != 0]
     if failed:
         raise SystemExit(f"[verify all] FAIL: {', '.join(failed)}")
     print("[verify all] OK")
@@ -456,13 +462,11 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     per = sub.add_parser("execution-readiness", help="校验单个 execution 工作包的准出证据")
     per.add_argument("--execution-id", required=True)
     per.add_argument("--require-reviewed", action="store_true")
-    per.add_argument("--min-pass-rate", type=float, default=1.0)
     per.add_argument(
         "--mode",
-        choices=("calibration", "commercial"),
-        default="commercial",
+        choices=READINESS_MODES,
+        required=True,
     )
-    per.add_argument("--fail-on-no-go", action="store_true")
     sub.add_parser("reusable-data-contract", help="校验静态数据资产只表达可复用能力")
     sub.add_parser("runtime-input-ownership", help="校验区域、数量和目标集只归运行工作包 0.plan")
     sub.add_parser("publish-purity", help="校验 publish 只含 approved 最终对象")

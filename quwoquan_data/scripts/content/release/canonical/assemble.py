@@ -5,11 +5,15 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from core.entity_object import collect_execution_entity_objects
-from core.paths import release_root
-from core.io import read_json, write_json
-from content.review.publish_filter import apply_publish_filter
 from content.execution.workspace import execution_root, load_frozen_target_set
+from content.release.canonical.release_identity_incident import (
+    canonical_release_identity_guard,
+    release_output_root,
+)
+from content.review.publish_filter import apply_publish_filter
+from core.entity_object import collect_execution_entity_objects
+from core.io import read_json, write_json
+from core.paths import release_root
 
 _RELEASE_EVIDENCE = ("attestation.json", "evidence_index.json")
 
@@ -22,7 +26,7 @@ def _execution_is_homepage_only(execution_id: str) -> bool:
     return is_homepage_only_spec(store.load_spec(execution_id))
 
 
-def assemble_release(execution_id: str, release_id: str) -> Path:
+def _assemble_release(execution_id: str, release_id: str) -> Path:
     """Build one immutable release from exactly one execution work package.
 
     发布链直接消费 execution 的 entities/posts；不再读取 task/batch 镜像或
@@ -98,6 +102,17 @@ def assemble_release(execution_id: str, release_id: str) -> Path:
     except Exception:
         shutil.rmtree(root, ignore_errors=True)
         raise
+
+
+def assemble_release(execution_id: str, release_id: str) -> Path:
+    """Guard the legacy canonical assembler with the same incident registry."""
+
+    releases = release_root(release_id).parent
+    with canonical_release_identity_guard(
+        output_root=release_output_root(releases),
+        release_id=release_id,
+    ):
+        return _assemble_release(execution_id, release_id)
 
 
 def _copy_entity_surface(src_dir: Path, dst_dir: Path) -> None:
@@ -213,7 +228,6 @@ def _copy_release_entities(
     *,
     allowed_entity_rels: set[str],
 ) -> None:
-    entities_dst = release_dir / "entities"
     rows = collect_execution_entity_objects(
         execution_id=execution_id,
         approved_only=True,

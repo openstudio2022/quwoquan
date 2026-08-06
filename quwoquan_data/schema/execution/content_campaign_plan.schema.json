@@ -7,8 +7,12 @@
     "rootExecutionId",
     "gitBranch",
     "gitCommitSha",
+    "sourceRevision",
     "sourceDigest",
     "entityCatalogDigest",
+    "semanticSelectionId",
+    "laneExternalInputs",
+    "externalInputsDigest",
     "submissionDigests",
     "executionIds",
     "frozenAt",
@@ -20,8 +24,25 @@
     "rootExecutionId": { "type": "string", "minLength": 1 },
     "gitBranch": { "type": "string", "minLength": 1 },
     "gitCommitSha": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+    "sourceRevision": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
     "sourceDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
     "entityCatalogDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "semanticSelectionId": {"enum": ["default", "cursor_auto", "not_applicable"]},
+    "semanticPreflightReceipt": {
+      "$ref": "semantic_preflight_receipt_ref.schema.json"
+    },
+    "laneExternalInputs": {
+      "type": "object",
+      "required": ["homepage", "article", "image", "video"],
+      "additionalProperties": false,
+      "properties": {
+        "homepage": { "$ref": "#/$defs/laneExternalInputs" },
+        "article": { "$ref": "#/$defs/laneExternalInputs" },
+        "image": { "$ref": "#/$defs/laneExternalInputs" },
+        "video": { "$ref": "#/$defs/laneExternalInputs" }
+      }
+    },
+    "externalInputsDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
     "submissionDigests": {
       "type": "object",
       "required": ["homepage", "article", "image", "video"],
@@ -44,7 +65,36 @@
         "video": { "type": "string", "minLength": 1 }
       }
     },
+    "reviewedClosureAdoption": {
+      "$ref": "reviewed_closure_adoption_campaign_binding.schema.json"
+    },
     "frozenAt": { "type": "string", "format": "date-time" },
     "planDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "semanticSelectionId": {"enum": ["default", "cursor_auto"]}
+        },
+        "required": ["semanticSelectionId"]
+      },
+      "then": {"required": ["semanticPreflightReceipt"]}
+    }
+  ],
+  "$defs": {
+    "laneExternalInputs": {
+      "type": "object",
+      "required": ["executionId", "externalInputRefs", "externalInputsDigest"],
+      "additionalProperties": false,
+      "properties": {
+        "executionId": { "type": "string", "minLength": 1 },
+        "externalInputRefs": {
+          "type": "array",
+          "items": { "$ref": "campaign_external_input_ref.schema.json" }
+        },
+        "externalInputsDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+      }
+    }
   }
 }

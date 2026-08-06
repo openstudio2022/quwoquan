@@ -5,25 +5,24 @@ import hashlib
 import json
 import re
 import secrets
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Callable, Mapping
 
 from core.generated.runtime_log_catalog import (
     FAILURE_CODES,
     FORBIDDEN_ATTRIBUTE_KEYS,
     FORBIDDEN_FIELDS,
     HIGH_CARDINALITY_METRIC_KEYS,
-    MAX_ATTRIBUTES,
-    MAX_ATTRIBUTES_BYTES,
     MAX_ATTRIBUTE_KEY_LENGTH,
     MAX_ATTRIBUTE_VALUE_LENGTH,
+    MAX_ATTRIBUTES,
+    MAX_ATTRIBUTES_BYTES,
     MAX_MESSAGE_BYTES,
     OBSERVABILITY_SCHEMA,
     SIGNAL_REGISTRY,
 )
-
 
 _SECRET_VALUE = re.compile(
     r"(access_token|token|authcode|authorization|signature|secret)=([^&#\s]+)",
@@ -172,6 +171,39 @@ class DataRuntimeLogger:
             handle.write(json.dumps(record, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
             handle.write("\n")
         return record
+
+
+def write_data_run_manifest(
+    base_dir: Path,
+    *,
+    run_id: str,
+    command: str,
+    target: str,
+    report_dir: Path,
+) -> Path:
+    """Write the Data-owned repo observability envelope without an Ops import."""
+    from core.paths import OUTPUT_ROOT
+
+    try:
+        report_ref = report_dir.resolve().relative_to(OUTPUT_ROOT.parent.resolve()).as_posix()
+    except ValueError:
+        report_ref = report_dir.resolve().as_posix()
+    manifest = {
+        "schema": OBSERVABILITY_SCHEMA,
+        "env": "repo",
+        "runId": run_id,
+        "command": command,
+        "target": target,
+        "reportDir": report_ref,
+        "generatedAt": _iso(datetime.now(UTC)),
+    }
+    path = base_dir / "manifest.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(manifest, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return path
 
 
 def default_data_exception_code() -> str:

@@ -67,6 +67,7 @@ from quwoquan_ops.cli.prod.prod_hosted_topology import (
     instance_for_stage as prod_hosted_instance_for_stage,
     load_access_manifest as load_prod_hosted_access_manifest,
     placement_check_name as prod_hosted_placement_check_name,
+    require_release_redundancy as require_prod_hosted_release_redundancy,
     resolve_plan as resolve_prod_hosted_plan,
     validate_host_coverage as validate_prod_hosted_host_coverage,
 )
@@ -171,6 +172,7 @@ from quwoquan_ops.cli.lib.data_execution_fleet import (
 from quwoquan_ops.cli.lib.local_runtime_reservation import (
     acquire_local_runtime_use_lock,
     assert_local_runtime_available,
+    local_runtime_peer_targets,
     local_runtime_operation_lock_path,
 )
 from quwoquan_ops.cli.lib.local_runtime_consumer_lease import (
@@ -181,6 +183,7 @@ from quwoquan_ops.cli.lib.local_runtime_consumer_lease import (
 )
 from quwoquan_ops.cli.lib.startup_attempt_receipt import (
     load_startup_attempt,
+    load_workload_startup_attempt,
     transition_startup_attempt,
 )
 from quwoquan_ops.cli.lib.local_env_gate_matrix import (
@@ -541,7 +544,23 @@ def _load_package_bound_local_image_composition(
     )
     if configuration_digest != manifest["configurationDigest"]:
         raise ValueError("package OCI configuration digest mismatch")
+    active = active_deployment_candidate(target_name)
+    if not isinstance(active, dict):
+        raise ValueError("package OCI runtime has no active deployment candidate")
+    candidate = load_candidate_manifest(
+        env_name,
+        target_name,
+        str(active.get("baselineId") or ""),
+        require_full=True,
+    )
+    if (
+        candidate.get("imageDigest") != manifest["imageDigest"]
+        or candidate.get("buildInputDigest") != manifest["buildInputDigest"]
+        or candidate.get("runtimeConfigDigest") != configuration_digest
+    ):
+        raise ValueError("package OCI runtime differs from the active candidate")
     return {
+        "candidateId": str(candidate["baselineId"]),
         "imageVersion": immutable_image_digest(runtime_refs),
         "configurationDigest": configuration_digest,
         "buildInputDigest": manifest["buildInputDigest"],
@@ -2067,6 +2086,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     hosted_plan_parser.add_argument("--host-id", action="append", default=[])
     hosted_plan_parser.add_argument("--ssh-host", default="")
+    hosted_plan_parser.add_argument(
+        "--require-release-redundancy",
+        action="store_true",
+        help=(
+            "GATE_BLOCK unless the complete formal gray/prod service+edge "
+            "inventory has two real hosts and replicas per plane"
+        ),
+    )
 
     content_readiness_parser = subparsers.add_parser(
         "content-readiness",
@@ -2456,7 +2483,10 @@ def build_parser() -> argparse.ArgumentParser:
     deploy_parser.add_argument(
         "--ssh-host",
         default="",
-        help="prod-hosted SSH 地址；只用于管理面，禁止成为 App public base",
+        help=(
+            "prevalidate/break-glass 单 host SSH 覆盖；formal rollout "
+            "必须由 access-isolation inventory 驱动，禁止成为 App public base"
+        ),
     )
     deploy_parser.add_argument(
         "--host-id",
@@ -10451,6 +10481,8 @@ def command_prod_hosted_plan(args: argparse.Namespace) -> dict[str, Any]:
         argv.extend(["--host-id", host_id])
     if args.ssh_host:
         argv.extend(["--ssh-host", args.ssh_host])
+    if args.require_release_redundancy:
+        argv.append("--require-release-redundancy")
     result = run(argv)
     timing = _finish_timing(started_monotonic, started_at)
     if result.returncode != 0:
@@ -14460,7 +14492,7 @@ def _verify_release_registry_attestations(
         raise RuntimeError("; ".join(sorted(failures)))
 
 
-def _prod_gray_canary_contract(rollout_stage: str) -> dict[str, Any]:
+def _prod_rollout_canary_contract(rollout_stage: str) -> dict[str, Any]:
     policy_path = ROOT / "quwoquan_ops" / "environments" / "prod" / "rollout" / "routing_policy.yaml"
     payload = load_json_yaml(policy_path)
     policy = payload.get("policy") if isinstance(payload, dict) else None
@@ -14520,7 +14552,7 @@ def _prod_gray_canary_contract(rollout_stage: str) -> dict[str, Any]:
     }
 
 
-def _emit_prod_gray_canary_traffic(
+def _emit_prod_rollout_canary_traffic(
     canary: dict[str, Any], *, deadline_epoch: int
 ) -> dict[str, Any]:
     topology = load_environment_topology()
@@ -14799,8 +14831,8 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
     from_image_transport_tag = ""
     to_image_transport_tag = ""
     last_good_candidate_digest = ""
-    gray_canary_contract: dict[str, Any] | None = None
-    gray_canary_traffic: dict[str, Any] | None = None
+    rollout_canary_contract: dict[str, Any] | None = None
+    rollout_canary_traffic: dict[str, Any] | None = None
     provider_readiness: dict[str, Any] = {}
     promotion_deadline_epoch = int(
         getattr(args, "promotion_deadline_epoch", 0) or 0
@@ -14818,6 +14850,22 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
                 "exitCode": 2,
                 "summary": f"stackctl deploy rollout stage invalid: {error}",
                 "details": [],
+                **timing,
+            }
+        try:
+            release_plan = resolve_prod_hosted_plan(
+                load_prod_hosted_access_manifest(),
+                instance=prod_hosted_instance_for_stage(rollout_stage),
+                host_ids=getattr(args, "host_id", None) or None,
+                ssh_host_override=str(getattr(args, "ssh_host", "") or ""),
+            )
+            require_prod_hosted_release_redundancy(release_plan)
+        except ProdHostedTopologyError as error:
+            timing = _finish_timing(started_monotonic, started_at)
+            return {
+                "exitCode": 2,
+                "summary": "stackctl deploy blocked: prod-hosted inventory is not release-ready",
+                "details": [str(error)],
                 **timing,
             }
         if rollout_stage == "gray-initial":
@@ -14892,7 +14940,7 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
             }
         if not dry_run_requested:
             try:
-                gray_canary_contract = _prod_gray_canary_contract(rollout_stage)
+                rollout_canary_contract = _prod_rollout_canary_contract(rollout_stage)
             except RuntimeError as error:
                 timing = _finish_timing(started_monotonic, started_at)
                 return {
@@ -15185,6 +15233,10 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
             deploy_result = run(
                 ["bash", "quwoquan_ops/cli/prod/deploy_to_prod.sh"],
                 env={
+                    # PROD_SSH_HOST identifies the hosted ledger authority for
+                    # surrounding calls. Deployment placement must remain
+                    # access-isolation policy driven across every host/replica.
+                    "PROD_SSH_HOST": "",
                     "CLOUD_PROVIDER": args.cloud_provider,
                     "SERVICE": args.service,
                     "IMAGE_TRANSPORT_TAG": to_image_transport_tag,
@@ -15218,10 +15270,10 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
             )
         else:
             try:
-                if gray_canary_contract is None:
-                    raise RuntimeError("gray canary contract was not loaded")
-                gray_canary_traffic = _emit_prod_gray_canary_traffic(
-                    gray_canary_contract,
+                if rollout_canary_contract is None:
+                    raise RuntimeError("Prod rollout canary contract was not loaded")
+                rollout_canary_traffic = _emit_prod_rollout_canary_traffic(
+                    rollout_canary_contract,
                     deadline_epoch=promotion_deadline_epoch,
                 )
                 settle_seconds = _slo_settle_seconds(rollout_stage)
@@ -15244,10 +15296,10 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
                     slo_service,
                     deadline_epoch=promotion_deadline_epoch,
                 )
-                slo_readback["canaryTraffic"] = gray_canary_traffic
+                slo_readback["canaryTraffic"] = rollout_canary_traffic
             except _SloSamplesInsufficient as error:
                 slo_readback = {
-                    "canaryTraffic": gray_canary_traffic or {},
+                    "canaryTraffic": rollout_canary_traffic or {},
                     "status": "insufficient_samples",
                     "error": str(error),
                 }
@@ -15259,7 +15311,7 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
                 )
             except RuntimeError as error:
                 slo_readback = {
-                    "canaryTraffic": gray_canary_traffic or {},
+                    "canaryTraffic": rollout_canary_traffic or {},
                     "error": str(error),
                 }
                 result = subprocess.CompletedProcess(
@@ -15437,6 +15489,9 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
                 int(time.time()) + rollback_budget_seconds,
             )
             rollback_env = {
+                # Re-resolve the complete rollback placement plan from policy;
+                # never collapse rollback onto the ledger authority host.
+                "PROD_SSH_HOST": "",
                 "CLOUD_PROVIDER": args.cloud_provider,
                 "SERVICE": args.service,
                 "IMAGE_TRANSPORT_TAG": from_image_transport_tag,
@@ -17550,12 +17605,15 @@ def command_provider_conformance(args: argparse.Namespace) -> dict[str, Any]:
                     f"generated Binding has no capabilities for {environment}"
                 )
             binding_capability_count = len(selected)
-            capability_count = sum(
-                1
-                for binding in selected.values()
-                if isinstance(binding, dict)
-                and governance.requires_provider_conformance(binding)
+            expected_cells = conformance.expected_required_cell_keys(compiled)
+            capability_ids = sorted(
+                {
+                    capability_id
+                    for capability_id, cell_environment, _ in expected_cells
+                    if cell_environment == environment
+                }
             )
+            capability_count = len(capability_ids)
             sources, source_issues = conformance.discover_test_sources()
             if source_issues:
                 raise ValueError("; ".join(source_issues))
@@ -17566,7 +17624,8 @@ def command_provider_conformance(args: argparse.Namespace) -> dict[str, Any]:
                 compiled=compiled,
                 sources=sources,
             )
-            for capability_id, binding in sorted(selected.items()):
+            for capability_id in capability_ids:
+                binding = selected.get(capability_id)
                 if not isinstance(binding, dict):
                     raise ValueError(
                         f"{environment}/{capability_id} selected Binding is invalid"
@@ -18030,6 +18089,118 @@ def _dev_session_phase(
     }
 
 
+_DEV_SESSION_WORKLOADS = ("full", "content-release", "content-commercial")
+
+
+def _dev_session_active_receipts(
+    topology: Mapping[str, Any],
+    target: str,
+) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
+    """读取 target 与 workload-scoped receipt，并返回当前 active 冲突。"""
+    requested_attempt: dict[str, Any] | None = None
+    active: list[dict[str, Any]] = []
+    targets = (target, *local_runtime_peer_targets(topology, target))
+    for candidate in targets:
+        target_attempt = load_startup_attempt(candidate)
+        if candidate == target:
+            requested_attempt = target_attempt
+        candidate_attempts: list[tuple[str, dict[str, Any]]] = []
+        if target_attempt and target_attempt.get("status") != "stopped":
+            candidate_attempts.append(("target", target_attempt))
+        for workload in _DEV_SESSION_WORKLOADS:
+            scoped_attempt = load_workload_startup_attempt(candidate, workload)
+            if not scoped_attempt or scoped_attempt.get("status") == "stopped":
+                continue
+            candidate_attempts.append((f"workload:{workload}", scoped_attempt))
+
+        seen: set[tuple[str, str, str]] = set()
+        for receipt_scope, attempt in candidate_attempts:
+            workload = str(attempt.get("workload") or "").strip()
+            attempt_id = str(attempt.get("attemptId") or "").strip()
+            status = str(attempt.get("status") or "").strip()
+            identity = (attempt_id, workload, status)
+            if identity in seen:
+                continue
+            seen.add(identity)
+            active.append(
+                {
+                    "target": candidate,
+                    "workload": workload,
+                    "attemptId": attempt_id,
+                    "status": status,
+                    "receiptScope": receipt_scope,
+                }
+            )
+    return requested_attempt, active
+
+
+def _dev_session_runtime_preflight(
+    *,
+    topology: Mapping[str, Any],
+    target: str,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    requested_attempt, active = _dev_session_active_receipts(topology, target)
+    allowed_full = (
+        requested_attempt
+        if requested_attempt
+        and requested_attempt.get("status") == "running"
+        and requested_attempt.get("workload") == "full"
+        else None
+    )
+    for attempt in active:
+        if (
+            allowed_full is not None
+            and attempt["target"] == target
+            and attempt["workload"] == "full"
+            and attempt["status"] == "running"
+            and attempt["attemptId"] == str(allowed_full.get("attemptId") or "").strip()
+        ):
+            continue
+        return allowed_full, attempt
+    return allowed_full, None
+
+
+def _dev_session_workload_conflict(
+    conflict: Mapping[str, Any],
+) -> dict[str, Any]:
+    active_target = str(conflict.get("target") or "<unknown>")
+    active_workload = str(conflict.get("workload") or "<unknown>")
+    active_attempt = str(conflict.get("attemptId") or "<unknown>")
+    active_status = str(conflict.get("status") or "<unknown>")
+    recovery = [
+        "python3",
+        "quwoquan_ops/cli/stackctl.py",
+        "down",
+        "--target",
+        active_target,
+    ]
+    if active_workload in _DEV_SESSION_WORKLOADS:
+        recovery.extend(("--workload", active_workload))
+    recovery_command = " ".join(shlex.quote(item) for item in recovery)
+    active_runtime = {
+        "target": active_target,
+        "workload": active_workload,
+        "attemptId": active_attempt,
+        "status": active_status,
+        "receiptScope": str(conflict.get("receiptScope") or ""),
+    }
+    return {
+        "exitCode": 2,
+        "sessionKind": "cold",
+        "blockerKind": "runtime_workload_conflict",
+        "activeRuntime": active_runtime,
+        "fullRuntimeSelected": False,
+        "details": [
+            f"activeTarget={active_target}",
+            f"activeWorkload={active_workload}",
+            f"activeAttemptId={active_attempt}",
+            f"activeStatus={active_status}",
+            f"recoveryCommand={recovery_command}",
+        ],
+        "phases": [],
+    }
+
+
 def _run_dev_session_target(
     *,
     environment: str,
@@ -18041,6 +18212,23 @@ def _run_dev_session_target(
     report_dir: Path,
 ) -> dict[str, Any]:
     phases: list[dict[str, Any]] = []
+    try:
+        active_attempt, conflict = _dev_session_runtime_preflight(
+            topology=load_environment_topology(),
+            target=target,
+        )
+    except (OSError, RuntimeError, ValueError) as exc:
+        return {
+            "exitCode": 2,
+            "sessionKind": "cold",
+            "blockerKind": "runtime_receipt_unreadable",
+            "details": [f"runtime startup receipt preflight failed: {exc}"],
+            "fullRuntimeSelected": False,
+            "phases": phases,
+        }
+    if conflict is not None:
+        return _dev_session_workload_conflict(conflict)
+
     package_payload = command_package(
         _dev_session_child_args(
             "package",
@@ -18065,19 +18253,10 @@ def _run_dev_session_target(
             "sessionKind": "cold",
             "blockerKind": "package_failed",
             "details": list(package_payload.get("details") or []),
+            "fullRuntimeSelected": False,
             "phases": phases,
         }
 
-    try:
-        active_attempt = load_startup_attempt(target)
-    except (OSError, ValueError) as exc:
-        return {
-            "exitCode": 2,
-            "sessionKind": "cold",
-            "blockerKind": "runtime_receipt_unreadable",
-            "details": [str(exc)],
-            "phases": phases,
-        }
     session_kind = (
         "hot"
         if active_attempt
@@ -18111,6 +18290,7 @@ def _run_dev_session_target(
                 "sessionKind": session_kind,
                 "blockerKind": "runtime_up_failed",
                 "details": list(up_payload.get("details") or []),
+                "fullRuntimeSelected": False,
                 "phases": phases,
             }
     else:
@@ -18147,6 +18327,7 @@ def _run_dev_session_target(
                     "sessionKind": session_kind,
                     "blockerKind": "app_launch_failed",
                     "details": [str(exc)],
+                    "fullRuntimeSelected": True,
                     "phases": phases,
                 }
             phases.append(
@@ -18173,6 +18354,7 @@ def _run_dev_session_target(
             "sessionKind": session_kind,
             "blockerKind": "runtime_health_failed",
             "details": list(health_payload.get("details") or []),
+            "fullRuntimeSelected": True,
             "phases": phases,
         }
 
@@ -18187,6 +18369,7 @@ def _run_dev_session_target(
             "App handoff: cd quwoquan_app && "
             + " ".join(shlex.quote(item) for item in handoff)
         ],
+        "fullRuntimeSelected": True,
         "phases": phases,
     }
 
@@ -18241,29 +18424,6 @@ def command_dev_session(args: argparse.Namespace) -> dict[str, Any]:
     blocker_kind = ""
     details: list[str] = []
 
-    if all_nonprod:
-        for target in CANONICAL_LOCAL_GATE_TARGETS:
-            try:
-                attempt = load_startup_attempt(target)
-            except (OSError, ValueError) as exc:
-                terminal_exit = 2
-                blocker_kind = "runtime_receipt_unreadable"
-                details = [f"{target}: {exc}"]
-                break
-            if attempt and attempt.get("status") != "stopped":
-                down_payload = command_down(
-                    _dev_session_child_args(
-                        "down",
-                        report_dir=report_dir / "pre-down" / target,
-                        argv=["--target", target],
-                    )
-                )
-                if int(down_payload.get("exitCode", 1)) != 0:
-                    terminal_exit = int(down_payload.get("exitCode", 1))
-                    blocker_kind = "pre_down_failed"
-                    details = list(down_payload.get("details") or [])
-                    break
-
     if terminal_exit == 0:
         for environment, target in selections:
             session = _run_dev_session_target(
@@ -18286,7 +18446,7 @@ def command_dev_session(args: argparse.Namespace) -> dict[str, Any]:
             if terminal_exit != 0:
                 blocker_kind = str(session.get("blockerKind") or "session_failed")
                 details = list(session.get("details") or [])
-            if all_nonprod:
+            if all_nonprod and bool(session.get("fullRuntimeSelected", False)):
                 down_payload = command_down(
                     _dev_session_child_args(
                         "down",

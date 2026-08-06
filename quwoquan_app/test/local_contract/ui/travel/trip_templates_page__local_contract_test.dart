@@ -2,8 +2,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/travel/travel/trip_plan_template/application/trip_template_coordinator.dart';
-import 'package:quwoquan_app/travel/travel/trip_plan_template/application/trip_template_facet.dart';
+import 'package:quwoquan_app/application/travel/trip_template_coordinator.dart';
+import 'package:quwoquan_app/application/travel/trip_template_facet.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/travel/pages/trip_templates_page.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';

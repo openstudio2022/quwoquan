@@ -12,6 +12,7 @@ SCRIPTS_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPTS_ROOT))
 
 from core.paths import DATA_EXECUTIONS_ROOT, OBJECT_STAGES, REPO_ROOT, is_execution_id
+from content.execution.execution_terminal import load_terminal_execution_evidence
 from content.execution.spec_contract import ExecutionSpec
 from content.execution.store import load_spec
 from content.execution.workspace import load_execution_manifest, load_frozen_target_set
@@ -196,6 +197,16 @@ def _execution_work_package_issues(entry: Path) -> list[str]:
     return issues
 
 
+def _terminal_evidence(entry: Path, *, issues: list[str]) -> object | None:
+    try:
+        return load_terminal_execution_evidence(entry)
+    except (OSError, TypeError, ValueError) as exc:
+        issues.append(
+            f"{entry.relative_to(REPO_ROOT)}: invalid terminal execution evidence: {exc}"
+        )
+        return None
+
+
 def content_execution_layout_issues(*, execution_id: str | None = None) -> list[str]:
     """Validate either every live work package or one explicitly named package.
 
@@ -218,6 +229,12 @@ def content_execution_layout_issues(*, execution_id: str | None = None) -> list[
         entry = DATA_EXECUTIONS_ROOT / execution_id
         if not entry.is_dir():
             return [*issues, f"{entry.relative_to(REPO_ROOT)}: execution work package does not exist"]
+        terminal = _terminal_evidence(entry, issues=issues)
+        if terminal is not None:
+            issues.append(
+                f"{entry.relative_to(REPO_ROOT)}: execution is protected and non-resumable; create retryOf"
+            )
+            return issues
         return [*issues, *_execution_work_package_issues(entry)]
     if not DATA_EXECUTIONS_ROOT.exists():
         return issues
@@ -227,6 +244,8 @@ def content_execution_layout_issues(*, execution_id: str | None = None) -> list[
             continue
         if not is_execution_id(entry.name):
             issues.append(f"{entry.relative_to(REPO_ROOT)}: invalid executionId directory")
+            continue
+        if _terminal_evidence(entry, issues=issues) is not None:
             continue
         issues.extend(_execution_work_package_issues(entry))
     return issues

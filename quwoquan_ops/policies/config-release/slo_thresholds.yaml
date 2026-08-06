@@ -26,6 +26,7 @@ thresholds:
 readback:
   window: 5m
   minimum_samples: 100
+  authority_max_age_seconds: 86400
   settle_seconds:
     gray-initial: 120
     carry-on: 120

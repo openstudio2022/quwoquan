@@ -1,0 +1,105 @@
+# Code generated from quwoquan_service/generated/contract_graph.json.
+# Regenerate with verify_object_alert_coverage.py --write.
+groups:
+  - name: quwoquan_user_contract_device_registration
+    rules:
+      - record: quwoquan_user_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="user-service",method="POST",route=~"^/internal/user/push-endpoints/[^/]+/invalidate$"})
+        labels:
+          service: "user-service"
+          operation: "user.device_registration.InvalidateDevicePushEndpoint"
+          contract_metric: "user_push_endpoint_invalidate"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "600"
+          slo_availability_percent: "99.95"
+      - record: quwoquan_user_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="user-service",method="POST",route=~"^/internal/user/push-endpoints/[^/]+/invalidate$"})
+        labels:
+          service: "user-service"
+          operation: "user.device_registration.InvalidateDevicePushEndpoint"
+          contract_metric: "user_push_endpoint_invalidate"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "600"
+          slo_availability_percent: "99.95"
+      - record: quwoquan_user_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="user-service",method="DELETE",route=~"^/user/devices/[^/]+/push-endpoints/[^/]+$"})
+        labels:
+          service: "user-service"
+          operation: "user.device_registration.RemoveDevicePushEndpoint"
+          contract_metric: "user_device_push_endpoint_remove"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "600"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="user-service",method="DELETE",route=~"^/user/devices/[^/]+/push-endpoints/[^/]+$"})
+        labels:
+          service: "user-service"
+          operation: "user.device_registration.RemoveDevicePushEndpoint"
+          contract_metric: "user_device_push_endpoint_remove"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "600"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="user-service",method="GET",route=~"^/internal/user/personas/[^/]+/push-destinations$"})
+        labels:
+          service: "user-service"
+          operation: "user.device_registration.ResolveIncomingCallPushDestinations"
+          contract_metric: "user_incoming_call_push_destinations_resolve"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "400"
+          slo_availability_percent: "99.95"
+      - record: quwoquan_user_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="user-service",method="GET",route=~"^/internal/user/personas/[^/]+/push-destinations$"})
+        labels:
+          service: "user-service"
+          operation: "user.device_registration.ResolveIncomingCallPushDestinations"
+          contract_metric: "user_incoming_call_push_destinations_resolve"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "400"
+          slo_availability_percent: "99.95"
+      - record: quwoquan_user_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="user-service",method="GET",route=~"^/internal/user/push-endpoints/[^/]+/secret$"})
+        labels:
+          service: "user-service"
+          operation: "user.device_registration.ResolvePushEndpointSecret"
+          contract_metric: "user_push_endpoint_secret_resolve"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "300"
+          slo_availability_percent: "99.95"
+      - record: quwoquan_user_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="user-service",method="GET",route=~"^/internal/user/push-endpoints/[^/]+/secret$"})
+        labels:
+          service: "user-service"
+          operation: "user.device_registration.ResolvePushEndpointSecret"
+          contract_metric: "user_push_endpoint_secret_resolve"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "300"
+          slo_availability_percent: "99.95"
+      - record: quwoquan_user_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="user-service",method="PUT",route=~"^/user/devices/[^/]+/push-endpoints/[^/]+$"})
+        labels:
+          service: "user-service"
+          operation: "user.device_registration.UpsertDevicePushEndpoint"
+          contract_metric: "user_device_push_endpoint_upsert"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_user_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="user-service",method="PUT",route=~"^/user/devices/[^/]+/push-endpoints/[^/]+$"})
+        labels:
+          service: "user-service"
+          operation: "user.device_registration.UpsertDevicePushEndpoint"
+          contract_metric: "user_device_push_endpoint_upsert"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "800"
+          slo_availability_percent: "99.9"

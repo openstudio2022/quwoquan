@@ -1,6 +1,7 @@
 """通过唯一 Data CLI 驱动 Mongo+Redis ReliableTask 内容 worker。"""
 from __future__ import annotations
 
+import math
 import os
 import signal
 import subprocess
@@ -21,6 +22,12 @@ from content.execution.reliabletask_transport import (
     _wait_for_fleet_transport,
     reliabletask_fleet_preflight,
     resolve_reliabletask_fleet_transport,
+)
+from content.execution.runtime_evidence_reliabletask_process import (
+    OBSERVER_BINARY_REF_ENV,
+    OBSERVER_BINARY_SHA256_ENV,
+    load_frozen_observer_binary_binding,
+    validate_frozen_observer_binary,
 )
 
 
@@ -73,6 +80,11 @@ class ReliableTaskFleetReport:
     passed: bool = True
     accepted_content_throughput_status: str = "MEASURED"
     finalized_object_count: int = 0
+    recovery_eligible_count: int = 0
+    automatic_recovered_count: int = 0
+    manual_recovered_count: int = 0
+    automatic_recovery_status: str = "NOT_EXERCISED"
+    automatic_recovery_rate: float = 0.0
 
     @classmethod
     def from_document(cls, value: object) -> "ReliableTaskFleetReport":
@@ -82,6 +94,10 @@ class ReliableTaskFleetReport:
             total = int(value.get("total"))
             succeeded = int(value.get("succeeded"))
             finalized_object_count = int(value.get("finalizedObjectCount") or 0)
+            recovery_eligible_count = int(value.get("recoveryEligibleCount"))
+            automatic_recovered_count = int(value.get("automaticRecoveredCount"))
+            manual_recovered_count = int(value.get("manualRecoveredCount"))
+            automatic_recovery_rate = float(value.get("automaticRecoveryRate"))
         except (TypeError, ValueError) as exc:
             raise ValueError("ReliableTask fleet report counts must be integers") from exc
         raw_outcomes = value.get("taskOutcomes")
@@ -91,6 +107,9 @@ class ReliableTaskFleetReport:
         accepted_status = str(
             value.get("acceptedContentThroughputStatus") or ""
         ).strip()
+        automatic_recovery_status = str(
+            value.get("automaticRecoveryStatus") or ""
+        ).strip()
         if not isinstance(passed, bool):
             raise ValueError("ReliableTask fleet report passed must be a boolean")
         if accepted_status not in _FLEET_ACCEPTED_CONTENT_STATUSES:
@@ -99,6 +118,38 @@ class ReliableTaskFleetReport:
             )
         if finalized_object_count < 0:
             raise ValueError("ReliableTask fleet report finalizedObjectCount is invalid")
+        if (
+            recovery_eligible_count < 0
+            or automatic_recovered_count < 0
+            or manual_recovered_count < 0
+            or automatic_recovered_count + manual_recovered_count
+            > recovery_eligible_count
+        ):
+            raise ValueError("ReliableTask fleet recovery counts are invalid")
+        expected_recovery_status = (
+            "MEASURED" if recovery_eligible_count else "NOT_EXERCISED"
+        )
+        expected_recovery_rate = (
+            automatic_recovered_count / recovery_eligible_count
+            if recovery_eligible_count
+            else 0.0
+        )
+        if (
+            automatic_recovery_status != expected_recovery_status
+            or not math.isclose(
+                automatic_recovery_rate,
+                expected_recovery_rate,
+                rel_tol=0.0,
+                abs_tol=1e-9,
+            )
+        ):
+            raise ValueError(
+                "ReliableTask fleet automatic recovery metric drift: "
+                f"status={automatic_recovery_status!r} "
+                f"rate={automatic_recovery_rate} expectedStatus="
+                f"{expected_recovery_status!r} expectedRate="
+                f"{expected_recovery_rate}"
+            )
         outcomes = tuple(ReliableTaskFleetOutcome.from_document(item) for item in raw_outcomes)
         if total < 1 or succeeded < 0 or len(outcomes) != total:
             raise ValueError("ReliableTask fleet report outcome count is invalid")
@@ -111,6 +162,11 @@ class ReliableTaskFleetReport:
             passed=passed,
             accepted_content_throughput_status=accepted_status,
             finalized_object_count=finalized_object_count,
+            recovery_eligible_count=recovery_eligible_count,
+            automatic_recovered_count=automatic_recovered_count,
+            manual_recovered_count=manual_recovered_count,
+            automatic_recovery_status=automatic_recovery_status,
+            automatic_recovery_rate=automatic_recovery_rate,
         )
 
 
@@ -273,6 +329,18 @@ def build_fleet_request(
 
 
 def _fleet_command() -> tuple[list[str], Path]:
+    # A campaign capsule deliberately excludes Service implementation source.
+    # The controller already freezes the exact data-content-worker executable
+    # (the same command exposes both the read-only observer and fleet modes),
+    # so a lane must consume that attested binary instead of falling back to
+    # ``go run`` against an incomplete capsule tree.  A partial binding fails
+    # closed through ``load_frozen_observer_binary_binding``.
+    if any(
+        str(os.environ.get(name) or "").strip()
+        for name in (OBSERVER_BINARY_REF_ENV, OBSERVER_BINARY_SHA256_ENV)
+    ):
+        binding = load_frozen_observer_binary_binding()
+        return [str(validate_frozen_observer_binary(binding))], REPO_ROOT
     binary = str(os.environ.get("QWQ_DATA_FLEET_BINARY") or "").strip()
     service_root = REPO_ROOT / "quwoquan_service"
     if binary:

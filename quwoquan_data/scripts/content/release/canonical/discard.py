@@ -6,14 +6,21 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from core.io import read_json
-from core.paths import OUTPUT_ROOT, RELEASE_ROOT
-from content.release.canonical.object_transaction_contract import _safe_id
 from content.release.canonical.acceptance_lease import validate_lease_event
+from content.release.canonical.garbage_collection import (
+    release_identity_incident_protected_release_ids,
+    reviewed_closure_adoption_protected_refs,
+)
+from content.release.canonical.object_transaction_contract import _safe_id
+from content.release.canonical.release_identity_incident import (
+    release_identity_protection_lock,
+)
 from content.release.canonical.release_operation_lock import (
     release_operation_guard,
     release_operation_lock_root,
 )
+from core.io import read_json
+from core.paths import OUTPUT_ROOT, RELEASE_ROOT
 
 
 def _active_release_processes(release_id: str) -> tuple[str, ...]:
@@ -31,7 +38,7 @@ def _active_release_processes(release_id: str) -> tuple[str, ...]:
         "ship apply",
         "ship rollback",
         "ship verify",
-        "release aggregate",
+        "release campaign-aggregate",
         "release baseline",
         "release lifecycle-exit",
         "release acceptance-lease",
@@ -186,15 +193,37 @@ def discard_release(
     release = release_root / normalized_id
     if not release.is_dir():
         raise FileNotFoundError(f"release output does not exist: {normalized_id}")
-    with release_operation_guard(
+    with release_identity_protection_lock(
+        output_root=output_root,
+        exclusive=True,
+    ), release_operation_guard(
         lock_root=release_operation_lock_root(release_root),
         release_ids=(normalized_id,),
         exclusive_releases=True,
     ):
+        incident_release_ids = release_identity_incident_protected_release_ids(
+            output_root
+        )
+        adoption_release_ids, _adoption_execution_ids = (
+            reviewed_closure_adoption_protected_refs(output_root)
+        )
+        if normalized_id in incident_release_ids:
+            raise RuntimeError(
+                "GATE_BLOCK DATA.RELEASE.IDENTITY_INCIDENT_PROTECTED: "
+                f"releaseId={normalized_id} is protected by append-only "
+                "release identity incident evidence"
+            )
+        if normalized_id in adoption_release_ids:
+            raise RuntimeError(
+                "GATE_BLOCK DATA.RELEASE.ADOPTION_SOURCE_PROTECTED: "
+                f"releaseId={normalized_id} is retained by reviewed-closure "
+                "adoption evidence"
+            )
         active_processes = _active_release_processes(normalized_id)
         if active_processes:
             raise RuntimeError(
-                "GATE_BLOCK active release command owns release: " + "; ".join(active_processes)
+                "GATE_BLOCK active release command owns release: "
+                + "; ".join(active_processes)
             )
         evidence_roots = _environment_evidence_roots(
             output_root=output_root,
@@ -209,7 +238,8 @@ def discard_release(
             refs = "; ".join(str(path) for path in protected)
             raise RuntimeError(
                 "GATE_BLOCK release is protected by acceptance evidence; "
-                f"canonical acceptance revocation is required before discard: {refs}"
+                "canonical acceptance revocation is required before "
+                f"discard: {refs}"
             )
         shutil.rmtree(release)
         for evidence_root in evidence_roots:

@@ -36,7 +36,7 @@
       "additionalProperties": false,
       "required": ["provider", "authorModel", "authorModelFamily", "authorModelParameters", "reviewerModel", "reviewerModelFamily", "reviewerModelParameters"],
       "properties": {
-        "provider": {"const": "cursor_sdk"},
+        "provider": {"enum": ["cursor_sdk", "codex_sdk"]},
         "authorModel": {"type": "string", "minLength": 1},
         "authorModelFamily": {"type": "string", "minLength": 1},
         "authorModelParameters": {"$ref": "#/$defs/modelParameters"},
@@ -45,12 +45,58 @@
         "reviewerModelParameters": {"$ref": "#/$defs/modelParameters"}
       }
     },
+    "runtimeProfileId": {"type": "string", "minLength": 1},
+    "runtimeProfileDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "semanticSelectionId": {"enum": ["default", "cursor_auto"]},
+    "semanticPreflightReceipt": {
+      "$ref": "semantic_preflight_receipt_ref.schema.json"
+    },
+    "semanticRuntime": {"enum": ["local", "cloud"]},
     "requestRef": {"const": "0.plan/request.json"},
     "targetSetRef": {"const": "0.plan/target_set.json"},
     "targetSetDigest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "retryOf": {"type": ["string", "null"]}
   },
-  "required": ["executionId", "familyRef", "sourceDigest", "modelBinding", "requestRef", "targetSetRef", "targetSetDigest", "retryOf"],
+  "required": ["executionId", "familyRef", "sourceDigest", "modelBinding", "runtimeProfileId", "runtimeProfileDigest", "semanticSelectionId", "semanticRuntime", "requestRef", "targetSetRef", "targetSetDigest", "retryOf"],
+  "allOf": [
+    {
+      "if": {
+        "properties": {"semanticSelectionId": {"const": "cursor_auto"}},
+        "required": ["semanticSelectionId"]
+      },
+      "then": {
+        "required": ["semanticPreflightReceipt"],
+        "properties": {
+          "retryOf": {"type": "string", "minLength": 1},
+          "modelBinding": {
+            "properties": {
+              "provider": {"const": "cursor_sdk"},
+              "authorModel": {"const": "auto"},
+              "authorModelFamily": {"const": "auto"},
+              "reviewerModel": {"const": "auto"},
+              "reviewerModelFamily": {"const": "auto"}
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "modelBinding": {
+            "properties": {
+              "provider": {"const": "codex_sdk"},
+              "authorModel": {"const": "gpt-5.6-terra"},
+              "authorModelFamily": {"const": "gpt"},
+              "reviewerModel": {"const": "gpt-5.6-terra"},
+              "reviewerModelFamily": {"const": "gpt"}
+            }
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
     "modelParameters": {
       "type": "array",

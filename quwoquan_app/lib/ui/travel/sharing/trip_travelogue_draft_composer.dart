@@ -1,4 +1,4 @@
-import 'package:quwoquan_app/travel/travel/trip_share_snapshot/application/trip_travelogue_draft.dart';
+import 'package:quwoquan_app/application/travel/trip_travelogue_draft.dart';
 import 'package:quwoquan_app/ui/travel/travel_text_constants.dart';
 
 /// 把隐私安全旅行事实组合为可编辑游记语义，不依赖 Content 编辑器实现。

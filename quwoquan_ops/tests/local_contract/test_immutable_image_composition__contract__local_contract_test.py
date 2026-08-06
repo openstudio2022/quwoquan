@@ -21,8 +21,9 @@ class ImmutableImageCompositionContractTest(unittest.TestCase):
 
     def test_all_first_party_image_owners_are_fail_closed(self) -> None:
         owners = composition.first_party_service_names(ROOT)
-        self.assertEqual(len(owners), 16)
+        self.assertEqual(len(owners), 17)
         self.assertIn("api-edge", owners)
+        self.assertIn("travel-service", owners)
         self.assertEqual(
             {service for service, _ in stackctl.GAMMA_PACKAGED_SERVICE_IMAGE_ENVIRONMENTS},
             set(owners),

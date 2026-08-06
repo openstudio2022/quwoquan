@@ -46,7 +46,15 @@ articleMedia:
   maximumTextOnlyRate: 0.1
   requireCoverAndBodyImage: true
 scaleGates:
-  m100PerCarrier: 100
-  m1000PerCarrier: 1000
+  m100Targets:
+    homepage: 100
+    article: 100
+    image: 100
+    video: 50
+  m1000Targets:
+    homepage: 1000
+    article: 1000
+    image: 1000
+    video: 300
   requireM100PromotionBeforeM1000: true
   minimumAutomaticRecoveryRate: 0.95

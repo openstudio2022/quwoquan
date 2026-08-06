@@ -240,6 +240,8 @@ def build_app_uat_envelope(
     homepage_report: Mapping[str, Any],
     queries_by_name: Mapping[str, Mapping[str, Any]],
     verified_playable_video_ids: set[str],
+    illustrated_article_ids: set[str],
+    verified_image_work_ids: set[str],
     release_class: str,
     product_lifecycle_state: str,
 ) -> dict[str, str]:
@@ -264,8 +266,11 @@ def build_app_uat_envelope(
         row
         for row in candidates["article"]
         if row[1] in query_ids.get("homepage_recommend", set())
+        and row[1] in illustrated_article_ids
     ]
-    images = candidates["image"]
+    images = [
+        row for row in candidates["image"] if row[1] in verified_image_work_ids
+    ]
     videos = [
         row
         for row in candidates["video"]
@@ -304,6 +309,10 @@ def build_app_uat_envelope(
             label="release image title",
         ),
         "videoWorkId": video_id,
+        "videoTitle": _required_text(
+            video.get("publishTitle") or video.get("title"),
+            label="release video title",
+        ),
         "creatorName": _creator_name(
             release_root=release_root, creator_ids=creator_ids, article=article
         ),

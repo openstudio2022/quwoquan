@@ -15,6 +15,7 @@ from quwoquan_ops.cli.lib.local_runtime_reservation import (
     acquire_local_runtime_use_lock,
     active_conflicting_local_targets,
     assert_local_runtime_available,
+    local_runtime_peer_targets,
 )
 
 
@@ -69,6 +70,14 @@ class LocalRuntimeReservationContractTest(unittest.TestCase):
         )
 
         self.assertEqual(conflicts, ())
+
+    def test_runtime_peer_targets_follow_metadata_resource_group(self) -> None:
+        topology = load_environment_topology()
+
+        self.assertEqual(
+            local_runtime_peer_targets(topology, "beta-local"),
+            ("alpha-local", "gamma-local", "prod-sim"),
+        )
 
     def test_patrol_use_lease_blocks_destructive_runtime_operation(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_dir:

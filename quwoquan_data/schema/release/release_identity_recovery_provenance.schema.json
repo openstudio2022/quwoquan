@@ -1,0 +1,169 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/release/release_identity_recovery_provenance.schema.json",
+  "type": "object",
+  "required": [
+    "schema",
+    "recoveryId",
+    "releaseId",
+    "acquisitionMode",
+    "storageClass",
+    "artifactRef",
+    "artifactFileSha256",
+    "targetAttestationFileSha256",
+    "artifactIdentity",
+    "reconstruction",
+    "independentEvidence",
+    "recordedAt",
+    "receiptDigest"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "quwoquan_data.release_identity_recovery_provenance"
+    },
+    "recoveryId": { "type": "string", "minLength": 1 },
+    "releaseId": { "type": "string", "minLength": 1 },
+    "acquisitionMode": {
+      "const": "deterministic_byte_reconstruction"
+    },
+    "storageClass": { "const": "append_only_create_once" },
+    "artifactRef": { "$ref": "#/$defs/safeRef" },
+    "artifactFileSha256": { "$ref": "#/$defs/sha256" },
+    "targetAttestationFileSha256": { "$ref": "#/$defs/sha256" },
+    "artifactIdentity": {
+      "type": "object",
+      "required": [
+        "releaseId",
+        "payloadSha256",
+        "canonicalMerkle",
+        "executionIds",
+        "recordedAt"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "releaseId": { "type": "string", "minLength": 1 },
+        "payloadSha256": { "$ref": "#/$defs/sha256" },
+        "canonicalMerkle": { "$ref": "#/$defs/sha256" },
+        "executionIds": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "recordedAt": { "type": "string", "minLength": 1 }
+      }
+    },
+    "reconstruction": {
+      "type": "object",
+      "required": [
+        "method",
+        "serializationContract",
+        "semanticInputSha256",
+        "writerRevision",
+        "historicalWriterSources",
+        "templateAttestationRef",
+        "templateAttestationFileSha256",
+        "fieldReplacements",
+        "recoveredField",
+        "recoveredValue",
+        "candidateSearch"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "method": { "const": "deterministic_canonical_json" },
+        "serializationContract": {
+          "const": "json_utf8_sorted_keys_compact_lf"
+        },
+        "semanticInputSha256": { "$ref": "#/$defs/sha256" },
+        "writerRevision": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "historicalWriterSources": {
+          "type": "array",
+          "minItems": 4,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "required": ["logicalRef", "snapshotRef", "fileSha256"],
+            "additionalProperties": false,
+            "properties": {
+              "logicalRef": { "$ref": "#/$defs/safeRef" },
+              "snapshotRef": { "$ref": "#/$defs/safeRef" },
+              "fileSha256": { "$ref": "#/$defs/sha256" }
+            }
+          }
+        },
+        "templateAttestationRef": { "$ref": "#/$defs/safeRef" },
+        "templateAttestationFileSha256": { "$ref": "#/$defs/sha256" },
+        "fieldReplacements": {
+          "type": "object",
+          "required": ["payloadSha256", "canonicalMerkle", "recordedAt"],
+          "additionalProperties": false,
+          "properties": {
+            "payloadSha256": { "$ref": "#/$defs/sha256" },
+            "canonicalMerkle": { "$ref": "#/$defs/sha256" },
+            "recordedAt": { "type": "string", "minLength": 1 }
+          }
+        },
+        "recoveredField": { "const": "recordedAt" },
+        "recoveredValue": { "type": "string", "minLength": 1 },
+        "candidateSearch": {
+          "type": "object",
+          "required": [
+            "startAt",
+            "endAt",
+            "granularity",
+            "stepMicros",
+            "candidateCount",
+            "matchedCandidateCount"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "startAt": { "type": "string", "minLength": 1 },
+            "endAt": { "type": "string", "minLength": 1 },
+            "granularity": { "const": "microsecond" },
+            "stepMicros": { "const": 1 },
+            "candidateCount": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            },
+            "matchedCandidateCount": { "const": 1 }
+          }
+        }
+      }
+    },
+    "independentEvidence": {
+      "type": "array",
+      "minItems": 2,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "required": ["role", "ref", "fileSha256"],
+        "additionalProperties": false,
+        "properties": {
+          "role": {
+            "enum": ["execution_closure", "release_identity"]
+          },
+          "ref": { "$ref": "#/$defs/safeRef" },
+          "fileSha256": { "$ref": "#/$defs/sha256" }
+        }
+      }
+    },
+    "recordedAt": { "type": "string", "minLength": 1 },
+    "receiptDigest": { "$ref": "#/$defs/sha256" }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "safeRef": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+    }
+  }
+}

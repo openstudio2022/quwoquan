@@ -6,12 +6,15 @@ import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/media/media_download_cache.dart';
-import 'package:quwoquan_app/components/media/video/player/video_playback_session.dart';
-import 'package:quwoquan_app/components/media/video/player/video_player_widget.dart';
+import 'package:quwoquan_app/cloud/services/ops/event_record_batch_writer.dart';
+import 'package:quwoquan_app/content/media/media_asset/presentation/video_playback_session.dart';
+import 'package:quwoquan_app/content/media/media_asset/presentation/video_player_widget.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/di/ops_event_record_dependencies.dart';
 import 'package:quwoquan_app/core/media/adaptive_video_delivery.dart';
 import 'package:quwoquan_app/core/media/media_candidate_failure.dart';
 import 'package:quwoquan_app/core/media/media_delivery_reference.dart';
@@ -19,9 +22,11 @@ import 'package:quwoquan_app/core/media/media_load_failure_cache.dart';
 import 'package:quwoquan_app/core/media/media_playback_failure.dart';
 import 'package:quwoquan_app/core/platform/platform_capabilities.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_cloud_contracts/generated/ops_contracts.dart' as ops;
 import 'package:video_player/video_player.dart';
 import 'package:video_player_platform_interface/video_player_platform_interface.dart';
 
+import '../../../../../support/harness/cloud_boundary_test_scope.dart';
 import '../../../../../support/video/fake_video_player_platform.dart';
 
 final class _NoopMediaDownloadCache extends MediaDownloadCache {
@@ -34,6 +39,57 @@ final class _NoopMediaDownloadCache extends MediaDownloadCache {
     lookedUpUrls.add(url);
     return null;
   }
+}
+
+/// 对象级 typed in-memory double：吃下 runtime 日志/事件出站批次。
+///
+/// 播放器 Widget 本身不发业务请求，但它经 `runtimeDiagnosticsProvider` ->
+/// `runtimeLoggerProvider` -> `opsEventRecordBatchWriterProvider` 依赖这条横切
+/// 观测出站面。这是绝大多数 Widget 测试撞上 generated client 的真实路径。
+final class _InMemoryOpsEventRecordBatchWriter
+    implements OpsEventRecordBatchWriter {
+  final List<String> idempotencyKeys = <String>[];
+
+  @override
+  Future<ops.EventRecordBatchReceipt> reportEventBatch(
+    ops.EventRecordBatchRequest request, {
+    required String idempotencyKey,
+  }) async {
+    idempotencyKeys.add(idempotencyKey);
+    return const ops.EventRecordBatchReceipt(
+      acceptedCount: 0,
+      duplicateBatch: false,
+    );
+  }
+
+  @override
+  Future<ops.EventRecordBatchReceipt> reportRuntimeLogBatch(
+    ops.RuntimeLogBatchRequest request, {
+    required String idempotencyKey,
+  }) async {
+    idempotencyKeys.add(idempotencyKey);
+    return const ops.EventRecordBatchReceipt(
+      acceptedCount: 0,
+      duplicateBatch: false,
+    );
+  }
+}
+
+/// 本套件的 App↔Cloud 边界装配：先封边界，再声明真正依赖的对象级 typed port。
+List<Override> _boundaryOverrides({
+  MediaDownloadCache? mediaDownloadCache,
+  List<Override> extra = const <Override>[],
+}) {
+  return <Override>[
+    ...sealedCloudBoundaryOverrides(),
+    opsEventRecordBatchWriterProvider.overrideWithValue(
+      _InMemoryOpsEventRecordBatchWriter(),
+    ),
+    mediaDownloadCacheProvider.overrideWithValue(
+      mediaDownloadCache ?? _NoopMediaDownloadCache(),
+    ),
+    ...extra,
+  ];
 }
 
 final _runtimeAdaptiveFlagProvider =
@@ -99,11 +155,7 @@ void main() {
     addTearDown(() {
       VideoPlayerPlatform.instance = previousPlatform;
     });
-    final container = ProviderContainer(
-      overrides: [
-        mediaDownloadCacheProvider.overrideWithValue(_NoopMediaDownloadCache()),
-      ],
-    );
+    final container = ProviderContainer(overrides: _boundaryOverrides());
     addTearDown(() {
       container.dispose();
       VideoPlayerWidget.debugResetControllerSlots();
@@ -155,11 +207,7 @@ void main() {
       VideoPlayerPlatform.instance = previousPlatform;
       VideoPlayerWidget.debugResetControllerSlots();
     });
-    final container = ProviderContainer(
-      overrides: [
-        mediaDownloadCacheProvider.overrideWithValue(_NoopMediaDownloadCache()),
-      ],
-    );
+    final container = ProviderContainer(overrides: _boundaryOverrides());
     addTearDown(container.dispose);
     var controllerCreated = false;
     var playbackFailed = false;
@@ -238,11 +286,7 @@ void main() {
       VideoPlayerPlatform.instance = previousPlatform;
       VideoPlayerWidget.debugResetControllerSlots();
     });
-    final container = ProviderContainer(
-      overrides: [
-        mediaDownloadCacheProvider.overrideWithValue(_NoopMediaDownloadCache()),
-      ],
-    );
+    final container = ProviderContainer(overrides: _boundaryOverrides());
     addTearDown(container.dispose);
     final initialize = ValueNotifier<bool>(true);
     addTearDown(initialize.dispose);
@@ -315,11 +359,7 @@ void main() {
       VideoPlayerPlatform.instance = previousPlatform;
       VideoPlayerWidget.debugResetControllerSlots();
     });
-    final container = ProviderContainer(
-      overrides: [
-        mediaDownloadCacheProvider.overrideWithValue(_NoopMediaDownloadCache()),
-      ],
-    );
+    final container = ProviderContainer(overrides: _boundaryOverrides());
     addTearDown(container.dispose);
     MediaCandidateFailureKind? reportedFailure;
 
@@ -394,15 +434,16 @@ void main() {
       VideoPlayerWidget.debugResetControllerSlots();
     });
     final container = ProviderContainer(
-      overrides: [
-        mediaDownloadCacheProvider.overrideWithValue(_NoopMediaDownloadCache()),
-        platformCapabilitiesProvider.overrideWithValue(
-          CapabilityProfile.mobile,
-        ),
-        contentFeatureFlagProvider(
-          hlsCmafAdaptivePlaybackFeatureFlag,
-        ).overrideWith((ref) => ref.watch(_runtimeAdaptiveFlagProvider)),
-      ],
+      overrides: _boundaryOverrides(
+        extra: <Override>[
+          platformCapabilitiesProvider.overrideWithValue(
+            CapabilityProfile.mobile,
+          ),
+          contentFeatureFlagProvider(
+            hlsCmafAdaptivePlaybackFeatureFlag,
+          ).overrideWith((ref) => ref.watch(_runtimeAdaptiveFlagProvider)),
+        ],
+      ),
     );
     addTearDown(container.dispose);
     final controllers = <VideoPlayerController>[];
@@ -448,15 +489,17 @@ void main() {
     });
     final cache = _NoopMediaDownloadCache();
     final container = ProviderContainer(
-      overrides: [
-        mediaDownloadCacheProvider.overrideWithValue(cache),
-        platformCapabilitiesProvider.overrideWithValue(
-          CapabilityProfile.mobile,
-        ),
-        contentFeatureFlagProvider(
-          hlsCmafAdaptivePlaybackFeatureFlag,
-        ).overrideWithValue(true),
-      ],
+      overrides: _boundaryOverrides(
+        mediaDownloadCache: cache,
+        extra: <Override>[
+          platformCapabilitiesProvider.overrideWithValue(
+            CapabilityProfile.mobile,
+          ),
+          contentFeatureFlagProvider(
+            hlsCmafAdaptivePlaybackFeatureFlag,
+          ).overrideWithValue(true),
+        ],
+      ),
     );
     addTearDown(container.dispose);
     int? startedCandidateIndex;
@@ -506,15 +549,16 @@ void main() {
       VideoPlayerWidget.debugResetControllerSlots();
     });
     final container = ProviderContainer(
-      overrides: [
-        mediaDownloadCacheProvider.overrideWithValue(_NoopMediaDownloadCache()),
-        platformCapabilitiesProvider.overrideWithValue(
-          CapabilityProfile.mobile,
-        ),
-        contentFeatureFlagProvider(
-          hlsCmafAdaptivePlaybackFeatureFlag,
-        ).overrideWithValue(true),
-      ],
+      overrides: _boundaryOverrides(
+        extra: <Override>[
+          platformCapabilitiesProvider.overrideWithValue(
+            CapabilityProfile.mobile,
+          ),
+          contentFeatureFlagProvider(
+            hlsCmafAdaptivePlaybackFeatureFlag,
+          ).overrideWithValue(true),
+        ],
+      ),
     );
     addTearDown(container.dispose);
     final controllers = <VideoPlayerController>[];
@@ -595,15 +639,16 @@ void main() {
       VideoPlayerWidget.debugResetControllerSlots();
     });
     final container = ProviderContainer(
-      overrides: [
-        mediaDownloadCacheProvider.overrideWithValue(_NoopMediaDownloadCache()),
-        platformCapabilitiesProvider.overrideWithValue(
-          CapabilityProfile.mobile,
-        ),
-        contentFeatureFlagProvider(
-          hlsCmafAdaptivePlaybackFeatureFlag,
-        ).overrideWithValue(true),
-      ],
+      overrides: _boundaryOverrides(
+        extra: <Override>[
+          platformCapabilitiesProvider.overrideWithValue(
+            CapabilityProfile.mobile,
+          ),
+          contentFeatureFlagProvider(
+            hlsCmafAdaptivePlaybackFeatureFlag,
+          ).overrideWithValue(true),
+        ],
+      ),
     );
     addTearDown(container.dispose);
     final controllers = <VideoPlayerController>[];
@@ -679,15 +724,16 @@ void main() {
       VideoPlayerWidget.debugResetControllerSlots();
     });
     final container = ProviderContainer(
-      overrides: [
-        mediaDownloadCacheProvider.overrideWithValue(_NoopMediaDownloadCache()),
-        platformCapabilitiesProvider.overrideWithValue(
-          CapabilityProfile.mobile,
-        ),
-        contentFeatureFlagProvider(
-          hlsCmafAdaptivePlaybackFeatureFlag,
-        ).overrideWith((ref) => ref.watch(_runtimeAdaptiveFlagProvider)),
-      ],
+      overrides: _boundaryOverrides(
+        extra: <Override>[
+          platformCapabilitiesProvider.overrideWithValue(
+            CapabilityProfile.mobile,
+          ),
+          contentFeatureFlagProvider(
+            hlsCmafAdaptivePlaybackFeatureFlag,
+          ).overrideWith((ref) => ref.watch(_runtimeAdaptiveFlagProvider)),
+        ],
+      ),
     );
     addTearDown(container.dispose);
     final controllers = <VideoPlayerController>[];
@@ -748,15 +794,16 @@ void main() {
       VideoPlayerWidget.debugResetControllerSlots();
     });
     final container = ProviderContainer(
-      overrides: [
-        mediaDownloadCacheProvider.overrideWithValue(_NoopMediaDownloadCache()),
-        platformCapabilitiesProvider.overrideWithValue(
-          CapabilityProfile.mobile,
-        ),
-        contentFeatureFlagProvider(
-          hlsCmafAdaptivePlaybackFeatureFlag,
-        ).overrideWithValue(true),
-      ],
+      overrides: _boundaryOverrides(
+        extra: <Override>[
+          platformCapabilitiesProvider.overrideWithValue(
+            CapabilityProfile.mobile,
+          ),
+          contentFeatureFlagProvider(
+            hlsCmafAdaptivePlaybackFeatureFlag,
+          ).overrideWithValue(true),
+        ],
+      ),
     );
     addTearDown(container.dispose);
     final controllers = <VideoPlayerController>[];

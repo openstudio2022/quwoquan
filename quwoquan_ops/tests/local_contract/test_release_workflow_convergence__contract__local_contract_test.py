@@ -6,7 +6,6 @@ import json
 import unittest
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[3]
 DELIVERY = ROOT / ".github/workflows/delivery-gate.yml"
 CONTROLLED_PROD = ROOT / ".github/workflows/deploy-prod-auto.yml"
@@ -127,7 +126,16 @@ class ReleaseWorkflowConvergenceContractTest(unittest.TestCase):
         self.assertNotIn("  prod_initial:\n", source)
         self.assertNotIn("  prod_carry_on:\n", source)
         self.assertNotIn("  prod_full:\n", source)
-        self.assertEqual(source.count("environment: production"), 1)
+        self.assertEqual(source.count("environment: production"), 2)
+        self.assertIn("  prod_soak_acceptance:\n", source)
+        self.assertEqual(
+            jobs["prod_soak_acceptance"]["environment"],
+            "production",
+        )
+        self.assertEqual(
+            jobs["prod_soak_acceptance"]["timeout-minutes"],
+            15,
+        )
         self.assertIn("- alpha_local\n      - beta_device_matrix\n      - gamma_local", source)
 
     def test_mainline_timing_uses_exact_oci_and_hosted_append_only_authority(
@@ -212,8 +220,16 @@ class ReleaseWorkflowConvergenceContractTest(unittest.TestCase):
 
     def test_prod_transaction_materializes_once_and_uses_candidate_identity(self) -> None:
         source = CONTROLLED_PROD.read_text(encoding="utf-8")
-        prod = source[source.index("  prod_rollout:\n") : source.index("  mainline_summary:\n")]
+        prod = source[
+            source.index("  prod_rollout:\n") :
+            source.index("  prod_soak_acceptance:\n")
+        ]
+        soak = source[
+            source.index("  prod_soak_acceptance:\n") :
+            source.index("  mainline_summary:\n")
+        ]
         self.assertEqual(prod.count("fetch_mainline_release_artifact.py"), 1)
+        self.assertEqual(soak.count("fetch_mainline_release_artifact.py"), 1)
         self.assertEqual(prod.count("verify_release_governance.py"), 1)
         self.assertEqual(prod.count("Materialize canonical configuration packages once"), 1)
         self.assertEqual(prod.count("QWQ_PROD_RELEASE_ARTIFACT_ROOT"), 1)

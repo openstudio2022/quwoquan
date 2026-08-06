@@ -9,6 +9,8 @@ from subprocess import CompletedProcess
 from unittest import mock
 
 from quwoquan_ops.cli import stackctl
+from quwoquan_ops.cli.lib import external_provider_governance
+from quwoquan_ops.cli.lib import provider_conformance
 
 
 def _provider_report(
@@ -163,6 +165,11 @@ class StackctlProviderReadinessContractTest(unittest.TestCase):
             conformance.discover_test_sources.return_value = ({}, [])
             conformance.load_validate_and_derive.return_value = ({}, [])
             conformance.readiness_issues.return_value = []
+            compiled, governance_issues = external_provider_governance.load_and_compile()
+            self.assertEqual(governance_issues, [])
+            conformance.expected_required_cell_keys.return_value = (
+                provider_conformance.expected_required_cell_keys(compiled)
+            )
             with (
                 mock.patch.object(
                     stackctl,
@@ -336,6 +343,10 @@ class StackctlProviderReadinessContractTest(unittest.TestCase):
                 raise AssertionError(f"unexpected subprocess: {argv}")
 
             with (
+                mock.patch.object(
+                    stackctl,
+                    "require_prod_hosted_release_redundancy",
+                ),
                 mock.patch.object(stackctl, "run", side_effect=run_preflight_then_package),
                 mock.patch.object(
                     stackctl,
@@ -399,6 +410,10 @@ class StackctlProviderReadinessContractTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             report_dir = Path(temporary) / "report"
             with (
+                mock.patch.object(
+                    stackctl,
+                    "require_prod_hosted_release_redundancy",
+                ),
                 mock.patch.object(
                     stackctl,
                     "run",

@@ -11,9 +11,13 @@ from unittest.mock import patch
 from quwoquan_ops.cli import stackctl
 from quwoquan_ops.cli.prod.prod_hosted_topology import (
     ProdHostedTopologyError,
+    expected_placement_check_names,
     load_access_manifest,
+    placement_check_name,
     plan_payload,
+    require_release_redundancy,
     resolve_plan,
+    validate_host_coverage,
 )
 
 
@@ -40,6 +44,7 @@ def _two_host_access() -> dict:
 class ProdHostedTopologyContractTest(unittest.TestCase):
     def test_two_hosts_two_replicas_have_isolated_runtime_identities(self) -> None:
         plan = resolve_plan(_two_host_access(), instance="gray")
+        require_release_redundancy(plan)
         self.assertEqual(len(plan), 4)
         self.assertEqual({item.host_id for item in plan}, {"prod-host-01", "prod-host-02"})
         for plane in ("service", "edge"):
@@ -53,6 +58,26 @@ class ProdHostedTopologyContractTest(unittest.TestCase):
         self.assertEqual(payload["schema"], "prod-hosted-deployment-plan")
         self.assertFalse(payload["secretMaterialEmbedded"])
         self.assertNotIn("privateKey", json.dumps(payload))
+
+    def test_repository_inventory_fails_closed_for_formal_rollout(self) -> None:
+        plan = resolve_plan(load_access_manifest(), instance="prod")
+        with self.assertRaisesRegex(
+            ProdHostedTopologyError,
+            "at least two real inventory hosts",
+        ):
+            require_release_redundancy(plan)
+
+    def test_formal_redundancy_rejects_filtered_plane_plan(self) -> None:
+        service_only = resolve_plan(
+            _two_host_access(),
+            instance="prod",
+            planes=("service",),
+        )
+        with self.assertRaisesRegex(
+            ProdHostedTopologyError,
+            "complete service\\+edge inventory",
+        ):
+            require_release_redundancy(service_only)
 
     def test_placement_receipts_use_the_single_current_schema_identity(self) -> None:
         plan = resolve_plan(load_access_manifest(), instance="prod")
@@ -150,13 +175,32 @@ class ProdHostedTopologyContractTest(unittest.TestCase):
             )
         )
 
-    def test_host_coverage_requires_every_placement_passed(self) -> None:
-        from quwoquan_ops.cli.prod.prod_hosted_topology import (
-            expected_placement_check_names,
-            placement_check_name,
-            validate_host_coverage,
+    def test_stackctl_reports_missing_real_redundant_inventory(self) -> None:
+        result = subprocess.run(
+            [
+                "python3",
+                "quwoquan_ops/cli/stackctl.py",
+                "--output",
+                "json",
+                "prod-hosted-plan",
+                "--deployment-instance",
+                "prod",
+                "--require-release-redundancy",
+            ],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["exitCode"], 2)
+        self.assertIn(
+            "at least two real inventory hosts",
+            " ".join(payload["details"]),
         )
 
+    def test_host_coverage_requires_every_placement_passed(self) -> None:
         plan = resolve_plan(_two_host_access(), instance="prod", planes=("service",))
         expected = expected_placement_check_names(plan)
         self.assertEqual(len(expected), 2)
@@ -184,6 +228,48 @@ class ProdHostedTopologyContractTest(unittest.TestCase):
             for name in expected
         ]
         self.assertEqual(validate_host_coverage(complete, plan), [])
+
+    def test_rolling_replica_failure_blocks_coverage_and_rollback_uses_policy(self) -> None:
+        plan = resolve_plan(_two_host_access(), instance="prod")
+        names = expected_placement_check_names(plan)
+        failed_name = placement_check_name(
+            next(
+                item
+                for item in plan
+                if item.host_id == "prod-host-02" and item.plane == "edge"
+            )
+        )
+        checks = [
+            {
+                "name": name,
+                "status": "failed" if name == failed_name else "passed",
+                "receiptDigest": "sha256:" + ("c" * 64),
+            }
+            for name in names
+        ]
+        issues = validate_host_coverage(checks, plan)
+        self.assertEqual(
+            issues,
+            [f"host coverage check not passed: {failed_name} status=failed"],
+        )
+
+        stackctl_source = (
+            ROOT / "quwoquan_ops/cli/stackctl.py"
+        ).read_text(encoding="utf-8")
+        deploy_source = (
+            ROOT / "quwoquan_ops/cli/prod/deploy_to_prod.sh"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "production apply failed; stackctl will rollback every plane",
+            stackctl_source,
+        )
+        self.assertGreaterEqual(stackctl_source.count('"PROD_SSH_HOST": ""'), 2)
+        self.assertIn(
+            "while IFS=$'\\t' read -r plane account compose_root",
+            deploy_source,
+        )
+        self.assertIn('done <<< "$PLANE_PLAN"', deploy_source)
+        self.assertIn("set -euo pipefail", deploy_source)
 
 
 if __name__ == "__main__":

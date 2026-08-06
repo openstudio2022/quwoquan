@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data.data_workstream_baseline",
+  "title": "Data workstream baseline evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "recordedAt",
+    "branch",
+    "headRevision",
+    "scopes",
+    "sourceRevision",
+    "sourceDigest",
+    "entityCatalogRef",
+    "entityCatalogDigest",
+    "worktreeStatusDigest",
+    "protectedEvidenceManifestDigest",
+    "fileOwnershipManifestDigest",
+    "baselineDigest",
+    "worktreeEntries",
+    "protectedEvidence",
+    "cursorPlan",
+    "runtimeFreeze"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.data_workstream_baseline"},
+    "recordedAt": {"type": "string", "minLength": 1},
+    "branch": {"type": "string", "minLength": 1},
+    "headRevision": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "scopes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "sourceRevision": {"$ref": "#/$defs/digest"},
+    "sourceDigest": {"$ref": "#/$defs/digest"},
+    "entityCatalogRef": {"type": "string", "minLength": 1},
+    "entityCatalogDigest": {"$ref": "#/$defs/digest"},
+    "worktreeStatusDigest": {"$ref": "#/$defs/digest"},
+    "protectedEvidenceManifestDigest": {"$ref": "#/$defs/digest"},
+    "fileOwnershipManifestDigest": {"$ref": "#/$defs/digest"},
+    "baselineDigest": {"$ref": "#/$defs/digest"},
+    "worktreeEntries": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/worktreeEntry"}
+    },
+    "protectedEvidence": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/protectedEvidence"}
+    },
+    "cursorPlan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "fileSha256", "taskCount", "pendingTaskCount", "taskIds"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "fileSha256": {"$ref": "#/$defs/digest"},
+        "taskCount": {"type": "integer", "minimum": 0},
+        "pendingTaskCount": {"type": "integer", "minimum": 0},
+        "taskIds": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "runtimeFreeze": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["campaignAllowed", "releaseAllowed", "stackctlAllowed", "reason"],
+      "properties": {
+        "campaignAllowed": {"const": false},
+        "releaseAllowed": {"const": false},
+        "stackctlAllowed": {"const": false},
+        "reason": {"type": "string", "minLength": 1}
+      }
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "worktreeEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "status", "fileSha256", "owner"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "status": {"type": "string", "minLength": 1},
+        "fileSha256": {
+          "type": ["string", "null"],
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "owner": {"type": "string", "minLength": 1}
+      }
+    },
+    "protectedEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "kind", "fileCount", "byteCount", "digest"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "kind": {"enum": ["file", "directory"]},
+        "fileCount": {"type": "integer", "minimum": 1},
+        "byteCount": {"type": "integer", "minimum": 0},
+        "digest": {"$ref": "#/$defs/digest"}
+      }
+    }
+  }
+}

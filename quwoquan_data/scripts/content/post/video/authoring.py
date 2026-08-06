@@ -300,6 +300,7 @@ def finalize_video_author_meta(
     run_id: str,
     agent_id: str | None,
     model: str,
+    provider: str,
 ) -> bool:
     script_path = video_script_path(execution_id, ref)
     if not script_path.is_file():
@@ -340,7 +341,7 @@ def finalize_video_author_meta(
             "stage": "4.draft",
             **stage_execution_context(execution_id),
             "objectRef": ref,
-            "provider": "cursor_sdk",
+            "provider": provider,
             **finalized.to_dict(),
         },
     )

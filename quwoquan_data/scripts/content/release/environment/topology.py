@@ -1,24 +1,39 @@
 """Typed projection of the Ops topology for Data release application."""
 from __future__ import annotations
 
+import os
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
-import os
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
+from content.release.model import DeploymentEnvironment
 from core.io import read_json
 from core.paths import OUTPUT_ROOT, REPO_ROOT
-from content.release.model import DeploymentEnvironment
-from quwoquan_ops.cli.lib.environment_topology import (
-    get_environment,
-    get_target,
-    load_environment_topology,
-)
-
 
 _PORTS_PATH = REPO_ROOT / "quwoquan_ops" / "environments" / "local_env_port_manifest.yaml"
+
+
+def _ops_topology_functions() -> tuple[Any, Any, Any]:
+    """Load Ops topology only when an environment operation actually runs.
+
+    Data campaign capsules intentionally contain the governed Data executor
+    closure, not the Ops environment implementation.  Keeping this dependency
+    lazy lets author/review/publish import the release contracts without
+    silently broadening the capsule; ship/readiness still fail closed if Ops is
+    unavailable at the environment boundary.
+    """
+    try:
+        from quwoquan_ops.cli.lib.environment_topology import (
+            get_environment,
+            get_target,
+            load_environment_topology,
+        )
+    except ImportError as exc:
+        raise RuntimeError("Ops environment topology resolver is unavailable") from exc
+    return load_environment_topology, get_environment, get_target
 
 
 class EnvironmentReleaseMode(StrEnum):
@@ -31,6 +46,40 @@ class MediaDeliverySlice(StrEnum):
     AVATAR = "avatar"
     IMAGE = "image"
     VIDEO = "video"
+
+
+def resolve_media_cdn_bases(
+    environment: str,
+    *,
+    topology_manifest: Path | None = None,
+) -> tuple[str, str]:
+    """从 Ops 环境拓扑解析图片与视频 CDN 基址。"""
+    load_environment_topology, get_environment, _get_target = (
+        _ops_topology_functions()
+    )
+    manifest = (
+        load_environment_topology(topology_manifest)
+        if topology_manifest is not None
+        else load_environment_topology()
+    )
+    try:
+        node = get_environment(manifest, environment)
+    except KeyError:
+        node = {}
+    public_bases = node.get("publicBases") or {}
+    image_base = str(public_bases.get("mediaImage") or "").strip().rstrip("/")
+    video_base = str(public_bases.get("mediaVideo") or "").strip().rstrip("/")
+
+    if environment == "prod":
+        if (
+            "media.quwoquan.invalid" in image_base
+            or "media.quwoquan.invalid" in video_base
+        ):
+            raise SystemExit("refusing media.quwoquan.invalid for prod media CDN")
+        if not image_base:
+            raise SystemExit("prod media CDN base unresolved")
+
+    return image_base, video_base
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,7 +135,7 @@ def _local_managed_ssl_cafile(target_name: str) -> str:
 
 def _mapping(value: Any, *, label: str) -> Mapping[str, Any]:
     if not isinstance(value, Mapping):
-        raise RuntimeError(f"{label} must be a mapping")
+        raise TypeError(f"{label} must be a mapping")
     return value
 
 
@@ -102,6 +151,9 @@ def _local_port(port_manifest: Mapping[str, Any], profile: str, role: str) -> in
 
 
 def resolve_environment_release_target(env: str) -> EnvironmentReleaseTarget:
+    load_environment_topology, get_environment, get_target = (
+        _ops_topology_functions()
+    )
     environment = DeploymentEnvironment(str(env))
     manifest = load_environment_topology()
     environment_row = get_environment(manifest, environment.value)
@@ -203,4 +255,5 @@ __all__ = [
     "EnvironmentReleaseMode",
     "EnvironmentReleaseTarget",
     "resolve_environment_release_target",
+    "resolve_media_cdn_bases",
 ]

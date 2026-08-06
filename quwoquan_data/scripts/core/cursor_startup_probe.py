@@ -1,4 +1,5 @@
 """Run and classify real Cursor SDK startup probes for data execution admission."""
+
 from __future__ import annotations
 
 import json
@@ -11,30 +12,37 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 
+from core.cursor_model import CursorModelSelection
 from core.cursor_probe_classification import (
     cursor_probe_attempt_has_5xx as _cursor_probe_attempt_has_5xx,
+)
+from core.cursor_probe_classification import (
     cursor_probe_attempt_is_auth as _cursor_probe_attempt_is_auth,
+)
+from core.cursor_probe_classification import (
     cursor_probe_attempt_is_bridge_disconnect as _cursor_probe_attempt_is_bridge_disconnect,
+)
+from core.cursor_probe_classification import (
     cursor_probe_is_startup_timeout as _cursor_probe_is_startup_timeout,
+)
+from core.cursor_probe_classification import (
     p95 as _p95,
 )
-
-from core.cursor_model import CursorModelSelection
-from core.runtime_policy import active_runtime_policy
 from core.python_environment import (
-    DEFAULT_CURSOR_STARTUP_MODEL,
-    DEFAULT_CURSOR_STARTUP_RUNTIME,
+    DEFAULT_SEMANTIC_AGENT_MODEL,
+    DEFAULT_SEMANTIC_AGENT_RUNTIME,
     REPO_ROOT,
     _redact_secret_text,
     _redact_secret_value,
     resolve_data_agent_python,
 )
+from core.runtime_policy import active_runtime_policy
 
 
 def cursor_startup_probe(
     *,
-    model: str | CursorModelSelection = DEFAULT_CURSOR_STARTUP_MODEL,
-    runtime: str = DEFAULT_CURSOR_STARTUP_RUNTIME,
+    model: str | CursorModelSelection = DEFAULT_SEMANTIC_AGENT_MODEL,
+    runtime: str = DEFAULT_SEMANTIC_AGENT_RUNTIME,
     timeout_seconds: float | None = None,
     cwd: Path | None = None,
 ) -> dict:
@@ -47,11 +55,17 @@ def cursor_startup_probe(
 
     selection = CursorModelSelection.from_value(model)
     try:
-        from core.cursor_credentials import resolve_cursor_api_key
+        from core.cursor_credentials import (
+            cursor_credential_subprocess_env,
+            protected_cursor_api_key_fd,
+            resolve_cursor_api_key,
+        )
     except Exception:  # noqa: BLE001
-        from cursor_credentials import resolve_cursor_api_key  # type: ignore
-    # Pass the key only through stdin to this short-lived probe. Its environment
-    # and argv remain credential-free, including for any bridge it spawns.
+        from cursor_credentials import (  # type: ignore
+            cursor_credential_subprocess_env,
+            protected_cursor_api_key_fd,
+            resolve_cursor_api_key,
+        )
     key = resolve_cursor_api_key()
     if not key:
         return {
@@ -70,19 +84,23 @@ def cursor_startup_probe(
         else runtime_policy.startup_timeout_seconds
     )
     probe_cwd = str((cwd or REPO_ROOT).resolve())
-    probe_python = resolve_data_agent_python(include_current=True) or Path(sys.executable)
-    code = r'''
+    probe_python = resolve_data_agent_python(include_current=True) or Path(
+        sys.executable
+    )
+    code = r"""
 import importlib.metadata
 import json
 import os
 import sys
+
+sys.path.insert(0, sys.argv[5])
+from core.cursor_bridge_transport import protected_cursor_client
 
 try:
     from cursor_sdk import (
         Agent,
         AgentOptions,
         CloudAgentOptions,
-        Client,
         CursorAgentError,
         LocalAgentOptions,
         ModelParameterValue,
@@ -92,7 +110,9 @@ except Exception as exc:
     print(json.dumps({"ready": False, "started": False, "error": f"cursor_sdk unavailable: {exc}"}, ensure_ascii=False))
     raise SystemExit(0)
 
-api_key = sys.stdin.readline().strip()
+credential_fd = int(os.environ.pop("QWQ_CURSOR_API_KEY_FD"))
+with os.fdopen(credential_fd, "r", encoding="utf-8", closefd=True) as credential_stream:
+    api_key = credential_stream.readline().strip()
 model_doc = json.loads(sys.argv[1])
 model = ModelSelection(
     id=str(model_doc["id"]),
@@ -118,11 +138,10 @@ def is_provider_rejection(message):
     )
 
 try:
-    with Client.launch_bridge(
+    with protected_cursor_client(
         workspace=cwd,
         timeout=bridge_timeout,
-        local=LocalAgentOptions(cwd=cwd, setting_sources=[]),
-        allow_api_key_env_fallback=False,
+        max_retries=0,
     ) as client:
         if runtime == "cloud":
             opts = AgentOptions(api_key=api_key, model=model, cloud=CloudAgentOptions(repos=[]))
@@ -207,37 +226,46 @@ except Exception as exc:
         "error": str(exc),
         "sdkVersion": importlib.metadata.version("cursor-sdk"),
     }, ensure_ascii=False))
-'''
+"""
     deadline = time.monotonic() + max(1, effective_timeout_seconds)
     attempts: list[dict] = []
-    payload: dict = {"ready": False, "started": False, "error": "cursor startup probe not run"}
+    payload: dict = {
+        "ready": False,
+        "started": False,
+        "error": "cursor startup probe not run",
+    }
     returncode = 0
     for attempt in range(1, runtime_policy.preflight_startup_attempts + 1):
         attempt_started_at = datetime.now(timezone.utc).isoformat()
         remaining = max(1, int(deadline - time.monotonic()))
         try:
-            proc = subprocess.run(
-                [
-                    str(probe_python),
-                    "-c",
-                    code,
-                    json.dumps(selection.to_sdk_document(), ensure_ascii=True, sort_keys=True),
-                    str(runtime),
-                    probe_cwd,
-                    str(runtime_policy.cursor_bridge_handshake_timeout_seconds),
-                ],
-                capture_output=True,
-                text=True,
-                check=False,
-                timeout=remaining,
-                env={
-                    name: value
-                    for name, value in os.environ.items()
-                    if name != "CURSOR_API_KEY"
-                },
-                input=f"{key}\n",
-                cwd=probe_cwd,
-            )
+            with protected_cursor_api_key_fd(key) as credential_fd:
+                proc = subprocess.run(
+                    [
+                        str(probe_python),
+                        "-c",
+                        code,
+                        json.dumps(
+                            selection.to_sdk_document(),
+                            ensure_ascii=True,
+                            sort_keys=True,
+                        ),
+                        str(runtime),
+                        probe_cwd,
+                        str(runtime_policy.cursor_bridge_handshake_timeout_seconds),
+                        str(Path(__file__).resolve().parents[1]),
+                    ],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                    timeout=remaining,
+                    env=cursor_credential_subprocess_env(
+                        os.environ, credential_fd=credential_fd
+                    ),
+                    stdin=subprocess.DEVNULL,
+                    pass_fds=(credential_fd,),
+                    cwd=probe_cwd,
+                )
         except subprocess.TimeoutExpired:
             attempts.append(
                 {
@@ -277,7 +305,9 @@ except Exception as exc:
                 "retryAfter": None,
                 "attemptCount": attempt,
                 "attempts": attempts,
-                "issues": [f"cursor startup probe timed out after {int(effective_timeout_seconds)}s"],
+                "issues": [
+                    f"cursor startup probe timed out after {int(effective_timeout_seconds)}s"
+                ],
             }
         returncode = proc.returncode
         try:
@@ -287,22 +317,29 @@ except Exception as exc:
                 "ready": False,
                 "started": False,
                 "status": "error",
-                "error": proc.stderr.strip() or "cursor startup probe did not return JSON",
+                "error": proc.stderr.strip()
+                or "cursor startup probe did not return JSON",
             }
-        payload = payload if isinstance(payload, dict) else {"ready": False, "started": False, "error": "invalid probe payload"}
+        payload = (
+            payload
+            if isinstance(payload, dict)
+            else {"ready": False, "started": False, "error": "invalid probe payload"}
+        )
         if returncode != 0 and payload.get("ready"):
             payload["ready"] = False
             payload["error"] = f"cursor startup probe exited {returncode}"
         retryable = bool(payload.get("retryable", False))
         if not payload.get("ready") and not _cursor_probe_attempt_is_auth(payload):
-            retryable = retryable or _cursor_probe_attempt_has_5xx(
-                payload
-            ) or _cursor_probe_attempt_is_bridge_disconnect(payload)
+            retryable = (
+                retryable
+                or _cursor_probe_attempt_has_5xx(payload)
+                or _cursor_probe_attempt_is_bridge_disconnect(payload)
+            )
         payload["retryable"] = retryable
         attempts.append(
             {
                 "attempt": attempt,
-                    "startedAt": attempt_started_at,
+                "startedAt": attempt_started_at,
                 "ready": bool(payload.get("ready")),
                 "status": payload.get("status"),
                 "errorClass": _redact_secret_value(
@@ -402,8 +439,8 @@ except Exception as exc:
 
 def cursor_startup_probe_suite(
     *,
-    model: str | CursorModelSelection = DEFAULT_CURSOR_STARTUP_MODEL,
-    runtime: str = DEFAULT_CURSOR_STARTUP_RUNTIME,
+    model: str | CursorModelSelection = DEFAULT_SEMANTIC_AGENT_MODEL,
+    runtime: str = DEFAULT_SEMANTIC_AGENT_RUNTIME,
     attempts: int | None = None,
     timeout_seconds: float | None = None,
     cwd: Path | None = None,
@@ -447,11 +484,9 @@ def cursor_startup_probe_suite(
     startup_timeout_count = 0
     bridge_disconnect_count = 0
     cold_start_5xx_observed = 0
-    worker_limit = min(
-        total,
-        runtime_policy.author_workers,
-        runtime_policy.cursor_bridge_instances,
-    )
+    # 主机级 bridge 容量，与 codex 套件同口径。author_workers 是单条 lane 进程内
+    # 的语义工作槽，不是本机可并发的 bridge 数，不能用来限制容量探针。
+    worker_limit = min(total, runtime_policy.cursor_bridge_instances)
     active_workers = 0
     maximum_active_workers = 0
     active_lock = threading.Lock()
@@ -595,5 +630,3 @@ def cursor_startup_probe_suite(
         "finishedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "results": rows,
     }
-
-

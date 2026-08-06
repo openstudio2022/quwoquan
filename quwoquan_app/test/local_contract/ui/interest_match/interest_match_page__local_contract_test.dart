@@ -1,15 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/cloud/services/ops/ops_visit_append_writer.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/core/constants/interest_match_text_constants.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/services/visit_recorder_service.dart';
 import 'package:quwoquan_app/ui/interest_match/pages/interest_match_page.dart';
+
+import '../../../support/harness/cloud_boundary_test_scope.dart';
 
 const Key _searchMarker = ValueKey<String>('stub-search');
 const Key _networkMarker = ValueKey<String>('stub-search-network');
@@ -18,6 +22,37 @@ const Key _homeMarker = ValueKey<String>('stub-home');
 const Key _openInterestMatchMarker = ValueKey<String>(
   'stub-open-interest-match',
 );
+
+/// 对象级 typed in-memory double：只吃下本页曝光产生的出站访问。
+///
+/// 它不合成任何第一方业务数据、不复制 wire 形状、不代替 `api_integration` 里
+/// `RemoteOpsVisitAppendWriter` 对真实 Gateway 的断言。
+final class _InMemoryOpsVisitAppendWriter implements OpsVisitAppendWriter {
+  final List<OpsVisitReportInput> appended = <OpsVisitReportInput>[];
+
+  @override
+  Future<void> recordVisit(OpsVisitReportInput input) async {
+    appended.add(input);
+  }
+}
+
+/// 本套件的 App↔Cloud 边界装配：先封边界，再声明真正依赖的对象级 typed port。
+///
+/// `InterestMatchPage` 在 `initState` 读 `visitRecorderServiceProvider`，该服务
+/// watch `opsVisitAppendWriterProvider`；只 override 这一个 typed port，provider 图
+/// 就不会再向下解析到 generated operation client。
+List<Override> _boundaryOverrides({
+  VisitRecorderService? visitRecorderService,
+}) {
+  return <Override>[
+    ...sealedCloudBoundaryOverrides(),
+    opsVisitAppendWriterProvider.overrideWithValue(
+      _InMemoryOpsVisitAppendWriter(),
+    ),
+    if (visitRecorderService != null)
+      visitRecorderServiceProvider.overrideWithValue(visitRecorderService),
+  ];
+}
 
 GoRouter _router({required String initialLocation}) {
   return GoRouter(
@@ -97,7 +132,10 @@ Future<void> _pump(WidgetTester tester) async {
   );
 
   await tester.pumpWidget(
-    ProviderScope(child: MaterialApp.router(routerConfig: router)),
+    ProviderScope(
+      overrides: _boundaryOverrides(),
+      child: MaterialApp.router(routerConfig: router),
+    ),
   );
   await tester.pump();
   await tester.pump();
@@ -109,6 +147,7 @@ Future<void> _pumpRouter(
 }) async {
   await tester.pumpWidget(
     ProviderScope(
+      overrides: _boundaryOverrides(),
       child: MaterialApp.router(
         routerConfig: _router(initialLocation: initialLocation),
       ),
@@ -216,7 +255,7 @@ void main() {
       final recorder = _CapturingVisitRecorder();
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [visitRecorderServiceProvider.overrideWithValue(recorder)],
+          overrides: _boundaryOverrides(visitRecorderService: recorder),
           child: MaterialApp.router(
             routerConfig: _router(initialLocation: AppRoutePaths.interestMatch),
           ),

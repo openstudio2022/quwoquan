@@ -1,20 +1,20 @@
 """Object queue constants, storage paths, locks, and governance helpers."""
 from __future__ import annotations
 
-from contextlib import contextmanager
 import fcntl
 import hashlib
 import json
-import os
 import random
 import time
+from collections.abc import Mapping
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
-from core import ops_governance as og
 from core.control_types import QueueBackend, QueueJobState
 from core.io import read_json, write_json
 from core.runtime_policy import active_runtime_policy
+
 from content.execution import production_contracts as pc
 from content.execution import store
 from content.execution.queue.model import QueueJob
@@ -51,16 +51,6 @@ QUEUE_BACKEND_RELIABLETASK = QueueBackend.RELIABLE_TASK
 SUPPORTED_QUEUE_BACKENDS = tuple(QueueBackend)
 RELIABLETASK_QUEUE = "reliabletask.data.content_supply"
 RELIABLETASK_TASK_TYPE = "data.content_object.execute"
-
-
-def _backend_name(backend: str | QueueBackend | None = None) -> QueueBackend:
-    value = str(backend or "").strip() or str(
-        os.environ.get("QWQ_OBJECT_QUEUE_BACKEND") or QUEUE_BACKEND_LOCAL
-    )
-    try:
-        return QueueBackend(value)
-    except ValueError as exc:
-        raise ValueError(f"unsupported object queue backend: {value}") from exc
 
 
 def _reliabletask_ref(
@@ -172,7 +162,7 @@ def _queue_lock(execution_id: str):
 
 
 def stable_job_id(execution_id: str, ref: str, stage: str) -> str:
-    raw = f"{execution_id}|{ref}|{stage}".encode("utf-8")
+    raw = f"{execution_id}|{ref}|{stage}".encode()
     return hashlib.sha1(raw).hexdigest()[:16]
 
 

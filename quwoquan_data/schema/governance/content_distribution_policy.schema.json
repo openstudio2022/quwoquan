@@ -101,13 +101,37 @@
     },
     "scaleGates": {
       "type": "object",
-      "required": ["m100PerCarrier", "m1000PerCarrier", "requireM100PromotionBeforeM1000", "minimumAutomaticRecoveryRate"],
+      "required": ["m100Targets", "m1000Targets", "requireM100PromotionBeforeM1000", "minimumAutomaticRecoveryRate"],
       "additionalProperties": false,
       "properties": {
-        "m100PerCarrier": {"type": "integer", "minimum": 100},
-        "m1000PerCarrier": {"type": "integer", "minimum": 1000},
+        "m100Targets": {"$ref": "#/$defs/m100Targets"},
+        "m1000Targets": {"$ref": "#/$defs/m1000Targets"},
         "requireM100PromotionBeforeM1000": {"const": true},
-        "minimumAutomaticRecoveryRate": {"type": "number", "minimum": 0.9, "maximum": 1}
+        "minimumAutomaticRecoveryRate": {"type": "number", "minimum": 0.95, "maximum": 1}
+      }
+    }
+  },
+  "$defs": {
+    "m100Targets": {
+      "type": "object",
+      "required": ["homepage", "article", "image", "video"],
+      "additionalProperties": false,
+      "properties": {
+        "homepage": {"const": 100},
+        "article": {"const": 100},
+        "image": {"const": 100},
+        "video": {"const": 50}
+      }
+    },
+    "m1000Targets": {
+      "type": "object",
+      "required": ["homepage", "article", "image", "video"],
+      "additionalProperties": false,
+      "properties": {
+        "homepage": {"const": 1000},
+        "article": {"const": 1000},
+        "image": {"const": 1000},
+        "video": {"const": 300}
       }
     }
   },

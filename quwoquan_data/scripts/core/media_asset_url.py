@@ -5,18 +5,15 @@ import hashlib
 import json
 import re
 import shutil
+from collections.abc import Iterable, Mapping
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any
 
 import yaml
 
 from core.paths import PUBLISH_ROOT, RELEASE_ROOT, REPO_ROOT
 from core.release_layout import payload_file
 from core.schema import assert_valid
-from quwoquan_ops.cli.lib.environment_topology import (
-    get_environment,
-    load_environment_topology,
-)
 
 _CAS_RE = re.compile(
     r"^media/objects/sha256/([0-9a-f]{2})/([0-9a-f]{2})/([0-9a-f]{64})(\.[a-z0-9]+)?$"
@@ -78,7 +75,7 @@ def _load_image_variant_policy() -> tuple[int, dict[str, dict[str, Any]]]:
     for name in sorted(_REQUIRED_IMAGE_VARIANT_PROFILES):
         profile = profiles.get(name)
         if not isinstance(profile, dict):
-            raise ValueError(f"content image variant profile is missing: {name}")
+            raise TypeError(f"content image variant profile is missing: {name}")
         width = int(profile.get("width") or 0)
         quality = int(profile.get("quality") or 0)
         image_format = str(profile.get("format") or "").strip()
@@ -99,33 +96,6 @@ def _load_image_variant_policy() -> tuple[int, dict[str, dict[str, Any]]]:
 
 
 IMAGE_VARIANT_POLICY_VERSION, IMAGE_VARIANT_PROFILES = _load_image_variant_policy()
-
-
-def resolve_media_cdn_bases(
-    environment: str,
-    *,
-    topology_manifest: Path | None = None,
-) -> tuple[str, str]:
-    """从环境拓扑真相源解析图片与视频 CDN 基址。"""
-    if topology_manifest is not None:
-        manifest = load_environment_topology(topology_manifest)
-    else:
-        manifest = load_environment_topology()
-    try:
-        node = get_environment(manifest, environment)
-    except KeyError:
-        node = {}
-    public_bases = node.get("publicBases") or {}
-    image_base = str(public_bases.get("mediaImage") or "").strip().rstrip("/")
-    video_base = str(public_bases.get("mediaVideo") or "").strip().rstrip("/")
-
-    if environment == "prod":
-        if "media.quwoquan.invalid" in image_base or "media.quwoquan.invalid" in video_base:
-            raise SystemExit("refusing media.quwoquan.invalid for prod media CDN")
-        if not image_base:
-            raise SystemExit("prod media CDN base unresolved")
-
-    return image_base, video_base
 
 
 def sha256_file(path: Path) -> str:
@@ -197,7 +167,7 @@ def _json_bytes(value: Any) -> bytes:
 def _read_json(path: Path) -> dict[str, Any]:
     value = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(value, dict):
-        raise ValueError(f"JSON 顶层必须为 object: {path}")
+        raise TypeError(f"JSON 顶层必须为 object: {path}")
     return value
 
 
@@ -474,10 +444,10 @@ def copy_release_media_objects(
     """Materialize private CAS bytes at public slice paths in the release."""
     assets = manifest.get("assets")
     if not isinstance(assets, list):
-        raise ValueError("release media manifest assets must be an array")
+        raise TypeError("release media manifest assets must be an array")
     for index, row in enumerate(assets):
         if not isinstance(row, Mapping):
-            raise ValueError(f"release media manifest assets[{index}] must be an object")
+            raise TypeError(f"release media manifest assets[{index}] must be an object")
         public_slice_key = str(row.get("publicSliceKey") or "")
         expected = str(row.get("sha256") or "")
         if not is_public_media_slice_key(public_slice_key):

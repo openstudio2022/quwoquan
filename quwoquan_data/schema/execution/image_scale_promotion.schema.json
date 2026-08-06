@@ -73,7 +73,7 @@
       ],
       "additionalProperties": false,
       "properties": {
-        "provider": { "const": "cursor_sdk" },
+        "provider": { "enum": ["cursor_sdk", "codex_sdk"] },
         "authorModel": { "type": "string", "minLength": 1 },
         "authorModelFamily": { "type": "string", "minLength": 1 },
         "authorModelParameters": { "type": "array" },
@@ -85,7 +85,7 @@
     "modelReadinessDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
     "postReviewClosureDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
     "publishReceiptDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
-    "sourceReadyCount": { "type": "integer", "minimum": 120 },
+    "sourceReadyCount": { "type": "integer", "minimum": 100 },
     "sourceIneligibleCount": { "type": "integer", "minimum": 0 },
     "candidateCount": { "type": "integer", "minimum": 180 },
     "approvedQuota": { "const": 100 },

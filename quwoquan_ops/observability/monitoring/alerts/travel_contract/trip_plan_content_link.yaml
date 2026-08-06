@@ -1,0 +1,65 @@
+# Code generated from quwoquan_service/generated/contract_graph.json.
+# Regenerate with verify_object_alert_coverage.py --write.
+groups:
+  - name: quwoquan_travel_contract_trip_plan_content_link
+    rules:
+      - record: quwoquan_travel_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="travel-service",method="GET",route=~"^/travel/trips/[^/]+/content-links$"})
+        labels:
+          service: "travel-service"
+          operation: "travel.trip_plan_content_link.ListTripPlanContentLinks"
+          contract_metric: "travel_trip_content_link_list"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_travel_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="travel-service",method="GET",route=~"^/travel/trips/[^/]+/content-links$"})
+        labels:
+          service: "travel-service"
+          operation: "travel.trip_plan_content_link.ListTripPlanContentLinks"
+          contract_metric: "travel_trip_content_link_list"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_travel_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="travel-service",method="PUT",route=~"^/travel/trips/[^/]+/content-links/[^/]+$"})
+        labels:
+          service: "travel-service"
+          operation: "travel.trip_plan_content_link.PutTripPlanContentLink"
+          contract_metric: "travel_trip_content_link_put"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "900"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_travel_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="travel-service",method="PUT",route=~"^/travel/trips/[^/]+/content-links/[^/]+$"})
+        labels:
+          service: "travel-service"
+          operation: "travel.trip_plan_content_link.PutTripPlanContentLink"
+          contract_metric: "travel_trip_content_link_put"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "900"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_travel_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="travel-service",method="POST",route=~"^/travel/trips/[^/]+/content-link-removals/[^/]+$"})
+        labels:
+          service: "travel-service"
+          operation: "travel.trip_plan_content_link.RemoveTripPlanContentLink"
+          contract_metric: "travel_trip_content_link_remove"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "700"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_travel_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="travel-service",method="POST",route=~"^/travel/trips/[^/]+/content-link-removals/[^/]+$"})
+        labels:
+          service: "travel-service"
+          operation: "travel.trip_plan_content_link.RemoveTripPlanContentLink"
+          contract_metric: "travel_trip_content_link_remove"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "700"
+          slo_availability_percent: "99.9"

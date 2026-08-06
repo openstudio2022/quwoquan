@@ -13,6 +13,9 @@
 from __future__ import annotations
 
 import argparse
+import datetime as dt
+import hashlib
+import json
 import os
 import subprocess
 import sys
@@ -79,6 +82,11 @@ def parse_args() -> argparse.Namespace:
         "--no-ssh-agent",
         action="store_true",
         help="仅允许 key file / key dir，不接受 ssh-agent 中已加载的同名公钥。",
+    )
+    parser.add_argument(
+        "--evidence-output",
+        type=Path,
+        help="写入仅含凭据引用、公钥摘要、签发方和到期时间的 canonical evidence。",
     )
     return parser.parse_args()
 
@@ -249,6 +257,75 @@ def _resolve_credential(
     return None, f"{required.plane}: {required.secret_name} 未就绪（{hint}）"
 
 
+def _normalized_public_key(credential: ResolvedCredential) -> bytes:
+    path = Path(credential.key_path)
+    if credential.source == "ssh-agent":
+        raw = path.read_text(encoding="utf-8").strip()
+    else:
+        result = subprocess.run(
+            ["ssh-keygen", "-y", "-f", str(path)],
+            text=True,
+            capture_output=True,
+            stdin=subprocess.DEVNULL,
+            check=False,
+            timeout=10,
+        )
+        if result.returncode != 0:
+            raise ValueError(
+                f"{credential.plane}: 无法从已校验私钥导出公钥摘要"
+            )
+        raw = result.stdout.strip()
+    parts = raw.split()
+    if len(parts) < 2:
+        raise ValueError(f"{credential.plane}: SSH 公钥格式无效")
+    return f"{parts[0]} {parts[1]}\n".encode()
+
+
+def _credential_evidence(
+    credential: ResolvedCredential,
+    *,
+    verified_at: str,
+) -> dict[str, str]:
+    prefix = credential.secret_name
+    reference = os.environ.get(f"{prefix}_REFERENCE", "").strip()
+    issuer = os.environ.get(f"{prefix}_ISSUER", "").strip()
+    expires_at = os.environ.get(f"{prefix}_EXPIRES_AT", "").strip()
+    declared_digest = os.environ.get(f"{prefix}_PUBLIC_DIGEST", "").strip()
+    if (
+        not reference
+        or not issuer
+        or not expires_at
+        or not declared_digest
+        or "PRIVATE KEY" in reference
+        or "\n" in reference
+    ):
+        raise ValueError(
+            f"{credential.plane}: {prefix} 缺少安全引用/签发方/到期时间/公钥摘要 metadata"
+        )
+    try:
+        expiry = dt.datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+    except ValueError as error:
+        raise ValueError(f"{credential.plane}: {prefix}_EXPIRES_AT 非法") from error
+    if expiry.tzinfo is None or expiry <= dt.datetime.now(dt.timezone.utc):
+        raise ValueError(f"{credential.plane}: {prefix} 凭据已过期或无时区")
+    public_digest = "sha256:" + hashlib.sha256(
+        _normalized_public_key(credential)
+    ).hexdigest()
+    if declared_digest != public_digest:
+        raise ValueError(f"{credential.plane}: {prefix} 公钥摘要与 metadata 不一致")
+    return {
+        "plane": credential.plane,
+        "account": credential.account,
+        "reference": reference,
+        "publicDigest": public_digest,
+        "issuer": issuer,
+        "expiresAt": expiry.astimezone(dt.timezone.utc)
+        .isoformat()
+        .replace("+00:00", "Z"),
+        "verifiedAt": verified_at,
+    }
+
+
 def main() -> int:
     if not ACCESS.exists():
         print(f"FAIL: 缺少访问隔离映射 {ACCESS}", file=sys.stderr)
@@ -293,6 +370,32 @@ def main() -> int:
         for item in issues:
             print(f"  - {item}", file=sys.stderr)
         return 2
+
+    if args.evidence_output is not None:
+        verified_at = (
+            dt.datetime.now(dt.timezone.utc)
+            .isoformat()
+            .replace("+00:00", "Z")
+        )
+        try:
+            evidence = {
+                "schema": "prod-plane-credential-evidence",
+                "stage": args.stage,
+                "verifiedAt": verified_at,
+                "credentials": [
+                    _credential_evidence(item, verified_at=verified_at)
+                    for item in resolved
+                ],
+            }
+        except (OSError, subprocess.SubprocessError, ValueError) as error:
+            print(f"::error::{error}", file=sys.stderr)
+            return 2
+        args.evidence_output.parent.mkdir(parents=True, exist_ok=True)
+        args.evidence_output.write_text(
+            json.dumps(evidence, ensure_ascii=False, indent=2, sort_keys=True)
+            + "\n",
+            encoding="utf-8",
+        )
 
     summary = ", ".join(
         f"{item.plane}:{item.secret_name} via {item.source} ({item.key_path})"

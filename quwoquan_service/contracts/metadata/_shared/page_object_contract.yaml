@@ -261,10 +261,10 @@ pages:
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { inherit_from: assistant.personal_session }
     entry_widget: AssistantReferenceWebViewPage
-    mount_evidence: [lib/ui/assistant/pages/personal_assistant_session_page.dart]
+    mount_evidence: [lib/assistant/assistant/assistant_run/presentation/personal_assistant_session_page.dart]
 
   - page_id: assistant.skill_center
-    source_path: lib/ui/assistant/pages/assistant_skill_center_page.dart
+    source_path: lib/assistant/assistant/skill_catalog/presentation/assistant_skill_center_page.dart
     page_kind: routed
     route_id: assistantSkills
     surface_ids: [assistantSkills]
@@ -308,7 +308,7 @@ pages:
     route_registration_evidence: [lib/app/navigation/app_router.dart]
 
   - page_id: assistant.personal_session
-    source_path: lib/ui/assistant/pages/personal_assistant_session_page.dart
+    source_path: lib/assistant/assistant/assistant_run/presentation/personal_assistant_session_page.dart
     page_kind: routed
     route_id: assistantPersonal
     surface_ids: [personalAssistantDialog, assistantHistory]

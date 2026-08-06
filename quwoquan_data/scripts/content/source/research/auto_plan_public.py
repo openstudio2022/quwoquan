@@ -121,6 +121,7 @@ def _recover_homepage_source_plans(
     recovery_passes: int,
     recovery_workers: int,
     report: dict[str, Any],
+    external_input_context: Any | None = None,
 ) -> list[str]:
     """Replay only empty homepage plans with the bounded recovery pool."""
     recovered: list[str] = []
@@ -150,6 +151,7 @@ def _recover_homepage_source_plans(
                     force=True,
                     lanes={"homepage"},
                     write_shared_report=False,
+                    external_input_context=external_input_context,
                 )
                 for entity_id in unresolved
             ]
@@ -295,6 +297,7 @@ def write_auto_research_plans(
     lanes: set[str] | None = None,
     max_workers: int | None = None,
     progress_callback: Callable[[dict[str, Any]], None] | None = None,
+    external_input_context: Any | None = None,
 ) -> dict[str, Any]:
     """Discover separated source plans, optionally parallelized per entity."""
     if lanes is None:
@@ -359,6 +362,7 @@ def write_auto_research_plans(
             force=force,
             lanes=selected_lanes,
             write_shared_report=False,
+            external_input_context=external_input_context,
         )
         emit_progress(
             "running",
@@ -408,6 +412,7 @@ def write_auto_research_plans(
                     force=force,
                     lanes=selected_lanes,
                     write_shared_report=False,
+                    external_input_context=external_input_context,
                 ): entity_id
                 for entity_id in entity_ids
             }
@@ -514,6 +519,7 @@ def write_auto_research_plans(
             recovery_passes=runtime_policy.source_plan_recovery_passes,
             recovery_workers=runtime_policy.source_plan_recovery_workers,
             report=report,
+            external_input_context=external_input_context,
         )
     if recovered_homepage_entities:
         report["homepageRecovery"] = {

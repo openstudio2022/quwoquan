@@ -2,11 +2,21 @@
 """promote_post_object must be idempotent when canonical already matches package."""
 from __future__ import annotations
 
+import inspect
 from pathlib import Path
 
 from content.release.canonical import post_promotion as subject
 from core.io import write_json
 from core.tree_integrity import tree_integrity_stats
+
+
+def test_promote_post_object_uses_fenced_inventory_not_full_publish_scan() -> None:
+    source = inspect.getsource(subject.promote_post_object)
+
+    assert "tree_integrity_stats(PUBLISH_ROOT)" not in source
+    assert "validate_publish_invariants" not in source
+    assert "refresh_canonical_tag_snapshots" not in source
+    assert "load_or_bootstrap_inventory(PUBLISH_ROOT)" in source
 
 
 def test_promote_post_object_skips_apply_when_canonical_matches_package(
@@ -94,12 +104,6 @@ def test_promote_post_object_skips_apply_when_canonical_matches_package(
     monkeypatch.setattr(subject, "build_post_object_transaction_package", fake_build)
     monkeypatch.setattr(subject, "audit_object_transaction", lambda **_k: {})
     monkeypatch.setattr(subject, "apply_object_transaction", fake_apply)
-    monkeypatch.setattr(
-        subject,
-        "validate_canonical_publish",
-        lambda _root: {"status": "passed", "issues": []},
-    )
-
     result = subject.promote_post_object(execution_id, post_ref)
     assert result["canonicalObjectRef"] == f"posts/{post_ref}"
     assert apply_calls == []

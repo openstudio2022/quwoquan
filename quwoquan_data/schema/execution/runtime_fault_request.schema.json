@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/runtime_fault_request.schema.json",
+  "title": "Create-once fenced fault request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "caseId", "sessionRef", "sessionDigest", "rootExecutionId",
+    "runId", "generation", "fencingToken", "faultType", "carrier",
+    "executionId", "jobId", "providerId", "providerConfigurationDigest",
+    "requestedAt", "requestDigest"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.runtime_fault_request"},
+    "caseId": {"type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]{2,127}$"},
+    "sessionRef": {"$ref": "#/$defs/safeRef"},
+    "sessionDigest": {"$ref": "#/$defs/digest"},
+    "rootExecutionId": {"type": "string", "minLength": 1},
+    "runId": {"type": "string", "minLength": 1},
+    "generation": {"type": "integer", "minimum": 1},
+    "fencingToken": {"$ref": "#/$defs/digest"},
+    "faultType": {"$ref": "#/$defs/faultType"},
+    "carrier": {"enum": ["homepage", "article", "image", "video"]},
+    "executionId": {"type": "string", "minLength": 1},
+    "jobId": {"type": "string", "minLength": 8},
+    "providerId": {"type": "string", "minLength": 1},
+    "providerConfigurationDigest": {"$ref": "#/$defs/digest"},
+    "requestedAt": {"type": "string", "minLength": 1},
+    "requestDigest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "safeRef": {"type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"},
+    "faultType": {
+      "enum": ["worker_termination", "lease_expiry", "redis_restart", "mongo_reconnect", "provider_timeout", "provider_rate_limit"]
+    }
+  }
+}

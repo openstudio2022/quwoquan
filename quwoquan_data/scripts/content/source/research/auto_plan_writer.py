@@ -1,6 +1,9 @@
 """Per-entity auto research plan implementation."""
 from __future__ import annotations
+
 from typing import Any
+
+from core.article_commercial_policy import article_commercial_closure_enabled
 from core.data_issue import (
     DataIssueCode,
     DataIssueError,
@@ -8,107 +11,88 @@ from core.data_issue import (
     DataRecoveryAction,
     data_issue,
 )
-from core.article_commercial_policy import article_commercial_closure_enabled
 from core.image_asset_strategy import (
+    image_asset_strategy,
     image_count_is_hard_quota,
     image_count_policy,
-    image_asset_strategy,
     image_strategy_requires_publishable_images,
     minimum_publishable_images_per_target,
 )
 from core.paths import STAGE_DOWNLOAD
 from core.source_catalog import vertical_from_task_id
-from content.source.source_unit import resolve_entity_object_dir
+from governance.coverage.license import rights_proof_required
+
+from content.execution.workspace import frozen_target_by_name
+from content.source.contracts import (
+    HomepageAuthorityProvider,
+    QualifiedHomepageSource,
+)
+from content.source.external_acquisition_inputs import (
+    professional_image_context_binding,
+    professional_image_context_enabled,
+    professional_video_context_binding,
+)
 from content.source.prepare import prepare_source_plan
-from content.source.research.auto_plan_lanes import (
-    _independent_homepage_media_collections,
-    write_image_lane,
+from content.source.research.auto_plan_article import write_article_lane
+from content.source.research.auto_plan_homepage import (
+    HomepageResearchInput,
+    write_homepage_lane,
+)
+from content.source.research.auto_plan_lanes import write_image_lane
+from content.source.research.auto_plan_report import (
+    _source_availability_summary,
+    _write_auto_report_artifacts,
 )
 from content.source.research.auto_plan_video import (
     discover_commons_sourced_videos,
     write_video_lane,
 )
-from content.source.research.auto_plan_article import write_article_lane
+from content.source.research.baike_com import geo_context_terms_from_ref
+from content.source.research.homepage_authority import discover_homepage_authority
 from content.source.research.image_provider_compliance import (
     professional_library_compliance_summary,
 )
-from governance.coverage.license import rights_proof_required
-from content.source.research.auto_plan_report import (
-    _source_availability_summary,
-    _write_auto_report_artifacts,
+from content.source.research.plan_reuse import (
+    _verified_article_sources_from_prior_plans,
 )
 from content.source.research.plan_state import (
-    _accept_source,
-    _accept_source_with_reject_memory,
-    _image_at,
-    _image_window,
     _record_unavailable,
-    _safe_collection_id,
-    _source,
-    _source_unavailable_for_entity,
     _task_content_quotas,
     _task_spec,
-    _write_lane,
+)
+from content.source.research.qunar_sources import (
+    _qunar_travelogue_sources,  # noqa: F401 - retained test seam
 )
 from content.source.research.reject_memory import (
     _download_reject_memory,
     _images_from_collections,
-    _url_in_memory,
     _verified_image_collections_from_prior_plans,
 )
-from content.source.research.plan_reuse import (
-    _homepage_urls_from_current_plan,
-    _verified_article_sources_from_prior_plans,
-)
-from content.source.research.source_quality import (
-    _ARTICLE_BASE_CATEGORIES,
-    _article_base_candidate_limit,
-    _collection_gate,
-    _collection_admissible_image_urls,
-    _evidence_reason,
-    _select_article_plan_sources,
-)
-from content.source.research.homepage_source_policy import (
-    _homepage_can_seed_base_draft,
-    _homepage_core_sources,
-)
+from content.source.research.source_quality import _article_base_candidate_limit
 from content.source.research.source_registry import (
-    _known_article_sources,
+    _known_article_sources,  # noqa: F401 - retained test seam
     _known_entity_aliases,
-    _known_official_website,
+    _known_official_website,  # noqa: F401 - retained test seam
 )
-from content.source.research.text_match import _entity_name_variants, _expanded_entity_aliases
-from content.source.research.wiki_common import _BASE_DRAFT_IMAGE_CANDIDATES
+from content.source.research.text_match import (
+    _entity_name_variants,
+    _expanded_entity_aliases,
+)
 from content.source.research.wiki_core import (
-    _external_article_category,
-    _external_platform,
-    _official_website,
+    _official_website,  # noqa: F401 - retained test seam
     _trusted_external_links,
-    _wikidata_entity_aliases,
-    _wikidata_item_for_entity_search,
-    _wikidata_item_for_zhwiki,
     _wiki_related_titles_for_entity,
     _wiki_title_for_entity,
     _wiki_url,
+    _wikidata_entity_aliases,
+    _wikidata_item_for_entity_search,
+    _wikidata_item_for_zhwiki,
 )
 from content.source.research.wiki_media import (
     _discover_open_license_image_pools,
-    _mediawiki_page_images,
+    _mediawiki_page_images,  # noqa: F401 - retained test seam
 )
-from content.source.research.qunar_sources import (
-    _qunar_review_support_source,
-    _qunar_travelogue_sources,
-)
-from content.source.research.auto_plan_homepage import HomepageResearchInput, write_homepage_lane
-from content.source.research.baike_com import geo_context_terms_from_ref
-from content.source.research.homepage_authority import discover_homepage_authority
-from content.source.contracts import (
-    HomepageAuthorityProvider,
-    QualifiedHomepageSource,
-)
-from content.execution.workspace import frozen_target_by_name
-
-
+from content.source.source_unit import resolve_entity_object_dir
 
 
 def _write_auto_research_plans_impl(
@@ -119,6 +103,7 @@ def _write_auto_research_plans_impl(
     force: bool = False,
     lanes: set[str] | None = None,
     write_shared_report: bool = True,
+    external_input_context: Any | None = None,
 ) -> dict[str, Any]:
     vertical = vertical_from_task_id(execution_id)
     # 单值 entity_type 只作 fallback；每个实体目录类型以 task spec coverageTargets 为准。
@@ -140,6 +125,10 @@ def _write_auto_research_plans_impl(
     selected_lanes = lanes or declared_lanes
     if not selected_lanes:
         raise ValueError("execution must declare at least one research lane")
+    professional_image_bound = professional_image_context_enabled(
+        external_input_context,
+        selected_lanes,
+    )
     report: dict[str, Any] = {
         "schema": "quwoquan.content.source.auto_research_plan",
         "executionId": execution_id,
@@ -234,7 +223,8 @@ def _write_auto_research_plans_impl(
             if str(value).strip()
         ]
         needs_source_discovery_context = bool(
-            selected_lanes & {"homepage", "article", "image", "video"}
+            selected_lanes & {"homepage", "article", "video"}
+            or ("image" in selected_lanes and not professional_image_bound)
         )
         initial_aliases = _expanded_entity_aliases(
             [*_entity_name_variants(entity_id), *configured_aliases],
@@ -282,6 +272,16 @@ def _write_auto_research_plans_impl(
             ],
             limit=24,
         )
+        professional_image_receipt_refs, professional_image_specs = (
+            professional_image_context_binding(
+                execution_id=execution_id,
+                entity_id=entity_id,
+                carrier=str(external_input_context.envelope["carrier"]),
+                external_input_context=external_input_context,
+            )
+            if professional_image_bound
+            else ([], [])
+        )
         authority = (
             discover_homepage_authority(
                 entity_id,
@@ -304,7 +304,7 @@ def _write_auto_research_plans_impl(
         ] if needs_source_discovery_context else []
         needs_visual_pool = bool(
             selected_lanes & {"homepage", "article", "image", "video"}
-        )
+        ) and not professional_image_bound
         voyage_title = (
             _wiki_title_for_entity(
                 "zh.wikivoyage.org",
@@ -316,14 +316,6 @@ def _write_auto_research_plans_impl(
             else ""
         )
         voyage_url = _wiki_url("zh.wikivoyage.org", voyage_title)
-        registry_official_url = _known_official_website(entity_id) if needs_source_discovery_context else ""
-        official_url = (
-            registry_official_url or _official_website(qid)
-            if needs_source_discovery_context
-            else ""
-        )
-        official_provider = "travel_source_registry" if registry_official_url else "wikidata_official_website"
-        official_reason_provider = "Travel source registry official website" if registry_official_url else "Wikidata official website"
         reject_memory = _download_reject_memory(
             execution_id,
             entity_id,
@@ -446,9 +438,9 @@ def _write_auto_research_plans_impl(
             else []
         )
         if "image" in selected_lanes:
-            # P4：图库可发布性以 registry rightsPolicy 为唯一真相源。图虫/Pinterest 等受限
-            # 来源如实标注受限（bypassAttempted=false）+ 替代路径=开放许可图池，使"为什么专业
-            # 图库不直接进发布面、合规替代是什么"在 research report 中可审计；不抓取、不绕过。
+            # 图库 acquisition 与 distribution rights 分轨。Pinterest/图虫只有在公开直链、
+            # 平台支持 API 或人工文件真实取得后才可形成 research 候选；未验证权利如实记录，
+            # 不因缺商业授权丢弃，也绝不绕过登录、验证码、付费墙或访问控制。
             report.setdefault(
                 "professionalImageLibraryCompliance",
                 professional_library_compliance_summary(),
@@ -457,6 +449,7 @@ def _write_auto_research_plans_impl(
             "image" in selected_lanes
             and requires_publishable_images
             and rights_proof_required(vertical)
+            and not professional_image_bound
             and not open_license_image_pool
         ):
             issues.append(f"{entity_id}: no rights-compatible open-license images discovered")
@@ -489,6 +482,10 @@ def _write_auto_research_plans_impl(
                 openverse=tuple(openverse),
                 rejected_source_urls=frozenset(rejected_source_urls),
                 force=force,
+                professional_image_specs=tuple(professional_image_specs),
+                acquisition_receipt_refs=tuple(
+                    professional_image_receipt_refs
+                ),
             ))
             if "homepage" in selected_lanes
             else []
@@ -548,13 +545,22 @@ def _write_auto_research_plans_impl(
                 qid=qid,
                 wiki_title=wiki_title,
                 voyage_title=voyage_title,
+                professional_image_specs=professional_image_specs,
+                acquisition_receipt_refs=professional_image_receipt_refs,
             )
         if "video" in selected_lanes:
             video_provider_funnel: list[dict[str, Any]] = []
-            sourced_video_pool = discover_commons_sourced_videos(
-                entity_id,
-                entity_aliases=entity_aliases,
-                diagnostics=video_provider_funnel,
+            acquisition_receipt_refs, acquisition_root = (
+                professional_video_context_binding(external_input_context)
+            )
+            sourced_video_pool = (
+                []
+                if acquisition_receipt_refs
+                else discover_commons_sourced_videos(
+                    entity_id,
+                    entity_aliases=entity_aliases,
+                    diagnostics=video_provider_funnel,
+                )
             )
             report.setdefault("videoProviderFunnels", []).extend(video_provider_funnel)
             write_video_lane(
@@ -564,6 +570,8 @@ def _write_auto_research_plans_impl(
                 report=report,
                 updated=updated,
                 sourced_video_pool=sourced_video_pool,
+                acquisition_receipt_refs=acquisition_receipt_refs,
+                acquisition_root=acquisition_root,
             )
     report["sourceAvailability"] = _source_availability_summary(report, entity_ids)
     if write_shared_report:

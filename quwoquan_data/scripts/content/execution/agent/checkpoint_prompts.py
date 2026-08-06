@@ -330,6 +330,42 @@ def _checkpoint_prompts(ctx: ExecutionContext, stage: str) -> list[str]:
             brief = content_object.read_brief_object(ctx.execution_id, ref) or {}
             packet_path = draft_package_dir(ctx.execution_id, ref) / "author_job_packet.json"
             if pack and brief:
+                carrier = str(pack.get("carrier") or brief.get("carrier") or "")
+                if carrier == "article":
+                    from content.post.article.source_unit_freeze import (
+                        validate_article_source_unit_freeze,
+                    )
+
+                    binding = (
+                        pack.get("articleSourceUnitFreeze")
+                        or brief.get("articleSourceUnitFreeze")
+                    )
+                    publish_media_mode = str(
+                        pack.get("publishMediaMode")
+                        or brief.get("publishMediaMode")
+                        or ""
+                    ).strip()
+                    asset_refs = list(
+                        pack.get("assetRefs") or brief.get("assetRefs") or []
+                    )
+                    if publish_media_mode == "text_only":
+                        if asset_refs or binding is not None:
+                            raise ValueError(
+                                "GATE_BLOCK DATA.ARTICLE.TEXT_ONLY_MEDIA_DRIFT: "
+                                "text-only article must not carry assets or a "
+                                "source-unit image freeze"
+                            )
+                    elif not isinstance(binding, dict):
+                        raise ValueError(
+                            "GATE_BLOCK DATA.ARTICLE.SOURCE_UNIT_FREEZE_REQUIRED: "
+                            "article semantic author requires one create-once "
+                            "source-unit freeze"
+                        )
+                    else:
+                        validate_article_source_unit_freeze(
+                            binding,
+                            execution_id=ctx.execution_id,
+                        )
                 packet = build_author_job_packet(
                     execution_id=ctx.execution_id,
                     ref=ref,

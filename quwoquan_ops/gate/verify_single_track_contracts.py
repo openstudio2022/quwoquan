@@ -9,6 +9,7 @@ import re
 import sys
 from collections import defaultdict
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
 
 import yaml
@@ -707,6 +708,67 @@ def _is_external_provider_path(rel: str) -> bool:
     )
 
 
+#: scope -> ContractGraph 对象 id。归属只认 ContractGraph 声明，不维护第二份台账；
+#: 对象不存在时 `_scope_object_segments` 会直接抛错，禁止悄悄退化成永不命中。
+RETIRED_DOMAIN_IDENTITY_OBJECTS = {
+    "assistant_policy_release": "assistant.assistant_policy_release",
+    "product_ops_experiment_assignment": "ops.experiment_assignment_fact",
+    "assistant_learning_fact": "assistant.assistant_learning_fact",
+}
+CONTRACT_GRAPH_PATH = ROOT / "quwoquan_service/generated/contract_graph.json"
+
+
+@lru_cache(maxsize=1)
+def _contract_graph_object_segments() -> dict[str, tuple[str, str]]:
+    """对象 id -> (bounded context, 对象目录名)，来自 ContractGraph `sourcePath`。
+
+    `sourcePath` 形如 `<domain>/<context>/<object>/object.yaml`；contracts、internal、
+    tests 与端侧目标形态四种物理布局都把 `<context>/<object>` 作为连续目录段，
+    这与 `object_path_map.derive_cloud_source_identity` /
+    `derive_app_target_shape_identity` 编码的是同一条布局不变量。
+    """
+    try:
+        payload = json.loads(CONTRACT_GRAPH_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise SystemExit(f"[single-track] 无法读取 ContractGraph: {error}") from error
+    segments: dict[str, tuple[str, str]] = {}
+    for record in payload.get("objects", []):
+        source_path = str(record.get("sourcePath", ""))
+        parts = source_path.split("/")
+        if len(parts) < 4:
+            continue
+        segments[str(record.get("id", ""))] = (parts[1], parts[2])
+    return segments
+
+
+def _scope_object_segments(scope: str) -> tuple[str, str]:
+    object_id = RETIRED_DOMAIN_IDENTITY_OBJECTS[scope]
+    segments = _contract_graph_object_segments().get(object_id)
+    if segments is None:
+        raise SystemExit(
+            f"[single-track] scope {scope!r} 声明的对象 {object_id!r} 不在 ContractGraph 中；"
+            "先修对象归属，不要让门禁静默失效"
+        )
+    return segments
+
+
+def _path_owns_object(rel: str, scope: str) -> bool:
+    """文件是否落在该对象自己的领地内，由 ContractGraph 归属判定，不看上下文文本。"""
+    context, object_name = _scope_object_segments(scope)
+    parts = rel.split("/")
+    return any(
+        parts[index] == context and parts[index + 1] == object_name
+        for index in range(len(parts) - 1)
+    )
+
+
+def _nearby_context(lines: list[str], line_number: int) -> str:
+    """命中行邻近文本。只有尚未定义权威归属的 scope 才允许使用（见下方 OPEN）。"""
+    start = max(0, line_number - 16)
+    end = min(len(lines), line_number + 16)
+    return "\n".join(lines[start:end]).lower()
+
+
 def _retired_domain_identity_applies(
     scope: str,
     rel: str,
@@ -716,9 +778,6 @@ def _retired_domain_identity_applies(
     """Match retired fields only inside the first-party object that retired them."""
     if _is_external_provider_path(rel):
         return False
-    start = max(0, line_number - 16)
-    end = min(len(lines), line_number + 16)
-    context = "\n".join(lines[start:end]).lower()
     rel_lower = rel.lower()
 
     if scope == "assistant_policy_release":
@@ -733,8 +792,7 @@ def _retired_domain_identity_applies(
                 rel_lower.startswith("quwoquan_app/")
                 and "/assistant/" in rel_lower
             )
-            or "assistantpolicyrelease" in context
-            or "assistant_policy_release" in context
+            or _path_owns_object(rel, scope)
         )
     if scope == "product_ops_experiment_assignment":
         return (
@@ -744,8 +802,7 @@ def _retired_domain_identity_applies(
             or rel_lower.startswith(
                 "specs/feature-tree/product-operations/"
             )
-            or "experimentassignmentfact" in context
-            or "experiment_assignment_fact" in context
+            or _path_owns_object(rel, scope)
         )
     if scope == "recommendation_content_identity":
         return (
@@ -763,11 +820,18 @@ def _retired_domain_identity_applies(
                 and "recommend" in rel_lower
             )
             or rel_lower.endswith("/l3_rec_model.json")
-            or "recommendationmodelexposure" in context
-            or "recommendationexposurefact" in context
-            or "recommendationmodelrelease" in context
-            or "recommendation_model_release" in context
-            or "rankedfeedwindow" in context
+            # OPEN：本 scope 在 ContractGraph 里没有单一权威对象——它同时牵涉
+            # recommendation.recommendation_model_release /
+            # recommendation.recommendation_exposure_fact /
+            # recommendation.ranked_recommendation_window，而下面两个词
+            # （recommendationmodelexposure / rankedfeedwindow）根本不对应任何对象。
+            # 适用范围从未被正式定义，属规格缺口而非脚本缺陷，因此这里保持原判据
+            # 不动，等规格线裁定对象集合后再按 _path_owns_object 收口。
+            or "recommendationmodelexposure" in _nearby_context(lines, line_number)
+            or "recommendationexposurefact" in _nearby_context(lines, line_number)
+            or "recommendationmodelrelease" in _nearby_context(lines, line_number)
+            or "recommendation_model_release" in _nearby_context(lines, line_number)
+            or "rankedfeedwindow" in _nearby_context(lines, line_number)
         )
     if scope == "assistant_learning_fact":
         return (
@@ -777,8 +841,7 @@ def _retired_domain_identity_applies(
                 "specs/feature-tree/assistant-run-learning/"
                 "learning-event-feedback-injection/"
             )
-            or "assistantlearningfact" in context
-            or "assistant_learning_fact" in context
+            or _path_owns_object(rel, scope)
         )
     return False
 

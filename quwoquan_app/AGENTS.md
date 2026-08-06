@@ -82,6 +82,77 @@ key 命名表达归属，避免 16 条 domain 并行流互相覆盖。
 - 错误码链路的 `local_contract` 必须覆盖 mapper、Provider 状态、UI 文案、恢复按钮和 typed 错误响应；`api_integration` 必须覆盖 RemoteRepository 对服务错误响应的映射。
 - 新增页面必须同步检查页面矩阵、P1-P8、metadata-driven UI 清单、Mock 隔离、设计系统语义 token 和登录无死循环。
 
+## local_contract 测试的 App↔Cloud 边界
+
+`cloudRuntimeEnvironmentProvider` 走 `CloudRuntimeEnvironment.fromCompileTime()`，因此
+「测试怎样满足 generated operation client 所在的 provider 图」是一个跨全部 domain 的共享
+写点。唯一被认可的机制在 `test/support/harness/cloud_boundary_test_scope.dart`。
+
+- Provider / Widget 的 `local_contract` 测试**不得**让 provider 图解析到 generated
+  operation client：`ProviderScope` / `ProviderContainer` 的 `overrides` 必须以
+  `sealedCloudBoundaryOverrides()` 开头，再叠加本测试真正依赖的对象级 typed port
+  （`*CommandWriter` / `*Query`）override。样板见
+  `test/local_contract/ui/interest_match/interest_match_page__local_contract_test.dart`。
+- 被测对象就是 generated client / decoder / 错误映射本身时，改用
+  `generatedClientBoundaryOverrides(transport: MockClient(...))`：environment 由测试显式
+  声明为字面值，传输必须是测试交出的 `MockClient`。样板见
+  `test/local_contract/app/cloud_boundary_test_scope__local_contract_test.dart`。
+- 撞上 `SealedCloudBoundaryError` 时唯一正确动作是补对象级 typed port override。禁止改成
+  给测试注入 environment、放宽 seal、返回 Noop/Mock client 或 skip 测试。失败信息里已经写明
+  缺哪一层边界 provider，按它往上找 `ref.watch` 链即可定位该 override 的 typed port。
+- 禁止新增 `test/flutter_test_config.dart` 之类全局钩子，禁止在测试里调用
+  `CloudRuntimeConfig.hydrateFromNativeRuntimePackage`，也禁止靠 `--dart-define` 让该
+  provider 变得可构造：那会让 Widget 测试摸到真实 Gateway 并留下 pending timer，等于用一批
+  红换另一批红，还掩盖真实的 DI 缺口。
+- 测试是否通过不得依赖 `flutter test` 的调用方式：同一套件在裸 `flutter test` 与
+  `scripts/env/run_flutter_test_guarded.py`（会注入 `APP_RUNTIME_ENV` 等 dart-define）下必须
+  同样绿。搬迁 domain 测试树时顺带完成本节改造，不要留给后续统一整改。
+- 断言被封边界时统一用 `isSealedCloudBoundaryFailure()`；Riverpod 3 会把 provider 构造异常
+  逐层包进 `ProviderException`，各套件不得自己拆包装。
+- 需要确定性 environment 值（provider override 之外，例如直接 `new` 出 Remote adapter 的
+  对象级契约测试）时用 `testCloudRuntimeEnvironment()`，不要各套件自己手写 gateway URI。
+
+### per-suite typed-port override 模板
+
+搬 domain 测试树时按此形状改，一个 suite 一个 `_boundaryOverrides()`：
+
+```dart
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
+
+import '../../../support/harness/cloud_boundary_test_scope.dart';
+
+final class _InMemoryFooCommandWriter implements FooCommandWriter {
+  final List<FooCommand> submitted = <FooCommand>[];
+
+  @override
+  Future<FooReceipt> submit(FooCommand command) async {
+    submitted.add(command);
+    return const FooReceipt(accepted: true);
+  }
+}
+
+List<Override> _boundaryOverrides({
+  FooCommandWriter? fooCommandWriter,
+  List<Override> extra = const <Override>[],
+}) {
+  return <Override>[
+    ...sealedCloudBoundaryOverrides(),
+    fooCommandWriterProvider.overrideWithValue(
+      fooCommandWriter ?? _InMemoryFooCommandWriter(),
+    ),
+    ...extra,
+  ];
+}
+```
+
+要点：in-memory double 只实现被测路径用到的方法，不造业务数据集合、不做聚合 Repository；
+suite 内所有 `ProviderScope` / `ProviderContainer` 都走同一个 `_boundaryOverrides()`；个别
+用例需要观察某个 double 时用具名可选参数传入，不要另起第二套装配。定位「还缺哪个 typed
+port」：跑失败测试，沿 `SealedCloudBoundaryError` 栈上方的 `*Provider.<anonymous closure>`
+逐层往上读，第一个属于本 domain 的 provider 就是要 override 的那一层——不要在栈底的
+generated client / http client 那一层打补丁。
+
 ## 推荐验证
 
 - 改 Dart 文件后读取最近改动文件的 lint。

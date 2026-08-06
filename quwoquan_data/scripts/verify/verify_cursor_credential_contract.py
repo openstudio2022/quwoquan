@@ -1,5 +1,5 @@
-#!/usr/bin/env python3
 """Credential contract: external 0600 key file, no repo secret or old alias."""
+
 from __future__ import annotations
 
 import subprocess
@@ -12,11 +12,13 @@ sys.path.insert(0, str(SCRIPTS_ROOT))
 from core.cursor_credentials import cursor_key_file_issues
 from core.paths import REPO_ROOT
 
-
 RETIRED_ALIAS = "QWQ_CURSOR_API_KEY" + "FILE"
 _PROHIBITED_SOURCE_FRAGMENTS = (
-    "allow_api_key_env_fallback" + "=True",
-    "os.environ[CURSOR_API_KEY_ENV]" + " =",
+    ("allow_api_key_env_fallback" + "=True", "credential environment fallback"),
+    ("os.environ[CURSOR_API_KEY_ENV]" + " =", "credential environment export"),
+    ("sys.stdin." + "readline().strip()", "credential stdin transport"),
+    ('input=f"{' + 'key}\\n"', "credential stdin transport"),
+    ("Client.launch_" + "bridge(", "SDK callback-token argv transport"),
 )
 
 
@@ -36,10 +38,23 @@ def cursor_credential_contract_issues(
         check=False,
     )
     if tracked.stdout.strip():
-        issues.extend(f"retired credential alias: {line}" for line in tracked.stdout.splitlines()[:20])
-    for fragment in _PROHIBITED_SOURCE_FRAGMENTS:
+        issues.extend(
+            f"retired credential alias: {line}"
+            for line in tracked.stdout.splitlines()[:20]
+        )
+    for fragment, reason in _PROHIBITED_SOURCE_FRAGMENTS:
         matches = subprocess.run(
-            ["git", "grep", "-n", "-I", "-F", "-e", fragment, "--", "quwoquan_data/scripts"],
+            [
+                "git",
+                "grep",
+                "-n",
+                "-I",
+                "-F",
+                "-e",
+                fragment,
+                "--",
+                "quwoquan_data/scripts",
+            ],
             cwd=repo_root,
             capture_output=True,
             text=True,
@@ -47,7 +62,7 @@ def cursor_credential_contract_issues(
         )
         if matches.stdout.strip():
             issues.extend(
-                f"forbidden Cursor credential environment fallback: {line}"
+                f"forbidden Cursor {reason}: {line}"
                 for line in matches.stdout.splitlines()[:20]
             )
     return issues
